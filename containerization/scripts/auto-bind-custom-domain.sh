@@ -6,9 +6,7 @@
 # hostname, creates the certificate, and binds it, all in that one deploy.
 #
 # Usage:
-#   ./auto-bind-custom-domain.sh -g rg-tusharpuri -p segue13 -t segueterm.pegasusone.com
-#   ./auto-bind-custom-domain.sh -g rg-tusharpuri -p segue13 \
-#     -a segueapp.pegasusone.com -d seguedemo.pegasusone.com -t segueterm.pegasusone.com
+#   ./auto-bind-custom-domain.sh -g rg-tusharpuri -p segue13 -a segueapp.pegasusone.com
 #
 # Safe to re-run: custom-domain.bicep is idempotent either way (a domain that's already bound is
 # just re-affirmed, not disturbed in any lasting way).
@@ -17,21 +15,17 @@ set -euo pipefail
 RESOURCE_GROUP=""
 NAME_PREFIX=""
 FHIRBRIDGE_APP_DOMAIN=""
-DEMO_APP_DOMAIN=""
-HAPI_TERMINOLOGY_DOMAIN=""
 WAIT_TIMEOUT_MINUTES=30
 WAIT_POLL_SECONDS=30
 
-while getopts "g:p:a:d:t:w:s:" opt; do
+while getopts "g:p:a:w:s:" opt; do
     case $opt in
         g) RESOURCE_GROUP="$OPTARG" ;;
         p) NAME_PREFIX="$OPTARG" ;;
         a) FHIRBRIDGE_APP_DOMAIN="$OPTARG" ;;
-        d) DEMO_APP_DOMAIN="$OPTARG" ;;
-        t) HAPI_TERMINOLOGY_DOMAIN="$OPTARG" ;;
         w) WAIT_TIMEOUT_MINUTES="$OPTARG" ;;
         s) WAIT_POLL_SECONDS="$OPTARG" ;;
-        *) echo "Usage: $0 -g <resource-group> -p <name-prefix> [-a <fhirbridge-app-domain>] [-d <demo-app-domain>] [-t <terminology-domain>] [-w <wait-timeout-min>] [-s <poll-interval-sec>]" >&2; exit 1 ;;
+        *) echo "Usage: $0 -g <resource-group> -p <name-prefix> [-a <fhirbridge-app-domain>] [-w <wait-timeout-min>] [-s <poll-interval-sec>]" >&2; exit 1 ;;
     esac
 done
 
@@ -41,8 +35,8 @@ BICEP_FILE="$HERE/../azure-deploy/custom-domain.bicep"
 command -v az >/dev/null 2>&1 || { echo "Azure CLI (az) not found. Install it, then run 'az login'." >&2; exit 1; }
 [[ -f "$BICEP_FILE" ]] || { echo "Could not find custom-domain.bicep at $BICEP_FILE" >&2; exit 1; }
 [[ -n "$RESOURCE_GROUP" && -n "$NAME_PREFIX" ]] || { echo "Both -g <resource-group> and -p <name-prefix> are required." >&2; exit 1; }
-if [[ -z "$FHIRBRIDGE_APP_DOMAIN" && -z "$DEMO_APP_DOMAIN" && -z "$HAPI_TERMINOLOGY_DOMAIN" ]]; then
-    echo "Set at least one of -a / -d / -t." >&2
+if [[ -z "$FHIRBRIDGE_APP_DOMAIN" ]]; then
+    echo "Set -a <fhirbridge-app-domain>." >&2
     exit 1
 fi
 
@@ -75,10 +69,10 @@ pending_domains=()
 pending_fqdns=()
 pending_verification_ids=()
 
-declare -A LABEL_TO_APPNAME=( [fhirbridgeApp]="${NAME_PREFIX}-app" [demoApp]="${NAME_PREFIX}-demo-app" [hapiTerminology]="${NAME_PREFIX}-term" )
-declare -A LABEL_TO_DOMAIN=( [fhirbridgeApp]="$FHIRBRIDGE_APP_DOMAIN" [demoApp]="$DEMO_APP_DOMAIN" [hapiTerminology]="$HAPI_TERMINOLOGY_DOMAIN" )
+declare -A LABEL_TO_APPNAME=( [fhirbridgeApp]="${NAME_PREFIX}-app" )
+declare -A LABEL_TO_DOMAIN=( [fhirbridgeApp]="$FHIRBRIDGE_APP_DOMAIN" )
 
-for label in fhirbridgeApp demoApp hapiTerminology; do
+for label in fhirbridgeApp; do
     domain="${LABEL_TO_DOMAIN[$label]}"
     [[ -z "$domain" ]] && continue
     app_name="${LABEL_TO_APPNAME[$label]}"
@@ -147,8 +141,6 @@ echo ""
 echo "==> Deploying custom-domain.bicep (namePrefix=${NAME_PREFIX}) ..."
 params=("namePrefix=${NAME_PREFIX}")
 [[ -n "$FHIRBRIDGE_APP_DOMAIN" ]] && params+=("fhirbridgeAppDomain=${FHIRBRIDGE_APP_DOMAIN}")
-[[ -n "$DEMO_APP_DOMAIN" ]] && params+=("demoAppDomain=${DEMO_APP_DOMAIN}")
-[[ -n "$HAPI_TERMINOLOGY_DOMAIN" ]] && params+=("hapiTerminologyDomain=${HAPI_TERMINOLOGY_DOMAIN}")
 
 results_json=$(az deployment group create \
     --resource-group "$RESOURCE_GROUP" \

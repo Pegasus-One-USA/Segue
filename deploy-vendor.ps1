@@ -48,7 +48,7 @@ if ($LASTEXITCODE -ne 0) { throw "az acr login failed - is Docker Desktop runnin
 # in that case, not a real error) - ErrorAction SilentlyContinue plus try/catch covers both how az
 # CLI failures can surface in PowerShell (non-zero exit code, and/or a terminating NativeCommandError
 # when $ErrorActionPreference = "Stop" is in effect, as it is for this whole script).
-$Images = @("fhirbridge-app", "demo-app", "fhirbridge-worker", "fhirbridge-redis", "hapi-terminology")
+$Images = @("fhirbridge-app", "demo-app", "fhirbridge-worker", "fhirbridge-redis", "fhirbridge-postgres")
 foreach ($image in $Images) {
     try {
         $existing = az acr repository show-tags --name $AcrName --repository $image --query "[?@=='$Tag']" -o tsv --only-show-errors 2>$null
@@ -60,7 +60,7 @@ foreach ($image in $Images) {
     }
 }
 
-Write-Host "==> Building and pushing all 4 custom images + importing hapi-terminology, tag $Tag"
+Write-Host "==> Building and pushing all custom images, tag $Tag"
 & "$RepoRoot\containerization\scripts\build-images.ps1" -Registry $AcrLoginServer -Tag $Tag -Push
 if ($LASTEXITCODE -ne 0) { throw "build-images.ps1 failed" }
 
@@ -70,6 +70,11 @@ if ($PublishOnly) {
 }
 
 Write-Host "==> Deploying via Bicep to resource group $ResourceGroup"
+# seguebuilds has neither the admin user nor anonymous pull enabled, so Container Apps needs real
+# registry credentials to pull - same read-only, scoped "one-click-pull" ACR token already embedded
+# in createUiDefinition.json for the customer-facing wizard (see README.md's "Wiring up registry
+# access" section). Without these two parameters the deploy succeeds but every Container App fails
+# to start with "UNAUTHORIZED: authentication required" pulling from seguebuilds.azurecr.io.
 # Fill in real values for the 4 password/key parameters below before running (or edit this file).
 az deployment group create `
   --resource-group $ResourceGroup `
@@ -77,12 +82,13 @@ az deployment group create `
   --parameters "$AzureDeployDir\main.parameters.example.json" `
   --parameters `
     imageRegistryServer=$AcrLoginServer `
+    imageRegistryUsername='one-click-pull' `
+    imageRegistryPassword='401K4t2K0LniPnjsqlSjjXDaUof0VPIzLyDodMHeXgWv2WYgGmn2JQQJ99CHACYeBjFEqg7NAAABAZCREYP3' `
     imageTag=$Tag `
-    sqlSaPassword='CHANGE-ME-Str0ng!' `
+    postgresPassword='CHANGE-ME-Str0ng!' `
     jwtSigningKey='CHANGE-ME-replace-with-a-long-random-string-32-chars-min' `
     redisPassword='CHANGE-ME-strong-redis-password' `
-    redisTrustedCertificateThumbprint=$RedisThumbprint `
-    hapiTerminologyPostgresPassword='CHANGE-ME-strong-postgres-password'
+    redisTrustedCertificateThumbprint=$RedisThumbprint
 if ($LASTEXITCODE -ne 0) { throw "az deployment group create failed" }
 
 Write-Host ""

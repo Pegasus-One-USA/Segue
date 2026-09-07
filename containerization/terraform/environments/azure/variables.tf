@@ -16,10 +16,40 @@ variable "image_tag" {
   default     = "latest"
 }
 
-variable "sql_sa_password" {
-  description = "SQL Server SA password. Must satisfy SQL Server's complexity policy."
+variable "use_azure_postgresql" {
+  description = "Chooses which Postgres FHIRBridge's own database (FHIRBridgeDb) gets. false (default) keeps a containerized Postgres (azurerm_container_app.postgres — stock postgres:16-alpine, Azure Files-backed persistence, single replica, internal-only network access, requires postgres_password). true creates a managed Azure Database for PostgreSQL Flexible Server instead (see azure_postgresql_sku/azure_postgresql_storage_mb) and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no volume; Azure manages patching/backups/HA. Replaces the SQL Server Express container this deployment used before the app migrated from SQL Server to PostgreSQL — there is no SQL Server option anymore."
+  type        = bool
+  default     = false
+}
+
+variable "postgres_password" {
+  description = "Password for FHIRBridge's own Postgres database. In the containerized path (use_azure_postgresql = false) this is the 'fhirbridge' role's password, stored in Key Vault; in the managed path (true) this is the Flexible Server's administrator_password directly (Azure Database for PostgreSQL doesn't have a separate Key Vault seeding step — the server resource holds it). Required either way — Terraform variables without a default must be provided."
   type        = string
   sensitive   = true
+}
+
+variable "postgres_port" {
+  description = "Port the containerized Postgres listens on (internal-only). Passed to the container via a postgres -p override. Meaningless when use_azure_postgresql is true — Azure Database for PostgreSQL always uses 5432."
+  type        = number
+  default     = 5432
+}
+
+variable "postgres_external_access" {
+  description = "TESTING ONLY: exposes the containerized Postgres directly to the internet (Container Apps external TCP ingress on var.postgres_port) so it can be reached from a local client like psql/pgAdmin. Defaults to false — this deployment is otherwise built around network isolation. Only set to true for a temporary connectivity check, then set back to false and re-apply. Meaningless when use_azure_postgresql is true (Azure Database for PostgreSQL has its own firewall-rule-based access control, see azurerm_postgresql_flexible_server_firewall_rule in main.tf)."
+  type        = bool
+  default     = false
+}
+
+variable "azure_postgresql_sku" {
+  description = "Azure Database for PostgreSQL Flexible Server compute/pricing tier, e.g. B_Standard_B1ms (Burstable, cheapest — good for dev/test) or GP_Standard_D2s_v3 (General Purpose, production-appropriate). Only consulted when use_azure_postgresql is true."
+  type        = string
+  default     = "B_Standard_B1ms"
+}
+
+variable "azure_postgresql_storage_mb" {
+  description = "Azure Database for PostgreSQL Flexible Server storage size in MB. 32768 (32GB) is the platform minimum. Only consulted when use_azure_postgresql is true — storage can only be scaled up later, not down, so don't over-provision speculatively."
+  type        = number
+  default     = 32768
 }
 
 variable "jwt_signing_key" {
@@ -29,22 +59,17 @@ variable "jwt_signing_key" {
 }
 
 # --- Client-configurable internal ports ---
-# fhirbridge-app and demo-app are NOT included here: Azure Container Apps external HTTP ingress
+# fhirbridge-app is NOT included here: Azure Container Apps external HTTP ingress
 # has no client-configurable port — it's always reached via its https://<app>.<domain> address on
 # the platform's standard 443, with no port number in the URL, regardless of target_port. That's a
 # genuine Container Apps platform constraint, not a Terraform limitation.
 #
-# sql_port/redis_port ARE meaningful to change: they're internal-only TCP ingress (reached by the
-# other Container Apps in this environment, never externally — see the sqlserver/redis
+# postgres_port/redis_port ARE meaningful to change: they're internal-only TCP ingress (reached by
+# the other Container Apps in this environment, never externally — see the postgres/redis
 # azurerm_container_app resources below), and main.tf passes each one through to the actual
-# process (MSSQL_TCP_PORT for SQL Server, a `redis-server --port` command override for Redis), not
-# just the ingress target_port.
-
-variable "sql_port" {
-  description = "Port SQL Server Express listens on (internal-only). Passed to the container as MSSQL_TCP_PORT."
-  type        = number
-  default     = 1433
-}
+# process (a `postgres -p` command override for Postgres, a `redis-server --port` command override
+# for Redis), not just the ingress target_port. (postgres_port itself is declared further up,
+# alongside the other use_azure_postgresql-related variables.)
 
 variable "redis_port" {
   description = "Port Redis listens on (internal-only). Passed to the container via a redis-server --port override."
@@ -89,12 +114,6 @@ variable "fhirbridge_app_custom_domain" {
   default     = ""
 }
 
-variable "demo_app_custom_domain" {
-  description = "Custom domain for the Demo app. Same flow as fhirbridge_app_custom_domain (including the required first-apply-blank step and the current SSL-binding limitation)."
-  type        = string
-  default     = ""
-}
-
 variable "bind_custom_domain_certificates" {
   description = "Currently a NO-OP: azurerm_container_app_environment_managed_certificate (the resource this flag would create) was only added in terraform-provider-azurerm v4.69.0, and this config is pinned to azurerm ~> 3.100 (see required_providers in main.tf) — no 3.x release has it. The custom-domain resources always use certificate_binding_type = \"Disabled\" regardless of this flag's value. Kept as a variable so existing tfvars files referencing it don't break, and so it's easy to re-wire once this environment is deliberately migrated to azurerm ~> 4.69 (a separate, larger change — see the comment above the azurerm_container_app_custom_domain resources in main.tf)."
   type        = bool
@@ -107,8 +126,3 @@ variable "enable_tenant_secrets_key_vault" {
   default     = false
 }
 
-variable "sql_external_access" {
-  description = "TESTING ONLY: exposes SQL Server directly to the internet (Container Apps external TCP ingress on var.sql_port) so it can be reached from a local client like SSMS. Defaults to false — this deployment is otherwise built around network isolation (sqlserver/redis are internal-only by design), and this bypasses that deliberately. Only set to true for a temporary connectivity check, then set back to false and re-apply. Even with this on, the sa password (from Key Vault) is still required to connect — this only controls network reachability, not authentication."
-  type        = bool
-  default     = false
-}

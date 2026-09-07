@@ -6,8 +6,8 @@
 # customDomainVerificationId once the app already exists).
 #
 # What it does:
-#   1. Finds which of this name prefix's public-facing apps actually exist (FHIRBridge app, Demo
-#      app, Terminology server — sqlserver/redis/worker/term-db are never eligible for a domain).
+#   1. Finds which of this name prefix's public-facing apps actually exist (FHIRBridge app —
+#      the database container/redis/worker are never eligible for a domain).
 #   2. Shows each one's default URL and Azure-assigned domain-verification ID.
 #   3. Asks, per app, whether you want a custom domain for it, and if so, what domain.
 #   4. Once given a domain, prints the exact CNAME + TXT records to create (delegates to
@@ -47,13 +47,10 @@ MANAGE_SCRIPT="${HERE}/manage-custom-domain.sh"
 
 ENVIRONMENT_NAME="${NAME_PREFIX}-env"
 
-# label|app_name|port — FHIRBridge app / Demo app are always external by design (main.bicep never
-# gives them an internal-only mode). The terminology server is internal-only by default; this
-# script enables external ingress on it automatically the moment you ask for a domain on it.
+# label|app_name|port — FHIRBridge app is always external by design (main.bicep never
+# gives it an internal-only mode).
 CANDIDATES=(
   "FHIRBridge app|${NAME_PREFIX}-app|80"
-  "Demo app|${NAME_PREFIX}-demo-app|5500"
-  "Terminology server|${NAME_PREFIX}-term|8080"
 )
 
 echo "==> Looking for '${NAME_PREFIX}'-prefixed apps in '${RESOURCE_GROUP}' ..."

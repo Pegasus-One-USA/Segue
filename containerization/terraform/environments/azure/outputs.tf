@@ -4,7 +4,7 @@ output "acr_login_server" {
 }
 
 output "key_vault_name" {
-  description = "Secrets source of truth. Rotate a secret with: az keyvault secret set --vault-name <this> --name <sql-sa-password|jwt-signing-key|redis-password> --value <new-value>, then restart the affected Container App revisions to pick it up."
+  description = "Secrets source of truth. Rotate a secret with: az keyvault secret set --vault-name <this> --name <postgres-password|jwt-signing-key|redis-password> --value <new-value>, then restart the affected Container App revisions to pick it up."
   value       = azurerm_key_vault.main.name
 }
 
@@ -27,6 +27,16 @@ output "azure_cache_primary_access_key" {
   description = "Populated only when use_azure_cache_for_redis is true. Rotate with 'az redis regenerate-keys' (or the Portal) — this output will reflect the new value on the next apply/refresh."
   value       = var.use_azure_cache_for_redis ? azurerm_redis_cache.main[0].primary_access_key : null
   sensitive   = true
+}
+
+output "postgres_mode" {
+  description = "Which Postgres FHIRBridge's own database actually has — \"azure-managed\" or \"container\"."
+  value       = var.use_azure_postgresql ? "azure-managed" : "container"
+}
+
+output "azure_postgresql_fqdn" {
+  description = "Populated only when use_azure_postgresql is true. Same host ConnectionStrings:FHIRBridgeDb points the app at — useful for connecting a client (e.g. psql / pgAdmin) directly for debugging."
+  value       = var.use_azure_postgresql ? azurerm_postgresql_flexible_server.main[0].fqdn : null
 }
 
 output "tenant_secrets_key_vault_name" {
@@ -63,28 +73,14 @@ output "fhirbridge_app_url" {
   value = "https://${local.fhirbridge_app_name}.${azurerm_container_app_environment.main.default_domain}"
 }
 
-output "demo_app_url" {
-  value = "https://${local.demo_app_name}.${azurerm_container_app_environment.main.default_domain}"
-}
-
 output "fhirbridge_app_domain_verification" {
   description = "Add CNAME (domain -> fhirbridge_app_url hostname) and TXT asuid.<domain>=this value at your DNS provider to register the hostname. See fhirbridge_app_custom_domain's description for the current SSL-binding limitation (bind_custom_domain_certificates is a no-op until this environment is migrated to azurerm ~> 4.69)."
   value       = azurerm_container_app.fhirbridge_app.custom_domain_verification_id
 }
 
-output "demo_app_domain_verification" {
-  description = "Same idea as fhirbridge_app_domain_verification, for the demo app's custom domain."
-  value       = azurerm_container_app.demo_app.custom_domain_verification_id
-}
-
 output "fhirbridge_app_custom_domain_url" {
   description = "Populated once fhirbridge_app_custom_domain is set; null otherwise."
   value       = var.fhirbridge_app_custom_domain != "" ? "https://${var.fhirbridge_app_custom_domain}" : null
-}
-
-output "demo_app_custom_domain_url" {
-  description = "Populated once demo_app_custom_domain is set; null otherwise."
-  value       = var.demo_app_custom_domain != "" ? "https://${var.demo_app_custom_domain}" : null
 }
 
 # Currently always false in effect — see bind_custom_domain_certificates' own description
@@ -94,5 +90,5 @@ output "bind_custom_domain_certificates" {
 }
 
 output "custom_domain_phase" {
-  value = (var.fhirbridge_app_custom_domain == "" && var.demo_app_custom_domain == "") ? "none" : "hostname-registered-no-managed-ssl-until-azurerm-4.69-migration"
+  value = var.fhirbridge_app_custom_domain == "" ? "none" : "hostname-registered-no-managed-ssl-until-azurerm-4.69-migration"
 }

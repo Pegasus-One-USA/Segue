@@ -130,7 +130,7 @@ fi
 # everything. Rather than let Terraform interactively prompt for real secrets just to tear things
 # down, backfill a throwaway placeholder for any required variable terraform.tfvars doesn't
 # already define — values that ARE in tfvars are left alone and used as-is.
-REQUIRED_VARS=(sql_sa_password jwt_signing_key redis_password hapi_terminology_postgres_password)
+REQUIRED_VARS=(postgres_password jwt_signing_key redis_password)
 DESTROY_VAR_ARGS=()
 for v in "${REQUIRED_VARS[@]}"; do
   if ! grep -qE "^[[:space:]]*${v}[[:space:]]*=" terraform.tfvars 2>/dev/null; then
@@ -193,7 +193,7 @@ if command -v az >/dev/null 2>&1; then
         # stuck in a broken half-deleted state (ingress stripped but provisioningState stuck at
         # "Failed" forever - recovered only by a generic `az resource delete --ids` against the
         # same resource, which is exactly what this sweep already uses). Deleting the certificate
-        # FIRST removes that entanglement up front - a demo app whose pending cert was deleted
+        # FIRST removes that entanglement up front - a test app whose pending cert was deleted
         # first took 3 seconds to delete, vs. 20+ minutes for one whose succeeded cert was still
         # attached. If a cert delete fails here (e.g. a live SniEnabled binding that genuinely
         # can't be dropped that easily), it's non-fatal - the subsequent app delete just falls

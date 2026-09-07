@@ -1,7 +1,14 @@
-# 5 Fargate task definitions. cpu/memory pairs are valid Fargate combinations; adjust per load.
+# 4 Fargate task definitions (when using the containerized Postgres path — 3 when
+# use_rds_postgresql routes FHIRBridgeDb to Amazon RDS instead). cpu/memory pairs are valid
+# Fargate combinations; adjust per load.
 
-resource "aws_ecs_task_definition" "sqlserver" {
-  family                   = "${var.name_prefix}-sqlserver"
+# Only created for the containerized Postgres path — Amazon RDS for PostgreSQL (aws_db_instance.
+# postgresql in main.tf) needs no ECS task/service of its own. Gated the same as every other
+# postgres-specific resource (its Cloud Map entry, EFS access point, Secrets Manager secret, log
+# group, and the aws_ecs_service.postgres in services.tf).
+resource "aws_ecs_task_definition" "postgres" {
+  count                    = var.use_rds_postgresql ? 0 : 1
+  family                   = "${var.name_prefix}-postgres"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "1024"
@@ -9,12 +16,12 @@ resource "aws_ecs_task_definition" "sqlserver" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
 
   volume {
-    name = "sql-data"
+    name = "postgres-data"
     efs_volume_configuration {
       file_system_id     = aws_efs_file_system.main.id
       transit_encryption = "ENABLED"
       authorization_config {
-        access_point_id = aws_efs_access_point.sql_data.id
+        access_point_id = aws_efs_access_point.postgres_data[0].id
         iam             = "DISABLED"
       }
     }
@@ -22,28 +29,40 @@ resource "aws_ecs_task_definition" "sqlserver" {
 
   container_definitions = jsonencode([
     {
-      name         = "sqlserver"
-      image        = "mcr.microsoft.com/mssql/server:2022-latest"
-      portMappings = [{ containerPort = var.sql_port, protocol = "tcp" }]
+      name  = "postgres"
+      image = "postgres:16-alpine"
+      # Stock image, no custom Dockerfile/ECR build needed — unlike Redis (see the redis task
+      # below), the C# app enforces no TLS/cert-pinning on the database connection, so this mirrors
+      # the SQL Server container it replaces: VPC/security-group isolation (ecs_tasks security
+      # group + private subnets) is the real boundary here, not TLS.
+      portMappings = [{ containerPort = var.postgres_port, protocol = "tcp" }]
       environment = [
-        { name = "ACCEPT_EULA", value = "Y" },
-        { name = "MSSQL_PID", value = "Express" },
-        # Fargate's awsvpc networking has no host-level port remapping — SQL Server itself must be
-        # told to listen on var.sql_port, not just the portMappings entry above.
-        { name = "MSSQL_TCP_PORT", value = tostring(var.sql_port) },
+        { name = "POSTGRES_DB", value = "FHIRBridge" },
+        { name = "POSTGRES_USER", value = "fhirbridge" },
+        # EFS (like Azure Files) doesn't support the chown/chmod postgres's entrypoint does on
+        # PGDATA at first boot ("Operation not permitted") the way a native/NFS filesystem does —
+        # pointing PGDATA at a subdirectory postgres creates and owns itself (rather than the
+        # mount root, which is externally provisioned by the EFS access point above) works around
+        # it. Proven previously in this same environment for the (now-removed) HAPI terminology
+        # Postgres container.
+        { name = "PGDATA", value = "/var/lib/postgresql/data/pgdata" },
       ]
+      # Fargate's awsvpc networking has no host-level port remapping — postgres itself must be
+      # told to listen on var.postgres_port, not just the portMappings entry above. The image has
+      # no env-var port override, so this is passed as a command override instead.
+      command = ["postgres", "-p", tostring(var.postgres_port)]
       secrets = [
-        { name = "MSSQL_SA_PASSWORD", valueFrom = aws_secretsmanager_secret.sql_sa_password.arn },
+        { name = "POSTGRES_PASSWORD", valueFrom = aws_secretsmanager_secret.postgres_password[0].arn },
       ]
       mountPoints = [
-        { sourceVolume = "sql-data", containerPath = "/var/opt/mssql", readOnly = false },
+        { sourceVolume = "postgres-data", containerPath = "/var/lib/postgresql/data", readOnly = false },
       ]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.sqlserver.name
+          "awslogs-group"         = aws_cloudwatch_log_group.postgres[0].name
           "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "sqlserver"
+          "awslogs-stream-prefix" = "postgres"
         }
       }
     }
@@ -78,8 +97,8 @@ resource "aws_ecs_task_definition" "redis" {
       # See containerization/docker/redis-tls/Dockerfile.
       image        = "${aws_ecr_repository.redis.repository_url}:${var.image_tag}"
       portMappings = [{ containerPort = var.redis_port, protocol = "tcp" }]
-      # Redis has no env-var port/password setting — same awsvpc constraint as SQL Server above
-      # for the port. The password is deliberately resolved from $REDIS_PASSWORD inside a shell
+      # Redis has no env-var port/password setting — same awsvpc constraint as the containerized
+      # Postgres task above for the port. The password is deliberately resolved from $REDIS_PASSWORD inside a shell
       # wrapper rather than passed as a plain --requirepass argument, so the actual value is never
       # written into this task definition in plaintext (unlike the port, which isn't secret) —
       # only the Secrets Manager ARN reference below is. Trade-off: this bypasses the image's
@@ -109,95 +128,6 @@ resource "aws_ecs_task_definition" "redis" {
   ])
 }
 
-resource "aws_ecs_task_definition" "hapi_terminology_postgres" {
-  family                   = "${var.name_prefix}-hapi-terminology-postgres"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = "512"
-  memory                   = "1024"
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-
-  volume {
-    name = "hapi-terminology-postgres-data"
-    efs_volume_configuration {
-      file_system_id     = aws_efs_file_system.main.id
-      transit_encryption = "ENABLED"
-      authorization_config {
-        access_point_id = aws_efs_access_point.hapi_terminology_postgres_data.id
-        iam             = "DISABLED"
-      }
-    }
-  }
-
-  container_definitions = jsonencode([
-    {
-      name         = "hapi-terminology-postgres"
-      image        = "postgres:16-alpine"
-      portMappings = [{ containerPort = 5432, protocol = "tcp" }]
-      environment = [
-        { name = "POSTGRES_DB", value = "hapi_terminology" },
-        { name = "POSTGRES_USER", value = "hapi_terminology" },
-      ]
-      secrets = [
-        { name = "POSTGRES_PASSWORD", valueFrom = aws_secretsmanager_secret.hapi_terminology_postgres_password.arn },
-      ]
-      mountPoints = [
-        { sourceVolume = "hapi-terminology-postgres-data", containerPath = "/var/lib/postgresql/data", readOnly = false },
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.hapi_terminology_postgres.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "hapi-terminology-postgres"
-        }
-      }
-    }
-  ])
-}
-
-# Second, dedicated HAPI FHIR instance (+ its own Postgres above) used only for code-system
-# lookups/validation/expansion/translation ($lookup et al.) and the automatic vocabulary syncs in
-# FHIRBridge.Infrastructure/Terminology/Hapi — separate from any EHR-sourced FHIR data, which never
-# touches this service. Reached only via Cloud Map (hapi-terminology.<name_prefix>.internal), never
-# through the ALB — see Terminology__BaseUrl on fhirbridge_app/worker below.
-resource "aws_ecs_task_definition" "hapi_terminology" {
-  family                   = "${var.name_prefix}-hapi-terminology"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = "512"
-  memory                   = "2048"
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-
-  container_definitions = jsonencode([
-    {
-      name = "hapi-terminology"
-      # Pulled from this environment's own ECR mirror (populated by build-images.sh|ps1), not
-      # Docker Hub directly on every task start/scale event — see aws_ecr_repository.hapi_terminology.
-      image        = "${aws_ecr_repository.hapi_terminology.repository_url}:${var.image_tag}"
-      portMappings = [{ containerPort = 8080, protocol = "tcp" }]
-      environment = [
-        { name = "SPRING_DATASOURCE_URL", value = "jdbc:postgresql://hapi-terminology-postgres.${var.name_prefix}.internal:5432/hapi_terminology" },
-        { name = "SPRING_DATASOURCE_USERNAME", value = "hapi_terminology" },
-        { name = "SPRING_DATASOURCE_DRIVERCLASSNAME", value = "org.postgresql.Driver" },
-        { name = "SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT", value = "ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgres94Dialect" },
-        { name = "HAPI_FHIR_VERSION", value = "R4" },
-      ]
-      secrets = [
-        { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = aws_secretsmanager_secret.hapi_terminology_postgres_password.arn },
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.hapi_terminology.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "hapi-terminology"
-        }
-      }
-    }
-  ])
-}
-
 resource "aws_ecs_task_definition" "fhirbridge_app" {
   family                   = "${var.name_prefix}-app"
   requires_compatibilities = ["FARGATE"]
@@ -213,15 +143,12 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
       portMappings = [{ containerPort = 80, protocol = "tcp" }]
       environment = [
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__FHIRBridgeDb", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
+        { name = "ConnectionStrings__FHIRBridgeDb", value = local.fhirbridgedb_connection_string },
+        { name = "Database__Provider", value = "PostgreSql" },
         { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password},ssl=true" },
         { name = "Redis__TrustedCertificateThumbprint", value = var.redis_trusted_certificate_thumbprint },
         { name = "DataProtection__KeyRingPath", value = "/app/keys" },
-        # The demo app is a separate origin whose frontend calls this API cross-origin — the ALB's
-        # DNS name is known from this same apply (a different resource, not a self-reference).
-        { name = "Portal__AllowedOrigins__0", value = "https://${aws_lb.main.dns_name}:${var.demo_app_port}" },
         { name = "AllowedHosts", value = "*" },
-        { name = "Terminology__BaseUrl", value = "http://hapi-terminology.${var.name_prefix}.internal:8080/fhir" },
         # Api and Gateway are sibling processes in one container (entrypoint.sh) - Api binds
         # loopback-only on 5000, and Gateway throws at startup outside Development without this.
         { name = "ApiBaseUrl", value = "http://127.0.0.1:5000/" },
@@ -235,36 +162,6 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
           "awslogs-group"         = aws_cloudwatch_log_group.fhirbridge_app.name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "app"
-        }
-      }
-    }
-  ])
-}
-
-resource "aws_ecs_task_definition" "demo_app" {
-  family                   = "${var.name_prefix}-demo-app"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-
-  container_definitions = jsonencode([
-    {
-      name         = "demo-app"
-      image        = "${aws_ecr_repository.demo_app.repository_url}:${var.image_tag}"
-      portMappings = [{ containerPort = 5500, protocol = "tcp" }]
-      environment = [
-        { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__Default", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=HealthAppDb;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
-        { name = "AllowedFrontendOrigin", value = "https://${aws_lb.main.dns_name}:${var.demo_app_port}" },
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.demo_app.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "demo-app"
         }
       }
     }
@@ -285,12 +182,12 @@ resource "aws_ecs_task_definition" "worker" {
       image = "${aws_ecr_repository.worker.repository_url}:${var.image_tag}"
       environment = [
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__FHIRBridgeDb", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
+        { name = "ConnectionStrings__FHIRBridgeDb", value = local.fhirbridgedb_connection_string },
+        { name = "Database__Provider", value = "PostgreSql" },
         { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password},ssl=true" },
         { name = "Redis__TrustedCertificateThumbprint", value = var.redis_trusted_certificate_thumbprint },
         { name = "RuntimeWorker__Enabled", value = "true" },
         { name = "Messaging__Provider", value = "InMemory" },
-        { name = "Terminology__BaseUrl", value = "http://hapi-terminology.${var.name_prefix}.internal:8080/fhir" },
       ]
       logConfiguration = {
         logDriver = "awslogs"

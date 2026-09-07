@@ -6,12 +6,15 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "Deploys FHIRBridge (portal + API), the Demo app, and their supporting SQL Server Express, Redis, and background Worker into a single Azure Container Apps environment in this subscription.",
+        "description": "Deploys FHIRBridge (portal + API) and its supporting Postgres, Redis, and background Worker into a single Azure Container Apps environment in this subscription.",
         "subscription": {
           "resourceProviders": [
             "Microsoft.App",
             "Microsoft.OperationalInsights",
-            "Microsoft.Storage"
+            "Microsoft.Storage",
+            "Microsoft.DBforPostgreSQL",
+            "Microsoft.Cache",
+            "Microsoft.KeyVault"
           ]
         },
         "location": {
@@ -26,7 +29,7 @@
         "type": "Microsoft.Common.TextBox",
         "label": "Deployment name prefix",
         "defaultValue": "fhirbridge",
-        "toolTip": "Short name used to build every resource name in this deployment (e.g. <prefix>-app, <prefix>-sqlserver).",
+        "toolTip": "Short name used to build every resource name in this deployment (e.g. <prefix>-app, <prefix>-postgres).",
         "constraints": {
           "required": true,
           "regex": "^[a-z][a-z0-9-]{1,20}$",
@@ -36,100 +39,16 @@
     ],
     "steps": [
       {
-        "name": "fhirbridgeSettings",
-        "label": "FHIRBridge Settings",
-        "elements": [
-          {
-            "name": "sqlSaPassword",
-            "type": "Microsoft.Common.PasswordBox",
-            "label": {
-              "password": "SQL Server SA password",
-              "confirmPassword": "Confirm password"
-            },
-            "toolTip": "Password for the SQL Server Express container's sa account. Must satisfy SQL Server's complexity policy (8+ chars, upper/lower/digit/symbol).",
-            "constraints": {
-              "required": true,
-              "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
-              "validationMessage": "At least 8 characters, including upper case, lower case, and a digit."
-            },
-            "options": {
-              "hideConfirmation": false
-            }
-          },
-          {
-            "name": "jwtSigningKey",
-            "type": "Microsoft.Common.PasswordBox",
-            "label": {
-              "password": "API signing key",
-              "confirmPassword": "Confirm signing key"
-            },
-            "toolTip": "FHIRBridge.Api's Authentication:SigningKey (HS256) — used to sign access/refresh tokens. At least 32 random characters; treat it like a secret.",
-            "constraints": {
-              "required": true,
-              "regex": "^.{32,}$",
-              "validationMessage": "Must be at least 32 characters."
-            },
-            "options": {
-              "hideConfirmation": false
-            }
-          },
-          {
-            "name": "redisPassword",
-            "type": "Microsoft.Common.PasswordBox",
-            "label": {
-              "password": "Redis password",
-              "confirmPassword": "Confirm password"
-            },
-            "toolTip": "Password Redis requires to connect (--requirepass) — defense-in-depth on top of network isolation.",
-            "constraints": {
-              "required": true,
-              "regex": "^.{8,}$",
-              "validationMessage": "At least 8 characters."
-            },
-            "options": {
-              "hideConfirmation": false
-            }
-          },
-          {
-            "name": "redisTrustedCertificateThumbprint",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Redis TLS certificate thumbprint",
-            "toolTip": "SHA-1 thumbprint of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value (e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F). The app refuses the Redis connection if this doesn't match what Redis actually presents.",
-            "constraints": {
-              "required": true,
-              "regex": "^[0-9A-Fa-f]{40}$",
-              "validationMessage": "A 40-character SHA-1 thumbprint (hex characters only)."
-            }
-          },
-          {
-            "name": "hapiTerminologyPostgresPassword",
-            "type": "Microsoft.Common.PasswordBox",
-            "label": {
-              "password": "Terminology server database password",
-              "confirmPassword": "Confirm password"
-            },
-            "toolTip": "Password for the Postgres database backing the HAPI terminology server's own schema — internal-only, not the app's own SQL Server database.",
-            "constraints": {
-              "required": true,
-              "regex": "^.{8,}$",
-              "validationMessage": "At least 8 characters."
-            },
-            "options": {
-              "hideConfirmation": false
-            }
-          }
-        ]
-      },
-      {
         "name": "containerSizing",
         "label": "Container Sizes",
         "elements": [
           {
-            "name": "sqlServerSize",
+            "name": "postgresSize",
             "type": "Microsoft.Common.DropDown",
-            "label": "SQL Server size",
+            "label": "Postgres size",
             "defaultValue": "Large",
-            "toolTip": "SQL Server's first-run setup can need more headroom than steady-state — pick XLarge if it fails to initialize on Large.",
+            "toolTip": "Containerized Postgres container size. Only used when Postgres deployment type is Containerized.",
+            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Containerized')]",
             "constraints": {
               "allowedValues": [
                 { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
@@ -145,7 +64,8 @@
             "type": "Microsoft.Common.DropDown",
             "label": "Redis size",
             "defaultValue": "Medium",
-            "toolTip": "Redis's own cache/queue memory needs — separate from the data it persists to its file share.",
+            "toolTip": "Redis's own cache/queue memory needs — separate from the data it persists to its file share. Only used when Redis deployment type is Containerized.",
+            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
             "constraints": {
               "allowedValues": [
                 { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
@@ -173,22 +93,6 @@
             }
           },
           {
-            "name": "demoAppSize",
-            "type": "Microsoft.Common.DropDown",
-            "label": "Demo app size",
-            "defaultValue": "Small",
-            "toolTip": "The lightweight demo application.",
-            "constraints": {
-              "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB) — current default", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
-              ],
-              "required": true
-            }
-          },
-          {
             "name": "workerSize",
             "type": "Microsoft.Common.DropDown",
             "label": "Worker size",
@@ -203,35 +107,165 @@
               ],
               "required": true
             }
-          },
+          }
+        ]
+      },
+      {
+        "name": "fhirbridgeSettings",
+        "label": "FHIRBridge Settings",
+        "elements": [
           {
-            "name": "hapiTerminologySize",
-            "type": "Microsoft.Common.DropDown",
-            "label": "Terminology server size",
-            "defaultValue": "Large",
-            "toolTip": "The HAPI FHIR terminology server itself (Java/Spring — benefits from more memory headroom than the CPU size alone suggests).",
+            "name": "postgresMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Postgres deployment type",
+            "defaultValue": "Containerized",
+            "toolTip": "Containerized keeps a single-replica Postgres container with Azure Files-backed storage (default, cheapest). Managed creates an Azure Database for PostgreSQL Flexible Server instead — no container, no volume; Azure handles patching/backups/HA.",
             "constraints": {
               "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB) — current default", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+                { "label": "Containerized (default)", "value": "Containerized" },
+                { "label": "Managed — Azure Database for PostgreSQL", "value": "Managed" }
               ],
               "required": true
             }
           },
           {
-            "name": "hapiTerminologyPostgresSize",
+            "name": "postgresPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Postgres password",
+              "confirmPassword": "Confirm Postgres password"
+            },
+            "toolTip": "Password for FHIRBridge's own Postgres database — the 'fhirbridge' role's password when Containerized, or the Flexible Server's administrator password when Managed.",
+            "constraints": {
+              "required": true,
+              "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
+              "validationMessage": "At least 8 characters, including upper case, lower case, and a digit."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "azurePostgresqlSku",
             "type": "Microsoft.Common.DropDown",
-            "label": "Terminology server database size",
-            "defaultValue": "Medium",
-            "toolTip": "The Postgres database backing the terminology server's own schema.",
+            "label": "Managed Postgres pricing tier",
+            "defaultValue": "Burstable_B1ms",
+            "toolTip": "Azure Database for PostgreSQL Flexible Server compute/pricing tier. Only used when Postgres deployment type is Managed.",
+            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
             "constraints": {
               "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB) — current default", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+                { "label": "Burstable B1ms (cheapest — dev/test)", "value": "Burstable_B1ms" },
+                { "label": "Burstable B2s", "value": "Burstable_B2s" },
+                { "label": "General Purpose D2s v3 (production-appropriate)", "value": "GeneralPurpose_D2s_v3" },
+                { "label": "General Purpose D4s v3", "value": "GeneralPurpose_D4s_v3" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "azurePostgresqlStorageMb",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Managed Postgres storage",
+            "defaultValue": "32768",
+            "toolTip": "Storage can only be scaled up later, not down — don't over-provision speculatively. Only used when Postgres deployment type is Managed.",
+            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
+            "constraints": {
+              "allowedValues": [
+                { "label": "32 GB (platform minimum)", "value": "32768" },
+                { "label": "64 GB", "value": "65536" },
+                { "label": "128 GB", "value": "131072" },
+                { "label": "256 GB", "value": "262144" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "jwtSigningKey",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "API signing key",
+              "confirmPassword": "Confirm API signing key"
+            },
+            "toolTip": "FHIRBridge.Api's Authentication:SigningKey (HS256) — used to sign access/refresh tokens. At least 32 random characters; treat it like a secret.",
+            "constraints": {
+              "required": true,
+              "regex": "^.{32,}$",
+              "validationMessage": "Must be at least 32 characters."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "redisMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Redis deployment type",
+            "defaultValue": "Containerized",
+            "toolTip": "Containerized keeps a single-replica Redis container (custom image with a self-signed TLS cert). Managed creates an Azure Managed Redis cluster instead (classic Azure Cache for Redis is retired and already blocked for new caches in some subscriptions) — no container, no self-signed cert to generate; Azure issues its own CA-trusted certificate.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Containerized (default)", "value": "Containerized" },
+                { "label": "Managed — Azure Managed Redis", "value": "Managed" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "redisPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Redis password",
+              "confirmPassword": "Confirm Redis password"
+            },
+            "toolTip": "Password Redis requires to connect (--requirepass) — defense-in-depth on top of network isolation.",
+            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
+            "constraints": {
+              "required": true,
+              "regex": "^.{8,}$",
+              "validationMessage": "At least 8 characters."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "redisTrustedCertificateThumbprint",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Redis TLS certificate thumbprint",
+            "toolTip": "SHA-1 thumbprint of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value (e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F). The app refuses the Redis connection if this doesn't match what Redis actually presents.",
+            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
+            "constraints": {
+              "required": true,
+              "regex": "^[0-9A-Fa-f]{40}$",
+              "validationMessage": "A 40-character SHA-1 thumbprint (hex characters only)."
+            }
+          },
+          {
+            "name": "azureCacheForRedisTier",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Azure Managed Redis SKU",
+            "defaultValue": "Balanced_B0",
+            "toolTip": "Balanced offers a healthy memory/compute ratio; Memory Optimized suits larger, less compute-intensive workloads. All sizes include SLA/high availability and TLS. Only used when Redis deployment type is Managed.",
+            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Managed')]",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Balanced B0 (1GB, cheapest)", "value": "Balanced_B0" },
+                { "label": "Balanced B5 (6GB)", "value": "Balanced_B5" },
+                { "label": "Memory Optimized M10 (12GB)", "value": "MemoryOptimized_M10" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "secretsMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Tenant/app secret storage",
+            "defaultValue": "Local database",
+            "toolTip": "Local database (default) keeps tenant connection secrets and app-level secrets on the local DataProtection-encrypted table — no extra Azure resource, no extra permission needed. Azure Key Vault creates a dedicated RBAC-enabled vault, grants the app's managed identities access to it, and moves secret storage + DataProtection key-ring wrapping there instead. Granting that access needs Owner or User Access Administrator on the resource group — see the tooltip on the deployment's own docs if you only have Contributor.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Local database (default)", "value": "Local database" },
+                { "label": "Azure Key Vault", "value": "Azure Key Vault" }
               ],
               "required": true
             }
@@ -273,27 +307,6 @@
             "label": "FHIRBridge app domain (optional, informational only)",
             "defaultValue": "",
             "toolTip": "e.g. app.customer.com. Not activated by this deployment - just recorded in the outputs as a reminder to complete Step 2 afterward."
-          },
-          {
-            "name": "demoAppIntendedDomain",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Demo app domain (optional, informational only)",
-            "defaultValue": "",
-            "toolTip": "e.g. demo.customer.com. Not activated by this deployment - just recorded in the outputs as a reminder to complete Step 2 afterward."
-          },
-          {
-            "name": "hapiTerminologyIntendedDomain",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Terminology server domain (optional, informational only)",
-            "defaultValue": "",
-            "toolTip": "e.g. terminology.customer.com. Not activated by this deployment - just recorded in the outputs as a reminder to complete Step 2 afterward."
-          },
-          {
-            "name": "hapiTerminologyExternalAccess",
-            "type": "Microsoft.Common.CheckBox",
-            "label": "Expose the terminology server externally",
-            "defaultValue": false,
-            "toolTip": "The HAPI terminology server is internal-only by default (reached only by the FHIRBridge app/Worker, same as SQL Server/Redis). Check this only if it needs to be reached directly from outside — e.g. a separate terminology admin tool, or a third-party integration. Not required for a custom domain on it later — Step 2 turns this on automatically when you give it a domain for the terminology server."
           }
         ]
       },
@@ -307,7 +320,7 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "This deployment creates resources in the selected resource group only:\n\n• 7 Container Apps — SQL Server Express, Redis, the HAPI Terminology Server + its own Postgres database, FHIRBridge/Segue (Api + Gateway), Demo App, Worker\n• 1 Container Apps Environment hosting all 7\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (SQL data, Redis data, Terminology server data, Data Protection keys)\n\nCustom domains are optional and activated in a SEPARATE deployment (Step 2 - custom-domain.bicep) after this one finishes — any domain entered on the Network Access step here is just a reminder, not yet active. SQL Server, Redis, and the Terminology Server are internal-only by default. Deployment outputs include a resourceManifest used by the cleanup scripts."
+              "text": "This deployment creates resources in the selected resource group only:\n\n• 4 Container Apps — Postgres, Redis, FHIRBridge/Segue (Api + Gateway), Worker\n• 1 Container Apps Environment hosting all 4\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (Postgres data, Redis data, Data Protection keys)\n\nCustom domains are optional and activated in a SEPARATE deployment (Step 2 - custom-domain.bicep) after this one finishes — any domain entered on the Network Access step here is just a reminder, not yet active. Postgres and Redis are internal-only by default. Deployment outputs include a resourceManifest used by the cleanup scripts."
             }
           },
           {
@@ -324,22 +337,21 @@
     "outputs": {
       "namePrefix": "[basics('namePrefix')]",
       "location": "[location()]",
-      "sqlSaPassword": "[steps('fhirbridgeSettings').sqlSaPassword]",
+      "useAzurePostgresql": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
+      "postgresPassword": "[steps('fhirbridgeSettings').postgresPassword]",
+      "azurePostgresqlSku": "[steps('fhirbridgeSettings').azurePostgresqlSku]",
+      "azurePostgresqlStorageMb": "[int(steps('fhirbridgeSettings').azurePostgresqlStorageMb)]",
       "jwtSigningKey": "[steps('fhirbridgeSettings').jwtSigningKey]",
-      "redisPassword": "[steps('fhirbridgeSettings').redisPassword]",
-      "redisTrustedCertificateThumbprint": "[steps('fhirbridgeSettings').redisTrustedCertificateThumbprint]",
-      "hapiTerminologyPostgresPassword": "[steps('fhirbridgeSettings').hapiTerminologyPostgresPassword]",
-      "sqlServerSize": "[steps('containerSizing').sqlServerSize]",
+      "useAzureCacheForRedis": "[equals(steps('fhirbridgeSettings').redisMode, 'Managed')]",
+      "redisPassword": "[if(equals(steps('fhirbridgeSettings').redisMode, 'Containerized'), steps('fhirbridgeSettings').redisPassword, '')]",
+      "redisTrustedCertificateThumbprint": "[if(equals(steps('fhirbridgeSettings').redisMode, 'Containerized'), steps('fhirbridgeSettings').redisTrustedCertificateThumbprint, '')]",
+      "azureCacheForRedisTier": "[steps('fhirbridgeSettings').azureCacheForRedisTier]",
+      "enableTenantSecretsKeyVault": "[equals(steps('fhirbridgeSettings').secretsMode, 'Azure Key Vault')]",
+      "postgresSize": "[steps('containerSizing').postgresSize]",
       "redisSize": "[steps('containerSizing').redisSize]",
       "fhirbridgeAppSize": "[steps('containerSizing').fhirbridgeAppSize]",
-      "demoAppSize": "[steps('containerSizing').demoAppSize]",
       "workerSize": "[steps('containerSizing').workerSize]",
-      "hapiTerminologySize": "[steps('containerSizing').hapiTerminologySize]",
-      "hapiTerminologyPostgresSize": "[steps('containerSizing').hapiTerminologyPostgresSize]",
-      "hapiTerminologyExternalAccess": "[steps('customDomains').hapiTerminologyExternalAccess]",
       "fhirbridgeAppIntendedDomain": "[steps('customDomains').fhirbridgeAppIntendedDomain]",
-      "demoAppIntendedDomain": "[steps('customDomains').demoAppIntendedDomain]",
-      "hapiTerminologyIntendedDomain": "[steps('customDomains').hapiTerminologyIntendedDomain]",
       "imageTag": "[steps('imageSettings').imageTag]",
       "imageRegistryServer": "seguebuilds.azurecr.io",
       "imageRegistryUsername": "one-click-pull",

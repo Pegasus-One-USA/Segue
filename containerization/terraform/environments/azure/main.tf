@@ -1,4 +1,4 @@
-# Deploys the same 5-container topology to Azure Container Apps. Terraform only deploys — it does
+# Deploys the same 4-container topology to Azure Container Apps. Terraform only deploys — it does
 # NOT build images. Before `terraform apply`, run:
 #
 #   ../../../scripts/build-images.sh -r <acr-login-server> -t <image_tag> -p
@@ -7,11 +7,12 @@
 # create the ACR first with a targeted apply, or push after the first apply and re-apply to update
 # the Container Apps' image references).
 #
-# SQL Server Express is pinned to a single replica (Azure Files-backed data directories are not
-# safe for concurrent multi-instance processes) and is reachable by other Container Apps in the
-# same environment via its app name as hostname (Container Apps' built-in internal DNS) — never
-# exposed externally. Redis is either the same containerized/single-replica/internal-only pattern,
-# or a managed Azure Cache for Redis instance — see use_azure_cache_for_redis in variables.tf.
+# FHIRBridge's own database (Postgres) and Redis are each either the same
+# containerized/single-replica/internal-only pattern (Azure Files-backed data directories are not
+# safe for concurrent multi-instance processes; reachable by other Container Apps in the same
+# environment via its app name as hostname, Container Apps' built-in internal DNS — never exposed
+# externally) or a managed Azure PaaS service — see use_azure_postgresql/use_azure_cache_for_redis
+# in variables.tf.
 
 terraform {
   required_version = ">= 1.6.0"
@@ -98,10 +99,9 @@ locals {
   # its OWN public URL — Container Apps' FQDN is always "<app-name>.<environment-default-domain>",
   # and the environment's default_domain doesn't depend on any individual app, so this avoids the
   # self-reference a resource would otherwise need to read its own computed attributes.
-  sqlserver_name      = "${var.name_prefix}-sqlserver"
+  postgres_name       = "${var.name_prefix}-postgres"
   redis_name          = "${var.name_prefix}-redis"
   fhirbridge_app_name = "${var.name_prefix}-app"
-  demo_app_name       = "${var.name_prefix}-demo-app"
   worker_name         = "${var.name_prefix}-worker"
 
   # Single source of truth for both fhirbridge_app's and worker's ConnectionStrings__Redis (was
@@ -114,6 +114,17 @@ locals {
     "${azurerm_redis_cache.main[0].hostname}:${azurerm_redis_cache.main[0].ssl_port},password=${azurerm_redis_cache.main[0].primary_access_key},ssl=true,abortConnect=false"
     ) : (
     "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password[0].value},ssl=true"
+  )
+
+  # Single source of truth for both fhirbridge_app's and worker's ConnectionStrings__FHIRBridgeDb.
+  # Azure Database for PostgreSQL requires SSL by default and presents a real CA-trusted
+  # certificate (unlike the containerized path's plain internal-network-only connection, which
+  # relies on Container Apps' network isolation instead of TLS — matching how the containerized
+  # postgres/redis paths are already "internal only, no external exposure" by design.
+  fhirbridgedb_connection_string = var.use_azure_postgresql ? (
+    "Host=${azurerm_postgresql_flexible_server.main[0].fqdn};Port=5432;Database=${azurerm_postgresql_flexible_server_database.main[0].name};Username=${azurerm_postgresql_flexible_server.main[0].administrator_login};Password=${var.postgres_password};Ssl Mode=Require;"
+    ) : (
+    "Host=${local.postgres_name};Port=${var.postgres_port};Database=FHIRBridge;Username=fhirbridge;Password=${azurerm_key_vault_secret.postgres_password[0].value};"
   )
 
   # Applied to every resource below that supports `tags` — lets you find/filter/cost-report on
@@ -167,7 +178,7 @@ resource "azurerm_container_app_environment" "main" {
   tags                       = local.common_tags
 }
 
-# --- Persistent storage for SQL Server + Redis (Container Apps are otherwise stateless) ---
+# --- Persistent storage for the containerized Postgres + Redis paths (Container Apps are otherwise stateless) ---
 
 resource "azurerm_storage_account" "main" {
   name                     = local.storage_account_name
@@ -178,8 +189,11 @@ resource "azurerm_storage_account" "main" {
   tags                     = local.common_tags
 }
 
-resource "azurerm_storage_share" "sql_data" {
-  name                 = "sql-data"
+# Only needed for the containerized Postgres path — Azure Database for PostgreSQL is a managed
+# PaaS service with no Azure Files volume of its own. Gated the same as azurerm_container_app.postgres below.
+resource "azurerm_storage_share" "postgres_data" {
+  count                = var.use_azure_postgresql ? 0 : 1
+  name                 = "postgres-data"
   storage_account_name = azurerm_storage_account.main.name
   quota                = 50
 }
@@ -193,12 +207,13 @@ resource "azurerm_storage_share" "redis_data" {
   quota                = 10
 }
 
-resource "azurerm_container_app_environment_storage" "sql_data" {
-  name                         = "sql-data"
+resource "azurerm_container_app_environment_storage" "postgres_data" {
+  count                        = var.use_azure_postgresql ? 0 : 1
+  name                         = "postgres-data"
   container_app_environment_id = azurerm_container_app_environment.main.id
   account_name                 = azurerm_storage_account.main.name
   access_key                   = azurerm_storage_account.main.primary_access_key
-  share_name                   = azurerm_storage_share.sql_data.name
+  share_name                   = azurerm_storage_share.postgres_data[0].name
   access_mode                  = "ReadWrite"
 }
 
@@ -229,7 +244,7 @@ resource "azurerm_container_app_environment_storage" "keys_data" {
 
 # --- Secrets (Key Vault is the source of truth; Terraform variables only seed it) ---
 #
-# The sql_sa_password/jwt_signing_key/redis_password Terraform variables still exist as the
+# The postgres_password/jwt_signing_key/redis_password Terraform variables still exist as the
 # initial seed values, but every Container App below reads the *Key Vault secret's* .value, not
 # the variable directly. `lifecycle.ignore_changes = ["value"]` means that after the first apply,
 # rotating a secret in the Vault (Portal, CLI, or an external rotation process) sticks — a later
@@ -264,9 +279,12 @@ resource "azurerm_key_vault_access_policy" "terraform_kv_secrets" {
   secret_permissions = ["Get", "List", "Set", "Delete", "Purge"]
 }
 
-resource "azurerm_key_vault_secret" "sql_sa_password" {
-  name         = "sql-sa-password"
-  value        = var.sql_sa_password
+# Only needed for the containerized Postgres path — Azure Database for PostgreSQL manages its own
+# admin password directly on the server resource, not via this Key Vault.
+resource "azurerm_key_vault_secret" "postgres_password" {
+  count        = var.use_azure_postgresql ? 0 : 1
+  name         = "postgres-password"
+  value        = var.postgres_password
   key_vault_id = azurerm_key_vault.main.id
   tags         = local.common_tags
   depends_on   = [azurerm_key_vault_access_policy.terraform_kv_secrets]
@@ -490,18 +508,21 @@ resource "azurerm_role_assignment" "tenant_secrets_worker_crypto" {
   principal_id         = azurerm_container_app.worker.identity[0].principal_id
 }
 
-# --- SQL Server Express (internal only, single replica) ---
+# --- FHIRBridge's own database: containerized Postgres (internal only, single replica) — only
+# when NOT using Azure Database for PostgreSQL. Replaces the SQL Server Express container this
+# deployment used before the app migrated from SQL Server to PostgreSQL. ---
 
-resource "azurerm_container_app" "sqlserver" {
-  name                         = local.sqlserver_name
+resource "azurerm_container_app" "postgres" {
+  count                        = var.use_azure_postgresql ? 0 : 1
+  name                         = local.postgres_name
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = data.azurerm_resource_group.main.name
   revision_mode                = "Single"
   tags                         = local.common_tags
 
   secret {
-    name  = "sql-sa-password"
-    value = azurerm_key_vault_secret.sql_sa_password.value
+    name  = "postgres-password"
+    value = azurerm_key_vault_secret.postgres_password[0].value
   }
 
   template {
@@ -509,49 +530,65 @@ resource "azurerm_container_app" "sqlserver" {
     max_replicas = 1
 
     volume {
-      name         = "sql-data"
+      name         = "postgres-data"
       storage_type = "AzureFile"
-      storage_name = azurerm_container_app_environment_storage.sql_data.name
+      storage_name = azurerm_container_app_environment_storage.postgres_data[0].name
     }
 
     container {
-      name   = "sqlserver"
-      image  = "mcr.microsoft.com/mssql/server:2022-latest"
+      name   = "postgres"
+      image  = "postgres:16-alpine"
       cpu    = 1.0
       memory = "2Gi"
 
       env {
-        name  = "ACCEPT_EULA"
-        value = "Y"
+        name  = "POSTGRES_DB"
+        value = "FHIRBridge"
       }
       env {
-        name  = "MSSQL_PID"
-        value = "Express"
+        name  = "POSTGRES_USER"
+        value = "fhirbridge"
       }
       env {
-        name        = "MSSQL_SA_PASSWORD"
-        secret_name = "sql-sa-password"
+        name        = "POSTGRES_PASSWORD"
+        secret_name = "postgres-password"
       }
-      # Container Apps ingress target_port alone doesn't change what SQL Server itself listens
-      # on — this env var does.
+      # Azure Files (SMB) doesn't support the chown/chmod postgres's entrypoint does on PGDATA at
+      # first boot ("Operation not permitted") the way a native/NFS filesystem does — pointing
+      # PGDATA at a subdirectory postgres creates and owns itself (rather than the mount root,
+      # which is externally provisioned) works around it.
       env {
-        name  = "MSSQL_TCP_PORT"
-        value = tostring(var.sql_port)
+        name  = "PGDATA"
+        value = "/var/lib/postgresql/data/pgdata"
       }
 
+      # Postgres has no env-var port override — this passes -p through to the postgres binary to
+      # listen on var.postgres_port, matching the ingress target_port below. Deliberately `args`,
+      # NOT `command`: `command` replaces the image's ENTRYPOINT outright, which for
+      # postgres:16-alpine is docker-entrypoint.sh — the script that does the chown/chmod on PGDATA
+      # referenced above AND drops from root to the unprivileged `postgres` user via gosu before
+      # exec'ing the server. A `command` override skips it, running the postgres binary directly as
+      # root, which postgres refuses outright ("must not be run as root"), crash-looping the
+      # container — confirmed live via the equivalent Bicep template's identical bug (see
+      # main.bicep's postgresApp resource). `args` instead overrides only the image's CMD, leaving
+      # ENTRYPOINT (docker-entrypoint.sh) intact — entrypoint.sh sees the leading `-p` and
+      # auto-prepends `postgres` itself, so the effective command stays `postgres -p <port>`, just
+      # routed through the privilege-dropping entrypoint instead of around it.
+      args = ["-p", tostring(var.postgres_port)]
+
       volume_mounts {
-        name = "sql-data"
-        path = "/var/opt/mssql"
+        name = "postgres-data"
+        path = "/var/lib/postgresql/data"
       }
     }
   }
 
   ingress {
-    # See var.sql_external_access's description — defaults to false (internal-only, as this
+    # See var.postgres_external_access's description — defaults to false (internal-only, as this
     # deployment is otherwise built around network isolation). Only ever set to true deliberately,
-    # for a temporary connectivity check (e.g. connecting with SSMS), then revert and re-apply.
-    external_enabled = var.sql_external_access
-    target_port      = var.sql_port
+    # for a temporary connectivity check (e.g. connecting with psql/pgAdmin), then revert and re-apply.
+    external_enabled = var.postgres_external_access
+    target_port      = var.postgres_port
     transport        = "tcp"
 
     traffic_weight {
@@ -559,6 +596,47 @@ resource "azurerm_container_app" "sqlserver" {
       percentage      = 100
     }
   }
+}
+
+# --- FHIRBridge's own database: Azure Database for PostgreSQL Flexible Server — only when
+# use_azure_postgresql is true. No VNet in this deployment (Container Apps here use the platform's
+# own managed networking, not a customer VNet), so this uses public network access + a firewall
+# rule allowing Azure-internal traffic, rather than private VNet integration — the simplest setup
+# that still keeps the server unreachable from the public internet by anything except Azure's own
+# services (and, indirectly, this environment's Container Apps). ---
+
+resource "azurerm_postgresql_flexible_server" "main" {
+  count                  = var.use_azure_postgresql ? 1 : 0
+  name                   = "${var.name_prefix}-pg"
+  resource_group_name    = data.azurerm_resource_group.main.name
+  location               = data.azurerm_resource_group.main.location
+  version                = "16"
+  administrator_login    = "fhirbridgeadmin"
+  administrator_password = var.postgres_password
+  storage_mb             = var.azure_postgresql_storage_mb
+  sku_name               = var.azure_postgresql_sku
+  zone                   = null
+  tags                   = local.common_tags
+
+  lifecycle {
+    ignore_changes = [zone]
+  }
+}
+
+resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_services" {
+  count            = var.use_azure_postgresql ? 1 : 0
+  name             = "AllowAzureServices"
+  server_id        = azurerm_postgresql_flexible_server.main[0].id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+resource "azurerm_postgresql_flexible_server_database" "main" {
+  count     = var.use_azure_postgresql ? 1 : 0
+  name      = "FHIRBridge"
+  server_id = azurerm_postgresql_flexible_server.main[0].id
+  collation = "en_US.utf8"
+  charset   = "UTF8"
 }
 
 # --- Redis (internal only, single replica) — only when NOT using Azure Cache for Redis ---
@@ -667,9 +745,11 @@ resource "azurerm_container_app" "fhirbridge_app" {
   revision_mode                = "Single"
   tags                         = local.common_tags
 
-  # Connection strings reference sqlserver/redis by their plain (predictable) name rather than a
-  # resource attribute, so this dependency has to be spelled out explicitly.
-  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis]
+  # Redis is reached by its plain (predictable) name rather than a resource attribute in the
+  # containerized path, so this dependency has to be spelled out explicitly. The Postgres
+  # connection (both containerized and managed) is referenced via a resource attribute inside
+  # local.fhirbridgedb_connection_string instead, so Terraform infers that dependency automatically.
+  depends_on = [azurerm_container_app.redis]
 
   # System-assigned so DefaultAzureCredential (AzureKeyVaultSecretProvider/Writer) can authenticate
   # to the tenant secrets Key Vault with no credential material to manage. Added unconditionally —
@@ -679,10 +759,6 @@ resource "azurerm_container_app" "fhirbridge_app" {
     type = "SystemAssigned"
   }
 
-  secret {
-    name  = "sql-sa-password"
-    value = azurerm_key_vault_secret.sql_sa_password.value
-  }
   secret {
     name  = "jwt-signing-key"
     value = azurerm_key_vault_secret.jwt_signing_key.value
@@ -714,7 +790,11 @@ resource "azurerm_container_app" "fhirbridge_app" {
       }
       env {
         name  = "ConnectionStrings__FHIRBridgeDb"
-        value = "Server=${local.sqlserver_name},${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True"
+        value = local.fhirbridgedb_connection_string
+      }
+      env {
+        name  = "Database__Provider"
+        value = "PostgreSql"
       }
       env {
         name  = "ConnectionStrings__Redis"
@@ -742,24 +822,6 @@ resource "azurerm_container_app" "fhirbridge_app" {
       env {
         name  = "ApiBaseUrl"
         value = "http://127.0.0.1:5000/"
-      }
-      # Demo app is a separate origin whose frontend calls this API cross-origin. Computed from
-      # the demo app's own (plain-string) name + the environment's default domain — a Container
-      # App's FQDN is always predictable this way, so this needs no second `apply`.
-      env {
-        name  = "Portal__AllowedOrigins__0"
-        value = "https://${local.demo_app_name}.${azurerm_container_app_environment.main.default_domain}"
-      }
-      # Only emitted once demo_app_custom_domain is actually set — otherwise the demo app only
-      # ever calls from its default *.azurecontainerapps.io origin, which __0 above already covers.
-      # Without this, binding a custom domain to the demo app would silently break its own calls
-      # into this API with a CORS rejection, since its new origin wouldn't be on the allowlist.
-      dynamic "env" {
-        for_each = var.demo_app_custom_domain != "" ? [1] : []
-        content {
-          name  = "Portal__AllowedOrigins__1"
-          value = "https://${var.demo_app_custom_domain}"
-        }
       }
       env {
         name  = "AllowedHosts"
@@ -821,70 +883,6 @@ resource "azurerm_container_app" "fhirbridge_app" {
   }
 }
 
-# --- Demo app (self-hosts its own frontend), public ---
-
-resource "azurerm_container_app" "demo_app" {
-  name                         = local.demo_app_name
-  container_app_environment_id = azurerm_container_app_environment.main.id
-  resource_group_name          = data.azurerm_resource_group.main.name
-  revision_mode                = "Single"
-  tags                         = local.common_tags
-
-  depends_on = [azurerm_container_app.sqlserver]
-
-  secret {
-    name  = "sql-sa-password"
-    value = azurerm_key_vault_secret.sql_sa_password.value
-  }
-  secret {
-    name  = "acr-password"
-    value = azurerm_container_registry.acr.admin_password
-  }
-
-  registry {
-    server               = azurerm_container_registry.acr.login_server
-    username             = azurerm_container_registry.acr.admin_username
-    password_secret_name = "acr-password"
-  }
-
-  template {
-    min_replicas = 1
-    max_replicas = 3
-
-    container {
-      name   = "demo-app"
-      image  = "${azurerm_container_registry.acr.login_server}/demo-app:${var.image_tag}"
-      cpu    = 0.25
-      memory = "0.5Gi"
-
-      env {
-        name  = "ASPNETCORE_ENVIRONMENT"
-        value = "Production"
-      }
-      env {
-        name  = "ConnectionStrings__Default"
-        value = "Server=${local.sqlserver_name},${var.sql_port};Database=HealthAppDb;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True"
-      }
-      # Prefer custom demo domain when set so browser origin matches API CORS allowlist.
-      env {
-        name  = "AllowedFrontendOrigin"
-        value = var.demo_app_custom_domain != "" ? "https://${var.demo_app_custom_domain}" : "https://${local.demo_app_name}.${azurerm_container_app_environment.main.default_domain}"
-      }
-    }
-  }
-
-  ingress {
-    external_enabled = true
-    target_port      = 5500
-    transport        = "auto"
-
-    traffic_weight {
-      latest_revision = true
-      percentage      = 100
-    }
-  }
-}
-
 # --- Custom domains (optional, per app) ---
 #
 # Azure managed certificates require the hostname to already exist on a Container App
@@ -913,15 +911,6 @@ resource "azurerm_container_app_custom_domain" "fhirbridge_app" {
   container_app_environment_certificate_id = null
 }
 
-resource "azurerm_container_app_custom_domain" "demo_app" {
-  count            = var.demo_app_custom_domain != "" ? 1 : 0
-  name             = var.demo_app_custom_domain
-  container_app_id = azurerm_container_app.demo_app.id
-
-  certificate_binding_type                 = "Disabled"
-  container_app_environment_certificate_id = null
-}
-
 # --- Worker (no ingress) ---
 
 resource "azurerm_container_app" "worker" {
@@ -934,17 +923,16 @@ resource "azurerm_container_app" "worker" {
   # fhirbridge_app is a head start, not a guarantee: both it and worker auto-migrate FHIRBridgeDb
   # on boot and can race on the initial CREATE DATABASE on a fresh database. Container Apps
   # replaces crashed replicas automatically, which turns a lost race into a self-healing retry.
-  depends_on = [azurerm_container_app.sqlserver, azurerm_container_app.redis, azurerm_container_app.fhirbridge_app]
+  # Redis is reached by its plain (predictable) name in the containerized path, so needs an
+  # explicit dependency the same as on fhirbridge_app; the Postgres connection is inferred
+  # automatically via local.fhirbridgedb_connection_string's resource reference.
+  depends_on = [azurerm_container_app.redis, azurerm_container_app.fhirbridge_app]
 
   # See the identical block on azurerm_container_app.fhirbridge_app for why this exists.
   identity {
     type = "SystemAssigned"
   }
 
-  secret {
-    name  = "sql-sa-password"
-    value = azurerm_key_vault_secret.sql_sa_password.value
-  }
   secret {
     name  = "acr-password"
     value = azurerm_container_registry.acr.admin_password
@@ -972,7 +960,11 @@ resource "azurerm_container_app" "worker" {
       }
       env {
         name  = "ConnectionStrings__FHIRBridgeDb"
-        value = "Server=${local.sqlserver_name},${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${azurerm_key_vault_secret.sql_sa_password.value};Encrypt=True;TrustServerCertificate=True"
+        value = local.fhirbridgedb_connection_string
+      }
+      env {
+        name  = "Database__Provider"
+        value = "PostgreSql"
       }
       env {
         name  = "ConnectionStrings__Redis"
@@ -1057,17 +1049,12 @@ locals {
     "azurerm_log_analytics_workspace.main                 = ${azurerm_log_analytics_workspace.main.id}",
     "azurerm_container_app_environment.main                = ${azurerm_container_app_environment.main.id}",
     "azurerm_storage_account.main                          = ${azurerm_storage_account.main.id}",
-    "azurerm_storage_share.sql_data                        = ${azurerm_storage_share.sql_data.id}",
     "azurerm_storage_share.keys_data                       = ${azurerm_storage_share.keys_data.id}",
-    "azurerm_container_app_environment_storage.sql_data    = ${azurerm_container_app_environment_storage.sql_data.id}",
     "azurerm_container_app_environment_storage.keys_data   = ${azurerm_container_app_environment_storage.keys_data.id}",
     "azurerm_key_vault.main                                = ${azurerm_key_vault.main.id}",
     "azurerm_key_vault_access_policy.terraform_kv_secrets  = ${azurerm_key_vault_access_policy.terraform_kv_secrets.id}",
-    "azurerm_key_vault_secret.sql_sa_password              = ${azurerm_key_vault_secret.sql_sa_password.id}",
     "azurerm_key_vault_secret.jwt_signing_key              = ${azurerm_key_vault_secret.jwt_signing_key.id}",
-    "azurerm_container_app.sqlserver                       = ${azurerm_container_app.sqlserver.id}",
     "azurerm_container_app.fhirbridge_app                  = ${azurerm_container_app.fhirbridge_app.id}",
-    "azurerm_container_app.demo_app                        = ${azurerm_container_app.demo_app.id}",
     "azurerm_container_app.worker                          = ${azurerm_container_app.worker.id}",
     "azurerm_storage_container.manifest (this file's own container) = ${azurerm_storage_container.manifest.id}",
   ])

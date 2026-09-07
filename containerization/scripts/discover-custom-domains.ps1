@@ -1,7 +1,7 @@
 # Read-only discovery helper for the Path A custom-domain flow (custom-domain.bicep - see
-# containerization/azure-deploy/CUSTOM_DOMAIN_SELF_SERVICE.md). Finds the 3 public-facing apps for
-# a given name prefix (FHIRBridge app, Demo app, Terminology server), shows each one's default URL
-# and Azure-assigned domain-verification ID, and - once you type in a domain for an app - prints
+# containerization/azure-deploy/CUSTOM_DOMAIN_SELF_SERVICE.md). Finds the public-facing app for
+# a given name prefix (FHIRBridge app), shows its default URL and
+# Azure-assigned domain-verification ID, and - once you type in a domain for an app - prints
 # the exact CNAME + TXT records to create at your DNS provider, plus ready-to-run
 # custom-domain.bicep deploy commands for both phases (hostname-only, then certificate-bind).
 #
@@ -26,12 +26,10 @@ if ([string]::IsNullOrWhiteSpace($NamePrefix)) {
     $NamePrefix = Read-Host "Name prefix (e.g. segue12)"
 }
 
-# sqlserver/redis/worker/term-db are never eligible - they have no public ingress, so no custom
-# domain is possible for them.
+# the database container/redis/worker are never eligible - they have no public ingress, so no
+# custom domain is possible for them.
 $Candidates = @(
-    @{ Label = "FHIRBridge app"; AppName = "$NamePrefix-app" },
-    @{ Label = "Demo app"; AppName = "$NamePrefix-demo-app" },
-    @{ Label = "Terminology server"; AppName = "$NamePrefix-term" }
+    @{ Label = "FHIRBridge app"; AppName = "$NamePrefix-app" }
 )
 
 Write-Host ""

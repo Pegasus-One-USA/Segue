@@ -1,6 +1,6 @@
-# Persistent storage for SQL Server + Redis + the HAPI terminology server's Postgres (Fargate tasks
-# are otherwise stateless / ephemeral storage only). One filesystem, one access point per stateful
-# service so each gets an isolated root directory.
+# Persistent storage for the containerized Postgres path + Redis (Fargate tasks are otherwise
+# stateless / ephemeral storage only). One filesystem, one access point per stateful service so
+# each gets an isolated root directory.
 
 resource "aws_security_group" "efs" {
   name        = "${var.name_prefix}-efs-sg"
@@ -25,7 +25,7 @@ resource "aws_security_group" "efs" {
 
 resource "aws_efs_file_system" "main" {
   creation_token = "${var.name_prefix}-data"
-  # Encryption at rest — not on by default for EFS. This is PHI-bearing storage (SQL Server +
+  # Encryption at rest — not on by default for EFS. This is PHI-bearing storage (Postgres +
   # Redis data), so it stays on regardless of environment.
   encrypted = true
 
@@ -39,7 +39,10 @@ resource "aws_efs_mount_target" "main" {
   security_groups = [aws_security_group.efs.id]
 }
 
-resource "aws_efs_access_point" "sql_data" {
+# Only needed for the containerized Postgres path — Amazon RDS for PostgreSQL is a managed service
+# with no EFS volume of its own. Gated the same as the postgres ECS task definition/service.
+resource "aws_efs_access_point" "postgres_data" {
+  count          = var.use_rds_postgresql ? 0 : 1
   file_system_id = aws_efs_file_system.main.id
 
   posix_user {
@@ -48,7 +51,7 @@ resource "aws_efs_access_point" "sql_data" {
   }
 
   root_directory {
-    path = "/sql-data"
+    path = "/postgres-data"
     creation_info {
       owner_uid   = 0
       owner_gid   = 0
@@ -67,24 +70,6 @@ resource "aws_efs_access_point" "redis_data" {
 
   root_directory {
     path = "/redis-data"
-    creation_info {
-      owner_uid   = 0
-      owner_gid   = 0
-      permissions = "0755"
-    }
-  }
-}
-
-resource "aws_efs_access_point" "hapi_terminology_postgres_data" {
-  file_system_id = aws_efs_file_system.main.id
-
-  posix_user {
-    uid = 0
-    gid = 0
-  }
-
-  root_directory {
-    path = "/hapi-terminology-postgres-data"
     creation_info {
       owner_uid   = 0
       owner_gid   = 0

@@ -2,17 +2,30 @@
 # See ../../../README.md for the bootstrap order (ACR must exist and have images pushed before
 # the Container Apps that reference them can be created).
 #
-# sql_sa_password / jwt_signing_key / redis_password are only SEED values: the first apply writes
-# them into the Key Vault this config creates (see the key_vault_name output), and every Container
-# App reads the secret's value out of the Vault from then on, not these variables. Rotate a secret
-# afterwards with `az keyvault secret set` (or the Portal) — a later `terraform apply` with the old
-# value here will NOT overwrite it (lifecycle.ignore_changes on each azurerm_key_vault_secret).
+# postgres_password / jwt_signing_key / redis_password are only SEED values for the containerized
+# paths: the first apply writes them into the Key Vault this config creates (see the
+# key_vault_name output), and every Container App reads the secret's value out of the Vault from
+# then on, not these variables. Rotate a secret afterwards with `az keyvault secret set` (or the
+# Portal) — a later `terraform apply` with the old value here will NOT overwrite it
+# (lifecycle.ignore_changes on each azurerm_key_vault_secret). postgres_password is the one
+# exception when use_azure_postgresql is true — see the Postgres block below.
 
 name_prefix         = "fhirbridge"
 resource_group_name = "rg-tusharpuri"   # must already exist: az group create --name rg-tusharpuri --location eastus
 image_tag           = "v1"
-sql_sa_password = "Ch4ngeMe!Str0ng"
 jwt_signing_key = "replace-with-a-long-random-string-at-least-32-chars"
+
+# Postgres (FHIRBridge's own database): false (default, or simply omit use_azure_postgresql) uses
+# a containerized Postgres — postgres_password is REQUIRED in that mode, seeded into Key Vault.
+# true instead creates a managed Azure Database for PostgreSQL Flexible Server (see
+# azure_postgresql_sku/azure_postgresql_storage_mb in variables.tf) — postgres_password becomes
+# that server's actual administrator_password directly (not seeded into Key Vault at all in this
+# mode, since the server resource holds it), so still required either way, just used differently.
+# use_azure_postgresql        = true
+# azure_postgresql_sku        = "B_Standard_B1ms"
+# azure_postgresql_storage_mb = 32768
+
+postgres_password = "replace-with-a-strong-postgres-password"
 
 # Redis: false (default, or simply omit use_azure_cache_for_redis) uses the containerized Redis
 # below — redis_password and redis_trusted_certificate_thumbprint are both REQUIRED in that mode.
@@ -28,20 +41,20 @@ redis_password = "replace-with-a-strong-redis-password"
 # it prints this value. Only needed when use_azure_cache_for_redis is false (the default).
 redis_trusted_certificate_thumbprint = "replace-with-the-thumbprint-generate-cert-printed"
 
-# Optional — internal-only ports for SQL Server / Redis (reached only by the other Container Apps
-# in this environment, never externally; redis_port is meaningless when use_azure_cache_for_redis
-# is true — Azure Cache uses its own ssl_port). Uncomment to override.
-# sql_port   = 1433
-# redis_port = 6379
+# Optional — internal-only ports for Postgres / Redis (reached only by the other Container Apps in
+# this environment, never externally; meaningless for whichever side is on its managed/PaaS option
+# instead — Azure Database for PostgreSQL always uses 5432, Azure Cache uses its own ssl_port).
+# Uncomment to override.
+# postgres_port = 5432
+# redis_port    = 6379
 
-# Note: fhirbridge-app / demo-app have no equivalent port variable — Azure Container Apps external
-# HTTP ingress has no client-configurable port; it's always https://<app>.<domain> with no port
-# number in the URL. See the AWS environment if a client-chosen public port is required.
+# Note: fhirbridge-app has no equivalent port variable — Azure Container Apps external HTTP
+# ingress has no client-configurable port; it's always https://<app>.<domain> with no port number
+# in the URL. See the AWS environment if a client-chosen public port is required.
 
-# Custom domains — see variables.tf. Registers the hostname (no managed SSL cert yet —
+# Custom domain — see variables.tf. Registers the hostname (no managed SSL cert yet —
 # bind_custom_domain_certificates is currently a no-op; see its description in variables.tf).
 # fhirbridge_app_custom_domain        = "app.customer.com"
-# demo_app_custom_domain              = "demo.customer.com"
 # bind_custom_domain_certificates     = false
 
 # Secret storage: false (default, or simply omit) keeps everything on the local DataProtection-

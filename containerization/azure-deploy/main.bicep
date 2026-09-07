@@ -1,25 +1,37 @@
 // FHIRBridge — single-deployment Azure Container Apps template.
 //
-// This is the "easy install" counterpart to ../terraform/environments/azure: same 7-container
-// topology (fhirbridge-app, demo-app, sqlserver, redis, worker, hapi-terminology,
-// hapi-terminology-postgres), same Container Apps Environment design, but expressed as one Bicep
-// template so it can be deployed with a single command or a single "Deploy to Azure" button click,
-// instead of a multi-step `terraform apply`.
+// This is the "easy install" counterpart to ../terraform/environments/azure: same 4-container
+// topology (fhirbridge-app, postgres, redis, worker), same Container Apps Environment
+// design, but expressed as one Bicep template so it can be deployed with a single command or a
+// single "Deploy to Azure" button click, instead of a multi-step `terraform apply`.
+//
+// FHIRBridge's own database (Postgres) is either containerized (default) or a managed Azure
+// Database for PostgreSQL Flexible Server — see the useAzurePostgresql parameter below. Replaces
+// the SQL Server Express container this deployment used before the app migrated from SQL Server to
+// PostgreSQL — there is no SQL Server option anymore. The containerized path runs Postgres on LOCAL
+// (ephemeral) disk, not directly on Azure Files — Postgres's own startup permission check can never
+// pass on an Azure Files/SMB mount (confirmed: chown/chmod always fails there, and Container Apps'
+// azureFile storage type has no mount-options/NFS escape hatch), so a custom image
+// (containerization/docker/postgres-local) instead treats Azure Files purely as an at-rest backup
+// target, restored into local storage on start and saved back out on a graceful stop only — see
+// that image's Dockerfile/entrypoint.sh for the real durability tradeoff this implies.
 //
 // Resource-group scoped: the customer picks/creates the resource group in the Azure Portal's
 // deployment wizard (or via -g on the CLI) — this template does not create the resource group
 // itself.
 //
 // IMPORTANT — image publishing is a prerequisite, not something this template does: a genuinely
-// one-click deploy requires the 4 custom images (fhirbridge-app, demo-app, fhirbridge-worker,
-// fhirbridge-redis) to already exist in a registry the customer's Container Apps can reach BEFORE
-// they click deploy. fhirbridge-redis is stock redis:7-alpine plus a self-signed TLS certificate
-// generated locally (containerization/docker/redis-tls/generate-cert.ps1|sh — run once before
-// building images) — see that Dockerfile for why Redis needs a custom image at all, and this
-// template's redisTrustedCertificateThumbprint parameter for wiring the printed thumbprint in.
-// Build and push images once (see containerization/scripts/build-images.sh|ps1) to whatever
-// registry you control, then point imageRegistryServer/imageTag at that release. See README.md in
-// this folder for the full publishing + one-click deploy story.
+// one-click deploy requires the 4 custom images (fhirbridge-app, fhirbridge-worker,
+// fhirbridge-redis, fhirbridge-postgres) to already exist in a registry the customer's Container
+// Apps can reach BEFORE they click deploy. fhirbridge-redis is stock redis:7-alpine plus a
+// self-signed TLS certificate generated locally (containerization/docker/redis-tls/generate-cert.
+// ps1|sh — run once before building images) — see that Dockerfile for why Redis needs a custom
+// image at all, and this template's redisTrustedCertificateThumbprint parameter for wiring the
+// printed thumbprint in. fhirbridge-postgres is stock postgres:16-alpine plus the backup/restore
+// entrypoint described above — see containerization/docker/postgres-local/Dockerfile. Build and
+// push images once (see containerization/scripts/build-images.sh|ps1) to whatever registry you
+// control, then point imageRegistryServer/imageTag at that release. See README.md in this folder
+// for the full publishing + one-click deploy story.
 
 @description('Short name used to build every resource name in this deployment.')
 param namePrefix string = 'fhirbridge'
@@ -27,9 +39,12 @@ param namePrefix string = 'fhirbridge'
 @description('Azure region for every resource. Defaults to the resource group\'s own region.')
 param location string = resourceGroup().location
 
-@description('SQL Server SA password. Must satisfy SQL Server\'s complexity policy.')
+@description('Chooses which Postgres FHIRBridge\'s own database (FHIRBridgeDb) gets. false (default) keeps a containerized Postgres (stock postgres:16-alpine, Azure Files-backed persistence, single replica, internal-only network access). true creates a managed Azure Database for PostgreSQL Flexible Server instead and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no volume; Azure manages patching/backups/HA.')
+param useAzurePostgresql bool = false
+
+@description('Password for FHIRBridge\'s own Postgres database. In the containerized path (useAzurePostgresql = false) this is the \'fhirbridge\' role\'s password; in the managed path (true) this is the Flexible Server\'s administrator password directly. Required either way.')
 @secure()
-param sqlSaPassword string
+param postgresPassword string
 
 @description('FHIRBridge.Api\'s Authentication:SigningKey (HS256). At least 32 random characters.')
 @secure()
@@ -50,42 +65,52 @@ param imageRegistryUsername string = ''
 @secure()
 param imageRegistryPassword string = ''
 
-@description('Port SQL Server Express listens on (internal-only — reached only by the other Container Apps in this environment, never externally). Passed to the container as MSSQL_TCP_PORT since ingress targetPort alone does not change what SQL Server itself listens on.')
-param sqlPort int = 1433
+@description('Port the containerized Postgres listens on (internal-only — reached only by the other Container Apps in this environment, never externally). Passed to the container via a `-p` args override (through the image\'s own entrypoint, not replacing it), since Postgres has no env-var port setting. Meaningless when useAzurePostgresql is true — Azure Database for PostgreSQL always uses 5432.')
+param postgresPort int = 5432
 
 @description('Port Redis listens on (internal-only). Passed to the container via a redis-server --port override, since Redis has no env-var port setting.')
 param redisPort int = 6379
 
-@description('Password Redis requires (--requirepass) — defense-in-depth on top of network isolation. Passed as a plain container command argument (Redis has no env-var equivalent and Container Apps command arguments have no secretRef option), so it is visible to anyone with read access to this Container App\'s configuration — same exposure level as any other command argument.')
+@description('Chooses which Redis this deployment gets. false (default) keeps the existing containerized Redis — self-signed TLS cert baked into the fhirbridge-redis image, Azure Files-backed persistence, single replica, requires redisPassword/redisTrustedCertificateThumbprint. true creates an Azure Managed Redis cluster instead (Microsoft.Cache/redisEnterprise — classic Microsoft.Cache/redis is being retired and is already blocked for new caches in some subscriptions, see https://aka.ms/AzureCacheForRedisRetirement) and points ConnectionStrings:Redis at it — no container, no volume, no self-signed cert to generate; Azure issues its own CA-trusted certificate, which FHIRBridge.Api/.Worker accept automatically. redisPassword and redisTrustedCertificateThumbprint are both ignored in this mode — Azure Managed Redis manages its own access keys and presents its own trusted certificate.')
+param useAzureCacheForRedis bool = false
+
+@description('Password the containerized Redis requires (--requirepass) — defense-in-depth on top of network isolation. Passed as a plain container command argument (Redis has no env-var equivalent and Container Apps command arguments have no secretRef option), so it is visible to anyone with read access to this Container App\'s configuration — same exposure level as any other command argument. Required when useAzureCacheForRedis is false; ignored when true (Azure Cache manages its own access keys).')
 @secure()
-param redisPassword string
+param redisPassword string = ''
 
-@description('SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn\'t match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs.')
-param redisTrustedCertificateThumbprint string
+@description('SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn\'t match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs. Required when useAzureCacheForRedis is false; leave blank when true — Azure Cache presents a normal CA-trusted certificate that needs no pinning.')
+param redisTrustedCertificateThumbprint string = ''
 
-@description('Password for the hapi_terminology Postgres role backing the HAPI terminology server\'s own schema (internal-only — not the app\'s own FHIRBridgeDb).')
-@secure()
-param hapiTerminologyPostgresPassword string
+@description('Azure Managed Redis SKU — a curated subset of the full Microsoft.Cache/redisEnterprise sku.name enum (e.g. also Balanced_B10/B20/..., ComputeOptimized_X5/X10/..., MemoryOptimized_M20/M50/...), which is already a valid raw ARM value so no sku/family/capacity translation is needed (unlike the retired classic Azure Cache for Redis). Only consulted when useAzureCacheForRedis is true.')
+@allowed(['Balanced_B0', 'Balanced_B5', 'MemoryOptimized_M10'])
+param azureCacheForRedisTier string = 'Balanced_B0'
 
-@description('Exposes the HAPI terminology server externally (Container Apps external ingress) so it can be reached directly from outside this environment — e.g. a separate terminology admin tool, or a third-party integration — rather than only internally by fhirbridge-app/worker. Defaults to false (internal-only, like sqlserver/redis). Setting hapiTerminologyCustomDomain also forces this on, since Azure Container Apps custom domains require external ingress.')
-param hapiTerminologyExternalAccess bool = false
+@description('The deployment-time choice between two secret-storage modes (see Documents/KeyVault-Implementation.html): false (default) keeps tenant SourceConnection/DestinationConfiguration secrets and the app\'s own 4 app-level secrets (jwt-signing-key etc.) on the local DataProtection-encrypted ProvisionedSecrets DB table — no Key Vault resource, no extra permission needed. true creates a dedicated RBAC-enabled Key Vault, grants the fhirbridgeApp/worker Container Apps\' system-assigned managed identities (and the identity running this deployment) the Key Vault Secrets Officer role on it, creates an RSA key for DataProtection key-ring wrapping (Crypto User granted to both apps), and points KeyVault:VaultName/KeyVault:UseAzureKeyVault/DataProtection:KeyVaultKeyId at it — the app reads/writes secrets there automatically via CompositeSecretProvider/Writer, with the local DB table remaining as an automatic fallback (KeyVault:AllowConfigurationFallback). Unlike the Terraform azure environment, this template does NOT pre-seed the 4 app-level secrets — AppSecretProvisioner generates and writes them itself on first boot once the RBAC role above is in place, which keeps this template free of any secret-generation logic of its own.')
+param enableTenantSecretsKeyVault bool = false
 
-@description('Custom domain for the HAPI terminology server (e.g. terminology.customer.com). Leave blank to use the auto-generated *.azurecontainerapps.io URL once hapiTerminologyExternalAccess is true. Same three-deploy flow as fhirbridgeAppCustomDomain (including the required first deploy with this left blank) — see the hapiTerminologyDomainVerificationId output.')
-param hapiTerminologyCustomDomain string = ''
+// Granting an RBAC role needs Microsoft.Authorization/roleAssignments/write (Owner or User Access
+// Administrator) on the vault/resource group — a Contributor-only account can create the vault
+// itself just fine but will get an authorization error on the role assignments below specifically.
+// If that happens: redeploy with enableTenantSecretsKeyVault left false, then have someone with
+// sufficient rights grant these manually using the fhirbridgeAppPrincipalId/workerPrincipalId
+// outputs plus their own account's object ID:
+//   az role assignment create --role "Key Vault Secrets Officer" --assignee <principal-id> --scope <tenantSecretsKeyVaultId output>
+//   az role assignment create --role "Key Vault Crypto User" --assignee <principal-id> --scope <tenantSecretsKeyVaultId output>
+// then redeploy with enableTenantSecretsKeyVault=true once those are in place.
+var keyVaultSecretsOfficerRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')
+var keyVaultCryptoOfficerRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '14b46e9e-c2b7-41b4-b07b-48a6ebf60603')
+var keyVaultCryptoUserRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '12338af0-0e69-4776-bea7-57ae8d297424')
 
 @description('Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank to keep the auto-generated *.azurecontainerapps.io URL. REQUIRED three-deploy flow, not two, to avoid InvalidCustomHostNameValidation/RequireCustomHostnameInEnvironment: (0) first deploy with this LEFT BLANK, so the app is actually created — Azure only assigns its customDomainVerificationId once the app exists, and there is no way to know that ID in advance, so setting a domain on the very first-ever deploy of a given namePrefix always fails with "a TXT record ... was not found"; (1) once deployed, read fhirbridgeAppDomainVerificationId, create CNAME (domain -> fhirbridgeAppUrl hostname) + TXT asuid.<domain> = that id, wait for DNS, THEN redeploy with this domain set and bindCustomDomainCertificates=false — registers the hostname (bindingType Disabled, no cert yet); (2) redeploy again with the SAME domain and bindCustomDomainCertificates=true — creates the managed certificate (hostname already exists) then binds SniEnabled SSL.')
 param fhirbridgeAppCustomDomain string = ''
 
-@description('Custom domain for the Demo app. Same three-deploy flow as fhirbridgeAppCustomDomain (including the required first deploy with this left blank) — see the demoAppDomainVerificationId output.')
-param demoAppCustomDomain string = ''
-
 @description('Phase-2 flag. false (default) = register custom hostnames only (bindingType Disabled), do NOT create managed certificates. true = create managed certificates and bind SniEnabled SSL. Only set true AFTER hostnames were registered in a prior deploy AND DNS CNAME + asuid TXT have propagated. Setting true on first deploy with a new domain causes RequireCustomHostnameInEnvironment.')
 param bindCustomDomainCertificates bool = false
 
-// The 3 params below are DELIBERATELY inert - captured here purely so a customer can note their
+// The param below is DELIBERATELY inert - captured here purely so a customer can note their
 // intended domain while filling out this wizard, without touching Azure at all (no
 // customDomains/ingress/certificate wiring, no TXT-record requirement, no risk of
-// InvalidCustomHostNameValidation on a first-ever deploy). They're only echoed back in this
+// InvalidCustomHostNameValidation on a first-ever deploy). It's only echoed back in this
 // template's outputs, as a plain reminder - actually activating a domain is a separate step (see
 // custom-domain.bicep / containerization/azure-deploy/CUSTOM_DOMAIN_SELF_SERVICE.md), which
 // re-asks for the domain and does the real work once this app already exists.
@@ -93,20 +118,34 @@ param bindCustomDomainCertificates bool = false
 @description('Domain you intend to use for the FHIRBridge app later (e.g. app.customer.com) - purely a reminder, echoed in this deployment\'s outputs. Does not configure anything in Azure by itself; activate it afterward with custom-domain.bicep (Step 2).')
 param fhirbridgeAppIntendedDomain string = ''
 
-@description('Domain you intend to use for the Demo app later - purely a reminder, echoed in this deployment\'s outputs. Activate it afterward with custom-domain.bicep (Step 2).')
-param demoAppIntendedDomain string = ''
-
-@description('Domain you intend to use for the HAPI terminology server later - purely a reminder, echoed in this deployment\'s outputs. Activate it afterward with custom-domain.bicep (Step 2).')
-param hapiTerminologyIntendedDomain string = ''
-
-// fhirbridge-app / demo-app have no equivalent parameter: Azure Container Apps external HTTP
+// fhirbridge-app has no equivalent parameter: Azure Container Apps external HTTP
 // ingress has no client-configurable port — it's always https://<app>.<domain> with no port
 // number in the URL, regardless of targetPort. That's a genuine Container Apps platform
 // constraint, not something this template can work around.
 
-@description('SQL Server container size.')
+@description('Containerized Postgres container size. Meaningless when useAzurePostgresql is true — the managed Flexible Server is sized via azurePostgresqlSku/azurePostgresqlStorageMb instead.')
 @allowed(['Small', 'Medium', 'Large', 'XLarge'])
-param sqlServerSize string = 'Large'
+param postgresSize string = 'Large'
+
+@description('Azure Database for PostgreSQL Flexible Server compute/pricing tier — a curated key, not a raw Azure SKU name, so an invalid tier/SKU combination (ParameterOutOfRange) is impossible. Mapped to the actual sku.name/sku.tier pair via postgresSkuMap below. Only consulted when useAzurePostgresql is true.')
+@allowed(['Burstable_B1ms', 'Burstable_B2s', 'GeneralPurpose_D2s_v3', 'GeneralPurpose_D4s_v3'])
+param azurePostgresqlSku string = 'Burstable_B1ms'
+
+@description('Azure Database for PostgreSQL Flexible Server storage size, from the platform\'s supported set (32GB is the minimum). Only consulted when useAzurePostgresql is true — storage can only be scaled up later, not down, so don\'t over-provision speculatively.')
+@allowed([32768, 65536, 131072, 262144])
+param azurePostgresqlStorageMb int = 32768
+
+// Curated key -> real Azure SKU name/tier pair. Azure's ARM API requires sku.name to be a plain
+// VM size (e.g. "Standard_B1ms") and sku.tier to independently match its family (Burstable /
+// GeneralPurpose / MemoryOptimized) — passing a combined string like "B_Standard_B1ms" (the format
+// Terraform's azurerm provider accepts and splits internally) directly as sku.name fails with
+// ParameterOutOfRange. This map is the single place that translation happens.
+var postgresSkuMap = {
+  Burstable_B1ms: { name: 'Standard_B1ms', tier: 'Burstable' }
+  Burstable_B2s: { name: 'Standard_B2s', tier: 'Burstable' }
+  GeneralPurpose_D2s_v3: { name: 'Standard_D2s_v3', tier: 'GeneralPurpose' }
+  GeneralPurpose_D4s_v3: { name: 'Standard_D4s_v3', tier: 'GeneralPurpose' }
+}
 
 @description('Redis container size.')
 @allowed(['Small', 'Medium', 'Large', 'XLarge'])
@@ -116,28 +155,15 @@ param redisSize string = 'Medium'
 @allowed(['Small', 'Medium', 'Large', 'XLarge'])
 param fhirbridgeAppSize string = 'Medium'
 
-@description('Demo app container size.')
-@allowed(['Small', 'Medium', 'Large', 'XLarge'])
-param demoAppSize string = 'Small'
-
 @description('Worker container size.')
 @allowed(['Small', 'Medium', 'Large', 'XLarge'])
 param workerSize string = 'Small'
 
-@description('HAPI terminology server container size.')
-@allowed(['Small', 'Medium', 'Large', 'XLarge'])
-param hapiTerminologySize string = 'Large'
-
-@description('HAPI terminology server Postgres container size.')
-@allowed(['Small', 'Medium', 'Large', 'XLarge'])
-param hapiTerminologyPostgresSize string = 'Medium'
-
 // Azure Container Apps' Consumption plan only accepts CPU/memory at a fixed 1:2 ratio from a
 // specific set of valid pairs — arbitrary combinations are rejected at deploy time. Exposing raw
 // numeric fields to the customer risks an invalid combo, so every container picks from this same
-// preset ladder instead. XLarge exists mainly for sqlServerSize: SQL Server's first-run
-// initialization can spike memory harder than steady-state, and 2Gi (Large) has been observed
-// hitting an OOM kill (container exit code 137) during that one-time setup.
+// preset ladder instead. XLarge remains available across the board for whichever container needs
+// the headroom under a particular workload.
 var containerSizes = {
   Small:  { cpu: json('0.25'), memory: '0.5Gi' }
   Medium: { cpu: json('0.5'),  memory: '1Gi' }
@@ -169,12 +195,9 @@ var storageAccountName = toLower('${take(namePrefix, 9)}st${uniqueSuffix}')
 // public URL from its own name + the environment's default domain — a Container App's FQDN is
 // always "<app-name>.<environment-default-domain>", and the environment's domain doesn't depend
 // on any individual app, so this needs no circular self-reference.
-var sqlServerName = '${namePrefix}-sqlserver'
+var postgresName = '${namePrefix}-postgres'
 var redisName = '${namePrefix}-redis'
-var hapiTerminologyPostgresName = '${namePrefix}-term-db' // kept short — Container App names cap at 32 chars
-var hapiTerminologyName = '${namePrefix}-term'
 var fhirbridgeAppName = '${namePrefix}-app'
-var demoAppName = '${namePrefix}-demo-app'
 var workerName = '${namePrefix}-worker'
 
 var hasRegistryCreds = !empty(imageRegistryUsername)
@@ -191,6 +214,116 @@ var registrySecret = hasRegistryCreds ? [
     value: imageRegistryPassword
   }
 ] : []
+
+// --- Tenant secrets Key Vault — only when enableTenantSecretsKeyVault is true. What the running
+//     app reads/writes to continuously at runtime via CompositeSecretProvider/Writer (tenant
+//     SourceConnection/DestinationConfiguration secrets, plus the 4 app-level secrets —
+//     jwt-signing-key etc. — which AppSecretProvisioner self-provisions on first boot once the RBAC
+//     role below is in place; this template deliberately does not pre-seed them itself, unlike the
+//     Terraform azure environment, to avoid needing any secret-generation logic here). RBAC-enabled
+//     (not classic access policies) so access is granted via role assignments below. ---
+
+// Key Vault names: alnum + hyphen, <=24 chars, globally unique. Truncated the same way
+// storageAccountName is above, for the same reason (namePrefix can be up to 21 chars).
+var tenantSecretsKeyVaultName = toLower('${take(namePrefix, 8)}-tkv-${take(uniqueSuffix, 8)}')
+
+resource tenantSecretsKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' = if (enableTenantSecretsKeyVault) {
+  name: tenantSecretsKeyVaultName
+  location: location
+  tags: commonTags
+  properties: {
+    tenantId: tenant().tenantId
+    sku: { family: 'A', name: 'standard' }
+    enableRbacAuthorization: true
+    softDeleteRetentionInDays: 7
+  }
+}
+
+// Grants the identity running this deployment permission to read/set secrets and create the
+// DataProtection key below — mirrors the Terraform azure environment's identical bootstrap grant.
+// Needs Owner/User Access Administrator on the resource group; see enableTenantSecretsKeyVault's
+// description above for the fallback if this deployment's identity only has Contributor.
+resource tenantSecretsDeployerSecretsOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
+  name: guid(tenantSecretsKeyVaultName, deployer().objectId, 'KeyVaultSecretsOfficer')
+  scope: tenantSecretsKeyVault
+  properties: {
+    roleDefinitionId: keyVaultSecretsOfficerRoleId
+    principalId: deployer().objectId
+  }
+}
+
+// Creating a Key object (not just a Secret) needs Key Vault Crypto OFFICER — broader than what the
+// app itself needs at runtime (Crypto USER, wrap/unwrap only — granted to fhirbridgeApp/worker below).
+resource tenantSecretsDeployerCryptoOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
+  name: guid(tenantSecretsKeyVaultName, deployer().objectId, 'KeyVaultCryptoOfficer')
+  scope: tenantSecretsKeyVault
+  properties: {
+    roleDefinitionId: keyVaultCryptoOfficerRoleId
+    principalId: deployer().objectId
+  }
+}
+
+// DataProtection key-ring protection (Documents/KeyVault-Implementation.html §3/§7's
+// DataProtection:KeyVaultKeyId) — wraps the app's DataProtection key ring using this key's
+// wrap/unwrap operations instead of a local certificate. Depends explicitly on the Crypto Officer
+// grant above: Azure AD role-assignment propagation can lag a few seconds behind the assignment's
+// own creation, and without this dependsOn, ARM could attempt to create the key before the grant
+// has actually taken effect.
+resource dataProtectionKey 'Microsoft.KeyVault/vaults/keys@2023-07-01' = if (enableTenantSecretsKeyVault) {
+  parent: tenantSecretsKeyVault
+  name: '${namePrefix}-dataprotection-key'
+  properties: {
+    kty: 'RSA'
+    keySize: 2048
+    keyOps: ['wrapKey', 'unwrapKey']
+  }
+  dependsOn: [tenantSecretsDeployerCryptoOfficer]
+}
+
+// fhirbridgeApp/worker's system-assigned identities aren't known until those resources are
+// declared below, but Bicep resolves resources by symbolic name regardless of file order, so these
+// can live here alongside the vault they grant access to. principalType 'ServicePrincipal' avoids
+// an Azure AD replication-lag failure (PrincipalNotFound) that can otherwise occur when granting a
+// role to an identity created earlier in this same deployment.
+resource tenantSecretsFhirbridgeAppSecretsOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
+  name: guid(tenantSecretsKeyVaultName, fhirbridgeAppName, 'KeyVaultSecretsOfficer')
+  scope: tenantSecretsKeyVault
+  properties: {
+    roleDefinitionId: keyVaultSecretsOfficerRoleId
+    principalId: fhirbridgeApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource tenantSecretsWorkerSecretsOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
+  name: guid(tenantSecretsKeyVaultName, workerName, 'KeyVaultSecretsOfficer')
+  scope: tenantSecretsKeyVault
+  properties: {
+    roleDefinitionId: keyVaultSecretsOfficerRoleId
+    principalId: workerApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource tenantSecretsFhirbridgeAppCryptoUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
+  name: guid(tenantSecretsKeyVaultName, fhirbridgeAppName, 'KeyVaultCryptoUser')
+  scope: tenantSecretsKeyVault
+  properties: {
+    roleDefinitionId: keyVaultCryptoUserRoleId
+    principalId: fhirbridgeApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource tenantSecretsWorkerCryptoUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
+  name: guid(tenantSecretsKeyVaultName, workerName, 'KeyVaultCryptoUser')
+  scope: tenantSecretsKeyVault
+  properties: {
+    roleDefinitionId: keyVaultCryptoUserRoleId
+    principalId: workerApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
 
 // --- Container Apps environment (Log Analytics is required, not optional, for Container Apps) ---
 
@@ -219,7 +352,7 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-// --- Persistent storage for SQL Server + Redis (Container Apps are otherwise stateless) ---
+// --- Persistent storage for the containerized Postgres + Redis (Container Apps are otherwise stateless) ---
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -229,12 +362,16 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   kind: 'StorageV2'
 }
 
-resource sqlDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
-  name: '${storageAccount.name}/default/sql-data'
+// Only needed for the containerized Postgres path — Azure Database for PostgreSQL is a managed
+// PaaS service with no Azure Files volume of its own. Gated the same as postgresApp below.
+resource postgresDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = if (!useAzurePostgresql) {
+  name: '${storageAccount.name}/default/postgres-data'
   properties: { shareQuota: 50 }
 }
 
-resource redisDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
+// Only needed for the containerized Redis path — Azure Cache for Redis is a managed PaaS service
+// with no Azure Files volume of its own. Gated the same as redisApp below.
+resource redisDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = if (!useAzureCacheForRedis) {
   name: '${storageAccount.name}/default/redis-data'
   properties: { shareQuota: 10 }
 }
@@ -244,21 +381,21 @@ resource keysDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@20
   properties: { shareQuota: 1 }
 }
 
-resource sqlDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+resource postgresDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = if (!useAzurePostgresql) {
   parent: containerAppEnv
-  name: 'sql-data'
+  name: 'postgres-data'
   properties: {
     azureFile: {
       accountName: storageAccount.name
       accountKey: storageAccount.listKeys().keys[0].value
-      shareName: 'sql-data'
+      shareName: 'postgres-data'
       accessMode: 'ReadWrite'
     }
   }
-  dependsOn: [sqlDataShare]
+  dependsOn: [postgresDataShare]
 }
 
-resource redisDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+resource redisDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = if (!useAzureCacheForRedis) {
   parent: containerAppEnv
   name: 'redis-data'
   properties: {
@@ -287,53 +424,191 @@ resource keysDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01'
 }
 
 
-// --- SQL Server Express (internal only, single replica — Azure Files isn't safe for concurrent
-//     multi-instance SQL Server) ---
+// --- FHIRBridge's own database: containerized Postgres (internal only, single replica — local
+//     ephemeral disk isn't safe for concurrent multi-instance Postgres either way) — only when NOT
+//     using Azure Database for PostgreSQL. Replaces the SQL Server Express container this
+//     deployment used before the app migrated from SQL Server to PostgreSQL. ---
 
-resource sqlserverApp 'Microsoft.App/containerApps@2024-03-01' = {
-  name: sqlServerName
+resource postgresApp 'Microsoft.App/containerApps@2024-03-01' = if (!useAzurePostgresql) {
+  name: postgresName
   location: location
   tags: commonTags
   properties: {
     managedEnvironmentId: containerAppEnv.id
     configuration: {
-      secrets: [
-        { name: 'sql-sa-password', value: sqlSaPassword }
-      ]
+      secrets: concat([
+        { name: 'postgres-password', value: postgresPassword }
+      ], registrySecret)
+      registries: registryConfig
       ingress: {
         external: false
-        targetPort: sqlPort
+        targetPort: postgresPort
         transport: 'tcp'
       }
     }
+    // Generous grace period (default is much shorter) so the custom image's shutdown handler has
+    // time to stop postgres cleanly AND copy PGDATA out to the backup mount before Container Apps
+    // force-kills the replica — see containerization/docker/postgres-local/entrypoint.sh.
     template: {
+      terminationGracePeriodSeconds: 90
       containers: [
         {
-          name: 'sqlserver'
-          image: 'mcr.microsoft.com/mssql/server:2022-latest'
-          resources: containerSizes[sqlServerSize]
+          name: 'postgres'
+          // Custom image (not stock postgres:16-alpine): Postgres's own startup permission check
+          // can never pass directly on Azure Files (SMB) — see this image's own Dockerfile comment.
+          // This wraps the stock image with a copy-in/copy-out entrypoint that runs Postgres on
+          // local (ephemeral) disk instead, using the Azure Files mount below purely as an at-rest
+          // backup target restored on start / saved on graceful stop. Real durability tradeoff:
+          // anything written since the last graceful shutdown is lost on a non-graceful restart —
+          // accepted here since there is no supported way to give Postgres real POSIX permissions
+          // on Container Apps' only persistent-storage option (confirmed: azureFile only exposes
+          // accountName/accountKey/shareName/accessMode — no mount-options/NFS escape hatch).
+          image: '${imageRegistryServer}/fhirbridge-postgres:${imageTag}'
+          resources: containerSizes[postgresSize]
           env: [
-            { name: 'ACCEPT_EULA', value: 'Y' }
-            { name: 'MSSQL_PID', value: 'Express' }
-            { name: 'MSSQL_SA_PASSWORD', secretRef: 'sql-sa-password' }
-            { name: 'MSSQL_TCP_PORT', value: string(sqlPort) }
+            { name: 'POSTGRES_DB', value: 'FHIRBridge' }
+            { name: 'POSTGRES_USER', value: 'fhirbridge' }
+            { name: 'POSTGRES_PASSWORD', secretRef: 'postgres-password' }
+            // Where the backup mount (below) is available inside the container — entrypoint.sh
+            // restores PGDATA from here on start and saves back here on graceful stop. PGDATA
+            // itself is left at the image's own default (local disk), not pointed at this mount.
+            { name: 'PG_BACKUP_DIR', value: '/mnt/pgbackup' }
+          ]
+          // Postgres has no env-var port override — this passes -p through to the postgres binary
+          // to listen on postgresPort, matching the ingress targetPort above. Deliberately `args`,
+          // NOT `command`: `command` replaces the image's ENTRYPOINT outright, which for this image
+          // is entrypoint.sh — the script that runs docker-entrypoint.sh in turn (chowns PGDATA,
+          // drops from root to the unprivileged `postgres` user via gosu) AND handles the
+          // backup/restore around it. Skipping it (as a `command` override would) runs the postgres
+          // binary directly as root with no backup/restore at all, and postgres refuses outright
+          // ("must not be run as root"), crash-looping the container. `args` instead overrides only
+          // the image's CMD, leaving ENTRYPOINT (entrypoint.sh) intact — it sees the leading `-p`
+          // and passes it through to docker-entrypoint.sh, which auto-prepends `postgres` itself,
+          // so the effective command stays `postgres -p <port>`.
+          args: [
+            '-p'
+            string(postgresPort)
           ]
           volumeMounts: [
-            { volumeName: 'sql-data', mountPath: '/var/opt/mssql' }
+            { volumeName: 'postgres-data', mountPath: '/mnt/pgbackup' }
           ]
         }
       ]
       volumes: [
-        { name: 'sql-data', storageType: 'AzureFile', storageName: sqlDataStorage.name }
+        { name: 'postgres-data', storageType: 'AzureFile', storageName: postgresDataStorage.name }
       ]
       scale: { minReplicas: 1, maxReplicas: 1 }
     }
   }
 }
 
-// --- Redis (internal only, single replica) ---
+// --- FHIRBridge's own database: Azure Database for PostgreSQL Flexible Server — only when
+//     useAzurePostgresql is true. No VNet in this deployment (Container Apps here use the
+//     platform's own managed networking, not a customer VNet), so this uses public network access
+//     + a firewall rule allowing Azure-internal traffic, rather than private VNet integration —
+//     the simplest setup that still keeps the server unreachable from the public internet by
+//     anything except Azure's own services (and, indirectly, this environment's Container Apps). ---
 
-resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
+var postgresManagedAdminLogin = 'fhirbridgeadmin'
+
+resource postgresFlexibleServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = if (useAzurePostgresql) {
+  name: '${namePrefix}-pg'
+  location: location
+  tags: commonTags
+  sku: postgresSkuMap[azurePostgresqlSku]
+  properties: {
+    version: '16'
+    administratorLogin: postgresManagedAdminLogin
+    administratorLoginPassword: postgresPassword
+    storage: {
+      storageSizeGB: azurePostgresqlStorageMb / 1024
+    }
+  }
+}
+
+resource postgresFlexibleServerFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = if (useAzurePostgresql) {
+  parent: postgresFlexibleServer
+  name: 'AllowAzureServices'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
+resource postgresFlexibleServerDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = if (useAzurePostgresql) {
+  parent: postgresFlexibleServer
+  name: 'FHIRBridge'
+  properties: {
+    charset: 'UTF8'
+    collation: 'en_US.utf8'
+  }
+}
+
+// Single source of truth for both fhirbridgeApp's and workerApp's ConnectionStrings__FHIRBridgeDb.
+// Azure Database for PostgreSQL requires SSL by default and presents a real CA-trusted
+// certificate (unlike the containerized path's plain internal-network-only connection, which
+// relies on Container Apps' network isolation instead of TLS — matching how the containerized
+// postgres/redis paths are already "internal only, no external exposure" by design).
+var fhirbridgeDbConnectionString = useAzurePostgresql
+  ? 'Host=${postgresFlexibleServer.?properties.fullyQualifiedDomainName};Port=5432;Database=${postgresFlexibleServerDatabase.?name};Username=${postgresManagedAdminLogin};Password=${postgresPassword};Ssl Mode=Require;'
+  : 'Host=${postgresName};Port=${postgresPort};Database=FHIRBridge;Username=fhirbridge;Password=${postgresPassword};'
+
+// --- Redis: Azure Managed Redis (Microsoft.Cache/redisEnterprise) — only when
+//     useAzureCacheForRedis is true. No container, no Azure Files volume, no self-signed TLS cert
+//     to generate/bake into an image — Azure issues a normal CA-trusted certificate, so
+//     FHIRBridge.Api/.Worker's ValidateRedisServerCertificate accepts it automatically as long as
+//     Redis:TrustedCertificateThumbprint is left unset (see the env wiring below — that value is
+//     only ever emitted for the containerized path). minimumTlsVersion 1.2 matches what the app
+//     already requires (ConnectionStrings:Redis must include ssl=true outside Development).
+//     clientProtocol 'Encrypted' is the TLS equivalent for this resource type. clusteringPolicy
+//     'EnterpriseCluster' (not 'OSSCluster') keeps a single logical endpoint that proxies to shards
+//     internally, so the app's plain StackExchange.Redis connection string keeps working unchanged
+//     — 'OSSCluster' would require a cluster-aware client that handles MOVED redirections, which
+//     this codebase's Redis usage was never written for (see the classic-to-managed migration notes
+//     at https://aka.ms/redis/migrate/understand). evictionPolicy 'VolatileLRU' matches the default
+//     classic Azure Cache for Redis used (this codebase's Redis keys — token cache entries, PKCE
+//     codes — are all TTL-bound, so evicting under memory pressure is safe and preferable to
+//     'NoEviction' rejecting writes with an OOM error). ---
+
+resource azureManagedRedis 'Microsoft.Cache/redisEnterprise@2025-04-01' = if (useAzureCacheForRedis) {
+  name: '${namePrefix}-cache'
+  location: location
+  tags: commonTags
+  sku: {
+    name: azureCacheForRedisTier
+  }
+  properties: {
+    minimumTlsVersion: '1.2'
+    highAvailability: 'Enabled'
+  }
+}
+
+resource azureManagedRedisDatabase 'Microsoft.Cache/redisEnterprise/databases@2025-04-01' = if (useAzureCacheForRedis) {
+  parent: azureManagedRedis
+  name: 'default'
+  properties: {
+    clientProtocol: 'Encrypted'
+    port: 10000
+    clusteringPolicy: 'EnterpriseCluster'
+    evictionPolicy: 'VolatileLRU'
+  }
+}
+
+// Single source of truth for both fhirbridgeApp's and workerApp's ConnectionStrings__Redis —
+// resolves to whichever of the two Redis resources useAzureCacheForRedis actually created.
+// abortConnect=false matches StackExchange.Redis's usual recommended default for a managed service
+// (retries instead of failing fast on a transient connect issue); the containerized path doesn't
+// set it, matching its pre-existing behavior. Port is always 10000 for Azure Managed Redis (both
+// TLS and non-TLS traffic use the same port, unlike classic Azure Cache for Redis's separate
+// 6379/6380) — see azureManagedRedisDatabase's port property above.
+var redisConnectionString = useAzureCacheForRedis
+  ? '${azureManagedRedis.?properties.hostName}:10000,password=${azureManagedRedisDatabase.listKeys().primaryKey},ssl=true,abortConnect=false'
+  : '${redisName}:${redisPort},password=${redisPassword},ssl=true'
+
+// --- Redis: containerized (internal only, single replica) — only when NOT using Azure Cache for
+//     Redis ---
+
+resource redisApp 'Microsoft.App/containerApps@2024-03-01' = if (!useAzureCacheForRedis) {
   name: redisName
   location: location
   tags: commonTags
@@ -389,121 +664,6 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
-// --- HAPI terminology server's Postgres (internal only, single replica) ---
-
-resource hapiTerminologyPostgresApp 'Microsoft.App/containerApps@2024-03-01' = {
-  name: hapiTerminologyPostgresName
-  location: location
-  tags: commonTags
-  properties: {
-    managedEnvironmentId: containerAppEnv.id
-    configuration: {
-      secrets: [
-        { name: 'hapi-terminology-postgres-password', value: hapiTerminologyPostgresPassword }
-      ]
-      ingress: {
-        external: false
-        targetPort: 5432
-        transport: 'tcp'
-      }
-    }
-    template: {
-      containers: [
-        {
-          name: 'hapi-terminology-postgres'
-          image: 'postgres:16-alpine'
-          resources: containerSizes[hapiTerminologyPostgresSize]
-          env: [
-            { name: 'POSTGRES_DB', value: 'hapi_terminology' }
-            { name: 'POSTGRES_USER', value: 'hapi_terminology' }
-            { name: 'POSTGRES_PASSWORD', secretRef: 'hapi-terminology-postgres-password' }
-          ]
-          // initdb hard-requires chmod 700 on PGDATA (not skippable via config) and Azure Files
-          // (SMB) doesn't support Unix permission changes at all, on any path within the share —
-          // so PGDATA can't live on an AzureFile-backed volume here (unlike SQL Server/Redis,
-          // which never chmod their own mount points). EmptyDir gives real POSIX semantics, at the
-          // cost of not surviving restarts/redeploys — acceptable since this is a rebuildable
-          // terminology cache, kept in sync by FHIRBridge.Infrastructure/Terminology/Hapi, not a
-          // source of truth.
-          volumeMounts: [
-            { volumeName: 'hapi-terminology-data', mountPath: '/var/lib/postgresql/data' }
-          ]
-        }
-      ]
-      volumes: [
-        { name: 'hapi-terminology-data', storageType: 'EmptyDir' }
-      ]
-      scale: { minReplicas: 1, maxReplicas: 1 }
-    }
-  }
-}
-
-// --- HAPI terminology server (internal only, single replica) ---
-//
-// Second, dedicated HAPI FHIR instance used only for code-system lookups/validation/expansion/
-// translation ($lookup et al.) and the automatic vocabulary syncs in
-// FHIRBridge.Infrastructure/Terminology/Hapi — separate from any EHR-sourced FHIR data, which
-// never touches this service. Reached only by hostname within the Container Apps environment,
-// never externally — see Terminology__BaseUrl on fhirbridgeApp/workerApp below.
-
-resource hapiTerminologyApp 'Microsoft.App/containerApps@2024-03-01' = {
-  name: hapiTerminologyName
-  location: location
-  tags: commonTags
-  properties: {
-    managedEnvironmentId: containerAppEnv.id
-    configuration: {
-      secrets: concat(registrySecret, [
-        { name: 'hapi-terminology-postgres-password', value: hapiTerminologyPostgresPassword }
-      ])
-      registries: registryConfig
-      // external defaults to false (internal-only, like sqlserver/redis) — flipped on by
-      // hapiTerminologyExternalAccess, or implicitly by hapiTerminologyCustomDomain (custom
-      // domains require external ingress). transport is 'auto' rather than sqlserver/redis' 'tcp'
-      // because HAPI serves plain HTTP/REST, both internally and externally.
-      ingress: {
-        external: hapiTerminologyExternalAccess || !empty(hapiTerminologyCustomDomain)
-        targetPort: 8080
-        transport: 'auto'
-        customDomains: !empty(hapiTerminologyCustomDomain) ? [
-          bindCustomDomainCertificates ? {
-            name: hapiTerminologyCustomDomain
-            certificateId: hapiTerminologyManagedCert.id
-            bindingType: 'SniEnabled'
-          } : {
-            name: hapiTerminologyCustomDomain
-            bindingType: 'Disabled'
-          }
-        ] : []
-      }
-    }
-    template: {
-      containers: [
-        {
-          name: 'hapi-terminology'
-          // Imported into this registry (az acr import, not docker build/push -- stock third-party
-          // image, no Dockerfile of our own) under the same imageTag as the other custom images --
-          // previously pulled hapiproject/hapi:latest straight from Docker Hub on every deploy/cold
-          // start, which is slower (Docker Hub rate limits + cross-registry latency) than pulling
-          // from this registry.
-          image: '${imageRegistryServer}/hapi-terminology:${imageTag}'
-          resources: containerSizes[hapiTerminologySize]
-          env: [
-            { name: 'SPRING_DATASOURCE_URL', value: 'jdbc:postgresql://${hapiTerminologyPostgresName}:5432/hapi_terminology' }
-            { name: 'SPRING_DATASOURCE_USERNAME', value: 'hapi_terminology' }
-            { name: 'SPRING_DATASOURCE_PASSWORD', secretRef: 'hapi-terminology-postgres-password' }
-            { name: 'SPRING_DATASOURCE_DRIVERCLASSNAME', value: 'org.postgresql.Driver' }
-            { name: 'SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT', value: 'ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgres94Dialect' }
-            { name: 'HAPI_FHIR_VERSION', value: 'R4' }
-          ]
-        }
-      ]
-      scale: { minReplicas: 1, maxReplicas: 1 }
-    }
-  }
-  dependsOn: [hapiTerminologyPostgresApp]
-}
-
 // --- Custom domains (optional, per app) ---
 //
 // Azure managed certificates require the hostname to ALREADY exist on a Container App in the
@@ -529,37 +689,24 @@ resource fhirbridgeAppManagedCert 'Microsoft.App/managedEnvironments/managedCert
   }
 }
 
-resource demoAppManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(demoAppCustomDomain) && bindCustomDomainCertificates) {
-  parent: containerAppEnv
-  name: '${demoAppName}-cert'
-  location: location
-  properties: {
-    subjectName: demoAppCustomDomain
-    domainControlValidation: 'CNAME'
-  }
-}
-
-resource hapiTerminologyManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(hapiTerminologyCustomDomain) && bindCustomDomainCertificates) {
-  parent: containerAppEnv
-  name: '${hapiTerminologyName}-cert'
-  location: location
-  properties: {
-    subjectName: hapiTerminologyCustomDomain
-    domainControlValidation: 'CNAME'
-  }
-}
-
 // --- FHIRBridge app (Api + Gateway in one image), public ---
 
 resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: fhirbridgeAppName
   location: location
   tags: commonTags
+  // System-assigned so DefaultAzureCredential (CompositeSecretProvider/Writer) can authenticate to
+  // the tenant secrets Key Vault with no credential material to manage. Added unconditionally —
+  // harmless when enableTenantSecretsKeyVault is false, and this identity may be reused for other
+  // Azure resource access later.
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     managedEnvironmentId: containerAppEnv.id
     configuration: {
       secrets: concat([
-        { name: 'sql-sa-password', value: sqlSaPassword }
+        { name: 'postgres-password', value: postgresPassword }
         { name: 'jwt-signing-key', value: jwtSigningKey }
       ], registrySecret)
       registries: registryConfig
@@ -587,22 +734,27 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'fhirbridge-app'
           image: '${imageRegistryServer}/fhirbridge-app:${imageTag}'
           resources: containerSizes[fhirbridgeAppSize]
+          // Redis__TrustedCertificateThumbprint only applies to the containerized path's
+          // self-signed cert — Azure Cache for Redis presents a normal CA-trusted certificate,
+          // which ValidateRedisServerCertificate accepts on its own when this is left unset.
           env: concat([
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
-            { name: 'ConnectionStrings__FHIRBridgeDb', value: 'Server=${sqlServerName},${sqlPort};Database=FHIRBridge;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
-            { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword},ssl=true' }
-            { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
+            { name: 'ConnectionStrings__FHIRBridgeDb', value: fhirbridgeDbConnectionString }
+            { name: 'Database__Provider', value: 'PostgreSql' }
+            { name: 'ConnectionStrings__Redis', value: redisConnectionString }
             { name: 'Authentication__SigningKey', secretRef: 'jwt-signing-key' }
             { name: 'DataProtection__KeyRingPath', value: '/app/keys' }
             // Gateway proxies /api to the Api process in this same container (entrypoint binds Api on loopback :5000).
             { name: 'ApiBaseUrl', value: 'http://127.0.0.1:5000/' }
-            // Always allow the platform demo FQDN; add custom demo origin when configured.
-            { name: 'Portal__AllowedOrigins__0', value: 'https://${demoAppName}.${containerAppEnv.properties.defaultDomain}' }
             { name: 'AllowedHosts', value: '*' }
             { name: 'Swagger__Enabled', value: 'true' }
-            { name: 'Terminology__BaseUrl', value: 'http://${hapiTerminologyName}:8080/fhir' }
-          ], !empty(demoAppCustomDomain) ? [
-            { name: 'Portal__AllowedOrigins__1', value: 'https://${demoAppCustomDomain}' }
+          ], !useAzureCacheForRedis ? [
+            { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
+          ] : [], enableTenantSecretsKeyVault ? [
+            { name: 'KeyVault__UseAzureKeyVault', value: 'true' }
+            { name: 'KeyVault__AllowConfigurationFallback', value: 'true' }
+            { name: 'KeyVault__VaultName', value: tenantSecretsKeyVault.?properties.vaultUri ?? '' }
+            { name: 'DataProtection__KeyVaultKeyId', value: dataProtectionKey.?properties.keyUriWithVersion ?? '' }
           ] : [])
           volumeMounts: [
             { volumeName: 'keys-data', mountPath: '/app/keys' }
@@ -615,54 +767,9 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
       scale: { minReplicas: 1, maxReplicas: 3 }
     }
   }
-  dependsOn: [sqlserverApp, redisApp, hapiTerminologyApp]
-}
-
-// --- Demo app (self-hosts its own frontend), public ---
-
-resource demoApp 'Microsoft.App/containerApps@2024-03-01' = {
-  name: demoAppName
-  location: location
-  tags: commonTags
-  properties: {
-    managedEnvironmentId: containerAppEnv.id
-    configuration: {
-      secrets: registrySecret
-      registries: registryConfig
-      ingress: {
-        external: true
-        targetPort: 5500
-        transport: 'auto'
-        customDomains: !empty(demoAppCustomDomain) ? [
-          bindCustomDomainCertificates ? {
-            name: demoAppCustomDomain
-            certificateId: demoAppManagedCert.id
-            bindingType: 'SniEnabled'
-          } : {
-            name: demoAppCustomDomain
-            bindingType: 'Disabled'
-          }
-        ] : []
-      }
-    }
-    template: {
-      containers: [
-        {
-          name: 'demo-app'
-          image: '${imageRegistryServer}/demo-app:${imageTag}'
-          resources: containerSizes[demoAppSize]
-          env: [
-            { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
-            { name: 'ConnectionStrings__Default', value: 'Server=${sqlServerName},${sqlPort};Database=HealthAppDb;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
-            // Prefer custom demo domain when set so browser origin matches CORS on the API.
-            { name: 'AllowedFrontendOrigin', value: !empty(demoAppCustomDomain) ? 'https://${demoAppCustomDomain}' : 'https://${demoAppName}.${containerAppEnv.properties.defaultDomain}' }
-          ]
-        }
-      ]
-      scale: { minReplicas: 1, maxReplicas: 3 }
-    }
-  }
-  dependsOn: [sqlserverApp]
+  dependsOn: !useAzurePostgresql
+    ? (!useAzureCacheForRedis ? [postgresApp, redisApp] : [postgresApp])
+    : (!useAzureCacheForRedis ? [redisApp] : [])
 }
 
 // --- Worker (no ingress) ---
@@ -671,6 +778,10 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: workerName
   location: location
   tags: commonTags
+  // See the identical block on fhirbridgeApp for why this exists.
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     managedEnvironmentId: containerAppEnv.id
     configuration: {
@@ -683,15 +794,21 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'worker'
           image: '${imageRegistryServer}/fhirbridge-worker:${imageTag}'
           resources: containerSizes[workerSize]
-          env: [
+          env: concat([
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
-            { name: 'ConnectionStrings__FHIRBridgeDb', value: 'Server=${sqlServerName},${sqlPort};Database=FHIRBridge;User Id=sa;Password=${sqlSaPassword};Encrypt=True;TrustServerCertificate=True' }
-            { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword},ssl=true' }
-            { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
+            { name: 'ConnectionStrings__FHIRBridgeDb', value: fhirbridgeDbConnectionString }
+            { name: 'Database__Provider', value: 'PostgreSql' }
+            { name: 'ConnectionStrings__Redis', value: redisConnectionString }
             { name: 'RuntimeWorker__Enabled', value: 'true' }
             { name: 'Messaging__Provider', value: 'InMemory' }
-            { name: 'Terminology__BaseUrl', value: 'http://${hapiTerminologyName}:8080/fhir' }
-          ]
+          ], !useAzureCacheForRedis ? [
+            { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
+          ] : [], enableTenantSecretsKeyVault ? [
+            { name: 'KeyVault__UseAzureKeyVault', value: 'true' }
+            { name: 'KeyVault__AllowConfigurationFallback', value: 'true' }
+            { name: 'KeyVault__VaultName', value: tenantSecretsKeyVault.?properties.vaultUri ?? '' }
+            { name: 'DataProtection__KeyVaultKeyId', value: dataProtectionKey.?properties.keyUriWithVersion ?? '' }
+          ] : [])
         }
       ]
       // fhirbridgeApp is a head start, not a guarantee: both it and worker auto-migrate
@@ -701,58 +818,104 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
       scale: { minReplicas: 1, maxReplicas: 1 }
     }
   }
-  dependsOn: [sqlserverApp, redisApp, hapiTerminologyApp, fhirbridgeApp]
+  dependsOn: !useAzurePostgresql
+    ? (!useAzureCacheForRedis ? [postgresApp, redisApp, fhirbridgeApp] : [postgresApp, fhirbridgeApp])
+    : (!useAzureCacheForRedis ? [redisApp, fhirbridgeApp] : [fhirbridgeApp])
 }
 
 output fhirbridgeAppUrl string = 'https://${fhirbridgeAppName}.${containerAppEnv.properties.defaultDomain}'
-output demoAppUrl string = 'https://${demoAppName}.${containerAppEnv.properties.defaultDomain}'
-output hapiTerminologyUrl string = 'https://${hapiTerminologyName}.${containerAppEnv.properties.defaultDomain}'
 
-// Always populated regardless of whether *CustomDomain is set — add a CNAME (your domain -> the
-// matching *Url output's hostname) and a TXT record named asuid.<your domain> with this value at
-// your DNS provider. Flow: Phase 1 deploy with domain + bindCustomDomainCertificates=false
+output redisMode string = useAzureCacheForRedis ? 'azure-cache' : 'container'
+
+@description('Populated only when useAzureCacheForRedis is true. Same host ConnectionStrings:Redis points the app at — useful for connecting a client (e.g. redis-cli / RedisInsight) directly for debugging.')
+output azureCacheForRedisHostname string = useAzureCacheForRedis ? (azureManagedRedis.?properties.hostName ?? '') : ''
+
+@description('Populated only when enableTenantSecretsKeyVault is true. Scope to use in a manual "az role assignment create --role ... --scope <this>" if the role assignments above fail for lack of Owner/User Access Administrator rights.')
+output tenantSecretsKeyVaultId string = enableTenantSecretsKeyVault ? tenantSecretsKeyVault.id : ''
+
+@description('Populated only when enableTenantSecretsKeyVault is true. Use with "az keyvault secret list --vault-name <this>" to see what the app has provisioned there so far.')
+output tenantSecretsKeyVaultName string = enableTenantSecretsKeyVault ? tenantSecretsKeyVaultName : ''
+
+@description('Populated only when enableTenantSecretsKeyVault is true. Same value the app receives as KeyVault:VaultName.')
+output tenantSecretsKeyVaultUri string = enableTenantSecretsKeyVault ? (tenantSecretsKeyVault.?properties.vaultUri ?? '') : ''
+
+@description('Populated only when enableTenantSecretsKeyVault is true. Same value the app receives as DataProtection:KeyVaultKeyId.')
+output dataProtectionKeyId string = enableTenantSecretsKeyVault ? (dataProtectionKey.?properties.keyUriWithVersion ?? '') : ''
+
+@description('System-assigned managed identity principal ID for the fhirbridgeApp Container App. Use as --assignee for the manual role-assignment fallback above.')
+output fhirbridgeAppPrincipalId string = fhirbridgeApp.identity.principalId
+
+@description('System-assigned managed identity principal ID for the worker Container App. Use as --assignee for the manual role-assignment fallback above.')
+output workerPrincipalId string = workerApp.identity.principalId
+
+// Always populated regardless of whether fhirbridgeAppCustomDomain is set — add a CNAME (your
+// domain -> fhirbridgeAppUrl's hostname) and a TXT record named asuid.<your domain> with this
+// value at your DNS provider. Flow: Phase 1 deploy with domain + bindCustomDomainCertificates=false
 // (hostname registered), create DNS, wait; Phase 2 redeploy with bindCustomDomainCertificates=true.
 output fhirbridgeAppDomainVerificationId string = fhirbridgeApp.properties.customDomainVerificationId
-output demoAppDomainVerificationId string = demoApp.properties.customDomainVerificationId
-output hapiTerminologyDomainVerificationId string = hapiTerminologyApp.properties.customDomainVerificationId
 
 output fhirbridgeAppCustomDomainUrl string = !empty(fhirbridgeAppCustomDomain) ? 'https://${fhirbridgeAppCustomDomain}' : ''
-output demoAppCustomDomainUrl string = !empty(demoAppCustomDomain) ? 'https://${demoAppCustomDomain}' : ''
-output hapiTerminologyCustomDomainUrl string = !empty(hapiTerminologyCustomDomain) ? 'https://${hapiTerminologyCustomDomain}' : ''
 output bindCustomDomainCertificates bool = bindCustomDomainCertificates
-output customDomainPhase string = empty(fhirbridgeAppCustomDomain) && empty(demoAppCustomDomain) ? 'none' : (bindCustomDomainCertificates ? 'ssl-bound-or-binding' : 'hostname-only-set-dns-then-redeploy-with-bind-true')
+output customDomainPhase string = empty(fhirbridgeAppCustomDomain) ? 'none' : (bindCustomDomainCertificates ? 'ssl-bound-or-binding' : 'hostname-only-set-dns-then-redeploy-with-bind-true')
 
-// Purely a reminder of whatever was typed into the (inert) intended-domain fields above - nothing
-// in this deployment acts on these values. Use custom-domain.bicep (Step 2) to actually activate
+// Purely a reminder of whatever was typed into the (inert) intended-domain field above - nothing
+// in this deployment acts on this value. Use custom-domain.bicep (Step 2) to actually activate
 // a domain once this deployment has finished.
 output intendedCustomDomains object = {
   fhirbridgeApp: fhirbridgeAppIntendedDomain
-  demoApp: demoAppIntendedDomain
-  hapiTerminology: hapiTerminologyIntendedDomain
 }
-output customDomainActivationNote string = (empty(fhirbridgeAppIntendedDomain) && empty(demoAppIntendedDomain) && empty(hapiTerminologyIntendedDomain)) ? '' : 'Domain names entered above are not yet active - they are recorded here purely for your reference. To actually route traffic to a custom domain, complete Step 2 (custom-domain.bicep) now that this deployment has finished.'
+output customDomainActivationNote string = empty(fhirbridgeAppIntendedDomain) ? '' : 'Domain names entered above are not yet active - they are recorded here purely for your reference. To actually route traffic to a custom domain, complete Step 2 (custom-domain.bicep) now that this deployment has finished.'
+
+// Whichever Postgres resources actually exist for the active path — firewall rule + database
+// (children) before their parent Flexible Server for the managed path, or just the container app
+// for the containerized path (its own data storage/share are folded into the storage/share groups
+// below, in the same relative position sqlDataStorage/sqlDataShare held before this migration).
+var postgresManifestItems = useAzurePostgresql ? [
+  postgresFlexibleServerFirewallRule.id
+  postgresFlexibleServerDatabase.id
+  postgresFlexibleServer.id
+] : [
+  postgresApp.id
+]
+var postgresStorageManifestItems = useAzurePostgresql ? [] : [postgresDataStorage.id]
+var postgresShareManifestItems = useAzurePostgresql ? [] : [postgresDataShare.id]
+
+// Whichever Redis resource actually exists for the active path — the managed cache instance, or
+// the container app plus its own data storage/share (folded into the storage/share groups below).
+var redisManifestItems = useAzureCacheForRedis ? [
+  azureManagedRedisDatabase.id
+  azureManagedRedis.id
+] : [redisApp.id]
+var redisStorageManifestItems = useAzureCacheForRedis ? [] : [redisDataStorage.id]
+var redisShareManifestItems = useAzureCacheForRedis ? [] : [redisDataShare.id]
 
 // Every resource this deployment created, in a dependency-safe DELETION order (children before
-// their parents — e.g. the 5 Container Apps before the environment they run in). Azure keeps this
+// their parents — e.g. the Container Apps before the environment they run in). Azure keeps this
 // output in the deployment's own history (`az deployment group show --name main --query
 // properties.outputs.resourceManifest.value`) indefinitely, with no extra resource needed to store
 // it — cleanup.sh|ps1 reads this first and deletes exactly these IDs in order, falling back to a
 // tag-based scan only if this deployment record isn't found (e.g. deployment history was purged).
-output resourceManifest array = [
-  sqlserverApp.id
-  redisApp.id
-  hapiTerminologyPostgresApp.id
-  hapiTerminologyApp.id
-  fhirbridgeApp.id
-  demoApp.id
-  workerApp.id
-  sqlDataStorage.id
-  redisDataStorage.id
-  keysDataStorage.id
-  sqlDataShare.id
-  redisDataShare.id
-  keysDataShare.id
-  containerAppEnv.id
-  storageAccount.id
-  logAnalytics.id
-]
+output resourceManifest array = concat(
+  postgresManifestItems,
+  redisManifestItems,
+  [
+    fhirbridgeApp.id
+    workerApp.id
+  ],
+  postgresStorageManifestItems,
+  redisStorageManifestItems,
+  [
+    keysDataStorage.id
+  ],
+  postgresShareManifestItems,
+  redisShareManifestItems,
+  [
+    keysDataShare.id
+    containerAppEnv.id
+    storageAccount.id
+    logAnalytics.id
+  ],
+  // The Key resource and role assignments are children/scoped to the vault and get deleted
+  // automatically when it does — only the vault itself needs listing here.
+  enableTenantSecretsKeyVault ? [tenantSecretsKeyVault.id] : []
+)

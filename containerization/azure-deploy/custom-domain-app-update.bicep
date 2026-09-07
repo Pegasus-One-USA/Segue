@@ -75,9 +75,10 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: managedEnvironmentId
     configuration: union(baseConfiguration, {
       secrets: existingSecrets
-      // Custom domains require external ingress — forced on even if the app was internal-only
-      // (e.g. the terminology server before its first domain is added). Every other ingress
-      // property (targetPort, transport, existing traffic weights) is preserved via union.
+      // Custom domains require external ingress — forced on unconditionally here (the app this
+      // module runs against is already external by default in main.bicep, but this keeps the
+      // module correct even if that changes). Every other ingress property (targetPort, transport,
+      // existing traffic weights) is preserved via union.
       ingress: union(baseConfiguration.ingress, {
         external: true
         customDomains: concat(otherCustomDomains, [thisCustomDomain])

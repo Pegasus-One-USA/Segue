@@ -11,8 +11,8 @@
 #
 # What it does:
 #   1. Finds which of this name prefix's public-facing apps actually exist in the resource group
-#      (FHIRBridge app, Demo app, Terminology server - sqlserver/redis/worker/term-db are never
-#      eligible, they have no public ingress).
+#      (FHIRBridge app - the database container/redis/worker are never eligible, they have no public
+#      ingress).
 #   2. Shows each one's default URL and Azure-assigned domain-verification ID.
 #   3. Asks, per app, whether you want a custom domain for it, and if so, what domain.
 #   4. Once you give a domain, prints the exact CNAME + TXT records to create at your DNS provider
@@ -52,15 +52,10 @@ if (-not (Test-Path $ManageScript)) {
 $EnvironmentName = "$NamePrefix-env"
 
 # Label -> app name (+ the ingress port to use if this script has to flip internal->external for
-# it). FHIRBridge app / Demo app are always external by design (main.bicep never gives them an
-# internal-only mode), so they never need the enable step below. The terminology server is
-# internal-only by default (hapi_terminology_external_access/hapiTerminologyExternalAccess) - this
-# script enables external ingress on it automatically the moment you ask for a domain on it,
-# rather than requiring that checkbox to have been set back at deploy time.
+# it). FHIRBridge app is always external by design (main.bicep never gives it an
+# internal-only mode), so it never needs the enable step below.
 $Candidates = @(
-    @{ Label = "FHIRBridge app"; AppName = "$NamePrefix-app"; Port = 80 },
-    @{ Label = "Demo app"; AppName = "$NamePrefix-demo-app"; Port = 5500 },
-    @{ Label = "Terminology server"; AppName = "$NamePrefix-term"; Port = 8080 }
+    @{ Label = "FHIRBridge app"; AppName = "$NamePrefix-app"; Port = 80 }
 )
 
 Write-Host "==> Looking for '$NamePrefix'-prefixed apps in '$ResourceGroup' ..."

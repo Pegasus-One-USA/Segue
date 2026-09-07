@@ -1,7 +1,7 @@
 # FHIRBridge — easy-install Azure deployment (Bicep)
 
 A single-template counterpart to [`../terraform/environments/azure`](../terraform/environments/azure):
-same 5-container topology (`fhirbridge-app`, `demo-app`, `sqlserver`, `redis`, `worker`), same
+same 4-container topology (`fhirbridge-app`, `postgres`, `redis`, `worker`), same
 Container Apps design, but expressed as **one Bicep file** so a customer can stand it up with a
 single command or a single button click in their own Azure Portal, instead of running
 `terraform init/apply`. Use whichever of the two fits the audience — this one for "install it like
@@ -10,7 +10,7 @@ a product," the Terraform one for your own CI/CD or repeatable internal environm
 ## The one thing that can't be skipped: publish the images first
 
 A one-click experience is only possible if the 3 custom images
-(`fhirbridge-app`, `demo-app`, `fhirbridge-worker`) **already exist in a registry the customer's
+(`fhirbridge-app`, `fhirbridge-worker`, `fhirbridge-redis`) **already exist in a registry the customer's
 Container Apps can reach** before they click deploy — there's no version of "single button" where
 the customer also builds Docker images. That's a normal part of shipping software as a product: you
 (the vendor) build and publish a release once; every customer's one-click deploy just references
@@ -77,7 +77,7 @@ az deployment group create \
   --resource-group fhirbridge-rg \
   --template-file main.bicep \
   --parameters main.parameters.example.json \
-  --parameters sqlSaPassword='<real password>' jwtSigningKey='<real 32+ char key>'
+  --parameters postgresPassword='<real password>' jwtSigningKey='<real 32+ char key>'
 ```
 
 (Copy `main.parameters.example.json` and fill in your registry details first, or override every
@@ -87,7 +87,7 @@ value inline with `--parameters` as shown.) When it finishes:
 az deployment group show --resource-group fhirbridge-rg --name main --query properties.outputs
 ```
 
-gives you `fhirbridgeAppUrl` and `demoAppUrl`.
+gives you `fhirbridgeAppUrl`.
 
 ## Tier 2 — an actual "Deploy to Azure" button
 
@@ -107,7 +107,7 @@ account blob with public/SAS read access, your own website). Then the button mar
 ```
 
 Clicking it opens the customer's own Azure Portal with a "Custom deployment" form auto-generated
-from `main.json`'s parameters (secure parameters like `sqlSaPassword` automatically render as
+from `main.json`'s parameters (secure parameters like `postgresPassword` automatically render as
 password fields) — no createUiDefinition wiring required for this path.
 
 ## Tier 3 — a native, nicely-labeled wizard (Template Specs or Marketplace)
@@ -128,8 +128,29 @@ customer a genuinely native "Deploy" experience inside their own Portal:
 
 ## Notes and known limitations (same as the Terraform Azure environment)
 
-- **SQL Server Express + Redis are containerized**, pinned to a single replica each — their Azure
-  Files-backed data directories aren't safe for concurrent multi-instance access.
+- **Postgres + Redis are containerized by default**, pinned to a single replica each. Set
+  `useAzurePostgresql=true` to use a managed Azure Database for PostgreSQL Flexible Server instead
+  (no container, no volume; Azure manages patching/backups/HA). Set `useAzureCacheForRedis=true` to
+  use an Azure Managed Redis cluster instead of the containerized Redis (no container, no
+  volume, no self-signed cert to generate — `redisPassword`/`redisTrustedCertificateThumbprint` are
+  ignored in that mode). Classic Azure Cache for Redis (`Microsoft.Cache/redis`) is being retired and
+  is already blocked for new caches in some subscriptions — see
+  https://aka.ms/AzureCacheForRedisRetirement — so this path deploys the newer
+  `Microsoft.Cache/redisEnterprise` resource instead. Both toggles are exposed in the `createUiDefinition.json` wizard (Tier 3)
+  as "deployment type" choices; the plain Tier 2 button auto-generates its form from `main.json`
+  and exposes the same two booleans directly.
+- **Containerized Postgres does NOT actually live on Azure Files**, despite the volume mount on
+  `postgresApp` — Postgres's own startup permission check (`chmod 0700` on the data directory,
+  enforced on every start, not just first init) can never pass on Azure Files, since it's SMB and
+  Container Apps' `azureFile` storage type exposes no mount-options/NFS alternative. The custom
+  `fhirbridge-postgres` image (`containerization/docker/postgres-local`) instead runs Postgres on
+  the container's own local (ephemeral) disk, and uses the Azure Files mount purely as an at-rest
+  backup target — restored into local storage on container start, saved back out only on a
+  **graceful** stop. Anything written since the last graceful shutdown is lost on a crash, a
+  forcibly-killed replica, or Container Apps exceeding the (generously set, 90s)
+  `terminationGracePeriodSeconds`. This is a real durability tradeoff, acceptable for a demo/test
+  environment specifically — for anything that needs guaranteed durability, use
+  `useAzurePostgresql=true` instead, which has no such caveat.
 - **`fhirbridge-app` and `worker` both auto-migrate `FHIRBridgeDb`** on first boot and can race on
   the initial `CREATE DATABASE` on a brand-new database; Container Apps replaces crashed replicas
   automatically, turning a lost race into a self-healing retry. See the containerization guide
@@ -139,9 +160,15 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   Phase 1 registers hostnames (`bindingType: Disabled`); after DNS CNAME + asuid TXT, Phase 2 binds
   free managed certificates (`SniEnabled`). Checking Bind SSL before the hostname exists causes
   `RequireCustomHostnameInEnvironment`. Operator fallback: `../scripts/manage-custom-domain.ps1|.sh`.
-- **Secrets are plain Bicep `@secure()` parameters**, not Key Vault references — fine for a
-  customer-run one-click deploy, but consider Key Vault integration if you want secret rotation
-  without a redeploy.
+- **Secrets are plain Bicep `@secure()` parameters by default**, not Key Vault references. Set
+  `enableTenantSecretsKeyVault=true` to create a dedicated RBAC-enabled Key Vault instead — grants
+  the `fhirbridge-app`/`worker` Container Apps' system-assigned identities (and the identity running
+  the deployment) access to it, wraps the DataProtection key ring with a Key Vault-managed RSA key,
+  and lets the app read/write tenant + app-level secrets there at runtime (local DB storage remains
+  an automatic fallback). Granting that RBAC needs Owner/User Access Administrator on the resource
+  group — see `enableTenantSecretsKeyVault`'s description in `main.bicep` for the manual fallback if
+  the deploying identity only has Contributor. Exposed in the wizard as the "Tenant/app secret
+  storage" choice.
 - Validate Phase 1 then Phase 2 against a real subscription before Marketplace certification.
   Live test evidence: an earlier single-shot domain+cert deploy failed with
   `RequireCustomHostnameInEnvironment` — this two-phase flag is the fix.

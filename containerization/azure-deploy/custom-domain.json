@@ -5,14 +5,14 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "7958564883581488934"
+      "templateHash": "13372203670052883855"
     }
   },
   "parameters": {
     "namePrefix": {
       "type": "string",
       "metadata": {
-        "description": "The same deployment name prefix used for the original FHIRBridge deployment (e.g. segue12). Used to derive the environment name (<prefix>-env) and all 3 app names."
+        "description": "The same deployment name prefix used for the original FHIRBridge deployment (e.g. segue12). Used to derive the environment name (<prefix>-env) and the app name."
       }
     },
     "fhirbridgeAppDomain": {
@@ -22,25 +22,11 @@
         "description": "Custom domain for the FHIRBridge app (e.g. app.example.com). Leave blank to skip this app entirely this run. Its CNAME + asuid TXT records must already be created and propagated BEFORE this deploy - see main.bicep's fhirbridgeAppDomainVerificationId output for the TXT value."
       }
     },
-    "demoAppDomain": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Custom domain for the Demo app. Leave blank to skip this app entirely this run. Same DNS-must-already-be-ready requirement as fhirbridgeAppDomain - see demoAppDomainVerificationId."
-      }
-    },
-    "hapiTerminologyDomain": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Custom domain for the HAPI terminology server. Leave blank to skip this app entirely this run. Same DNS-must-already-be-ready requirement as fhirbridgeAppDomain - see hapiTerminologyDomainVerificationId."
-      }
-    },
     "location": {
       "type": "string",
       "defaultValue": "[resourceGroup().location]",
       "metadata": {
-        "description": "Region for the (re)deployed container apps + managed certificates. An existing container app's own location can't be read back at compile time (Bicep BCP120), so this must match wherever the environment/apps actually live — defaults to the resource group's region, which is what main.bicep itself uses."
+        "description": "Region for the (re)deployed container app + managed certificate. An existing container app's own location can't be read back at compile time (Bicep BCP120), so this must match wherever the environment/app actually lives — defaults to the resource group's region, which is what main.bicep itself uses."
       }
     }
   },
@@ -51,16 +37,6 @@
         "key": "fhirbridgeApp",
         "name": "[format('{0}-app', parameters('namePrefix'))]",
         "domain": "[parameters('fhirbridgeAppDomain')]"
-      },
-      {
-        "key": "demoApp",
-        "name": "[format('{0}-demo-app', parameters('namePrefix'))]",
-        "domain": "[parameters('demoAppDomain')]"
-      },
-      {
-        "key": "hapiTerminology",
-        "name": "[format('{0}-term', parameters('namePrefix'))]",
-        "domain": "[parameters('hapiTerminologyDomain')]"
       }
     ],
     "activeAppConfigs": "[filter(variables('allAppConfigs'), lambda('c', not(empty(lambdaVariables('c').domain))))]"

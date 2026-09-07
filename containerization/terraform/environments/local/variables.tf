@@ -4,8 +4,8 @@ variable "image_tag" {
   default     = "local"
 }
 
-variable "sql_sa_password" {
-  description = "SQL Server SA password. Must satisfy SQL Server's complexity policy."
+variable "postgres_password" {
+  description = "Password for the 'fhirbridge' role in FHIRBridge's own containerized Postgres database. Injected as POSTGRES_PASSWORD on the postgres container and used to build both fhirbridge-app's and worker's ConnectionStrings__FHIRBridgeDb. Replaces the former sql_sa_password variable now that this environment has moved off SQL Server."
   type        = string
   sensitive   = true
 }
@@ -27,12 +27,6 @@ variable "redis_trusted_certificate_thumbprint" {
   type        = string
 }
 
-variable "hapi_terminology_postgres_password" {
-  description = "Password for the hapi_terminology Postgres role backing the HAPI terminology server's own schema (not the app's own FHIRBridgeDb)."
-  type        = string
-  sensitive   = true
-}
-
 variable "portal_build_config" {
   description = "Angular build configuration baked into the fhirbridge-app image (informational only here — the image is already built by the time Terraform runs)."
   type        = string
@@ -45,16 +39,10 @@ variable "app_host_port" {
   default     = 8080
 }
 
-variable "demo_host_port" {
-  description = "Host port for demo-app."
+variable "postgres_host_port" {
+  description = "Host port for the containerized Postgres backing FHIRBridgeDb. Offset from Postgres's standard 5432 to avoid colliding with any native/other local Postgres install on the host machine (docker-compose.yml itself doesn't run a Postgres for FHIRBridgeDb, so there's no compose-stack mapping to avoid here the way redis_host_port is offset from compose's own redis mapping)."
   type        = number
-  default     = 5500
-}
-
-variable "sql_host_port" {
-  description = "Host port for the SQL Server Express container. Offset from 1433 to avoid colliding with the repo-root dev/E2E docker-compose.yml stack."
-  type        = number
-  default     = 1434
+  default     = 5433
 }
 
 variable "redis_host_port" {
@@ -63,8 +51,3 @@ variable "redis_host_port" {
   default     = 6380
 }
 
-variable "hapi_terminology_host_port" {
-  description = "Host port for the HAPI terminology server. Offset from 8090 to avoid colliding with the repo-root dev/E2E docker-compose.yml stack's own hapi-terminology mapping."
-  type        = number
-  default     = 8091
-}

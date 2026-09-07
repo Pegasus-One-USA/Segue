@@ -25,40 +25,38 @@ see `backups/2026-08-28-pre-2step-domain-flow`): a Container App's `customDomain
 only exists once the app itself does, so asking for a domain on the very first deploy always fails
 with `InvalidCustomHostNameValidation`/`RequireCustomHostnameInEnvironment`. Domain binding is now a
 **separate template** (`custom-domain.bicep` / compiled `custom-domain.json`), deployed after
-`main.bicep`'s step-1 stack is already up. It handles all 3 public-facing apps (FHIRBridge app,
-Demo app, Terminology server) in ONE deployment — each with its own optional domain field, none
-required, so you can set one, two, or all three in a single run. For each app whose domain is set,
-it patches only that container app — reading every other property (env vars, volumes, registries,
-existing secrets via `listSecrets`) back from the live resource — so it never requires re-submitting
-`main.bicep`'s full parameter set (`sqlSaPassword`, `jwtSigningKey`, image tag, etc.) and can't
-accidentally drift them. The write itself is routed through a small module
+`main.bicep`'s step-1 stack is already up. It handles the FHIRBridge app in ONE deployment — with
+its own optional domain field, not required, so you only run it once you want a domain bound. If
+the domain is set, it patches the container app — reading every other property (env vars, volumes,
+registries, existing secrets via `listSecrets`) back from the live resource — so it never requires
+re-submitting `main.bicep`'s full parameter set (`sqlSaPassword`, `jwtSigningKey`, image tag, etc.)
+and can't accidentally drift them. The write itself is routed through a small module
 (`custom-domain-app-update.bicep`) to avoid a genuine ARM circular-dependency (reading + writing the
 same container app's `properties`/`listSecrets()` in one template is a self-reference ARM's
 validator rejects at deploy time — this doesn't show up under `az deployment group what-if`, only
 on a real deploy).
 
 There is ONE Deploy-to-Azure wizard for this template (`createUiDefinition.custom-domain.json`) —
-no certificate checkbox at all, and (as of the redesign below) only ONE deploy per domain, not two.
-`custom-domain.bicep` always does the full sequence — register hostname, create certificate, bind
-it — internally ordered via two module calls (`registerHostnames` then `bindCertificates`, the
+no certificate checkbox at all, and (as of the redesign below) only ONE deploy for the domain, not
+two. `custom-domain.bicep` always does the full sequence — register hostname, create certificate,
+bind it — internally ordered via two module calls (`registerHostnames` then `bindCertificates`, the
 second explicitly `dependsOn` the first) so Azure's API only ever sees "certificate created" after
 "hostname added" has actually completed, which is the one ordering constraint Azure enforces. The
-wizard has a name-prefix field in Basics plus 3 tabs (one per app, `isWizard: true` so Basics must
-be completed before any tab renders). Azure shows a one-time "Do you trust the authors code?"
-prompt the first time any template using a live API lookup like this is opened — expected, not a
-bug, safe to accept.
+wizard has a name-prefix field in Basics plus one step for the FHIRBridge app (`isWizard: false`, so
+Basics and the app step render together on a single page). Azure shows a one-time "Do you trust the
+authors code?" prompt the first time any template using a live API lookup like this is opened —
+expected, not a bug, safe to accept.
 
 The one thing that genuinely cannot be folded into this single deploy: **DNS must already be
 propagated before you run it at all** — Azure validates the `asuid` TXT record the moment the
 hostname is registered, not just at certificate-creation, so there is no way to defer that check to
 later within the same deployment. But you don't need a throwaway prior deploy to learn the
-verification ID for that TXT record — `main.bicep`'s own outputs
-(`fhirbridgeAppDomainVerificationId` / `demoAppDomainVerificationId` /
-`hapiTerminologyDomainVerificationId`) already expose it unconditionally, the moment the app
-exists, whether or not any domain was ever set on that deploy.
+verification ID for that TXT record — `main.bicep`'s own output
+(`fhirbridgeAppDomainVerificationId`) already exposes it unconditionally, the moment the app exists,
+whether or not any domain was ever set on that deploy.
 
-Each tab shows, in order: the app's name; the app's live default URL and domain-verification ID (one
-`Microsoft.Solutions.ArmApiControl` GET per tab, parsed out with a string-search expression — see
+The step shows, in order: the app's name; the app's live default URL and domain-verification ID (one
+`Microsoft.Solutions.ArmApiControl` GET, parsed out with a string-search expression — see
 point 3 below for why that's needed instead of plain property access); the domain textbox; and, once
 you type a domain, the exact CNAME/TXT record **names and values** to create.
 
@@ -114,20 +112,20 @@ The verification ID and default FQDN exist the moment the app does — no need t
   etc.) from Step 1.
 - `az containerapp show --name <prefix>-app --resource-group <rg> --query
   "{fqdn:properties.configuration.ingress.fqdn, verificationId:properties.customDomainVerificationId}"`
-- `containerization/scripts/discover-custom-domains.ps1|sh` (prompts for prefix, lists all 3 apps).
-- The Step 2 wizard itself shows both live per tab, before you even fill in a domain.
+- `containerization/scripts/discover-custom-domains.ps1|sh` (prompts for prefix, lists the app).
+- The Step 2 wizard itself shows this live, before you even fill in a domain.
 
 ### Create DNS, then deploy once
 
-1. At your DNS provider create, per app you want a domain on:
+1. At your DNS provider create:
    - **CNAME** `your.domain` → the app's default FQDN
    - **TXT** `asuid.your.domain` → the app's verification ID
 2. Wait for propagation (minutes to hours — check with `nslookup`/`dig`, or just try the deploy and
    let it tell you if it's not ready yet).
 3. Open the Deploy-to-Azure link (`publish-deploy-artifacts.ps1`/`.sh` prints it), fill in
-   `namePrefix` and whichever of the 3 tabs' domain fields you want, and deploy. One deploy
-   registers the hostname, creates the certificate, and binds it for every domain you set.
-4. Open `https://your.domain` and confirm the padlock, for each app.
+   `namePrefix` and the domain field, and deploy. One deploy registers the hostname, creates the
+   certificate, and binds it.
+4. Open `https://your.domain` and confirm the padlock.
 
 If DNS was not actually ready, Azure rejects the deploy with `InvalidCustomHostNameValidation` (TXT
 record not found) — wait and redeploy once it resolves; redeploying is always safe, including for a
@@ -138,19 +136,19 @@ not recreated, and the app stays reachable throughout).
 
 ```bash
 az deployment group create -g <rg> -f custom-domain.bicep \
-  -p namePrefix=segue12 hapiTerminologyDomain=term.example.com
+  -p namePrefix=segue12 fhirbridgeAppDomain=app.example.com
 ```
 
 ### Automating the DNS wait
 
 `auto-bind-custom-domain.ps1`/`.sh` (in `containerization/scripts/`) does the manual "check DNS,
-wait, then deploy" for you: reads each app's FQDN/verification ID directly (no deploy needed for
+wait, then deploy" for you: reads the app's FQDN/verification ID directly (no deploy needed for
 that), prints the DNS records, polls DNS itself until they resolve, then deploys
 `custom-domain.bicep` once:
 
 ```powershell
 .\containerization\scripts\auto-bind-custom-domain.ps1 -ResourceGroup rg-tusharpuri -NamePrefix segue12 `
-  -HapiTerminologyDomain term.example.com
+  -FhirbridgeAppDomain app.example.com
 ```
 
 Drives `custom-domain.bicep` itself (not raw `az containerapp hostname` commands), so it can't hit
@@ -159,9 +157,9 @@ and skipped without deploying anything.
 
 ### main.bicep's own domain parameters (fallback, not recommended)
 
-`main.bicep` still has `fhirbridgeAppCustomDomain`/`demoAppCustomDomain`/
-`hapiTerminologyCustomDomain`/`bindCustomDomainCertificates` — same 3-deploy flow, but every
-redeploy resubmits the *entire* stack's parameters (all passwords, image tag, etc.), so a stale or
+`main.bicep` still has `fhirbridgeAppCustomDomain`/`bindCustomDomainCertificates` — same 3-deploy
+flow, but every redeploy resubmits the *entire*
+stack's parameters (all passwords, image tag, etc.), so a stale or
 mistyped value elsewhere in that parameter set can drift other resources. Prefer Path A above;
 use this only if you're already re-deploying `main.bicep` for another reason anyway and want to
 fold the domain change into the same deploy.
@@ -185,7 +183,7 @@ parameters on later applies or the next deploy may remove the hostname.
 
 Same two-phase flags in `terraform/environments/azure`:
 
-- `fhirbridge_app_custom_domain` / `demo_app_custom_domain`
+- `fhirbridge_app_custom_domain`
 - `bind_custom_domain_certificates = false` then `true` after DNS
 
 ## Marketplace / Partner Center (org process — not code)

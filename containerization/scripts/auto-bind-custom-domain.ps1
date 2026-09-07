@@ -5,9 +5,7 @@
 # hostname, creates the certificate, and binds it, all in that one deploy.
 #
 # Usage:
-#   .\auto-bind-custom-domain.ps1 -ResourceGroup rg-tusharpuri -NamePrefix segue13 -HapiTerminologyDomain segueterm.pegasusone.com
-#   .\auto-bind-custom-domain.ps1 -ResourceGroup rg-tusharpuri -NamePrefix segue13 `
-#     -FhirbridgeAppDomain segueapp.pegasusone.com -DemoAppDomain seguedemo.pegasusone.com -HapiTerminologyDomain segueterm.pegasusone.com
+#   .\auto-bind-custom-domain.ps1 -ResourceGroup rg-tusharpuri -NamePrefix segue13 -FhirbridgeAppDomain segueapp.pegasusone.com
 #
 # Safe to re-run: custom-domain.bicep is idempotent either way (a domain that's already bound is
 # just re-affirmed, not disturbed in any lasting way).
@@ -15,8 +13,6 @@ param(
     [Parameter(Mandatory = $true)][string]$ResourceGroup,
     [Parameter(Mandatory = $true)][string]$NamePrefix,
     [string]$FhirbridgeAppDomain = "",
-    [string]$DemoAppDomain = "",
-    [string]$HapiTerminologyDomain = "",
     [int]$WaitTimeoutMinutes = 30,
     [int]$WaitPollSeconds = 30
 )
@@ -36,12 +32,10 @@ if (-not (Test-Path $BicepFile)) {
 
 $Requested = @(
     @{ Label = "fhirbridgeApp"; AppName = "$NamePrefix-app"; Domain = $FhirbridgeAppDomain }
-    @{ Label = "demoApp"; AppName = "$NamePrefix-demo-app"; Domain = $DemoAppDomain }
-    @{ Label = "hapiTerminology"; AppName = "$NamePrefix-term"; Domain = $HapiTerminologyDomain }
 ) | Where-Object { $_.Domain }
 
 if ($Requested.Count -eq 0) {
-    Write-Error "Set at least one of -FhirbridgeAppDomain / -DemoAppDomain / -HapiTerminologyDomain."
+    Write-Error "Set -FhirbridgeAppDomain."
     exit 1
 }
 
@@ -123,8 +117,6 @@ Write-Host ""
 Write-Host "==> Deploying custom-domain.bicep (namePrefix=$NamePrefix) ..." -ForegroundColor Cyan
 $paramArgs = @("namePrefix=$NamePrefix")
 if ($FhirbridgeAppDomain) { $paramArgs += "fhirbridgeAppDomain=$FhirbridgeAppDomain" }
-if ($DemoAppDomain) { $paramArgs += "demoAppDomain=$DemoAppDomain" }
-if ($HapiTerminologyDomain) { $paramArgs += "hapiTerminologyDomain=$HapiTerminologyDomain" }
 
 $outputJson = az deployment group create `
     --resource-group $ResourceGroup `

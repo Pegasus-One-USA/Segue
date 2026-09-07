@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "15345199952607564362"
+      "templateHash": "8316023650145583500"
     }
   },
   "parameters": {
@@ -23,10 +23,17 @@
         "description": "Azure region for every resource. Defaults to the resource group's own region."
       }
     },
-    "sqlSaPassword": {
+    "useAzurePostgresql": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Chooses which Postgres FHIRBridge's own database (FHIRBridgeDb) gets. false (default) keeps a containerized Postgres (stock postgres:16-alpine, Azure Files-backed persistence, single replica, internal-only network access). true creates a managed Azure Database for PostgreSQL Flexible Server instead and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no volume; Azure manages patching/backups/HA."
+      }
+    },
+    "postgresPassword": {
       "type": "securestring",
       "metadata": {
-        "description": "SQL Server SA password. Must satisfy SQL Server's complexity policy."
+        "description": "Password for FHIRBridge's own Postgres database. In the containerized path (useAzurePostgresql = false) this is the 'fhirbridge' role's password; in the managed path (true) this is the Flexible Server's administrator password directly. Required either way."
       }
     },
     "jwtSigningKey": {
@@ -63,11 +70,11 @@
         "description": "Registry password/token. Leave blank alongside imageRegistryUsername for anonymous/public pull."
       }
     },
-    "sqlPort": {
+    "postgresPort": {
       "type": "int",
-      "defaultValue": 1433,
+      "defaultValue": 5432,
       "metadata": {
-        "description": "Port SQL Server Express listens on (internal-only — reached only by the other Container Apps in this environment, never externally). Passed to the container as MSSQL_TCP_PORT since ingress targetPort alone does not change what SQL Server itself listens on."
+        "description": "Port the containerized Postgres listens on (internal-only — reached only by the other Container Apps in this environment, never externally). Passed to the container via a `-p` args override (through the image's own entrypoint, not replacing it), since Postgres has no env-var port setting. Meaningless when useAzurePostgresql is true — Azure Database for PostgreSQL always uses 5432."
       }
     },
     "redisPort": {
@@ -77,36 +84,44 @@
         "description": "Port Redis listens on (internal-only). Passed to the container via a redis-server --port override, since Redis has no env-var port setting."
       }
     },
+    "useAzureCacheForRedis": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Chooses which Redis this deployment gets. false (default) keeps the existing containerized Redis — self-signed TLS cert baked into the fhirbridge-redis image, Azure Files-backed persistence, single replica, requires redisPassword/redisTrustedCertificateThumbprint. true creates an Azure Managed Redis cluster instead (Microsoft.Cache/redisEnterprise — classic Microsoft.Cache/redis is being retired and is already blocked for new caches in some subscriptions, see https://aka.ms/AzureCacheForRedisRetirement) and points ConnectionStrings:Redis at it — no container, no volume, no self-signed cert to generate; Azure issues its own CA-trusted certificate, which FHIRBridge.Api/.Worker accept automatically. redisPassword and redisTrustedCertificateThumbprint are both ignored in this mode — Azure Managed Redis manages its own access keys and presents its own trusted certificate."
+      }
+    },
     "redisPassword": {
       "type": "securestring",
+      "defaultValue": "",
       "metadata": {
-        "description": "Password Redis requires (--requirepass) — defense-in-depth on top of network isolation. Passed as a plain container command argument (Redis has no env-var equivalent and Container Apps command arguments have no secretRef option), so it is visible to anyone with read access to this Container App's configuration — same exposure level as any other command argument."
+        "description": "Password the containerized Redis requires (--requirepass) — defense-in-depth on top of network isolation. Passed as a plain container command argument (Redis has no env-var equivalent and Container Apps command arguments have no secretRef option), so it is visible to anyone with read access to this Container App's configuration — same exposure level as any other command argument. Required when useAzureCacheForRedis is false; ignored when true (Azure Cache manages its own access keys)."
       }
     },
     "redisTrustedCertificateThumbprint": {
       "type": "string",
+      "defaultValue": "",
       "metadata": {
-        "description": "SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn't match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs."
+        "description": "SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn't match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs. Required when useAzureCacheForRedis is false; leave blank when true — Azure Cache presents a normal CA-trusted certificate that needs no pinning."
       }
     },
-    "hapiTerminologyPostgresPassword": {
-      "type": "securestring",
+    "azureCacheForRedisTier": {
+      "type": "string",
+      "defaultValue": "Balanced_B0",
+      "allowedValues": [
+        "Balanced_B0",
+        "Balanced_B5",
+        "MemoryOptimized_M10"
+      ],
       "metadata": {
-        "description": "Password for the hapi_terminology Postgres role backing the HAPI terminology server's own schema (internal-only — not the app's own FHIRBridgeDb)."
+        "description": "Azure Managed Redis SKU — a curated subset of the full Microsoft.Cache/redisEnterprise sku.name enum (e.g. also Balanced_B10/B20/..., ComputeOptimized_X5/X10/..., MemoryOptimized_M20/M50/...), which is already a valid raw ARM value so no sku/family/capacity translation is needed (unlike the retired classic Azure Cache for Redis). Only consulted when useAzureCacheForRedis is true."
       }
     },
-    "hapiTerminologyExternalAccess": {
+    "enableTenantSecretsKeyVault": {
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "Exposes the HAPI terminology server externally (Container Apps external ingress) so it can be reached directly from outside this environment — e.g. a separate terminology admin tool, or a third-party integration — rather than only internally by fhirbridge-app/worker. Defaults to false (internal-only, like sqlserver/redis). Setting hapiTerminologyCustomDomain also forces this on, since Azure Container Apps custom domains require external ingress."
-      }
-    },
-    "hapiTerminologyCustomDomain": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Custom domain for the HAPI terminology server (e.g. terminology.customer.com). Leave blank to use the auto-generated *.azurecontainerapps.io URL once hapiTerminologyExternalAccess is true. Same three-deploy flow as fhirbridgeAppCustomDomain (including the required first deploy with this left blank) — see the hapiTerminologyDomainVerificationId output."
+        "description": "The deployment-time choice between two secret-storage modes (see Documents/KeyVault-Implementation.html): false (default) keeps tenant SourceConnection/DestinationConfiguration secrets and the app's own 4 app-level secrets (jwt-signing-key etc.) on the local DataProtection-encrypted ProvisionedSecrets DB table — no Key Vault resource, no extra permission needed. true creates a dedicated RBAC-enabled Key Vault, grants the fhirbridgeApp/worker Container Apps' system-assigned managed identities (and the identity running this deployment) the Key Vault Secrets Officer role on it, creates an RSA key for DataProtection key-ring wrapping (Crypto User granted to both apps), and points KeyVault:VaultName/KeyVault:UseAzureKeyVault/DataProtection:KeyVaultKeyId at it — the app reads/writes secrets there automatically via CompositeSecretProvider/Writer, with the local DB table remaining as an automatic fallback (KeyVault:AllowConfigurationFallback). Unlike the Terraform azure environment, this template does NOT pre-seed the 4 app-level secrets — AppSecretProvisioner generates and writes them itself on first boot once the RBAC role above is in place, which keeps this template free of any secret-generation logic of its own."
       }
     },
     "fhirbridgeAppCustomDomain": {
@@ -114,13 +129,6 @@
       "defaultValue": "",
       "metadata": {
         "description": "Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank to keep the auto-generated *.azurecontainerapps.io URL. REQUIRED three-deploy flow, not two, to avoid InvalidCustomHostNameValidation/RequireCustomHostnameInEnvironment: (0) first deploy with this LEFT BLANK, so the app is actually created — Azure only assigns its customDomainVerificationId once the app exists, and there is no way to know that ID in advance, so setting a domain on the very first-ever deploy of a given namePrefix always fails with \"a TXT record ... was not found\"; (1) once deployed, read fhirbridgeAppDomainVerificationId, create CNAME (domain -> fhirbridgeAppUrl hostname) + TXT asuid.<domain> = that id, wait for DNS, THEN redeploy with this domain set and bindCustomDomainCertificates=false — registers the hostname (bindingType Disabled, no cert yet); (2) redeploy again with the SAME domain and bindCustomDomainCertificates=true — creates the managed certificate (hostname already exists) then binds SniEnabled SSL."
-      }
-    },
-    "demoAppCustomDomain": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Custom domain for the Demo app. Same three-deploy flow as fhirbridgeAppCustomDomain (including the required first deploy with this left blank) — see the demoAppDomainVerificationId output."
       }
     },
     "bindCustomDomainCertificates": {
@@ -137,21 +145,7 @@
         "description": "Domain you intend to use for the FHIRBridge app later (e.g. app.customer.com) - purely a reminder, echoed in this deployment's outputs. Does not configure anything in Azure by itself; activate it afterward with custom-domain.bicep (Step 2)."
       }
     },
-    "demoAppIntendedDomain": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Domain you intend to use for the Demo app later - purely a reminder, echoed in this deployment's outputs. Activate it afterward with custom-domain.bicep (Step 2)."
-      }
-    },
-    "hapiTerminologyIntendedDomain": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Domain you intend to use for the HAPI terminology server later - purely a reminder, echoed in this deployment's outputs. Activate it afterward with custom-domain.bicep (Step 2)."
-      }
-    },
-    "sqlServerSize": {
+    "postgresSize": {
       "type": "string",
       "defaultValue": "Large",
       "allowedValues": [
@@ -161,7 +155,33 @@
         "XLarge"
       ],
       "metadata": {
-        "description": "SQL Server container size."
+        "description": "Containerized Postgres container size. Meaningless when useAzurePostgresql is true — the managed Flexible Server is sized via azurePostgresqlSku/azurePostgresqlStorageMb instead."
+      }
+    },
+    "azurePostgresqlSku": {
+      "type": "string",
+      "defaultValue": "Burstable_B1ms",
+      "allowedValues": [
+        "Burstable_B1ms",
+        "Burstable_B2s",
+        "GeneralPurpose_D2s_v3",
+        "GeneralPurpose_D4s_v3"
+      ],
+      "metadata": {
+        "description": "Azure Database for PostgreSQL Flexible Server compute/pricing tier — a curated key, not a raw Azure SKU name, so an invalid tier/SKU combination (ParameterOutOfRange) is impossible. Mapped to the actual sku.name/sku.tier pair via postgresSkuMap below. Only consulted when useAzurePostgresql is true."
+      }
+    },
+    "azurePostgresqlStorageMb": {
+      "type": "int",
+      "defaultValue": 32768,
+      "allowedValues": [
+        32768,
+        65536,
+        131072,
+        262144
+      ],
+      "metadata": {
+        "description": "Azure Database for PostgreSQL Flexible Server storage size, from the platform's supported set (32GB is the minimum). Only consulted when useAzurePostgresql is true — storage can only be scaled up later, not down, so don't over-provision speculatively."
       }
     },
     "redisSize": {
@@ -190,19 +210,6 @@
         "description": "FHIRBridge app (Api + Gateway) container size."
       }
     },
-    "demoAppSize": {
-      "type": "string",
-      "defaultValue": "Small",
-      "allowedValues": [
-        "Small",
-        "Medium",
-        "Large",
-        "XLarge"
-      ],
-      "metadata": {
-        "description": "Demo app container size."
-      }
-    },
     "workerSize": {
       "type": "string",
       "defaultValue": "Small",
@@ -215,35 +222,30 @@
       "metadata": {
         "description": "Worker container size."
       }
-    },
-    "hapiTerminologySize": {
-      "type": "string",
-      "defaultValue": "Large",
-      "allowedValues": [
-        "Small",
-        "Medium",
-        "Large",
-        "XLarge"
-      ],
-      "metadata": {
-        "description": "HAPI terminology server container size."
-      }
-    },
-    "hapiTerminologyPostgresSize": {
-      "type": "string",
-      "defaultValue": "Medium",
-      "allowedValues": [
-        "Small",
-        "Medium",
-        "Large",
-        "XLarge"
-      ],
-      "metadata": {
-        "description": "HAPI terminology server Postgres container size."
-      }
     }
   },
   "variables": {
+    "keyVaultSecretsOfficerRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
+    "keyVaultCryptoOfficerRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '14b46e9e-c2b7-41b4-b07b-48a6ebf60603')]",
+    "keyVaultCryptoUserRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '12338af0-0e69-4776-bea7-57ae8d297424')]",
+    "postgresSkuMap": {
+      "Burstable_B1ms": {
+        "name": "Standard_B1ms",
+        "tier": "Burstable"
+      },
+      "Burstable_B2s": {
+        "name": "Standard_B2s",
+        "tier": "Burstable"
+      },
+      "GeneralPurpose_D2s_v3": {
+        "name": "Standard_D2s_v3",
+        "tier": "GeneralPurpose"
+      },
+      "GeneralPurpose_D4s_v3": {
+        "name": "Standard_D4s_v3",
+        "tier": "GeneralPurpose"
+      }
+    },
     "containerSizes": {
       "Small": {
         "cpu": "[json('0.25')]",
@@ -270,18 +272,150 @@
     },
     "uniqueSuffix": "[uniqueString(resourceGroup().id, parameters('namePrefix'))]",
     "storageAccountName": "[toLower(format('{0}st{1}', take(parameters('namePrefix'), 9), variables('uniqueSuffix')))]",
-    "sqlServerName": "[format('{0}-sqlserver', parameters('namePrefix'))]",
+    "postgresName": "[format('{0}-postgres', parameters('namePrefix'))]",
     "redisName": "[format('{0}-redis', parameters('namePrefix'))]",
-    "hapiTerminologyPostgresName": "[format('{0}-term-db', parameters('namePrefix'))]",
-    "hapiTerminologyName": "[format('{0}-term', parameters('namePrefix'))]",
     "fhirbridgeAppName": "[format('{0}-app', parameters('namePrefix'))]",
-    "demoAppName": "[format('{0}-demo-app', parameters('namePrefix'))]",
     "workerName": "[format('{0}-worker', parameters('namePrefix'))]",
     "hasRegistryCreds": "[not(empty(parameters('imageRegistryUsername')))]",
     "registryConfig": "[if(variables('hasRegistryCreds'), createArray(createObject('server', parameters('imageRegistryServer'), 'username', parameters('imageRegistryUsername'), 'passwordSecretRef', 'registry-password')), createArray())]",
-    "registrySecret": "[if(variables('hasRegistryCreds'), createArray(createObject('name', 'registry-password', 'value', parameters('imageRegistryPassword'))), createArray())]"
+    "registrySecret": "[if(variables('hasRegistryCreds'), createArray(createObject('name', 'registry-password', 'value', parameters('imageRegistryPassword'))), createArray())]",
+    "tenantSecretsKeyVaultName": "[toLower(format('{0}-tkv-{1}', take(parameters('namePrefix'), 8), take(variables('uniqueSuffix'), 8)))]",
+    "postgresManagedAdminLogin": "fhirbridgeadmin",
+    "postgresManifestItems": "[if(parameters('useAzurePostgresql'), createArray(resourceId('Microsoft.DBforPostgreSQL/flexibleServers/firewallRules', format('{0}-pg', parameters('namePrefix')), 'AllowAzureServices'), resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('{0}-pg', parameters('namePrefix')), 'FHIRBridge'), resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix')))), createArray(resourceId('Microsoft.App/containerApps', variables('postgresName'))))]",
+    "postgresStorageManifestItems": "[if(parameters('useAzurePostgresql'), createArray(), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'postgres-data')))]",
+    "postgresShareManifestItems": "[if(parameters('useAzurePostgresql'), createArray(), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[2])))]",
+    "redisManifestItems": "[if(parameters('useAzureCacheForRedis'), createArray(resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default'), resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix')))), createArray(resourceId('Microsoft.App/containerApps', variables('redisName'))))]",
+    "redisStorageManifestItems": "[if(parameters('useAzureCacheForRedis'), createArray(), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'redis-data')))]",
+    "redisShareManifestItems": "[if(parameters('useAzureCacheForRedis'), createArray(), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[2])))]"
   },
   "resources": [
+    {
+      "condition": "[parameters('enableTenantSecretsKeyVault')]",
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('tenantSecretsKeyVaultName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "tenantId": "[tenant().tenantId]",
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "enableRbacAuthorization": true,
+        "softDeleteRetentionInDays": 7
+      }
+    },
+    {
+      "condition": "[parameters('enableTenantSecretsKeyVault')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]",
+      "name": "[guid(variables('tenantSecretsKeyVaultName'), deployer().objectId, 'KeyVaultSecretsOfficer')]",
+      "properties": {
+        "roleDefinitionId": "[variables('keyVaultSecretsOfficerRoleId')]",
+        "principalId": "[deployer().objectId]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableTenantSecretsKeyVault')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]",
+      "name": "[guid(variables('tenantSecretsKeyVaultName'), deployer().objectId, 'KeyVaultCryptoOfficer')]",
+      "properties": {
+        "roleDefinitionId": "[variables('keyVaultCryptoOfficerRoleId')]",
+        "principalId": "[deployer().objectId]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableTenantSecretsKeyVault')]",
+      "type": "Microsoft.KeyVault/vaults/keys",
+      "apiVersion": "2023-07-01",
+      "name": "[format('{0}/{1}', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix')))]",
+      "properties": {
+        "kty": "RSA",
+        "keySize": 2048,
+        "keyOps": [
+          "wrapKey",
+          "unwrapKey"
+        ]
+      },
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName')), 'Microsoft.Authorization/roleAssignments', guid(variables('tenantSecretsKeyVaultName'), deployer().objectId, 'KeyVaultCryptoOfficer'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableTenantSecretsKeyVault')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]",
+      "name": "[guid(variables('tenantSecretsKeyVaultName'), variables('fhirbridgeAppName'), 'KeyVaultSecretsOfficer')]",
+      "properties": {
+        "roleDefinitionId": "[variables('keyVaultSecretsOfficerRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), '2024-03-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableTenantSecretsKeyVault')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]",
+      "name": "[guid(variables('tenantSecretsKeyVaultName'), variables('workerName'), 'KeyVaultSecretsOfficer')]",
+      "properties": {
+        "roleDefinitionId": "[variables('keyVaultSecretsOfficerRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.App/containerApps', variables('workerName')), '2024-03-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('workerName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableTenantSecretsKeyVault')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]",
+      "name": "[guid(variables('tenantSecretsKeyVaultName'), variables('fhirbridgeAppName'), 'KeyVaultCryptoUser')]",
+      "properties": {
+        "roleDefinitionId": "[variables('keyVaultCryptoUserRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), '2024-03-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableTenantSecretsKeyVault')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]",
+      "name": "[guid(variables('tenantSecretsKeyVaultName'), variables('workerName'), 'KeyVaultCryptoUser')]",
+      "properties": {
+        "roleDefinitionId": "[variables('keyVaultCryptoUserRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.App/containerApps', variables('workerName')), '2024-03-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('workerName'))]"
+      ]
+    },
     {
       "type": "Microsoft.OperationalInsights/workspaces",
       "apiVersion": "2023-09-01",
@@ -326,9 +460,10 @@
       "kind": "StorageV2"
     },
     {
+      "condition": "[not(parameters('useAzurePostgresql'))]",
       "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
       "apiVersion": "2023-01-01",
-      "name": "[format('{0}/default/sql-data', variables('storageAccountName'))]",
+      "name": "[format('{0}/default/postgres-data', variables('storageAccountName'))]",
       "properties": {
         "shareQuota": 50
       },
@@ -337,6 +472,7 @@
       ]
     },
     {
+      "condition": "[not(parameters('useAzureCacheForRedis'))]",
       "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
       "apiVersion": "2023-01-01",
       "name": "[format('{0}/default/redis-data', variables('storageAccountName'))]",
@@ -359,24 +495,26 @@
       ]
     },
     {
+      "condition": "[not(parameters('useAzurePostgresql'))]",
       "type": "Microsoft.App/managedEnvironments/storages",
       "apiVersion": "2024-03-01",
-      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'sql-data')]",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'postgres-data')]",
       "properties": {
         "azureFile": {
           "accountName": "[variables('storageAccountName')]",
           "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value]",
-          "shareName": "sql-data",
+          "shareName": "postgres-data",
           "accessMode": "ReadWrite"
         }
       },
       "dependsOn": [
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
-        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[2])]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[2])]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
     },
     {
+      "condition": "[not(parameters('useAzureCacheForRedis'))]",
       "type": "Microsoft.App/managedEnvironments/storages",
       "apiVersion": "2024-03-01",
       "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'redis-data')]",
@@ -413,63 +551,65 @@
       ]
     },
     {
+      "condition": "[not(parameters('useAzurePostgresql'))]",
       "type": "Microsoft.App/containerApps",
       "apiVersion": "2024-03-01",
-      "name": "[variables('sqlServerName')]",
+      "name": "[variables('postgresName')]",
       "location": "[parameters('location')]",
       "tags": "[variables('commonTags')]",
       "properties": {
         "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "configuration": {
-          "secrets": [
-            {
-              "name": "sql-sa-password",
-              "value": "[parameters('sqlSaPassword')]"
-            }
-          ],
+          "secrets": "[concat(createArray(createObject('name', 'postgres-password', 'value', parameters('postgresPassword'))), variables('registrySecret'))]",
+          "registries": "[variables('registryConfig')]",
           "ingress": {
             "external": false,
-            "targetPort": "[parameters('sqlPort')]",
+            "targetPort": "[parameters('postgresPort')]",
             "transport": "tcp"
           }
         },
         "template": {
+          "terminationGracePeriodSeconds": 90,
           "containers": [
             {
-              "name": "sqlserver",
-              "image": "mcr.microsoft.com/mssql/server:2022-latest",
-              "resources": "[variables('containerSizes')[parameters('sqlServerSize')]]",
+              "name": "postgres",
+              "image": "[format('{0}/fhirbridge-postgres:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
+              "resources": "[variables('containerSizes')[parameters('postgresSize')]]",
               "env": [
                 {
-                  "name": "ACCEPT_EULA",
-                  "value": "Y"
+                  "name": "POSTGRES_DB",
+                  "value": "FHIRBridge"
                 },
                 {
-                  "name": "MSSQL_PID",
-                  "value": "Express"
+                  "name": "POSTGRES_USER",
+                  "value": "fhirbridge"
                 },
                 {
-                  "name": "MSSQL_SA_PASSWORD",
-                  "secretRef": "sql-sa-password"
+                  "name": "POSTGRES_PASSWORD",
+                  "secretRef": "postgres-password"
                 },
                 {
-                  "name": "MSSQL_TCP_PORT",
-                  "value": "[string(parameters('sqlPort'))]"
+                  "name": "PG_BACKUP_DIR",
+                  "value": "/mnt/pgbackup"
                 }
+              ],
+              "args": [
+                "-p",
+                "[string(parameters('postgresPort'))]"
               ],
               "volumeMounts": [
                 {
-                  "volumeName": "sql-data",
-                  "mountPath": "/var/opt/mssql"
+                  "volumeName": "postgres-data",
+                  "mountPath": "/mnt/pgbackup"
                 }
               ]
             }
           ],
           "volumes": [
             {
-              "name": "sql-data",
+              "name": "postgres-data",
               "storageType": "AzureFile",
-              "storageName": "sql-data"
+              "storageName": "postgres-data"
             }
           ],
           "scale": {
@@ -480,10 +620,84 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
-        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'sql-data')]"
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'postgres-data')]"
       ]
     },
     {
+      "condition": "[parameters('useAzurePostgresql')]",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}-pg', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "sku": "[variables('postgresSkuMap')[parameters('azurePostgresqlSku')]]",
+      "properties": {
+        "version": "16",
+        "administratorLogin": "[variables('postgresManagedAdminLogin')]",
+        "administratorLoginPassword": "[parameters('postgresPassword')]",
+        "storage": {
+          "storageSizeGB": "[div(parameters('azurePostgresqlStorageMb'), 1024)]"
+        }
+      }
+    },
+    {
+      "condition": "[parameters('useAzurePostgresql')]",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', format('{0}-pg', parameters('namePrefix')), 'AllowAzureServices')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "condition": "[parameters('useAzurePostgresql')]",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', format('{0}-pg', parameters('namePrefix')), 'FHIRBridge')]",
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "condition": "[parameters('useAzureCacheForRedis')]",
+      "type": "Microsoft.Cache/redisEnterprise",
+      "apiVersion": "2025-04-01",
+      "name": "[format('{0}-cache', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "sku": {
+        "name": "[parameters('azureCacheForRedisTier')]"
+      },
+      "properties": {
+        "minimumTlsVersion": "1.2",
+        "highAvailability": "Enabled"
+      }
+    },
+    {
+      "condition": "[parameters('useAzureCacheForRedis')]",
+      "type": "Microsoft.Cache/redisEnterprise/databases",
+      "apiVersion": "2025-04-01",
+      "name": "[format('{0}/{1}', format('{0}-cache', parameters('namePrefix')), 'default')]",
+      "properties": {
+        "clientProtocol": "Encrypted",
+        "port": 10000,
+        "clusteringPolicy": "EnterpriseCluster",
+        "evictionPolicy": "VolatileLRU"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "condition": "[not(parameters('useAzureCacheForRedis'))]",
       "type": "Microsoft.App/containerApps",
       "apiVersion": "2024-03-01",
       "name": "[variables('redisName')]",
@@ -548,135 +762,6 @@
       ]
     },
     {
-      "type": "Microsoft.App/containerApps",
-      "apiVersion": "2024-03-01",
-      "name": "[variables('hapiTerminologyPostgresName')]",
-      "location": "[parameters('location')]",
-      "tags": "[variables('commonTags')]",
-      "properties": {
-        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
-        "configuration": {
-          "secrets": [
-            {
-              "name": "hapi-terminology-postgres-password",
-              "value": "[parameters('hapiTerminologyPostgresPassword')]"
-            }
-          ],
-          "ingress": {
-            "external": false,
-            "targetPort": 5432,
-            "transport": "tcp"
-          }
-        },
-        "template": {
-          "containers": [
-            {
-              "name": "hapi-terminology-postgres",
-              "image": "postgres:16-alpine",
-              "resources": "[variables('containerSizes')[parameters('hapiTerminologyPostgresSize')]]",
-              "env": [
-                {
-                  "name": "POSTGRES_DB",
-                  "value": "hapi_terminology"
-                },
-                {
-                  "name": "POSTGRES_USER",
-                  "value": "hapi_terminology"
-                },
-                {
-                  "name": "POSTGRES_PASSWORD",
-                  "secretRef": "hapi-terminology-postgres-password"
-                }
-              ],
-              "volumeMounts": [
-                {
-                  "volumeName": "hapi-terminology-data",
-                  "mountPath": "/var/lib/postgresql/data"
-                }
-              ]
-            }
-          ],
-          "volumes": [
-            {
-              "name": "hapi-terminology-data",
-              "storageType": "EmptyDir"
-            }
-          ],
-          "scale": {
-            "minReplicas": 1,
-            "maxReplicas": 1
-          }
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]"
-      ]
-    },
-    {
-      "type": "Microsoft.App/containerApps",
-      "apiVersion": "2024-03-01",
-      "name": "[variables('hapiTerminologyName')]",
-      "location": "[parameters('location')]",
-      "tags": "[variables('commonTags')]",
-      "properties": {
-        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
-        "configuration": {
-          "secrets": "[concat(variables('registrySecret'), createArray(createObject('name', 'hapi-terminology-postgres-password', 'value', parameters('hapiTerminologyPostgresPassword'))))]",
-          "registries": "[variables('registryConfig')]",
-          "ingress": {
-            "external": "[or(parameters('hapiTerminologyExternalAccess'), not(empty(parameters('hapiTerminologyCustomDomain'))))]",
-            "targetPort": 8080,
-            "transport": "auto",
-            "customDomains": "[if(not(empty(parameters('hapiTerminologyCustomDomain'))), createArray(if(parameters('bindCustomDomainCertificates'), createObject('name', parameters('hapiTerminologyCustomDomain'), 'certificateId', resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('hapiTerminologyName'))), 'bindingType', 'SniEnabled'), createObject('name', parameters('hapiTerminologyCustomDomain'), 'bindingType', 'Disabled'))), createArray())]"
-          }
-        },
-        "template": {
-          "containers": [
-            {
-              "name": "hapi-terminology",
-              "image": "[format('{0}/hapi-terminology:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
-              "resources": "[variables('containerSizes')[parameters('hapiTerminologySize')]]",
-              "env": [
-                {
-                  "name": "SPRING_DATASOURCE_URL",
-                  "value": "[format('jdbc:postgresql://{0}:5432/hapi_terminology', variables('hapiTerminologyPostgresName'))]"
-                },
-                {
-                  "name": "SPRING_DATASOURCE_USERNAME",
-                  "value": "hapi_terminology"
-                },
-                {
-                  "name": "SPRING_DATASOURCE_PASSWORD",
-                  "secretRef": "hapi-terminology-postgres-password"
-                },
-                {
-                  "name": "SPRING_DATASOURCE_DRIVERCLASSNAME",
-                  "value": "org.postgresql.Driver"
-                },
-                {
-                  "name": "SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT",
-                  "value": "ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgres94Dialect"
-                },
-                {
-                  "name": "HAPI_FHIR_VERSION",
-                  "value": "R4"
-                }
-              ]
-            }
-          ],
-          "scale": {
-            "minReplicas": 1,
-            "maxReplicas": 1
-          }
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
-        "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('hapiTerminologyName')))]",
-        "[resourceId('Microsoft.App/containerApps', variables('hapiTerminologyPostgresName'))]"
-      ]
-    },
-    {
       "condition": "[and(not(empty(parameters('fhirbridgeAppCustomDomain'))), parameters('bindCustomDomainCertificates'))]",
       "type": "Microsoft.App/managedEnvironments/managedCertificates",
       "apiVersion": "2024-03-01",
@@ -691,43 +776,18 @@
       ]
     },
     {
-      "condition": "[and(not(empty(parameters('demoAppCustomDomain'))), parameters('bindCustomDomainCertificates'))]",
-      "type": "Microsoft.App/managedEnvironments/managedCertificates",
-      "apiVersion": "2024-03-01",
-      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('demoAppName')))]",
-      "location": "[parameters('location')]",
-      "properties": {
-        "subjectName": "[parameters('demoAppCustomDomain')]",
-        "domainControlValidation": "CNAME"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]"
-      ]
-    },
-    {
-      "condition": "[and(not(empty(parameters('hapiTerminologyCustomDomain'))), parameters('bindCustomDomainCertificates'))]",
-      "type": "Microsoft.App/managedEnvironments/managedCertificates",
-      "apiVersion": "2024-03-01",
-      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('hapiTerminologyName')))]",
-      "location": "[parameters('location')]",
-      "properties": {
-        "subjectName": "[parameters('hapiTerminologyCustomDomain')]",
-        "domainControlValidation": "CNAME"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]"
-      ]
-    },
-    {
       "type": "Microsoft.App/containerApps",
       "apiVersion": "2024-03-01",
       "name": "[variables('fhirbridgeAppName')]",
       "location": "[parameters('location')]",
       "tags": "[variables('commonTags')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "properties": {
         "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "configuration": {
-          "secrets": "[concat(createArray(createObject('name', 'sql-sa-password', 'value', parameters('sqlSaPassword')), createObject('name', 'jwt-signing-key', 'value', parameters('jwtSigningKey'))), variables('registrySecret'))]",
+          "secrets": "[concat(createArray(createObject('name', 'postgres-password', 'value', parameters('postgresPassword')), createObject('name', 'jwt-signing-key', 'value', parameters('jwtSigningKey'))), variables('registrySecret'))]",
           "registries": "[variables('registryConfig')]",
           "ingress": {
             "external": true,
@@ -742,7 +802,7 @@
               "name": "fhirbridge-app",
               "image": "[format('{0}/fhirbridge-app:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
               "resources": "[variables('containerSizes')[parameters('fhirbridgeAppSize')]]",
-              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', format('Server={0},{1};Database=FHIRBridge;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))), createObject('name', 'ConnectionStrings__Redis', 'value', format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))), createObject('name', 'Redis__TrustedCertificateThumbprint', 'value', parameters('redisTrustedCertificateThumbprint')), createObject('name', 'Authentication__SigningKey', 'secretRef', 'jwt-signing-key'), createObject('name', 'DataProtection__KeyRingPath', 'value', '/app/keys'), createObject('name', 'ApiBaseUrl', 'value', 'http://127.0.0.1:5000/'), createObject('name', 'Portal__AllowedOrigins__0', 'value', format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)), createObject('name', 'AllowedHosts', 'value', '*'), createObject('name', 'Swagger__Enabled', 'value', 'true'), createObject('name', 'Terminology__BaseUrl', 'value', format('http://{0}:8080/fhir', variables('hapiTerminologyName')))), if(not(empty(parameters('demoAppCustomDomain'))), createArray(createObject('name', 'Portal__AllowedOrigins__1', 'value', format('https://{0}', parameters('demoAppCustomDomain')))), createArray()))]",
+              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', if(parameters('useAzurePostgresql'), format('Host={0};Port=5432;Database={1};Username={2};Password={3};Ssl Mode=Require;', tryGet(if(parameters('useAzurePostgresql'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix'))), '2024-08-01', 'full'), null()), 'properties', 'fullyQualifiedDomainName'), if(parameters('useAzurePostgresql'), 'FHIRBridge', null()), variables('postgresManagedAdminLogin'), parameters('postgresPassword')), format('Host={0};Port={1};Database=FHIRBridge;Username=fhirbridge;Password={2};', variables('postgresName'), parameters('postgresPort'), parameters('postgresPassword')))), createObject('name', 'Database__Provider', 'value', 'PostgreSql'), createObject('name', 'ConnectionStrings__Redis', 'value', if(parameters('useAzureCacheForRedis'), format('{0}:10000,password={1},ssl=true,abortConnect=false', tryGet(if(parameters('useAzureCacheForRedis'), reference(resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix'))), '2025-04-01', 'full'), null()), 'properties', 'hostName'), listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default'), '2025-04-01').primaryKey), format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword')))), createObject('name', 'Authentication__SigningKey', 'secretRef', 'jwt-signing-key'), createObject('name', 'DataProtection__KeyRingPath', 'value', '/app/keys'), createObject('name', 'ApiBaseUrl', 'value', 'http://127.0.0.1:5000/'), createObject('name', 'AllowedHosts', 'value', '*'), createObject('name', 'Swagger__Enabled', 'value', 'true')), if(not(parameters('useAzureCacheForRedis')), createArray(createObject('name', 'Redis__TrustedCertificateThumbprint', 'value', parameters('redisTrustedCertificateThumbprint'))), createArray()), if(parameters('enableTenantSecretsKeyVault'), createArray(createObject('name', 'KeyVault__UseAzureKeyVault', 'value', 'true'), createObject('name', 'KeyVault__AllowConfigurationFallback', 'value', 'true'), createObject('name', 'KeyVault__VaultName', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName')), '2023-07-01', 'full'), null()), 'properties', 'vaultUri'), '')), createObject('name', 'DataProtection__KeyVaultKeyId', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix'))), '2023-07-01', 'full'), null()), 'properties', 'keyUriWithVersion'), ''))), createArray()))]",
               "volumeMounts": [
                 {
                   "volumeName": "keys-data",
@@ -765,64 +825,17 @@
         }
       },
       "dependsOn": [
+        "[resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default')]",
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix')))]",
         "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('fhirbridgeAppName')))]",
-        "[resourceId('Microsoft.App/containerApps', variables('hapiTerminologyName'))]",
         "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')]",
+        "[resourceId('Microsoft.App/containerApps', variables('postgresName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('{0}-pg', parameters('namePrefix')), 'FHIRBridge')]",
         "[resourceId('Microsoft.App/containerApps', variables('redisName'))]",
-        "[resourceId('Microsoft.App/containerApps', variables('sqlServerName'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.App/containerApps",
-      "apiVersion": "2024-03-01",
-      "name": "[variables('demoAppName')]",
-      "location": "[parameters('location')]",
-      "tags": "[variables('commonTags')]",
-      "properties": {
-        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
-        "configuration": {
-          "secrets": "[variables('registrySecret')]",
-          "registries": "[variables('registryConfig')]",
-          "ingress": {
-            "external": true,
-            "targetPort": 5500,
-            "transport": "auto",
-            "customDomains": "[if(not(empty(parameters('demoAppCustomDomain'))), createArray(if(parameters('bindCustomDomainCertificates'), createObject('name', parameters('demoAppCustomDomain'), 'certificateId', resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('demoAppName'))), 'bindingType', 'SniEnabled'), createObject('name', parameters('demoAppCustomDomain'), 'bindingType', 'Disabled'))), createArray())]"
-          }
-        },
-        "template": {
-          "containers": [
-            {
-              "name": "demo-app",
-              "image": "[format('{0}/demo-app:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
-              "resources": "[variables('containerSizes')[parameters('demoAppSize')]]",
-              "env": [
-                {
-                  "name": "ASPNETCORE_ENVIRONMENT",
-                  "value": "Production"
-                },
-                {
-                  "name": "ConnectionStrings__Default",
-                  "value": "[format('Server={0},{1};Database=HealthAppDb;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))]"
-                },
-                {
-                  "name": "AllowedFrontendOrigin",
-                  "value": "[if(not(empty(parameters('demoAppCustomDomain'))), format('https://{0}', parameters('demoAppCustomDomain')), format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain))]"
-                }
-              ]
-            }
-          ],
-          "scale": {
-            "minReplicas": 1,
-            "maxReplicas": 3
-          }
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
-        "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('demoAppName')))]",
-        "[resourceId('Microsoft.App/containerApps', variables('sqlServerName'))]"
+        "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]"
       ]
     },
     {
@@ -831,6 +844,9 @@
       "name": "[variables('workerName')]",
       "location": "[parameters('location')]",
       "tags": "[variables('commonTags')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "properties": {
         "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "configuration": {
@@ -843,36 +859,7 @@
               "name": "worker",
               "image": "[format('{0}/fhirbridge-worker:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
               "resources": "[variables('containerSizes')[parameters('workerSize')]]",
-              "env": [
-                {
-                  "name": "ASPNETCORE_ENVIRONMENT",
-                  "value": "Production"
-                },
-                {
-                  "name": "ConnectionStrings__FHIRBridgeDb",
-                  "value": "[format('Server={0},{1};Database=FHIRBridge;User Id=sa;Password={2};Encrypt=True;TrustServerCertificate=True', variables('sqlServerName'), parameters('sqlPort'), parameters('sqlSaPassword'))]"
-                },
-                {
-                  "name": "ConnectionStrings__Redis",
-                  "value": "[format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword'))]"
-                },
-                {
-                  "name": "Redis__TrustedCertificateThumbprint",
-                  "value": "[parameters('redisTrustedCertificateThumbprint')]"
-                },
-                {
-                  "name": "RuntimeWorker__Enabled",
-                  "value": "true"
-                },
-                {
-                  "name": "Messaging__Provider",
-                  "value": "InMemory"
-                },
-                {
-                  "name": "Terminology__BaseUrl",
-                  "value": "[format('http://{0}:8080/fhir', variables('hapiTerminologyName'))]"
-                }
-              ]
+              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', if(parameters('useAzurePostgresql'), format('Host={0};Port=5432;Database={1};Username={2};Password={3};Ssl Mode=Require;', tryGet(if(parameters('useAzurePostgresql'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix'))), '2024-08-01', 'full'), null()), 'properties', 'fullyQualifiedDomainName'), if(parameters('useAzurePostgresql'), 'FHIRBridge', null()), variables('postgresManagedAdminLogin'), parameters('postgresPassword')), format('Host={0};Port={1};Database=FHIRBridge;Username=fhirbridge;Password={2};', variables('postgresName'), parameters('postgresPort'), parameters('postgresPassword')))), createObject('name', 'Database__Provider', 'value', 'PostgreSql'), createObject('name', 'ConnectionStrings__Redis', 'value', if(parameters('useAzureCacheForRedis'), format('{0}:10000,password={1},ssl=true,abortConnect=false', tryGet(if(parameters('useAzureCacheForRedis'), reference(resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix'))), '2025-04-01', 'full'), null()), 'properties', 'hostName'), listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default'), '2025-04-01').primaryKey), format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword')))), createObject('name', 'RuntimeWorker__Enabled', 'value', 'true'), createObject('name', 'Messaging__Provider', 'value', 'InMemory')), if(not(parameters('useAzureCacheForRedis')), createArray(createObject('name', 'Redis__TrustedCertificateThumbprint', 'value', parameters('redisTrustedCertificateThumbprint'))), createArray()), if(parameters('enableTenantSecretsKeyVault'), createArray(createObject('name', 'KeyVault__UseAzureKeyVault', 'value', 'true'), createObject('name', 'KeyVault__AllowConfigurationFallback', 'value', 'true'), createObject('name', 'KeyVault__VaultName', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName')), '2023-07-01', 'full'), null()), 'properties', 'vaultUri'), '')), createObject('name', 'DataProtection__KeyVaultKeyId', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix'))), '2023-07-01', 'full'), null()), 'properties', 'keyUriWithVersion'), ''))), createArray()))]"
             }
           ],
           "scale": {
@@ -882,11 +869,16 @@
         }
       },
       "dependsOn": [
+        "[resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default')]",
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix')))]",
         "[resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName'))]",
-        "[resourceId('Microsoft.App/containerApps', variables('hapiTerminologyName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('postgresName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('{0}-pg', parameters('namePrefix')), 'FHIRBridge')]",
         "[resourceId('Microsoft.App/containerApps', variables('redisName'))]",
-        "[resourceId('Microsoft.App/containerApps', variables('sqlServerName'))]"
+        "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]"
       ]
     }
   ],
@@ -895,37 +887,66 @@
       "type": "string",
       "value": "[format('https://{0}.{1}', variables('fhirbridgeAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)]"
     },
-    "demoAppUrl": {
+    "redisMode": {
       "type": "string",
-      "value": "[format('https://{0}.{1}', variables('demoAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)]"
+      "value": "[if(parameters('useAzureCacheForRedis'), 'azure-cache', 'container')]"
     },
-    "hapiTerminologyUrl": {
+    "azureCacheForRedisHostname": {
       "type": "string",
-      "value": "[format('https://{0}.{1}', variables('hapiTerminologyName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)]"
+      "metadata": {
+        "description": "Populated only when useAzureCacheForRedis is true. Same host ConnectionStrings:Redis points the app at — useful for connecting a client (e.g. redis-cli / RedisInsight) directly for debugging."
+      },
+      "value": "[if(parameters('useAzureCacheForRedis'), coalesce(tryGet(if(parameters('useAzureCacheForRedis'), reference(resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix'))), '2025-04-01', 'full'), null()), 'properties', 'hostName'), ''), '')]"
+    },
+    "tenantSecretsKeyVaultId": {
+      "type": "string",
+      "metadata": {
+        "description": "Populated only when enableTenantSecretsKeyVault is true. Scope to use in a manual \"az role assignment create --role ... --scope <this>\" if the role assignments above fail for lack of Owner/User Access Administrator rights."
+      },
+      "value": "[if(parameters('enableTenantSecretsKeyVault'), resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName')), '')]"
+    },
+    "tenantSecretsKeyVaultName": {
+      "type": "string",
+      "metadata": {
+        "description": "Populated only when enableTenantSecretsKeyVault is true. Use with \"az keyvault secret list --vault-name <this>\" to see what the app has provisioned there so far."
+      },
+      "value": "[if(parameters('enableTenantSecretsKeyVault'), variables('tenantSecretsKeyVaultName'), '')]"
+    },
+    "tenantSecretsKeyVaultUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Populated only when enableTenantSecretsKeyVault is true. Same value the app receives as KeyVault:VaultName."
+      },
+      "value": "[if(parameters('enableTenantSecretsKeyVault'), coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName')), '2023-07-01', 'full'), null()), 'properties', 'vaultUri'), ''), '')]"
+    },
+    "dataProtectionKeyId": {
+      "type": "string",
+      "metadata": {
+        "description": "Populated only when enableTenantSecretsKeyVault is true. Same value the app receives as DataProtection:KeyVaultKeyId."
+      },
+      "value": "[if(parameters('enableTenantSecretsKeyVault'), coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix'))), '2023-07-01', 'full'), null()), 'properties', 'keyUriWithVersion'), ''), '')]"
+    },
+    "fhirbridgeAppPrincipalId": {
+      "type": "string",
+      "metadata": {
+        "description": "System-assigned managed identity principal ID for the fhirbridgeApp Container App. Use as --assignee for the manual role-assignment fallback above."
+      },
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), '2024-03-01', 'full').identity.principalId]"
+    },
+    "workerPrincipalId": {
+      "type": "string",
+      "metadata": {
+        "description": "System-assigned managed identity principal ID for the worker Container App. Use as --assignee for the manual role-assignment fallback above."
+      },
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('workerName')), '2024-03-01', 'full').identity.principalId]"
     },
     "fhirbridgeAppDomainVerificationId": {
       "type": "string",
       "value": "[reference(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), '2024-03-01').customDomainVerificationId]"
     },
-    "demoAppDomainVerificationId": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('demoAppName')), '2024-03-01').customDomainVerificationId]"
-    },
-    "hapiTerminologyDomainVerificationId": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('hapiTerminologyName')), '2024-03-01').customDomainVerificationId]"
-    },
     "fhirbridgeAppCustomDomainUrl": {
       "type": "string",
       "value": "[if(not(empty(parameters('fhirbridgeAppCustomDomain'))), format('https://{0}', parameters('fhirbridgeAppCustomDomain')), '')]"
-    },
-    "demoAppCustomDomainUrl": {
-      "type": "string",
-      "value": "[if(not(empty(parameters('demoAppCustomDomain'))), format('https://{0}', parameters('demoAppCustomDomain')), '')]"
-    },
-    "hapiTerminologyCustomDomainUrl": {
-      "type": "string",
-      "value": "[if(not(empty(parameters('hapiTerminologyCustomDomain'))), format('https://{0}', parameters('hapiTerminologyCustomDomain')), '')]"
     },
     "bindCustomDomainCertificates": {
       "type": "bool",
@@ -933,40 +954,21 @@
     },
     "customDomainPhase": {
       "type": "string",
-      "value": "[if(and(empty(parameters('fhirbridgeAppCustomDomain')), empty(parameters('demoAppCustomDomain'))), 'none', if(parameters('bindCustomDomainCertificates'), 'ssl-bound-or-binding', 'hostname-only-set-dns-then-redeploy-with-bind-true'))]"
+      "value": "[if(empty(parameters('fhirbridgeAppCustomDomain')), 'none', if(parameters('bindCustomDomainCertificates'), 'ssl-bound-or-binding', 'hostname-only-set-dns-then-redeploy-with-bind-true'))]"
     },
     "intendedCustomDomains": {
       "type": "object",
       "value": {
-        "fhirbridgeApp": "[parameters('fhirbridgeAppIntendedDomain')]",
-        "demoApp": "[parameters('demoAppIntendedDomain')]",
-        "hapiTerminology": "[parameters('hapiTerminologyIntendedDomain')]"
+        "fhirbridgeApp": "[parameters('fhirbridgeAppIntendedDomain')]"
       }
     },
     "customDomainActivationNote": {
       "type": "string",
-      "value": "[if(and(and(empty(parameters('fhirbridgeAppIntendedDomain')), empty(parameters('demoAppIntendedDomain'))), empty(parameters('hapiTerminologyIntendedDomain'))), '', 'Domain names entered above are not yet active - they are recorded here purely for your reference. To actually route traffic to a custom domain, complete Step 2 (custom-domain.bicep) now that this deployment has finished.')]"
+      "value": "[if(empty(parameters('fhirbridgeAppIntendedDomain')), '', 'Domain names entered above are not yet active - they are recorded here purely for your reference. To actually route traffic to a custom domain, complete Step 2 (custom-domain.bicep) now that this deployment has finished.')]"
     },
     "resourceManifest": {
       "type": "array",
-      "value": [
-        "[resourceId('Microsoft.App/containerApps', variables('sqlServerName'))]",
-        "[resourceId('Microsoft.App/containerApps', variables('redisName'))]",
-        "[resourceId('Microsoft.App/containerApps', variables('hapiTerminologyPostgresName'))]",
-        "[resourceId('Microsoft.App/containerApps', variables('hapiTerminologyName'))]",
-        "[resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName'))]",
-        "[resourceId('Microsoft.App/containerApps', variables('demoAppName'))]",
-        "[resourceId('Microsoft.App/containerApps', variables('workerName'))]",
-        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'sql-data')]",
-        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'redis-data')]",
-        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')]",
-        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/sql-data', variables('storageAccountName')), '/')[2])]",
-        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[2])]",
-        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2])]",
-        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
-        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
-        "[resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix')))]"
-      ]
+      "value": "[concat(variables('postgresManifestItems'), variables('redisManifestItems'), createArray(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), resourceId('Microsoft.App/containerApps', variables('workerName'))), variables('postgresStorageManifestItems'), variables('redisStorageManifestItems'), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')), variables('postgresShareManifestItems'), variables('redisShareManifestItems'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2]), resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix')))), if(parameters('enableTenantSecretsKeyVault'), createArray(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))), createArray()))]"
     }
   }
 }
