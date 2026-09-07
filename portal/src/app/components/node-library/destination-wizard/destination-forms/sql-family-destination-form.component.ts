@@ -27,6 +27,15 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
 
   readonly engine = input.required<SqlFamilyEngine>();
 
+  /** Password has no required validator (optional by default) — SQL never hard-blocks reopening a saved
+   *  connection with a blank password. This is only consulted by getMetadata() below, to avoid rebuilding
+   *  a connection string with a blank embedded password on a no-op re-save. */
+  readonly reusingExisting = input<boolean>(false);
+  /** Set alongside reusingExisting — not yet consumed here (Test Connection still requires retyping the
+   *  password for SQL), but declared so the wizard can pass it uniformly without ComponentRef.setInput
+   *  throwing on an undeclared input. See CsvDestinationFormComponent for the consuming pattern. */
+  readonly existingDestinationId = input<string | null>(null);
+
   /** AzureSql has no live UI anywhere prior to this refactor — it reuses SqlServer's exact fields/behavior,
    *  differing only in the DestinationType/dest_engine tag it's saved under (see _destinationTypeFor below). */
   readonly showSslToggle = () => this.engine() === 'mysql' || this.engine() === 'postgres';
@@ -111,9 +120,15 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    // buildSqlConnectionString bakes the password into the connection string even when it's blank
+    // (e.g. "...;User Id=x;Password=;..."), which is non-empty and would overwrite a working stored secret
+    // with a broken one on a no-op re-save — same guard as
+    // WorkflowBuildAssemblerService.buildDestinationRequest's isSql branch.
+    const secret =
+      this.reusingExisting() && !config['dest_password'] ? null : buildSqlConnectionString(config);
     return {
       fields: JSON.parse(buildConnectionMetadata(config, 'sql')) as Record<string, string>,
-      secret: buildSqlConnectionString(config),
+      secret,
     };
   }
 

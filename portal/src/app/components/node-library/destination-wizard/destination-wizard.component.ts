@@ -701,22 +701,32 @@ export class DestinationWizardComponent implements OnInit {
       () => DESTINATION_FORM_REGISTRY[this.registryKey()] ?? null,
     );
 
-  /** Only Csv's and BlobStorage's own components declare `reusingExisting` (gates sftpPassword's/secretValue's
-   *  required validator) — see CsvDestinationFormComponent/BlobStorageDestinationFormComponent. Passing an
-   *  input key a loaded component doesn't declare would throw (NgComponentOutlet uses ComponentRef.setInput
-   *  under the hood), so this is scoped to those branches only. Deliberately a plain method, not computed() —
-   *  hasExistingChanged() reads the live FormGroup underneath activeForm(), which isn't itself a tracked
-   *  signal, so a computed() here would never invalidate as the user types; template bindings re-evaluate
-   *  this fresh on every change-detection pass instead. */
+  /** Every registry-routed destination form now declares `reusingExisting` (gates its secret field's required
+   *  validator, and — via getMetadata() — whether a blank secret is sent as null/preserve vs. rebuilt into a
+   *  broken value) — Sql-family/Mongo/Medplum/BlobStorage/Csv/Sftp/AzureFhirService all declare the input, so
+   *  passing it uniformly no longer throws via ComponentRef.setInput. FHIR (Aidbox) never reaches this at all
+   *  (isFhir() is never registry-routed — see registryKey()); its own hand-rolled fhirForm has the equivalent
+   *  logic wired directly in destination-wizard.component.ts instead. Deliberately a plain method, not
+   *  computed() — hasExistingChanged() reads the live FormGroup underneath activeForm(), which isn't itself a
+   *  tracked signal, so a computed() here would never invalidate as the user types; template bindings
+   *  re-evaluate this fresh on every change-detection pass instead. */
   activeFormInputs(): Record<string, unknown> {
-    // Medplum's own form (like Mongo's) has no `reusingExisting` input — passing it would throw via
-    // ComponentRef.setInput. FHIR (Aidbox) never reaches this at all (isFhir() is never registry-routed —
-    // see registryKey()), so it isn't listed here. AzureFhirServiceDestinationFormComponent DOES declare
-    // `reusingExisting` (like Blob's), so 'azurefhir' is deliberately NOT added to this exclusion.
-    if (this.isSql() || this.isMongo() || this.isMedplum()) return {};
+    // Also relaxed when reopening an already-provisioned node straight from the canvas (_populateFromNode
+    // sets resolvedDestinationId but never touches connectionMode, since that flag is only ever set by the
+    // "reuse existing connection" dropdown's selectExisting()) — otherwise the never-re-displayed secret
+    // field's required validator blocks saving/testing an edit that doesn't touch the secret at all.
+    // hasExistingChanged() safely returns false when _existingBaseline is null (the case here), so this
+    // doesn't lose the "user actually retyped the secret" protection that flow relies on.
+    const reusingExisting =
+      (this.connectionMode() === 'existing' || !!this.resolvedDestinationId()) &&
+      !this.hasExistingChanged();
     return {
-      reusingExisting:
-        this.connectionMode() === 'existing' && !this.hasExistingChanged(),
+      reusingExisting,
+      // Only meaningful alongside reusingExisting — lets a form's Test Connection resolve the stored secret
+      // server-side (see e.g. CsvDestinationFormComponent.testConnection()) instead of requiring the user to
+      // retype it just to verify an unchanged connection still works. Null whenever reusingExisting is false,
+      // so a form never accidentally tests-by-id against stale state after the user picks/types something new.
+      existingDestinationId: reusingExisting ? this.resolvedDestinationId() : null,
     };
   }
 
@@ -1783,6 +1793,22 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly FHIR_TYPES: DestinationType[] = ['FhirRepository'];
   private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
   private static readonly AZUREFHIR_TYPES: DestinationType[] = ['AzureFhirService'];
+
+  /** Every secret-shaped form control name across every destination form's raw FormGroup value — shared by
+   *  hasExistingChanged()/isStep1Dirty() so a real value typed there never counts as "the user changed
+   *  something" (secrets are never re-displayed from the API, so a baseline snapshot always has these blank).
+   *  Previously two separately-hand-maintained lists that had drifted out of sync (isStep1Dirty() was missing
+   *  both 'secretValue' [Blob] and 'secret' [Medplum]; hasExistingChanged() was missing 'secret') despite a
+   *  doc comment claiming they were the same list — kept as one set now so they can't drift again. */
+  private static readonly SECRET_FORM_CONTROL_KEYS = new Set([
+    'password',
+    'sftpPassword',
+    'connectionString',
+    'secretValue',
+    'clientSecret',
+    'bearerToken',
+    'secret',
+  ]);
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -3642,17 +3668,9 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set([
-      'password',
-      'sftpPassword',
-      'connectionString',
-      'secretValue',
-      'clientSecret',
-      'bearerToken',
-    ]);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(
-        Object.entries(v).filter(([key]) => !secretKeys.has(key)),
+        Object.entries(v).filter(([key]) => !DestinationWizardComponent.SECRET_FORM_CONTROL_KEYS.has(key)),
       );
     const current = this.isFhir()
       ? this.fhirForm.getRawValue()
@@ -3671,16 +3689,9 @@ export class DestinationWizardComponent implements OnInit {
    *  key list as hasExistingChanged(). */
   isStep1Dirty(): boolean {
     if (!this._step1Baseline) return false;
-    const secretKeys = new Set([
-      'password',
-      'sftpPassword',
-      'connectionString',
-      'clientSecret',
-      'bearerToken',
-    ]);
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(
-        Object.entries(v).filter(([key]) => !secretKeys.has(key)),
+        Object.entries(v).filter(([key]) => !DestinationWizardComponent.SECRET_FORM_CONTROL_KEYS.has(key)),
       );
     const current = this.isFhir()
       ? this.fhirForm.getRawValue()

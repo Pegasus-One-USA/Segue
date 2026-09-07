@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Azure.Identity;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
 using FHIRBridge.Api.Hubs;
@@ -35,6 +36,12 @@ using Microsoft.OpenApi;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Pulls ConnectionStrings/messaging-broker secrets from Azure Key Vault when KeyVault:UseAzureKeyVault is set
+// — as early as possible, since ConnectionStrings:FHIRBridgeDb itself (read further below) is one of them. See
+// KeyVaultConfigurationExtensions' remarks for what this does and doesn't cover, and its graceful-on-failure
+// behavior.
+builder.Configuration.AddFhirBridgeKeyVaultConfiguration();
 
 // Every non-dev deployment MUST set ASPNETCORE_URLS explicitly (the Windows Service's registry
 // Environment value — see deploy/windows/Deploy-FHIRBridge*.ps1). Kestrel's own built-in fallback
@@ -112,6 +119,18 @@ if (!string.IsNullOrWhiteSpace(dataProtectionCertPath) && !builder.Environment.I
         : System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(
             dataProtectionCertPath, dataProtectionCertPassword);
     dataProtection.ProtectKeysWithCertificate(dataProtectionCert);
+}
+
+// Alternative to the certificate above: wraps the key ring using an Azure Key Vault Key's wrap/unwrap
+// operations instead of a local certificate. Same "wraps, never rotates" semantics — each key's own stored
+// descriptor governs how it's decrypted, so keys written before this was configured stay readable. Requires
+// the app's identity to hold the Key Vault "Key Vault Crypto User" role on the referenced key (a different
+// role than "Key Vault Secrets Officer", which the tenant/app secret system uses). Off by default; set
+// DataProtection:KeyVaultKeyId (e.g. https://<vault>.vault.azure.net/keys/<key-name>) to enable.
+var dataProtectionKeyVaultKeyId = builder.Configuration["DataProtection:KeyVaultKeyId"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeyVaultKeyId))
+{
+    dataProtection.ProtectKeysWithAzureKeyVault(new Uri(dataProtectionKeyVaultKeyId), new DefaultAzureCredential());
 }
 
 builder.Services.AddEndpointsApiExplorer();
