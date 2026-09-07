@@ -2629,6 +2629,11 @@ export class DestinationWizardComponent implements OnInit {
    *  right after Step 1. */
   readonly canSelectExistingProfile = computed(
     () =>
+      // "Select Existing" reuses a saved MAPPING PROFILE, so it only means anything where mapping exists.
+      // A whole-resource FHIR destination (Aidbox / Medplum / Azure FHIR) writes each resource verbatim and
+      // has no field mappings at all — there is no profile to pick, and offering one implied a step that
+      // does not apply to it.
+      !this.isWholeResourceFhirDestination() &&
       !!this.sourceConnectionId() &&
       !!(this.selectedExistingId() ?? this.resolvedDestinationId()) &&
       !!this.sourceVendor(),
