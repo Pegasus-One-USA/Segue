@@ -6,7 +6,7 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "Step 2 of the FHIRBridge custom-domain flow. Binds a domain (hostname + free Azure-managed SSL certificate) to the FHIRBridge app from an already-deployed FHIRBridge stack, in ONE deploy. The domain field below is optional - leave it blank to skip this app entirely this run. IMPORTANT: create the CNAME + asuid TXT records shown below at your DNS provider and wait for them to propagate BEFORE deploying - Azure validates DNS as part of this same deploy and rejects it if the records are not there yet (InvalidCustomHostNameValidation); just wait and redeploy once they resolve.",
+        "description": "Step 2 of the Segue custom-domain flow. Binds a domain (hostname + free Azure-managed SSL certificate) to the Segue app from an already-deployed Segue stack, in ONE deploy. The domain field below is optional - leave it blank to skip this app entirely this run. IMPORTANT: create the CNAME + asuid TXT records shown below at your DNS provider and wait for them to propagate BEFORE deploying - Azure validates DNS as part of this same deploy and rejects it if the records are not there yet (InvalidCustomHostNameValidation); just wait and redeploy once they resolve.",
         "subscription": {
           "resourceProviders": [
             "Microsoft.App"
@@ -20,18 +20,18 @@
         "type": "Microsoft.Common.TextBox",
         "label": "Deployment name prefix",
         "defaultValue": "",
-        "toolTip": "The same prefix used for the original FHIRBridge deployment (e.g. 'segue12') - builds <prefix>-app, <prefix>-env.",
+        "toolTip": "The same prefix used for the original Segue deployment (e.g. 'segue12') - builds <prefix>-app, <prefix>-env.",
         "constraints": {
           "required": true,
           "regex": "^[a-z][a-z0-9-]{1,20}$",
-          "validationMessage": "Lowercase letters, numbers, and hyphens only, starting with a letter - the same prefix your FHIRBridge deployment used."
+          "validationMessage": "Lowercase letters, numbers, and hyphens only, starting with a letter - the same prefix your Segue deployment used."
         }
       }
     ],
     "steps": [
       {
         "name": "fhirbridgeAppStep",
-        "label": "FHIRBridge app",
+        "label": "Segue app",
         "elements": [
           {
             "name": "appNameInfo",

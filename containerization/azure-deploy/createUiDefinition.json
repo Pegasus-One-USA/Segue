@@ -6,7 +6,7 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "Deploys FHIRBridge (portal + API) and its supporting Postgres, Redis, and background Worker into a single Azure Container Apps environment in this subscription.",
+        "description": "Deploys Segue (portal + API) and its supporting Postgres, Redis, and background Worker into a single Azure Container Apps environment in this subscription.",
         "subscription": {
           "resourceProviders": [
             "Microsoft.App",
@@ -39,80 +39,8 @@
     ],
     "steps": [
       {
-        "name": "containerSizing",
-        "label": "Container Sizes",
-        "elements": [
-          {
-            "name": "postgresSize",
-            "type": "Microsoft.Common.DropDown",
-            "label": "Postgres size",
-            "defaultValue": "Large",
-            "toolTip": "Containerized Postgres container size. Only used when Postgres deployment type is Containerized.",
-            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Containerized')]",
-            "constraints": {
-              "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB) — current default", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
-              ],
-              "required": true
-            }
-          },
-          {
-            "name": "redisSize",
-            "type": "Microsoft.Common.DropDown",
-            "label": "Redis size",
-            "defaultValue": "Medium",
-            "toolTip": "Redis's own cache/queue memory needs — separate from the data it persists to its file share. Only used when Redis deployment type is Containerized.",
-            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
-            "constraints": {
-              "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB) — current default", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
-              ],
-              "required": true
-            }
-          },
-          {
-            "name": "fhirbridgeAppSize",
-            "type": "Microsoft.Common.DropDown",
-            "label": "FHIRBridge app size",
-            "defaultValue": "Medium",
-            "toolTip": "Runs both FHIRBridge.Api and FHIRBridge.Gateway in this one container.",
-            "constraints": {
-              "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB) — current default", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
-              ],
-              "required": true
-            }
-          },
-          {
-            "name": "workerSize",
-            "type": "Microsoft.Common.DropDown",
-            "label": "Worker size",
-            "defaultValue": "Small",
-            "toolTip": "Background scheduler/pipeline processor — no HTTP endpoint.",
-            "constraints": {
-              "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB) — current default", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
-              ],
-              "required": true
-            }
-          }
-        ]
-      },
-      {
         "name": "fhirbridgeSettings",
-        "label": "FHIRBridge Settings",
+        "label": "Segue Settings",
         "elements": [
           {
             "name": "postgresMode",
@@ -122,8 +50,14 @@
             "toolTip": "Containerized keeps a single-replica Postgres container with Azure Files-backed storage (default, cheapest). Managed creates an Azure Database for PostgreSQL Flexible Server instead — no container, no volume; Azure handles patching/backups/HA.",
             "constraints": {
               "allowedValues": [
-                { "label": "Containerized (default)", "value": "Containerized" },
-                { "label": "Managed — Azure Database for PostgreSQL", "value": "Managed" }
+                {
+                  "label": "Containerized (default)",
+                  "value": "Containerized"
+                },
+                {
+                  "label": "Managed — Azure Database for PostgreSQL",
+                  "value": "Managed"
+                }
               ],
               "required": true
             }
@@ -135,7 +69,7 @@
               "password": "Postgres password",
               "confirmPassword": "Confirm Postgres password"
             },
-            "toolTip": "Password for FHIRBridge's own Postgres database — the 'fhirbridge' role's password when Containerized, or the Flexible Server's administrator password when Managed.",
+            "toolTip": "Password for Segue's own Postgres database — the 'fhirbridge' role's password when Containerized, or the Flexible Server's administrator password when Managed.",
             "constraints": {
               "required": true,
               "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
@@ -154,10 +88,22 @@
             "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
             "constraints": {
               "allowedValues": [
-                { "label": "Burstable B1ms (cheapest — dev/test)", "value": "Burstable_B1ms" },
-                { "label": "Burstable B2s", "value": "Burstable_B2s" },
-                { "label": "General Purpose D2s v3 (production-appropriate)", "value": "GeneralPurpose_D2s_v3" },
-                { "label": "General Purpose D4s v3", "value": "GeneralPurpose_D4s_v3" }
+                {
+                  "label": "Burstable B1ms (cheapest — dev/test)",
+                  "value": "Burstable_B1ms"
+                },
+                {
+                  "label": "Burstable B2s",
+                  "value": "Burstable_B2s"
+                },
+                {
+                  "label": "General Purpose D2s v3 (production-appropriate)",
+                  "value": "GeneralPurpose_D2s_v3"
+                },
+                {
+                  "label": "General Purpose D4s v3",
+                  "value": "GeneralPurpose_D4s_v3"
+                }
               ],
               "required": true
             }
@@ -171,10 +117,22 @@
             "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
             "constraints": {
               "allowedValues": [
-                { "label": "32 GB (platform minimum)", "value": "32768" },
-                { "label": "64 GB", "value": "65536" },
-                { "label": "128 GB", "value": "131072" },
-                { "label": "256 GB", "value": "262144" }
+                {
+                  "label": "32 GB (platform minimum)",
+                  "value": "32768"
+                },
+                {
+                  "label": "64 GB",
+                  "value": "65536"
+                },
+                {
+                  "label": "128 GB",
+                  "value": "131072"
+                },
+                {
+                  "label": "256 GB",
+                  "value": "262144"
+                }
               ],
               "required": true
             }
@@ -204,8 +162,14 @@
             "toolTip": "Containerized keeps a single-replica Redis container (custom image with a self-signed TLS cert). Managed creates an Azure Managed Redis cluster instead (classic Azure Cache for Redis is retired and already blocked for new caches in some subscriptions) — no container, no self-signed cert to generate; Azure issues its own CA-trusted certificate.",
             "constraints": {
               "allowedValues": [
-                { "label": "Containerized (default)", "value": "Containerized" },
-                { "label": "Managed — Azure Managed Redis", "value": "Managed" }
+                {
+                  "label": "Containerized (default)",
+                  "value": "Containerized"
+                },
+                {
+                  "label": "Managed — Azure Managed Redis",
+                  "value": "Managed"
+                }
               ],
               "required": true
             }
@@ -249,9 +213,18 @@
             "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Managed')]",
             "constraints": {
               "allowedValues": [
-                { "label": "Balanced B0 (1GB, cheapest)", "value": "Balanced_B0" },
-                { "label": "Balanced B5 (6GB)", "value": "Balanced_B5" },
-                { "label": "Memory Optimized M10 (12GB)", "value": "MemoryOptimized_M10" }
+                {
+                  "label": "Balanced B0 (1GB, cheapest)",
+                  "value": "Balanced_B0"
+                },
+                {
+                  "label": "Balanced B5 (6GB)",
+                  "value": "Balanced_B5"
+                },
+                {
+                  "label": "Memory Optimized M10 (12GB)",
+                  "value": "MemoryOptimized_M10"
+                }
               ],
               "required": true
             }
@@ -264,8 +237,201 @@
             "toolTip": "Local database (default) keeps tenant connection secrets and app-level secrets on the local DataProtection-encrypted table — no extra Azure resource, no extra permission needed. Azure Key Vault creates a dedicated RBAC-enabled vault, grants the app's managed identities access to it, and moves secret storage + DataProtection key-ring wrapping there instead. Granting that access needs Owner or User Access Administrator on the resource group — see the tooltip on the deployment's own docs if you only have Contributor.",
             "constraints": {
               "allowedValues": [
-                { "label": "Local database (default)", "value": "Local database" },
-                { "label": "Azure Key Vault", "value": "Azure Key Vault" }
+                {
+                  "label": "Local database (default)",
+                  "value": "Local database"
+                },
+                {
+                  "label": "Azure Key Vault",
+                  "value": "Azure Key Vault"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "seqMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Centralized log viewing (Seq)",
+            "defaultValue": "None",
+            "toolTip": "None (default) — no Seq container; the app logs to console/Log Analytics only. Seq creates a Seq container with its own public URL (protected by the admin password below) that Api, Gateway, and Worker all send structured logs to, for browsing/searching/monitoring them in one place.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "None (default)",
+                  "value": "None"
+                },
+                {
+                  "label": "Seq",
+                  "value": "Seq"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "seqAdminPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Seq admin password",
+              "confirmPassword": "Confirm Seq admin password"
+            },
+            "toolTip": "Password for the Seq web UI (SEQ_FIRSTRUN_ADMINPASSWORD) — the only thing protecting that URL, since no other authentication is configured. Only used when Centralized log viewing is Seq.",
+            "visible": "[equals(steps('fhirbridgeSettings').seqMode, 'Seq')]",
+            "constraints": {
+              "required": true,
+              "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
+              "validationMessage": "At least 8 characters, including upper case, lower case, and a digit."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          }
+        ]
+      },
+      {
+        "name": "containerSizing",
+        "label": "Container Sizes",
+        "elements": [
+          {
+            "name": "postgresSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Postgres size",
+            "defaultValue": "Large",
+            "toolTip": "Containerized Postgres container size. Only used when Postgres deployment type is Containerized.",
+            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Containerized')]",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Small (0.25 CPU / 0.5 GB)",
+                  "value": "Small"
+                },
+                {
+                  "label": "Medium (0.5 CPU / 1 GB)",
+                  "value": "Medium"
+                },
+                {
+                  "label": "Large (1.0 CPU / 2 GB) — current default",
+                  "value": "Large"
+                },
+                {
+                  "label": "XLarge (2.0 CPU / 4 GB)",
+                  "value": "XLarge"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "redisSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Redis size",
+            "defaultValue": "Medium",
+            "toolTip": "Redis's own cache/queue memory needs — separate from the data it persists to its file share. Only used when Redis deployment type is Containerized.",
+            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Small (0.25 CPU / 0.5 GB)",
+                  "value": "Small"
+                },
+                {
+                  "label": "Medium (0.5 CPU / 1 GB) — current default",
+                  "value": "Medium"
+                },
+                {
+                  "label": "Large (1.0 CPU / 2 GB)",
+                  "value": "Large"
+                },
+                {
+                  "label": "XLarge (2.0 CPU / 4 GB)",
+                  "value": "XLarge"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "fhirbridgeAppSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Segue app size",
+            "defaultValue": "Medium",
+            "toolTip": "Runs both FHIRBridge.Api and FHIRBridge.Gateway in this one container.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Small (0.25 CPU / 0.5 GB)",
+                  "value": "Small"
+                },
+                {
+                  "label": "Medium (0.5 CPU / 1 GB) — current default",
+                  "value": "Medium"
+                },
+                {
+                  "label": "Large (1.0 CPU / 2 GB)",
+                  "value": "Large"
+                },
+                {
+                  "label": "XLarge (2.0 CPU / 4 GB)",
+                  "value": "XLarge"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "workerSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Worker size",
+            "defaultValue": "Small",
+            "toolTip": "Background scheduler/pipeline processor — no HTTP endpoint.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Small (0.25 CPU / 0.5 GB) — current default",
+                  "value": "Small"
+                },
+                {
+                  "label": "Medium (0.5 CPU / 1 GB)",
+                  "value": "Medium"
+                },
+                {
+                  "label": "Large (1.0 CPU / 2 GB)",
+                  "value": "Large"
+                },
+                {
+                  "label": "XLarge (2.0 CPU / 4 GB)",
+                  "value": "XLarge"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "seqSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Seq size",
+            "defaultValue": "Small",
+            "toolTip": "Structured log viewer. Only used when Centralized log viewing is Seq.",
+            "visible": "[equals(steps('fhirbridgeSettings').seqMode, 'Seq')]",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Small (0.25 CPU / 0.5 GB) — current default",
+                  "value": "Small"
+                },
+                {
+                  "label": "Medium (0.5 CPU / 1 GB)",
+                  "value": "Medium"
+                },
+                {
+                  "label": "Large (1.0 CPU / 2 GB)",
+                  "value": "Large"
+                },
+                {
+                  "label": "XLarge (2.0 CPU / 4 GB)",
+                  "value": "XLarge"
+                }
               ],
               "required": true
             }
@@ -304,7 +470,7 @@
           {
             "name": "fhirbridgeAppIntendedDomain",
             "type": "Microsoft.Common.TextBox",
-            "label": "FHIRBridge app domain (optional, informational only)",
+            "label": "Segue app domain (optional, informational only)",
             "defaultValue": "",
             "toolTip": "e.g. app.customer.com. Not activated by this deployment - just recorded in the outputs as a reminder to complete Step 2 afterward."
           }
@@ -320,7 +486,7 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "This deployment creates resources in the selected resource group only:\n\n• 4 Container Apps — Postgres, Redis, FHIRBridge/Segue (Api + Gateway), Worker\n• 1 Container Apps Environment hosting all 4\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (Postgres data, Redis data, Data Protection keys)\n\nCustom domains are optional and activated in a SEPARATE deployment (Step 2 - custom-domain.bicep) after this one finishes — any domain entered on the Network Access step here is just a reminder, not yet active. Postgres and Redis are internal-only by default. Deployment outputs include a resourceManifest used by the cleanup scripts."
+              "text": "This deployment creates resources in the selected resource group only:\n\n• 4 Container Apps — Postgres, Redis, Segue (Api + Gateway), Worker (plus a 5th, Seq, if you enabled centralized log viewing)\n• 1 Container Apps Environment hosting all of the above\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (Postgres data, Redis data, Data Protection keys, and Seq data if enabled)\n\nCustom domains are optional and activated in a SEPARATE deployment (Step 2 - custom-domain.bicep) after this one finishes — any domain entered on the Network Access step here is just a reminder, not yet active. Postgres and Redis are internal-only by default; Seq (if enabled) gets its own public URL specifically so you can browse to it. Deployment outputs include a resourceManifest used by the cleanup scripts."
             }
           },
           {
@@ -347,10 +513,13 @@
       "redisTrustedCertificateThumbprint": "[if(equals(steps('fhirbridgeSettings').redisMode, 'Containerized'), steps('fhirbridgeSettings').redisTrustedCertificateThumbprint, '')]",
       "azureCacheForRedisTier": "[steps('fhirbridgeSettings').azureCacheForRedisTier]",
       "enableTenantSecretsKeyVault": "[equals(steps('fhirbridgeSettings').secretsMode, 'Azure Key Vault')]",
+      "enableSeq": "[equals(steps('fhirbridgeSettings').seqMode, 'Seq')]",
+      "seqAdminPassword": "[if(equals(steps('fhirbridgeSettings').seqMode, 'Seq'), steps('fhirbridgeSettings').seqAdminPassword, '')]",
       "postgresSize": "[steps('containerSizing').postgresSize]",
       "redisSize": "[steps('containerSizing').redisSize]",
       "fhirbridgeAppSize": "[steps('containerSizing').fhirbridgeAppSize]",
       "workerSize": "[steps('containerSizing').workerSize]",
+      "seqSize": "[steps('containerSizing').seqSize]",
       "fhirbridgeAppIntendedDomain": "[steps('customDomains').fhirbridgeAppIntendedDomain]",
       "imageTag": "[steps('imageSettings').imageTag]",
       "imageRegistryServer": "seguebuilds.azurecr.io",
