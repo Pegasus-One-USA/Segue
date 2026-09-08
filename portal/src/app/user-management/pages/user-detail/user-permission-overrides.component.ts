@@ -43,6 +43,8 @@ import { AuthService } from '../../../auth/services/auth.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { PermissionGroup, PermissionAction as PermCode, permissionCode } from '../../../auth/models/permission.constants';
+import { PhaseConfigService } from '../../../services/phase-config.service';
+import { isNodePermissionPrefixVisible } from '../../../data/node-permission-visibility.util';
 
 // One row of a category table — a Permission Group. Mirrors role-permissions.component's grid:
 // `cells` holds only the actions that actually have a Permission for this group; an action with
@@ -105,6 +107,7 @@ export class UserPermissionOverridesComponent
   private readonly toast = inject(ToastService);
   private readonly authService = inject(AuthService);
   private readonly actionGuard = inject(PermissionActionGuard);
+  private readonly phaseCfg = inject(PhaseConfigService);
 
   // ─── Permission gating — direct overrides are a form of editing the user, so they're gated on
   // the same user.edit code as the rest of this user's mutating actions (Edit/Reset Password/2FA
@@ -142,9 +145,18 @@ export class UserPermissionOverridesComponent
 
   readonly overriddenCount = computed(() => this.overrides().size);
 
+  // Drops any group for a source/destination node the Workflow Builder itself doesn't let anyone
+  // add yet (phase-gated — see PhaseConfigService/node-permission-visibility.util.ts), the same
+  // filter role-permissions.component.ts's own Workflow Nodes table and Effective Permissions
+  // already apply — without it, this screen let an admin set direct overrides on a vendor no one
+  // can actually reach from a workflow (e.g. Cerner, Sftp). A group with no permissions has no
+  // resource to check and is dropped too.
   private readonly gridCategories = computed<GridCategory[]>(() => {
     return this.catalog().map((cat) => {
-      const rows: GridRow[] = cat.groups.map((g) => {
+      const visibleGroups = cat.groups.filter(
+        (g) => g.permissions.length > 0 && isNodePermissionPrefixVisible(g.permissions[0].resource, this.phaseCfg),
+      );
+      const rows: GridRow[] = visibleGroups.map((g) => {
         const cells = new Map<string, Permission>();
         for (const p of g.permissions) {
           cells.set(capitalize(p.action), p);
