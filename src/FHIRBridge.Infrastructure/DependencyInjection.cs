@@ -667,6 +667,7 @@ public static class DependencyInjection
         services.AddScoped<IBackendAuthScopeProbeService, BackendAuthScopeProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();
         services.AddScoped<ISigningKeyGenerationService, SigningKeyGenerationService>();
+        services.AddScoped<ISourceSigningKeyExportService, SourceSigningKeyExportService>();
         var healthChecksBuilder = services.AddHealthChecks()
             .AddCheck<KeyVaultConfigurationHealthCheck>("keyvault");
 
