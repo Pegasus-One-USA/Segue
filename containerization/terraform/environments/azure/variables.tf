@@ -126,3 +126,16 @@ variable "enable_tenant_secrets_key_vault" {
   default     = false
 }
 
+variable "enable_seq" {
+  description = "false (default) — no Seq container; fhirbridge_app/worker log to console/Log Analytics only. true creates a Seq container (datalust/seq, public image) with its own external ingress — its own https://<name_prefix>-seq.<environment>.azurecontainerapps.io URL, protected by var.seq_admin_password — and points Observability:SeqServerUrl at it on fhirbridge_app (both the Api and Gateway processes read this same config key) and worker. Unlike Postgres/Redis, Seq gets a public URL deliberately, since the whole point is being able to browse to it and monitor logs."
+  type        = bool
+  default     = false
+}
+
+variable "seq_admin_password" {
+  description = "Admin password for the Seq web UI (SEQ_FIRSTRUN_ADMINPASSWORD) — required when enable_seq is true. This is the ONLY thing protecting that URL, since no other authentication is configured here. Ignored when enable_seq is false."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+

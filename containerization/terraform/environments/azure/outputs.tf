@@ -73,6 +73,11 @@ output "fhirbridge_app_url" {
   value = "https://${local.fhirbridge_app_name}.${azurerm_container_app_environment.main.default_domain}"
 }
 
+output "seq_url" {
+  description = "Populated only when enable_seq is true. Log into this with the seq_admin_password you set to browse structured logs from Api/Gateway/Worker."
+  value       = var.enable_seq ? "https://${local.seq_name}.${azurerm_container_app_environment.main.default_domain}" : null
+}
+
 output "fhirbridge_app_domain_verification" {
   description = "Add CNAME (domain -> fhirbridge_app_url hostname) and TXT asuid.<domain>=this value at your DNS provider to register the hostname. See fhirbridge_app_custom_domain's description for the current SSL-binding limitation (bind_custom_domain_certificates is a no-op until this environment is migrated to azurerm ~> 4.69)."
   value       = azurerm_container_app.fhirbridge_app.custom_domain_verification_id

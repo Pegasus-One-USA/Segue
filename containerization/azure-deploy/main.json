@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "8316023650145583500"
+      "templateHash": "13408318135437644126"
     }
   },
   "parameters": {
@@ -122,6 +122,33 @@
       "defaultValue": false,
       "metadata": {
         "description": "The deployment-time choice between two secret-storage modes (see Documents/KeyVault-Implementation.html): false (default) keeps tenant SourceConnection/DestinationConfiguration secrets and the app's own 4 app-level secrets (jwt-signing-key etc.) on the local DataProtection-encrypted ProvisionedSecrets DB table — no Key Vault resource, no extra permission needed. true creates a dedicated RBAC-enabled Key Vault, grants the fhirbridgeApp/worker Container Apps' system-assigned managed identities (and the identity running this deployment) the Key Vault Secrets Officer role on it, creates an RSA key for DataProtection key-ring wrapping (Crypto User granted to both apps), and points KeyVault:VaultName/KeyVault:UseAzureKeyVault/DataProtection:KeyVaultKeyId at it — the app reads/writes secrets there automatically via CompositeSecretProvider/Writer, with the local DB table remaining as an automatic fallback (KeyVault:AllowConfigurationFallback). Unlike the Terraform azure environment, this template does NOT pre-seed the 4 app-level secrets — AppSecretProvisioner generates and writes them itself on first boot once the RBAC role above is in place, which keeps this template free of any secret-generation logic of its own."
+      }
+    },
+    "enableSeq": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Chooses whether this deployment includes a Seq container for centralized structured log viewing. false (default) — no Seq container; FHIRBridge.Api/.Gateway/.Worker log to console/Log Analytics only, same as leaving every other toggle at its default. true creates a Seq container app (datalust/seq, public image) with its own external ingress — its own https://<namePrefix>-seq.<environment>.azurecontainerapps.io URL, protected by seqAdminPassword — and points Observability:SeqServerUrl at it on fhirbridgeApp and worker. All three hosts (Api, Gateway, Worker) pick this up automatically since FhirBridgeLogging (FHIRBridge.Observability) reads that same config key on every host that calls it — see src/BuildingBlocks/FHIRBridge.Observability/Logging/FhirBridgeLogging.cs."
+      }
+    },
+    "seqAdminPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Admin password for the Seq web UI (SEQ_FIRSTRUN_ADMINPASSWORD) — required when enableSeq is true. This is the ONLY thing protecting that URL, since no other authentication is configured here. Ignored when enableSeq is false."
+      }
+    },
+    "seqSize": {
+      "type": "string",
+      "defaultValue": "Small",
+      "allowedValues": [
+        "Small",
+        "Medium",
+        "Large",
+        "XLarge"
+      ],
+      "metadata": {
+        "description": "Seq container size. Only consulted when enableSeq is true."
       }
     },
     "fhirbridgeAppCustomDomain": {
@@ -276,6 +303,7 @@
     "redisName": "[format('{0}-redis', parameters('namePrefix'))]",
     "fhirbridgeAppName": "[format('{0}-app', parameters('namePrefix'))]",
     "workerName": "[format('{0}-worker', parameters('namePrefix'))]",
+    "seqName": "[format('{0}-seq', parameters('namePrefix'))]",
     "hasRegistryCreds": "[not(empty(parameters('imageRegistryUsername')))]",
     "registryConfig": "[if(variables('hasRegistryCreds'), createArray(createObject('server', parameters('imageRegistryServer'), 'username', parameters('imageRegistryUsername'), 'passwordSecretRef', 'registry-password')), createArray())]",
     "registrySecret": "[if(variables('hasRegistryCreds'), createArray(createObject('name', 'registry-password', 'value', parameters('imageRegistryPassword'))), createArray())]",
@@ -286,7 +314,10 @@
     "postgresShareManifestItems": "[if(parameters('useAzurePostgresql'), createArray(), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[2])))]",
     "redisManifestItems": "[if(parameters('useAzureCacheForRedis'), createArray(resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default'), resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix')))), createArray(resourceId('Microsoft.App/containerApps', variables('redisName'))))]",
     "redisStorageManifestItems": "[if(parameters('useAzureCacheForRedis'), createArray(), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'redis-data')))]",
-    "redisShareManifestItems": "[if(parameters('useAzureCacheForRedis'), createArray(), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[2])))]"
+    "redisShareManifestItems": "[if(parameters('useAzureCacheForRedis'), createArray(), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[2])))]",
+    "seqManifestItems": "[if(parameters('enableSeq'), createArray(resourceId('Microsoft.App/containerApps', variables('seqName'))), createArray())]",
+    "seqStorageManifestItems": "[if(parameters('enableSeq'), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'seq-data')), createArray())]",
+    "seqShareManifestItems": "[if(parameters('enableSeq'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[2])), createArray())]"
   },
   "resources": [
     {
@@ -495,6 +526,18 @@
       ]
     },
     {
+      "condition": "[parameters('enableSeq')]",
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/default/seq-data', variables('storageAccountName'))]",
+      "properties": {
+        "shareQuota": 10
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
       "condition": "[not(parameters('useAzurePostgresql'))]",
       "type": "Microsoft.App/managedEnvironments/storages",
       "apiVersion": "2024-03-01",
@@ -547,6 +590,25 @@
       "dependsOn": [
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2])]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableSeq')]",
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('namePrefix')), 'seq-data')]",
+      "properties": {
+        "azureFile": {
+          "accountName": "[variables('storageAccountName')]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value]",
+          "shareName": "seq-data",
+          "accessMode": "ReadWrite"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[2])]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
     },
@@ -762,6 +824,70 @@
       ]
     },
     {
+      "condition": "[parameters('enableSeq')]",
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('seqName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "configuration": {
+          "secrets": [
+            {
+              "name": "seq-admin-password",
+              "value": "[parameters('seqAdminPassword')]"
+            }
+          ],
+          "ingress": {
+            "external": true,
+            "targetPort": 80,
+            "transport": "auto"
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "seq",
+              "image": "datalust/seq:latest",
+              "resources": "[variables('containerSizes')[parameters('seqSize')]]",
+              "env": [
+                {
+                  "name": "ACCEPT_EULA",
+                  "value": "Y"
+                },
+                {
+                  "name": "SEQ_FIRSTRUN_ADMINPASSWORD",
+                  "secretRef": "seq-admin-password"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "seq-data",
+                  "mountPath": "/data"
+                }
+              ]
+            }
+          ],
+          "volumes": [
+            {
+              "name": "seq-data",
+              "storageType": "AzureFile",
+              "storageName": "seq-data"
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'seq-data')]"
+      ]
+    },
+    {
       "condition": "[and(not(empty(parameters('fhirbridgeAppCustomDomain'))), parameters('bindCustomDomainCertificates'))]",
       "type": "Microsoft.App/managedEnvironments/managedCertificates",
       "apiVersion": "2024-03-01",
@@ -802,7 +928,7 @@
               "name": "fhirbridge-app",
               "image": "[format('{0}/fhirbridge-app:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
               "resources": "[variables('containerSizes')[parameters('fhirbridgeAppSize')]]",
-              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', if(parameters('useAzurePostgresql'), format('Host={0};Port=5432;Database={1};Username={2};Password={3};Ssl Mode=Require;', tryGet(if(parameters('useAzurePostgresql'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix'))), '2024-08-01', 'full'), null()), 'properties', 'fullyQualifiedDomainName'), if(parameters('useAzurePostgresql'), 'FHIRBridge', null()), variables('postgresManagedAdminLogin'), parameters('postgresPassword')), format('Host={0};Port={1};Database=FHIRBridge;Username=fhirbridge;Password={2};', variables('postgresName'), parameters('postgresPort'), parameters('postgresPassword')))), createObject('name', 'Database__Provider', 'value', 'PostgreSql'), createObject('name', 'ConnectionStrings__Redis', 'value', if(parameters('useAzureCacheForRedis'), format('{0}:10000,password={1},ssl=true,abortConnect=false', tryGet(if(parameters('useAzureCacheForRedis'), reference(resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix'))), '2025-04-01', 'full'), null()), 'properties', 'hostName'), listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default'), '2025-04-01').primaryKey), format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword')))), createObject('name', 'Authentication__SigningKey', 'secretRef', 'jwt-signing-key'), createObject('name', 'DataProtection__KeyRingPath', 'value', '/app/keys'), createObject('name', 'ApiBaseUrl', 'value', 'http://127.0.0.1:5000/'), createObject('name', 'AllowedHosts', 'value', '*'), createObject('name', 'Swagger__Enabled', 'value', 'true')), if(not(parameters('useAzureCacheForRedis')), createArray(createObject('name', 'Redis__TrustedCertificateThumbprint', 'value', parameters('redisTrustedCertificateThumbprint'))), createArray()), if(parameters('enableTenantSecretsKeyVault'), createArray(createObject('name', 'KeyVault__UseAzureKeyVault', 'value', 'true'), createObject('name', 'KeyVault__AllowConfigurationFallback', 'value', 'true'), createObject('name', 'KeyVault__VaultName', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName')), '2023-07-01', 'full'), null()), 'properties', 'vaultUri'), '')), createObject('name', 'DataProtection__KeyVaultKeyId', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix'))), '2023-07-01', 'full'), null()), 'properties', 'keyUriWithVersion'), ''))), createArray()))]",
+              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', if(parameters('useAzurePostgresql'), format('Host={0};Port=5432;Database={1};Username={2};Password={3};Ssl Mode=Require;', tryGet(if(parameters('useAzurePostgresql'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix'))), '2024-08-01', 'full'), null()), 'properties', 'fullyQualifiedDomainName'), if(parameters('useAzurePostgresql'), 'FHIRBridge', null()), variables('postgresManagedAdminLogin'), parameters('postgresPassword')), format('Host={0};Port={1};Database=FHIRBridge;Username=fhirbridge;Password={2};', variables('postgresName'), parameters('postgresPort'), parameters('postgresPassword')))), createObject('name', 'Database__Provider', 'value', 'PostgreSql'), createObject('name', 'ConnectionStrings__Redis', 'value', if(parameters('useAzureCacheForRedis'), format('{0}:10000,password={1},ssl=true,abortConnect=false', tryGet(if(parameters('useAzureCacheForRedis'), reference(resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix'))), '2025-04-01', 'full'), null()), 'properties', 'hostName'), listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default'), '2025-04-01').primaryKey), format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword')))), createObject('name', 'Authentication__SigningKey', 'secretRef', 'jwt-signing-key'), createObject('name', 'DataProtection__KeyRingPath', 'value', '/app/keys'), createObject('name', 'ApiBaseUrl', 'value', 'http://127.0.0.1:5000/'), createObject('name', 'AllowedHosts', 'value', '*'), createObject('name', 'Swagger__Enabled', 'value', 'true')), if(not(parameters('useAzureCacheForRedis')), createArray(createObject('name', 'Redis__TrustedCertificateThumbprint', 'value', parameters('redisTrustedCertificateThumbprint'))), createArray()), if(parameters('enableTenantSecretsKeyVault'), createArray(createObject('name', 'KeyVault__UseAzureKeyVault', 'value', 'true'), createObject('name', 'KeyVault__AllowConfigurationFallback', 'value', 'true'), createObject('name', 'KeyVault__VaultName', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName')), '2023-07-01', 'full'), null()), 'properties', 'vaultUri'), '')), createObject('name', 'DataProtection__KeyVaultKeyId', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix'))), '2023-07-01', 'full'), null()), 'properties', 'keyUriWithVersion'), ''))), createArray()), if(parameters('enableSeq'), createArray(createObject('name', 'Observability__SeqServerUrl', 'value', format('http://{0}', variables('seqName')))), createArray()))]",
               "volumeMounts": [
                 {
                   "volumeName": "keys-data",
@@ -859,7 +985,7 @@
               "name": "worker",
               "image": "[format('{0}/fhirbridge-worker:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
               "resources": "[variables('containerSizes')[parameters('workerSize')]]",
-              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', if(parameters('useAzurePostgresql'), format('Host={0};Port=5432;Database={1};Username={2};Password={3};Ssl Mode=Require;', tryGet(if(parameters('useAzurePostgresql'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix'))), '2024-08-01', 'full'), null()), 'properties', 'fullyQualifiedDomainName'), if(parameters('useAzurePostgresql'), 'FHIRBridge', null()), variables('postgresManagedAdminLogin'), parameters('postgresPassword')), format('Host={0};Port={1};Database=FHIRBridge;Username=fhirbridge;Password={2};', variables('postgresName'), parameters('postgresPort'), parameters('postgresPassword')))), createObject('name', 'Database__Provider', 'value', 'PostgreSql'), createObject('name', 'ConnectionStrings__Redis', 'value', if(parameters('useAzureCacheForRedis'), format('{0}:10000,password={1},ssl=true,abortConnect=false', tryGet(if(parameters('useAzureCacheForRedis'), reference(resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix'))), '2025-04-01', 'full'), null()), 'properties', 'hostName'), listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default'), '2025-04-01').primaryKey), format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword')))), createObject('name', 'RuntimeWorker__Enabled', 'value', 'true'), createObject('name', 'Messaging__Provider', 'value', 'InMemory')), if(not(parameters('useAzureCacheForRedis')), createArray(createObject('name', 'Redis__TrustedCertificateThumbprint', 'value', parameters('redisTrustedCertificateThumbprint'))), createArray()), if(parameters('enableTenantSecretsKeyVault'), createArray(createObject('name', 'KeyVault__UseAzureKeyVault', 'value', 'true'), createObject('name', 'KeyVault__AllowConfigurationFallback', 'value', 'true'), createObject('name', 'KeyVault__VaultName', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName')), '2023-07-01', 'full'), null()), 'properties', 'vaultUri'), '')), createObject('name', 'DataProtection__KeyVaultKeyId', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix'))), '2023-07-01', 'full'), null()), 'properties', 'keyUriWithVersion'), ''))), createArray()))]"
+              "env": "[concat(createArray(createObject('name', 'ASPNETCORE_ENVIRONMENT', 'value', 'Production'), createObject('name', 'ConnectionStrings__FHIRBridgeDb', 'value', if(parameters('useAzurePostgresql'), format('Host={0};Port=5432;Database={1};Username={2};Password={3};Ssl Mode=Require;', tryGet(if(parameters('useAzurePostgresql'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix'))), '2024-08-01', 'full'), null()), 'properties', 'fullyQualifiedDomainName'), if(parameters('useAzurePostgresql'), 'FHIRBridge', null()), variables('postgresManagedAdminLogin'), parameters('postgresPassword')), format('Host={0};Port={1};Database=FHIRBridge;Username=fhirbridge;Password={2};', variables('postgresName'), parameters('postgresPort'), parameters('postgresPassword')))), createObject('name', 'Database__Provider', 'value', 'PostgreSql'), createObject('name', 'ConnectionStrings__Redis', 'value', if(parameters('useAzureCacheForRedis'), format('{0}:10000,password={1},ssl=true,abortConnect=false', tryGet(if(parameters('useAzureCacheForRedis'), reference(resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix'))), '2025-04-01', 'full'), null()), 'properties', 'hostName'), listKeys(resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default'), '2025-04-01').primaryKey), format('{0}:{1},password={2},ssl=true', variables('redisName'), parameters('redisPort'), parameters('redisPassword')))), createObject('name', 'RuntimeWorker__Enabled', 'value', 'true'), createObject('name', 'Messaging__Provider', 'value', 'InMemory')), if(not(parameters('useAzureCacheForRedis')), createArray(createObject('name', 'Redis__TrustedCertificateThumbprint', 'value', parameters('redisTrustedCertificateThumbprint'))), createArray()), if(parameters('enableTenantSecretsKeyVault'), createArray(createObject('name', 'KeyVault__UseAzureKeyVault', 'value', 'true'), createObject('name', 'KeyVault__AllowConfigurationFallback', 'value', 'true'), createObject('name', 'KeyVault__VaultName', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName')), '2023-07-01', 'full'), null()), 'properties', 'vaultUri'), '')), createObject('name', 'DataProtection__KeyVaultKeyId', 'value', coalesce(tryGet(if(parameters('enableTenantSecretsKeyVault'), reference(resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix'))), '2023-07-01', 'full'), null()), 'properties', 'keyUriWithVersion'), ''))), createArray()), if(parameters('enableSeq'), createArray(createObject('name', 'Observability__SeqServerUrl', 'value', format('http://{0}', variables('seqName')))), createArray()))]"
             }
           ],
           "scale": {
@@ -886,6 +1012,13 @@
     "fhirbridgeAppUrl": {
       "type": "string",
       "value": "[format('https://{0}.{1}', variables('fhirbridgeAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)]"
+    },
+    "seqUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Populated only when enableSeq is true. Log into this with the seqAdminPassword you set to browse structured logs from Api/Gateway/Worker."
+      },
+      "value": "[if(parameters('enableSeq'), format('https://{0}', coalesce(tryGet(if(parameters('enableSeq'), reference(resourceId('Microsoft.App/containerApps', variables('seqName')), '2024-03-01', 'full'), null()), 'properties', 'configuration', 'ingress', 'fqdn'), '')), '')]"
     },
     "redisMode": {
       "type": "string",
@@ -968,7 +1101,7 @@
     },
     "resourceManifest": {
       "type": "array",
-      "value": "[concat(variables('postgresManifestItems'), variables('redisManifestItems'), createArray(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), resourceId('Microsoft.App/containerApps', variables('workerName'))), variables('postgresStorageManifestItems'), variables('redisStorageManifestItems'), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')), variables('postgresShareManifestItems'), variables('redisShareManifestItems'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2]), resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix')))), if(parameters('enableTenantSecretsKeyVault'), createArray(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))), createArray()))]"
+      "value": "[concat(variables('postgresManifestItems'), variables('redisManifestItems'), variables('seqManifestItems'), createArray(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), resourceId('Microsoft.App/containerApps', variables('workerName'))), variables('postgresStorageManifestItems'), variables('redisStorageManifestItems'), variables('seqStorageManifestItems'), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')), variables('postgresShareManifestItems'), variables('redisShareManifestItems'), variables('seqShareManifestItems'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2]), resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix')))), if(parameters('enableTenantSecretsKeyVault'), createArray(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))), createArray()))]"
     }
   }
 }

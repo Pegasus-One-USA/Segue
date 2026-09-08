@@ -128,6 +128,53 @@ resource "aws_ecs_task_definition" "redis" {
   ])
 }
 
+resource "aws_ecs_task_definition" "seq" {
+  count                    = var.enable_seq ? 1 : 0
+  family                   = "${var.name_prefix}-seq"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+
+  volume {
+    name = "seq-data"
+    efs_volume_configuration {
+      file_system_id     = aws_efs_file_system.main.id
+      transit_encryption = "ENABLED"
+      authorization_config {
+        access_point_id = aws_efs_access_point.seq_data[0].id
+        iam             = "DISABLED"
+      }
+    }
+  }
+
+  container_definitions = jsonencode([
+    {
+      name         = "seq"
+      image        = "datalust/seq:latest"
+      portMappings = [{ containerPort = 80, protocol = "tcp" }]
+      environment = [
+        { name = "ACCEPT_EULA", value = "Y" },
+      ]
+      secrets = [
+        { name = "SEQ_FIRSTRUN_ADMINPASSWORD", valueFrom = aws_secretsmanager_secret.seq_admin_password[0].arn },
+      ]
+      mountPoints = [
+        { sourceVolume = "seq-data", containerPath = "/data", readOnly = false },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.seq[0].name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "seq"
+        }
+      }
+    }
+  ])
+}
+
 resource "aws_ecs_task_definition" "fhirbridge_app" {
   family                   = "${var.name_prefix}-app"
   requires_compatibilities = ["FARGATE"]
@@ -141,7 +188,7 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
       name         = "fhirbridge-app"
       image        = "${aws_ecr_repository.fhirbridge_app.repository_url}:${var.image_tag}"
       portMappings = [{ containerPort = 80, protocol = "tcp" }]
-      environment = [
+      environment = concat([
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
         { name = "ConnectionStrings__FHIRBridgeDb", value = local.fhirbridgedb_connection_string },
         { name = "Database__Provider", value = "PostgreSql" },
@@ -152,7 +199,12 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
         # Api and Gateway are sibling processes in one container (entrypoint.sh) - Api binds
         # loopback-only on 5000, and Gateway throws at startup outside Development without this.
         { name = "ApiBaseUrl", value = "http://127.0.0.1:5000/" },
-      ]
+        ],
+        # See enable_seq's description in variables.tf. Both Api and Gateway (this same container)
+        # read this key via FhirBridgeLogging.
+        var.enable_seq ? [
+          { name = "Observability__SeqServerUrl", value = "http://seq.${var.name_prefix}.internal" },
+      ] : [])
       secrets = [
         { name = "Authentication__SigningKey", valueFrom = aws_secretsmanager_secret.jwt_signing_key.arn },
       ]
@@ -180,7 +232,7 @@ resource "aws_ecs_task_definition" "worker" {
     {
       name  = "worker"
       image = "${aws_ecr_repository.worker.repository_url}:${var.image_tag}"
-      environment = [
+      environment = concat([
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
         { name = "ConnectionStrings__FHIRBridgeDb", value = local.fhirbridgedb_connection_string },
         { name = "Database__Provider", value = "PostgreSql" },
@@ -188,7 +240,11 @@ resource "aws_ecs_task_definition" "worker" {
         { name = "Redis__TrustedCertificateThumbprint", value = var.redis_trusted_certificate_thumbprint },
         { name = "RuntimeWorker__Enabled", value = "true" },
         { name = "Messaging__Provider", value = "InMemory" },
-      ]
+        ],
+        # See enable_seq's description on fhirbridge_app above.
+        var.enable_seq ? [
+          { name = "Observability__SeqServerUrl", value = "http://seq.${var.name_prefix}.internal" },
+      ] : [])
       logConfiguration = {
         logDriver = "awslogs"
         options = {

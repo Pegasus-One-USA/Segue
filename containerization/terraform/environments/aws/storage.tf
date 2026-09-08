@@ -77,3 +77,25 @@ resource "aws_efs_access_point" "redis_data" {
     }
   }
 }
+
+# Only needed when var.enable_seq is true. Unlike Azure Files (SMB, which can't satisfy Postgres's
+# chmod-based startup check — see the Azure environment's postgres resource comments), EFS is real
+# POSIX-permission NFS storage, so Seq's data directory isn't expected to hit an equivalent wall.
+resource "aws_efs_access_point" "seq_data" {
+  count          = var.enable_seq ? 1 : 0
+  file_system_id = aws_efs_file_system.main.id
+
+  posix_user {
+    uid = 0
+    gid = 0
+  }
+
+  root_directory {
+    path = "/seq-data"
+    creation_info {
+      owner_uid   = 0
+      owner_gid   = 0
+      permissions = "0755"
+    }
+  }
+}

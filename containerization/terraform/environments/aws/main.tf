@@ -162,7 +162,7 @@ resource "aws_route_table_association" "private" {
 
 resource "aws_security_group" "alb" {
   name        = "${var.name_prefix}-alb-sg"
-  description = "Public ALB — allows inbound HTTP on the app port."
+  description = "Public ALB — allows inbound HTTP on the app port (and the Seq port, if enabled)."
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -171,6 +171,17 @@ resource "aws_security_group" "alb" {
     to_port     = var.fhirbridge_app_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  dynamic "ingress" {
+    for_each = var.enable_seq ? [1] : []
+    content {
+      description = "seq"
+      from_port   = var.seq_port
+      to_port     = var.seq_port
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
   }
 
   egress {
@@ -274,6 +285,18 @@ resource "aws_secretsmanager_secret_version" "redis_password" {
   secret_string = var.redis_password
 }
 
+resource "aws_secretsmanager_secret" "seq_admin_password" {
+  count                   = var.enable_seq ? 1 : 0
+  name                    = "${var.name_prefix}/seq-admin-password"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "seq_admin_password" {
+  count         = var.enable_seq ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.seq_admin_password[0].id
+  secret_string = var.seq_admin_password
+}
+
 # --- IAM: task execution role (pulls from ECR, writes logs, reads the 2 secrets above) ---
 
 data "aws_iam_policy_document" "ecs_task_assume" {
@@ -307,6 +330,7 @@ data "aws_iam_policy_document" "ecs_task_execution_secrets" {
       # postgres_password only exists in Secrets Manager for the containerized path — the RDS
       # path's master password is set directly on aws_db_instance.postgresql, not via this secret.
       var.use_rds_postgresql ? [] : [aws_secretsmanager_secret.postgres_password[0].arn],
+      var.enable_seq ? [aws_secretsmanager_secret.seq_admin_password[0].arn] : [],
     )
   }
 }
@@ -340,6 +364,12 @@ resource "aws_cloudwatch_log_group" "postgres" {
 
 resource "aws_cloudwatch_log_group" "redis" {
   name              = "/ecs/${var.name_prefix}/redis"
+  retention_in_days = 14
+}
+
+resource "aws_cloudwatch_log_group" "seq" {
+  count             = var.enable_seq ? 1 : 0
+  name              = "/ecs/${var.name_prefix}/seq"
   retention_in_days = 14
 }
 

@@ -44,6 +44,35 @@ resource "aws_ecs_service" "redis" {
   }
 }
 
+resource "aws_ecs_service" "seq" {
+  count           = var.enable_seq ? 1 : 0
+  name            = "${var.name_prefix}-seq"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.seq[0].arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  depends_on = [aws_lb_listener.seq]
+
+  network_configuration {
+    subnets          = aws_subnet.private[*].id
+    security_groups  = [aws_security_group.ecs_tasks.id]
+    assign_public_ip = false
+  }
+
+  # Both at once: Cloud Map so fhirbridge_app/worker can reach Seq internally by hostname to ship
+  # logs, and the ALB target group so a human can browse to it externally — see alb.tf/discovery.tf.
+  service_registries {
+    registry_arn = aws_service_discovery_service.seq[0].arn
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.seq[0].arn
+    container_name   = "seq"
+    container_port   = 80
+  }
+}
+
 resource "aws_ecs_service" "fhirbridge_app" {
   name            = "${var.name_prefix}-app"
   cluster         = aws_ecs_cluster.main.id
@@ -57,7 +86,7 @@ resource "aws_ecs_service" "fhirbridge_app" {
   # local.fhirbridgedb_connection_string references aws_db_instance.postgresql directly, so
   # Terraform infers that dependency automatically. Referencing aws_ecs_service.postgres here is
   # safe even when use_rds_postgresql is true (count = 0): it just resolves to zero dependencies.
-  depends_on = [aws_ecs_service.postgres, aws_ecs_service.redis, aws_lb_listener.fhirbridge_app]
+  depends_on = [aws_ecs_service.postgres, aws_ecs_service.redis, aws_ecs_service.seq, aws_lb_listener.fhirbridge_app]
 
   network_configuration {
     subnets          = aws_subnet.private[*].id
@@ -83,7 +112,7 @@ resource "aws_ecs_service" "worker" {
   # on boot and can race on the initial CREATE DATABASE on a fresh database. ECS restarts a failed
   # task automatically (desired_count reconciliation), which turns a lost race into a self-healing
   # retry.
-  depends_on = [aws_ecs_service.postgres, aws_ecs_service.redis, aws_ecs_service.fhirbridge_app]
+  depends_on = [aws_ecs_service.postgres, aws_ecs_service.redis, aws_ecs_service.seq, aws_ecs_service.fhirbridge_app]
 
   network_configuration {
     subnets          = aws_subnet.private[*].id

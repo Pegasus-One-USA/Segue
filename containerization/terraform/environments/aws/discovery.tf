@@ -37,3 +37,21 @@ resource "aws_service_discovery_service" "redis" {
     routing_policy = "MULTIVALUE"
   }
 }
+
+# Only needed when var.enable_seq is true — lets fhirbridge_app/worker reach Seq internally by
+# hostname (seq.<name_prefix>.internal) to ship logs, the same way they reach postgres/redis.
+# Separate from Seq's own external reachability (a human browsing to it), which goes through the
+# ALB instead — see alb.tf.
+resource "aws_service_discovery_service" "seq" {
+  count = var.enable_seq ? 1 : 0
+  name  = "seq"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.main.id
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+    routing_policy = "MULTIVALUE"
+  }
+}

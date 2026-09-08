@@ -82,6 +82,20 @@ resource "docker_volume" "dataprotection_keys" {
   }
 }
 
+# Only needed when var.enable_seq is true.
+resource "docker_volume" "seq_data" {
+  count = var.enable_seq ? 1 : 0
+  name  = "fhirbridge-ctr-seq-data"
+
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
+  }
+}
+
 # --- Postgres (FHIRBridge's own database) ---
 #
 # Stock postgres:16-alpine, replacing the SQL Server Express container this environment used before
@@ -205,20 +219,70 @@ resource "docker_container" "redis" {
   restart = "unless-stopped"
 }
 
+# --- Seq (structured log viewing) — only when var.enable_seq is true ---
+
+resource "docker_image" "seq" {
+  count = var.enable_seq ? 1 : 0
+  name  = "datalust/seq:latest"
+}
+
+resource "docker_container" "seq" {
+  count = var.enable_seq ? 1 : 0
+  name  = "fhirbridge-ctr-seq"
+  image = docker_image.seq[0].image_id
+
+  networks_advanced {
+    name    = docker_network.fhirbridge.name
+    aliases = ["seq"]
+  }
+
+  env = [
+    "ACCEPT_EULA=Y",
+    "SEQ_FIRSTRUN_ADMINPASSWORD=${var.seq_admin_password}",
+  ]
+
+  ports {
+    internal = 80
+    external = var.seq_host_port
+  }
+
+  volumes {
+    volume_name    = docker_volume.seq_data[0].name
+    container_path = "/data"
+  }
+
+  healthcheck {
+    test     = ["CMD-SHELL", "curl -f http://localhost/api || exit 1"]
+    interval = "15s"
+    timeout  = "10s"
+    retries  = 10
+  }
+
+  dynamic "labels" {
+    for_each = local.common_labels
+    content {
+      label = labels.key
+      value = labels.value
+    }
+  }
+
+  restart = "unless-stopped"
+}
+
 # --- FHIRBridge app (Api + Gateway) ---
 
 resource "docker_container" "fhirbridge_app" {
   name  = "fhirbridge-ctr-app"
   image = "fhirbridge-app:${var.image_tag}"
 
-  depends_on = [docker_container.postgres, docker_container.redis]
+  depends_on = [docker_container.postgres, docker_container.redis, docker_container.seq]
 
   networks_advanced {
     name    = docker_network.fhirbridge.name
     aliases = ["fhirbridge-app"]
   }
 
-  env = [
+  env = concat([
     "ASPNETCORE_ENVIRONMENT=Production",
     "ConnectionStrings__FHIRBridgeDb=Host=postgres;Port=5432;Database=FHIRBridge;Username=fhirbridge;Password=${var.postgres_password};",
     "Database__Provider=PostgreSql",
@@ -230,7 +294,11 @@ resource "docker_container" "fhirbridge_app" {
     # Api and Gateway are sibling processes in one container (entrypoint.sh) - Api binds
     # loopback-only on 5000, and Gateway throws at startup outside Development without this.
     "ApiBaseUrl=http://127.0.0.1:5000/",
-  ]
+    ],
+    # See enable_seq's description in variables.tf. Both Api and Gateway (this same container)
+    # read this key via FhirBridgeLogging.
+    var.enable_seq ? ["Observability__SeqServerUrl=http://seq"] : []
+  )
 
   ports {
     internal = 80
@@ -262,14 +330,14 @@ resource "docker_container" "worker" {
   # fhirbridge_app is a head start, not a guarantee: both it and worker auto-migrate FHIRBridgeDb
   # on boot and can race on the initial CREATE DATABASE on a fresh database. restart="unless-stopped"
   # above is the actual safety net that turns a lost race into a self-healing retry.
-  depends_on = [docker_container.postgres, docker_container.redis, docker_container.fhirbridge_app]
+  depends_on = [docker_container.postgres, docker_container.redis, docker_container.seq, docker_container.fhirbridge_app]
 
   networks_advanced {
     name    = docker_network.fhirbridge.name
     aliases = ["worker"]
   }
 
-  env = [
+  env = concat([
     "ASPNETCORE_ENVIRONMENT=Production",
     "ConnectionStrings__FHIRBridgeDb=Host=postgres;Port=5432;Database=FHIRBridge;Username=fhirbridge;Password=${var.postgres_password};",
     "Database__Provider=PostgreSql",
@@ -277,7 +345,10 @@ resource "docker_container" "worker" {
     "Redis__TrustedCertificateThumbprint=${var.redis_trusted_certificate_thumbprint}",
     "RuntimeWorker__Enabled=true",
     "Messaging__Provider=InMemory",
-  ]
+    ],
+    # See enable_seq's description on fhirbridge_app above.
+    var.enable_seq ? ["Observability__SeqServerUrl=http://seq"] : []
+  )
 
   dynamic "labels" {
     for_each = local.common_labels

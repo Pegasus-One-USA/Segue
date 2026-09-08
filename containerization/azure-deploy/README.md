@@ -169,6 +169,16 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   group — see `enableTenantSecretsKeyVault`'s description in `main.bicep` for the manual fallback if
   the deploying identity only has Contributor. Exposed in the wizard as the "Tenant/app secret
   storage" choice.
+- **No centralized log viewing by default.** Set `enableSeq=true` to add a Seq container
+  (`datalust/seq`, public image) with its own external ingress — `Observability:SeqServerUrl` is
+  automatically pointed at it on `fhirbridge-app` (both the Api and Gateway processes read this same
+  config key) and `worker`. Unlike Postgres/Redis, Seq gets a public URL deliberately, since the
+  whole point is being able to browse to it and monitor logs; `seqAdminPassword` is the only thing
+  protecting that URL. Its `/data` volume uses the same Azure Files pattern as Postgres/Redis — this
+  is unverified against the same SMB permission limitation documented above (Seq may or may not hit
+  it); if its container fails at startup with a similar permission error, the same
+  local-disk-plus-backup image pattern (`containerization/docker/postgres-local`) would need to be
+  applied here too. Exposed in the wizard as the "Centralized log viewing (Seq)" choice.
 - Validate Phase 1 then Phase 2 against a real subscription before Marketplace certification.
   Live test evidence: an earlier single-shot domain+cert deploy failed with
   `RequireCustomHostnameInEnvironment` — this two-phase flag is the fix.

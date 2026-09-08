@@ -64,3 +64,9 @@ redis_trusted_certificate_thumbprint = "replace-with-the-thumbprint-generate-cer
 # Documents/KeyVault-Implementation.html for the full picture.
 # enable_tenant_secrets_key_vault = true
 
+# Centralized log viewing: false (default, or simply omit) — no Seq container. true creates a Seq
+# container with its own public URL that Api/Gateway/Worker all send structured logs to — see
+# enable_seq's description in variables.tf. seq_admin_password is required whenever this is true.
+# enable_seq          = true
+# seq_admin_password  = "change-me-strong-seq-password"
+

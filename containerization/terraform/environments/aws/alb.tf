@@ -44,3 +44,40 @@ resource "aws_lb_listener" "fhirbridge_app" {
     target_group_arn = aws_lb_target_group.fhirbridge_app.arn
   }
 }
+
+# --- Seq (structured log viewing) — only when var.enable_seq is true. A dedicated listener/port
+#     (not a path-based rule on the fhirbridge_app listener), since Seq is a completely separate
+#     service with its own health check and target — deliberately external, unlike postgres/redis,
+#     since the whole point is being able to browse to it and monitor logs. ---
+
+resource "aws_lb_target_group" "seq" {
+  count       = var.enable_seq ? 1 : 0
+  name        = "${var.name_prefix}-seq-tg"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    path                = "/"
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_lb_listener" "seq" {
+  count             = var.enable_seq ? 1 : 0
+  load_balancer_arn = aws_lb.main.arn
+  port              = var.seq_port
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate.alb.arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.seq[0].arn
+  }
+}

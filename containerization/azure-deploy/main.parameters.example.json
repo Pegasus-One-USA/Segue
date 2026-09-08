@@ -17,6 +17,8 @@
     "redisTrustedCertificateThumbprint": { "value": "replace-with-the-thumbprint-generate-cert-ps1-sh-printed" },
     "azureCacheForRedisTier": { "value": "Balanced_B0" },
     "enableTenantSecretsKeyVault": { "value": false },
+    "enableSeq": { "value": false },
+    "seqAdminPassword": { "value": "" },
     "fhirbridgeAppCustomDomain": { "value": "" },
     "bindCustomDomainCertificates": { "value": false }
   }

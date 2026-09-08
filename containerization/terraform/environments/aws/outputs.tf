@@ -12,6 +12,11 @@ output "fhirbridge_app_url" {
   value       = "https://${aws_lb.main.dns_name}:${var.fhirbridge_app_port}"
 }
 
+output "seq_url" {
+  description = "Populated only when enable_seq is true. Log into this with the seq_admin_password you set to browse structured logs from Api/Gateway/Worker. Same self-signed-certificate caveat as fhirbridge_app_url."
+  value       = var.enable_seq ? "https://${aws_lb.main.dns_name}:${var.seq_port}" : null
+}
+
 output "postgres_mode" {
   description = "Which Postgres FHIRBridge's own database actually has — \"rds-managed\" or \"container\"."
   value       = var.use_rds_postgresql ? "rds-managed" : "container"

@@ -31,3 +31,11 @@ redis_password    = "replace-with-a-strong-redis-password"
 # containerized Postgres. See rds_postgresql_instance_class/rds_postgresql_allocated_storage in
 # variables.tf to size it.
 # use_rds_postgresql = false
+
+# Centralized log viewing: false (default, or simply omit) — no Seq service. true creates a Seq
+# ECS service with its own ALB listener/port that Api/Gateway/Worker all send structured logs to —
+# see enable_seq's description in variables.tf. seq_admin_password is required whenever this is
+# true; seq_port defaults to 8443 (distinct from fhirbridge_app_port).
+# enable_seq          = true
+# seq_admin_password  = "change-me-strong-seq-password"
+# seq_port            = 8443

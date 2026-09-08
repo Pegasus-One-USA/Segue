@@ -103,6 +103,7 @@ locals {
   redis_name          = "${var.name_prefix}-redis"
   fhirbridge_app_name = "${var.name_prefix}-app"
   worker_name         = "${var.name_prefix}-worker"
+  seq_name            = "${var.name_prefix}-seq"
 
   # Single source of truth for both fhirbridge_app's and worker's ConnectionStrings__Redis (was
   # duplicated identically in both places before this became a local) — resolves to whichever of
@@ -239,6 +240,28 @@ resource "azurerm_container_app_environment_storage" "keys_data" {
   account_name                 = azurerm_storage_account.main.name
   access_key                   = azurerm_storage_account.main.primary_access_key
   share_name                   = azurerm_storage_share.keys_data.name
+  access_mode                  = "ReadWrite"
+}
+
+# Only needed when var.enable_seq is true. Untested against the same Azure Files/SMB permission
+# limitation documented on the Postgres container above (see that resource's comments and
+# Documents/Containerization-Azure-Deployment-Run-Log-V2.html) — Seq may or may not hit the same
+# wall; if its container fails at startup with a similar permission error, the same fix pattern
+# (a custom local-disk-plus-backup image) would need to be applied here too.
+resource "azurerm_storage_share" "seq_data" {
+  count                = var.enable_seq ? 1 : 0
+  name                 = "seq-data"
+  storage_account_name = azurerm_storage_account.main.name
+  quota                = 10
+}
+
+resource "azurerm_container_app_environment_storage" "seq_data" {
+  count                        = var.enable_seq ? 1 : 0
+  name                         = "seq-data"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  account_name                 = azurerm_storage_account.main.name
+  access_key                   = azurerm_storage_account.main.primary_access_key
+  share_name                   = azurerm_storage_share.seq_data[0].name
   access_mode                  = "ReadWrite"
 }
 
@@ -736,6 +759,69 @@ resource "azurerm_redis_cache" "main" {
   tags                 = local.common_tags
 }
 
+# --- Seq (structured log viewing) — only when var.enable_seq is true. Public image, no custom
+#     build needed. External ingress deliberately: unlike Postgres/Redis (internal-only, reached
+#     only by fhirbridge_app/worker), Seq exists specifically so a human can browse to it and
+#     monitor logs — an internal-only Seq would have no way in from outside the Container Apps
+#     environment. ---
+
+resource "azurerm_container_app" "seq" {
+  count                        = var.enable_seq ? 1 : 0
+  name                         = local.seq_name
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = data.azurerm_resource_group.main.name
+  revision_mode                = "Single"
+  tags                         = local.common_tags
+
+  secret {
+    name  = "seq-admin-password"
+    value = var.seq_admin_password
+  }
+
+  template {
+    min_replicas = 1
+    max_replicas = 1
+
+    volume {
+      name         = "seq-data"
+      storage_type = "AzureFile"
+      storage_name = azurerm_container_app_environment_storage.seq_data[0].name
+    }
+
+    container {
+      name   = "seq"
+      image  = "datalust/seq:latest"
+      cpu    = 0.25
+      memory = "0.5Gi"
+
+      env {
+        name  = "ACCEPT_EULA"
+        value = "Y"
+      }
+      env {
+        name        = "SEQ_FIRSTRUN_ADMINPASSWORD"
+        secret_name = "seq-admin-password"
+      }
+
+      volume_mounts {
+        name = "seq-data"
+        path = "/data"
+      }
+    }
+  }
+
+  ingress {
+    external_enabled = true
+    target_port      = 80
+    transport        = "auto"
+
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+}
+
 # --- FHIRBridge app (Api + Gateway), public ---
 
 resource "azurerm_container_app" "fhirbridge_app" {
@@ -855,6 +941,15 @@ resource "azurerm_container_app" "fhirbridge_app" {
         content {
           name  = "DataProtection__KeyVaultKeyId"
           value = azurerm_key_vault_key.dataprotection[0].id
+        }
+      }
+      # See enable_seq's description — only emitted when that flag is set. FHIRBridge.Api and
+      # FHIRBridge.Gateway (this same container) both read this key via FhirBridgeLogging.
+      dynamic "env" {
+        for_each = var.enable_seq ? [1] : []
+        content {
+          name  = "Observability__SeqServerUrl"
+          value = "http://${local.seq_name}"
         }
       }
 
@@ -1011,6 +1106,14 @@ resource "azurerm_container_app" "worker" {
         content {
           name  = "DataProtection__KeyVaultKeyId"
           value = azurerm_key_vault_key.dataprotection[0].id
+        }
+      }
+      # See enable_seq's description on fhirbridge_app above.
+      dynamic "env" {
+        for_each = var.enable_seq ? [1] : []
+        content {
+          name  = "Observability__SeqServerUrl"
+          value = "http://${local.seq_name}"
         }
       }
     }

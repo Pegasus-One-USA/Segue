@@ -88,6 +88,17 @@ param azureCacheForRedisTier string = 'Balanced_B0'
 @description('The deployment-time choice between two secret-storage modes (see Documents/KeyVault-Implementation.html): false (default) keeps tenant SourceConnection/DestinationConfiguration secrets and the app\'s own 4 app-level secrets (jwt-signing-key etc.) on the local DataProtection-encrypted ProvisionedSecrets DB table — no Key Vault resource, no extra permission needed. true creates a dedicated RBAC-enabled Key Vault, grants the fhirbridgeApp/worker Container Apps\' system-assigned managed identities (and the identity running this deployment) the Key Vault Secrets Officer role on it, creates an RSA key for DataProtection key-ring wrapping (Crypto User granted to both apps), and points KeyVault:VaultName/KeyVault:UseAzureKeyVault/DataProtection:KeyVaultKeyId at it — the app reads/writes secrets there automatically via CompositeSecretProvider/Writer, with the local DB table remaining as an automatic fallback (KeyVault:AllowConfigurationFallback). Unlike the Terraform azure environment, this template does NOT pre-seed the 4 app-level secrets — AppSecretProvisioner generates and writes them itself on first boot once the RBAC role above is in place, which keeps this template free of any secret-generation logic of its own.')
 param enableTenantSecretsKeyVault bool = false
 
+@description('Chooses whether this deployment includes a Seq container for centralized structured log viewing. false (default) — no Seq container; FHIRBridge.Api/.Gateway/.Worker log to console/Log Analytics only, same as leaving every other toggle at its default. true creates a Seq container app (datalust/seq, public image) with its own external ingress — its own https://<namePrefix>-seq.<environment>.azurecontainerapps.io URL, protected by seqAdminPassword — and points Observability:SeqServerUrl at it on fhirbridgeApp and worker. All three hosts (Api, Gateway, Worker) pick this up automatically since FhirBridgeLogging (FHIRBridge.Observability) reads that same config key on every host that calls it — see src/BuildingBlocks/FHIRBridge.Observability/Logging/FhirBridgeLogging.cs.')
+param enableSeq bool = false
+
+@description('Admin password for the Seq web UI (SEQ_FIRSTRUN_ADMINPASSWORD) — required when enableSeq is true. This is the ONLY thing protecting that URL, since no other authentication is configured here. Ignored when enableSeq is false.')
+@secure()
+param seqAdminPassword string = ''
+
+@description('Seq container size. Only consulted when enableSeq is true.')
+@allowed(['Small', 'Medium', 'Large', 'XLarge'])
+param seqSize string = 'Small'
+
 // Granting an RBAC role needs Microsoft.Authorization/roleAssignments/write (Owner or User Access
 // Administrator) on the vault/resource group — a Contributor-only account can create the vault
 // itself just fine but will get an authorization error on the role assignments below specifically.
@@ -199,6 +210,7 @@ var postgresName = '${namePrefix}-postgres'
 var redisName = '${namePrefix}-redis'
 var fhirbridgeAppName = '${namePrefix}-app'
 var workerName = '${namePrefix}-worker'
+var seqName = '${namePrefix}-seq'
 
 var hasRegistryCreds = !empty(imageRegistryUsername)
 var registryConfig = hasRegistryCreds ? [
@@ -381,6 +393,17 @@ resource keysDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@20
   properties: { shareQuota: 1 }
 }
 
+// Only needed when enableSeq is true — Seq persists its log database under /data. Unlike Postgres
+// (see the top-of-file comment and this deployment's own run log for why that one can't use Azure
+// Files at all), Seq's storage engine hasn't been confirmed either way against the same SMB
+// permission limitation — if Seq's container fails at startup with a similar "Operation not
+// permitted" error, the same fix pattern (a custom local-disk-plus-backup image, following
+// containerization/docker/postgres-local as a template) would need to be applied here too.
+resource seqDataShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = if (enableSeq) {
+  name: '${storageAccount.name}/default/seq-data'
+  properties: { shareQuota: 10 }
+}
+
 resource postgresDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = if (!useAzurePostgresql) {
   parent: containerAppEnv
   name: 'postgres-data'
@@ -421,6 +444,20 @@ resource keysDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01'
     }
   }
   dependsOn: [keysDataShare]
+}
+
+resource seqDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = if (enableSeq) {
+  parent: containerAppEnv
+  name: 'seq-data'
+  properties: {
+    azureFile: {
+      accountName: storageAccount.name
+      accountKey: storageAccount.listKeys().keys[0].value
+      shareName: 'seq-data'
+      accessMode: 'ReadWrite'
+    }
+  }
+  dependsOn: [seqDataShare]
 }
 
 
@@ -664,6 +701,50 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = if (!useAzureCacheF
   }
 }
 
+// --- Seq (structured log viewing) — only when enableSeq is true. Public image, no custom build
+//     needed. External ingress deliberately: unlike Postgres/Redis (internal-only, reached only by
+//     fhirbridgeApp/worker), Seq exists specifically so a human can browse to it and monitor logs —
+//     an internal-only Seq would have no way in from outside the Container Apps environment. ---
+
+resource seqApp 'Microsoft.App/containerApps@2024-03-01' = if (enableSeq) {
+  name: seqName
+  location: location
+  tags: commonTags
+  properties: {
+    managedEnvironmentId: containerAppEnv.id
+    configuration: {
+      secrets: [
+        { name: 'seq-admin-password', value: seqAdminPassword }
+      ]
+      ingress: {
+        external: true
+        targetPort: 80
+        transport: 'auto'
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'seq'
+          image: 'datalust/seq:latest'
+          resources: containerSizes[seqSize]
+          env: [
+            { name: 'ACCEPT_EULA', value: 'Y' }
+            { name: 'SEQ_FIRSTRUN_ADMINPASSWORD', secretRef: 'seq-admin-password' }
+          ]
+          volumeMounts: [
+            { volumeName: 'seq-data', mountPath: '/data' }
+          ]
+        }
+      ]
+      volumes: [
+        { name: 'seq-data', storageType: 'AzureFile', storageName: seqDataStorage.name }
+      ]
+      scale: { minReplicas: 1, maxReplicas: 1 }
+    }
+  }
+}
+
 // --- Custom domains (optional, per app) ---
 //
 // Azure managed certificates require the hostname to ALREADY exist on a Container App in the
@@ -755,6 +836,8 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'KeyVault__AllowConfigurationFallback', value: 'true' }
             { name: 'KeyVault__VaultName', value: tenantSecretsKeyVault.?properties.vaultUri ?? '' }
             { name: 'DataProtection__KeyVaultKeyId', value: dataProtectionKey.?properties.keyUriWithVersion ?? '' }
+          ] : [], enableSeq ? [
+            { name: 'Observability__SeqServerUrl', value: 'http://${seqName}' }
           ] : [])
           volumeMounts: [
             { volumeName: 'keys-data', mountPath: '/app/keys' }
@@ -808,6 +891,8 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'KeyVault__AllowConfigurationFallback', value: 'true' }
             { name: 'KeyVault__VaultName', value: tenantSecretsKeyVault.?properties.vaultUri ?? '' }
             { name: 'DataProtection__KeyVaultKeyId', value: dataProtectionKey.?properties.keyUriWithVersion ?? '' }
+          ] : [], enableSeq ? [
+            { name: 'Observability__SeqServerUrl', value: 'http://${seqName}' }
           ] : [])
         }
       ]
@@ -824,6 +909,9 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
 }
 
 output fhirbridgeAppUrl string = 'https://${fhirbridgeAppName}.${containerAppEnv.properties.defaultDomain}'
+
+@description('Populated only when enableSeq is true. Log into this with the seqAdminPassword you set to browse structured logs from Api/Gateway/Worker.')
+output seqUrl string = enableSeq ? 'https://${seqApp.?properties.configuration.ingress.fqdn ?? ''}' : ''
 
 output redisMode string = useAzureCacheForRedis ? 'azure-cache' : 'container'
 
@@ -889,6 +977,10 @@ var redisManifestItems = useAzureCacheForRedis ? [
 var redisStorageManifestItems = useAzureCacheForRedis ? [] : [redisDataStorage.id]
 var redisShareManifestItems = useAzureCacheForRedis ? [] : [redisDataShare.id]
 
+var seqManifestItems = enableSeq ? [seqApp.id] : []
+var seqStorageManifestItems = enableSeq ? [seqDataStorage.id] : []
+var seqShareManifestItems = enableSeq ? [seqDataShare.id] : []
+
 // Every resource this deployment created, in a dependency-safe DELETION order (children before
 // their parents — e.g. the Container Apps before the environment they run in). Azure keeps this
 // output in the deployment's own history (`az deployment group show --name main --query
@@ -898,17 +990,20 @@ var redisShareManifestItems = useAzureCacheForRedis ? [] : [redisDataShare.id]
 output resourceManifest array = concat(
   postgresManifestItems,
   redisManifestItems,
+  seqManifestItems,
   [
     fhirbridgeApp.id
     workerApp.id
   ],
   postgresStorageManifestItems,
   redisStorageManifestItems,
+  seqStorageManifestItems,
   [
     keysDataStorage.id
   ],
   postgresShareManifestItems,
   redisShareManifestItems,
+  seqShareManifestItems,
   [
     keysDataShare.id
     containerAppEnv.id

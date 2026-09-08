@@ -51,3 +51,22 @@ variable "redis_host_port" {
   default     = 6380
 }
 
+variable "enable_seq" {
+  description = "false (default) — no Seq container; fhirbridge-app/worker log to console only. true creates a Seq container (datalust/seq, public image) that both send structured logs to, for browsing/searching them at http://localhost:<seq_host_port>."
+  type        = bool
+  default     = false
+}
+
+variable "seq_admin_password" {
+  description = "Admin password for the Seq web UI (SEQ_FIRSTRUN_ADMINPASSWORD) — required when enable_seq is true. Ignored when enable_seq is false."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "seq_host_port" {
+  description = "Host port for the Seq container. Offset from the repo-root dev/E2E docker-compose.yml stack's own Seq mapping ($${SEQ_PORT:-5341}) so both can run at the same time without colliding. Only consulted when enable_seq is true."
+  type        = number
+  default     = 5342
+}
+

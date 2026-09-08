@@ -2,6 +2,11 @@ output "fhirbridge_app_url" {
   value = "http://localhost:${var.app_host_port}"
 }
 
+output "seq_url" {
+  description = "Populated only when enable_seq is true. Log into this with the seq_admin_password you set to browse structured logs from Api/Gateway/Worker."
+  value       = var.enable_seq ? "http://localhost:${var.seq_host_port}" : null
+}
+
 # No "external access"/custom-domain toggle here, unlike the aws/azure environments — every
 # container's port is already published to the host machine unconditionally (see
 # docker_container.postgres's ports block in main.tf), same as every other container in this local

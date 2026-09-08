@@ -95,3 +95,22 @@ variable "redis_trusted_certificate_thumbprint" {
   type        = string
 }
 
+variable "enable_seq" {
+  description = "false (default) — no Seq service; fhirbridge_app/worker log to CloudWatch only (via awslogs). true creates a Seq ECS service (datalust/seq, public image) reachable two ways: internally via Cloud Map (seq.<name_prefix>.internal, same as postgres/redis) so fhirbridge_app/worker can ship logs to it, and externally via a dedicated ALB listener on seq_port so a human can browse to it and monitor logs — protected by seq_admin_password, the only thing guarding that URL."
+  type        = bool
+  default     = false
+}
+
+variable "seq_admin_password" {
+  description = "Admin password for the Seq web UI (SEQ_FIRSTRUN_ADMINPASSWORD) — required when enable_seq is true. Stored in Secrets Manager, never written into the task definition in plaintext. Ignored when enable_seq is false."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "seq_port" {
+  description = "Public port clients use to reach Seq through the load balancer — deliberately a different port from fhirbridge_app_port, since each ALB listener is bound to exactly one port/target group. Only consulted when enable_seq is true."
+  type        = number
+  default     = 8443
+}
+
