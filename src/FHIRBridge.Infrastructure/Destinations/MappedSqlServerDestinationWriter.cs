@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
@@ -368,7 +369,7 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         {
             var paramName = $"@p{rowIndex}_{columnIndex}";
             placeholders[columnIndex] = paramName;
-            command.Parameters.AddWithValue(paramName, ResolveColumnValue(record, columns[columnIndex], context) ?? DBNull.Value);
+            AddColumnParameter(command, paramName, ResolveColumnValue(record, columns[columnIndex], context));
         }
 
         return $"({string.Join(", ", placeholders)})";
@@ -561,7 +562,7 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         await using var command = new SqlCommand(sql, connection);
         foreach (var column in columns)
         {
-            command.Parameters.AddWithValue($"@{column}", ResolveColumnValue(record, column, context) ?? DBNull.Value);
+            AddColumnParameter(command, $"@{column}", ResolveColumnValue(record, column, context));
         }
 
         if (outputColumns.Count == 0)
@@ -672,7 +673,7 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         await using var command = new SqlCommand(sql, connection);
         foreach (var column in columns)
         {
-            command.Parameters.AddWithValue($"@{column}", ResolveColumnValue(record, column, context) ?? DBNull.Value);
+            AddColumnParameter(command, $"@{column}", ResolveColumnValue(record, column, context));
         }
 
         if (outputColumns.Count == 0)
@@ -818,7 +819,7 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             command.Parameters.AddWithValue($"@{fk}", parentKeyValue ?? DBNull.Value);
             foreach (var fieldName in fieldNames)
             {
-                command.Parameters.AddWithValue($"@{fieldName}", row[fieldName] ?? DBNull.Value);
+                AddColumnParameter(command, $"@{fieldName}", row[fieldName]);
             }
 
             await command.ExecuteNonQueryAsync(cancellationToken);
@@ -905,6 +906,50 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             "LastUpdatedOnUtc" => context.RunStartedAtUtc.UtcDateTime,
             _ => record.Values.TryGetValue(column, out var mappedValue) ? mappedValue : null
         };
+    }
+
+    /// <summary>
+    /// Binds a resolved column value to the command, coercing date/time values so one out-of-range date never
+    /// fails the whole batch on SQL Server's legacy <c>datetime</c> parameter inference.
+    /// <para>
+    /// <see cref="SqlParameterCollection.AddWithValue"/> infers <see cref="SqlDbType.DateTime"/> from a CLR
+    /// <see cref="DateTime"/>, and that type's range starts at 1753-01-01 — so any earlier value (a genuinely old
+    /// birth date such as a historical 1600s DOB, or a default/sentinel <see cref="DateTime.MinValue"/>) throws
+    /// "SqlDateTime overflow" while the parameter is serialized, before it ever reaches the column. Binding as
+    /// <see cref="SqlDbType.DateTime2"/> (range 0001-9999) serializes any CLR date and converts cleanly to a
+    /// <c>date</c>/<c>datetime2</c> column (and to a legacy <c>datetime</c> column when the value is in its range).
+    /// </para>
+    /// A default/MinValue date is a "no value" sentinel rather than year 1, so it is written as NULL, not 0001-01-01.
+    /// </summary>
+    internal static void AddColumnParameter(SqlCommand command, string parameterName, object? value)
+    {
+        switch (value)
+        {
+            case null:
+                command.Parameters.AddWithValue(parameterName, DBNull.Value);
+                return;
+            case DateTime dateTime:
+                if (dateTime == default)
+                {
+                    command.Parameters.AddWithValue(parameterName, DBNull.Value);
+                    return;
+                }
+
+                command.Parameters.Add(parameterName, SqlDbType.DateTime2).Value = dateTime;
+                return;
+            case DateTimeOffset dateTimeOffset:
+                if (dateTimeOffset == default)
+                {
+                    command.Parameters.AddWithValue(parameterName, DBNull.Value);
+                    return;
+                }
+
+                command.Parameters.Add(parameterName, SqlDbType.DateTimeOffset).Value = dateTimeOffset;
+                return;
+            default:
+                command.Parameters.AddWithValue(parameterName, value);
+                return;
+        }
     }
 
     private static bool TryGetKeyValue(

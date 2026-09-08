@@ -49,6 +49,50 @@ public sealed class ScopeGeneratorServiceTests
     }
 
     [Fact]
+    public void Backend_group_export_adds_group_read_scope_ecw_v1()
+    {
+        // eCW bulk (Group/{id}/$export) needs system/Group.read on top of the per-resource scopes. Regression guard:
+        // Group is otherwise excluded from the per-resource set, so without isGroupExport the token misses Group.read
+        // and eCW's authorization rule denies the export (HTTP 403 "HAPI-0333: Access denied by rule").
+        var result = _sut.Generate(
+            ApplicationType.Backend, ["Patient", "AllergyIntolerance"], "v1", false, null,
+            vendor: SourceSystemType.Healow, isGroupExport: true);
+
+        result.Scopes.Should().Contain("system/Group.read");
+        result.Scopes.Should().Contain("system/Patient.read");
+    }
+
+    [Fact]
+    public void Backend_group_export_uses_version_suffix_for_group_v2()
+    {
+        var result = _sut.Generate(
+            ApplicationType.Backend, ["Patient"], "v2", true, null, isGroupExport: true);
+
+        result.Scopes.Should().Contain("system/Group.rs");
+    }
+
+    [Fact]
+    public void Backend_single_patient_does_not_add_group_scope()
+    {
+        // Default (isGroupExport: false) must NOT request Group — eCW requires it excluded from Backend Single Patient.
+        var result = _sut.Generate(
+            ApplicationType.Backend, ["Patient", "AllergyIntolerance"], "v1", false, null,
+            vendor: SourceSystemType.Healow);
+
+        result.Scopes.Should().NotContain(s => s.StartsWith("system/Group", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Interactive_ignores_group_export_flag()
+    {
+        // Group export is a system/ (Backend) concept — an interactive prefix must never gain a Group scope.
+        var result = _sut.Generate(
+            ApplicationType.EhrLaunch, ["Patient"], "v2", true, null, isGroupExport: true);
+
+        result.Scopes.Should().NotContain(s => s.Contains("Group", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Flags_scopes_not_advertised_by_discovery()
     {
         // Server advertises only Patient (exact) — Observation should be reported unsupported.

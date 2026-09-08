@@ -151,7 +151,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
                 scopeVersion: scopeVersion,
                 scopeVersionDetected: false,
                 supportedScopes: null,
-                vendor: sourceConnection.SourceSystemType).Scopes
+                vendor: sourceConnection.SourceSystemType,
+                isGroupExport: string.Equals(retrieval.ExportScope, "group", StringComparison.OrdinalIgnoreCase)).Scopes
             : sourceConnection.Authentication.Scopes.Any()
                 ? sourceConnection.Authentication.Scopes
                 : _scopeGenerator.Generate(

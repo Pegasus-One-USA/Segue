@@ -156,6 +156,23 @@ public sealed class WorkflowSettingsEntity
     // demo type.
     public string StandaloneWorkflowId { get; set; } = string.Empty;
     public string StandaloneDetailWorkflowId { get; set; } = string.Empty;
+
+    // eClinicalWorks (eCW) variant of the Provider_Standalone list/detail flow — same shape/role as the
+    // StandaloneWorkflowId/StandaloneDetailWorkflowId/StandaloneBaseUrl trio, but for the eCW vendor toggle on the
+    // launch-standalone-provider screen (mirrors the Patient_Standalone eCW fields above). Provider_Standalone needs
+    // TWO workflow ids (a LIST workflow for the patient name-search and a DETAIL workflow for a picked patient),
+    // unlike Patient_Standalone's single EcwPatientWorkflowId. EcwProviderStandaloneEhrEndpointId is a SEPARATE
+    // endpoint id from the Patient section's EcwEhrEndpointId (they can NOT be shared): provider-standalone's launch
+    // (OAuthController's public-standalone-url) requires an EhrEndpoint of type EhrEndpointType.Epic
+    // (IsKnownEndpointAsync(ehrEndpointId, EhrEndpointType.Epic)), whereas EcwEhrEndpointId points at a MyChart-type
+    // row for the patient-standalone flow — Epic vs MyChart are different EndpointType values. Like eCW Patient, eCW's
+    // audience targets one fixed practice with no per-hospital directory, so the provider screen skips the Epic
+    // hospital picker and mints against this pre-seeded Epic-type endpoint row (whose FHIR base is the eCW practice).
+    public string EcwProviderStandaloneListWorkflowId { get; set; } = string.Empty;
+    public string EcwProviderStandaloneDetailWorkflowId { get; set; } = string.Empty;
+    public string EcwProviderStandaloneBaseUrl { get; set; } = string.Empty;
+    public string EcwProviderStandaloneEhrEndpointId { get; set; } = string.Empty;
+
     // Provider_Standalone's own FHIRBridge connection point — previously the frontend's hardcoded
     // environment.fhirbridgeBase (a build-time constant), which only ever worked when the browser and the
     // FHIRBridge Api happened to share a host (e.g. both localhost in local dev). Moved here for the same reason
@@ -517,6 +534,10 @@ public sealed class HealthAppDbContext : DbContext
             EcwEhrEndpointId = string.Empty,
             StandaloneWorkflowId = string.Empty,
             StandaloneDetailWorkflowId = string.Empty,
+            EcwProviderStandaloneListWorkflowId = string.Empty,
+            EcwProviderStandaloneDetailWorkflowId = string.Empty,
+            EcwProviderStandaloneBaseUrl = string.Empty,
+            EcwProviderStandaloneEhrEndpointId = string.Empty,
             // Same sourcing rationale as PatientBaseUrl above (DefaultWorkflowSettings:StandaloneBaseUrl).
             StandaloneBaseUrl = _configuration["DefaultWorkflowSettings:StandaloneBaseUrl"] ?? string.Empty,
             BackendSystemPractitionerImportWorkflowId = "17c81a2c-b266-4ed3-9afb-8fc54910f577"

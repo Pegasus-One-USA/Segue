@@ -31,7 +31,8 @@ public sealed class ScopeGeneratorService : IScopeGeneratorService
         string scopeVersion,
         bool scopeVersionDetected,
         IReadOnlyCollection<string>? supportedScopes,
-        SourceSystemType? vendor = null)
+        SourceSystemType? vendor = null,
+        bool isGroupExport = false)
     {
         var version = string.Equals(scopeVersion, "v1", StringComparison.OrdinalIgnoreCase) ? "v1" : "v2";
         // Prefix by application type (is-pattern, not a switch on ApplicationType — the engine's dispatch stays in the
@@ -124,6 +125,20 @@ public sealed class ScopeGeneratorService : IScopeGeneratorService
         }
 
         scopes.AddRange(resourceScopes);
+
+        // Group $export (bulk) needs the Group read scope on top of the per-resource scopes above — eCW's Backend
+        // Authentication guide mandates system/Group.read for a Group/{id}/$export, and SMART bulk requires it
+        // generally. Group is deliberately kept OUT of the per-resource set (IsPolicyExcluded / VendorScopeCatalog
+        // omit it) so it can never leak into a Backend Single Patient grant, which eCW requires it excluded from —
+        // so this flag is the only path that requests it. Added only for a system/ (Backend) group export.
+        if (isGroupExport && prefix == "system")
+        {
+            var groupScope = $"{prefix}/Group.{suffix}";
+            if (!scopes.Contains(groupScope, StringComparer.OrdinalIgnoreCase))
+            {
+                scopes.Add(groupScope);
+            }
+        }
 
         var validated = supportedScopes is { Count: > 0 };
         var unsupported = validated

@@ -50,15 +50,20 @@ import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
  */
 export const VENDOR_DISABLED_AUDIENCES: Partial<Record<EhrVendor, EpicAudience[]>> = {
   Athenahealth: ['provider-standalone', 'provider-ehr-launch'],
-  // eClinicalWorks (Healow): Patient, Provider EHR launch AND Backend System are rolled out. Provider EHR launch
-  // (Provider EMR) was verified end-to-end against the live eCW sandbox (poc/ecw-ehr-launch-poc: EHR launch →
-  // PKCE → confidential client_secret_basic token → multi-resource FHIR reads). Backend System is eCW's
-  // "Backend — Single Patient" API: client_credentials + RS384 private_key_jwt, system/ scopes, one authorized
-  // patient (see the 'single-patient' Data Retrieval Method, which is offered for this vendor only). Its scope
+  // eClinicalWorks (Healow): Patient, Provider EHR launch, Backend System, AND Provider Standalone are all rolled out.
+  // Provider EHR launch (Provider EMR) was verified end-to-end against the live eCW sandbox: EHR launch → PKCE →
+  // confidential client token → multi-resource FHIR reads → Medplum (poc/ecw-ehr-launch-poc, plus the local launch-alias
+  // shim + StandaloneBaseUrl wiring proven against the eCW developer-portal launch).
+  // Backend System is eCW's "Backend — Single Patient" API: client_credentials + RS384 private_key_jwt, system/ scopes,
+  // one authorized patient (see the 'single-patient' Data Retrieval Method, offered for this vendor only). Its scope
   // vocabulary differs per resource type — see VENDOR_SCOPE_PROFILES in data/vendor-scope-catalog.data.ts and its
-  // authoritative backend twin, VendorScopeCatalog. Provider standalone stays disabled until its own sandbox
-  // credentials/round-trip verification exist.
-  Healow: ['provider-standalone'],
+  // authoritative backend twin, VendorScopeCatalog.
+  // Provider Standalone reuses the same interactive SMART auth-code+PKCE round-trip as patient standalone / EHR launch
+  // (OAuthController + InteractiveSourceAuthorizationService, incl. eCW's request-derived callback), verified end-to-end
+  // against the live eCW sandbox (Patient search → SQL and → Medplum). Enabled here so an eCW Provider Standalone
+  // source can be authored.
+  Healow: [],
+
 };
 
 export function isAudienceDisabledForVendor(vendor: EhrVendor, audience: EpicAudience): boolean {

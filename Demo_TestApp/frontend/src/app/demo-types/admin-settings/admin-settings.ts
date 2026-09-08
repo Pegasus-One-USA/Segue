@@ -25,6 +25,10 @@ interface AdminSettings {
   standaloneWorkflowId: string;
   standaloneDetailWorkflowId: string;
   standaloneBaseUrl: string;
+  ecwProviderStandaloneListWorkflowId: string;
+  ecwProviderStandaloneDetailWorkflowId: string;
+  ecwProviderStandaloneBaseUrl: string;
+  ecwProviderStandaloneEhrEndpointId: string;
   providerInAppWorkflowId: string;
   ecwProviderInAppWorkflowId: string;
   backendSystemPractitionerImportWorkflowId: string;
@@ -81,6 +85,13 @@ export class AdminSettingsComponent implements OnInit {
   readonly standaloneWorkflowId = signal('');
   readonly standaloneDetailWorkflowId = signal('');
   readonly standaloneBaseUrl = signal('');
+  // eClinicalWorks (eCW) variant of the Provider_Standalone list/detail flow — the vendor toggle on the
+  // launch-standalone-provider screen. Its EhrEndpoint id is a SEPARATE, Epic-type row (not the patient section's
+  // MyChart-type ecwEhrEndpointId), since provider-standalone's launch requires an Epic-type EhrEndpoint.
+  readonly ecwProviderStandaloneListWorkflowId = signal('');
+  readonly ecwProviderStandaloneDetailWorkflowId = signal('');
+  readonly ecwProviderStandaloneBaseUrl = signal('');
+  readonly ecwProviderStandaloneEhrEndpointId = signal('');
   readonly providerInAppWorkflowId = signal('');
   // Separate eCW (eClinicalWorks) Provider EMR EHR-launch workflow id — the mint endpoint auto-selects this over
   // providerInAppWorkflowId when the launching EHR's iss is an eCW practice (host *.ecwcloud.com).
@@ -210,6 +221,10 @@ export class AdminSettingsComponent implements OnInit {
       this.standaloneWorkflowId.set(current.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(current.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(current.standaloneBaseUrl);
+      this.ecwProviderStandaloneListWorkflowId.set(current.ecwProviderStandaloneListWorkflowId);
+      this.ecwProviderStandaloneDetailWorkflowId.set(current.ecwProviderStandaloneDetailWorkflowId);
+      this.ecwProviderStandaloneBaseUrl.set(current.ecwProviderStandaloneBaseUrl);
+      this.ecwProviderStandaloneEhrEndpointId.set(current.ecwProviderStandaloneEhrEndpointId);
       this.providerInAppWorkflowId.set(current.providerInAppWorkflowId);
       this.ecwProviderInAppWorkflowId.set(current.ecwProviderInAppWorkflowId);
       this.backendSystemPractitionerImportWorkflowId.set(current.backendSystemPractitionerImportWorkflowId);
@@ -244,6 +259,10 @@ export class AdminSettingsComponent implements OnInit {
             standaloneWorkflowId: this.standaloneWorkflowId(),
             standaloneDetailWorkflowId: this.standaloneDetailWorkflowId(),
             standaloneBaseUrl: this.standaloneBaseUrl(),
+            ecwProviderStandaloneListWorkflowId: this.ecwProviderStandaloneListWorkflowId(),
+            ecwProviderStandaloneDetailWorkflowId: this.ecwProviderStandaloneDetailWorkflowId(),
+            ecwProviderStandaloneBaseUrl: this.ecwProviderStandaloneBaseUrl(),
+            ecwProviderStandaloneEhrEndpointId: this.ecwProviderStandaloneEhrEndpointId(),
             providerInAppWorkflowId: this.providerInAppWorkflowId(),
             ecwProviderInAppWorkflowId: this.ecwProviderInAppWorkflowId(),
             backendSystemPractitionerImportWorkflowId: this.backendSystemPractitionerImportWorkflowId(),
@@ -266,6 +285,10 @@ export class AdminSettingsComponent implements OnInit {
       this.standaloneWorkflowId.set(result.standaloneWorkflowId);
       this.standaloneDetailWorkflowId.set(result.standaloneDetailWorkflowId);
       this.standaloneBaseUrl.set(result.standaloneBaseUrl);
+      this.ecwProviderStandaloneListWorkflowId.set(result.ecwProviderStandaloneListWorkflowId);
+      this.ecwProviderStandaloneDetailWorkflowId.set(result.ecwProviderStandaloneDetailWorkflowId);
+      this.ecwProviderStandaloneBaseUrl.set(result.ecwProviderStandaloneBaseUrl);
+      this.ecwProviderStandaloneEhrEndpointId.set(result.ecwProviderStandaloneEhrEndpointId);
       this.providerInAppWorkflowId.set(result.providerInAppWorkflowId);
       this.ecwProviderInAppWorkflowId.set(result.ecwProviderInAppWorkflowId);
       this.backendSystemPractitionerImportWorkflowId.set(result.backendSystemPractitionerImportWorkflowId);

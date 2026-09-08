@@ -52,49 +52,79 @@
             }
           </div>
 
-          <div class="hospital-picker">
-            <p class="step-label">1. Select hospital</p>
-
-            <input
-              type="search"
-              class="hospital-search"
-              placeholder="Search hospitals by name…"
-              [value]="hospitalSearchQuery()"
-              (input)="onHospitalSearchChange($any($event.target).value)"
-            />
-
-            @if (hospitalSelectError()) {
-              <p class="error-banner">{{ hospitalSelectError() }}</p>
-            }
-
-            @if (isLoadingHospitals()) {
-              <div class="loading-container">
-                <mat-spinner diameter="32"></mat-spinner>
-              </div>
-            } @else {
-              <div class="hospital-list">
-                @for (hospital of hospitals(); track hospital.id) {
-                  <button
-                    type="button"
-                    class="hospital-row"
-                    [class.hospital-row--selected]="selectedHospitalId() === hospital.id"
-                    [disabled]="isRedirectingToEpic()"
-                    (click)="chooseHospital(hospital)"
-                  >
-                    <span class="hospital-row__text">
-                      <span class="hospital-row__name">{{ hospital.name }}</span>
-                      <span class="hospital-row__url">{{ hospital.fhirBaseUrl }}</span>
-                    </span>
-                    @if (selectedHospitalId() === hospital.id) {
-                      <span class="hospital-row__chevron">✓</span>
-                    }
-                  </button>
-                } @empty {
-                  <p class="subtitle">No Epic sandbox endpoints match your search.</p>
-                }
-              </div>
-            }
+          <div class="vendor-toggle" role="group" aria-label="EHR vendor">
+            <button
+              type="button"
+              class="vendor-toggle__btn"
+              [class.vendor-toggle__btn--active]="vendor() === 'epic'"
+              [disabled]="isRedirectingToEpic()"
+              (click)="selectVendor('epic')"
+            >Epic</button>
+            <button
+              type="button"
+              class="vendor-toggle__btn"
+              [class.vendor-toggle__btn--active]="vendor() === 'ecw'"
+              [disabled]="isRedirectingToEpic()"
+              (click)="selectVendor('ecw')"
+            >eCW</button>
           </div>
+
+          @if (vendor() === 'epic') {
+            <div class="hospital-picker">
+              <p class="step-label">1. Select hospital</p>
+
+              <input
+                type="search"
+                class="hospital-search"
+                placeholder="Search hospitals by name…"
+                [value]="hospitalSearchQuery()"
+                (input)="onHospitalSearchChange($any($event.target).value)"
+              />
+
+              @if (hospitalSelectError()) {
+                <p class="error-banner">{{ hospitalSelectError() }}</p>
+              }
+
+              @if (isLoadingHospitals()) {
+                <div class="loading-container">
+                  <mat-spinner diameter="32"></mat-spinner>
+                </div>
+              } @else {
+                <div class="hospital-list">
+                  @for (hospital of hospitals(); track hospital.id) {
+                    <button
+                      type="button"
+                      class="hospital-row"
+                      [class.hospital-row--selected]="selectedHospitalId() === hospital.id"
+                      [disabled]="isRedirectingToEpic()"
+                      (click)="chooseHospital(hospital)"
+                    >
+                      <span class="hospital-row__text">
+                        <span class="hospital-row__name">{{ hospital.name }}</span>
+                        <span class="hospital-row__url">{{ hospital.fhirBaseUrl }}</span>
+                      </span>
+                      @if (selectedHospitalId() === hospital.id) {
+                        <span class="hospital-row__chevron">✓</span>
+                      }
+                    </button>
+                  } @empty {
+                    <p class="subtitle">No Epic sandbox endpoints match your search.</p>
+                  }
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="hospital-picker">
+              <p class="step-label">1. eCW practice</p>
+              <p class="subtitle">
+                eCW's Provider audience currently targets one fixed practice — nothing to pick here. Just type any
+                search criteria below and click Fetch Patient List.
+              </p>
+              @if (hospitalSelectError()) {
+                <p class="error-banner">{{ hospitalSelectError() }}</p>
+              }
+            </div>
+          }
 
           <div class="name-filter">
             <label class="step-label" for="search-criteria-input">2. Search criteria (optional)</label>
@@ -123,7 +153,7 @@
                 <mat-spinner diameter="18"></mat-spinner>
               } @else if (isRedirectingToEpic()) {
                 <mat-spinner diameter="18"></mat-spinner>
-                <span>Redirecting to Epic…</span>
+                <span>{{ vendor() === 'ecw' ? 'Redirecting to eCW…' : 'Redirecting to Epic…' }}</span>
               } @else {
                 <span>Fetch Patient List</span>
               }

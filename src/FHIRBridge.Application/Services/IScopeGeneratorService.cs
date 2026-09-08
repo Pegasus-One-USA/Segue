@@ -17,11 +17,19 @@ public interface IScopeGeneratorService
     /// <see cref="VendorScopeCatalog"/>). Optional and null-by-default: a caller that doesn't supply it, or a
     /// vendor with no registered profile, gets exactly the previous behaviour.
     /// </param>
+    /// <param name="isGroupExport">
+    /// True for a Group <c>$export</c> (bulk) source. Adds the vendor's Group read scope (e.g. <c>system/Group.read</c>)
+    /// on top of the per-resource scopes — required by SMART bulk (and eCW's Backend Authentication guide) for a
+    /// <c>Group/{id}/$export</c>. Group is otherwise deliberately excluded from the per-resource scope set (see
+    /// <see cref="VendorScopeCatalog"/>) so it can't leak into a Backend Single Patient grant, so this flag is the
+    /// only path that requests it.
+    /// </param>
     GeneratedScopesDto Generate(
         ApplicationType? applicationType,
         IEnumerable<string> resourceTypes,
         string scopeVersion,
         bool scopeVersionDetected,
         IReadOnlyCollection<string>? supportedScopes,
-        SourceSystemType? vendor = null);
+        SourceSystemType? vendor = null,
+        bool isGroupExport = false);
 }
