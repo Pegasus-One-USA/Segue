@@ -20,14 +20,12 @@
   &:active { background: var(--color-primary-dark); }
 }
 
-.filter-header-text {
-  flex: 1 1 280px;
-
-  p {
-    font-size: 13.5px;
-    color: var(--color-muted);
-    margin: 0;
-  }
+// The guidance copy that used to sit inside the filter bar, moved out from under it once the Label filter
+// took that space — same treatment Operations -> Errors gives its own note line.
+.filter-note {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--color-muted);
 }
 
 // ─── Column widths ────────────────────────────────────────────────────────────

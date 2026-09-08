@@ -40,6 +40,11 @@ export interface PagedResult<T> {
 
 export interface EhrEndpointFilter {
   search?: string;
+  /** The "Source" dropdown — the row's Vendor (backend SourceSystemType). */
+  vendor?: EhrVendor;
+  /** The "Status" dropdown: true = Status is "active", false = anything else. Mirrors the Status column's
+   *  own active-or-not split, since Status is a free-text string rather than a closed enum. */
+  isActive?: boolean;
   sortDescending?: boolean;
   page: number;
   pageSize: number;

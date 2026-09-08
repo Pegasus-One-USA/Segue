@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
@@ -82,10 +82,15 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var search = filter.Search;
+            // Upper-cased on both sides rather than left to the database's own collation: SQL Server's default
+            // collation is case-insensitive but PostgreSQL's LIKE is not, so an interpolated LIKE matched
+            // nothing on Npgsql unless the user typed the stored casing exactly. Contains() (instead of an
+            // interpolated LIKE pattern) also parameterizes the term, so a '%' or '_' the user types is matched
+            // literally rather than acting as a wildcard.
+            var search = filter.Search.ToUpperInvariant();
             query = query.Where(x =>
-                EF.Functions.Like(x.Name, $"%{search}%") ||
-                EF.Functions.Like(x.BaseUrl, $"%{search}%"));
+                x.Name.ToUpper().Contains(search) ||
+                x.BaseUrl.ToUpper().Contains(search));
         }
 
         if (filter.SourceSystemType.HasValue)
@@ -233,8 +238,10 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var search = filter.Search;
-            query = query.Where(x => EF.Functions.Like(x.Name, $"%{search}%"));
+            // See GetSourceConnectionsPagedAsync for why this upper-cases both sides instead of relying on the
+            // database collation, and why it uses Contains() rather than an interpolated LIKE pattern.
+            var search = filter.Search.ToUpperInvariant();
+            query = query.Where(x => x.Name.ToUpper().Contains(search));
         }
 
         if (filter.DestinationType.HasValue)
@@ -331,10 +338,12 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var search = filter.Search;
+            // See GetSourceConnectionsPagedAsync for why this upper-cases both sides instead of relying on the
+            // database collation, and why it uses Contains() rather than an interpolated LIKE pattern.
+            var search = filter.Search.ToUpperInvariant();
             query = query.Where(x =>
-                EF.Functions.Like(x.Name, $"%{search}%") ||
-                EF.Functions.Like(x.DestinationObject, $"%{search}%"));
+                x.Name.ToUpper().Contains(search) ||
+                x.DestinationObject.ToUpper().Contains(search));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.ResourceType))

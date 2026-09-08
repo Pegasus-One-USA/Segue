@@ -3,17 +3,38 @@
   <!-- Filter Bar -->
   <div class="filter-card">
     <div class="filter-row">
-      <div class="filter-header-text">
-        <p>Browser origins allowed to call the API with credentials. Changes take effect immediately — no restart needed.</p>
+      <div class="search-wrap">
+        <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Filter by label..."
+          [value]="labelFilter()"
+          (input)="onLabelFilterChange($any($event.target).value)"
+        />
       </div>
 
       <div class="filter-actions">
+        <button class="btn-reset" type="button" (click)="reset()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+          Reset
+        </button>
         <button class="btn-add" type="button" (click)="openAdd()">
           New
         </button>
       </div>
     </div>
   </div>
+
+  <p class="filter-note">
+    Browser origins allowed to call the API with credentials. Changes take effect immediately — no restart needed.
+  </p>
 
   <!-- Table Card -->
   <div class="table-card">
@@ -23,7 +44,7 @@
     } @else {
 
       <div class="table-wrapper">
-        <table mat-table [dataSource]="origins()" class="data-table">
+        <table mat-table [dataSource]="filteredOrigins()" class="data-table">
 
           <!-- Origin URL Column -->
           <ng-container matColumnDef="originUrl">
@@ -82,13 +103,18 @@
       </div>
 
       <!-- Empty State -->
-      @if (origins().length === 0) {
+      @if (filteredOrigins().length === 0) {
         <div class="empty-state">
           <div class="empty-state__icon-wrap">
             <mat-icon>public</mat-icon>
           </div>
-          <h3 class="empty-state__title">No allowed origins yet</h3>
-          <p class="empty-state__sub">Add the URLs allowed to call the API — e.g. your portal's production domain.</p>
+          @if (labelFilter().trim()) {
+            <h3 class="empty-state__title">No origins matched that label</h3>
+            <p class="empty-state__sub">Try a shorter term, or Reset to see every origin.</p>
+          } @else {
+            <h3 class="empty-state__title">No allowed origins yet</h3>
+            <p class="empty-state__sub">Add the URLs allowed to call the API — e.g. your portal's production domain.</p>
+          }
         </div>
       }
 

@@ -12,10 +12,27 @@
         <input
           type="search"
           class="search-input"
-          placeholder="Search by name, vendor, or FHIR base URL..."
+          placeholder="Search by name or FHIR base URL..."
           [value]="searchQuery()"
           (input)="onSearch($any($event.target).value)"
         />
+      </div>
+
+      <div class="type-filter-wrap">
+        <select class="type-filter-select" [value]="sourceFilter()" (change)="onSourceFilterChange($any($event.target).value)">
+          <option value="">All sources</option>
+          @for (o of sourceOptions; track o.value) {
+            <option [value]="o.value">{{ o.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="type-filter-wrap">
+        <select class="type-filter-select" [value]="statusFilter()" (change)="onStatusFilterChange($any($event.target).value)">
+          <option value="">All statuses</option>
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
       </div>
 
       <div class="filter-actions">
@@ -156,15 +173,15 @@
             <mat-icon>dns</mat-icon>
           </div>
           <h3 class="empty-state__title">
-            @if (searchQuery()) {
-              No endpoints matched your search
+            @if (hasActiveFilter()) {
+              No endpoints matched your filters
             } @else {
               No EHR endpoints yet
             }
           </h3>
           <p class="empty-state__sub">
-            @if (searchQuery()) {
-              Try adjusting your search.
+            @if (hasActiveFilter()) {
+              Try adjusting your search or filters.
             } @else {
               Get started by adding your first endpoint.
             }

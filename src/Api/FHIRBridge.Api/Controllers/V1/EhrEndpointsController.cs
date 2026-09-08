@@ -1,8 +1,9 @@
-using FHIRBridge.Api.Security;
+﻿using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -38,15 +39,20 @@ public sealed class EhrEndpointsController : ControllerBase
     [HttpGet("paged")]
     [StandardPermission(PermissionGroupCode.EhrEndpoints, PermissionActionCode.View, description: "View the EHR endpoint directory.")]
     [ProducesResponseType(typeof(PagedResult<EhrEndpointDto>), StatusCodes.Status200OK)]
+    /// <param name="vendor">The screen's "Source" dropdown — a <see cref="SourceSystemType"/> member name.</param>
+    /// <param name="isActive">The screen's "Status" dropdown; see <see cref="EhrEndpointFilter.IsActive"/>.</param>
     public async Task<IActionResult> ListPaged(
         [FromQuery] string? search,
+        [FromQuery] SourceSystemType? vendor,
+        [FromQuery] bool? isActive,
         [FromQuery] bool? sortDescending,
         [FromQuery] int page,
         [FromQuery] int pageSize,
         CancellationToken cancellationToken)
     {
+        var filter = new EhrEndpointFilter(search, vendor, isActive);
         var result = await _service.GetPagedAsync(
-            search, sortDescending, page <= 0 ? 1 : page, pageSize <= 0 ? 10 : pageSize, cancellationToken);
+            filter, sortDescending, page <= 0 ? 1 : page, pageSize <= 0 ? 10 : pageSize, cancellationToken);
         return Ok(result);
     }
 
