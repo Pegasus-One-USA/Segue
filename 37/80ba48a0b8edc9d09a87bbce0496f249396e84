@@ -1,0 +1,54 @@
+src/FHIRBridge.Application/Services/EhrEndpointService.cs
+  s_60fc7c20dfa79a::t_135db714cc6fc6 1,45,47
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_60fc7c20dfa79a::t_76a3e782cb9526 1,258-266
+portal/src/app/ehr-endpoints/services/api-ehr-endpoint.service.ts
+  s_60fc7c20dfa79a::t_19724064a03fda 25-26
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  s_60fc7c20dfa79a::t_8e7cd5dc1d1712 15-16,49-52,67-69,102-103,125-142,145-146
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.ts
+  s_60fc7c20dfa79a::t_528d5d46c54a47 1,40-51,72-79
+src/Api/FHIRBridge.Api/Controllers/V1/EhrEndpointsController.cs
+  s_60fc7c20dfa79a::t_eb76150cac4f5e 1,6,42-43,46-47,53,55
+src/FHIRBridge.Infrastructure/Persistence/InMemoryEhrEndpointRepository.cs
+  s_60fc7c20dfa79a::t_c30df81265d08b 1,21,23-43
+src/FHIRBridge.Infrastructure/Persistence/EfEhrEndpointRepository.cs
+  s_60fc7c20dfa79a::t_fd036d965ba4e6 1,28,46-51,53-56,71-83
+  s_60fc7c20dfa79a::t_0f5883e28e4413 17-21,26,29-45,52
+src/FHIRBridge.Infrastructure/Persistence/EfPipelineRunRouteExecutionRepository.cs
+  s_60fc7c20dfa79a::t_d834b30077d5e9 1,96-101,103-104
+src/FHIRBridge.Application/Abstractions/Persistence/IEhrEndpointRepository.cs
+  s_60fc7c20dfa79a::t_8d23490a796fc1 1,15,17-18,21,39-53
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_60fc7c20dfa79a::t_bd6d9c42abdb3e 15,21-37,176-177,183-184
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.scss
+  s_60fc7c20dfa79a::t_9fd710dcfb261c 23-28
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.html
+  s_60fc7c20dfa79a::t_ca0d8d2a254590 6-17,21-27,35-38,47,106,111-117
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.scss
+  s_60fc7c20dfa79a::t_d3f46387579fe0 3-21
+src/FHIRBridge.Infrastructure/Persistence/EfTenantRepository.cs
+  s_60fc7c20dfa79a::t_d834b30077d5e9 1,21-37
+portal/src/app/ehr-endpoints/models/ehr-endpoint.model.ts
+  s_60fc7c20dfa79a::t_19724064a03fda 43-47
+src/FHIRBridge.Application/Services/IEhrEndpointService.cs
+  s_60fc7c20dfa79a::t_135db714cc6fc6 1,11-13,15
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_60fc7c20dfa79a::t_2c5bcc9c75f893 1,85-90,92-93,241-244,341-343,345-346
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "3780ba48a0b8edc9d09a87bbce0496f249396e84",
+  "prompts": {},
+  "sessions": {
+    "s_60fc7c20dfa79a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b94777ae-c95d-4110-9abc-1d779bcff32d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
