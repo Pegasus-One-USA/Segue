@@ -37,9 +37,19 @@ export interface PagedResult<T> {
   pageSize: number;
 }
 
+/** Matches the backend's WorkflowRunHistoryPageDto — a page of runs plus the source systems that actually appear
+ *  in the history, so the Source filter lists only vendors with real runs behind them (same facet contract the
+ *  Workflows list already uses). */
+export interface RouteExecutionPage extends PagedResult<RouteExecution> {
+  availableSourceSystemTypes: string[];
+}
+
 export interface RouteExecutionFilter {
   status?: string;
   source?: string;
+  /** Multi-select Source filter — sent as repeated `sources` params. `source` above stays for single-value
+   *  callers (Dashboard links). */
+  sources?: string[];
   triggeredBy?: string;
   search?: string;
   page: number;

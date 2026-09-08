@@ -139,6 +139,29 @@ export class SourceConnectionListComponent implements OnInit, OnDestroy {
 
   readonly addVendor = signal<EhrVendor>(this.permittedCreateVendorOptions()[0]?.value ?? 'Epic');
 
+  /** The same permitted vendors as above, enriched from the SOURCES catalog (abbreviation, brand colour,
+   *  one-line description) for the EHR card picker "New Source Connection" now opens — the create flow
+   *  Destination Connections already uses (see DestinationConnectionDialogComponent's type cards), rather than
+   *  a bare toolbar `<select>` the user has to notice before clicking New. */
+  readonly createVendorCards = computed(() =>
+    this.permittedCreateVendorOptions().map(option => {
+      const catalogEntry = SOURCES.find(
+        s => SourceConnectionListComponent.SOURCE_KEY_TO_EHR_VENDOR[s.id] === option.value,
+      );
+      return {
+        value: option.value,
+        label: catalogEntry?.name ?? option.label,
+        sub: catalogEntry?.sub ?? '',
+        abbr: catalogEntry?.abbr ?? option.label.slice(0, 2).toUpperCase(),
+        color: catalogEntry?.color ?? 'var(--color-primary)',
+      };
+    })
+  );
+
+  /** True while the EHR card picker is open — the step between clicking "New Source Connection" and the
+   *  chosen vendor's form opening. Closed as soon as a card is picked (see chooseCreateVendor). */
+  readonly vendorPickerOpen = signal(false);
+
   /** `{vendor}.edit` for a specific row, e.g. `epic.edit` — the code the backend actually authorizes
    *  PUT /source-connections/{id} against (ConfigurationsController.cs), never the generic
    *  `sourceconnections.edit` fallback (that only covers a vendor with no dedicated permission group). */
@@ -331,6 +354,28 @@ export class SourceConnectionListComponent implements OnInit, OnDestroy {
     if (!this.actionGuard.ensure(`${vendor.toLowerCase()}.create`, `You do not have permission to add a new ${vendor} source connection.`)) return;
     this.wiz.openEntity(null);
     this.wiz.ehrType.set(vendor);
+  }
+
+  /** "New Source Connection" — opens the EHR card picker rather than jumping straight into a form under
+   *  whatever the toolbar `<select>` happened to be left on. */
+  openVendorPicker(): void {
+    this.vendorPickerOpen.set(true);
+  }
+
+  closeVendorPicker(): void {
+    this.vendorPickerOpen.set(false);
+  }
+
+  onVendorPickerBackdropClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget) this.closeVendorPicker();
+  }
+
+  /** Card click: remember the choice (so the form's own vendor sync and a later reopen agree), then hand off to
+   *  the existing create flow. The picker closes only if openAdd's permission guard actually let it through. */
+  chooseCreateVendor(vendor: EhrVendor): void {
+    this.addVendor.set(vendor);
+    this.openAdd(vendor);
+    if (this.wiz.isOpen()) this.closeVendorPicker();
   }
 
   openView(connection: SourceConnectionModel): void {

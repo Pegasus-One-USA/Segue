@@ -2928,8 +2928,9 @@ export class EhrVendorSourceFormComponent
           this.keyGenStatus.set('generated');
           this.toast.show(
             'Private key imported',
-            `Key ID ${key.keyId} imported. The JWKS URL becomes available at this connection's ` +
-              '.well-known/jwks.json once you save — register that URL with the EHR.',
+            `Key imported. Key ID ${key.keyId} was generated for it. Note: update the Key ID manually if the ` +
+              `JWKS URL is already registered on ${this.displayVendor()} — it must match the kid registered ` +
+              "there. The JWKS URL becomes available at this connection's .well-known/jwks.json once you save.",
           );
         },
         error: (err) => {

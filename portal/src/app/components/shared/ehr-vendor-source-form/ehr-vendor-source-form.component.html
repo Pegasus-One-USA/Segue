@@ -83,7 +83,18 @@
           </div>
         }
 
-        <div class="eaf-field" [class.eaf-field--full]="!showSourcePicker()" [class.eaf-field--error]="saveErrorMessage()">
+        <!-- The EHR this connection reads from. Chosen in the card picker before this form opens (Source
+             Connections page) or fixed by the canvas node's vendor, and never editable here: every field below
+             is shaped by it, so changing it mid-form would invalidate the whole entry. Shown as the first row so
+             the choice stays visible while filling the rest in, rather than only living in the topbar title. -->
+        <div class="eaf-field">
+          <label class="eaf-label" for="eaf-ehrVendor">EHR / Source System</label>
+          <input id="eaf-ehrVendor" class="eaf-input" type="text" [value]="displayVendor()" readonly />
+        </div>
+
+        <!-- No longer full-width when there is no "Existing connection" picker: the EHR row above now fills that
+             first grid cell, so App Name pairs with it instead of leaving a gap beside it. -->
+        <div class="eaf-field" [class.eaf-field--error]="saveErrorMessage()">
           <label class="eaf-label" for="eaf-appName">App Name</label>
           <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
                  placeholder="e.g. Segue Provider Launch" />
@@ -425,13 +436,22 @@
 
                 <div class="eaf-field" [class.eaf-field--error]="form.controls.jwtKid.touched && form.controls.jwtKid.invalid">
                   <label class="eaf-label" for="eaf-jwtKid">Key ID (kid) <span class="eaf-req">*</span></label>
+                  <!-- Editable on Import, read-only on Generate: an imported PEM carries no kid (it is a JWK/JWKS
+                       concept, not part of the PEM encoding), so the backend mints one — but if this key is ALREADY
+                       registered with the EHR under the customer's own kid, that minted value would not match and
+                       the token request would fail its key lookup. Generate stays read-only: FHIRBridge owns both
+                       halves there, so its kid is the authoritative one. -->
                   <input id="eaf-jwtKid" class="eaf-input" type="text" formControlName="jwtKid"
-                         [readonly]="isGenKey() || isImportKey()"
-                         [placeholder]="(isGenKey() || isImportKey()) ? 'Generate or import a key above' : 'e.g. 8f2a1c4e-…-jwk-1'" />
+                         [readonly]="isGenKey()"
+                         [placeholder]="isGenKey() ? 'Generate a key above' : (isImportKey() ? 'Import a key above, or type the kid your app registration uses' : 'e.g. 8f2a1c4e-…-jwk-1')" />
                   @if (form.controls.jwtKid.touched && form.controls.jwtKid.invalid) {
                     <p class="eaf-error-msg">Key ID is required.</p>
                   }
-                  <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what your {{ displayVendor() }} app registration expects.</p>
+                  @if (isImportKey()) {
+                    <p class="eaf-hint">Pre-filled with a Key ID generated for the key you imported. <strong>If this key pair is already registered in {{ displayVendor() }} under a specific <code>kid</code>, replace this with that exact value</strong> — {{ displayVendor() }} looks the signing key up by <code>kid</code>, so a mismatch fails the token request. Leave the generated value if you will be registering FHIRBridge's JWKS URL above instead.</p>
+                  } @else {
+                    <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what your {{ displayVendor() }} app registration expects.</p>
+                  }
                 </div>
                 <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid">
                   <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Name <span class="eaf-req">*</span></label>

@@ -27,6 +27,19 @@ public sealed record WorkflowRunHistoryDto(
         : null;
 }
 
+/// <summary>
+/// A page of Execution History rows plus the distinct source systems that actually appear in the history at all.
+/// Same shape and reasoning as <c>WorkflowSummaryPageDto</c>: the Source filter offers only vendors with real runs
+/// behind them (instead of every EHR the platform can talk to), and the option list is computed over the UNFILTERED
+/// set so unchecking every box doesn't empty the list it was chosen from.
+/// </summary>
+public sealed record WorkflowRunHistoryPageDto(
+    IReadOnlyList<WorkflowRunHistoryDto> Items,
+    int TotalCount,
+    int Page,
+    int PageSize,
+    IReadOnlyList<string> AvailableSourceSystemTypes);
+
 /// <summary>All-time run count per <see cref="FHIRBridge.Runtime.Domain.Workflows.WorkflowRunStatus"/>, across
 /// every workflow definition — backs the Dashboard's status stat tiles.</summary>
 public sealed record WorkflowRunStatusCountsDto(
