@@ -43,4 +43,7 @@ public enum PermissionActionCode
 
     [PermissionDisplayName("Test")]
     Test = 12,
+
+    [PermissionDisplayName("Export")]
+    Export = 13,
 }

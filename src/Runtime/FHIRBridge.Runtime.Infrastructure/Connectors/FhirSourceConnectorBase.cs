@@ -191,6 +191,8 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
         }
 
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        EnsureFhirJsonBody(json, requestUrl, response, resourceType);
+
         return FhirResourceParser.ParseResource(json);
     }
 
@@ -263,6 +265,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            EnsureFhirJsonBody(json, nextUrl, response, resourceType);
 
             var newOnThisPage = 0;
             foreach (var resource in FhirResourceParser.ParseSearchBundle(json))
@@ -771,6 +774,64 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
         }
 
         return $"{baseUrl.TrimEnd('/')}/{resourceType}?{query}";
+    }
+
+    /// <summary>
+    /// Guards the success path against a 2xx response whose body isn't FHIR JSON at all. Servers fronted by a
+    /// gateway, WAF, SSO proxy or plain misconfiguration answer 200 with an HTML sign-in or error page, and a FHIR
+    /// server that ignores the <c>Accept: application/fhir+json</c> header answers with XML — both start with
+    /// '&lt;', so handing the body to the parser produced a bare
+    /// <c>JsonReaderException: '&lt;' is an invalid start of a value</c> naming neither the source, the resource
+    /// type, the URL, nor the content type. Thrown as a
+    /// <see cref="FHIRBridge.Runtime.Domain.Exceptions.ResourceRequestFailedException"/> so it is isolated to this
+    /// one resource type and excluded from the executor's retry loop, exactly like the non-success statuses above —
+    /// re-requesting will not turn an HTML page into a Bundle.
+    /// </summary>
+    private void EnsureFhirJsonBody(
+        string body,
+        string requestUrl,
+        HttpResponseMessage response,
+        string resourceType)
+    {
+        var trimmed = body?.TrimStart();
+        if (!string.IsNullOrEmpty(trimmed) && (trimmed[0] == '{' || trimmed[0] == '['))
+        {
+            return;
+        }
+
+        var contentType = response.Content.Headers.ContentType?.MediaType;
+        var cause = string.IsNullOrEmpty(trimmed)
+            ? "the response body was empty"
+            : trimmed[0] == '<'
+                ? trimmed.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase) ||
+                  trimmed.Contains("http://hl7.org/fhir", StringComparison.OrdinalIgnoreCase)
+                    ? "the server returned FHIR XML instead of JSON — it is ignoring the Accept: application/fhir+json " +
+                      "header, so add _format=json to the connection's additional query parameters"
+                    : "the server returned an HTML page instead of FHIR JSON — the base URL is most likely not a FHIR " +
+                      "R4 endpoint (check for a trailing path such as /fhir/R4), or a gateway/SSO proxy answered the " +
+                      "request with a sign-in or error page"
+                : "the response body was not JSON";
+
+        var redactedBody = RedactFailureBody(trimmed?.ReplaceLineEndings(" ").Trim() ?? string.Empty);
+        if (redactedBody.Length > 500)
+        {
+            redactedBody = redactedBody[..500] + "...";
+        }
+
+        var message =
+            $"{SourceDisplayName} returned {(int)response.StatusCode} ({response.ReasonPhrase}) with content type " +
+            $"'{contentType ?? "(none)"}' for {RedactRequestUrl(requestUrl)}, but {cause}. " +
+            $"Response body: {redactedBody}";
+
+        _logger.LogError(
+            "{Source} {ResourceType} request succeeded with a non-JSON body (content type {ContentType}): {Reason}",
+            SourceDisplayName,
+            resourceType,
+            contentType ?? "(none)",
+            cause);
+
+        throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceRequestFailedException(
+            resourceType, (int)response.StatusCode, message);
     }
 
     private string BuildFailureMessage(

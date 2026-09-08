@@ -540,10 +540,10 @@ export class DestinationWizardComponent implements OnInit {
   private readonly discoverySvc = inject(EpicDiscoveryService);
   private readonly sourceConnectionSvc = inject(ISourceConnectionService);
 
-  // Feature flag: Settings > System Settings > General, "TransformationRules:Hidden" (default false —
-  // visible unless an admin explicitly hides it). Starts matching that default until the real value comes
+  // Feature flag: Settings > System Settings > General, "TransformationRules:Hidden" (default true —
+  // hidden unless an admin explicitly reveals it). Starts matching that default until the real value comes
   // back, so there's no flash on first paint in the common case.
-  readonly rulesHidden = signal(false);
+  readonly rulesHidden = signal(true);
 
   // True while "Add to Pipeline"/"Update" is waiting on POST mapping-profiles/import.
   readonly savingMappingProfiles = signal(false);

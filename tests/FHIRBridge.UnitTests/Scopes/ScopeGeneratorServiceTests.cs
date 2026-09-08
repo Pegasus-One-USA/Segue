@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.SharedKernel.Enums;
 using FluentAssertions;
 
@@ -67,5 +68,98 @@ public sealed class ScopeGeneratorServiceTests
             ["user/*.rs"]);
 
         result.UnsupportedScopes.Should().BeEmpty();
+    }
+
+    // ── Discovery-derived access levels (Tier 1) ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void System_scopes_take_the_access_level_the_server_actually_advertises()
+    {
+        // The caller asks for v2, but this server publishes ServiceRequest as '.r' and Patient as '.read' — the
+        // eCW shape. Honouring the advertised spelling per resource is the whole point: a vendor that fails the
+        // WHOLE token request on one unrecognized scope makes a single wrong suffix cost every other scope too.
+        var result = _sut.Generate(
+            ApplicationType.Backend, ["Patient", "ServiceRequest"], "v2", true,
+            ["system/Patient.read", "system/ServiceRequest.r"]);
+
+        result.Scopes.Should().BeEquivalentTo(["system/Patient.read", "system/ServiceRequest.r"]);
+        result.UnsupportedScopes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Discovery_derived_level_wins_over_a_stale_vendor_profile()
+    {
+        // VendorScopeCatalog's eCW profile (captured from one practice on one day) spells Coverage '.r'. A tenant
+        // that advertises '.read' must get '.read' — the live document outranks the snapshot, which is what stops
+        // the captured map going stale.
+        var result = _sut.Generate(
+            ApplicationType.Backend, ["Coverage"], "v1", true,
+            ["system/Coverage.read"], SourceSystemType.Healow);
+
+        result.Scopes.Should().ContainSingle().Which.Should().Be("system/Coverage.read");
+    }
+
+    [Fact]
+    public void Write_only_advertised_levels_never_substitute_for_a_read_scope()
+    {
+        // FHIRBridge reads. A server advertising only create/update/delete for a type publishes no read scope, so
+        // the type is reported rather than requested — asking for write access it doesn't need would be wrong.
+        var result = _sut.Generate(
+            ApplicationType.Backend, ["Patient"], "v1", true,
+            ["system/Patient.c", "system/Patient.u"], SourceSystemType.Healow);
+
+        result.Scopes.Should().NotContain("system/Patient.c").And.NotContain("system/Patient.u");
+        result.UnsupportedScopes.Should().ContainSingle().Which.Should().Be("system/Patient.read");
+    }
+
+    [Fact]
+    public void Unprofiled_vendor_falls_back_to_the_uniform_suffix_when_discovery_is_silent()
+    {
+        // Epic has no profile: absence from a possibly-unreachable discovery document is not authority to drop a
+        // resource, so it keeps the uniform suffix and is merely flagged.
+        var result = _sut.Generate(
+            ApplicationType.Backend, ["Patient"], "v2", true,
+            ["system/Observation.rs"]);
+
+        result.Scopes.Should().ContainSingle().Which.Should().Be("system/Patient.rs");
+        result.UnsupportedScopes.Should().ContainSingle().Which.Should().Be("system/Patient.rs");
+    }
+
+    // ── Vendor policy exclusions ──────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Group_is_never_requested_for_eCW_even_when_advertised()
+    {
+        // eCW publishes system/Group.read, but its Backend Authentication guide requires that scope EXCLUDED from
+        // Backend Single Patient calls — the only eCW backend flow FHIRBridge supports. Policy, not vocabulary:
+        // the discovery tier would otherwise hand it straight back and break single-patient auth.
+        var result = _sut.Generate(
+            ApplicationType.Backend, ["Group", "Patient"], "v1", true,
+            ["system/Group.read", "system/Patient.read"], SourceSystemType.Healow);
+
+        result.Scopes.Should().ContainSingle().Which.Should().Be("system/Patient.read");
+        result.UnsupportedScopes.Should().ContainSingle().Which.Should().Be("system/Group.read");
+    }
+
+    [Fact]
+    public void Group_is_still_requested_for_a_vendor_with_no_such_rule()
+    {
+        var result = _sut.Generate(
+            ApplicationType.Backend, ["Group"], "v1", true,
+            ["system/Group.read"]);
+
+        result.Scopes.Should().ContainSingle().Which.Should().Be("system/Group.read");
+    }
+
+    [Fact]
+    public void Interactive_prefixes_are_untouched_by_the_discovery_tier()
+    {
+        // Tier 1 is scoped to system/ deliberately, exactly like the vendor profile — an interactive audience's
+        // generation stays byte-identical, so this change cannot regress EHR launch / standalone / patient.
+        var result = _sut.Generate(
+            ApplicationType.EhrLaunch, ["Patient"], "v2", true,
+            ["user/Patient.read"]);
+
+        result.Scopes.Should().Contain("user/Patient.rs");
     }
 }

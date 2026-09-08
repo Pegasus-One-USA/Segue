@@ -263,6 +263,10 @@ export class WorkflowBuildAssemblerService {
           authenticationType: athenaAppType === 'Backend' ? 'OAuthClientCredentials' : 'None',
           clientId: fields['Client ID'] || fields['Active client ID'] || null,
           tokenEndpoint: fields['Token endpoint'] || null,
+          // Carried through so a canvas-built connection persists the same authorize URL the wizard
+          // discovered, exactly as entity mode does — null for a non-interactive (client_credentials)
+          // app, which has no authorize endpoint at all.
+          authorizationEndpoint: fields['Authorize endpoint'] || null,
           scopes: athenaScopes,
           practiceId: fields['Practice ID'] || null,
           clientSecretKeyVaultName: athenaTypedSecret ? 'workflow-secrets' : null,
@@ -376,6 +380,10 @@ export class WorkflowBuildAssemblerService {
             : healowAuthMethod === 'secret' ? 'OAuthClientCredentials' : 'None',
           clientId: fields['Client ID'] || fields['Active client ID'] || null,
           tokenEndpoint: fields['Token endpoint'] || null,
+          // Carried through so a canvas-built connection persists the same authorize URL the wizard
+          // discovered, exactly as entity mode does — null for a non-interactive (client_credentials)
+          // app, which has no authorize endpoint at all.
+          authorizationEndpoint: fields['Authorize endpoint'] || null,
           scopes: healowScopes,
           // Backend Services signs its assertion with a private key referenced by (Key Vault Name, Secret Name);
           // the wizard writes all three of these for any Backend + JWT audience (see WizardService.save()).
@@ -443,6 +451,10 @@ export class WorkflowBuildAssemblerService {
           appType === 'Backend' ? 'SmartBackendServices' : 'None',
         clientId: fields['Client ID'] || fields['Active client ID'] || null,
         tokenEndpoint: fields['Token endpoint'] || null,
+        // Carried through so a canvas-built connection persists the same authorize URL the wizard
+        // discovered, exactly as entity mode does — null for a non-interactive (client_credentials)
+        // app, which has no authorize endpoint at all.
+        authorizationEndpoint: fields['Authorize endpoint'] || null,
         scopes,
         keyId: fields['JWT kid'] || null,
         // Backend Services signs its JWT assertion with a private key referenced by (Key Vault Name, Secret Name) —

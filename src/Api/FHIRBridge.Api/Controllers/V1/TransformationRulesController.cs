@@ -28,7 +28,7 @@ public sealed class TransformationRulesController : ControllerBase
     }
 
     /// <summary>Whether the whole feature is currently hidden (Settings &gt; System Settings &gt; General,
-    /// key "TransformationRules:Hidden", default false). Deliberately requires only <see cref="Authorize"/> at
+    /// key "TransformationRules:Hidden", default true). Deliberately requires only <see cref="Authorize"/> at
     /// the class level — not UnifiedAdmin — since any authenticated portal user building a workflow needs to
     /// know whether to show the Rules button, not just admins.</summary>
     [HttpGet("hidden")]

@@ -241,13 +241,13 @@ export class TransformationRulesService {
   }
 
   /** Whether the whole feature is currently hidden (Settings &gt; System Settings &gt; General,
-   *  "TransformationRules:Hidden", default false). Cached for the app session like getNodeSchemas() — a
-   *  System Setting change takes effect on next portal reload, not mid-session. Fails safe to `false`
-   *  (visible) if the call errors, since that's the feature's own default. */
+   *  "TransformationRules:Hidden", default true). Cached for the app session like getNodeSchemas() — a
+   *  System Setting change takes effect on next portal reload, not mid-session. Fails safe to `true`
+   *  (hidden) if the call errors, since that's the feature's own default. */
   isHidden(): Observable<boolean> {
     if (!this.hiddenCache) {
       this.hiddenCache = this.http.get<{ hidden: boolean }>(TRANSFORMATION_RULES_ENDPOINTS.hidden)
-        .pipe(map(r => r.hidden), catchError(() => of(false)), shareReplay(1));
+        .pipe(map(r => r.hidden), catchError(() => of(true)), shareReplay(1));
     }
     return this.hiddenCache;
   }

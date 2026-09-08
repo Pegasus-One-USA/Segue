@@ -118,6 +118,11 @@ export interface SourceAuthenticationRequest {
   authenticationType: string;                 // None | SmartBackendServices | OAuthClientCredentials | ApiKey
   clientId?: string | null;
   tokenEndpoint?: string | null;
+  /** The SMART authorization (browser redirect) endpoint resolved by the wizard's "Discover"
+   *  (SourceAuthenticationDto.AuthorizationEndpoint). Persisted so re-opening a saved connection shows back the
+   *  URL it was actually configured with; the interactive sign-in flow still re-discovers this live at authorize
+   *  time. Null for a non-interactive (client_credentials) app, which never uses one. */
+  authorizationEndpoint?: string | null;
   scopes?: string[];
   clientSecretKeyVaultName?: string | null;
   clientSecretName?: string | null;

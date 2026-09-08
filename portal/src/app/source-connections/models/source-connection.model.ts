@@ -8,6 +8,12 @@ export interface SourceAuthenticationModel {
   authenticationType: AuthenticationTypeModel;
   clientId?: string | null;
   tokenEndpoint?: string | null;
+  /** The SMART authorization (browser redirect) endpoint resolved by the wizard's "Discover". Persisted so
+   *  re-opening a saved connection shows back the URL that was actually configured, rather than a guessed
+   *  per-vendor default. The interactive sign-in flow itself still re-discovers this live at authorize time,
+   *  so a stale value can never redirect a user to the wrong authorization server. Null for Backend System
+   *  (client_credentials) connections, which never use an authorization endpoint. */
+  authorizationEndpoint?: string | null;
   scopes: string[];
   clientSecretKeyVaultName?: string | null;
   clientSecretName?: string | null;

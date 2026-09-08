@@ -133,6 +133,14 @@ public static class RbacSeedData
         new("Create a new source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Create),
         new("View the list of source connections.", PermissionGroupCode.SourceConnections, PermissionActionCode.View),
         new("Delete a source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Delete),
+        // Downloading the PRIVATE half of a connection's signing key is the only operation that hands real secret
+        // material back out of the secret store, so it gets its own action rather than riding on Edit/View — a role
+        // can provision and register keys without ever being able to extract one. (The public-key download is gated
+        // by the ordinary View permission above; it publishes nothing the anonymous JWKS endpoint doesn't already.)
+        new(
+            "Download the private key PEM of a source connection's SMART Backend Services signing key.",
+            PermissionGroupCode.SourceConnections,
+            PermissionActionCode.Export),
         // Execute a workflow whose source vendor / destination type has no dedicated permission group of its own
         // (anything that falls back to the generic SourceConnections group). The workflow /run endpoint checks an
         // Execute permission per source/destination node; the dynamic-discovery loop deliberately skips this generic

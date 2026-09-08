@@ -34,10 +34,10 @@ export class WorkflowConfigurationsShellComponent {
   private readonly store = inject(AuthStore);
   private readonly transformationRulesSvc = inject(TransformationRulesService);
 
-  // Feature flag: Settings > System Settings > General, "TransformationRules:Hidden" (default false —
-  // visible unless an admin explicitly hides it). Starts matching that default until the real value comes
+  // Feature flag: Settings > System Settings > General, "TransformationRules:Hidden" (default true —
+  // hidden unless an admin explicitly reveals it). Starts matching that default until the real value comes
   // back, so there's no flash on first paint in the common case.
-  private readonly rulesHidden = signal(false);
+  private readonly rulesHidden = signal(true);
 
   constructor() {
     this.transformationRulesSvc.isHidden().subscribe(hidden => this.rulesHidden.set(hidden));

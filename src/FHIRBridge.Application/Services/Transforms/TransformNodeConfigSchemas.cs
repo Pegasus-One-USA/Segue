@@ -9,11 +9,12 @@ namespace FHIRBridge.Application.Services.Transforms;
 /// default value, read via <c>ISystemSettingsCache.GetBoolAsync</c> from the API's hidden-check endpoint.
 /// Deliberately does NOT gate rule application at runtime — hiding the configuration UI must never silently
 /// stop already-configured rules from running (<c>MappingNodeExecutor</c>'s rule-application step ignores this
-/// flag entirely), so a workflow's output stays correct regardless of whether an admin has hidden the screen.</summary>
+/// flag entirely), so a workflow's output stays correct regardless of whether an admin has hidden the screen.
+/// Ships hidden by default; an admin sets the setting to false to reveal the UI.</summary>
 public static class TransformationRulesFeatureFlag
 {
     public const string SettingKey = "TransformationRules:Hidden";
-    public const bool DefaultHidden = false;
+    public const bool DefaultHidden = true;
 }
 
 /// <summary>

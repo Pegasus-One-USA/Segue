@@ -337,6 +337,23 @@
               } @else {
                 <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in your {{ displayVendor() }} app).</p>
               }
+              @if (canDownloadKeyPem()) {
+                <!-- Only for a SAVED connection: the PEM is read from the secret store by connection id, so there
+                     is nothing to download until this source has one (see canDownloadKeyPem()). The public key is
+                     the file an EHR app registration takes when it accepts an upload instead of fetching the URL
+                     above; the private key is separately permissioned and audit-logged server-side. -->
+                <div class="eaf-inline-actions">
+                  <button type="button" class="eaf-btn eaf-btn--ghost" (click)="downloadPublicKeyPem()"
+                          [disabled]="pemDownload() !== 'idle'">
+                    {{ pemDownload() === 'public' ? 'Preparing…' : 'Download Public Key (.pem)' }}
+                  </button>
+                  <button type="button" class="eaf-btn eaf-btn--ghost" (click)="downloadPrivateKeyPem()"
+                          [disabled]="pemDownload() !== 'idle'">
+                    {{ pemDownload() === 'private' ? 'Preparing…' : 'Download Private Key (.pem)' }}
+                  </button>
+                </div>
+                <p class="eaf-hint">Upload the public key to your {{ displayVendor() }} app registration if it expects a .pem file rather than the JWKS URL above. The private key download is restricted and recorded — keep that file secret.</p>
+              }
             </div>
             @if (audience() === 'backend-system') {
               @if (hasExistingSigningKey() && keyLoadedFromExistingConnection() && !replacingKey()) {
@@ -418,13 +435,22 @@
 
                 <div class="eaf-field" [class.eaf-field--error]="form.controls.jwtKid.touched && form.controls.jwtKid.invalid">
                   <label class="eaf-label" for="eaf-jwtKid">Key ID (kid) <span class="eaf-req">*</span></label>
+                  <!-- Editable on Import, read-only on Generate: an imported PEM carries no kid (it is a JWK/JWKS
+                       concept, not part of the PEM encoding), so the backend mints one — but if this key is ALREADY
+                       registered with the EHR under the customer's own kid, that minted value would not match and
+                       the token request would fail its key lookup. Generate stays read-only: FHIRBridge owns both
+                       halves there, so its kid is the authoritative one. -->
                   <input id="eaf-jwtKid" class="eaf-input" type="text" formControlName="jwtKid"
-                         [readonly]="isGenKey() || isImportKey()"
-                         [placeholder]="(isGenKey() || isImportKey()) ? 'Generate or import a key above' : 'e.g. 8f2a1c4e-…-jwk-1'" />
+                         [readonly]="isGenKey()"
+                         [placeholder]="isGenKey() ? 'Generate a key above' : (isImportKey() ? 'Import a key above, or type the kid your app registration uses' : 'e.g. 8f2a1c4e-…-jwk-1')" />
                   @if (form.controls.jwtKid.touched && form.controls.jwtKid.invalid) {
                     <p class="eaf-error-msg">Key ID is required.</p>
                   }
-                  <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what {{ displayVendor() }}'s app registration expects.</p>
+                  @if (isImportKey()) {
+                    <p class="eaf-hint">Pre-filled with a Key ID generated for the key you imported. <strong>If this key pair is already registered in {{ displayVendor() }} under a specific <code>kid</code>, replace this with that exact value</strong> — {{ displayVendor() }} looks the signing key up by <code>kid</code>, so a mismatch fails the token request. Leave the generated value if you will be registering FHIRBridge's JWKS URL above instead.</p>
+                  } @else {
+                    <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what {{ displayVendor() }}'s app registration expects.</p>
+                  }
                 </div>
                 <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid">
                   <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Name <span class="eaf-req">*</span></label>
@@ -859,24 +885,14 @@
     }
     <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
     @if (!isReadonly) {
-      @if (testStatus() === 'fail' && connectionTestError() && !form.invalid) {
-        <span class="eaf-missing-hint" [title]="connectionTestError()!">
-          Connection test failed: {{ connectionTestError() }}
-        </span>
-      }
       <button
         class="eaf-btn eaf-btn--primary"
         type="button"
         [class.eaf-btn--invalid]="form.invalid"
-        [disabled]="testStatus() === 'running'"
         [title]="form.invalid ? 'Some required fields are still empty — click to jump to the first one' : ''"
-        (click)="testConnectionAndNext()"
+        (click)="save()"
       >
-        @if (testStatus() === 'running') {
-          <span class="eaf-spin"></span>&nbsp;Testing connection…
-        } @else {
-          Test Connection {{ isEditing ? '& Update' : (wiz.wizardMode() === 'entity' ? '& Save' : '& Add to Workflow') }}
-        }
+        {{ isEditing ? 'Update' : (wiz.wizardMode() === 'entity' ? 'Save' : 'Add to Workflow') }}
       </button>
     }
   </div>

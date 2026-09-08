@@ -10,6 +10,7 @@ using FHIRBridge.Runtime.Infrastructure.Destinations;
 using FHIRBridge.Runtime.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Runtime.Infrastructure;
 
@@ -69,12 +70,30 @@ public static class DependencyInjection
         services.AddScoped<ISourceApplicationStrategy, PatientApplicationStrategy>();
         services.AddScoped<ISourceApplicationStrategyRegistry, SourceApplicationStrategyRegistry>();
 
+        // Unauthenticated reachability check against a source's /metadata, used by the preflight decorator below to
+        // tell "the vendor said no" apart from "the vendor said nothing". Its own client so the short probe timeout
+        // and this call's failures stay isolated from the real FHIR/token clients' retry budgets.
+        services.AddHttpClient<HttpSourceAvailabilityProbe>().AddMutualTls();
+        services.AddScoped<ISourceAvailabilityProbe>(serviceProvider =>
+            serviceProvider.GetRequiredService<HttpSourceAvailabilityProbe>());
+
         // Composite picks the grant per source: the application-type strategy (registry) when set, else legacy
         // inference — Healow (auth-code + PKCE), MEDITECH Greenfield (confidential JSON), SMART JWT (Epic), or OAuth2
         // client-credentials (Cerner/Allscripts/generic FHIR).
         services.AddScoped<CompositeFhirAccessTokenProvider>();
+
+        // The registered IFhirAccessTokenProvider is the composite wrapped in the availability preflight, so every
+        // application type gets outage-vs-credentials wording from one registration. The decorator re-implements
+        // IFhirPatientContextProvider/IFhirGrantedScopeProvider as pass-throughs because callers feature-detect
+        // this registration by pattern-matching on those — see its remarks.
         services.AddScoped<IFhirAccessTokenProvider>(serviceProvider =>
-            serviceProvider.GetRequiredService<CompositeFhirAccessTokenProvider>());
+            new PreflightFhirAccessTokenProvider(
+                // Resolved by CONCRETE type on purpose: the decorator's inner dependency is typed as
+                // IFhirAccessTokenProvider (so it stays testable), and asking the container for that interface
+                // here would resolve this very registration and recurse.
+                serviceProvider.GetRequiredService<CompositeFhirAccessTokenProvider>(),
+                serviceProvider.GetRequiredService<ISourceAvailabilityProbe>(),
+                serviceProvider.GetService<ILogger<PreflightFhirAccessTokenProvider>>()));
 
         // The interactive authorization-code round-trip (authorize + callback exchange) is served by the
         // vendor-neutral SMART provider.

@@ -18,7 +18,7 @@ import { SQL_FAMILY_DESTINATION_TYPES } from '../../models/transform-v2.model';
 
 import { Source } from '../../models/source.model';
 import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node-v2.model';
-import { environment } from '../../../environments/environment';
+import { APP_ORIGIN } from '../../core/api-endpoints';
 /** V2's chain steps in canonical canvas order — Source → Mapping → Transformation →
  *  De-identification → Destination. Mirrors ApplicabilityServiceV2.CHAIN_STEP_IDS. */
 const CHAIN_STEP_IDS: string[] = ['field-mapping', 'transformation', 'deidentification'];
@@ -444,7 +444,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
       if (!isGeneratedOrImportedBackendKey) continue;
 
-      const jwksUrl = `${environment.apiBase}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
+      const jwksUrl = `${APP_ORIGIN}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
       if (fields['JWKS URL'] !== jwksUrl) {
         this.store.updateNode(nodeId, { fields: { ...fields, 'JWKS URL': jwksUrl } } as Partial<CanvasNode>);
         anyCorrected = true;

@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
+using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -113,15 +114,22 @@ public sealed class OAuth2ClientCredentialsTokenProvider : IFhirAccessTokenProvi
                 "OAuth2 client-credentials token request FAILED: {StatusCode} ({ReasonPhrase}) from {TokenEndpoint} " +
                 "clientId={ClientId} placement={AuthPlacement} scope=\"{Scope}\" — response body: {Body}",
                 (int)response.StatusCode, response.ReasonPhrase, source.TokenEndpoint, source.ClientId, authPlacement, scopes, body);
-            throw new InvalidOperationException(
-                $"OAuth2 token request returned {(int)response.StatusCode} ({response.ReasonPhrase}). {body}");
+            // Previously an InvalidOperationException whose message read "OAuth2 token request returned …" — which
+            // TokenEndpointFailureDiagnosisRule's substring match ("token endpoint returned") never even matched,
+            // so generic client-credentials failures got no diagnosis at all despite the rule's doc claiming to
+            // cover them. Matching is now by exception type, so the wording can't drift out of coverage again.
+            throw TokenEndpointException.FromResponse(
+                "OAuth2",
+                (int)response.StatusCode,
+                response.ReasonPhrase,
+                body);
         }
 
         var token = await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken)
-            ?? throw new InvalidOperationException("OAuth2 token endpoint returned an empty response.");
+            ?? throw TokenEndpointException.EmptyResponse("OAuth2", "an empty response.");
         if (string.IsNullOrWhiteSpace(token.AccessToken))
         {
-            throw new InvalidOperationException("OAuth2 token endpoint did not return an access_token.");
+            throw TokenEndpointException.EmptyResponse("OAuth2", "no access_token.");
         }
 
         _logger.LogInformation(

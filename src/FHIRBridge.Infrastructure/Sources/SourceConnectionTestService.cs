@@ -81,12 +81,23 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
 
             // Per docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md §6: this previously returned exception.Message
             // raw, unlike every other error path in the app — the exact class of leak SafeErrorText exists to stop.
+            //
+            // A FHIRBridgeException's UserMessage is author-written and client-safe BY CONSTRUCTION, so it is
+            // preferred over sanitizing Message: the sanitizer's 200-char/shape filter would otherwise reject a
+            // perfectly safe explanation (e.g. SourceUnavailableException's "the source is not reachable … the
+            // credentials on this connection are not the cause") and replace it with the generic fallback,
+            // throwing away the very diagnosis this path exists to deliver. Same trust rule the API's global
+            // exception handler already applies to FHIRBridgeException.
+            var message = exception is FHIRBridge.SharedKernel.Exceptions.FHIRBridgeException domainFailure
+                ? domainFailure.UserMessage
+                : FHIRBridge.Governance.SafeErrorText.SanitizeOr(exception.Message, "The connection test failed.");
+
             return new SourceConnectionTestResultDto(
                 sourceConnectionId,
                 sourceConnection.SourceSystemType.ToString(),
                 false,
                 "Failed",
-                FHIRBridge.Governance.SafeErrorText.SanitizeOr(exception.Message, "The connection test failed."),
+                message,
                 DateTime.UtcNow);
         }
     }

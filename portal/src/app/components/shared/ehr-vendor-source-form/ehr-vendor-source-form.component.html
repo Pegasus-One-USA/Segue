@@ -873,24 +873,14 @@
     }
     <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
     @if (!isReadonly) {
-      @if (testStatus() === 'fail' && connectionTestError() && !form.invalid) {
-        <span class="eaf-missing-hint" [title]="connectionTestError()!">
-          Connection test failed: {{ connectionTestError() }}
-        </span>
-      }
       <button
         class="eaf-btn eaf-btn--primary"
         type="button"
         [class.eaf-btn--invalid]="form.invalid"
-        [disabled]="testStatus() === 'running'"
         [title]="form.invalid ? 'Some required fields are still empty — click to jump to the first one' : ''"
-        (click)="testConnectionAndNext()"
+        (click)="save()"
       >
-        @if (testStatus() === 'running') {
-          <span class="eaf-spin"></span>&nbsp;Testing connection…
-        } @else {
-          Test Connection {{ isEditing ? '& Update' : (wiz.wizardMode() === 'entity' ? '& Save' : '& Add to Workflow') }}
-        }
+        {{ isEditing ? 'Update' : (wiz.wizardMode() === 'entity' ? 'Save' : 'Add to Workflow') }}
       </button>
     }
   </div>

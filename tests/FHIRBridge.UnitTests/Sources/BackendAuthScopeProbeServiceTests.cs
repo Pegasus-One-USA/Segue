@@ -164,6 +164,77 @@ public sealed class BackendAuthScopeProbeServiceTests
         handler.Body.Should().Contain("scope=system%2F%2A.read");
     }
 
+    // Epic's real 400 body, pretty-printed exactly as it arrives — the newlines are the whole point: they are what
+    // made SafeErrorText reject the body and hand over to the leaky fallback.
+    private const string EpicInvalidClientBody = """
+        {
+          "error": "invalid_client",
+          "error_description": null
+        }
+        """;
+
+    private const string EpicTokenEndpoint = "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token";
+
+    /// <summary>
+    /// The leak this path used to have. Epic pretty-prints its OAuth error body, so SafeErrorText's newline check
+    /// rejected it — and the fallback that took over embedded that same body inside an internal format string
+    /// which ALSO carried the client id, token endpoint and requested scope. The internal string was therefore the
+    /// normal output for every Epic rejection, not a rare edge case.
+    /// </summary>
+    [Fact]
+    public async Task A_rejection_does_not_leak_the_client_id_endpoint_scope_or_raw_body_to_the_client()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.BadRequest, EpicInvalidClientBody);
+        var service = CreateService(handler);
+        var request = new BackendAuthScopesRequest(
+            EpicTokenEndpoint, "0184f963-e044-4af2-a2fc-7546ec71ceac", "secret",
+            null, null, null, "s3cr3t", "post", "system/*.rs");
+
+        var result = await service.ProbeGrantedScopesAsync(request, CancellationToken.None);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().NotBeNull();
+        result.Error.Should().NotContain("0184f963", "the client id belongs in the log, not the browser");
+        result.Error.Should().NotContain("system/*.rs");
+        result.Error.Should().NotContain("interconnect-fhir-oauth");
+        result.Error.Should().NotContain("error_description");
+        result.Error.Should().NotContain("Backend-services token exchange failed");
+    }
+
+    [Fact]
+    public async Task A_rejection_names_the_authorization_server_and_the_oauth_reason()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.BadRequest, EpicInvalidClientBody);
+        var service = CreateService(handler);
+        var request = new BackendAuthScopesRequest(
+            EpicTokenEndpoint, "cid", "secret", null, null, null, "s3cr3t", "post", "system/*.rs");
+
+        var result = await service.ProbeGrantedScopesAsync(request, CancellationToken.None);
+
+        result.Error.Should().Contain("fhir.epic.com");
+        result.Error.Should().Contain("invalid_client");
+        result.Error.Should().Contain("client ID");
+    }
+
+    /// <summary>
+    /// Same fix as the token providers, applied to the wizard: an outage must not be worded as a credentials
+    /// problem here either.
+    /// </summary>
+    [Fact]
+    public async Task An_unavailable_authorization_server_is_worded_as_an_outage_not_as_bad_credentials()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.ServiceUnavailable, "<html>Service Unavailable</html>");
+        var service = CreateService(handler);
+        var request = new BackendAuthScopesRequest(
+            EpicTokenEndpoint, "cid", "secret", null, null, null, "s3cr3t", "post", "system/*.rs");
+
+        var result = await service.ProbeGrantedScopesAsync(request, CancellationToken.None);
+
+        result.Error.Should().Contain("not available");
+        result.Error.Should().Contain("not a problem with this connection's credentials");
+        result.Error.Should().NotContain("<html>", "an HTML error page must never reach the browser");
+    }
+
     private sealed class CapturingHandler : HttpMessageHandler
     {
         private readonly HttpStatusCode _statusCode;

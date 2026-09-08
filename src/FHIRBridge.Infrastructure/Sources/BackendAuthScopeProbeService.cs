@@ -8,6 +8,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
+using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Sources;
@@ -129,23 +130,35 @@ public sealed class BackendAuthScopeProbeService : IBackendAuthScopeProbeService
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                var message = string.Format(
-                    "Backend-services token exchange failed for client {0} against {1} with scope '{2}': {3} {4} — {5}",
-                    request.ClientId,
-                    request.TokenEndpoint,
-                    scope,
-                    (int)response.StatusCode,
-                    response.ReasonPhrase,
-                    body);
-                // The client-facing message is sanitized (an arbitrary external response could contain markup or an
-                // oversized payload) — log the raw body here so a real invalid_scope/invalid_client reason is still
-                // diagnosable in Seq without exposing it to the browser. No token/JWT/secret/key material is ever in
-                // this body; it's the source server's own OAuth error response.
+
+                // Full technical detail stays in the log (Seq) where it belongs — client id, endpoint, requested
+                // scope, status and the vendor's raw body. No token/JWT/secret/key material is ever in this body;
+                // it's the source server's own OAuth error response.
                 _logger.LogWarning(
                     "Backend-services token exchange failed for client {ClientId} against {TokenEndpoint} " +
                     "with scope '{Scope}': {StatusCode} {ReasonPhrase} — {Body}",
                     request.ClientId, request.TokenEndpoint, scope, (int)response.StatusCode, response.ReasonPhrase, body);
-                return new BackendAuthScopesResult(false, [], SafeErrorText.SanitizeOr(body, message) ?? message);
+
+                // The browser gets a status-classified, author-written sentence instead.
+                //
+                // This used to be `SafeErrorText.SanitizeOr(body, message) ?? message`, which had two faults. The
+                // `?? message` was dead (SanitizeOr never returns null), and — worse — the `message` fallback
+                // itself embedded the raw body, so the sanitizer was defeated in exactly the case it existed for:
+                // when the vendor's body failed the shape filter, the client received that body anyway, wrapped in
+                // an internal format string that also leaked the client id, token endpoint and scope. Epic
+                // pretty-prints its OAuth errors, so the newline check rejected every one of them and the internal
+                // string was in fact the normal output, not the rare fallback.
+                //
+                // Building the message through TokenEndpointException also means this wizard probe and a real
+                // pipeline run describe an identical failure identically — a 503 here now reads as an outage
+                // rather than as "check your credentials", the same fix applied to the token providers.
+                var failure = TokenEndpointException.FromResponse(
+                    DescribeAuthorizationServer(request.TokenEndpoint),
+                    (int)response.StatusCode,
+                    response.ReasonPhrase,
+                    body);
+
+                return new BackendAuthScopesResult(false, [], failure.UserMessage);
             }
 
             var tokenResponse = await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken);
@@ -166,6 +179,14 @@ public sealed class BackendAuthScopeProbeService : IBackendAuthScopeProbeService
                 ex.Message, "Could not reach the token endpoint."));
         }
     }
+
+    /// <summary>
+    /// Names the authorization server by its host (e.g. "fhir.epic.com") for the client-facing message. The host
+    /// is factual and already known to whoever typed the token endpoint into the wizard, unlike a guessed vendor
+    /// label — and this request carries no vendor field to read one from.
+    /// </summary>
+    private static string DescribeAuthorizationServer(string? tokenEndpoint) =>
+        Uri.TryCreate(tokenEndpoint, UriKind.Absolute, out var uri) ? uri.Host : "The authorization server";
 
     private sealed record TokenResponse(
         [property: JsonPropertyName("access_token")] string AccessToken,

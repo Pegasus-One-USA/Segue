@@ -9,6 +9,7 @@ using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.SharedKernel.Enums;
+using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Protocols;
@@ -415,16 +416,20 @@ public class SmartAuthorizationCodeTokenProvider : IFhirAccessTokenProvider, IIn
         {
             if (!response.IsSuccessStatusCode)
             {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                var message = $"{ProviderName} token endpoint returned {(int)response.StatusCode} ({response.ReasonPhrase}). {body}".Trim();
-                throw new InvalidOperationException(message);
+                // Status kept as a number so an IdP outage is diagnosed as an outage, not as bad credentials —
+                // see TokenEndpointException.
+                throw TokenEndpointException.FromResponse(
+                    ProviderName,
+                    (int)response.StatusCode,
+                    response.ReasonPhrase,
+                    await response.Content.ReadAsStringAsync(cancellationToken));
             }
 
             var token = await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken)
-                ?? throw new InvalidOperationException($"{ProviderName} token endpoint returned an empty response.");
+                ?? throw TokenEndpointException.EmptyResponse(ProviderName, "an empty response.");
             if (string.IsNullOrWhiteSpace(token.AccessToken))
             {
-                throw new InvalidOperationException($"{ProviderName} token endpoint did not return an access_token.");
+                throw TokenEndpointException.EmptyResponse(ProviderName, "no access_token.");
             }
 
             string? practitionerId = null;

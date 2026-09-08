@@ -31,7 +31,8 @@ public static class ConfigurationMapper
                 sourceConnection.Authentication.JwksUrl,
                 sourceConnection.Authentication.DiscoveredScopes,
                 sourceConnection.Authentication.PracticeId,
-                sourceConnection.Authentication.AuthPlacement),
+                sourceConnection.Authentication.AuthPlacement,
+                AuthorizationEndpoint: sourceConnection.Authentication.AuthorizationEndpoint),
             sourceConnection.IsEnabled,
             sourceConnection.ApplicationType,
             ToDto(sourceConnection.Interactive),
@@ -269,7 +270,8 @@ public static class ConfigurationMapper
             dto.JwksUrl,
             dto.DiscoveredScopes,
             dto.PracticeId,
-            dto.AuthPlacement);
+            dto.AuthPlacement,
+            dto.AuthorizationEndpoint);
     }
 
     private static SecretReference? CreateSecretReference(string? keyVaultName, string? secretName)

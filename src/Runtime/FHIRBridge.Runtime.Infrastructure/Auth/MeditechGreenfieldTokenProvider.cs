@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
+using FHIRBridge.SharedKernel.Exceptions;
 
 namespace FHIRBridge.Runtime.Infrastructure.Auth;
 
@@ -62,16 +63,19 @@ public sealed class MeditechGreenfieldTokenProvider : IFhirAccessTokenProvider
         {
             if (!response.IsSuccessStatusCode)
             {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                var message = $"MEDITECH Greenfield token endpoint returned {(int)response.StatusCode} ({response.ReasonPhrase}). {body}".Trim();
-                throw new InvalidOperationException(message);
+                // Status kept as a number so an outage is diagnosed as an outage — see TokenEndpointException.
+                throw TokenEndpointException.FromResponse(
+                    "MEDITECH Greenfield",
+                    (int)response.StatusCode,
+                    response.ReasonPhrase,
+                    await response.Content.ReadAsStringAsync(cancellationToken));
             }
 
             var token = await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken)
-                ?? throw new InvalidOperationException("MEDITECH Greenfield token endpoint returned an empty response.");
+                ?? throw TokenEndpointException.EmptyResponse("MEDITECH Greenfield", "an empty response.");
             if (string.IsNullOrWhiteSpace(token.AccessToken))
             {
-                throw new InvalidOperationException("MEDITECH Greenfield token endpoint did not return an access_token.");
+                throw TokenEndpointException.EmptyResponse("MEDITECH Greenfield", "no access_token.");
             }
 
             var expiresIn = token.ExpiresInSeconds > 0 ? token.ExpiresInSeconds : DefaultExpiresInSeconds;

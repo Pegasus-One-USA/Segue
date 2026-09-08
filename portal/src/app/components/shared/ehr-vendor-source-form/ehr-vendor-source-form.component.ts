@@ -12,7 +12,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { Observable } from 'rxjs';
+import { Observable, catchError, map, of, switchMap } from 'rxjs';
 import { take } from 'rxjs/operators';
 import {
   ReactiveFormsModule,
@@ -149,6 +149,14 @@ function defaultAuthMethodFor(
 ): 'public' | 'secret' | 'jwt' {
   if (audience !== 'backend-system') return 'public';
   return vendor === 'Athenahealth' ? 'secret' : 'jwt';
+}
+
+/** Outcome of working out what scope Test Connection should ask for: either a space-joined scope string, or a
+ *  reason the test must not run at all (athenahealth with no resource types selected — see
+ *  fallbackTestConnectionScope). Exactly one of the two is ever set. */
+interface TestScopeResolution {
+  scope: string | null;
+  blocked: string | null;
 }
 
 function detectScopeVersion(
@@ -1025,9 +1033,6 @@ export class EhrVendorSourceFormComponent
   protected readonly testStatus = signal<'idle' | 'running' | 'ok' | 'fail'>(
     'idle',
   );
-  /** Set only on a real testStatus 'fail' from testConnectionAndNext() — the actual reason the source rejected the
-   *  connection (bad credentials, unreachable endpoint), shown under the footer's combined test-and-save button. */
-  protected readonly connectionTestError = signal<string | null>(null);
 
   // Backend System only: scopes Epic actually granted the app from a real client_credentials + private_key_jwt
   // exchange run as part of Discover (requested with the fixed wildcard scope 'system/*.*') — distinct from
@@ -1925,11 +1930,20 @@ export class EhrVendorSourceFormComponent
 
     if (this.wiz.discovered()) {
       const env = EPIC_ENV[this.wiz.env()];
+      // Token/Authorization Endpoint deliberately have NO EPIC_ENV fallback here. Both open paths set env to
+      // 'sandbox' (WizardService.open()/openEntity()) regardless of which vendor form is actually open, so
+      // falling back stamped Epic's sandbox authorize URL over the value Discover had just resolved — for every
+      // non-Epic vendor, and for Epic production too — and a subsequent Save wrote that wrong URL back onto the
+      // node. Both endpoints are now genuinely persisted and restored (AuthorizationEndpoint since
+      // AddSourceAuthenticationAuthorizationEndpoint), so whatever is here is real. When one is still empty — a
+      // connection saved before that column existed, or a Backend System app that has no authorize endpoint —
+      // leave the field empty: its watermark plus the Discover button say what to do, and runDiscover() fills it
+      // from the source's real /.well-known/smart-configuration.
       const dv: FullDiscoveredValues = {
         fhirBaseUrl: this.wiz.baseUrl() || env.base,
         fhirVersion: 'R4 (4.0.1)',
-        tokenEndpoint: this.wiz.token() || env.token,
-        authzEndpoint: this.wiz.authorize() || env.authorize,
+        tokenEndpoint: this.wiz.token(),
+        authzEndpoint: this.wiz.authorize(),
         issuer: '',
         jwksUri: '',
         introspectEp: '',
@@ -1943,8 +1957,14 @@ export class EhrVendorSourceFormComponent
       this.discValues.set(dv);
       this.discStatus.set('done');
       this.form.controls.epicBaseUrl.setValue(dv.fhirBaseUrl);
-      this.form.controls.tokenEndpoint.setValue(dv.tokenEndpoint);
-      this.form.controls.authzEndpoint.setValue(dv.authzEndpoint);
+      // Only write these when there is a real, restored value — never blank out an endpoint that some other
+      // init path (or the user) already put there.
+      if (dv.tokenEndpoint) {
+        this.form.controls.tokenEndpoint.setValue(dv.tokenEndpoint);
+      }
+      if (dv.authzEndpoint) {
+        this.form.controls.authzEndpoint.setValue(dv.authzEndpoint);
+      }
     }
     if (this.wiz.resources().length) {
       this.form.controls.resources.setValue(this.wiz.resources());
@@ -2792,7 +2812,6 @@ export class EhrVendorSourceFormComponent
     this.scopeVersionAuto.set(false);
     this.authMethodAuto.set(false);
     this.testStatus.set('idle');
-    this.connectionTestError.set(null);
     this.wiz.trustedIssuers.set('');
 
     this.prevAudience = this.audience();
@@ -2960,6 +2979,10 @@ export class EhrVendorSourceFormComponent
       appName: dto.name,
       epicBaseUrl: dto.baseUrl,
       tokenEndpoint: dto.authentication?.tokenEndpoint ?? '',
+      // Persisted since AddSourceAuthenticationAuthorizationEndpoint, so a clone now starts from the authorize
+      // URL the original was actually configured with instead of an empty field — runDiscover() below still
+      // re-confirms it live against the cloned Base URL and overwrites this if the source says otherwise.
+      authzEndpoint: dto.authentication?.authorizationEndpoint ?? '',
       clientId: dto.authentication?.clientId ?? '',
       practiceId: dto.authentication?.practiceId ?? '',
       authMethod,
@@ -3085,10 +3108,9 @@ export class EhrVendorSourceFormComponent
 
     this.toast.show('Loaded', `Copied configuration from "${dto.name}".`);
 
-    // SourceConnection only ever persists a Token Endpoint — there's no Authorization Endpoint column at all
-    // (nothing to clone it from) — so run real SMART discovery against the cloned Base URL instead of faking
-    // discStatus 'done'/an "Auto-populated" badge for data that was never actually saved. This also re-confirms
-    // Token Endpoint live and refreshes the discovered (available) resource type list for this source right now.
+    // Token and Authorization Endpoint are both patched in from the DTO above, but still run real SMART discovery
+    // against the cloned Base URL rather than faking discStatus 'done'/an "Auto-populated" badge: it re-confirms
+    // both endpoints live and refreshes the discovered (available) resource type list for this source right now.
     // The baseline snapshot (for hasExistingChanged) is taken once this settles, not here — see runDiscover().
     this._awaitingBaselineSnapshot = true;
     this.runDiscover();
@@ -3309,39 +3331,128 @@ export class EhrVendorSourceFormComponent
     });
   }
 
-  /** Shared by runBackendAuthScopeProbe() (Discover's passive auto-probe) and testConnectionAndNext() (the
-   *  footer's explicit gate): builds and sends the real client_credentials exchange for whichever Backend System
-   *  auth method is selected, requesting the fixed wildcard scope 'system/*.*'. Most Backend Services servers
-   *  (Epic included) reject a literal wildcard access-level as invalid_scope — the access level must be a real
-   *  suffix: '.read' for v1 (coarse), '.rs' for v2 (granular), matching whichever version scopeString() elsewhere
-   *  already uses for this connection. */
+  /** The resource types Test Connection should request scopes for — the same expression scopeString() uses, so
+   *  the test and the Scopes preview can never disagree about what this connection covers. */
+  private testConnectionResourceTypes(): string[] {
+    return this.showResourcePickerSection()
+      ? this.selectedResources()
+      : this.activeRetrievalResourceTypes();
+  }
+
+  /**
+   * The scope Test Connection exchanges for. Asks the backend (derived-config) whenever this connection is
+   * already persisted, so the test requests EXACTLY what the pipeline will: application type prefix, the vendor's
+   * own access-level spellings, and validation against the source's live scopes_supported. Deliberately sends no
+   * scopeVersion — the server detects it, which is the only way athenahealth's and eCW's hard v1-only
+   * requirement is honoured (both reject a v2 '.rs' resource scope outright).
+   *
+   * Falls back to a locally-built scope for a brand-new connection (no id yet — derived-config is keyed on one)
+   * and whenever discovery is unreachable, so an offline source degrades to a testable request rather than a
+   * dead button.
+   */
+  private resolveTestConnectionScope(): Observable<TestScopeResolution> {
+    const resources = this.testConnectionResourceTypes();
+    const connectionId = this.resolvedSourceConnectionId();
+    if (!connectionId) {
+      return of(this.fallbackTestConnectionScope(resources));
+    }
+    return this.discovery.derivedScopes(connectionId, resources).pipe(
+      map((derived) =>
+        derived.scopeString.trim()
+          ? { scope: derived.scopeString, blocked: null }
+          : this.fallbackTestConnectionScope(resources),
+      ),
+      catchError(() => of(this.fallbackTestConnectionScope(resources))),
+    );
+  }
+
+  /**
+   * Locally-built scope for when derived-config can't answer. Mirrors the backend's own rules rather than
+   * reaching for one wildcard: a wildcard is the single spelling that is wrong on two of the three vendors.
+   *
+   *  - A vendor with a scope profile (eCW) gets the access level it actually publishes per resource. Its
+   *    wildcard is 'system/*.r' — 'system/*.read' does not exist there. Group is absent from the profile on
+   *    purpose: eCW requires it EXCLUDED from Backend Single Patient calls, so it must not come back here.
+   *  - athenahealth rejects the ENTIRE token request (401 access_denied) the moment a wildcard resource scope
+   *    appears, so with nothing selected there is no valid scope to send and the test is blocked with a reason
+   *    instead of a misleading auth failure. It is also v1-only, hence the fixed '.read'.
+   *  - Every other vendor (Epic included) keeps the uniform version suffix and the wildcard fallback, unchanged.
+   */
+  private fallbackTestConnectionScope(resources: string[]): TestScopeResolution {
+    const profile = vendorScopeProfile(this.vendor());
+    if (profile) {
+      const vendorScopes = resources
+        .map((r) => {
+          const level = profile.readAccessLevelByResourceType[r];
+          return level ? `system/${r}.${level}` : null;
+        })
+        .filter((s): s is string => s !== null);
+      return {
+        scope: vendorScopes.length
+          ? vendorScopes.join(' ')
+          : `system/*.${profile.wildcardReadAccessLevel}`,
+        blocked: null,
+      };
+    }
+    if (this.vendor() === 'Athenahealth') {
+      return resources.length
+        ? { scope: resources.map((r) => `system/${r}.read`).join(' '), blocked: null }
+        : {
+            scope: null,
+            blocked:
+              'Select at least one resource type first. athenahealth rejects a wildcard scope outright, so there is nothing valid to test with until resource types are chosen.',
+          };
+    }
+    const suffix = this.scopeVersionValue() === 'v2' ? 'rs' : 'read';
+    return {
+      scope: resources.length
+        ? resources.map((r) => `system/${r}.${suffix}`).join(' ')
+        : `system/*.${suffix}`,
+      blocked: null,
+    };
+  }
+
+  /** Used by runBackendAuthScopeProbe() (Discover's passive auto-probe): builds and sends the real
+   *  client_credentials exchange for whichever Backend System auth method is selected, for whichever scope
+   *  resolveTestConnectionScope() settles on. A blocked resolution surfaces as an ordinary failed result, so the
+   *  caller reports it through the path it already has. */
   private runRealCredentialTest(
     method: 'secret' | 'jwt',
     tokenEndpoint: string,
   ): Observable<BackendAuthScopesResult> {
     const clientId = this.form.controls.clientId.value.trim();
-    const suffix = this.scopeVersionValue() === 'v2' ? 'rs' : 'read';
-    const scope = `system/*.${suffix}`;
-    if (method === 'secret') {
-      return this.discovery.testBackendAuthScopes({
-        tokenEndpoint,
-        clientId,
-        authMethod: 'secret',
-        clientSecret: this.form.controls.clientSecret.value,
-        authPlacement: this.form.controls.authPlacement.value,
-        scope,
-      });
-    }
-    const keyId = this.form.controls.jwtKid.value.trim();
-    return this.discovery.testBackendAuthScopes({
-      tokenEndpoint,
-      clientId,
-      authMethod: 'jwt',
-      keyId: keyId || null,
-      privateKeyVaultName: this.form.controls.privateKeyRef.value.trim(),
-      privateKeySecretName: this.form.controls.privateKeySecretName.value.trim(),
-      scope,
-    });
+    return this.resolveTestConnectionScope().pipe(
+      switchMap((resolution) => {
+        if (!resolution.scope) {
+          return of<BackendAuthScopesResult>({
+            success: false,
+            grantedScopes: [],
+            error: resolution.blocked,
+          });
+        }
+        const scope = resolution.scope;
+        if (method === 'secret') {
+          return this.discovery.testBackendAuthScopes({
+            tokenEndpoint,
+            clientId,
+            authMethod: 'secret',
+            clientSecret: this.form.controls.clientSecret.value,
+            authPlacement: this.form.controls.authPlacement.value,
+            scope,
+          });
+        }
+        const keyId = this.form.controls.jwtKid.value.trim();
+        return this.discovery.testBackendAuthScopes({
+          tokenEndpoint,
+          clientId,
+          authMethod: 'jwt',
+          keyId: keyId || null,
+          privateKeyVaultName: this.form.controls.privateKeyRef.value.trim(),
+          privateKeySecretName: this.form.controls.privateKeySecretName.value.trim(),
+          scope,
+        });
+      }),
+    );
   }
 
   /** Captures the hasExistingChanged() baseline once discovery settles after a clone — see the
@@ -3382,85 +3493,6 @@ export class EhrVendorSourceFormComponent
     });
   }
 
-  /** Footer's combined "Test Connection" gate — replaces the old separate Test-then-Next flow with one action: run
-   *  a real connectivity/credential check, and only proceed to save() once it actually passes. This is the whole
-   *  point of the feature — today, a bad client id/secret/key is otherwise only discovered once the entire
-   *  workflow is built and actually run. Backend System connections get a real client_credentials token exchange
-   *  (JWT or Client Secret, whichever authMethod is selected) — the same probe Discover's passive auto-check uses
-   *  (see runBackendAuthScopeProbe/runRealCredentialTest). The three interactive audiences (EHR launch /
-   *  standalone / patient) can't be exchanged headlessly — SMART App Launch requires a live browser redirect the
-   *  wizard can't simulate — so they fall back to the same reachability probe Discover itself uses; full
-   *  credential validation for those happens the first time a user actually launches the app. */
-  protected testConnectionAndNext(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
-      // Wait one tick so the error classes/messages just triggered by markAllAsTouched are in the DOM before we
-      // measure scroll position and focus the field — mirrors save()'s own invalid-form handling below.
-      setTimeout(() => this.focusFirstInvalidField());
-      return;
-    }
-
-    const baseUrl = this.form.controls.epicBaseUrl.value.trim();
-    // A loopback FHIR base URL (e.g. local HAPI at http://localhost:8080/fhir) is unauthenticated and skips OAuth
-    // entirely (see syncValidators/isLoopbackUrl) — nothing meaningful to test, so proceed straight to save.
-    if (this.isLoopbackUrl(baseUrl)) {
-      this.testStatus.set('ok');
-      this.connectionTestError.set(null);
-      this.save();
-      return;
-    }
-
-    this.testStatus.set('running');
-    this.connectionTestError.set(null);
-
-    const aud = this.audience();
-    const method = this.authMethod();
-    if (aud === 'backend-system' && (method === 'secret' || method === 'jwt')) {
-      const tokenEndpoint = this.form.controls.tokenEndpoint.value.trim();
-      this.runRealCredentialTest(method, tokenEndpoint).subscribe({
-        next: (result) => {
-          if (result.success) {
-            this.testStatus.set('ok');
-            this.grantedScopes.set(result.grantedScopes);
-            this.grantedScopesStatus.set('done');
-            this.save();
-          } else {
-            this.testStatus.set('fail');
-            this.connectionTestError.set(
-              result.error ?? 'The source rejected these credentials.',
-            );
-          }
-        },
-        error: (err) => {
-          this.testStatus.set('fail');
-          this.connectionTestError.set(
-            typeof err?.error?.error === 'string'
-              ? err.error.error
-              : 'Could not authenticate with the source.',
-          );
-        },
-      });
-      return;
-    }
-
-    // Interactive audiences (and the rare Backend System + Public Client combination — SMART Backend Services
-    // doesn't actually issue public-client credentials, so there's nothing to exchange): fall back to the same
-    // reachability probe Discover uses.
-    this.discovery.discover(baseUrl).subscribe({
-      next: () => {
-        this.testStatus.set('ok');
-        this.save();
-      },
-      error: (err) => {
-        this.testStatus.set('fail');
-        this.connectionTestError.set(
-          typeof err?.error?.error === 'string'
-            ? err.error.error
-            : 'Could not reach the source endpoint.',
-        );
-      },
-    });
-  }
 
   /**
    * The flat `fields` bag this form's current (assumed-valid) values map to — everything save() writes onto the

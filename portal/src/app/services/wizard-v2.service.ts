@@ -272,7 +272,11 @@ export class WizardServiceV2 {
     this.stepName.set(dto?.name ?? '');
     this.baseUrl.set(dto?.baseUrl ?? EPIC_ENV['sandbox'].base);
     this.token.set(dto?.authentication?.tokenEndpoint ?? '');
-    this.authorize.set('');
+    // Persisted since AddSourceAuthenticationAuthorizationEndpoint — a saved connection shows back the exact
+    // authorize URL it was configured with. Blank only for a connection saved before that column existed (or a
+    // Backend System one, which has no authorize endpoint); EhrVendorSourceFormComponent leaves the field empty
+    // in that case rather than substituting a per-vendor default, and Discover fills it in.
+    this.authorize.set(dto?.authentication?.authorizationEndpoint ?? '');
     // Entity mode has no Resource Type & Scopes picker UI at all (removed — see ehr-vendor-source-form.component.ts's
     // showResourcePickerSection remarks), so a brand-new connection needs a real, non-empty default here
     // regardless of audience: ScopeBuilderService.buildScopes returns scopes derived ONLY from this list for a
@@ -449,6 +453,10 @@ export class WizardServiceV2 {
         authenticationType: AUTH_METHOD_TO_AUTHENTICATION_TYPE[liveAuthMethod] ?? 'OAuthClientCredentials',
         clientId:           liveClientId,
         tokenEndpoint:       fields['Token endpoint'] || null,
+        // Interactive audiences only — Backend System (client_credentials) never redirects a browser, so it has
+        // no authorize endpoint to store. Persisted so reopening this connection in Settings > Source Connections
+        // shows back what was configured (there's no workflow node to recover it from in entity mode).
+        authorizationEndpoint: audCfg.showRedirect ? (fields['Authorize endpoint'] || null) : null,
         // ScopeBuilderService.buildScopes already includes the base auth-flow scopes (openid/fhirUser/
         // launch/offline_access) for an interactive app regardless of how many resources are passed — so
         // this stays correct even with zero resources (the common case for a brand-new source; real

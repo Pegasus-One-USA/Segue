@@ -190,7 +190,8 @@ public sealed class ConfigurationService : IConfigurationService
             requested.JwksUrl,
             requested.DiscoveredScopes,
             requested.PracticeId,
-            requested.AuthPlacement);
+            requested.AuthPlacement,
+            requested.AuthorizationEndpoint);
     }
 
     public async Task DeleteSourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
