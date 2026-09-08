@@ -1,25 +1,34 @@
+using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Infrastructure.Caching;
 
 /// <summary>
-/// Single-instance in-process cache: correct for the current one-VM deployment. If the API ever scales
-/// to multiple instances, an admin edit on one instance won't invalidate the others' caches — at that
-/// point this needs a pub/sub invalidation signal (e.g. Redis, already used for
-/// DistributedFhirAccessTokenCache) instead of a plain in-memory field.
+/// The merged, live set of origins the API's "Portal" CORS policy currently allows: the permanent
+/// Portal:AllowedOrigins config floor, unioned with rows in AllowedCorsOrigins. Backed by the shared
+/// <see cref="IDistributedCache"/> (Redis in a multi-instance deployment, an in-process memory cache
+/// otherwise — see the "Phase 2" registration in DependencyInjection.cs, the same one
+/// DistributedFhirAccessTokenCache uses) instead of a local field, so an admin edit made through one
+/// replica takes effect on every replica's very next request, not just the one that handled the edit.
 /// </summary>
 public sealed class InProcessAllowedCorsOriginsCache : IAllowedCorsOriginsCache
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IReadOnlySet<string> _configuredFloor;
-    private volatile IReadOnlySet<string>? _cached;
+    private const string CacheKey = "fhirbridge:allowed-cors-origins:v1";
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(60);
 
-    public InProcessAllowedCorsOriginsCache(IServiceScopeFactory scopeFactory, IConfiguration configuration)
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IDistributedCache _distributedCache;
+    private readonly IReadOnlySet<string> _configuredFloor;
+
+    public InProcessAllowedCorsOriginsCache(
+        IServiceScopeFactory scopeFactory, IDistributedCache distributedCache, IConfiguration configuration)
     {
         _scopeFactory = scopeFactory;
+        _distributedCache = distributedCache;
         _configuredFloor = (configuration.GetSection("Portal:AllowedOrigins").Get<string[]>()
                 ?? ["http://localhost:4200", "https://localhost:4200"])
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -27,10 +36,11 @@ public sealed class InProcessAllowedCorsOriginsCache : IAllowedCorsOriginsCache
 
     public async Task<IReadOnlySet<string>> GetOriginsAsync(CancellationToken cancellationToken)
     {
-        var snapshot = _cached;
-        if (snapshot is not null)
+        var cachedBytes = await _distributedCache.GetAsync(CacheKey, cancellationToken);
+        if (cachedBytes is not null)
         {
-            return snapshot;
+            var cachedOrigins = JsonSerializer.Deserialize<string[]>(cachedBytes) ?? [];
+            return new HashSet<string>(cachedOrigins, StringComparer.OrdinalIgnoreCase);
         }
 
         using var scope = _scopeFactory.CreateScope();
@@ -43,9 +53,13 @@ public sealed class InProcessAllowedCorsOriginsCache : IAllowedCorsOriginsCache
             merged.Add(origin.OriginUrl);
         }
 
-        _cached = merged;
+        await _distributedCache.SetAsync(
+            CacheKey,
+            JsonSerializer.SerializeToUtf8Bytes(merged),
+            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration },
+            cancellationToken);
         return merged;
     }
 
-    public void Invalidate() => _cached = null;
+    public void Invalidate() => _distributedCache.Remove(CacheKey);
 }

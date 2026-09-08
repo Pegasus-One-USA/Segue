@@ -4,7 +4,9 @@ namespace FHIRBridge.Application.Abstractions.Caching;
 /// Process-wide read cache for <see cref="FHIRBridge.Domain.Entities.SystemSetting"/> rows. Safe to
 /// inject into singletons (hosted/background services) since it resolves the repository lazily through
 /// a scope. Typed getters fall back to the caller-supplied appsettings-derived default when no DB row
-/// exists for the key, or when the stored value fails to parse.
+/// exists for the key, or when the stored value fails to parse. The default implementation is backed by
+/// the shared distributed cache, so <see cref="Invalidate"/> is visible across every replica in a
+/// multi-instance deployment, not just the one that called it.
 /// </summary>
 public interface ISystemSettingsCache
 {

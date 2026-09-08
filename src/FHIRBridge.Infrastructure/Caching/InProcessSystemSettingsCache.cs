@@ -1,23 +1,35 @@
 using System.Data.Common;
 using System.Globalization;
+using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Infrastructure.Caching;
 
 /// <summary>
-/// Single-instance in-process cache: correct for the current one-VM deployment, same limitation as
-/// <see cref="InProcessAllowedCorsOriginsCache"/> if the API ever scales to multiple instances.
+/// Process-wide read cache for <see cref="FHIRBridge.Domain.Entities.SystemSetting"/> rows, backed by
+/// the shared <see cref="IDistributedCache"/> (Redis in a multi-instance deployment, an in-process
+/// memory cache when no Redis connection string is configured — see the "Phase 2" registration in
+/// DependencyInjection.cs). Storing the snapshot there instead of a local field means an
+/// <see cref="Invalidate"/> on one replica is visible to every other replica on their very next read,
+/// instead of only after that replica happens to restart. The short absolute expiration below is a
+/// safety net for the rare case an explicit Invalidate() is missed (e.g. a row edited directly in the
+/// database, bypassing SystemSettingsService) — not the primary invalidation path.
 /// </summary>
 public sealed class InProcessSystemSettingsCache : ISystemSettingsCache
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private volatile IReadOnlyDictionary<string, string>? _cached;
+    private const string CacheKey = "fhirbridge:system-settings:v1";
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(60);
 
-    public InProcessSystemSettingsCache(IServiceScopeFactory scopeFactory)
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IDistributedCache _distributedCache;
+
+    public InProcessSystemSettingsCache(IServiceScopeFactory scopeFactory, IDistributedCache distributedCache)
     {
         _scopeFactory = scopeFactory;
+        _distributedCache = distributedCache;
     }
 
     public async Task<string> GetStringAsync(string key, string defaultValue, CancellationToken cancellationToken)
@@ -52,14 +64,16 @@ public sealed class InProcessSystemSettingsCache : ISystemSettingsCache
             : defaultValue;
     }
 
-    public void Invalidate() => _cached = null;
+    public void Invalidate() => _distributedCache.Remove(CacheKey);
 
     private async Task<IReadOnlyDictionary<string, string>> GetSnapshotAsync(CancellationToken cancellationToken)
     {
-        var snapshot = _cached;
-        if (snapshot is not null)
+        var cachedBytes = await _distributedCache.GetAsync(CacheKey, cancellationToken);
+        if (cachedBytes is not null)
         {
-            return snapshot;
+            var cached = JsonSerializer.Deserialize<Dictionary<string, string>>(cachedBytes)
+                ?? new Dictionary<string, string>();
+            return new Dictionary<string, string>(cached, StringComparer.OrdinalIgnoreCase);
         }
 
         using var scope = _scopeFactory.CreateScope();
@@ -79,7 +93,11 @@ public sealed class InProcessSystemSettingsCache : ISystemSettingsCache
         }
 
         var merged = settings.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
-        _cached = merged;
+        await _distributedCache.SetAsync(
+            CacheKey,
+            JsonSerializer.SerializeToUtf8Bytes(merged),
+            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration },
+            cancellationToken);
         return merged;
     }
 }
