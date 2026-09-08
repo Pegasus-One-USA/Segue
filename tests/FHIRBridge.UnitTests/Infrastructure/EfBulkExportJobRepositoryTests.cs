@@ -12,7 +12,12 @@ namespace FHIRBridge.UnitTests.Infrastructure;
 // DbUpdateConcurrencyException test against it would not prove anything about production behavior.
 public sealed class EfBulkExportJobRepositoryTests
 {
-    private readonly InMemoryDatabaseRoot _root = new();
+    // static: xUnit builds a new instance of this class for EVERY test, and each distinct
+    // InMemoryDatabaseRoot makes EF build another internal service provider — past twenty, EF raises
+    // ManyServiceProvidersCreatedWarning as an error in whichever test happens to cross the line, which
+    // reads as an unrelated failure elsewhere in the suite. Sharing one root costs no isolation: each test
+    // still gets its own database via the unique _databaseName below. (Same pattern as WorkflowSqlStoreTests.)
+    private static readonly InMemoryDatabaseRoot _root = new();
     private readonly string _databaseName = Guid.NewGuid().ToString();
 
     private FHIRBridgeDbContext CreateContext()

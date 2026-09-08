@@ -163,7 +163,27 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
                 continue;
             }
 
-            if (!string.Equals(column.MappingValueType, field.ValueType.ToString(), StringComparison.OrdinalIgnoreCase))
+            var rules = destinationType is null
+                ? (IReadOnlyList<Domain.Entities.TransformationRule>)[]
+                : await _ruleResolver.ResolveAsync(
+                    destinationType.Value,
+                    request.ResourceType,
+                    field.TargetField,
+                    resourcePipelineRouteId: null,
+                    sourceSystem: null,
+                    sourceField: null,
+                    cancellationToken);
+
+            // A transformation rule chain (e.g. DateMathAge turning a Date into an Integer) can legitimately
+            // change the value's shape between the raw JsonPath extraction and what actually reaches the
+            // column — field.ValueType only describes the former, so comparing it against the column here
+            // would reject a perfectly valid rule-backed mapping. Once a rule declares an output type,
+            // ValidateApplicableRules below is the sole authority on whether that type fits the column.
+            var ruleDeclaresOutputType = rules.Any(r => r.ExpectedValueType is not null);
+
+            if (!ruleDeclaresOutputType &&
+                !string.Equals(column.MappingValueType, field.ValueType.ToString(), StringComparison.OrdinalIgnoreCase) &&
+                !IsJsonSafeForColumn(field.ValueType, column))
             {
                 context.AddFailure(
                     $"Fields[{i}].ValueType",
@@ -180,7 +200,7 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
 
             if (destinationType is not null)
             {
-                await ValidateApplicableRulesAsync(request, field, i, column, destinationType.Value, context, cancellationToken);
+                ValidateApplicableRules(i, column, rules, context);
             }
         }
     }
@@ -189,32 +209,22 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
     /// A field can pass the check above (its declared type matches the column) and still fail at run time,
     /// because a Global/ResourceType/DestinationType-scoped <see cref="Domain.Entities.TransformationRule"/>
     /// applies to it and expects a different type than the column actually is — e.g. a Global NumberCast rule
-    /// hitting a text column. Resolved with resourcePipelineRouteId: null deliberately: a MappingProfile can be
-    /// created before any ResourcePipelineRoute references it, so no Workflow-scoped override can exist yet at
-    /// this point — this check only ever sees the broader tiers a workflow-level override would need to beat.
+    /// hitting a text column. Rules are resolved with resourcePipelineRouteId: null by the caller deliberately:
+    /// a MappingProfile can be created before any ResourcePipelineRoute references it, so no Workflow-scoped
+    /// override can exist yet at this point — this check only ever sees the broader tiers a workflow-level
+    /// override would need to beat.
     /// </summary>
-    private async Task ValidateApplicableRulesAsync(
-        CreateMappingProfileRequest request,
-        MappingFieldDto field,
+    private static void ValidateApplicableRules(
         int fieldIndex,
         DestinationColumnSchemaDto column,
-        DestinationType destinationType,
-        ValidationContext<CreateMappingProfileRequest> context,
-        CancellationToken cancellationToken)
+        IReadOnlyList<Domain.Entities.TransformationRule> rules,
+        ValidationContext<CreateMappingProfileRequest> context)
     {
-        var rules = await _ruleResolver.ResolveAsync(
-            destinationType,
-            request.ResourceType,
-            field.TargetField,
-            resourcePipelineRouteId: null,
-            sourceSystem: null,
-            sourceField: null,
-            cancellationToken);
-
         foreach (var rule in rules)
         {
             if (rule.ExpectedValueType is { } expectedValueType &&
-                !string.Equals(expectedValueType.ToString(), column.MappingValueType, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(expectedValueType.ToString(), column.MappingValueType, StringComparison.OrdinalIgnoreCase) &&
+                !IsJsonSafeForColumn(expectedValueType, column))
             {
                 var failure = new FluentValidation.Results.ValidationFailure(
                     $"Fields[{fieldIndex}].TargetField",
@@ -230,6 +240,47 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
 
             CheckStructuredOutputFitsColumn(rule, column, fieldIndex, context);
         }
+    }
+
+    /// <summary>
+    /// True when a Json-shaped value (<paramref name="effectiveType"/> is <see cref="MappingValueType.Json"/>
+    /// — a childJson field, or a rule declaring Json output) is safe to write into <paramref name="column"/>
+    /// even though its own <see cref="DestinationColumnSchemaDto.MappingValueType"/> is the generic "String"
+    /// every character-string SQL type collapses to (see SqlDestinationSchemaService.MapSqlServerType/
+    /// MapPostgresType/MapMySqlType — none of them ever produce "Json" for any real column, including a
+    /// native Postgres jsonb) — an exact string-equality check would otherwise reject EVERY Json mapping
+    /// onto EVERY destination, including one deliberately sized to hold it (e.g. SQL Server nvarchar(max)).
+    ///
+    /// Scoped narrowly to an UNBOUNDED string column (<see cref="DestinationColumnSchemaDto.MaxLength"/> is
+    /// null) — the same signal <see cref="CheckStructuredOutputFitsColumn"/> just below already uses to mean
+    /// "no truncation risk here" — OR a column whose DATA TYPE NAME is itself a fixed-capacity large-blob
+    /// type: MySQL's TEXT/MEDIUMTEXT/LONGTEXT and SQL Server's legacy NTEXT never report a null MaxLength at
+    /// all (unlike SQL Server nvarchar(max)'s -1, or PostgreSQL's genuinely NULL character_maximum_length for
+    /// `text`) — MySQL in particular always reports a real, if enormous, number (65,535 / 16,777,215 /
+    /// 4,294,967,296) for these, because capacity is fixed by the keyword itself, not an independently
+    /// configurable length the way varchar(n) is. Recognized by name for exactly that reason, regardless of
+    /// whatever MaxLength SqlDestinationSchemaService happens to report for them (this is what "the actual
+    /// column metadata/type is handled correctly instead of assuming only one exact type name" means in
+    /// practice — MaxLength alone is not a reliable cross-engine "unbounded" signal). Deliberately excludes
+    /// MySQL's much smaller TINYTEXT (255 chars) — genuinely too small for arbitrary JSON, so that one (and
+    /// any other length-BOUNDED string column: nvarchar(50), varchar(200), …) keeps failing exactly as
+    /// before — a real truncation risk there, not a false positive.
+    /// </summary>
+    private static bool IsJsonSafeForColumn(MappingValueType effectiveType, DestinationColumnSchemaDto column)
+    {
+        if (effectiveType != MappingValueType.Json ||
+            !string.Equals(column.MappingValueType, "String", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (column.MaxLength is null)
+        {
+            return true;
+        }
+
+        var family = column.DataType.Trim().ToLowerInvariant().Split('(')[0];
+        return family is "text" or "mediumtext" or "longtext" or "ntext";
     }
 
     /// <summary>

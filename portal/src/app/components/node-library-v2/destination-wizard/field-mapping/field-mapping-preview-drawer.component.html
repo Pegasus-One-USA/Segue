@@ -1,0 +1,19 @@
+@if (open()) {
+  <div class="fm-drawer" role="dialog" aria-modal="true" aria-labelledby="fm-drawer-title">
+    <div class="fm-drawer-head">
+      <span id="fm-drawer-title" class="fm-drawer-title">Output preview — {{ isSqlFamily() ? 'SQL' : 'CSV' }}</span>
+      <button type="button" class="fm-drawer-close" aria-label="Close preview" (click)="closed.emit()">✕</button>
+    </div>
+    <div class="fm-drawer-body">
+      @for (section of sections(); track section.resource) {
+        <div class="fm-drawer-section">
+          <div class="fm-drawer-section-head">{{ section.tableName || section.resource }}</div>
+          <pre class="fm-drawer-pre">{{ section.text }}</pre>
+        </div>
+      }
+      @if (!sections().length) {
+        <p class="fm-drawer-empty">No destination resources to preview yet.</p>
+      }
+    </div>
+  </div>
+}

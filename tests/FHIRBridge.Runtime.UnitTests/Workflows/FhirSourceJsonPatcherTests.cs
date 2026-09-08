@@ -1,5 +1,5 @@
 using System.Text.Json.Nodes;
-using FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
+using FHIRBridge.Application.Services.Transforms;
 using FluentAssertions;
 using Xunit;
 
@@ -90,5 +90,82 @@ public sealed class FhirSourceJsonPatcherTests
     {
         FhirSourceJsonPatcher.TryReadSiblingDisplay(null, "code.coding.code").Should().BeNull();
         FhirSourceJsonPatcher.TryReadSiblingDisplay("""{"code":{}}""", null).Should().BeNull();
+    }
+
+    // ── Repeating elements ──────────────────────────────────────────────────────────────────────────
+    // FHIR cardinality is structural: Patient.name is 0..*, so it is an ARRAY whether it holds one entry
+    // or five. A write that replaces the array with the object it contains produces a resource a real
+    // server rejects — Aidbox answers 422 "Patient.name / The property must be an array". These cover the
+    // reported bug (a StringNormalization rule on Patient.name.family with an empty write-back path) and
+    // its sibling on a repeating primitive.
+
+    [Fact]
+    public void Writing_through_an_unindexed_array_segment_keeps_the_array()
+    {
+        const string sourceJson = """{"resourceType":"Patient","name":[{"family":"smith","given":["john"]}]}""";
+
+        var patched = FhirSourceJsonPatcher.ApplyPatches(sourceJson, [("name.family", "SMITH")]);
+
+        var name = JsonNode.Parse(patched!)!["name"];
+        name.Should().BeOfType<JsonArray>("Patient.name is 0..* — replacing it with an object is a 422");
+        name!.AsArray()[0]!["family"]!.GetValue<string>().Should().Be("SMITH");
+        // Everything else in that element survives the write.
+        name.AsArray()[0]!["given"]!.AsArray()[0]!.GetValue<string>().Should().Be("john");
+    }
+
+    [Fact]
+    public void Writing_to_an_unindexed_array_leaf_replaces_its_first_item_not_the_array()
+    {
+        // The reader takes the first element of a repeating primitive, so the writer must put the result
+        // back into that same slot — assigning the bare value would collapse given: ["john","q"] to a string.
+        const string sourceJson = """{"resourceType":"Patient","name":[{"given":["john","q"]}]}""";
+
+        var patched = FhirSourceJsonPatcher.ApplyPatches(sourceJson, [("name.given", "JOHN")]);
+
+        var given = JsonNode.Parse(patched!)!["name"]!.AsArray()[0]!["given"];
+        given.Should().BeOfType<JsonArray>();
+        given!.AsArray().Count.Should().Be(2, "the other entries are not this rule's to remove");
+        given.AsArray()[0]!.GetValue<string>().Should().Be("JOHN");
+        given.AsArray()[1]!.GetValue<string>().Should().Be("q");
+    }
+
+    [Fact]
+    public void Writing_through_an_empty_array_creates_the_element_rather_than_replacing_the_array()
+    {
+        const string sourceJson = """{"resourceType":"Patient","name":[]}""";
+
+        var patched = FhirSourceJsonPatcher.ApplyPatches(sourceJson, [("name.family", "SMITH")]);
+
+        var name = JsonNode.Parse(patched!)!["name"];
+        name.Should().BeOfType<JsonArray>();
+        name!.AsArray()[0]!["family"]!.GetValue<string>().Should().Be("SMITH");
+    }
+
+    [Fact]
+    public void An_explicit_index_still_targets_that_exact_element()
+    {
+        const string sourceJson = """{"resourceType":"Patient","name":[{"family":"a"},{"family":"b"}]}""";
+
+        var patched = FhirSourceJsonPatcher.ApplyPatches(sourceJson, [("name[1].family", "B")]);
+
+        var name = JsonNode.Parse(patched!)!["name"]!.AsArray();
+        name[0]!["family"]!.GetValue<string>().Should().Be("a");
+        name[1]!["family"]!.GetValue<string>().Should().Be("B");
+    }
+
+    [Fact]
+    public void The_reader_and_writer_agree_on_which_element_an_unindexed_path_means()
+    {
+        // The invariant behind all of the above: whatever FhirJsonPathReader read is the node the patch
+        // lands on. If these two ever disagree, a rule silently transforms one value and writes another.
+        const string sourceJson = """{"resourceType":"Patient","name":[{"family":"smith"},{"family":"jones"}]}""";
+
+        FhirJsonPathReader.Read(sourceJson, "name.family").Should().Be("smith");
+
+        var patched = FhirSourceJsonPatcher.ApplyPatches(sourceJson, [("name.family", "SMITH")]);
+
+        FhirJsonPathReader.Read(patched, "name.family").Should().Be("SMITH");
+        JsonNode.Parse(patched!)!["name"]!.AsArray()[1]!["family"]!.GetValue<string>()
+            .Should().Be("jones", "only the element the reader saw is rewritten");
     }
 }

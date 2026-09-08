@@ -23,4 +23,10 @@ export abstract class ISourceConnectionService {
    *  for SMART Backend Services — the alternative to generateSigningKey() for a customer who already has an Epic
    *  app registered against their own key. Rejects (400) anything that isn't a real, unencrypted RSA private key. */
   abstract importSigningKey(privateKeyPem: string): Observable<GeneratedSigningKeyModel>;
+  /** The public half of a SAVED connection's signing key, as a PEM file — what an EHR app registration takes when
+   *  it accepts an uploaded public key instead of a JWKS URL. Only meaningful once the connection has an id. */
+  abstract downloadPublicKeyPem(sourceConnectionId: string): Observable<Blob>;
+  /** The private key PEM of a SAVED connection's signing key. Gated server-side by its own
+   *  `sourceconnections.export` permission and written to the security event log on every download. */
+  abstract downloadPrivateKeyPem(sourceConnectionId: string): Observable<Blob>;
 }

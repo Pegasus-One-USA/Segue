@@ -1,0 +1,1275 @@
+<div class="dw">
+
+  <!-- ── FHIR transformation rules ── covers the whole right-hand detail panel (position:absolute inset:0
+       against this .dw, which is already position:relative) rather than floating as a centred dialog. Kept
+       first in the wrapper so it paints above the wizard beneath it without needing a higher stacking hack. -->
+  @if (fhirRulesPanel(); as rulesPanelData) {
+    <app-fhir-rules-panel
+      [data]="rulesPanelData"
+      (closed)="fhirRulesPanel.set(null)"
+      (deIdentificationProfileChange)="selectedDeIdentificationProfileId.set($event)"
+    />
+  }
+
+  <!-- ── Top bar + step indicator ── hidden while a group's mapping canvas is open; the outer
+       Node Library header shows "Map fields — {group}" instead, and Close/Save below the canvas
+       are the only navigation needed there. ── -->
+  @if (!activeMappingGroup()) {
+    <div class="dw-topbar">
+      <div class="dw-topbar-left">
+        <div class="dw-icon-wrap">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="3" fill="currentColor" opacity=".15"/>
+            <path d="M7 12h10M12 7v10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="dw-topbar-title">{{ configHeading() }}</span>
+      </div>
+      <div class="dw-topbar-actions">
+        <button class="dw-back-btn" type="button" (click)="cancel()">← Back to library</button>
+        <button
+          class="dw-maximize"
+          type="button"
+          [attr.aria-label]="isMaximized() ? 'Restore dialog size' : 'Maximize dialog'"
+          [attr.aria-pressed]="isMaximized()"
+          [title]="isMaximized() ? 'Restore' : 'Maximize'"
+          (click)="toggleMaximizeRequest.emit()"
+        >
+          @if (isMaximized()) {
+            <svg class="dw-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          } @else {
+            <svg class="dw-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          }
+        </button>
+        <button class="dw-close-btn" type="button" title="Close" (click)="closeAll.emit()">×</button>
+      </div>
+    </div>
+
+    <div class="dw-stepper">
+      @for (label of STEP_LABELS; track $index) {
+        <div class="dw-step" [class.active]="isStepActive($index + 1)" [class.done]="isStepDone($index + 1)">
+          <div class="dw-step-num">
+            @if (isStepDone($index + 1)) { ✓ } @else { {{ $index + 1 }} }
+          </div>
+          <span class="dw-step-label">{{ label }}</span>
+        </div>
+        @if ($index < STEP_LABELS.length - 1) {
+          <div class="dw-step-line" [class.done]="isStepDone($index + 1)"></div>
+        }
+      }
+    </div>
+  }
+
+  <!-- ── Body ─────────────────────────────────────────────────────────────── -->
+  <div class="dw-body" [class.dw-body--canvas]="!!activeMappingGroup()">
+
+    <!-- ═══ STEP 1: Configure ═══════════════════════════════════════════════ -->
+    @if (isStepActive(1)) {
+      <div class="dw-section-head">
+        <span class="dw-section-num">1</span>
+        <span class="dw-section-title">Configure {{ destLabel() }}</span>
+      </div>
+
+      <!-- No explicit New/Existing toggle — the dropdown is always offered (canvas create only, see
+           showConnectionModeToggle); leaving it unselected just means "New connection". -->
+      @if (showConnectionModeToggle()) {
+        <div class="dw-field dw-field--full">
+          <label class="dw-label" for="dw-existing">Existing {{ destLabel() }} connection</label>
+          <div class="dw-existing-connection-row">
+            <div class="dw-select-wrap">
+              <select
+                id="dw-existing"
+                class="dw-select"
+                [disabled]="existingOptionsLoading()"
+                [value]="selectedExistingId() ?? ''"
+                (change)="selectExisting($any($event.target).value)"
+              >
+                <option value="" disabled>{{ existingOptionsLoading() ? 'Loading…' : 'Choose a connection…' }}</option>
+                @for (o of existingOptions(); track o.id) {
+                  <option [value]="o.id">{{ o.name }} ({{ o.destinationType }})</option>
+                }
+              </select>
+            </div>
+            @if (selectedExistingId()) {
+              <button type="button" class="dw-clear-btn" title="Clear selected connection — start a new one instead"
+                      (click)="clearExistingConnection()">✕</button>
+            }
+          </div>
+          @if (!existingOptionsLoading() && existingOptions().length === 0) {
+            <span class="dw-hint">No reusable {{ destLabel() }} connections found (connections with execution history can't be reused here) — configure a new one below.</span>
+          } @else {
+            <span class="dw-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</span>
+          }
+        </div>
+      }
+
+      @if (isFhir()) {
+        <form [formGroup]="fhirForm" class="dw-form" autocomplete="off">
+          <div class="dw-grid-3">
+
+            <div class="dw-field" [class.dw-field--error]="fhirForm.get('name')!.invalid && fhirForm.get('name')!.touched">
+              <label class="dw-label" for="dw-fhir-name">Destination name <span class="dw-req">*</span></label>
+              <input id="dw-fhir-name" class="dw-input" formControlName="name" placeholder="e.g. Aidbox Production" />
+              @if (fhirForm.get('name')!.invalid && fhirForm.get('name')!.touched) {
+                <span class="dw-error">Destination name is required.</span>
+              }
+            </div>
+
+            <div class="dw-field" [class.dw-field--error]="fhirForm.get('baseUrl')!.invalid && fhirForm.get('baseUrl')!.touched">
+              <label class="dw-label" for="dw-fhir-baseUrl">Base URL <span class="dw-req">*</span></label>
+              <input id="dw-fhir-baseUrl" class="dw-input" formControlName="baseUrl" placeholder="https://tenant.aidbox.app/fhir" />
+              @if (fhirForm.get('baseUrl')!.invalid && fhirForm.get('baseUrl')!.touched) {
+                <span class="dw-error">Base URL is required.</span>
+              }
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-fhir-project">Aidbox Project</label>
+              <input id="dw-fhir-project" class="dw-input" formControlName="project" placeholder="e.g. tenant-acme" />
+            </div>
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-fhir-auth">Authentication <span class="dw-req">*</span></label>
+              <div class="dw-select-wrap">
+                <select id="dw-fhir-auth" class="dw-select" formControlName="authType">
+                  <option value="oauth2">OAuth2 Client Credentials</option>
+                  <option value="basic">Basic Username / Password</option>
+                  <option value="bearer">Static Bearer Token</option>
+                </select>
+              </div>
+            </div>
+
+            @if (fhirForm.get('authType')!.value === 'oauth2') {
+              <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientId')!.invalid && fhirForm.get('clientId')!.touched">
+                <label class="dw-label" for="dw-fhir-clientId">Client ID <span class="dw-req">*</span></label>
+                <input id="dw-fhir-clientId" class="dw-input" formControlName="clientId" autocomplete="off" />
+                @if (fhirForm.get('clientId')!.invalid && fhirForm.get('clientId')!.touched) {
+                  <span class="dw-error">Client ID is required.</span>
+                }
+              </div>
+              <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched">
+                <label class="dw-label" for="dw-fhir-clientSecret">Client secret <span class="dw-req">*</span></label>
+                <input id="dw-fhir-clientSecret" type="password" class="dw-input" formControlName="clientSecret" autocomplete="new-password" />
+                @if (fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched) {
+                  <span class="dw-error">Client secret is required.</span>
+                }
+              </div>
+            }
+
+            @if (fhirForm.get('authType')!.value === 'basic') {
+              <div class="dw-field" [class.dw-field--error]="fhirForm.get('username')!.invalid && fhirForm.get('username')!.touched">
+                <label class="dw-label" for="dw-fhir-username">Username <span class="dw-req">*</span></label>
+                <input id="dw-fhir-username" class="dw-input" formControlName="username" autocomplete="off" />
+                @if (fhirForm.get('username')!.invalid && fhirForm.get('username')!.touched) {
+                  <span class="dw-error">Username is required.</span>
+                }
+              </div>
+              <div class="dw-field" [class.dw-field--error]="fhirForm.get('password')!.invalid && fhirForm.get('password')!.touched">
+                <label class="dw-label" for="dw-fhir-password">Password <span class="dw-req">*</span></label>
+                <input id="dw-fhir-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+                @if (fhirForm.get('password')!.invalid && fhirForm.get('password')!.touched) {
+                  <span class="dw-error">Password is required.</span>
+                }
+              </div>
+            }
+
+            @if (fhirForm.get('authType')!.value === 'bearer') {
+              <div class="dw-field dw-field--full" [class.dw-field--error]="fhirForm.get('bearerToken')!.invalid && fhirForm.get('bearerToken')!.touched">
+                <label class="dw-label" for="dw-fhir-bearerToken">Bearer token <span class="dw-req">*</span></label>
+                <input id="dw-fhir-bearerToken" type="password" class="dw-input" formControlName="bearerToken" autocomplete="new-password" />
+                @if (fhirForm.get('bearerToken')!.invalid && fhirForm.get('bearerToken')!.touched) {
+                  <span class="dw-error">Bearer token is required.</span>
+                }
+              </div>
+            }
+
+            <div class="dw-field">
+              <label class="dw-label" for="dw-fhir-writeMode">Write mode</label>
+              <div class="dw-select-wrap">
+                <select id="dw-fhir-writeMode" class="dw-select" formControlName="writeMode">
+                  <option value="upsert">Upsert by resource id (PUT)</option>
+                  <option value="upsertBundle">Upsert by resource id (Bundle)</option>
+                  <option value="upsertTransaction">Upsert by resource id (Transaction)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="dw-field dw-field--checkbox dw-field--full">
+              <label class="dw-label">
+                <input type="checkbox" formControlName="autoFetchMissingReferences" />
+                Automatically fetch a missing reference from the source
+              </label>
+              <span class="dw-hint">
+                If a reference (e.g. a Location or Organization) is confirmed missing from both this batch and the
+                destination, fetch it directly from the source EHR instead of blocking the record that references
+                it. Requires the source's app registration to have read access to whatever resource type turns up
+                missing. Off by default.
+              </span>
+            </div>
+
+            @if (fhirForm.get('autoFetchMissingReferences')!.value) {
+              <div class="dw-field">
+                <label class="dw-label" for="dw-fhir-autoFetchMaxCount">Max references to auto-fetch per run</label>
+                <input id="dw-fhir-autoFetchMaxCount" class="dw-input" type="number" min="1"
+                       formControlName="autoFetchMaxCount" />
+                <span class="dw-hint">Beyond this many distinct missing references in one run, the excess is
+                  blocked instead of fetched — each is a separate request to the source.</span>
+              </div>
+            }
+
+          </div><!-- /dw-grid-3 -->
+        </form>
+
+        @if (probeState() === 'testing') {
+          <div class="dw-callout dw-callout--info">Testing connection…</div>
+        }
+        @if (probeState() === 'error') {
+          <div class="dw-callout dw-callout--warn">Connection failed: {{ probeError() }}</div>
+        }
+        @if (probeState() === 'ok') {
+          <div class="dw-callout dw-callout--info">Connected — the base URL and credentials are valid.</div>
+        }
+      }
+
+      <!-- Cross-cutting — applies regardless of destination type, so it lives outside the per-type form
+           component. Read-only when reusing an existing connection as-is (nothing to save it through in
+           that mode — see selectExisting()/provisionDestinationConnection()). -->
+      <div class="dw-field dw-field--full">
+        <label class="dw-label" for="dw-deid-profile">De-identification profile</label>
+        <div class="dw-existing-connection-row">
+          <div class="dw-select-wrap">
+            <select
+              id="dw-deid-profile"
+              class="dw-select"
+              [disabled]="connectionMode() === 'existing'"
+              [value]="selectedDeIdentificationProfileId() ?? ''"
+              (change)="selectedDeIdentificationProfileId.set($any($event.target).value || null)"
+            >
+              <option value="">None</option>
+              @for (p of deIdentificationProfiles(); track p.id) {
+                <option [value]="p.id">{{ p.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        @if (connectionMode() !== 'existing') {
+          <div class="dw-existing-connection-row" style="margin-top: 8px;">
+            <input
+              type="text"
+              class="dw-select"
+              placeholder="New profile name…"
+              [value]="newProfileName()"
+              (input)="newProfileName.set($any($event.target).value)"
+            />
+            <button type="button" class="dw-clear-btn" title="Create a new de-identification profile"
+                    [disabled]="!newProfileName().trim() || creatingProfile()"
+                    (click)="createDeIdentificationProfile()">+ New</button>
+          </div>
+          <span class="dw-hint">Resources routed to this destination are redacted per the selected profile's rules before delivery. Manage a profile's rules on the Transformation Rules screen.</span>
+        }
+      </div>
+    }
+
+    <!-- ── Connection form host ── the component DESTINATION_FORM_REGISTRY resolves for this destination
+         type (see destination-forms/destination-form.registry.ts). Kept mounted for the wizard's whole
+         lifetime once created — only visually hidden outside Step 1 (dw-hidden) — so Steps 2-4 keep reading
+         live values off it directly (the mapping canvas's connectionInfo/csvDelimiterKey, Step 4's review),
+         same as the old inline sqlForm/csvForm/mongoForm did just by staying alive as class fields. Each
+         component renders its own Test Connection button/callouts (SQL family/CSV-via-SFTP) in its own
+         template now, instead of the wizard rendering them inline. FHIR is the one exception — its
+         DESTINATION_FORM_REGISTRY entry is only a placeholder stub, so it's rendered by the hand-rolled
+         fhirForm block above instead of this outlet (see isFhir() guard). ── -->
+    @if (!isFhir()) {
+      <div [class.dw-hidden]="!isStepActive(1)">
+        <ng-container [ngComponentOutlet]="activeFormType()" [ngComponentOutletInputs]="activeFormInputs()" />
+      </div>
+    }
+
+    <!-- ═══ STEP 2: Data groups ═══════════════════════════════════════════ -->
+    @if (isStepActive(2)) {
+      <div class="dw-section-head">
+        <span class="dw-section-num">2</span>
+        <span class="dw-section-title">Select data groups</span>
+        <div class="dw-section-spacer"></div>
+        <div class="dw-group-search">
+          <input
+            type="text"
+            class="dw-group-search-input"
+            placeholder="Search resources…"
+            [value]="groupSearchQuery()"
+            (input)="onGroupSearchInput($any($event.target).value)"
+          />
+          @if (groupSearchQuery()) {
+            <button type="button" class="dw-group-search-clear" (click)="clearGroupSearch()" aria-label="Clear search">✕</button>
+          }
+        </div>
+        <label class="dw-group-select-all">
+          <input
+            type="checkbox"
+            [checked]="allFilteredSelected()"
+            [indeterminate]="anyFilteredSelected() && !allFilteredSelected()"
+            (click)="toggleSelectAllFiltered()"
+          />
+          Select all{{ groupSearchQuery() ? ' (' + filteredGroups().length + ')' : '' }}
+        </label>
+        <span class="dw-section-hint">
+          @if (discoverProbeStatus() === 'probing') {
+            Choose which FHIR resources to include in this destination. Checking which ones this source supports…
+          } @else if (discoverProbeStatus() === 'done' && availableGroups().length < SUPPORTED_RESOURCE_TYPES.length) {
+            Showing {{ availableGroups().length }} of {{ SUPPORTED_RESOURCE_TYPES.length }} resources — filtered to what this source supports.
+          } @else {
+            Choose which FHIR resources to include in this destination.
+          }
+        </span>
+      </div>
+      @if (filteredGroups().length === 0) {
+        <div class="dw-callout">No resources match "{{ groupSearchQuery() }}".</div>
+      }
+      @if (unsupportedSelectedResources().length > 0) {
+        <div class="dw-callout dw-callout--warn">
+          {{ unsupportedSelectedResources().length }} selected resource{{ unsupportedSelectedResources().length > 1 ? 's are' : ' is' }}
+          no longer confirmed supported by this source ({{ unsupportedSelectedResources().join(', ') }}) —
+          it was allowed when this route was saved, but the filter has since narrowed. Review and remove it if it's no longer needed.
+        </div>
+      }
+      <div class="dw-resources">
+        @for (r of filteredGroups(); track r) {
+          <button
+            type="button"
+            class="dw-resource-card"
+            [class.selected]="isResourceSelected(r)"
+            [class.unsupported]="unsupportedSelectedResources().includes(r)"
+            [title]="unsupportedSelectedResources().includes(r) ? 'Selected, but no longer confirmed supported by this source' : ''"
+            (click)="toggleResource(r)"
+          >
+            <div class="dw-rc-check">
+              @if (isResourceSelected(r)) { ✓ }
+            </div>
+            <div class="dw-rc-body">
+              <strong class="dw-rc-name" [title]="r">{{ r }}</strong>
+              <span class="dw-rc-scope" [title]="'user/' + r + '.read'">{{ 'user/' + r + '.read' }}</span>
+              @if (unsupportedSelectedResources().includes(r)) {
+                <span class="dw-rc-warn-badge" title="No longer confirmed supported by this source">⚠ not confirmed supported</span>
+              }
+            </div>
+          </button>
+        }
+      </div>
+      @if (selectedResources().length === 0) {
+        <div class="dw-callout dw-callout--warn">
+          Select at least one data group to continue.
+        </div>
+      }
+      @if (recommendedResources().length > 0) {
+        <div class="dw-callout dw-callout--info dw-recommend-callout">
+          <span class="dw-recommend-label">Commonly used together:</span>
+          @for (r of recommendedResources(); track r) {
+            <button type="button" class="dw-recommend-chip" (click)="addRecommendedResource(r)">+ {{ r }}</button>
+          }
+          <button type="button" class="dw-recommend-add-all" (click)="addAllRecommendedResources()">+ Add all</button>
+          <button type="button" class="dw-recommend-dismiss" title="Dismiss" (click)="dismissAllRecommendations()">✕</button>
+        </div>
+      }
+    }
+
+    <!-- ═══ STEP 3: Map fields ════════════════════════════════════════════ -->
+    <!-- A FHIR repository (Aidbox) has no field-by-field mapping canvas — it writes whole FHIR resources,
+         so this step offers passthrough vs. per-field transform rules instead of the group list/canvas. -->
+    @if (isStepActive(3) && isFhir()) {
+      <div class="dw-section-head">
+        <span class="dw-section-num">3</span>
+        <span class="dw-section-title">Map fields</span>
+        <span class="dw-section-hint">Choose how FHIR resources are written to {{ destLabel() }}.</span>
+      </div>
+
+      <label class="dw-fhir-choice" [class.selected]="fhirMapMode() === 'passthrough'">
+        <input type="radio" name="fhirMapMode" [checked]="fhirMapMode() === 'passthrough'" (change)="fhirMapMode.set('passthrough')" />
+        <div class="dw-fhir-choice-body">
+          <span class="dw-fhir-choice-title">Send FHIR resources as-is <span class="dw-fhir-choice-pill">Recommended</span></span>
+          <span class="dw-hint">Writes the normalized resource unchanged — no mapping to configure.</span>
+        </div>
+      </label>
+
+      <!-- Transformation rules for a FHIR destination are authored here rather than in a second per-field
+           engine of this screen's own: they persist as real TransformationRule rows (FhirResource phase) and
+           run on the Transformation node, which brings them the shared 20-node registry, null/error policies
+           and field lineage that the legacy customize block below has none of. -->
+      <div class="dw-fhir-choice">
+        <div class="dw-fhir-choice-body">
+          <span class="dw-fhir-choice-title">Transform fields before writing</span>
+          <span class="dw-hint">
+            Read a FHIR path, transform the value, and write it back into the resource — rounding, unit
+            conversion, code mapping, status coercion and the rest of the transformation library. Rules are
+            applied by the Transformation node on the canvas.
+          </span>
+          <button type="button" class="dw-btn" (click)="openRulesForResource(activeRuleResource() ?? selectedResources()[0])">
+            Configure transformation rules
+          </button>
+        </div>
+      </div>
+
+      @if (fhirMapMode() === 'customize') {
+        <!-- Legacy: this workflow was saved before transformation rules moved onto the Transformation node.
+             Its rules keep running (FhirFieldTransformApplier still handles them) and are still editable here
+             so nothing silently stops working, but new rules belong above. Deliberately no way back INTO this
+             mode — selectFhirCustomizeMode() has no call site any more. -->
+        <p class="dw-hint">
+          This workflow uses the older per-field rules below. They still run, but new rules should be added
+          under “Transform fields before writing” above, which supports the full transformation library.
+        </p>
+        <div class="dw-fhir-resource-tabs">
+          @for (rt of selectedResources(); track rt) {
+            <button
+              type="button"
+              class="dw-fhir-resource-tab"
+              [class.active]="activeRuleResource() === rt"
+              (click)="selectRuleResourceTab(rt)"
+            >
+              {{ rt }} ({{ (fhirCustomRules()[rt] ?? []).length }})
+            </button>
+          }
+        </div>
+
+        @if (activeRuleResource()) {
+          <div class="dw-fhir-rules">
+            @for (rule of rulesForActiveResource(); track $index; let ruleIndex = $index) {
+              <div class="dw-fhir-rule-card">
+                <button type="button" class="dw-clear-btn" title="Remove rule" (click)="removeFhirRule(ruleIndex)">✕</button>
+
+                <div class="dw-fhir-rule-row">
+                  <div class="dw-select-wrap">
+                    <select class="dw-select" (change)="onFieldSelectChange(ruleIndex, $any($event.target).value)">
+                      <option value="" disabled [selected]="!rule.field && !rule.customField">Select a field…</option>
+                      @for (f of fieldOptionsFor(activeRuleResource()); track f.path) {
+                        <option [value]="f.path" [selected]="!rule.customField && rule.field === f.path">{{ f.label }}</option>
+                      }
+                      <option value="__custom__" [selected]="rule.customField">Other field (advanced)…</option>
+                    </select>
+                  </div>
+                  @if (rule.customField) {
+                    <input
+                      class="dw-input"
+                      [value]="rule.field"
+                      (input)="updateFhirRule(ruleIndex, {field: $any($event.target).value})"
+                      placeholder="e.g. identifier[0].system"
+                    />
+                  }
+
+                  <div class="dw-select-wrap">
+                    <select class="dw-select" [value]="rule.transform" (change)="onTransformChange(ruleIndex, $any($event.target).value)">
+                      <optgroup label="Value &amp; type">
+                        <option value="dateFormat">Date/time format</option>
+                        <option value="typeCast">Number / string cast</option>
+                        <option value="booleanConversion">Boolean conversion</option>
+                        <option value="unitConversion">Unit conversion (UCUM)</option>
+                        <option value="quantityRange">Quantity / Range assembly</option>
+                        <option value="roundPrecision">Rounding / scaling / precision</option>
+                      </optgroup>
+                      <optgroup label="Codes &amp; terminology">
+                        <option value="codeLookup">Value / code lookup</option>
+                        <option value="codeableConcept">CodeableConcept / Coding builder</option>
+                        <option value="statusCoercion">Status / enum coercion</option>
+                      </optgroup>
+                      <optgroup label="FHIR complex types">
+                        <option value="referenceConstruct">Reference construct</option>
+                        <option value="telecom">Telecom (ContactPoint)</option>
+                        <option value="identifierFormat">Identifier formatting</option>
+                        <option value="humanNameFormat">HumanName parse</option>
+                        <option value="addressParse">Address parse</option>
+                      </optgroup>
+                      <optgroup label="Strings &amp; structure">
+                        <option value="stringClean">String normalization / cleaning</option>
+                        <option value="stringTemplate">Concatenate / template / split</option>
+                        <option value="arrayOp">Array / list operation</option>
+                      </optgroup>
+                      <optgroup label="Data quality">
+                        <option value="coalesce">Default / coalesce</option>
+                        <option value="dateShift">Date math / date-shift</option>
+                        <option value="hashMask">Hashing / masking</option>
+                      </optgroup>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="dw-fhir-rule-params">
+                  @switch (rule.transform) {
+                    @case ('dateFormat') {
+                      <div class="dw-select-wrap">
+                        <select
+                          class="dw-select"
+                          [value]="rule.params['targetFormat'] || 'iso8601'"
+                          (change)="updateFhirRuleParam(ruleIndex, 'targetFormat', $any($event.target).value)"
+                        >
+                          <option value="iso8601">ISO 8601 (recommended)</option>
+                          <option value="custom">Custom pattern</option>
+                        </select>
+                      </div>
+                      @if (rule.params['targetFormat'] === 'custom') {
+                        <input
+                          class="dw-input"
+                          [value]="rule.params['pattern'] || ''"
+                          (input)="updateFhirRuleParam(ruleIndex, 'pattern', $any($event.target).value)"
+                          placeholder="e.g. MM/dd/yyyy"
+                        />
+                      }
+                    }
+                    @case ('typeCast') {
+                      <div class="dw-select-wrap">
+                        <select
+                          class="dw-select"
+                          [value]="rule.params['targetType'] || 'string'"
+                          (change)="updateFhirRuleParam(ruleIndex, 'targetType', $any($event.target).value)"
+                        >
+                          <option value="string">String</option>
+                          <option value="integer">Integer</option>
+                          <option value="decimal">Decimal</option>
+                        </select>
+                      </div>
+                    }
+                    @case ('booleanConversion') {
+                      <input
+                        class="dw-input"
+                        [value]="rule.params['trueValues'] || ''"
+                        (input)="updateFhirRuleParam(ruleIndex, 'trueValues', $any($event.target).value)"
+                        placeholder="true values, e.g. Y, 1, yes"
+                      />
+                    }
+                    @case ('unitConversion') {
+                      <input
+                        class="dw-input"
+                        [value]="rule.params['fromUnit'] || ''"
+                        (input)="updateFhirRuleParam(ruleIndex, 'fromUnit', $any($event.target).value)"
+                        placeholder="from unit, e.g. lb"
+                      />
+                      <input
+                        class="dw-input"
+                        [value]="rule.params['toUnit'] || ''"
+                        (input)="updateFhirRuleParam(ruleIndex, 'toUnit', $any($event.target).value)"
+                        placeholder="to unit, e.g. kg"
+                      />
+                    }
+                    @case ('telecom') {
+                      <div class="dw-select-wrap">
+                        <select
+                          class="dw-select"
+                          [value]="rule.params['system'] || 'phone'"
+                          (change)="updateFhirRuleParam(ruleIndex, 'system', $any($event.target).value)"
+                        >
+                          <option value="phone">Phone</option>
+                          <option value="email">Email</option>
+                          <option value="fax">Fax</option>
+                          <option value="url">URL</option>
+                        </select>
+                      </div>
+                      <div class="dw-select-wrap">
+                        <select
+                          class="dw-select"
+                          [value]="rule.params['use'] || ''"
+                          (change)="updateFhirRuleParam(ruleIndex, 'use', $any($event.target).value)"
+                        >
+                          <option value="">(no use)</option>
+                          <option value="home">Home</option>
+                          <option value="work">Work</option>
+                          <option value="mobile">Mobile</option>
+                        </select>
+                      </div>
+                    }
+                    @case ('referenceConstruct') {
+                      <input
+                        class="dw-input"
+                        [value]="rule.params['targetResourceType'] || ''"
+                        (input)="updateFhirRuleParam(ruleIndex, 'targetResourceType', $any($event.target).value)"
+                        placeholder="target resource type, e.g. Organization"
+                      />
+                    }
+                    @case ('quantityRange') {
+                      <div class="dw-select-wrap">
+                        <select class="dw-select" [value]="rule.params['mode'] || 'quantity'" (change)="updateFhirRuleParam(ruleIndex, 'mode', $any($event.target).value)">
+                          <option value="quantity">Single quantity</option>
+                          <option value="range">Low/high range</option>
+                        </select>
+                      </div>
+                      <input class="dw-input" [value]="rule.params['unit'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'unit', $any($event.target).value)" placeholder="unit (UCUM), e.g. mg" />
+                      @if (rule.params['mode'] === 'range') {
+                        <input class="dw-input" [value]="rule.params['delimiter'] || '-'" (input)="updateFhirRuleParam(ruleIndex, 'delimiter', $any($event.target).value)" placeholder="delimiter, e.g. -" />
+                      }
+                    }
+                    @case ('roundPrecision') {
+                      <input class="dw-input" type="number" [value]="rule.params['decimals'] || '2'" (input)="updateFhirRuleParam(ruleIndex, 'decimals', $any($event.target).value)" placeholder="decimal places" />
+                    }
+                    @case ('codeLookup') {
+                      <div class="dw-fhir-lookup-pairs">
+                        @for (pair of getLookupPairs(rule); track $index; let pairIndex = $index) {
+                          <div class="dw-fhir-lookup-pair-row">
+                            <input class="dw-input" [value]="pair.from" (input)="updateLookupPair(ruleIndex, pairIndex, 'from', $any($event.target).value)" placeholder="source value" />
+                            <span>&rarr;</span>
+                            <input class="dw-input" [value]="pair.to" (input)="updateLookupPair(ruleIndex, pairIndex, 'to', $any($event.target).value)" placeholder="target code" />
+                            <button type="button" class="dw-clear-btn" title="Remove mapping" (click)="removeLookupPair(ruleIndex, pairIndex)">✕</button>
+                          </div>
+                        }
+                        <button type="button" class="dw-btn" (click)="addLookupPair(ruleIndex)">+ Add mapping</button>
+                      </div>
+                    }
+                    @case ('statusCoercion') {
+                      <div class="dw-fhir-lookup-pairs">
+                        @for (pair of getLookupPairs(rule); track $index; let pairIndex = $index) {
+                          <div class="dw-fhir-lookup-pair-row">
+                            <input class="dw-input" [value]="pair.from" (input)="updateLookupPair(ruleIndex, pairIndex, 'from', $any($event.target).value)" placeholder="source value" />
+                            <span>&rarr;</span>
+                            <input class="dw-input" [value]="pair.to" (input)="updateLookupPair(ruleIndex, pairIndex, 'to', $any($event.target).value)" placeholder="allowed FHIR code" />
+                            <button type="button" class="dw-clear-btn" title="Remove mapping" (click)="removeLookupPair(ruleIndex, pairIndex)">✕</button>
+                          </div>
+                        }
+                        <button type="button" class="dw-btn" (click)="addLookupPair(ruleIndex)">+ Add mapping</button>
+                      </div>
+                    }
+                    @case ('codeableConcept') {
+                      <input class="dw-input" [value]="rule.params['system'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'system', $any($event.target).value)" placeholder="system URI" />
+                      <input class="dw-input" [value]="rule.params['display'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'display', $any($event.target).value)" placeholder="display text" />
+                    }
+                    @case ('identifierFormat') {
+                      <input class="dw-input" [value]="rule.params['system'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'system', $any($event.target).value)" placeholder="system URI, e.g. http://hospital.org/mrn" />
+                    }
+                    @case ('humanNameFormat') {
+                      <input class="dw-input" [value]="rule.params['delimiter'] || ', '" (input)="updateFhirRuleParam(ruleIndex, 'delimiter', $any($event.target).value)" placeholder="delimiter, e.g. ', '" />
+                    }
+                    @case ('addressParse') {
+                      <input class="dw-input" [value]="rule.params['delimiter'] || ','" (input)="updateFhirRuleParam(ruleIndex, 'delimiter', $any($event.target).value)" placeholder="delimiter, e.g. comma" />
+                    }
+                    @case ('stringClean') {
+                      <div class="dw-select-wrap">
+                        <select class="dw-select" [value]="rule.params['mode'] || 'trim'" (change)="updateFhirRuleParam(ruleIndex, 'mode', $any($event.target).value)">
+                          <option value="trim">Trim whitespace</option>
+                          <option value="upper">UPPERCASE</option>
+                          <option value="lower">lowercase</option>
+                          <option value="collapseWhitespace">Collapse internal whitespace</option>
+                        </select>
+                      </div>
+                    }
+                    @case ('stringTemplate') {
+                      <div class="dw-select-wrap">
+                        <select class="dw-select" [value]="rule.params['mode'] || 'template'" (change)="updateFhirRuleParam(ruleIndex, 'mode', $any($event.target).value)">
+                          <option value="template">Template (wrap value)</option>
+                          <option value="split">Split into array</option>
+                        </select>
+                      </div>
+                      @if (rule.params['mode'] === 'split') {
+                        <input class="dw-input" [value]="rule.params['delimiter'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'delimiter', $any($event.target).value)" placeholder="delimiter" />
+                      } @else {
+                        <input class="dw-input" [value]="rule.params['template'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'template', $any($event.target).value)" placeholder="e.g. MRN-{value}" />
+                      }
+                    }
+                    @case ('arrayOp') {
+                      <div class="dw-select-wrap">
+                        <select class="dw-select" [value]="rule.params['operation'] || 'first'" (change)="updateFhirRuleParam(ruleIndex, 'operation', $any($event.target).value)">
+                          <option value="first">Take first element</option>
+                          <option value="filterBySystem">Filter by system</option>
+                          <option value="join">Join into a string</option>
+                        </select>
+                      </div>
+                      @if (rule.params['operation'] === 'filterBySystem') {
+                        <input class="dw-input" [value]="rule.params['filterSystem'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'filterSystem', $any($event.target).value)" placeholder="system to match" />
+                      }
+                      @if (rule.params['operation'] === 'join') {
+                        <input class="dw-input" [value]="rule.params['joinDelimiter'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'joinDelimiter', $any($event.target).value)" placeholder="join delimiter, e.g. ', '" />
+                      }
+                    }
+                    @case ('coalesce') {
+                      <input
+                        class="dw-input"
+                        [value]="rule.params['defaultValue'] || ''"
+                        (input)="updateFhirRuleParam(ruleIndex, 'defaultValue', $any($event.target).value)"
+                        placeholder="default value"
+                      />
+                    }
+                    @case ('dateShift') {
+                      <input class="dw-input" type="number" [value]="rule.params['days'] || ''" (input)="updateFhirRuleParam(ruleIndex, 'days', $any($event.target).value)" placeholder="days to shift, e.g. -5" />
+                    }
+                    @case ('hashMask') {
+                      <div class="dw-select-wrap">
+                        <select class="dw-select" [value]="rule.params['mode'] || 'hash'" (change)="updateFhirRuleParam(ruleIndex, 'mode', $any($event.target).value)">
+                          <option value="hash">Hash (SHA-256)</option>
+                          <option value="mask">Mask, keep last N characters</option>
+                        </select>
+                      </div>
+                      @if (rule.params['mode'] === 'mask') {
+                        <input class="dw-input" type="number" [value]="rule.params['showLastN'] || '0'" (input)="updateFhirRuleParam(ruleIndex, 'showLastN', $any($event.target).value)" placeholder="characters to keep" />
+                      }
+                    }
+                  }
+                </div>
+
+                @if (rule.field) {
+                  <div class="dw-fhir-rule-preview">{{ fhirRulePreview(rule) }}</div>
+                }
+              </div>
+            }
+            <button type="button" class="dw-btn" (click)="addFhirRule()">+ Add rule for {{ activeRuleResource() }}</button>
+          </div>
+        }
+      }
+    } @else if (isStepActive(3) && (isMedplum() || isAzureFhir())) {
+      <!-- ── Columnless FHIR server (Medplum / Azure FHIR Service): the whole normalized resource is written
+           as-is (runtime wholeResourceFhir path — MappedDestinationRecord.SourceJson), so there is nothing to
+           map field-by-field. Present the single "send as-is" choice instead of the mapping table — unlike
+           Aidbox above, neither has a per-field customize option. ── -->
+      <div class="dw-section-head">
+        <span class="dw-section-num">3</span>
+        <span class="dw-section-title">Map fields</span>
+        <span class="dw-section-hint">Choose how FHIR resources are written to {{ destLabel() }}.</span>
+      </div>
+      <div class="dw-resources">
+        <div class="dw-resource-card selected">
+          <div class="dw-rc-check">●</div>
+          <div class="dw-rc-body">
+            <strong class="dw-rc-name">Send FHIR resources as-is · RECOMMENDED</strong>
+            <span class="dw-rc-scope">Writes the normalized resource unchanged — no mapping to configure.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Same entry point Aidbox gets above. Medplum and Azure FHIR previously had none at all, so their only
+           option was verbatim passthrough even though the runtime treats all three identically. -->
+      <div class="dw-fhir-choice">
+        <div class="dw-fhir-choice-body">
+          <span class="dw-fhir-choice-title">Transform fields before writing</span>
+          <span class="dw-hint">
+            Read a FHIR path, transform the value, and write it back into the resource. Rules are applied by
+            the Transformation node on the canvas.
+          </span>
+          <button type="button" class="dw-btn" (click)="openRulesForResource(activeRuleResource() ?? selectedResources()[0])">
+            Configure transformation rules
+          </button>
+        </div>
+      </div>
+    } @else if (isStepActive(3)) {
+      @if (!activeMappingGroup()) {
+        <!-- ── Data group selection screen ── choose which group's canvas to open ── -->
+        <div class="dw-section-head">
+          <span class="dw-section-num">3</span>
+          <span class="dw-section-title">Map fields</span>
+          <span class="dw-section-hint">
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : isFhir() ? 'Map FHIR paths to FHIR repository resource fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : 'Map FHIR paths to CSV file columns.' }}
+            Choose a data group to configure.
+          </span>
+        </div>
+
+        <!-- The Mapping / Transformation / De-identification tabs the user actually works in live inside
+             the mapping canvas's own Mapping list (see field-mapping-list.component.html). Whichever
+             chain node opened this wizard just preselects one of those (configTab → the canvas's
+             initialListTab), so this screen stays a plain resource list and there's exactly one set of
+             tabs rather than two competing ones. -->
+        @if (configTab() !== 'mapping') {
+          <p class="dw-chain-hint">
+            Opening {{ configTab() === 'transformation' ? 'Transformation' : 'De-identification' }} —
+            choose a data group below. All three tabs (Mappings, Transformations, De-identification) stay
+            available once its canvas is open.
+          </p>
+        }
+
+        <!-- ── Save mapping / Load saved mapping / Load mapping JSON controls live here, hidden from
+             this screen for now — still reachable via the in-canvas header Save (which also builds and
+             shows the Mapping JSON), see buildAndShowMappingSummary()/loadMappingSnapshot()/
+             submitLoadMappingSummary(). ── -->
+
+        <table class="data-table dw-groups-table">
+          <thead class="data-table__header">
+            <tr>
+              <th class="dw-groups-drag-col"></th>
+              <th>Data group</th>
+              <th class="dw-groups-actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody #groupsBody>
+            @for (r of resourceKeys(); track r) {
+              <tr
+                class="data-table__row"
+                [class.dw-groups-row--dragging]="draggingResource() === r"
+                [attr.data-resource-row]="r"
+              >
+                <td class="dw-groups-drag-col">
+                  <button
+                    type="button"
+                    class="dw-groups-drag-handle"
+                    [attr.aria-label]="'Drag to reorder ' + r"
+                    title="Drag to reorder"
+                    (pointerdown)="onGroupRowDragHandlePointerDown(r, $event)"
+                    (pointermove)="onGroupRowDragPointerMove($event)"
+                    (pointerup)="onGroupRowDragPointerUp($event)"
+                    (pointercancel)="onGroupRowDragPointerUp($event)"
+                  >⠿</button>
+                </td>
+                <td class="dw-groups-name">{{ r }}</td>
+                <td class="dw-groups-actions">
+                  <!-- One action, labelled for whichever chain node opened this wizard — all three open
+                       the same mapping canvas, which lands on the matching tab of its Mapping list. -->
+                  <button type="button" class="btn btn-sm btn-primary" (click)="openGroupMapping(r)">
+                    {{ configTab() === 'transformation' ? 'Transformation' : configTab() === 'deidentification' ? 'De-identification' : 'Map' }}
+                  </button>
+                  <!-- The per-resource "Rules" button used to live here. Transformation rules are now
+                       reached from the canvas's own Transformation node — which lands on the matching tab
+                       of the mapping list for a SQL destination, and opens the payload-tree rules panel
+                       for a FHIR one — so a second entry point from this row is redundant. The
+                       TransformationRules:Hidden setting (rulesHidden) still gates the rules UI itself. -->
+                  @if (canSelectExistingProfile()) {
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-secondary"
+                      title="Reuse a mapping profile already saved for this source connection, destination, and resource type"
+                      (click)="openExistingProfilePicker(r)"
+                    >Select Existing</button>
+                  }
+                </td>
+              </tr>
+            }
+            @if (resourceKeys().length === 0) {
+              <tr><td colspan="3" class="dw-groups-empty">No data groups selected — go back to Step 2 to choose some.</td></tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <!-- ── Mapping canvas, scoped to the one selected group ── the outer Node Library header
+             shows "Map fields — {group}" in place of its own title, so no title repeats here. ── -->
+        <app-field-mapping-canvas
+          class="dw-mapping-canvas-full"
+          [initialListTab]="listTabForConfigTab()"
+          [resources]="[activeMappingGroup()!]"
+          [allResources]="selectedResources()"
+          [destType]="nonFhirDestType()"
+          [rulesDestinationType]="resolveDestinationTypeForRules()"
+          [workflowId]="currentWorkflowId()"
+          [deIdentificationProfiles]="deIdentificationProfiles()"
+          [selectedDeIdentificationProfileId]="selectedDeIdentificationProfileId()"
+          [newProfileName]="newProfileName()"
+          [creatingProfile]="creatingProfile()"
+          (selectedDeIdentificationProfileIdChange)="selectedDeIdentificationProfileId.set($event)"
+          (newProfileNameChange)="newProfileName.set($event)"
+          (createDeIdentificationProfileRequested)="createDeIdentificationProfile()"
+          [mappingRows]="mappingRows()"
+          [targetByResource]="targetByResource()"
+          [availableFields]="availableFieldsFn"
+          [defaultAvailableFields]="defaultAvailableFieldsFn"
+          [columnsForResourceTarget]="columnsForResourceTargetFn"
+          [hasSqlTables]="hasSqlTables()"
+          [sqlTableOptions]="sqlTableOptions()"
+          [sqlTableNames]="sqlTableBareNames()"
+          [schemaAuthoringEnabled]="isSql()"
+          [schemaLoadState]="schemaLoadState()"
+          [csvDelimiterKey]="activeFormConfig()['dest_delimiter'] ?? 'comma'"
+          [extraTables]="extraTablesFor(activeMappingGroup()!)"
+          [pendingTableNames]="pendingTableNames()"
+          [columnsForTable]="columnsForTableFn"
+          [dataTypeForTable]="dataTypeForTableColumnFn"
+          [keyInfoForTable]="keyInfoForTableColumnFn"
+          [childTableRelations]="childTableRelationsByTable()"
+          [availableTablesToAdd]="availableTablesToAddFn"
+          [connectionInfo]="connectionInfo()"
+          [openLoadPayloadRequest]="openLoadPayloadRequest()"
+          [openPreviewRequest]="openPreviewRequest()"
+          [runSuggestMappingsRequest]="runSuggestMappingsRequest()"
+          [clearSuggestionsRequest]="clearSuggestionsRequest()"
+          [zoomInRequest]="zoomInRequest()"
+          [zoomOutRequest]="zoomOutRequest()"
+          [zoomResetRequest]="zoomResetRequest()"
+          [zoomFitRequest]="zoomFitRequest()"
+          [searchQuery]="mappingSearchQuery()"
+          (suggestionCountChange)="suggestionCountChange.emit($event)"
+          (zoomPercentChange)="zoomPercentChange.emit($event)"
+          (mappingRowsChange)="mappingRows.set($event)"
+          (targetByResourceChange)="targetByResource.set($event)"
+          (extraTablesChange)="onExtraTablesChange($event)"
+          (columnAdded)="onColumnAdded($event)"
+          (tableCreated)="onTableCreated($event)"
+          (columnDropped)="onColumnDropped($event)"
+          (columnAltered)="onColumnAltered($event)"
+          (schemaOpQueued)="onSchemaOpQueued($event)"
+          (schemaOpsCancelledForTable)="onSchemaOpsCancelledForTable($event)"
+          (sourcePayloadLoaded)="onSourcePayloadLoaded($event)"
+          (sourcePayloadReset)="onSourcePayloadReset($event)"
+          (childTableRelationAdded)="onChildTableRelationAdded($event)"
+          (retrySchemaLoad)="retrySchemaLoad()"
+        />
+      }
+    }
+
+    @if (mappingSummaryPreviewOpen()) {
+      <app-field-mapping-export-preview-modal
+        [data]="lastMappingSummary()"
+        (closed)="closeMappingSummaryPreview()"
+      />
+    }
+
+    <!-- ═══ STEP 4: Review ═══════════════════════════════════════════════ -->
+    @if (isStepActive(4)) {
+      <div class="dw-section-head">
+        <span class="dw-section-num">4</span>
+        <span class="dw-section-title">Review &amp; add to workflow</span>
+      </div>
+
+      <div class="dw-review-grid">
+        <div class="dw-review-card">
+          <span class="dw-review-key">Destination type</span>
+          <span class="dw-review-val">{{ destLabel() }}</span>
+        </div>
+        <div class="dw-review-card">
+          <span class="dw-review-key">De-identification</span>
+          <span class="dw-review-val" [class.dw-review-val--warn]="!selectedDeIdentificationProfileId() || !selectedProfileHasRules()">
+            @if (!selectedDeIdentificationProfileId()) {
+              ⚠ No policy assigned
+            } @else if (!selectedProfileHasRules()) {
+              ⚠ {{ selectedDeIdentificationProfileName() }} (no active rules)
+            } @else {
+              {{ selectedDeIdentificationProfileName() }}
+            }
+          </span>
+        </div>
+        @if (isSql()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">SQL Server</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_server'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Database</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_database'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Auth</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_auth'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_writeMode'] }}</span>
+          </div>
+        } @else if (isMongo()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Collection</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_collection'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_writeMode'] }}</span>
+          </div>
+        } @else if (isMedplum()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">FHIR base URL</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_medplumBaseUrl'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Auth method</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_medplumAuthMethod'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_medplumWriteMode'] }}</span>
+          </div>
+        } @else if (isFhir()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ fhirForm.value.name }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Base URL</span>
+            <span class="dw-review-val dw-mono">{{ fhirForm.value.baseUrl || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Project</span>
+            <span class="dw-review-val">{{ fhirForm.value.project || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Authentication</span>
+            <span class="dw-review-val">{{ fhirForm.value.authType === 'oauth2' ? 'OAuth2 Client Credentials' : fhirForm.value.authType === 'basic' ? 'Basic Username / Password' : 'Static Bearer Token' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Write mode</span>
+            <span class="dw-review-val">{{ fhirForm.value.writeMode === 'upsertBundle' ? 'Upsert by resource id (Bundle)' : fhirForm.value.writeMode === 'upsertTransaction' ? 'Upsert by resource id (Transaction)' : 'Upsert by resource id (PUT)' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Auto-fetch missing references</span>
+            <span class="dw-review-val">{{ fhirForm.value.autoFetchMissingReferences ? ('On — up to ' + (fhirForm.value.autoFetchMaxCount ?? 25) + ' per run') : 'Off' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Field handling</span>
+            <span class="dw-review-val">{{ fhirMapMode() === 'customize' ? ('Custom mapping (' + totalFhirRuleCount() + ' rule' + (totalFhirRuleCount() === 1 ? '' : 's') + ')') : 'Passthrough — no mapping' }}</span>
+
+          </div>
+        } @else if (isBlob()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Container</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobContainer'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Authentication</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_blobAuthMode'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Delivery</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_blobGranularity'] === 'individual' ? 'Individual records (one blob per record)' : 'Bulk upload (all records in one blob)' }}</span>
+          </div>
+          @if (activeFormConfig()['dest_blobGranularity'] === 'individual') {
+            <div class="dw-review-card">
+              <span class="dw-review-key">Record mode</span>
+              <span class="dw-review-val">{{ activeFormConfig()['dest_blobRecordMode'] === 'insert' ? 'Insert — always add new' : activeFormConfig()['dest_blobRecordMode'] === 'update' ? 'Update — only if exists' : 'Upsert — update if exists, else insert' }}</span>
+            </div>
+            <div class="dw-review-card">
+              <span class="dw-review-key">Folder pattern</span>
+              <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobFolderPattern'] || '{name}' }}</span>
+            </div>
+            <div class="dw-review-card">
+              <span class="dw-review-key">File name pattern</span>
+              <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobFileNamePattern'] || (activeFormConfig()['dest_blobRecordMode'] === 'insert' ? '{id}_{date:yyyyMMddHHmmssfff}_{guid}.json' : '{id}.json') }}</span>
+            </div>
+          }
+          @if (activeFormConfig()['dest_blobPathPrefix']) {
+            <div class="dw-review-card">
+              <span class="dw-review-key">Path prefix</span>
+              <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobPathPrefix'] }}</span>
+            </div>
+          }
+        } @else if (isAzureFhir()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">FHIR service URL</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_baseUrl'] || '—' }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Authentication</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_authType'] === 'managedIdentity' ? 'Managed identity' : 'Client credentials' }}</span>
+          </div>
+        } @else {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Delivery mode</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_deliveryMode'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">File pattern</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_filePattern'] }}</span>
+          </div>
+        }
+        <div class="dw-review-card">
+          <span class="dw-review-key">Data groups</span>
+          <span class="dw-review-val">{{ selectedResources().join(', ') || '—' }}</span>
+        </div>
+        @if (!isFhir() && !isAzureFhir()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Mapped fields</span>
+            <span class="dw-review-val">{{ mappingRows().length }} fields</span>
+          </div>
+        }
+      </div>
+
+      <div class="dw-callout dw-callout--info">
+        After adding to the workflow, the {{ destLabel() }} node will be connected automatically to the selected source.
+      </div>
+    }
+
+  </div><!-- /dw-body -->
+
+  <!-- ── Footer ── hidden while a group's mapping canvas is open; Close/Save below the
+       canvas are the only exit points there, so the step Cancel/Back/Next controls would
+       just be redundant (and "Next"/"Back" would skip past the canvas state entirely). ── -->
+  @if (!activeMappingGroup()) {
+    <div class="dw-footer">
+      <button class="dw-btn" type="button" (click)="cancel()">Cancel</button>
+      <div class="dw-footer-right">
+        <!-- Opened from a chain node (Mapping / Transformation / De-identification): Step 3 is the whole
+             screen, so the step counter and Back/Next (which would walk into Configure/Data groups/Review)
+             are replaced by a single Save that commits and stays here for the next resource. -->
+        @if (chainNodeEntry()) {
+          <button
+            class="dw-btn dw-btn--primary"
+            type="button"
+            [disabled]="savingMappingProfiles() || applyingSchemaOps()"
+            (click)="saveChainNode()"
+          >
+            {{ applyingSchemaOps() ? 'Applying schema changes…' : (savingMappingProfiles() ? 'Saving…' : 'Save') }}
+          </button>
+        } @else {
+        <span class="dw-step-info">Step {{ step() }} of {{ TOTAL_STEPS }}</span>
+        <button class="dw-btn" type="button" [disabled]="step() === 1" (click)="back()">Back</button>
+        <button
+          class="dw-btn dw-btn--primary"
+          type="button"
+          [disabled]="isNextDisabled() || probeState() === 'testing' || provisioningDestination() || savingMappingProfiles() || applyingSchemaOps()"
+          (click)="next()"
+        >
+          @if (step() === TOTAL_STEPS) { {{ applyingSchemaOps() ? 'Applying schema changes…' : (savingMappingProfiles() ? 'Saving…' : (editNode() ? '✓ Update' : '✓ Add to Workflow')) }} }
+          @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : (provisioningDestination() ? 'Creating…' : 'Test connection & Next') }} }
+          @else if (step() === 1 && isFhir()) { {{ probeState() === 'testing' ? 'Testing…' : (provisioningDestination() ? 'Creating…' : 'Test connection & Next') }} }
+          @else if (step() === 1 && provisioningDestination()) { Creating… }
+          @else { Next }
+        </button>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ── Confirm before discarding an in-progress group mapping ─────────────── -->
+  @if (pendingExitConfirm()) {
+    <div class="dw-confirm-backdrop" tabindex="0"
+         (click)="onExitConfirmBackdropClick($event)"
+         (keydown.escape)="cancelExitMapping()">
+      <div class="dw-confirm-dialog">
+        <div class="dw-confirm-icon">⚠</div>
+        <h3 class="dw-confirm-title">Exit mapping for {{ activeMappingGroup() }}?</h3>
+        <p class="dw-confirm-body">
+          Any changes made since you opened this group's mapping will be discarded.
+        </p>
+        <div class="dw-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelExitMapping()">Keep editing</button>
+          <button type="button" class="btn btn-danger" (click)="confirmExitMapping()">Exit without saving</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ── Confirm before saving despite a non-blocking mapping warning ────────── -->
+  <!-- ── No de-identification profile selected for this destination — never silent; requires an explicit
+       "Continue anyway" before Step 1 advances, whether the connection is new or reused as-is. ── -->
+  @if (pendingDeIdentificationWarning(); as w) {
+    <div class="dw-confirm-backdrop" tabindex="0"
+         (click)="cancelProceedWithoutDeIdentification()"
+         (keydown.escape)="cancelProceedWithoutDeIdentification()">
+      <div class="dw-confirm-dialog">
+        <div class="dw-confirm-icon">⚠</div>
+        <h3 class="dw-confirm-title">
+          @if (w.reason === 'none') {
+            No de-identification policy assigned
+          } @else {
+            Selected policy has no active rules
+          }
+        </h3>
+        <div class="dw-confirm-body">
+          @if (w.reason === 'none') {
+            <p>This destination has no de-identification profile selected — PHI will not be redacted or generalized before it's written. Continue only if this destination is genuinely meant to receive unprotected data.</p>
+          } @else {
+            <p><strong>{{ selectedDeIdentificationProfileName() }}</strong> is selected, but it currently has no enabled rules under it — nothing will actually be redacted, even though a policy appears to be assigned. Add rules to this profile on the Transformation Rules screen, or pick a different one, before continuing.</p>
+          }
+        </div>
+        <div class="dw-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelProceedWithoutDeIdentification()">Go back</button>
+          <button type="button" class="btn btn-danger" (click)="confirmProceedWithoutDeIdentification()">Continue anyway</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (pendingSaveWarnings(); as warnings) {
+    <div class="dw-confirm-backdrop" tabindex="0"
+         (click)="onSaveWarningsBackdropClick($event)"
+         (keydown.escape)="cancelSaveWithWarnings()">
+      <div class="dw-confirm-dialog dw-confirm-dialog--wide">
+        <div class="dw-confirm-icon">⚠</div>
+        <h3 class="dw-confirm-title">Save {{ activeMappingGroup() }} mapping with {{ warnings.length }} warning{{ warnings.length === 1 ? '' : 's' }}?</h3>
+        <div class="dw-confirm-body">
+          @for (w of warnings; track w.parent) {
+            <div class="dw-ref-warning">
+              @if (w.message) {
+                <p>{{ w.message }}</p>
+              } @else {
+                <p>
+                  "{{ w.resource }}" requires a reference to "{{ w.parent }}"
+                  <br>
+                  —
+                  @if (w.existingRow) {
+                    <strong>{{ w.sourceFieldLabel }}</strong> is already mapped; point it at:
+                  } @else {
+                    map <strong>{{ w.sourceFieldLabel }}</strong> to:
+                  }
+                </p>
+                <div class="dw-ref-warning-fix">
+                  <select #destSelect class="dw-ref-warning-select">
+                    <option value="" [selected]="!w.selectedDestinationColumn">Select…</option>
+                    @for (col of w.destinationColumns; track col) {
+                      <option [value]="col" [selected]="col === w.selectedDestinationColumn">{{ col }}</option>
+                    }
+                  </select>
+                  <button type="button" class="btn btn-secondary"
+                          (click)="resolvePendingReferenceWarning(w, destSelect.value)">
+                    Map as {{ w.parent }}
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <div class="dw-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelSaveWithWarnings()">Keep editing</button>
+          <button type="button" class="btn btn-danger" (click)="confirmSaveWithWarnings()">Save anyway</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ── Transform rule conflicts blocking Save — per-conflict Override/Bypass, never edits the rule itself ── -->
+  @if (pendingRuleConflicts(); as conflicts) {
+    <div class="dw-confirm-backdrop" tabindex="0"
+         (click)="onRuleConflictsBackdropClick($event)"
+         (keydown.escape)="cancelRuleConflicts()">
+      <div class="dw-confirm-dialog dw-confirm-dialog--wide">
+        <div class="dw-confirm-icon">⚠</div>
+        <h3 class="dw-confirm-title">
+          Fix {{ conflicts.length }} transform rule conflict{{ conflicts.length === 1 ? '' : 's' }} before saving
+        </h3>
+        @if (!currentWorkflowId()) {
+          <p class="dw-rule-conflict-hint">
+            Save this workflow first, then reopen the mapping to override or bypass a conflicting rule for it.
+          </p>
+        }
+        <div class="dw-confirm-body">
+          @for (c of conflicts; track ruleConflictKey(c)) {
+            <div class="dw-ref-warning">
+              <p>{{ c.message }}</p>
+              @if (currentWorkflowId()) {
+                <div class="dw-ref-warning-fix">
+                  <button type="button" class="btn btn-secondary"
+                          [disabled]="resolvingRuleConflict() === ruleConflictKey(c)"
+                          (click)="resolveRuleConflictOverride(c)">
+                    Override for this workflow
+                  </button>
+                  <button type="button" class="btn btn-secondary"
+                          [disabled]="resolvingRuleConflict() === ruleConflictKey(c)"
+                          (click)="resolveRuleConflictBypass(c)">
+                    Bypass for this workflow
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <div class="dw-confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelRuleConflicts()">Keep editing</button>
+        </div>
+      </div>
+    </div>
+  }
+
+</div>

@@ -181,18 +181,16 @@ public sealed class RoleManagementService : IRoleManagementService
 
     public async Task DeleteRoleAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        if (SystemRoleIds.Contains(roleId))
+        // SuperAdmin alone is truly non-deletable — the platform must always have at least one role that
+        // can never be locked out of its own permissions. Every other role, built-in (Admin/Operations/Audit,
+        // where they still exist — see RbacSeedData.Roles) or custom, is deletable once no user holds it.
+        if (roleId == SeededSecurityIds.SuperAdminRoleId)
         {
-            throw new InvalidOperationException("System roles cannot be deleted.");
+            throw new InvalidOperationException("The SuperAdmin role cannot be deleted.");
         }
 
         var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken)
             ?? throw new InvalidOperationException("Role was not found.");
-
-        if (role.IsSystem)
-        {
-            throw new InvalidOperationException("System roles cannot be deleted.");
-        }
 
         var userCount = await _repository.GetRoleUserCountAsync(roleId, cancellationToken);
         if (userCount > 0)
@@ -227,12 +225,14 @@ public sealed class RoleManagementService : IRoleManagementService
         Guid permissionId,
         CancellationToken cancellationToken)
     {
-        var role = await _repository.GetRoleByIdAsync(roleId, cancellationToken)
+        _ = await _repository.GetRoleByIdAsync(roleId, cancellationToken)
             ?? throw new InvalidOperationException("Role was not found.");
 
-        if (role.IsSystem && SystemRoleIds.Contains(roleId))
+        // Same rule as UpdateRoleAsync's permission-edit path (the one the Role Permissions screen actually
+        // uses): only SuperAdmin's grant is immutable.
+        if (roleId == SeededSecurityIds.SuperAdminRoleId)
         {
-            throw new InvalidOperationException("Permissions cannot be removed from system roles.");
+            throw new InvalidOperationException("Permissions cannot be removed from the SuperAdmin role.");
         }
 
         await _repository.RemoveRolePermissionAsync(roleId, permissionId, cancellationToken);

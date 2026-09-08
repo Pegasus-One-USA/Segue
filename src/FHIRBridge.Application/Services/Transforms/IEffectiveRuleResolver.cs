@@ -13,6 +13,16 @@ namespace FHIRBridge.Application.Services.Transforms;
 /// </summary>
 public interface IEffectiveRuleResolver
 {
+    /// <param name="workflowScopedOnly">
+    /// True to resolve at <see cref="TransformScope.Workflow"/> scope and stop there — no fall-through to the
+    /// tenant-wide tiers. Set by a caller whose rules are authored per pipeline, so a rule belonging to a
+    /// different workflow can never apply here: those broader tiers key on (resource type, destination field),
+    /// not on a workflow, so one rule authored anywhere applies everywhere that field is mapped.
+    ///
+    /// Defaults to false, which is the original five-tier walk. V1 pipelines (and any graph saved before the
+    /// workflow id was stamped onto its nodes) keep resolving exactly as they always have — their rules live in
+    /// those broader tiers and would otherwise stop firing.
+    /// </param>
     Task<IReadOnlyList<TransformationRule>> ResolveAsync(
         DestinationType destinationType,
         string resourceType,
@@ -20,7 +30,8 @@ public interface IEffectiveRuleResolver
         Guid? resourcePipelineRouteId,
         string? sourceSystem,
         string? sourceField,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool workflowScopedOnly = false);
 }
 
 public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
@@ -39,7 +50,8 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
         Guid? resourcePipelineRouteId,
         string? sourceSystem,
         string? sourceField,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool workflowScopedOnly = false)
     {
         if (resourcePipelineRouteId is not null)
         {
@@ -53,6 +65,20 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
             {
                 return OrderOnly(workflowRules);
             }
+
+            // This pipeline's rules are the only ones that may apply to it, so "no rule here" means no rule —
+            // not "look for someone else's".
+            if (workflowScopedOnly)
+            {
+                return [];
+            }
+        }
+
+        // A workflow-scoped caller with no workflow id yet (an unsaved graph) has nothing that could have been
+        // authored against it, and must not inherit the tenant-wide tiers either.
+        if (workflowScopedOnly)
+        {
+            return [];
         }
 
         var fieldRules = PreferSourceFieldSpecific(

@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,14 +18,23 @@ public sealed class EfTenantRepository : ITenantRepository
 
     public async Task<PagedResult<Tenant>> GetPagedAsync(string? search, int page, int pageSize, CancellationToken cancellationToken)
     {
-        var query = _db.Tenants
-            .Where(x => string.IsNullOrWhiteSpace(search)
-                || EF.Functions.Like(x.Name, $"%{search}%")
-                || EF.Functions.Like(x.Code, $"%{search}%"))
-            .OrderBy(x => x.Name);
+        var query = _db.Tenants.AsQueryable();
 
-        var totalCount = await query.CountAsync(cancellationToken);
-        var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            // Upper-cased on both sides rather than left to the database's own collation: SQL Server's default
+            // collation is case-insensitive but PostgreSQL's LIKE is not, so an interpolated LIKE matched nothing
+            // on Npgsql unless the user typed the stored casing exactly. Contains() (instead of an interpolated
+            // LIKE pattern) also parameterizes the term, so a '%' or '_' the user types is matched literally
+            // rather than acting as a wildcard.
+            var term = search.Trim().ToUpperInvariant();
+            query = query.Where(x => x.Name.ToUpper().Contains(term) || x.Code.ToUpper().Contains(term));
+        }
+
+        var ordered = query.OrderBy(x => x.Name);
+
+        var totalCount = await ordered.CountAsync(cancellationToken);
+        var items = await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         return new PagedResult<Tenant>(items, totalCount, page, pageSize);
     }
 

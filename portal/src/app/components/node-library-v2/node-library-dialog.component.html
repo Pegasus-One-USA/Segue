@@ -1,0 +1,613 @@
+<app-modal-overlay
+  [open]="open()"
+  [closeOnBackdropClick]="!(openSourceFormType() !== null || showDestWizard())"
+  (closed)="onOverlayClosed()"
+>
+  <div class="nld" [class.nld--maximized]="isMaximized()">
+
+    <!-- ── Header ── ONLY exists to carry the mapping-canvas title + Close/Save while a group's
+         mapping canvas is open (destMappingTitle() truthy) — every other state (plain node browsing,
+         or a node's own Epic/SQL/etc. form) has nothing worth a whole extra row for: the browsing
+         empty-state already shows any context info in its own body, and each form already has its
+         own topbar (title + Back to library + maximize + close — see DestinationWizardComponent's
+         .dw-topbar / EpicAudienceFormComponent's .eaf-topbar). Rendering this unconditionally left an
+         empty-looking bar with nothing but a stray icon + maximize/close in those states. -->
+    @if (destMappingTitle()) {
+    <div class="nld-header">
+      <div class="nld-header-left">
+        <span class="nld-brand-hex">⬡</span>
+        <h2 class="nld-title">{{ destMappingTitle() }}</h2>
+        <span class="nld-mapping-badge nld-mapping-badge--dest">{{ destMappingTypeLabel() === 'SQL Server' ? '🗄️' : '📄' }} {{ destMappingTypeLabel() }}</span>
+        <span class="nld-mapping-badge">{{ destMappingCount() }} field mapping{{ destMappingCount() === 1 ? '' : 's' }}</span>
+      </div>
+
+      <div class="nld-header-right">
+        <button
+          class="nld-maximize"
+          type="button"
+          [attr.aria-label]="isMaximized() ? 'Restore dialog size' : 'Maximize dialog'"
+          [attr.aria-pressed]="isMaximized()"
+          [title]="isMaximized() ? 'Restore' : 'Maximize'"
+          (click)="toggleMaximize()"
+        >
+          @if (isMaximized()) {
+            <svg class="nld-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          } @else {
+            <svg class="nld-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          }
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" (click)="bumpExitMappingTrigger()">Close</button>
+        <button type="button" class="btn btn-primary btn-sm" (click)="bumpSaveMappingTrigger()">Save</button>
+      </div>
+    </div>
+    }
+
+    <!-- ── Floating maximize/close ── for whichever states have no header/topbar of their own to carry
+         them: plain node browsing, and a "headless" inline source form (generic-fhir, hl7v2 — unlike the
+         self-contained vendor forms/dest-wizard, they never grew their own topbar). Self-contained vendor
+         forms (Epic, Cerner, ...) and dest-wizard are excluded here since their .eaf-topbar/.dw-topbar
+         already show these controls next to "← Back to library" — this would just duplicate them.
+         Absolutely positioned over the top-right corner rather than living in a full-width row, since
+         nothing else in these states needs one. -->
+    @if (!destMappingTitle() && !isSelfContainedSourceForm() && !showDestWizard()) {
+      <div class="nld-floating-controls">
+        <button
+          class="nld-maximize"
+          type="button"
+          [attr.aria-label]="isMaximized() ? 'Restore dialog size' : 'Maximize dialog'"
+          [attr.aria-pressed]="isMaximized()"
+          [title]="isMaximized() ? 'Restore' : 'Maximize'"
+          (click)="toggleMaximize()"
+        >
+          @if (isMaximized()) {
+            <svg class="nld-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          } @else {
+            <svg class="nld-maximize-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          }
+        </button>
+        <button class="nld-close" type="button" aria-label="Close dialog" (click)="onOverlayClosed()">×</button>
+      </div>
+    }
+
+    <!-- ── Mapping toolbar ── canvas actions, on their own row so they can wrap independently of the
+         title/badges/Close/Save row above at narrow dialog widths, instead of squeezing the title.
+         Badges (destination type + field count) moved up next to the title itself — see .nld-header-left.
+         Suggest-mappings + zoom-dock controls moved here from the canvas's own floating chrome (see
+         field-mapping-canvas.component.html) — the canvas viewport gets that room back. -->
+    @if (destMappingTitle()) {
+      <div class="nld-mapping-toolbar">
+        <div class="nld-mapping-toolbar-actions">
+          <button type="button" class="nld-mapping-tool-btn" (click)="bumpRunSuggestMappingsTrigger()">✨ Suggest mappings</button>
+          @if (destSuggestionCount() > 0) {
+            <button type="button" class="nld-mapping-tool-btn" (click)="bumpClearSuggestionsTrigger()">
+              Clear {{ destSuggestionCount() }} suggestion{{ destSuggestionCount() === 1 ? '' : 's' }}
+            </button>
+          }
+          <button type="button" class="nld-mapping-tool-btn" (click)="bumpMarkAsMasterTrigger()">★ Mark as Master</button>
+        </div>
+
+        <!-- Global search across BOTH the payload source tree and every destination table's columns —
+             matches by name, full path, or real data type (int/string/boolean/... — see
+             field-mapping-tree.util.ts's matchesSearchTerms), not just plain text. Sits in the middle of
+             this space-between toolbar, between the left action group and the right zoom/load group. -->
+        <div class="nld-mapping-toolbar-search">
+          <input
+            type="search"
+            class="nld-mapping-search-input"
+            placeholder="Search fields, columns, or types…"
+            aria-label="Search payload fields and destination columns by name, path, or data type"
+            [value]="mappingSearchQuery()"
+            (input)="onMappingSearchInput($any($event.target).value)"
+          />
+          @if (mappingSearchQuery()) {
+            <button type="button" class="nld-mapping-search-clear" aria-label="Clear search" (click)="clearMappingSearch()">✕</button>
+          }
+        </div>
+
+        <div class="nld-mapping-toolbar-actions">
+          <app-zoom-dock
+            [zoomPercent]="destZoomPercent()"
+            [showFit]="true"
+            [corner]="'inline'"
+            (zoomIn)="bumpZoomInTrigger()"
+            (zoomOut)="bumpZoomOutTrigger()"
+            (reset)="bumpZoomResetTrigger()"
+            (fit)="bumpZoomFitTrigger()"
+          />
+          <button type="button" class="nld-mapping-tool-btn" (click)="bumpLoadPayloadTrigger()">⇩ Load JSON payload</button>
+        </div>
+      </div>
+    }
+
+    <!-- ── Body: sidebar + detail ──────────────────────────────────────────── -->
+    <div class="nld-body">
+
+      <!-- LEFT: Node Library sidebar — hidden entirely (not just collapsed to a mini rail) once a
+           node's own form/wizard is open (source form, destination wizard, or a group's mapping
+           canvas), so the drawer's whole width goes to that form/wizard — the "add a node" browsing
+           list and "configure this node" panel are two distinct steps, not two panes shown at once.
+           "← Back to library" (each form's own topbar) is how you return to this list. -->
+      @if (!destMappingCanvasActive() && openSourceFormType() === null && !showDestWizard()) {
+      <nav class="nld-sidebar" aria-label="Node library">
+
+        <!-- Search -->
+        <div class="nld-search-wrap">
+          <span class="nld-search-icon">⌕</span>
+          <input
+            class="nld-search"
+            type="search"
+            autocomplete="off"
+            placeholder="Search nodes or actions…"
+            [value]="searchQuery()"
+            (input)="searchQuery.set($any($event.target).value)"
+          />
+          @if (searchQuery()) {
+            <button class="nld-search-clear" type="button" (click)="searchQuery.set('')">×</button>
+          }
+        </div>
+
+        <!-- Categories -->
+        <div class="nld-cats">
+          <!-- No per-category headers in V2: with only selectable items listed (see
+               filteredCategories) the groups are usually one item each, and the rank labels
+               ("DESTINATION", "MAPPING", ...) said less than the items themselves. -->
+          @for (cat of filteredCategories(); track cat.rank) {
+            @for (item of cat.items; track item.id) {
+              <button
+                class="nld-item"
+                type="button"
+                [class.is-selected]="selectedId() === item.id"
+                [class.status-show]="item.status === 'show' || item.status === 'enabled'"
+                [class.status-caveat]="item.status === 'caveat'"
+                [class.status-disabled]="item.status === 'disabled' || item.status === 'hide'"
+                [disabled]="item.status === 'disabled' || item.status === 'hide'"
+                [title]="item.reason ?? ''"
+                (click)="selectItem(item)"
+              >
+                <span
+                  class="nld-item-avatar"
+                  [style.background]="item.color"
+                >{{ item.abbr }}</span>
+
+                <span class="nld-item-body">
+                  <span class="nld-item-name">{{ item.name }}</span>
+                  @if (item.reason) {
+                    <span class="nld-item-meta">{{ item.reason }}</span>
+                  } @else if (item.category && item.category !== item.name) {
+                    <span class="nld-item-meta">{{ item.category }}</span>
+                  } @else if (item.isMerge) {
+                    <span class="nld-item-meta">Merge node</span>
+                  }
+                </span>
+
+                @if (item.status === 'caveat') {
+                  <span class="nld-item-indicator caveat" title="Works with caveat">⚠</span>
+                }
+                @if (item.isMerge) {
+                  <span class="nld-merge-tag">⊕</span>
+                }
+              </button>
+            }
+          }
+
+          @if (filteredCategories().length === 0) {
+            <div class="nld-no-results">
+              <span class="nld-no-results-icon">⌕</span>
+              <p>No nodes match <strong>"{{ searchQuery() }}"</strong></p>
+              <button type="button" (click)="searchQuery.set('')">Clear search</button>
+            </div>
+          }
+        </div>
+
+      </nav>
+      }
+
+      <!-- RIGHT: Detail / config panel -->
+      <section
+        class="nld-detail"
+        [class.nld-detail--form]="openSourceFormType() !== null || showDestWizard()"
+        [class.nld-detail--canvas]="destMappingCanvasActive()"
+      >
+
+        <!-- ── Inline self-contained vendor source form (Epic, Cerner, Athenahealth, Allscripts, Healow,
+             Meditech, Sample) — each owns its full save/cancel/maximize flow via WizardServiceV2, exactly as
+             EpicAudienceFormComponent always did. Dispatched by a `@switch` over openSourceFormType() rather than
+             NgComponentOutlet: Angular has no template mechanism to bind a dynamically-resolved component's
+             *outputs*, only its inputs (NgComponentOutlet's `inputs`), so the concrete tag has to be written out
+             per vendor — the registry-driven part is *which* case is active, decided once in selectItem()/the
+             constructor's edit-detection effect, never here. -->
+        @if (isSelfContainedSourceForm()) {
+          @switch (openSourceFormType()) {
+            @case ('epic') {
+              <app-epic-source-form
+                #activeSourceForm
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('cerner') {
+              <app-cerner-source-form
+                #activeSourceForm
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('athena') {
+              <app-athenahealth-source-form
+                #activeSourceForm
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('allscripts') {
+              <app-allscripts-source-form
+                #activeSourceForm
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('healow') {
+              <app-healow-source-form
+                #activeSourceForm
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('meditech') {
+              <app-meditech-source-form
+                #activeSourceForm
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+            @case ('sample') {
+              <app-sample-source-form
+                #activeSourceForm
+                [isMaximized]="isMaximized()"
+                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
+              />
+            }
+          }
+
+        } @else if (openSourceFormType()) {
+
+          <!-- ── Inline "headless" source form (generic-fhir, hl7v2, ...) ── these only implement
+               SourceConfigFormComponent.getFields(); this dialog owns their title + Cancel/Save chrome and reads
+               the field bag back out via sourceFormOutlet()'s componentInstance, generalizing the old
+               genericFhirForm()?.getFields() call site. -->
+          <div class="nld-generic-fhir">
+            <h3 class="nld-generic-fhir-title">
+              {{ sourceFormEditNode() ? 'Edit' : 'Configure' }} {{ sourceFormTitle() }}
+            </h3>
+            <ng-container
+              [ngComponentOutlet]="currentSourceFormComponent()"
+              [ngComponentOutletInputs]="{ initialFields: sourceFormEditNode()?.fields ?? null }"
+            />
+            @if (sourceFormError()) {
+              <p class="nld-generic-fhir-error">{{ sourceFormError() }}</p>
+            }
+            <div class="nld-generic-fhir-actions">
+              <button class="nld-generic-fhir-cancel" type="button" (click)="onSourceFormCancelled()">Cancel</button>
+              <button class="nld-cta" type="button" (click)="onHeadlessSourceFormSave()">
+                {{ sourceFormEditNode() ? 'Save' : 'Add to Workflow' }}
+              </button>
+            </div>
+          </div>
+
+        } @else if (showDestWizard() && destWizardType() && destWizardAttach()) {
+
+          <!-- ── Destination wizard (SQL Server or CSV) ── its title/badges/actions while a group's
+               mapping canvas is open live in the top-level .nld-header/.nld-mapping-toolbar above
+               (see destMappingTitle()) — do not duplicate them here. ── -->
+          <app-destination-wizard
+            [destType]="destWizardType()!"
+            [attachNode]="destWizardAttach()!"
+            [editNode]="destEditNode()"
+            [sourceResources]="sourceResources()"
+            [sourceVendor]="wiz.ehrType()"
+            [sourceConnectionId]="sourceConnectionId()"
+            [sourceDiscoveredResourceTypes]="sourceDiscoveredResourceTypes()"
+            [currentWorkflowId]="currentWorkflowId()"
+            [exitMappingRequest]="exitMappingTrigger()"
+            [saveMappingRequest]="saveMappingTrigger()"
+            [saveSnapshotRequest]="saveSnapshotTrigger()"
+            [openLoadPayloadRequest]="loadPayloadTrigger()"
+            [openPreviewRequest]="previewOutputTrigger()"
+            [runSuggestMappingsRequest]="runSuggestMappingsTrigger()"
+            [clearSuggestionsRequest]="clearSuggestionsTrigger()"
+            [markAsMasterRequest]="markAsMasterTrigger()"
+            [zoomInRequest]="zoomInTrigger()"
+            [zoomOutRequest]="zoomOutTrigger()"
+            [zoomResetRequest]="zoomResetTrigger()"
+            [zoomFitRequest]="zoomFitTrigger()"
+            [mappingSearchQuery]="mappingSearchQuery()"
+            [isMaximized]="isMaximized()"
+            [initialConfigTab]="destWizardTab()"
+            [initialStep]="destWizardInitialStep()"
+            [chainNodeEntry]="chainNodeEntry()"
+            (saved)="onDestWizardSaved($event)"
+            (cancelled)="onDestWizardCancelled()"
+            (closeAll)="close()"
+            (toggleMaximizeRequest)="toggleMaximize()"
+            (stepChange)="destWizardStep.set($event)"
+            (progressChange)="destWizardHasProgressed.set($event)"
+            (mappingCanvasActive)="destMappingCanvasActive.set($event)"
+            (mappingCanvasTitle)="destMappingTitle.set($event)"
+            (mappingCountChange)="destMappingCount.set($event)"
+            (suggestionCountChange)="destSuggestionCount.set($event)"
+            (zoomPercentChange)="destZoomPercent.set($event)"
+          />
+
+        } @else {
+
+        @if (!selectedItem()) {
+          <!-- Empty state -->
+          <div class="nld-empty">
+            <div class="nld-empty-graphic">
+              <span class="nld-empty-hex">⬡</span>
+              <span class="nld-empty-plus">+</span>
+            </div>
+            <h3 class="nld-empty-title">Select a node from the left</h3>
+            <p class="nld-empty-sub">
+              View available actions, configuration options, and applicability details
+              before adding the node to your workflow.
+            </p>
+            @if (mode() === 'transform' && pickerMeta()) {
+              <div class="nld-empty-context">
+                <div class="nld-ctx-row">
+                  <span class="nld-ctx-key">Rule</span>
+                  <span class="nld-ctx-val">{{ pickerMeta()?.rule }}</span>
+                </div>
+                <div class="nld-ctx-row">
+                  <span class="nld-ctx-key">Context</span>
+                  <span class="nld-ctx-val">{{ pickerMeta()?.cfg?.context }}</span>
+                </div>
+                <div class="nld-ctx-row">
+                  <span class="nld-ctx-key">Mode</span>
+                  <span class="nld-ctx-val">{{ pickerMeta()?.cfg?.ingestionMode }}</span>
+                </div>
+              </div>
+            }
+          </div>
+
+        } @else {
+
+          <!-- Config panel -->
+          <div class="nld-config">
+
+            <!-- Node identity -->
+            <div class="nld-config-head">
+              <span class="nld-config-avatar" [style.background]="selectedItem()!.color">
+                {{ selectedItem()!.abbr }}
+              </span>
+              <div class="nld-config-title-area">
+                <h3 class="nld-config-name">{{ selectedItem()!.name }}</h3>
+                <div class="nld-config-pills">
+                  @if (selectedItem()!.isSource) {
+                    <span class="nld-pill source">Source · Rank 0</span>
+                  } @else {
+                    <span
+                      class="nld-pill transform"
+                      [style.background]="getRankColor(selectedItem()!.rank)"
+                    >Rank {{ selectedItem()!.rank }} · {{ rankLabel[selectedItem()!.rank] }}</span>
+                  }
+                  @if (selectedItem()!.isMerge) {
+                    <span class="nld-pill merge">⊕ Merge</span>
+                  }
+                  @if (selectedItem()!.group && !selectedItem()!.isMerge) {
+                    <span class="nld-pill group">Group: {{ selectedItem()!.group }}</span>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <!-- Description -->
+            <div class="nld-config-desc">{{ selectedItem()!.sub }}</div>
+
+            <!-- Applicability status (transforms only) -->
+            @if (!selectedItem()!.isSource) {
+              <div class="nld-applicability">
+                <div class="nld-app-label">Applicability</div>
+                @if (selectedItem()!.status === 'show' || selectedItem()!.status === 'enabled') {
+                  <div class="nld-app-badge applicable">✓ Applicable for this workflow context</div>
+                } @else if (selectedItem()!.status === 'caveat') {
+                  <div class="nld-app-badge caveat">⚠ Works — with a caveat</div>
+                } @else if (selectedItem()!.status === 'disabled') {
+                  <div class="nld-app-badge disabled">— Add a source node first to check applicability</div>
+                }
+                @if (selectedItem()!.reason) {
+                  <div class="nld-app-reason" [class.caveat]="selectedItem()!.status === 'caveat'">
+                    {{ selectedItem()!.reason }}
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Source connection details -->
+            @if (selectedItem()!.isSource) {
+              <div class="nld-fields-card">
+                <div class="nld-fields-title">Connection Details</div>
+                @if (selectedItem()!.id === 'epic') {
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Protocol</span>
+                    <span class="nld-fv">FHIR R4 over SMART on FHIR</span>
+                  </div>
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Auth Type</span>
+                    <span class="nld-fv">OAuth 2.0 / Client Credentials</span>
+                  </div>
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Discovery</span>
+                    <span class="nld-fv mono">/.well-known/smart-configuration</span>
+                  </div>
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Resources</span>
+                    <span class="nld-fv">Configurable (Patient, Observation…)</span>
+                  </div>
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Setup</span>
+                    <span class="nld-fv">Guided form required</span>
+                  </div>
+                } @else if (selectedItem()!.id === 'hl7v2') {
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Protocol</span>
+                    <span class="nld-fv">HL7 v2 over MLLP</span>
+                  </div>
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Auth</span>
+                    <span class="nld-fv">None (MLLP TCP stream)</span>
+                  </div>
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Default Port</span>
+                    <span class="nld-fv mono">2575</span>
+                  </div>
+                } @else {
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Protocol</span>
+                    <span class="nld-fv">FHIR R4 REST</span>
+                  </div>
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Auth</span>
+                    <span class="nld-fv">OAuth 2.0 / API Key</span>
+                  </div>
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Environment</span>
+                    <span class="nld-fv">Sandbox / Production</span>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Transform info -->
+            @if (!selectedItem()!.isSource && pickerMeta()) {
+              <div class="nld-fields-card">
+                <div class="nld-fields-title">Workflow Context</div>
+                <div class="nld-field-row">
+                  <span class="nld-fk">Rule</span>
+                  <span class="nld-fv">{{ pickerMeta()?.ruleLabel }}</span>
+                </div>
+                <div class="nld-field-row">
+                  <span class="nld-fk">Ingestion mode</span>
+                  <span class="nld-fv">{{ pickerMeta()?.cfg?.ingestionMode }}</span>
+                </div>
+                @if (selectedItem()!.category) {
+                  <div class="nld-field-row">
+                    <span class="nld-fk">Category</span>
+                    <span class="nld-fv">{{ selectedItem()!.category }}</span>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- CTA -->
+            <div class="nld-actions">
+              @if (selectedItem()!.id === 'epic') {
+                <button class="nld-cta wizard" type="button" (click)="addSelected()">
+                  ⚙&nbsp; Configure Epic Connection
+                </button>
+              } @else if (selectedItem()!.status === 'disabled') {
+                <button class="nld-cta" type="button" disabled>
+                  Add a source node first
+                </button>
+              } @else {
+                <button
+                  class="nld-cta"
+                  type="button"
+                  [disabled]="selectedItem()!.status === 'hide'"
+                  (click)="addSelected()"
+                >
+                  +&nbsp; Add to Workflow
+                </button>
+              }
+              <button class="nld-back" type="button" (click)="selectedId.set(null)">
+                ← Back to library
+              </button>
+            </div>
+
+          </div><!-- /nld-config -->
+        }
+
+        }<!-- /else source form / dest wizard -->
+
+      </section>
+    </div><!-- /nld-body -->
+
+    <!-- Confirm before discarding an in-progress destination config -->
+    @if (pendingDestSwitch(); as switchType) {
+      <div class="nld-confirm-backdrop" tabindex="0"
+           (click)="onConfirmSwitchBackdropClick($event)"
+           (keydown.escape)="cancelDestSwitch()">
+        <div class="nld-confirm-dialog">
+          <div class="nld-confirm-icon">⚠</div>
+          <h3 class="nld-confirm-title">Switch to {{ destTypeLabel(switchType) }}?</h3>
+          <p class="nld-confirm-body">
+            Your {{ destTypeLabel(destWizardType()) }} configuration hasn't been saved yet.
+            Switching destination type now will discard it.
+          </p>
+          <div class="nld-confirm-actions">
+            <button type="button" class="btn btn-secondary" (click)="cancelDestSwitch()">Keep editing</button>
+            <button type="button" class="btn btn-danger" (click)="confirmDestSwitch()">Discard &amp; switch</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Confirm before backing out of an in-progress destination config to the library -->
+    @if (pendingDestCancel()) {
+      <div class="nld-confirm-backdrop" tabindex="0"
+           (click)="onConfirmCancelBackdropClick($event)"
+           (keydown.escape)="cancelDestCancel()">
+        <div class="nld-confirm-dialog">
+          <div class="nld-confirm-icon">⚠</div>
+          <h3 class="nld-confirm-title">Discard changes?</h3>
+          <p class="nld-confirm-body">
+            Your {{ destTypeLabel(destWizardType()) }} configuration hasn't been saved yet.
+            Going back to the library now will discard it.
+          </p>
+          <div class="nld-confirm-actions">
+            <button type="button" class="btn btn-secondary" (click)="cancelDestCancel()">Keep editing</button>
+            <button type="button" class="btn btn-danger" (click)="confirmDestCancel()">Discard &amp; go back</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Confirm before closing the whole dialog while a form/wizard is open -->
+    @if (pendingCloseConfirm()) {
+      <div class="nld-confirm-backdrop" tabindex="0"
+           (click)="onConfirmCloseBackdropClick($event)"
+           (keydown.escape)="cancelDiscardClose()">
+        <div class="nld-confirm-dialog">
+          <div class="nld-confirm-icon">⚠</div>
+          <h3 class="nld-confirm-title">Discard changes?</h3>
+          <p class="nld-confirm-body">
+            You haven't saved this yet. Closing now will discard it.
+          </p>
+          <div class="nld-confirm-actions">
+            <button type="button" class="btn btn-secondary" (click)="cancelDiscardClose()">Keep editing</button>
+            <button type="button" class="btn btn-danger" (click)="confirmDiscardClose()">Discard &amp; close</button>
+          </div>
+        </div>
+      </div>
+    }
+  </div><!-- /nld -->
+</app-modal-overlay>

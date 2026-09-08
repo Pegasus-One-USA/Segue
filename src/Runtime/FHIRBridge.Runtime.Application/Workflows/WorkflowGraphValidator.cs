@@ -154,11 +154,13 @@ public sealed class WorkflowGraphValidator : IWorkflowGraphValidator
 
     private static bool DestinationRequiresMappedRecords(WorkflowNode destination)
         => destination.Category is WorkflowNodeCategory.Destination or WorkflowNodeCategory.Analytics
-           // FhirRepositoryDestination is spec-owned (see docs/backend/14-mapping-profile-master-screen-plan.md) —
-           // it accepts raw/normalized resources directly (see DefaultWorkflowNodeCatalog.Destination()'s widened
-           // InputContracts for this node type), so it never needs an upstream Mapping node. Every other
-           // destination/analytics node type is unaffected.
-           && !string.Equals(destination.NodeType, WorkflowNodeTypes.FhirRepositoryDestination, StringComparison.OrdinalIgnoreCase);
+           // Whole-resource FHIR destinations are spec-owned (see docs/backend/14-mapping-profile-master-screen-plan.md) —
+           // they accept raw/normalized resources directly (see DefaultWorkflowNodeCatalog.Destination()'s widened
+           // InputContracts for these node types), so they never need an upstream Mapping node. All three are
+           // already handled identically by MappingNodeExecutor's `wholeResourceFhir` branch; listing only
+           // FhirRepositoryDestination here meant a Medplum/Azure FHIR graph still had to carry a Mapping node
+           // that does nothing but emit a carrier record. Every other destination/analytics node type is unaffected.
+           && !DefaultWorkflowNodeCatalog.WholeResourceFhirDestinationNodeTypes.Contains(destination.NodeType);
 
     private static bool AreContractsCompatible(
         WorkflowDataContract fromContract,

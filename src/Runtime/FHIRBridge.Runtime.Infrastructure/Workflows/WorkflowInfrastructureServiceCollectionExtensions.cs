@@ -1,4 +1,4 @@
-using FHIRBridge.Runtime.Application.Workflows;
+﻿using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -22,6 +22,7 @@ public static class WorkflowInfrastructureServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, DataQualityScoringNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, FlattenExtensionsNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, PatientMatchingNodeExecutor>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, FhirResourceTransformNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, MappingNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, RepeatingArrayMappingNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, TerminologyNodeExecutor>());

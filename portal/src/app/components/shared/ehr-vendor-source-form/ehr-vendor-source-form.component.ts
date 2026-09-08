@@ -12,6 +12,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { Observable, catchError, map, of, switchMap } from 'rxjs';
 import { take } from 'rxjs/operators';
 import {
   ReactiveFormsModule,
@@ -26,7 +27,7 @@ import {
   APPLICATION_TYPE_TO_AUDIENCE,
   AUTHENTICATION_TYPE_TO_AUTH_METHOD,
 } from '../../../services/wizard.service';
-import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
+import { EpicDiscoveryService, BackendAuthScopesResult } from '../../../services/epic-discovery.service';
 import { ToastService } from '../../../services/toast.service';
 import { EPIC_ENV } from '../../../data/epic-environments.data';
 import { EnvKey } from '../../../models/epic-env.model';
@@ -34,6 +35,7 @@ import { AppKey } from '../../../models/epic-app.model';
 import { FullDiscoveredValues } from '../../epic-source-wizard/models/epic-config.model';
 import { EpicAudience, AudienceFieldConfig, AUDIENCE_FIELD_CONFIG, VENDOR_DISABLED_AUDIENCES, isAudienceDisabledForVendor } from '../../epic-source-wizard/models/audience-field-config.data';
 import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
+import { vendorScopeProfile } from '../../../data/vendor-scope-catalog.data';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
@@ -96,12 +98,18 @@ const ATHENA_SANDBOX_TOKEN_URL =
 const ATHENA_SANDBOX_AUTHORIZE_URL =
   'https://api.preview.platform.athenahealth.com/oauth2/v1/authorize';
 
-// eClinicalWorks (Healow) — only the Patient audience is enabled so far (see VENDOR_DISABLED_AUDIENCES). This is
-// the new-source FHIR Base URL default (ngOnInit) for that one audience; Token/Authorization Endpoint are
+// eClinicalWorks (Healow) — the new-source FHIR Base URL default (ngOnInit) AND this vendor's FHIR Base URL
+// watermark (see baseUrlPlaceholder below), so the field shows the right host shape whether or not it has been
+// cleared. The trailing segment is the per-customer practice code (eCW issues one per EMR org), so this is a
+// format example rather than a value any real connection can keep as-is. Token/Authorization Endpoint are
 // watermarks only (see tokenEndpointPlaceholder/authzEndpointPlaceholder below), same treatment as Epic's.
-const HEALOW_SANDBOX_BASE_URL = 'https://fhir4.healow.com/fhir/r4/JAFJCD';
-const HEALOW_TOKEN_URL_PLACEHOLDER     = 'https://oauthserver.eclinicalworks.com/.../oauth2/token';
-const HEALOW_AUTHORIZE_URL_PLACEHOLDER = 'https://oauthserver.eclinicalworks.com/.../oauth2/authorize';
+const HEALOW_SANDBOX_BASE_URL = 'https://fhir.ecwcloud.com/fhir/r4/FFBJCD';
+// Watermarks only — Discover fills both in for real from the practice's /.well-known/smart-configuration, which
+// eCW does publish (verified against the FFBJCD staging sandbox: HTTP 200, token_endpoint +
+// authorization_endpoint + private_key_jwt + client_credentials + 486 scopes_supported). The host shape below is
+// that document's own, so a hand-typed value starts from the right pattern.
+const HEALOW_TOKEN_URL_PLACEHOLDER     = 'https://oauthserver.ecwcloud.com/oauth/oauth2/token';
+const HEALOW_AUTHORIZE_URL_PLACEHOLDER = 'https://oauthserver.ecwcloud.com/oauth/oauth2/authorize';
 
 /**
  * Determines the SMART scope version a source uses. Prefers the explicit permission-v1/permission-v2 capability
@@ -143,6 +151,14 @@ function defaultAuthMethodFor(
   return vendor === 'Athenahealth' ? 'secret' : 'jwt';
 }
 
+/** Outcome of working out what scope Test Connection should ask for: either a space-joined scope string, or a
+ *  reason the test must not run at all (athenahealth with no resource types selected — see
+ *  fallbackTestConnectionScope). Exactly one of the two is ever set. */
+interface TestScopeResolution {
+  scope: string | null;
+  blocked: string | null;
+}
+
 function detectScopeVersion(
   capabilities: string[],
   scopesSupported: string[],
@@ -174,7 +190,8 @@ export type RetrievalMethod =
   | 'subscription'
   | 'webhook'
   | 'search-rest'
-  | 'bulk-export';
+  | 'bulk-export'
+  | 'single-patient';
 
 // Each retrieval method owns its own Resource Type control (never shared) so that
 // switching methods never shows two Resource Type pickers, or leaks one method's
@@ -184,6 +201,7 @@ type RetrievalFieldKey =
   | 'webhookResourceType'
   | 'searchRestResourceType'
   | 'bulkExportResourceType'
+  | 'singlePatientResourceType'
   | 'eventType'
   | 'notificationPayload'
   | 'endpointType'
@@ -215,6 +233,7 @@ const RETRIEVAL_FIELD_KEYS: readonly RetrievalFieldKey[] = [
   'webhookResourceType',
   'searchRestResourceType',
   'bulkExportResourceType',
+  'singlePatientResourceType',
   'eventType',
   'notificationPayload',
   'endpointType',
@@ -278,6 +297,7 @@ const RETRIEVAL_FIELD_DEFAULTS: Record<RetrievalFieldKey, unknown> = {
   webhookResourceType: [] as string[],
   searchRestResourceType: [] as string[],
   bulkExportResourceType: [] as string[],
+  singlePatientResourceType: [] as string[],
   eventType: '',
   notificationPayload: '',
   endpointType: '',
@@ -528,7 +548,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
     'search-rest': {
       value: 'search-rest',
       label: 'Search (REST)',
-      description: 'Segue polls Epic’s FHIR REST API on a schedule.',
+      description: 'Segue polls the server’s FHIR REST API on a schedule.',
       fields: [
         // Resource Type / Search Criteria / Max Results / Include Related Resources are the only four fields shown to
         // Provider Standalone (one-shot, user-initiated) — everything else here is scheduling/automation plumbing
@@ -715,7 +735,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           type: 'text',
           required: false,
           placeholder: '30',
-          hint: 'Per-request timeout before the connector aborts and retries.',
+          hint: 'Per-request timeout before the connector aborts and retries. Applies to each page of a search, not to the whole extraction — raise it for a slow source, not for one that simply returns many pages.',
           advanced: true,
           visibleWhen: (ctx) => ctx.retrievalScope === 'automated',
         },
@@ -735,20 +755,17 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           required: false,
           visibleWhen: () => false,
         },
-        {
-          key: 'exportScope',
-          label: 'Export Scope',
-          type: 'select',
-          required: true,
-          options: [
-            { value: 'system', label: 'System ($export)' },
-            { value: 'group', label: 'Group ($export)' },
-            { value: 'patient', label: 'Patient ($export)' },
-          ],
-        },
-        // Static defaults below are Epic-shaped (Epic's Group export uses a real FHIR Group resource id) — athenahealth
-        // addresses a Group export by Practice instead, so groupIdPlaceholder()/groupIdHint() override this per-vendor
-        // at render time (this field config has no access to the vendor() input).
+        // Every vendor this form serves implements the Group-level $export operation ONLY. Epic states it outright
+        // — "Epic supports only the Group Export operation. We do not support _since or other bulk data operations
+        // at this time." (Epic's FHIR Bulk Data documentation) — and athenahealth and eCW are documented the same
+        // way. So a bulk export here is ALWAYS a Group export: there is deliberately no Export Scope choice, no
+        // Patient ID list and no _since cursor in this list at all, and Group ID is the one identifier it needs.
+        // GenericFhirSourceFormComponent — a separate component for a plain conformant FHIR server, which does
+        // implement all three export levels — keeps the full set of scopes.
+        //
+        // Placeholder/hint are Epic-shaped (Epic's Group export uses a real FHIR Group resource id) — athenahealth
+        // addresses a Group export by Practice instead, so groupIdPlaceholder()/groupIdHint() override them
+        // per-vendor at render time (this field config has no access to the vendor() input).
         {
           key: 'groupId',
           label: 'Group ID',
@@ -756,23 +773,6 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           required: true,
           placeholder: 'e.g. 4diBHMQR-nurOSMS8UbGqQB',
           hint: 'Epic Group FHIR ID to export.',
-          visibleWhen: (ctx) => ctx.exportScope === 'group',
-        },
-        {
-          key: 'patientIdList',
-          label: 'Patient ID / Patient List',
-          type: 'textarea',
-          required: true,
-          placeholder: 'Comma-separated Patient FHIR IDs',
-          hint: 'One or more Patient FHIR IDs to export.',
-          visibleWhen: (ctx) => ctx.exportScope === 'patient',
-        },
-        {
-          key: 'incrementalCursor',
-          label: 'Incremental Cursor (_since)',
-          type: 'checkbox',
-          required: false,
-          hint: 'Only export resources changed since the last successful export.',
         },
         {
           key: 'fhirOutputFormat',
@@ -786,17 +786,15 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
         },
         // Bulk $export is a heavy operation and servers (e.g. Epic) cap its frequency (~once/24h), so it schedules on a
         // calendar "Repeat" (min daily) — the same recurrence control as Search-REST Full Refresh — never a tight poll
-        // frequency. System and Group exports repeat on a schedule; a Patient ID list is a one-off, so it stays manual
-        // (no recurrence fields shown).
+        // frequency. Always shown: a Group export is the only shape this form produces, and it always repeats on a
+        // schedule (the previous per-scope gating existed only to hide these for a one-off Patient ID list export).
         {
           key: 'fullRefreshRecurrence',
           label: 'Repeat',
           type: 'select',
           required: true,
           options: FULL_REFRESH_RECURRENCE_OPTIONS,
-          visibleWhen: (ctx) =>
-            ctx.exportScope !== '' && ctx.exportScope !== 'patient',
-          hint: 'How often to re-run this export. Patient ID list exports run manually and are not scheduled.',
+          hint: 'How often to re-run this export.',
         },
         {
           key: 'fullRefreshDaysOfWeek',
@@ -804,9 +802,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           type: 'weekday-picker',
           required: true,
           options: WEEKDAY_OPTIONS,
-          visibleWhen: (ctx) =>
-            ctx.exportScope !== 'patient' &&
-            ctx.fullRefreshRecurrence === 'weekly',
+          visibleWhen: (ctx) => ctx.fullRefreshRecurrence === 'weekly',
         },
         {
           key: 'fullRefreshDayOfMonth',
@@ -817,9 +813,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
             value: String(i + 1),
             label: `${i + 1}`,
           })),
-          visibleWhen: (ctx) =>
-            ctx.exportScope !== 'patient' &&
-            ctx.fullRefreshRecurrence === 'monthly',
+          visibleWhen: (ctx) => ctx.fullRefreshRecurrence === 'monthly',
           hint: 'Capped at 28 so it fires every month, including February.',
         },
         {
@@ -827,8 +821,6 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           label: 'At',
           type: 'time',
           required: true,
-          visibleWhen: (ctx) =>
-            ctx.exportScope !== '' && ctx.exportScope !== 'patient',
           hint: 'Runs in the time zone selected below. Pick an off-hours slot to avoid contending with interactive EHR traffic.',
         },
         {
@@ -837,9 +829,46 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           type: 'select',
           required: true,
           options: TIME_ZONE_OPTIONS,
-          visibleWhen: (ctx) =>
-            ctx.exportScope !== '' && ctx.exportScope !== 'patient',
           hint: 'The schedule above is evaluated in this time zone, including daylight saving transitions.',
+        },
+      ],
+    },
+    // Single Patient: one authorized patient's record, fetched through the ordinary patient-scoped REST search
+    // (not $export). This is eCW's "Backend - Single Patient" API, where the app registration itself is authorized
+    // for one patient rather than a Group cohort, so the method is offered for eClinicalWorks (Healow) only - see
+    // RETRIEVAL_METHOD_VENDORS. Nothing in the field list or the runtime path is eCW-specific (it resolves to an
+    // ordinary patient-scoped search), so opening it to another vendor is one entry in that map.
+    //
+    // Deliberately just the Patient ID: no Run Mode, no scheduler, no incremental cursor, no advanced search
+    // options. A single-patient pull is a bounded, on-demand fetch, so there is nothing to schedule or to page
+    // through the way Search (REST) has.
+    'single-patient': {
+      value: 'single-patient',
+      label: 'Single Patient',
+      description:
+        'Fetches one authorized patient\u2019s resources via a patient-scoped REST search.',
+      fields: [
+        // Hidden - see subscriptionResourceType above / ensureRetrievalResourceTypeDefault. Backend System has no
+        // shared Resource Type picker, so scope generation (activeRetrievalResourceTypes/scopeString) reads this.
+        {
+          key: 'singlePatientResourceType',
+          label: 'Resource Type',
+          type: 'multiselect',
+          required: false,
+          visibleWhen: () => false,
+        },
+        // Optional on purpose: blank means "whichever patient this app's registration already resolves to" (eCW's
+        // Backend Single Patient app is bound to one patient server-side, so the id is frequently redundant). When
+        // supplied it reuses Bulk Export's own control and 'Patient ID / list' save key, which already threads
+        // through to SourceRetrievalConfiguration.PatientIds and, at run time, to the connector's patient scoping
+        // (FhirSourceConnectorBase.ApplyPatientScopeAsync: `_id=` for Patient, `patient=` for compartment types).
+        {
+          key: 'patientIdList',
+          label: 'Patient ID',
+          type: 'text',
+          required: false,
+          placeholder: 'Patient FHIR ID',
+          hint: 'Optional. The Patient FHIR ID this app is authorized for \u2014 leave blank to use whichever patient the source resolves for this app registration.',
         },
       ],
     },
@@ -1073,6 +1102,7 @@ export class EhrVendorSourceFormComponent
     webhookResourceType: [[] as string[]],
     searchRestResourceType: [[] as string[]],
     bulkExportResourceType: [[] as string[]],
+    singlePatientResourceType: [[] as string[]],
     eventType: [''],
     notificationPayload: [''],
     endpointType: [''],
@@ -1214,6 +1244,10 @@ export class EhrVendorSourceFormComponent
     this.form.controls.bulkExportResourceType.valueChanges,
     { initialValue: this.form.controls.bulkExportResourceType.value },
   );
+  private readonly singlePatientResourceTypeValue = toSignal(
+    this.form.controls.singlePatientResourceType.valueChanges,
+    { initialValue: this.form.controls.singlePatientResourceType.value },
+  );
 
   protected readonly audience = computed(
     () => this.audienceValue() as EpicAudience,
@@ -1244,6 +1278,19 @@ export class EhrVendorSourceFormComponent
     this.vendor() === 'Athenahealth' ? ATHENA_SANDBOX_AUTHORIZE_URL :
     this.vendor() === 'Healow' ? HEALOW_AUTHORIZE_URL_PLACEHOLDER :
     'https://fhir.epic.com/…/oauth2/authorize');
+
+  /** FHIR Base URL watermark, keyed off the vendor for the same reason as the two endpoint placeholders above:
+   *  the field is per-customer, so the only useful hint is that vendor's real base-URL shape. Every vendor
+   *  without an entry here keeps the original Epic watermark unchanged. */
+  protected readonly baseUrlPlaceholder = computed(() =>
+    this.vendor() === 'Athenahealth' ? ATHENA_SANDBOX_BASE_URL :
+    this.vendor() === 'Healow' ? HEALOW_SANDBOX_BASE_URL :
+    'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4');
+
+  /** Gates the eCW-specific copy in the template (the JWKS allow-listing warning on Backend System, and the
+   *  destination-derived Resource Type note) — the vendor's own behaviour lives in data tables
+   *  (VENDOR_SCOPE_PROFILES, HIDDEN_RETRIEVAL_METHODS, RETRIEVAL_METHOD_VENDORS), never in a branch. */
+  protected readonly isEclinicalWorks = computed(() => this.vendor() === 'Healow');
 
   /** True when this vendor doesn't support the given audience yet (see VENDOR_DISABLED_AUDIENCES) — used to
    *  grey out the option in the audience `<select>`. The strategy is fully implemented server-side; only the
@@ -1380,17 +1427,76 @@ export class EhrVendorSourceFormComponent
       : null;
   });
 
-  // ── Data Retrieval Method (Backend System: all four methods; Standalone: Search REST only, one-shot) ──────────
-  /** Standalone only ever offers Search REST — Subscription/Webhook/Bulk Export are async, unattended patterns
-   *  that don't fit a user-initiated, one-shot launch. */
+  // ── Data Retrieval Method (Backend System: Search REST / Bulk Export / Single Patient; Standalone: Search
+  //    REST only, one-shot) ────────────────────────────────────────────────────────────────────
+  /** Never offered in the dropdown, for any audience or vendor. Subscription and Webhook are not executed by the
+   *  workflow engine — SourceNodeExecutor (Runtime plane) only ever runs search-rest/bulk-export/single-patient, and
+   *  SourceRetrievalConfiguration's own remarks note those two values are persisted for forward-compatibility only.
+   *  Offering them just lets an admin configure a connection that silently never delivers anything. The
+   *  RetrievalMethod type and their RETRIEVAL_METHOD_CONFIG entries stay (already-saved connections may still
+   *  reference them, and the Retrieval Configuration panel still renders their fields); only the selectable option
+   *  list is filtered. Applied ahead of the `current` exemption below, so a legacy connection holding one of these
+   *  does not resurrect it as a choice. Kept as data, exactly like VENDOR_DISABLED_AUDIENCES — re-enabling one is
+   *  removing it from this list. */
+  private static readonly NEVER_OFFERED_RETRIEVAL_METHODS: readonly RetrievalMethod[] =
+    ['subscription', 'webhook'];
+
+  /** Methods hidden from the dropdown, per retrieval scope. Standalone only ever offers Search REST — every other
+   *  method is an async or unattended pattern that doesn't fit a user-initiated, one-shot launch. Hidden rather
+   *  than deleted, exactly like VENDOR_DISABLED_AUDIENCES — re-enabling one is removing it from this list.
+   *  Subscription/Webhook are absent here because NEVER_OFFERED_RETRIEVAL_METHODS above already excludes them
+   *  unconditionally, for every scope. */
+  private static readonly HIDDEN_RETRIEVAL_METHODS: Record<
+    AudienceFieldConfig['retrievalScope'],
+    readonly RetrievalMethod[]
+  > = {
+    none: [],
+    oneshot: ['bulk-export', 'single-patient'],
+    automated: [],
+  };
+
+  /** Methods restricted to specific vendors, on top of the vendor-blind scope filter above. A method with no
+   *  entry here is offered to every vendor — an allow-list rather than VENDOR_DISABLED_AUDIENCES' disabled-list
+   *  shape, since these restrictions are "this one vendor's API" rather than "not verified yet for this vendor",
+   *  and listing the eight vendors that DON'T get a method would invert on every vendor added.
+   *
+   *  Single Patient is eClinicalWorks (Healow) only: it models eCW's Backend Single Patient API, where the app
+   *  registration is bound to one patient server-side. Opening it to another vendor is one more entry here. */
+  private static readonly RETRIEVAL_METHOD_VENDORS: Partial<
+    Record<RetrievalMethod, readonly EhrVendor[]>
+  > = {
+    'single-patient': ['Healow'],
+  };
+
   protected readonly retrievalMethodOptions = computed(() => {
-    const all = Object.values(RETRIEVAL_METHOD_CONFIG).map((c) => ({
-      value: c.value,
-      label: c.label,
-    }));
-    return this.audienceConfig().retrievalScope === 'oneshot'
-      ? all.filter((o) => o.value === 'search-rest')
-      : all;
+    const hidden = new Set(
+      EhrVendorSourceFormComponent.HIDDEN_RETRIEVAL_METHODS[
+        this.audienceConfig().retrievalScope
+      ],
+    );
+    const vendor = this.vendor();
+    const allowedForVendor = (method: RetrievalMethod): boolean => {
+      const vendors =
+        EhrVendorSourceFormComponent.RETRIEVAL_METHOD_VENDORS[method];
+      return !vendors || vendors.includes(vendor);
+    };
+    // Never hide the method this form is actually holding: a node/connection saved before a method was hidden
+    // (or before these lists existed) would otherwise render a `<select>` with no matching option, while the
+    // Retrieval Configuration panel below still showed that method's own fields.
+    const current = this.retrievalMethodValue();
+    return Object.values(RETRIEVAL_METHOD_CONFIG)
+      .filter(
+        (c) =>
+          !EhrVendorSourceFormComponent.NEVER_OFFERED_RETRIEVAL_METHODS.includes(
+            c.value,
+          ),
+      )
+      .filter(
+        (c) =>
+          c.value === current ||
+          (!hidden.has(c.value) && allowedForVendor(c.value)),
+      )
+      .map((c) => ({ value: c.value, label: c.label }));
   });
 
   protected readonly retrievalMethod = computed(
@@ -1494,9 +1600,16 @@ export class EhrVendorSourceFormComponent
    * the field currently has a value — drives the Search Criteria control's required validator (see
    * syncRetrievalValidators), which doesn't need that distinction since Angular re-evaluates Validators.required
    * against the live value on every keystroke regardless.
+   *
+   * Gated on showRetrievalSection() — this section (and Search Criteria within it) only renders for the Backend
+   * System audience. Other audiences (Patient, Provider Standalone/EHR Launch) still carry a 'search-rest'
+   * retrievalMethod / Patient-inclusive resources from cloning an existing connection (see the clone fallback a
+   * few hundred lines down), but their data actually flows through the SMART launch context, not a live
+   * search-rest query — requiring a field the admin can never see would leave the form permanently invalid.
    */
   protected readonly athenaPatientSearchNeedsCriteria = computed(
     () =>
+      this.showRetrievalSection() &&
       this.vendor() === 'Athenahealth' &&
       this.retrievalMethod() === 'search-rest' &&
       this.activeRetrievalResourceTypes().includes('Patient'),
@@ -1532,24 +1645,21 @@ export class EhrVendorSourceFormComponent
         '"a-1.C-{Practice}" automatically.'
       );
     }
+    if (field.key === 'groupId' && this.vendor() !== 'Epic') {
+      return `${this.displayVendor()} Group FHIR ID to export.`;
+    }
     return field.hint;
   }
 
   /**
-   * athenahealth's FHIR Bulk Export supports Group-level export ONLY — there is no System ($export) or Patient
-   * ($export) endpoint on their server at all (confirmed against athenahealth's own implementation guide/docs).
-   * The static Export Scope options above are shared across every vendor (Epic supports all three), so for
-   * athenahealth this narrows the dropdown down to the one scope that's actually valid — same per-field-override
-   * pattern as groupIdPlaceholder/groupIdHint, since the static field config has no access to `vendor()`. Paired
-   * with the exportScope-locking effect in the constructor, which forces the control's value to 'group' and
-   * disables it for this vendor.
+   * Options for whichever `select` field the config-driven renderer is currently drawing. There is no longer an
+   * Export Scope dropdown to narrow per vendor — every vendor this form serves does Group-level $export only, so
+   * bulk export has no scope choice at all (see RETRIEVAL_METHOD_CONFIG's 'bulk-export' entry) — leaving this as a
+   * plain pass-through of the field's own static options.
    */
   protected exportScopeOptions(
     field: RetrievalFieldDef,
   ): readonly RetrievalFieldOption[] {
-    if (field.key === 'exportScope' && this.vendor() === 'Athenahealth') {
-      return [{ value: 'group', label: 'Group ($export)' }];
-    }
     return field.options ?? [];
   }
 
@@ -1564,6 +1674,8 @@ export class EhrVendorSourceFormComponent
         return this.searchRestResourceTypeValue() ?? [];
       case 'bulkExportResourceType':
         return this.bulkExportResourceTypeValue() ?? [];
+      case 'singlePatientResourceType':
+        return this.singlePatientResourceTypeValue() ?? [];
       default:
         return [];
     }
@@ -1659,10 +1771,37 @@ export class EhrVendorSourceFormComponent
       : [];
     // v2 = granular per-resource read+search (SMART v2 uses .rs); v1 = coarse per-resource .read.
     const suffix = this.scopeVersionValue() === 'v2' ? 'rs' : 'read';
-    return [
-      ...fixed,
-      ...res.map((r) => `${cfg.scopePrefix}/${r}.${suffix}`),
-    ].join('\n');
+    // Some vendors don't spell every system/ read scope with the same access level, and don't publish one for
+    // every resource type at all — eCW, for instance, has `.read` for most but ONLY `.r` for ServiceRequest,
+    // Coverage, RelatedPerson, Binary, Specimen, MedicationDispense, QuestionnaireResponse, Media and Claim, and
+    // fails the WHOLE token request on a single unrecognized scope. Mirror of the backend's VendorScopeCatalog,
+    // which is authoritative at run time; a vendor with no profile keeps the uniform suffix, unchanged. Scoped to
+    // the system/ prefix only, exactly like the backend, so interactive audiences are untouched.
+    const profile =
+      cfg.scopePrefix === 'system' ? vendorScopeProfile(this.vendor()) : null;
+    const resourceScopes = profile
+      ? res
+          .map((r) => {
+            const level = profile.readAccessLevelByResourceType[r];
+            return level ? `${cfg.scopePrefix}/${r}.${level}` : null;
+          })
+          .filter((s): s is string => s !== null)
+      : res.map((r) => `${cfg.scopePrefix}/${r}.${suffix}`);
+    return [...fixed, ...resourceScopes].join('\n');
+  });
+
+  /** Resource types the current vendor publishes no system/ read scope for, so scopeString() above leaves them
+   *  out of the request entirely. Surfaced under the Scopes preview so the omission is visible rather than
+   *  silent — empty for every vendor with no profile, and for any audience that isn't system/-scoped. */
+  protected readonly vendorOmittedResources = computed(() => {
+    const cfg = this.audienceConfig();
+    const profile =
+      cfg.scopePrefix === 'system' ? vendorScopeProfile(this.vendor()) : null;
+    if (!profile) return [];
+    const res = this.showResourcePickerSection()
+      ? this.selectedResources()
+      : this.activeRetrievalResourceTypes();
+    return res.filter((r) => !profile.readAccessLevelByResourceType[r]);
   });
 
   constructor() {
@@ -1730,24 +1869,11 @@ export class EhrVendorSourceFormComponent
       }
     });
 
-    // athenahealth's Bulk Export only ever supports Group-level export (see exportScopeOptions' remarks) — force
-    // the control to 'group' and lock it so an admin can't pick System/Patient, which would fail against
-    // athenahealth's server. Also self-heals a connection saved before this restriction existed (restoreExtended-
-    // FieldsFromEditingNode runs in ngOnInit, before this effect's first flush, so a legacy 'system'/'patient'
-    // value gets corrected here). Every other vendor is re-enabled here too, guarded by !isReadonly so this never
-    // fights the view-mode "disable the whole form" lock — needed only if this instance's `vendor` input ever
-    // changes at runtime (same caveat already noted on the audience-reset effect above).
-    effect(() => {
-      const control = this.form.controls.exportScope;
-      if (this.vendor() === 'Athenahealth') {
-        if (control.value !== 'group') {
-          control.setValue('group');
-        }
-        control.disable({ emitEvent: false });
-      } else if (!this.isReadonly) {
-        control.enable({ emitEvent: false });
-      }
-    });
+    // Bulk export is always a Group export for every vendor this form serves (see RETRIEVAL_METHOD_CONFIG's
+    // 'bulk-export' entry), so the exportScope/patientIdList/incrementalCursor controls are no longer part of that
+    // method's field list at all. buildFieldsToSave pins the persisted scope to 'group' and writes no patient id
+    // list, and clearInapplicableRetrievalFields resets those controls on the way in, so nothing here has to keep
+    // a hidden picker in sync any more.
 
     // Keeps the "Private Key / JWKS URL" field itself correct for a Generated/Imported key, instead of only
     // showing the real URL in a toast — once resolvedSourceConnectionId() is known (after the first save, or
@@ -1821,11 +1947,20 @@ export class EhrVendorSourceFormComponent
 
     if (this.wiz.discovered()) {
       const env = EPIC_ENV[this.wiz.env()];
+      // Token/Authorization Endpoint deliberately have NO EPIC_ENV fallback here. Both open paths set env to
+      // 'sandbox' (WizardService.open()/openEntity()) regardless of which vendor form is actually open, so
+      // falling back stamped Epic's sandbox authorize URL over the value Discover had just resolved — for every
+      // non-Epic vendor, and for Epic production too — and a subsequent Save wrote that wrong URL back onto the
+      // node. Both endpoints are now genuinely persisted and restored (AuthorizationEndpoint since
+      // AddSourceAuthenticationAuthorizationEndpoint), so whatever is here is real. When one is still empty — a
+      // connection saved before that column existed, or a Backend System app that has no authorize endpoint —
+      // leave the field empty: its watermark plus the Discover button say what to do, and runDiscover() fills it
+      // from the source's real /.well-known/smart-configuration.
       const dv: FullDiscoveredValues = {
         fhirBaseUrl: this.wiz.baseUrl() || env.base,
         fhirVersion: 'R4 (4.0.1)',
-        tokenEndpoint: this.wiz.token() || env.token,
-        authzEndpoint: this.wiz.authorize() || env.authorize,
+        tokenEndpoint: this.wiz.token(),
+        authzEndpoint: this.wiz.authorize(),
         issuer: '',
         jwksUri: '',
         introspectEp: '',
@@ -1839,8 +1974,14 @@ export class EhrVendorSourceFormComponent
       this.discValues.set(dv);
       this.discStatus.set('done');
       this.form.controls.epicBaseUrl.setValue(dv.fhirBaseUrl);
-      this.form.controls.tokenEndpoint.setValue(dv.tokenEndpoint);
-      this.form.controls.authzEndpoint.setValue(dv.authzEndpoint);
+      // Only write these when there is a real, restored value — never blank out an endpoint that some other
+      // init path (or the user) already put there.
+      if (dv.tokenEndpoint) {
+        this.form.controls.tokenEndpoint.setValue(dv.tokenEndpoint);
+      }
+      if (dv.authzEndpoint) {
+        this.form.controls.authzEndpoint.setValue(dv.authzEndpoint);
+      }
     }
     if (this.wiz.resources().length) {
       this.form.controls.resources.setValue(this.wiz.resources());
@@ -1885,6 +2026,20 @@ export class EhrVendorSourceFormComponent
       if (this.form.controls.environment.value === 'sandbox') {
         this.form.controls.epicBaseUrl.setValue(HEALOW_SANDBOX_BASE_URL);
       }
+    }
+
+    // Generic new-source App Name default for every other non-Epic vendor (Cerner, MEDITECH Greenfield,
+    // Allscripts, ...): wiz.stepName() above defaults to 'Epic' regardless of which vendor form is actually
+    // open (see WizardService.open()), and Athenahealth/Healow already correct it via their own overrides
+    // above (they also need other field defaults). Every remaining vendor gets this vendor-neutral fallback
+    // instead of silently keeping the word "Epic" on screen. Skipped once editing, same as the blocks above.
+    if (
+      !this.wiz.isEditing() &&
+      this.vendor() !== 'Epic' &&
+      this.vendor() !== 'Athenahealth' &&
+      this.vendor() !== 'Healow'
+    ) {
+      this.form.controls.appName.setValue(this.displayVendor());
     }
 
     this.prevAudience = this.audience();
@@ -1965,10 +2120,6 @@ export class EhrVendorSourceFormComponent
         this.ensureRetrievalResourceTypeDefault();
         this.syncRetrievalValidators();
       });
-
-    this.form.controls.exportScope.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.syncRetrievalValidators());
 
     this.form.controls.runMode.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -2270,6 +2421,7 @@ export class EhrVendorSourceFormComponent
         webhookResourceType: [],
         searchRestResourceType: [],
         bulkExportResourceType: [],
+        singlePatientResourceType: [],
         eventType: '',
         notificationPayload: '',
         endpointType: '',
@@ -2388,14 +2540,21 @@ export class EhrVendorSourceFormComponent
    *  (see the showResourcePicker default in ngOnInit). Never overwrites a real, already-populated value — a
    *  genuinely restored/edited selection (from a saved connection or an edited canvas node) is left exactly as-is. */
   private ensureRetrievalResourceTypeDefault(): void {
-    // athenahealth AND eClinicalWorks (Healow) are excluded from this default: their OAuth servers reject the ENTIRE
-    // token request if even one requested scope isn't provisioned on the app registration (verified against both live
-    // sandboxes — eCW returns 400 invalid_scope), so silently seeding every canonical resource type here — fine for
-    // Epic, which just ignores an unsupported scope rather than rejecting the whole grant — reliably produces an
-    // unusable connection (the exact eCW backend bulk-export invalid_scope failure this guards against). Leaving it
-    // empty means a fresh athenahealth/eCW connection requests no resource scopes until something explicit sets them
-    // (the workflow builder's destination-derived resourceTypes, or a deliberate selection here) — the operator picks
-    // from the vendor's actually-registered resource types, never a broad guess that has to be pared back every time.
+    // athenahealth is excluded from this default: its OAuth server rejects the ENTIRE token request if even one
+    // requested scope isn't provisioned on the app registration (verified against the live preview sandbox), so
+    // silently seeding every MVP1 resource type here — appropriate for Epic, which just ignores an unsupported
+    // scope rather than rejecting the whole grant — reliably produces an unusable connection. Leaving this null/
+    // empty means a fresh athenahealth connection created in Source Connection Master requests no resource scopes
+    // at all until something explicit sets them (the workflow builder's destination-derived resourceTypes in
+    // workflow-build-assembler.service.ts, or a deliberate edit here) — never a broad guess that has to be
+    // manually pared back down every time, which was the actual repeated cause of "Invalid Scope" failures.
+    // eClinicalWorks (Healow) is excluded for the same reason: eCW also fails the entire token request when a
+    // requested scope isn't provisioned on the app registration, and it publishes no system/ read scope at all for
+    // a large part of SUPPORTED_RESOURCE_TYPES (Appointment, Schedule, Slot, Task, Consent, Contract, ...). The
+    // vendor profile in scopeString()/VendorScopeCatalog already filters those out of the scope string, but seeding
+    // 59 resource types would still leave the connection configured to EXTRACT resource types eCW cannot serve.
+    // A Healow connection instead takes its resource types from the workflow's destination selection, which is the
+    // real record of what anyone actually consumes.
     if (this.vendor() === 'Athenahealth' || this.vendor() === 'Healow') return;
 
     const key = (
@@ -2404,6 +2563,7 @@ export class EhrVendorSourceFormComponent
         webhook: 'webhookResourceType',
         'search-rest': 'searchRestResourceType',
         'bulk-export': 'bulkExportResourceType',
+        'single-patient': 'singlePatientResourceType',
       } as const
     )[this.form.controls.retrievalMethod.value as RetrievalMethod];
     if (!key) return;
@@ -2464,7 +2624,14 @@ export class EhrVendorSourceFormComponent
     apply('epicBaseUrl', true, true);
     apply('clientId', true);
     apply('tokenEndpoint', !isLoopback, true);
-    apply('authzEndpoint', !isLoopback, true);
+    // Backend System is client_credentials: there is no browser redirect, so no authorization endpoint is
+    // involved and requiring one blocks the form on a field the flow never uses. (Discovery still populates it
+    // when the server publishes one — it's simply not mandatory.) Every interactive audience still requires it.
+    apply(
+      'authzEndpoint',
+      !isLoopback && this.audience() !== 'backend-system',
+      true,
+    );
     apply('callbackUrl', cfg.showRedirect, true);
     apply('launchUrl', cfg.showLaunchUrl, true);
     // Not required: there's no UI left to hand-pick this (the Resource Type & Scopes picker was removed —
@@ -2810,6 +2977,7 @@ export class EhrVendorSourceFormComponent
       webhook: 'webhookResourceType',
       'search-rest': 'searchRestResourceType',
       'bulk-export': 'bulkExportResourceType',
+      'single-patient': 'singlePatientResourceType',
     };
     // A connection created via Settings (entity mode) always has retrieval: null — narrowing Settings to
     // connection-only fields (docs/backend/13-source-connection-configuration-split-plan.md) means retrieval
@@ -2828,6 +2996,10 @@ export class EhrVendorSourceFormComponent
       appName: dto.name,
       epicBaseUrl: dto.baseUrl,
       tokenEndpoint: dto.authentication?.tokenEndpoint ?? '',
+      // Persisted since AddSourceAuthenticationAuthorizationEndpoint, so a clone now starts from the authorize
+      // URL the original was actually configured with instead of an empty field — runDiscover() below still
+      // re-confirms it live against the cloned Base URL and overwrites this if the source says otherwise.
+      authzEndpoint: dto.authentication?.authorizationEndpoint ?? '',
       clientId: dto.authentication?.clientId ?? '',
       practiceId: dto.authentication?.practiceId ?? '',
       authMethod,
@@ -2953,10 +3125,9 @@ export class EhrVendorSourceFormComponent
 
     this.toast.show('Loaded', `Copied configuration from "${dto.name}".`);
 
-    // SourceConnection only ever persists a Token Endpoint — there's no Authorization Endpoint column at all
-    // (nothing to clone it from) — so run real SMART discovery against the cloned Base URL instead of faking
-    // discStatus 'done'/an "Auto-populated" badge for data that was never actually saved. This also re-confirms
-    // Token Endpoint live and refreshes the discovered (available) resource type list for this source right now.
+    // Token and Authorization Endpoint are both patched in from the DTO above, but still run real SMART discovery
+    // against the cloned Base URL rather than faking discStatus 'done'/an "Auto-populated" badge: it re-confirms
+    // both endpoints live and refreshes the discovered (available) resource type list for this source right now.
     // The baseline snapshot (for hasExistingChanged) is taken once this settles, not here — see runDiscover().
     this._awaitingBaselineSnapshot = true;
     this.runDiscover();
@@ -3132,59 +3303,173 @@ export class EhrVendorSourceFormComponent
   }
 
   /** Backend System only: fired from runDiscover() once the token endpoint resolves — exchanges the fixed
-   *  wildcard scope 'system/*.*' via client_credentials + private_key_jwt using whatever clientId/signing-key
-   *  fields are already on the form, and shows the scopes Epic actually granted. Silently skipped when the
-   *  signing key hasn't been configured yet (nothing to sign with) rather than surfacing an error. */
+   *  wildcard scope 'system/*.*' via client_credentials, using whichever auth method (JWT or Client Secret) is
+   *  currently selected, and shows the scopes the source actually granted. Silently skipped when the fields that
+   *  method needs (signing key reference, or client secret) aren't populated yet, rather than surfacing an error —
+   *  this is a passive side effect of Discover, not something the admin explicitly asked to run. */
   private runBackendAuthScopeProbe(tokenEndpoint: string): void {
     const clientId = this.form.controls.clientId.value.trim();
-    const keyId = this.form.controls.jwtKid.value.trim();
-    const privateKeyVaultName = this.form.controls.privateKeyRef.value.trim();
-    const privateKeySecretName =
-      this.form.controls.privateKeySecretName.value.trim();
+    const method = this.authMethod();
+    if (!clientId || !tokenEndpoint || (method !== 'secret' && method !== 'jwt')) {
+      return;
+    }
+    if (method === 'secret' && !this.form.controls.clientSecret.value) {
+      return;
+    }
     if (
-      !clientId ||
-      !tokenEndpoint ||
-      !privateKeyVaultName ||
-      !privateKeySecretName
+      method === 'jwt' &&
+      (!this.form.controls.privateKeyRef.value.trim() ||
+        !this.form.controls.privateKeySecretName.value.trim())
     ) {
       return;
     }
 
     this.grantedScopesStatus.set('loading');
-    // Epic's system scope grammar has no literal wildcard access-level ('system/*.*' is invalid and gets rejected
-    // as invalid_scope) — the access level must be a real suffix: '.read' for v1 (coarse), '.rs' for v2 (granular),
-    // matching whichever version scopeString() above already uses for this connection.
-    const suffix = this.scopeVersionValue() === 'v2' ? 'rs' : 'read';
-    this.discovery
-      .testBackendAuthScopes({
-        tokenEndpoint,
-        clientId,
-        keyId: keyId || null,
-        privateKeyVaultName,
-        privateKeySecretName,
-        scope: `system/*.${suffix}`,
-      })
-      .subscribe({
-        next: (result) => {
-          if (result.success) {
-            this.grantedScopes.set(result.grantedScopes);
-            this.grantedScopesStatus.set('done');
-          } else {
-            this.grantedScopesError.set(
-              result.error ?? 'Epic did not grant any scopes.',
-            );
-            this.grantedScopesStatus.set('error');
-          }
-        },
-        error: (err) => {
-          const msg =
-            typeof err?.error?.error === 'string'
-              ? err.error.error
-              : 'Could not authenticate with Epic.';
-          this.grantedScopesError.set(msg);
+    this.runRealCredentialTest(method, tokenEndpoint).subscribe({
+      next: (result) => {
+        if (result.success) {
+          this.grantedScopes.set(result.grantedScopes);
+          this.grantedScopesStatus.set('done');
+        } else {
+          this.grantedScopesError.set(
+            result.error ?? 'The source did not grant any scopes.',
+          );
           this.grantedScopesStatus.set('error');
-        },
-      });
+        }
+      },
+      error: (err) => {
+        const msg =
+          typeof err?.error?.error === 'string'
+            ? err.error.error
+            : 'Could not authenticate with the source.';
+        this.grantedScopesError.set(msg);
+        this.grantedScopesStatus.set('error');
+      },
+    });
+  }
+
+  /** The resource types Test Connection should request scopes for — the same expression scopeString() uses, so
+   *  the test and the Scopes preview can never disagree about what this connection covers. */
+  private testConnectionResourceTypes(): string[] {
+    return this.showResourcePickerSection()
+      ? this.selectedResources()
+      : this.activeRetrievalResourceTypes();
+  }
+
+  /**
+   * The scope Test Connection exchanges for. Asks the backend (derived-config) whenever this connection is
+   * already persisted, so the test requests EXACTLY what the pipeline will: application type prefix, the vendor's
+   * own access-level spellings, and validation against the source's live scopes_supported. Deliberately sends no
+   * scopeVersion — the server detects it, which is the only way athenahealth's and eCW's hard v1-only
+   * requirement is honoured (both reject a v2 '.rs' resource scope outright).
+   *
+   * Falls back to a locally-built scope for a brand-new connection (no id yet — derived-config is keyed on one)
+   * and whenever discovery is unreachable, so an offline source degrades to a testable request rather than a
+   * dead button.
+   */
+  private resolveTestConnectionScope(): Observable<TestScopeResolution> {
+    const resources = this.testConnectionResourceTypes();
+    const connectionId = this.resolvedSourceConnectionId();
+    if (!connectionId) {
+      return of(this.fallbackTestConnectionScope(resources));
+    }
+    return this.discovery.derivedScopes(connectionId, resources).pipe(
+      map((derived) =>
+        derived.scopeString.trim()
+          ? { scope: derived.scopeString, blocked: null }
+          : this.fallbackTestConnectionScope(resources),
+      ),
+      catchError(() => of(this.fallbackTestConnectionScope(resources))),
+    );
+  }
+
+  /**
+   * Locally-built scope for when derived-config can't answer. Mirrors the backend's own rules rather than
+   * reaching for one wildcard: a wildcard is the single spelling that is wrong on two of the three vendors.
+   *
+   *  - A vendor with a scope profile (eCW) gets the access level it actually publishes per resource. Its
+   *    wildcard is 'system/*.r' — 'system/*.read' does not exist there. Group is absent from the profile on
+   *    purpose: eCW requires it EXCLUDED from Backend Single Patient calls, so it must not come back here.
+   *  - athenahealth rejects the ENTIRE token request (401 access_denied) the moment a wildcard resource scope
+   *    appears, so with nothing selected there is no valid scope to send and the test is blocked with a reason
+   *    instead of a misleading auth failure. It is also v1-only, hence the fixed '.read'.
+   *  - Every other vendor (Epic included) keeps the uniform version suffix and the wildcard fallback, unchanged.
+   */
+  private fallbackTestConnectionScope(resources: string[]): TestScopeResolution {
+    const profile = vendorScopeProfile(this.vendor());
+    if (profile) {
+      const vendorScopes = resources
+        .map((r) => {
+          const level = profile.readAccessLevelByResourceType[r];
+          return level ? `system/${r}.${level}` : null;
+        })
+        .filter((s): s is string => s !== null);
+      return {
+        scope: vendorScopes.length
+          ? vendorScopes.join(' ')
+          : `system/*.${profile.wildcardReadAccessLevel}`,
+        blocked: null,
+      };
+    }
+    if (this.vendor() === 'Athenahealth') {
+      return resources.length
+        ? { scope: resources.map((r) => `system/${r}.read`).join(' '), blocked: null }
+        : {
+            scope: null,
+            blocked:
+              'Select at least one resource type first. athenahealth rejects a wildcard scope outright, so there is nothing valid to test with until resource types are chosen.',
+          };
+    }
+    const suffix = this.scopeVersionValue() === 'v2' ? 'rs' : 'read';
+    return {
+      scope: resources.length
+        ? resources.map((r) => `system/${r}.${suffix}`).join(' ')
+        : `system/*.${suffix}`,
+      blocked: null,
+    };
+  }
+
+  /** Used by runBackendAuthScopeProbe() (Discover's passive auto-probe): builds and sends the real
+   *  client_credentials exchange for whichever Backend System auth method is selected, for whichever scope
+   *  resolveTestConnectionScope() settles on. A blocked resolution surfaces as an ordinary failed result, so the
+   *  caller reports it through the path it already has. */
+  private runRealCredentialTest(
+    method: 'secret' | 'jwt',
+    tokenEndpoint: string,
+  ): Observable<BackendAuthScopesResult> {
+    const clientId = this.form.controls.clientId.value.trim();
+    return this.resolveTestConnectionScope().pipe(
+      switchMap((resolution) => {
+        if (!resolution.scope) {
+          return of<BackendAuthScopesResult>({
+            success: false,
+            grantedScopes: [],
+            error: resolution.blocked,
+          });
+        }
+        const scope = resolution.scope;
+        if (method === 'secret') {
+          return this.discovery.testBackendAuthScopes({
+            tokenEndpoint,
+            clientId,
+            authMethod: 'secret',
+            clientSecret: this.form.controls.clientSecret.value,
+            authPlacement: this.form.controls.authPlacement.value,
+            scope,
+          });
+        }
+        const keyId = this.form.controls.jwtKid.value.trim();
+        return this.discovery.testBackendAuthScopes({
+          tokenEndpoint,
+          clientId,
+          authMethod: 'jwt',
+          keyId: keyId || null,
+          privateKeyVaultName: this.form.controls.privateKeyRef.value.trim(),
+          privateKeySecretName: this.form.controls.privateKeySecretName.value.trim(),
+          scope,
+        });
+      }),
+    );
   }
 
   /** Captures the hasExistingChanged() baseline once discovery settles after a clone — see the
@@ -3225,6 +3510,7 @@ export class EhrVendorSourceFormComponent
     });
   }
 
+
   /**
    * The flat `fields` bag this form's current (assumed-valid) values map to — everything save() writes onto the
    * node/entity EXCEPT the "reuse vs fork an existing connection" bookkeeping (`sourceConnectionId`/
@@ -3238,6 +3524,10 @@ export class EhrVendorSourceFormComponent
     cfg: AudienceFieldConfig,
     emitRecurrence: boolean,
   ): Record<string, string> {
+    // Bulk export is always a Group export for every vendor this form serves, and Epic documents that it does not
+    // support _since — so Export scope / Patient ID list / Incremental cursor are pinned below rather than read
+    // off controls the Bulk Export field list no longer contains. Search (REST) writes all three normally.
+    const isBulkExport = this.retrievalMethod() === 'bulk-export';
     return {
       // Lets NodeLibraryDialogComponent re-open the correct per-vendor wrapper when editing an existing canvas
       // node later (see its _sourceFormKeyForNode) — the same pattern GenericFhirSourceFormComponent/
@@ -3310,12 +3600,13 @@ export class EhrVendorSourceFormComponent
             'Reconciliation schedule': v.reconciliationSchedule ?? '',
             'Payload format': v.payloadFormat ?? '',
             'Search criteria': v.searchCriteria ?? '',
-            'Incremental cursor': v.incrementalCursor ? 'enabled' : 'disabled',
+            'Incremental cursor':
+              !isBulkExport && v.incrementalCursor ? 'enabled' : 'disabled',
             'Schedule / poll frequency': v.schedulePollFrequency ?? '',
             'Run mode': v.runMode ?? '',
-            'Export scope': v.exportScope ?? '',
+            'Export scope': isBulkExport ? 'group' : (v.exportScope ?? ''),
             'Group ID': v.groupId ?? '',
-            'Patient ID / list': v.patientIdList ?? '',
+            'Patient ID / list': isBulkExport ? '' : (v.patientIdList ?? ''),
             'FHIR output format': v.fhirOutputFormat ?? '',
             // ── Calendar recurrence (Search-REST Full Refresh, or System/Group bulk export) ──
             ...(emitRecurrence
@@ -3363,10 +3654,7 @@ export class EhrVendorSourceFormComponent
     const aud = v.audience as EpicAudience;
     const cfg = this.audienceConfig();
     const emitRecurrence =
-      v.runMode === 'full' ||
-      (this.retrievalMethod() === 'bulk-export' &&
-        v.exportScope !== '' &&
-        v.exportScope !== 'patient');
+      v.runMode === 'full' || this.retrievalMethod() === 'bulk-export';
     return this.buildFieldsToSave(v, aud, cfg, emitRecurrence);
   }
 
@@ -3398,10 +3686,7 @@ export class EhrVendorSourceFormComponent
     // a System/Group bulk export (a Patient-id-list export is a one-off and stays manual). buildTrigger() in the
     // workflow builder reads 'Full refresh schedule (cron)' to compile the workflow's Schedule trigger.
     const emitRecurrence =
-      v.runMode === 'full' ||
-      (this.retrievalMethod() === 'bulk-export' &&
-        v.exportScope !== '' &&
-        v.exportScope !== 'patient');
+      v.runMode === 'full' || this.retrievalMethod() === 'bulk-export';
 
     // "Existing Source" has two outcomes depending on whether the form still matches what
     // populateFormFromSourceConnection() cloned in (as re-confirmed by discovery):
@@ -3411,7 +3696,7 @@ export class EhrVendorSourceFormComponent
     //  - Edited: fork it as a new, independent connection. If the user left Name exactly as cloned,
     //    it collides with the original unless suffixed; if they typed their own distinct name, honor
     //    it as-is (only deduped on an actual collision) rather than silently suffixing a chosen name.
-    let resolvedName = v.appName ?? 'Epic';
+    let resolvedName = v.appName ?? this.displayVendor();
     let resolvedSourceConnectionId: string | null = null;
     if (this.sourceMode() === 'existing') {
       const original = this.existingConnections().find(

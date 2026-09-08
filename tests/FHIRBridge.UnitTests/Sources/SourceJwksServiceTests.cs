@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Entities;
@@ -95,6 +95,65 @@ public sealed class SourceJwksServiceTests
         var act = () => Service().GetPublicJwksAsync(Guid.NewGuid(), CancellationToken.None);
 
         await act.Should().ThrowAsync<NotFoundException>();
+    }
+
+    // The connection stores only a reference to the key, so it can be saved (and its JWKS URL registered with the
+    // EHR) while the slot it points at holds an unset appsettings placeholder. Before the guard this reached
+    // RSA.ImportFromPem and surfaced as "No supported key formats were found... not the path to such a file" —
+    // naming neither the connection nor the secret, and mapped to a 400 with a generic message.
+    [Theory]
+    [InlineData("SET_VIA_DOTNET_USER_SECRETS")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("/etc/keys/epic.pem")]
+    public async Task GetPublicJwksAsync_names_the_connection_and_secret_when_the_reference_holds_no_pem(
+        string resolvedValue)
+    {
+        var source = SeedSource(new SecretReference("dev-local", "epic-backend-private-key"), keyId: "key-2026");
+        _secretProvider.Setup(x => x.GetSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(resolvedValue);
+
+        var act = () => Service().GetPublicJwksAsync(source.Id, CancellationToken.None);
+
+        var thrown = await act.Should().ThrowAsync<InvalidOperationException>();
+        thrown.Which.Message.Should()
+            .Contain("Epic Backend")
+            .And.Contain("epic-backend-private-key")
+            .And.Contain("dev-local");
+
+        // Never echo the resolved value — it is key material whenever the same path succeeds.
+        if (!string.IsNullOrWhiteSpace(resolvedValue))
+        {
+            thrown.Which.Message.Should().NotContain(resolvedValue);
+        }
+    }
+
+    [Fact]
+    public async Task GetPublicJwksAsync_reports_a_pem_shaped_key_that_is_not_an_importable_rsa_key()
+    {
+        var source = SeedSource(new SecretReference("signing-keys", "epic-private-key-abc"), keyId: "key-2026");
+        _secretProvider.Setup(x => x.GetSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("-----BEGIN PRIVATE KEY-----\ntruncated\n-----END PRIVATE KEY-----");
+
+        var act = () => Service().GetPublicJwksAsync(source.Id, CancellationToken.None);
+
+        var thrown = await act.Should().ThrowAsync<InvalidOperationException>();
+        thrown.Which.Message.Should().Contain("Epic Backend").And.Contain("epic-private-key-abc");
+    }
+
+    // A public-key PEM imports without error but has no private component; it must not be mistaken for a signing
+    // key, and the failure must still name where it came from.
+    [Fact]
+    public async Task GetPublicJwksAsync_rejects_a_public_key_pem_stored_at_the_signing_key_reference()
+    {
+        using var rsa = RSA.Create(2048);
+        var source = SeedSource(new SecretReference("signing-keys", "epic-private-key-abc"), keyId: "key-2026");
+        _secretProvider.Setup(x => x.GetSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(rsa.ExportSubjectPublicKeyInfoPem());
+
+        var act = () => Service().GetPublicJwksAsync(source.Id, CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     private static string Base64UrlEncode(byte[] bytes) =>

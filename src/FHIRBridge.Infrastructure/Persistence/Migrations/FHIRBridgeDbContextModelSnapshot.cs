@@ -4314,6 +4314,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Scope", "DestinationType", "DestinationField");
 
+                    b.HasIndex("ExecutionPhase", "Scope", "ResourceType", "SourceField");
+
                     b.HasIndex("Scope", "ResourceType", "DestinationField", "SourceSystem", "SourceField");
 
                     b.HasIndex("Scope", "ResourcePipelineRouteId", "ResourceType", "DestinationField", "SourceSystem", "SourceField");
@@ -4481,7 +4483,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasIndex("Email");
 
                     b.HasIndex("ExternalUserId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.HasIndex("MfaChallengeTokenHash");
 
@@ -5716,6 +5719,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                                 .HasMaxLength(100)
                                 .HasColumnType("nvarchar(100)")
                                 .HasColumnName("AuthenticationType");
+
+                            b1.Property<string>("AuthorizationEndpoint")
+                                .HasMaxLength(500)
+                                .HasColumnType("nvarchar(500)")
+                                .HasColumnName("AuthorizationEndpoint");
 
                             b1.Property<string>("ClientId")
                                 .HasMaxLength(300)

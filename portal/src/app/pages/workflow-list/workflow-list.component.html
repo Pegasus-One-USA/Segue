@@ -1,4 +1,4 @@
-<div class="list-page">
+﻿<div class="list-page">
 
   <!-- Header -->
   <div class="page-head">
@@ -12,6 +12,14 @@
         Refresh
       </button>
       @if (canCreate()) {
+        <select
+          class="builder-version-select"
+          aria-label="Builder version for New"
+          [value]="builderVersion()"
+          (change)="onBuilderVersionChange($any($event.target).value)">
+          <option value="v1">V1</option>
+          <option value="v2">V2</option>
+        </select>
         <button class="btn-cta" type="button" (click)="onNewWorkflow()">
           New
         </button>
@@ -242,7 +250,7 @@
               </td>
               <td>
                 @if (w.sourceSystemType) {
-                  <span class="tag">{{ w.sourceSystemType }}</span>
+                  <span class="tag">{{ sourceSystemLabel(w.sourceSystemType) }}</span>
                 } @else {
                   <span class="cell-muted">—</span>
                 }
@@ -258,7 +266,7 @@
               <td>
                 @if (w.lastRun) {
                   <div class="lastrun">
-                    <span [class]="runStatusClass(w.lastRun)">{{ w.lastRun }}</span>
+                    <span [class]="runStatusClass(w.lastRun)">{{ runStatusLabel(w.lastRun) }}</span>
                     <span class="cell-meta">{{ w.lastRunAt | date:'MMM d, h:mm a' }}</span>
                     @if (w.lastRunErrorReferenceId) {
                       <a

@@ -94,6 +94,13 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
                 .HasMaxLength(500)
                 .HasColumnName("TokenEndpoint");
 
+            // Null for every connection saved before this column existed, and for Backend System connections
+            // (client_credentials never redirects a browser). The interactive flow still re-discovers the live
+            // endpoint at authorize time — this is stored so the portal can show back what was configured.
+            authentication.Property(x => x.AuthorizationEndpoint)
+                .HasMaxLength(500)
+                .HasColumnName("AuthorizationEndpoint");
+
             authentication.Property(x => x.KeyId)
                 .HasMaxLength(200)
                 .HasColumnName("KeyId");

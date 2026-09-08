@@ -223,13 +223,19 @@
 
           <div class="field-row">
             <div class="field-group">
-              <label class="field-label" for="smtpUsername">Username</label>
+              <label class="field-label" for="smtpUsername">Username <span class="required">*</span></label>
               <input id="smtpUsername" class="text-input" type="text" formControlName="smtpUsername" autocomplete="off" />
+              @if (submitted() && form.get('smtpUsername')!.invalid) {
+                <p class="field-hint field-hint--error">Username is required.</p>
+              }
             </div>
 
             <div class="field-group">
-              <label class="field-label" for="smtpPassword">Password</label>
+              <label class="field-label" for="smtpPassword">Password <span class="required">*</span></label>
               <input id="smtpPassword" class="text-input" type="password" formControlName="smtpPassword" autocomplete="new-password" />
+              @if (submitted() && form.get('smtpPassword')!.invalid) {
+                <p class="field-hint field-hint--error">Password is required.</p>
+              }
             </div>
           </div>
 
@@ -250,7 +256,7 @@
 
             <div class="field-group">
               <label class="field-label" for="smtpFromName">From name <span class="required">*</span></label>
-              <input id="smtpFromName" class="text-input" type="text" formControlName="smtpFromName" placeholder="FHIRBridge" />
+              <input id="smtpFromName" class="text-input" type="text" formControlName="smtpFromName" placeholder="Segue" />
               @if (submitted() && form.get('smtpFromName')!.invalid) {
                 <p class="field-hint field-hint--error">From name is required.</p>
               }
@@ -262,10 +268,14 @@
              projected label content (a nested <a> there is an unreliable click target — mat-checkbox's
              own label/touch-target claims that whole area as one click zone). -->
         <div class="terms-row">
-          <mat-checkbox formControlName="acceptTerms" color="primary">I accept the</mat-checkbox>
+          <mat-checkbox
+            [checked]="form.get('acceptTerms')!.value"
+            color="primary"
+            (change)="onAcceptTermsChange($event)"
+          >I accept the</mat-checkbox>
           <a href="javascript:void(0)" class="terms-link" (click)="openTermsDialog()">Terms and Conditions</a>
-          @if (form.get('acceptTerms')!.disabled) {
-            <p class="field-hint">Open and scroll through the Terms and Conditions to enable this checkbox.</p>
+          @if (!termsReadToEnd()) {
+            <p class="field-hint">Open the Terms and Conditions to enable this checkbox.</p>
           } @else if (submitted() && form.get('acceptTerms')!.invalid) {
             <p class="field-hint field-hint--error">You must accept the Terms and Conditions to continue.</p>
           }
@@ -275,7 +285,7 @@
         <button
           type="submit"
           class="submit-btn"
-          [disabled]="isLoading()"
+          [disabled]="isLoading() || !canSubmit()"
         >
           @if (isLoading()) {
             <mat-spinner diameter="20" strokeWidth="2" class="btn-spinner"></mat-spinner>

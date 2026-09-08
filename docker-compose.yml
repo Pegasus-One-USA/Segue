@@ -17,6 +17,27 @@ services:
       timeout: 5s
       retries: 10
 
+  # Primary app database, PostgreSQL flavor — appsettings.Development.json's default FHIRBridgeDb
+  # connection string (Database:Provider=PostgreSql) points here. Sits alongside controlplane-sql
+  # above rather than replacing it: EF's provider is chosen by config, so either engine can back the
+  # app depending on which "Database:Provider"/connection string is active.
+  controlplane-postgres:
+    image: postgres:16-alpine
+    container_name: fhirbridge-controlplane-postgres
+    environment:
+      POSTGRES_DB: "${FHIRBRIDGE_POSTGRES_DB:-FHIRBridge}"
+      POSTGRES_USER: "${FHIRBRIDGE_POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${FHIRBRIDGE_POSTGRES_PASSWORD:-Your_password123}"
+    ports:
+      - "${FHIRBRIDGE_POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - controlplane-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FHIRBRIDGE_POSTGRES_USER:-postgres} -d ${FHIRBRIDGE_POSTGRES_DB:-FHIRBridge}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   hapi-postgres:
     image: postgres:16-alpine
     container_name: fhirbridge-hapi-postgres
@@ -274,6 +295,8 @@ services:
     depends_on:
       controlplane-sql:
         condition: service_healthy
+      controlplane-postgres:
+        condition: service_healthy
       hapi-postgres:
         condition: service_healthy
       output-mysql:
@@ -285,6 +308,7 @@ services:
 
 volumes:
   controlplane-sql-data:
+  controlplane-postgres-data:
   hapi-postgres-data:
   hapi-terminology-postgres-data:
   rabbitmq-data:

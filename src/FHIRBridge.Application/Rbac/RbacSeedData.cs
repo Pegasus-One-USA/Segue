@@ -133,6 +133,14 @@ public static class RbacSeedData
         new("Create a new source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Create),
         new("View the list of source connections.", PermissionGroupCode.SourceConnections, PermissionActionCode.View),
         new("Delete a source connection.", PermissionGroupCode.SourceConnections, PermissionActionCode.Delete),
+        // Downloading the PRIVATE half of a connection's signing key is the only operation that hands real secret
+        // material back out of the secret store, so it gets its own action rather than riding on Edit/View — a role
+        // can provision and register keys without ever being able to extract one. (The public-key download is gated
+        // by the ordinary View permission above; it publishes nothing the anonymous JWKS endpoint doesn't already.)
+        new(
+            "Download the private key PEM of a source connection's SMART Backend Services signing key.",
+            PermissionGroupCode.SourceConnections,
+            PermissionActionCode.Export),
         // Execute a workflow whose source vendor / destination type has no dedicated permission group of its own
         // (anything that falls back to the generic SourceConnections group). The workflow /run endpoint checks an
         // Execute permission per source/destination node; the dynamic-discovery loop deliberately skips this generic
@@ -205,15 +213,17 @@ public static class RbacSeedData
         Permissions.ToDictionary(p => (p.Group, p.Action), p => p.Id);
 
     /// <summary>
-    /// The 4 built-in system roles, in seed order. Descriptions are preserved verbatim from the former
-    /// <c>RoleConfiguration.HasData</c> block.
+    /// Only SuperAdmin is auto-created on a fresh install now — it alone is truly non-deletable (see
+    /// RoleManagementService.DeleteRoleAsync), so it's the only role that must always exist. Admin/Operations/Audit
+    /// used to be seeded here unconditionally; an admin who wants an equivalent role now creates it themselves
+    /// (their default grants are still documented in SystemRoleDefaultPermissions.Grants for reference/copying).
+    /// A database that already has those 3 roles from before this change keeps them exactly as they are — this
+    /// list only controls what a brand-new/empty database starts with, never removes anything from an existing
+    /// one (see RbacBootstrapper's existingRoleIds check, which never deletes).
     /// </summary>
     public static IReadOnlyList<RoleSeed> Roles { get; } =
     [
         new(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator."),
-        new(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users."),
-        new(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs workflow configurations, and reviews data and audit output."),
-        new(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs."),
     ];
 
     /// <summary>

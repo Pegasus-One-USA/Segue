@@ -1,0 +1,151 @@
+<div
+  class="canvas-shell"
+  #shellRef
+  (contextmenu)="onContextMenu($event)"
+  (pointerdown)="onShellPointerDown($event)"
+  (pointermove)="onShellPointerMove($event)"
+  (pointerup)="onShellPointerUp($event)"
+  (pointercancel)="onShellPointerUp($event)"
+  (wheel)="onWheel($event)"
+  [class.panning]="false"
+>
+  <div class="flow" [style.transform]="transformStyle()">
+    <app-canvas-connectors
+      [nodes]="nodes()"
+      [edges]="edges()"
+      [tempPath]="tempPath()"
+    />
+
+    @for (node of nodes(); track node.id) {
+      @if (isSourceNode(node)) {
+        <app-source-node
+          [attr.data-node-id]="node.id"
+          [node]="node"
+          [readOnly]="readOnly()"
+          [canAddNext]="canAddNext(node)"
+          [canDelete]="canDeleteNode(node.id)"
+          (configure)="onNodeConfigure($event)"
+          (addNext)="onAddNext($event)"
+          (delete)="onNodeDelete($event)"
+          (dragMove)="onNodeDragMove($event)"
+          (portStart)="onPortStart($event)"
+          (portMove)="onPortMove($event)"
+          (portEnd)="onPortEnd($event)"
+        />
+      } @else if (isTransformNode(node)) {
+        <app-transform-node
+          [attr.data-node-id]="node.id"
+          [node]="node"
+          [readOnly]="readOnly()"
+          [canAddNext]="canAddNext(node)"
+          [canDelete]="canDeleteNode(node.id)"
+          (configure)="onNodeConfigure($event)"
+          (addNext)="onAddNext($event)"
+          (delete)="onNodeDelete($event)"
+          (dragMove)="onNodeDragMove($event)"
+          (portStart)="onPortStart($event)"
+          (portMove)="onPortMove($event)"
+          (portEnd)="onPortEnd($event)"
+        />
+      } @else if (isMergeNode(node)) {
+        <app-merge-node
+          [attr.data-node-id]="node.id"
+          [node]="node"
+          [readOnly]="readOnly()"
+          [canAddNext]="canAddNext(node)"
+          (addNext)="onAddNext($event)"
+          (delete)="onNodeDelete($event)"
+          (dragMove)="onNodeDragMove($event)"
+          (portStart)="onPortStart($event)"
+          (portMove)="onPortMove($event)"
+          (portEnd)="onPortEnd($event)"
+        />
+      }
+    }
+
+  </div>
+
+  <!-- Context menu -->
+  @if (ctxMenu(); as menu) {
+    <div class="ctx-backdrop" tabindex="0"
+         (click)="closeCtx()"
+         (keydown.escape)="closeCtx()"
+         (contextmenu)="$event.preventDefault(); closeCtx()"></div>
+    <div class="ctx-menu" [style.left.px]="menu.x" [style.top.px]="menu.y">
+      @if (menu.type === 'node') {
+        <button class="ctx-item" (click)="ctxCopy()">
+          <svg class="ctx-ico" viewBox="0 0 16 16"><rect x="5" y="1" width="9" height="11" rx="1.5"/><rect x="2" y="4" width="9" height="11" rx="1.5"/></svg>
+          Copy
+        </button>
+        @if (!readOnly()) {
+          @if (!ctxNodeIsMerge()) {
+            <div class="ctx-sep"></div>
+            @if (checkpointEnabledForCtxNode()) {
+              @if (workflowSaved()) {
+                <button class="ctx-item" (click)="ctxCopyCheckpointUrl()">
+                  <svg class="ctx-ico" viewBox="0 0 16 16"><path d="M6 10a3 3 0 0 1 0-4l2-2a3 3 0 0 1 4 4l-1 1"/><path d="M10 6a3 3 0 0 1 0 4l-2 2a3 3 0 0 1-4-4l1-1"/></svg>
+                  Copy checkpoint URL
+                </button>
+              } @else {
+                <button class="ctx-item" disabled title="Save the workflow first — a checkpoint URL needs a saved node.">
+                  <svg class="ctx-ico" viewBox="0 0 16 16"><path d="M6 10a3 3 0 0 1 0-4l2-2a3 3 0 0 1 4 4l-1 1"/><path d="M10 6a3 3 0 0 1 0 4l-2 2a3 3 0 0 1-4-4l1-1"/></svg>
+                  Copy checkpoint URL (save first)
+                </button>
+              }
+              <button class="ctx-item" (click)="ctxToggleCheckpoint()">Disable checkpoint</button>
+            } @else {
+              <button class="ctx-item" (click)="ctxToggleCheckpoint()">Enable checkpoint</button>
+            }
+          }
+          @if (!ctxNodeIsFieldMapping() && ctxNodeCanDelete()) {
+            <div class="ctx-sep"></div>
+            <button class="ctx-item ctx-item--danger" (click)="ctxDelete()">
+              <svg class="ctx-ico" viewBox="0 0 16 16"><polyline points="2,4 14,4"/><path d="M6,4V2h4v2"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>
+              Delete
+            </button>
+          }
+        }
+      } @else if (!readOnly()) {
+        <button class="ctx-item" (click)="ctxAddModule()">
+          <svg class="ctx-ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="5" y1="8" x2="11" y2="8"/></svg>
+          Add module
+        </button>
+        @if (hasClipboard()) {
+          <button class="ctx-item" (click)="ctxPaste()">
+            <svg class="ctx-ico" viewBox="0 0 16 16"><rect x="5" y="1" width="9" height="11" rx="1.5"/><rect x="2" y="4" width="9" height="11" rx="1.5"/></svg>
+            Paste
+          </button>
+        }
+      }
+    </div>
+  }
+
+  <!-- Delete confirmation -->
+  @if (pendingDeleteId()) {
+    <div class="confirm-backdrop" tabindex="0"
+         (click)="onConfirmBackdropClick($event)"
+         (keydown.escape)="cancelDelete()"
+         (pointerdown)="$event.stopPropagation()">
+      <div class="confirm-dialog">
+        <div class="confirm-icon">🗑</div>
+        <h3 class="confirm-title">Delete module?</h3>
+        <p class="confirm-body">Are you sure you want to delete this module? This will remove all its connections too.</p>
+        <div class="confirm-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="btn btn-danger" (click)="confirmDelete()">Delete</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (!readOnly()) {
+    <button class="add-module-fab" type="button" (click)="openSourcePicker.emit()">&#xFF0B; Add module</button>
+  }
+
+  <app-zoom-dock
+    [zoomPercent]="zoomPercent()"
+    (zoomIn)="canvas.setZoom(canvas.zoom() + 0.1)"
+    (zoomOut)="canvas.setZoom(canvas.zoom() - 0.1)"
+    (reset)="canvas.reset()"
+  />
+</div>

@@ -1,0 +1,204 @@
+:host { display: contents; }
+
+.canvas-shell {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  /* Dot grid: 1px dots at rgba(0,168,157,0.15), 26×26px spacing */
+  background-image: radial-gradient(circle at 1px 1px, rgba(0, 168, 157, 0.15) 1px, transparent 0);
+  background-size: 26px 26px;
+  background-color: var(--color-bg, var(--color-bg));
+  cursor: grab;
+
+  &.panning { cursor: grabbing; }
+}
+
+.flow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4000px;
+  height: 2600px;
+  transform-origin: 0 0;
+}
+
+/* ── Edge SVG layer ──────────────────────────────────────────────────────────── */
+.edges-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* Default edge */
+.edge-path {
+  fill: none;
+  stroke: var(--color-muted-2, var(--color-muted-2));
+  stroke-width: 2;
+  transition: stroke 0.15s, stroke-width 0.15s;
+}
+
+/* Selected edge */
+.edge-path.selected {
+  stroke: var(--color-primary, var(--color-primary));
+  stroke-width: 2.5;
+}
+
+/* Running edge — dashed animated */
+.edge-path.running {
+  stroke: var(--color-primary, var(--color-primary));
+  stroke-width: 2;
+  stroke-dasharray: 8 5;
+  animation: edge-dash 0.6s linear infinite;
+}
+
+@keyframes edge-dash {
+  to { stroke-dashoffset: -26; }
+}
+
+/* ── FAB ─────────────────────────────────────────────────────────────────────── */
+.add-module-fab {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 20;
+  min-height: 44px;
+  padding: 11px 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-on-primary);
+  background: var(--color-primary, var(--color-primary));
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow: 0 14px 30px rgba(0, 168, 157, 0.34);
+  cursor: pointer;
+  transition: filter 0.12s;
+
+  &:hover { filter: brightness(1.06); }
+}
+
+/* ── Context menu ────────────────────────────────────────────────────────────── */
+.ctx-backdrop {
+  // Scoped to the nearest positioned ancestor — .canvas-shell (position: relative, above) — rather
+  // than the viewport, matching the treatment already applied to .confirm-backdrop below and to
+  // app-modal-overlay's backdrop (see modal-overlay.component.scss).
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-backdrop, 50);
+}
+
+.ctx-menu {
+  position: fixed;
+  z-index: calc(var(--z-backdrop, 50) + 1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: var(--shadow-md);
+  min-width: 190px;
+  padding: 4px;
+  animation: scale-in var(--transition-fast, 0.1s) ease;
+}
+
+.ctx-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-ink);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background var(--transition-fast, 0.08s);
+
+  &:hover { background: var(--color-side); }
+  &--danger { color: var(--color-error); &:hover { background: var(--color-error-soft); } }
+
+  &:disabled {
+    color: var(--color-muted-2, #94A3B8);
+    cursor: not-allowed;
+    &:hover { background: transparent; }
+  }
+}
+
+.ctx-ico {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+/* circle icon filled for Add module */
+.ctx-item:first-child .ctx-ico circle { fill: none; }
+
+.ctx-sep {
+  height: 1px;
+  background: var(--color-border);
+  margin: 3px 0;
+}
+
+/* ── Delete confirmation dialog ──────────────────────────────────────────────── */
+.confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  animation: fade-in var(--transition-base, 0.12s) ease;
+}
+
+.confirm-dialog {
+  width: 360px;
+  background: var(--color-surface);
+  border-radius: var(--radius-modal, 14px);
+  box-shadow: var(--shadow-xl);
+  padding: 28px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.confirm-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.confirm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.confirm-body {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}

@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Aggregation;
+﻿using FHIRBridge.Application.Abstractions.Aggregation;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
@@ -71,9 +71,19 @@ public static class DependencyInjection
         services.ConfigureHttpClientDefaults(http =>
             http.AddStandardResilienceHandler(options =>
             {
-                options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
-                options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
-                options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(120);
+                // A BACKSTOP against a hung connection, deliberately above any per-request deadline a caller
+                // sets for itself — not a competing limit. It used to be 30s, which silently capped every
+                // outbound call: EpicFhirClientOptions.RequestTimeoutSeconds already declared 100s as the
+                // intended per-request budget, and a source connection's own "Timeout (seconds)" is meant to be
+                // the operator's knob (FhirSourceConnectorBase.SendWithRetryAsync), but Polly cancelled at 30s
+                // regardless, so neither could ever exceed it and raising either did nothing. Observed against
+                // eCW staging: successful calls averaging ~9s with a legitimate tail past 30s were being killed
+                // mid-flight and retried, turning one slow request into four.
+                //
+                // CircuitBreaker.SamplingDuration must stay >= 2x AttemptTimeout (Polly validates this).
+                options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(100);
+                options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(200);
+                options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(300);
             }));
 
         // Phase 2: distributed cache. Registered FIRST so it wins the IDistributedCache TryAdd over the memory fallback
@@ -657,6 +667,7 @@ public static class DependencyInjection
         services.AddScoped<IBackendAuthScopeProbeService, BackendAuthScopeProbeService>();
         services.AddScoped<ISourceJwksService, SourceJwksService>();
         services.AddScoped<ISigningKeyGenerationService, SigningKeyGenerationService>();
+        services.AddScoped<ISourceSigningKeyExportService, SourceSigningKeyExportService>();
         var healthChecksBuilder = services.AddHealthChecks()
             .AddCheck<KeyVaultConfigurationHealthCheck>("keyvault");
 

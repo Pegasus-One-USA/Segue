@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -18,13 +18,29 @@ public sealed class InMemoryEhrEndpointRepository : IEhrEndpointRepository
             _store.Values.Where(x => !x.IsDeleted).OrderBy(x => x.Name).ToArray());
 
     public Task<PagedResult<EhrEndpoint>> GetPagedAsync(
-        string? search, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken)
+        EhrEndpointFilter filter, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken)
     {
-        IEnumerable<EhrEndpoint> query = _store.Values
-            .Where(x => !x.IsDeleted)
-            .Where(x => string.IsNullOrWhiteSpace(search)
-                || x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
-                || x.FhirBaseUrl.Contains(search, StringComparison.OrdinalIgnoreCase));
+        IEnumerable<EhrEndpoint> query = _store.Values.Where(x => !x.IsDeleted);
+
+        if (filter.Vendor.HasValue)
+        {
+            query = query.Where(x => x.Vendor == filter.Vendor.Value);
+        }
+
+        if (filter.IsActive.HasValue)
+        {
+            // Same "anything that isn't 'active' is Inactive" split the EF repository and the listing itself use.
+            query = query.Where(x =>
+                string.Equals(x.Status, "active", StringComparison.OrdinalIgnoreCase) == filter.IsActive.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var term = filter.Search.Trim();
+            query = query.Where(x =>
+                x.Name.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || x.FhirBaseUrl.Contains(term, StringComparison.OrdinalIgnoreCase));
+        }
 
         query = sortDescending switch
         {

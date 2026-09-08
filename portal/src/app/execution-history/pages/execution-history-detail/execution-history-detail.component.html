@@ -19,7 +19,9 @@
           <span class="status-badge" [class]="statusClass(ex.status)">
             <span class="status-dot"></span>{{ statusLabel(ex.status) }}
           </span>
-          @if (ex.status === 'Running') {
+          <!-- AwaitingBulkExport is a still-in-flight run shown as "Running", and it's the longest-lived state
+               there is (a bulk $export can run for hours), so it needs Cancel more than anything else. -->
+          @if (ex.status === 'Running' || ex.status === 'AwaitingBulkExport') {
             <button class="btn-cancel-run" type="button" [disabled]="cancelling()" (click)="cancelRun()">
               <mat-icon>cancel</mat-icon>
               {{ cancelling() ? 'Cancelling…' : 'Cancel Run' }}
@@ -148,7 +150,7 @@
             <div class="node-summary-main">
               <div class="node-summary-title">
                 <span class="node-index">{{ i + 1 }}</span>
-                <span class="cell-primary">{{ entry.nodeType }}</span>
+                <span class="cell-primary">{{ nodeLabel(entry) }}</span>
                 <span class="status-badge" [class]="statusClass(entry.status)">{{ entry.status }}</span>
                 @if (entry.contract) {
                   <span class="contract-badge" [class]="contractClass(entry.contract)">{{ entry.contract }}</span>

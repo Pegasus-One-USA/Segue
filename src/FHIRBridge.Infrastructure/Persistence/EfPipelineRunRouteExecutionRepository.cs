@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -93,10 +93,15 @@ public sealed class EfPipelineRunRouteExecutionRepository : IPipelineRunRouteExe
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var search = filter.Search;
+            // Upper-cased on both sides rather than left to the database's own collation: SQL Server's default
+            // collation is case-insensitive but PostgreSQL's LIKE is not, so an interpolated LIKE matched nothing
+            // on Npgsql unless the user typed the stored casing exactly. Contains() (instead of an interpolated
+            // LIKE pattern) also parameterizes the term, so a '%' or '_' the user types is matched literally
+            // rather than acting as a wildcard.
+            var search = filter.Search.Trim().ToUpperInvariant();
             query = query.Where(x =>
-                EF.Functions.Like(x.PipelineName, $"%{search}%") ||
-                EF.Functions.Like(x.SourceName, $"%{search}%"));
+                x.PipelineName.ToUpper().Contains(search) ||
+                x.SourceName.ToUpper().Contains(search));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

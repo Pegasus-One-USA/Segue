@@ -17,6 +17,14 @@ public sealed record CurrentUserInfo(
     string? IpAddress = null,
     string? UserAgent = null,
     string? CorrelationId = null,
+    // The calling browser's own origin (scheme://host[:port]) for this request — read from the Origin
+    // header, falling back to Referer's scheme+authority. Used to build links embedded in outbound
+    // email (invite/password-reset) so they always point at whatever portal the admin is actually
+    // using, instead of a hand-maintained per-environment config value that can go stale (see
+    // UserManagementService.BuildInviteLink / LocalAuthService.BuildResetLink). A caller MUST validate
+    // this against the same allowlist CORS itself trusts (IAllowedCorsOriginsCache) before using it for
+    // anything — it's an unauthenticated, client-supplied header, not attested by anything.
+    string? RequestOrigin = null,
     // The internal Users.Id GUID for this request's caller, when resolvable (Local JWT carries it as the "uid"
     // claim; Entra tokens get it looked up by ExternalUserId at token-validation time — see
     // FhirBridgeAuthenticationExtensions). Null for non-interactive/system contexts (Worker) or a caller whose

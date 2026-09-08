@@ -37,10 +37,16 @@ public sealed class TransformationRuleService : ITransformationRuleService
         Guid? resourcePipelineRouteId,
         string? sourceSystem = null,
         string? sourceField = null,
+        TransformExecutionPhase? executionPhase = null,
         CancellationToken cancellationToken = default)
     {
+        // Phase defaults to null, which the repository reads as "everything the Rules modal has always shown"
+        // (PostMapping + PreMapping de-identification rows) minus FHIR-resource rules — those key on a FHIR
+        // path rather than a destination column, so that screen has no column to show them against. V2's
+        // Transformation node asks for them explicitly.
         var rules = await _repository.ListAsync(
-            scope, destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField, cancellationToken);
+            scope, destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
+            executionPhase, cancellationToken);
         return rules.Select(ToDto).ToList();
     }
 
@@ -49,6 +55,17 @@ public sealed class TransformationRuleService : ITransformationRuleService
     {
         var configJson = JsonSerializer.Serialize(request.Config);
         var existing = request.Id is null ? null : await _repository.GetByIdAsync(request.Id.Value, cancellationToken);
+
+        // No id supplied: fall back to the rule's own natural key before inserting. A rule IS the combination
+        // below — two rows differing in nothing but their Id are the same rule saved twice, not two rules. The
+        // authoring UIs do not always have an id to send (a rule reopened from a list, a re-save after an
+        // error), and without this every such save appended a clone: four byte-identical
+        // Patient.birthDate/DateMathAge rows were observed in a dev database, and deleting the one on screen
+        // left the other three quietly in effect.
+        if (existing is null)
+        {
+            existing = await FindByNaturalKeyAsync(request, cancellationToken);
+        }
 
         if (existing is null)
         {
@@ -83,6 +100,56 @@ public sealed class TransformationRuleService : ITransformationRuleService
         existing.SetEnabled(request.IsEnabled);
         await _repository.UpdateAsync(existing, cancellationToken);
         return ToDto(existing);
+    }
+
+    /// <summary>The single rule already stored for this request's identity — scope plus everything that
+    /// addresses it (destination type, resource type, destination field, route, source system, source field,
+    /// node type, execution phase, de-identification profile). Null when this is genuinely a new rule, or when
+    /// more than one candidate exists: pre-existing duplicates are left alone rather than one being picked
+    /// arbitrarily, so this can never silently rewrite a row the caller did not name.</summary>
+    private async Task<TransformationRule?> FindByNaturalKeyAsync(
+        SaveTransformationRuleRequest request, CancellationToken cancellationToken)
+    {
+        var candidates = await _repository.ListAsync(
+            request.Scope, request.DestinationType, request.ResourceType, request.DestinationField,
+            request.ResourcePipelineRouteId, request.SourceSystem, request.SourceField,
+            request.ExecutionPhase, cancellationToken);
+
+        var matches = candidates
+            .Where(rule =>
+                rule.NodeType == request.NodeType
+                && rule.DeIdentificationProfileId == request.DeIdentificationProfileId)
+            .ToList();
+
+        return matches.Count == 1 ? matches[0] : null;
+    }
+
+    public async Task<int> AttachPendingRulesToWorkflowAsync(
+        Guid workflowId,
+        IReadOnlyCollection<DestinationType> destinationTypes,
+        CancellationToken cancellationToken = default)
+    {
+        var pending = await _repository.GetPendingWorkflowRulesAsync(destinationTypes, cancellationToken);
+
+        var attached = 0;
+        foreach (var rule in pending)
+        {
+            // AttachToWorkflow refuses a rule that already belongs to a workflow, so a race with another
+            // builder session cannot silently re-point someone else's rule — it is skipped instead.
+            try
+            {
+                rule.AttachToWorkflow(workflowId);
+            }
+            catch (InvalidOperationException)
+            {
+                continue;
+            }
+
+            await _repository.UpdateAsync(rule, cancellationToken);
+            attached++;
+        }
+
+        return attached;
     }
 
     public async Task DeleteRuleAsync(Guid ruleId, CancellationToken cancellationToken = default)
@@ -162,10 +229,12 @@ public sealed class TransformationRuleService : ITransformationRuleService
         Guid? resourcePipelineRouteId,
         string? sourceSystem,
         string? sourceField,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool workflowScopedOnly = false)
     {
         var rules = await _resolver.ResolveAsync(
-            destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField, cancellationToken);
+            destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
+            cancellationToken, workflowScopedOnly);
         return rules.Select(ToDto).ToList();
     }
 

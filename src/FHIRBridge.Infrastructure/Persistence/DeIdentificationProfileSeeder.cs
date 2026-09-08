@@ -13,19 +13,42 @@ public sealed class DeIdentificationProfileSeeder : IDeIdentificationProfileSeed
 {
     public const string DefaultProfileName = "HIPAA Safe Harbor — Default";
 
-    private readonly FHIRBridgeDbContext _db;
+    /// <summary>Durable "this has already run" marker. Deliberately NOT inferred from the profile or its rules
+    /// still existing: an admin who deletes the seeded defaults means it, and inferring from live data re-armed
+    /// the seeder the moment they finished cleaning up — so the rules came back on the next restart, looking
+    /// like they had reappeared on their own. A setting row survives deleting both.</summary>
+    public const string SeededSettingKey = "DeIdentification:DefaultProfileSeeded";
 
-    public DeIdentificationProfileSeeder(FHIRBridgeDbContext db)
+    private readonly FHIRBridgeDbContext _db;
+    private readonly ISystemSettingRepository _settings;
+
+    public DeIdentificationProfileSeeder(FHIRBridgeDbContext db, ISystemSettingRepository settings)
     {
         _db = db;
+        _settings = settings;
     }
 
     public async Task EnsureSeededAsync(CancellationToken cancellationToken)
     {
-        var alreadySeeded = await _db.DeIdentificationProfiles
-            .AnyAsync(x => x.Name == DefaultProfileName, cancellationToken);
-        if (alreadySeeded)
+        // Three independent "already done" signals, checked cheapest-first. The marker is what makes deleting
+        // the defaults stick; the other two keep an existing installation (seeded before the marker existed)
+        // from being re-seeded on the upgrade that introduces it.
+        if (await _settings.GetByKeyAsync(SeededSettingKey, cancellationToken) is not null)
         {
+            return;
+        }
+
+        var profileExists = await _db.DeIdentificationProfiles
+            .AnyAsync(x => x.Name == DefaultProfileName, cancellationToken);
+        var seededRulesExist = await _db.TransformationRules
+            .AnyAsync(x => x.DeIdentificationProfileId == DeIdentificationProfile.DefaultProfileId, cancellationToken);
+        if (profileExists || seededRulesExist)
+        {
+            // Record the marker so the check above short-circuits from now on, and so deleting these defaults
+            // later is honoured instead of undone by the next restart.
+            await _settings.UpsertAsync(
+                SeededSettingKey, "true", "Set once the default de-identification profile has been seeded.",
+                cancellationToken);
             return;
         }
 
@@ -50,6 +73,10 @@ public sealed class DeIdentificationProfileSeeder : IDeIdentificationProfileSeed
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        await _settings.UpsertAsync(
+            SeededSettingKey, "true", "Set once the default de-identification profile has been seeded.",
+            cancellationToken);
     }
 
     private static readonly (TransformScope Scope, string? ResourceType, string SourceField, string Mode)[] DefaultRules =

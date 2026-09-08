@@ -22,6 +22,8 @@ export class ApiEhrEndpointService extends IEhrEndpointService {
       .set('pageSize', String(filter.pageSize));
 
     if (filter.search) params = params.set('search', filter.search);
+    if (filter.vendor) params = params.set('vendor', filter.vendor);
+    if (filter.isActive !== undefined) params = params.set('isActive', String(filter.isActive));
     if (filter.sortDescending !== undefined) params = params.set('sortDescending', String(filter.sortDescending));
 
     return this.http.get<PagedResult<EhrEndpoint>>(EHR_ENDPOINTS_ENDPOINTS.paged, { params }).pipe(

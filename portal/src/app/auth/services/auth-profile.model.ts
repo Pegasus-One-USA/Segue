@@ -16,6 +16,11 @@ export interface AuthProfileDto {
   // replaces the portal's former hardcoded orgId:'org' placeholder.
   tenantId?:   string;
   tenantName?: string;
+  // Real account-creation/last-login timestamps (see UserProfileDto.CreatedOnUtc/LastLoginOnUtc) — feed
+  // the profile page's Member Since / Last Login fields. lastLoginOnUtc is null for a user who has never
+  // logged in before (e.g. mid-invitation-acceptance).
+  createdOnUtc?:   string;
+  lastLoginOnUtc?: string | null;
 }
 
 /** Mirrors the backend LocalLoginResponse with the raw token fields stripped (see AuthController.IssueTokenCookiesAndStrip). */

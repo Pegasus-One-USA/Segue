@@ -15,5 +15,16 @@ public abstract class FHIRBridgeException : Exception
         UserMessage = userMessage ?? message;
     }
 
+    /// <summary>
+    /// For subtypes that re-frame an underlying failure (e.g. re-reporting a token error as the source outage it
+    /// really was) and must keep the original exception attached for the log/ErrorLog trail rather than discarding
+    /// the evidence behind the friendlier message.
+    /// </summary>
+    protected FHIRBridgeException(string message, string? userMessage, Exception? innerException)
+        : base(message, innerException)
+    {
+        UserMessage = userMessage ?? message;
+    }
+
     public string UserMessage { get; }
 }

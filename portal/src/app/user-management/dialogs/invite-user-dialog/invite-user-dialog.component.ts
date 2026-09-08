@@ -6,7 +6,6 @@ import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angula
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -31,7 +30,6 @@ import { InviteResult } from '../../../auth/models/user.model';
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
-    MatSelectModule,
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
@@ -120,7 +118,12 @@ export class InviteUserDialogComponent implements OnInit {
     this.userService.inviteUser(req).subscribe({
       next: res => {
         this.loading.set(false);
-        this.toast.success(res.message ?? `Invitation sent to "${req.email}".`);
+        const message = res.message ?? `Invitation sent to "${req.email}".`;
+        if (res.emailSent) {
+          this.toast.success(message);
+        } else {
+          this.toast.warning(message);
+        }
         // Show the invitation link with a copy button.
         this.customDialog.open<InviteResultDialogComponent, InviteResult, void>(InviteResultDialogComponent, {
           width: '540px', data: res,

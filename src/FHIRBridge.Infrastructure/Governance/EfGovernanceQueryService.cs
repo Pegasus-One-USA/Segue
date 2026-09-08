@@ -1,4 +1,4 @@
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
@@ -255,7 +255,15 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         var query = _dbContext.ErrorLogs.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search.ErrorReferenceId))
-            query = query.Where(x => x.ErrorReferenceId == search.ErrorReferenceId);
+        {
+            // Operations -> Errors is the one governance filter a support engineer hand-types (the rest arrive via
+            // deep-link), and ErrorReference.New() always mints uppercase ("ERR-yyyyMMdd-" + uppercase base-36).
+            // Normalizing the term instead of comparing case-insensitively in SQL keeps this matching on
+            // PostgreSQL (whose = is case-sensitive, unlike SQL Server's default collation) while still using the
+            // unique index on ErrorLogs.ErrorReferenceId.
+            var errorReferenceId = search.ErrorReferenceId.Trim().ToUpperInvariant();
+            query = query.Where(x => x.ErrorReferenceId == errorReferenceId);
+        }
         if (!string.IsNullOrWhiteSpace(search.CorrelationId))
             query = query.Where(x => x.CorrelationId == search.CorrelationId);
         if (!string.IsNullOrWhiteSpace(search.ExecutionId))

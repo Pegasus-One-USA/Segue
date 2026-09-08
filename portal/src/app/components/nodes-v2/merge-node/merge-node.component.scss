@@ -1,0 +1,237 @@
+/* ── Merge Node ──────────────────────────────────────────────────────────────── */
+:host {
+  --node-color: var(--color-success);
+
+  position: absolute;
+  width: 88px;
+  height: 88px;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  touch-action: none;
+
+  &:hover .sn-circle { transform: scale(1.06); }
+}
+
+.sn-circle { animation: nodeIn 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.sn-labels { animation: labelsIn 0.28s ease 0.14s both; }
+
+@keyframes nodeIn {
+  from { opacity: 0; transform: scale(0.25); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes labelsIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.sn-circle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 52px;
+  border-radius: 10px;
+  border: 2px solid var(--color-muted-2, var(--color-muted-2));
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm, 0 2px 12px rgba(0, 0, 0, 0.06));
+  transform: translate(-50%, -50%);
+  touch-action: none;
+  cursor: pointer;
+  overflow: visible;
+  transition: box-shadow 0.18s, border-color 0.18s;
+
+  /* ── States ── */
+  &:hover {
+    box-shadow: var(--shadow-md, 0 8px 32px rgba(0, 0, 0, 0.10));
+    border-color: var(--color-muted, var(--color-muted));
+  }
+
+  &.selected {
+    box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.30),
+                var(--shadow-md, 0 8px 32px rgba(0, 0, 0, 0.10));
+  }
+
+  &.running {
+    animation: merge-pulse 1.4s ease-in-out infinite;
+  }
+
+  &.completed {
+    border-color: var(--color-success, var(--color-success));
+  }
+
+  &.failed {
+    border-color: var(--color-error, var(--color-error));
+  }
+
+  &.disabled {
+    opacity: 0.38;
+    pointer-events: none;
+  }
+}
+
+/* ── Label (centered, with ⊕ symbol) ───────────────────────────────────────── */
+.node-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+  text-align: center;
+  user-select: none;
+
+  .merge-symbol {
+    font-size: 16px;
+    color: var(--color-muted-2, var(--color-muted-2));
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  strong {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-ink, var(--color-ink));
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 72px;
+  }
+}
+
+/* ── Delete button (top-right, appears on hover/selected) ───────────────────── */
+.sn-del-btn {
+  position: absolute;
+  right: -14px;
+  top: -14px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-error);
+  color: var(--color-error);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 9;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+
+  svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; fill: none; }
+}
+:host:hover .sn-del-btn,
+:host.selected .sn-del-btn { opacity: 1; pointer-events: auto; }
+:host:hover .sn-del-btn:hover { transform: scale(1.18); background: var(--color-error); color: var(--color-on-primary); }
+
+/* ── Attached + button ───────────────────────────────────────────────────────── */
+.sn-add-btn {
+  position: absolute;
+  right: -15px;
+  top: 50%;
+  transform: translateY(-50%) scale(0.65);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-primary);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 8;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.15s ease;
+  box-shadow: 0 2px 10px rgba(0, 168, 157, 0.35);
+
+  svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    fill: none;
+    pointer-events: none;
+  }
+
+  &:hover {
+    transform: translateY(-50%) scale(1.18);
+    box-shadow: 0 4px 16px rgba(0, 168, 157, 0.55);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+
+  &:active {
+    transform: translateY(-50%) scale(0.96);
+  }
+}
+
+:host:hover .sn-add-btn,
+:host.selected .sn-add-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
+
+:host:hover .sn-add-btn:hover {
+  transform: translateY(-50%) scale(1.18);
+}
+
+.port {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-muted-2, var(--color-muted-2));
+  z-index: 6;
+  transition: background 0.14s, transform 0.14s, box-shadow 0.14s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.port-in  { left: -5px; }
+.port-out {
+  right: -5px;
+  cursor: crosshair;
+
+  &:hover {
+    background: var(--color-muted-2, var(--color-muted-2));
+    transform: translateY(-50%) scale(1.25);
+  }
+}
+
+/* ── Status badges ──────────────────────────────────────────────────────────── */
+.node-badge {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  color: var(--color-on-primary);
+  border: 2px solid var(--color-surface);
+  border-radius: var(--radius-pill, 999px);
+  font-size: 10px;
+  font-weight: 800;
+
+  &.badge-success { background: var(--color-success, var(--color-success)); }
+  &.badge-error   { background: var(--color-error,   var(--color-error)); }
+}
+
+/* ── Running pulse animation ────────────────────────────────────────────────── */
+@keyframes merge-pulse {
+  0%, 100% { border-color: var(--color-muted-2, var(--color-muted-2)); }
+  50%       { border-color: var(--color-primary, var(--color-primary)); }
+}
+:host.running .sn-circle { animation: node-pulse 1.4s ease-in-out infinite; }

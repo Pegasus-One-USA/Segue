@@ -126,7 +126,7 @@
               <option value="production">Customer Production</option>
             </select>
           </div>
-          <p class="eaf-hint">Decides which Client ID set applies. Epic issues separate IDs per environment.</p>
+          <p class="eaf-hint">Decides which Client ID set applies. {{ displayVendor() }} issues separate IDs per environment.</p>
         </div>
       </div>
     </div>
@@ -144,7 +144,7 @@
             <label class="eaf-label" for="eaf-epicBaseUrl">FHIR Base URL <span class="eaf-req">*</span></label>
             <div class="eaf-input-row">
               <input id="eaf-epicBaseUrl" class="eaf-input" type="url" formControlName="epicBaseUrl"
-                     placeholder="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4" />
+                     [placeholder]="baseUrlPlaceholder()" />
               <button class="eaf-discover-btn" type="button"
                       [disabled]="discStatus() === 'loading' || isReadonly"
                       (click)="runDiscover()">
@@ -172,11 +172,11 @@
 
         @if (audience() === 'backend-system') {
           @if (grantedScopesStatus() === 'loading') {
-            <p class="eaf-hint">Authenticating with Epic (system/*.*)…</p>
+            <p class="eaf-hint">Authenticating with {{ displayVendor() }} (system/*.*)…</p>
           }
           @if (grantedScopesStatus() === 'done') {
             <div class="eaf-granted-scopes">
-              <p class="eaf-granted-scopes-title">Scopes allowed for this Epic app:</p>
+              <p class="eaf-granted-scopes-title">Scopes allowed for this {{ displayVendor() }} app:</p>
               <ul class="eaf-granted-scopes-list">
                 @for (scope of grantedScopes(); track scope) {
                   <li>{{ scope }}</li>
@@ -260,7 +260,7 @@
             @if (form.controls.clientId.touched && form.controls.clientId.invalid) {
               <p class="eaf-error-msg">Client ID is required.</p>
             }
-            <p class="eaf-hint">From the customer's own Epic app registration (Production/Non-Production based on Environment).</p>
+            <p class="eaf-hint">From the customer's own {{ displayVendor() }} app registration (Production/Non-Production based on Environment).</p>
           </div>
 
           @if (showPracticeId()) {
@@ -292,7 +292,7 @@
             } @else if (audience() === 'backend-system') {
               <p class="eaf-hint">Backend System apps authenticate with a signed JWT assertion (client credentials) — no interactive login.</p>
             } @else {
-              <p class="eaf-hint">Provider EHR launch is normally a public client (PKCE) — no client secret required. Choose Client Secret or JWT only based on how your Epic app is actually registered — the server's discovery document lists everything it can accept, not what your specific app uses.</p>
+              <p class="eaf-hint">Provider EHR launch is normally a public client (PKCE) — no client secret required. Choose Client Secret or JWT only based on how your {{ displayVendor() }} app is actually registered — the server's discovery document lists everything it can accept, not what your specific app uses.</p>
             }
           </div>
 
@@ -330,12 +330,19 @@
               @if (form.controls.jwksUrl.touched && form.controls.jwksUrl.invalid) {
                 <p class="eaf-error-msg">Enter a valid JWKS URL.</p>
               }
+              @if (isEclinicalWorks() && audience() === 'backend-system') {
+                <p class="eaf-hint"><strong>eCW must allow-list this URL's host on its own servers</strong>, on top of
+                  the app registration. A host that isn't allow-listed fails with a bare <code>invalid_client</code>
+                  that looks identical to a wrong <code>kid</code>, and it can't be checked from here — ask eCW.
+                  Prefer pointing this at the JWKS URL your eCW app is already registered and allow-listed against,
+                  rather than generating a new key whose URL only exists after this connection is saved.</p>
+              }
               @if (audience() === 'backend-system' && (isGenKey() || isImportKey())) {
                 <p class="eaf-hint">Auto-filled with this connection's real JWKS URL once known — save first if it still shows a placeholder.</p>
               } @else if (keyLoadedFromExistingConnection()) {
-                <p class="eaf-hint">Auto-filled with FHIRBridge's hosted JWKS URL for this connection's existing key. If Epic is actually configured to fetch from a different, self-hosted URL, replace this with that URL instead.</p>
+                <p class="eaf-hint">Auto-filled with FHIRBridge's hosted JWKS URL for this connection's existing key. If {{ displayVendor() }} is actually configured to fetch from a different, self-hosted URL, replace this with that URL instead.</p>
               } @else {
-                <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in Epic APP).</p>
+                <p class="eaf-hint">Mandatory (one of Client Secret or Private Key / JWKS as configured in your {{ displayVendor() }} app).</p>
               }
             </div>
             @if (audience() === 'backend-system') {
@@ -374,7 +381,7 @@
                 @if (replacingKey()) {
                   <div class="eaf-field eaf-field--full">
                     <div class="eaf-warning-box">
-                      Replacing this key invalidates the one currently registered with Epic (if any) until you
+                      Replacing this key invalidates the one currently registered with {{ displayVendor() }} (if any) until you
                       register the new one in its place.
                       <button type="button" class="eaf-btn eaf-btn--ghost" (click)="cancelReplacingKey()">Cancel</button>
                     </div>
@@ -412,7 +419,7 @@
                         <span class="eaf-tag-auto">&#10003; key imported</span>
                       }
                     </div>
-                    <p class="eaf-hint">Upload the RSA private key PEM for the Epic app you've already registered (PKCS#1 or PKCS#8, unencrypted, 2048-bit or stronger). Segue validates it and signs with it as-is — no new key is generated.</p>
+                    <p class="eaf-hint">Upload the RSA private key PEM for the {{ displayVendor() }} app you've already registered (PKCS#1 or PKCS#8, unencrypted, 2048-bit or stronger). Segue validates it and signs with it as-is — no new key is generated.</p>
                   </div>
                 }
 
@@ -424,7 +431,7 @@
                   @if (form.controls.jwtKid.touched && form.controls.jwtKid.invalid) {
                     <p class="eaf-error-msg">Key ID is required.</p>
                   }
-                  <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what Epic's app registration expects.</p>
+                  <p class="eaf-hint">The <code>kid</code> your registered JWK Set uses to identify this signing key — must match what your {{ displayVendor() }} app registration expects.</p>
                 </div>
                 <div class="eaf-field" [class.eaf-field--error]="form.controls.privateKeyRef.touched && form.controls.privateKeyRef.invalid">
                   <label class="eaf-label" for="eaf-privateKeyRef">Key Vault Name <span class="eaf-req">*</span></label>
@@ -448,9 +455,9 @@
                 @if ((isGenKey() || isImportKey()) && keyGenStatus() === 'generated' && !liveJwksUrl()) {
                   <div class="eaf-field eaf-field--full">
                     <p class="eaf-hint">
-                      <strong>Register the JWKS URL in Epic after saving</strong> — once this connection is saved, its
+                      <strong>Register the JWKS URL in {{ displayVendor() }} after saving</strong> — once this connection is saved, its
                       public key is published at <code>/api/v1/source-connections/&lbrace;id&rbrace;/.well-known/jwks.json</code>,
-                      and the field above will fill in with that real URL automatically. Register it in your Epic
+                      and the field above will fill in with that real URL automatically. Register it in your {{ displayVendor() }}
                       app before running test launch.
                     </p>
                   </div>
@@ -481,7 +488,7 @@
                 @if (form.controls.launchUrl.touched && form.controls.launchUrl.invalid) {
                   <p class="eaf-error-msg">Enter a valid Launch URL.</p>
                 }
-                <p class="eaf-hint">Must be registered in Epic as a valid launch URI.</p>
+                <p class="eaf-hint">Must be registered in {{ displayVendor() }} as a valid launch URI.</p>
               </div>
             }
 
@@ -489,11 +496,11 @@
               <div class="eaf-field eaf-field--full">
                 <label class="eaf-label" for="eaf-launchDisplayMode">Launch Display Mode</label>
                 <select id="eaf-launchDisplayMode" class="eaf-input" formControlName="launchDisplayMode">
-                  <option value="Embedded">Embedded (within Hyperspace)</option>
+                  <option value="Embedded">{{ vendor() === 'Epic' ? 'Embedded (within Hyperspace)' : 'Embedded (within the EHR)' }}</option>
                   <option value="ExternalBrowser">External Browser</option>
                   <option value="Sidebar">Sidebar (side-by-side with the chart)</option>
                 </select>
-                <p class="eaf-hint">Match whatever this app is registered as in Epic's own Hyperspace/Hyperdrive app-launch configuration — Segue doesn't control this behavior, it's just recorded here for reference (e.g. Embedded launches need the launch page to allow being framed; External Browser does not).</p>
+                <p class="eaf-hint">Match whatever this app is registered as in {{ displayVendor() }}'s own app-launch configuration — Segue doesn't control this behavior, it's just recorded here for reference (e.g. Embedded launches need the launch page to allow being framed; External Browser does not).</p>
               </div>
             }
 
@@ -505,7 +512,7 @@
                     <input id="eaf-callbackUrl" class="eaf-input eaf-input--readonly" type="text" formControlName="callbackUrl" readonly />
                     <button class="eaf-discover-btn" type="button" (click)="copyRedirectUri()">⧉ Copy</button>
                   </div>
-                  <p class="eaf-hint">Your app's redirect URI — copy this into Epic's app registration. Not editable here.</p>
+                  <p class="eaf-hint">Your app's redirect URI — copy this into {{ displayVendor() }}'s app registration. Not editable here.</p>
                 </div>
               } @else {
                 <div class="eaf-field eaf-field--full"
@@ -519,7 +526,7 @@
                   @if (form.controls.callbackUrl.touched && form.controls.callbackUrl.invalid) {
                     <p class="eaf-error-msg">Enter a valid URL.</p>
                   }
-                  <p class="eaf-hint">Where the authorization server redirects after login/consent. Editable — <strong>must match what's registered in Epic.</strong></p>
+                  <p class="eaf-hint">Where the authorization server redirects after login/consent. Editable — <strong>must match what's registered in {{ displayVendor() }}.</strong></p>
                 </div>
               }
             }
@@ -672,9 +679,16 @@
             <span class="eaf-badge-neutral">{{ method.label }}</span>
           </div>
 
-          @if (vendor() === 'Athenahealth') {
+          @if (vendor() === 'Athenahealth' || isEclinicalWorks()) {
             <p class="eaf-section-sub">Resource types (and the OAuth scopes requested) are derived automatically
               from whatever is mapped on the destination — configure them there, not here.</p>
+          }
+
+          @if (vendorOmittedResources().length) {
+            <p class="eaf-section-sub">{{ displayVendor() }} publishes no <code>system/</code> read scope for
+              {{ vendorOmittedResources().join(', ') }}, so {{ vendorOmittedResources().length === 1 ? 'it is' : 'they are' }}
+              left out of this connection's scope request. Anything mapped for
+              {{ vendorOmittedResources().length === 1 ? 'it' : 'them' }} on a destination will not be retrieved.</p>
           }
 
           <div class="eaf-grid">

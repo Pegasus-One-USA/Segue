@@ -1,0 +1,214 @@
+<div class="frp-panel">
+  <header class="frp-panel__head">
+    <div class="frp-panel__head-text">
+      <h2 class="frp-panel__title">Transformation &amp; De-identification</h2>
+      <p class="frp-panel__subtitle">
+        Applied to each FHIR resource before it is written to {{ destinationLabel() }}. Pick a field on the
+        left to attach a rule to it — the resource is edited in place, and anything no rule names is written
+        through unchanged.
+      </p>
+    </div>
+    <button type="button" class="frp-panel__close" aria-label="Close" (click)="close()">✕</button>
+  </header>
+
+  <div class="frp-panel__body">
+
+    <!-- ── Payload tree ── the same card the mapping canvas shows, so the source side reads identically
+         for a FHIR destination. Clicking a field opens the rule modal (there is no connector line or
+         destination row to click instead). ── -->
+    <div class="frp-payload">
+      @if (resourceTypes().length > 1) {
+        <div class="frp-tree__resources">
+          @for (resourceType of resourceTypes(); track resourceType) {
+            <button
+              type="button"
+              class="frp-tree__resource"
+              [class.frp-tree__resource--active]="resourceType === activeResource()"
+              (click)="activeResource.set(resourceType)">
+              {{ resourceType }}
+            </button>
+          }
+        </div>
+      }
+
+      @if (visibleForest().length) {
+        <app-fhir-payload-tree
+          [forest]="visibleForest()"
+          [isCollapsed]="isCollapsedFn"
+          [hasRule]="hasRuleFn"
+          (toggleCollapse)="toggleCollapsed($event)"
+          (fieldClick)="onFieldClick($event)"
+        />
+      } @else {
+        <p class="frp-tree__empty">Loading fields…</p>
+      }
+    </div>
+
+    <!-- ── Rules already attached ── collapsed by default, exactly like the canvas's Mapping list. ── -->
+    <section class="frp-list" [class.frp-list--collapsed]="listCollapsed()">
+      <button
+        type="button"
+        class="frp-list__handle"
+        [attr.aria-expanded]="!listCollapsed()"
+        (click)="listCollapsed.set(!listCollapsed())">
+        <span class="frp-list__caret" [class.frp-list__caret--open]="!listCollapsed()">›</span>
+        <span class="frp-list__handle-label">Rules list</span>
+        <span class="frp-list__count">{{ transformationCount() + deIdCount() }}</span>
+      </button>
+
+      @if (!listCollapsed()) {
+      <nav class="frp-list__tabs">
+        <button
+          type="button"
+          class="frp-list__tab"
+          [class.frp-list__tab--active]="activeTab() === 'transformation'"
+          (click)="activeTab.set('transformation')">
+          Transformations <span class="frp-list__count">{{ transformationCount() }}</span>
+        </button>
+        <button
+          type="button"
+          class="frp-list__tab"
+          [class.frp-list__tab--active]="activeTab() === 'deidentification'"
+          (click)="activeTab.set('deidentification')">
+          De-identification <span class="frp-list__count">{{ deIdCount() }}</span>
+        </button>
+      </nav>
+
+      <div class="frp-list__body">
+
+        @if (workflowUnsaved()) {
+          <p class="frp-notice">
+            Add rules now if you like — they belong to this workflow and start applying once you save it.
+          </p>
+        }
+
+        @if (activeTab() === 'deidentification') {
+          <div class="frp-policy">
+            <label class="frp-policy__field">
+              <span class="frp-policy__label">Policy</span>
+              <select
+                class="frp-policy__select"
+                [ngModel]="selectedProfileId() ?? ''"
+                (ngModelChange)="onProfileChange($event)"
+                [ngModelOptions]="{ standalone: true }">
+                <option value="">None</option>
+                @for (profile of profiles(); track profile.id) {
+                  <option [value]="profile.id">{{ profile.name }}</option>
+                }
+              </select>
+            </label>
+            @if (selectedProfileId()) {
+              <span class="frp-policy__status">{{ selectedProfileName() }} is active</span>
+            } @else {
+              <span class="frp-policy__status frp-policy__status--muted">
+                Select a policy, or name and create one, to attach de-identification rules.
+              </span>
+            }
+
+            <span class="frp-policy__spacer"></span>
+
+            <input
+              type="text"
+              class="frp-policy__name"
+              placeholder="New policy name…"
+              aria-label="New policy name"
+              [ngModel]="newProfileName()"
+              (ngModelChange)="newProfileName.set($event)"
+              [ngModelOptions]="{ standalone: true }" />
+            <button
+              type="button"
+              class="frp-policy__create"
+              [disabled]="!newProfileName().trim() || creatingProfile()"
+              (click)="createProfile()">
+              {{ creatingProfile() ? 'Creating…' : '+ New Policy' }}
+            </button>
+          </div>
+        }
+
+        @if (listedRules(); as rules) {
+          <table class="frp-table">
+            <thead>
+              <tr>
+                <th>FHIR path</th>
+                @if (activeTab() === 'transformation') { <th>Writes to</th> }
+                <th>Rule</th>
+                <th>Config</th>
+                <th class="frp-table__actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (rule of rules; track rule.id) {
+                <tr>
+                  <td class="frp-mono">{{ rule.sourceField }}</td>
+                  @if (activeTab() === 'transformation') {
+                    <td class="frp-mono">{{ writesTo(rule) }}</td>
+                  }
+                  <td>
+                    {{ rule.nodeType }}
+                    @if (!rule.isEnabled) { <span class="frp-table__chip">Disabled</span> }
+                  </td>
+                  <td class="frp-mono frp-table__config">{{ configSummary(rule) }}</td>
+                  <td class="frp-table__actions">
+                    <button
+                      type="button"
+                      class="frp-table__kebab"
+                      [attr.aria-expanded]="openMenuRuleId() === rule.id"
+                      aria-haspopup="menu"
+                      aria-label="Rule actions"
+                      (click)="toggleMenu(rule.id)">⋯</button>
+
+                    @if (openMenuRuleId() === rule.id) {
+                      <div class="frp-menu" role="menu">
+                        <button type="button" class="frp-menu__item" role="menuitem" (click)="editRule(rule)">
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          class="frp-menu__item frp-menu__item--danger"
+                          role="menuitem"
+                          (click)="deleteRule(rule)">
+                          Delete
+                        </button>
+                      </div>
+                    }
+                  </td>
+                </tr>
+              }
+              @if (!rules.length) {
+                <tr>
+                  <td [attr.colspan]="activeTab() === 'transformation' ? 5 : 4" class="frp-table__empty">
+                    @if (activeTab() === 'deidentification' && !selectedProfileId()) {
+                      Select a policy above to see and add its rules.
+                    } @else {
+                      No rules yet — pick a field on the left to attach one.
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          <!-- Mirrors the SQL list's own "+ Add rule": picking a path in the tree is the quick route, this
+               is the one that does not assume the user has found the tree yet. -->
+          <button type="button" class="frp-list__add" (click)="addRule()">+ Add rule</button>
+        } @else {
+          <p class="frp-list__loading">Loading rules…</p>
+        }
+      </div>
+      }
+    </section>
+  </div>
+
+  <footer class="frp-panel__foot">
+    <span class="frp-panel__spacer"></span>
+    <button type="button" class="frp-panel__done" (click)="close()">Done</button>
+  </footer>
+
+  @if (popover(); as popoverContext) {
+    <app-fhir-rule-popover
+      [context]="popoverContext"
+      (applied)="onPopoverApplied()"
+      (closed)="popover.set(null)"
+    />
+  }
+</div>

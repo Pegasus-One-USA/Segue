@@ -12,8 +12,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
 import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import { IEhrEndpointService } from '../../services/i-ehr-endpoint.service';
-import { EhrEndpoint } from '../../models/ehr-endpoint.model';
-import { EhrEndpointDialogComponent, EhrEndpointDialogData } from '../../dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component';
+import { EhrEndpoint, EhrVendor } from '../../models/ehr-endpoint.model';
+import { EhrEndpointDialogComponent, EhrEndpointDialogData, EHR_VENDOR_OPTIONS } from '../../dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component';
 import { ConfirmDialogComponent } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
@@ -46,6 +46,10 @@ export class EhrEndpointListComponent implements OnInit {
   private readonly destroyRef  = inject(DestroyRef);
 
   readonly searchQuery  = signal('');
+  /** The "Source" dropdown — filters on the row's Vendor. */
+  readonly sourceFilter = signal<EhrVendor | ''>('');
+  /** The "Status" dropdown, as the raw `<select>` value; '' = All. Mapped to the API's `isActive` in load(). */
+  readonly statusFilter = signal<'' | 'true' | 'false'>('');
   readonly pageIndex    = signal(0);
   readonly pageSize     = signal(10);
   readonly loading      = signal(true);
@@ -59,6 +63,9 @@ export class EhrEndpointListComponent implements OnInit {
   readonly actionOnSortDirection = signal<'asc' | 'desc' | null>(null);
 
   private readonly searchChanged = new Subject<string>();
+
+  /** Same vendor list the add/edit dialog offers, so the filter can never name a vendor a row can't hold. */
+  readonly sourceOptions = EHR_VENDOR_OPTIONS;
 
   toggleActionOnSort(): void {
     this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
@@ -92,6 +99,8 @@ export class EhrEndpointListComponent implements OnInit {
     const direction = this.actionOnSortDirection();
     this.svc.getPaged({
       search: this.searchQuery().trim() || undefined,
+      vendor: this.sourceFilter() || undefined,
+      isActive: this.statusFilter() === '' ? undefined : this.statusFilter() === 'true',
       sortDescending: direction ? direction === 'desc' : undefined,
       page: this.pageIndex() + 1,
       pageSize: this.pageSize(),
@@ -113,8 +122,28 @@ export class EhrEndpointListComponent implements OnInit {
     this.searchChanged.next(val);
   }
 
+  onSourceFilterChange(val: string): void {
+    this.sourceFilter.set(val as EhrVendor | '');
+    this.pageIndex.set(0);
+    this.loadEndpoints();
+  }
+
+  onStatusFilterChange(val: string): void {
+    this.statusFilter.set(val as '' | 'true' | 'false');
+    this.pageIndex.set(0);
+    this.loadEndpoints();
+  }
+
+  /** Whether any filter is narrowing the list — drives the empty state's "no match" vs "nothing yet" copy,
+   *  which previously only considered the search box. */
+  readonly hasActiveFilter = computed(() =>
+    !!this.searchQuery() || !!this.sourceFilter() || this.statusFilter() !== ''
+  );
+
   reset(): void {
     this.searchQuery.set('');
+    this.sourceFilter.set('');
+    this.statusFilter.set('');
     this.pageIndex.set(0);
     this.loadEndpoints();
   }

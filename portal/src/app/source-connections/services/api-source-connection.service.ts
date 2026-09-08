@@ -83,4 +83,16 @@ export class ApiSourceConnectionService extends ISourceConnectionService {
       catchError(err => throwError(() => err))
     );
   }
+
+  downloadPublicKeyPem(sourceConnectionId: string): Observable<Blob> {
+    return this.http.get(SOURCE_CONNECTIONS_ENDPOINTS.publicKeyPem(sourceConnectionId), { responseType: 'blob' }).pipe(
+      catchError(err => throwError(() => err))
+    );
+  }
+
+  downloadPrivateKeyPem(sourceConnectionId: string): Observable<Blob> {
+    return this.http.get(SOURCE_CONNECTIONS_ENDPOINTS.privateKeyPem(sourceConnectionId), { responseType: 'blob' }).pipe(
+      catchError(err => throwError(() => err))
+    );
+  }
 }

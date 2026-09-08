@@ -92,10 +92,45 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
             .OrderBy(x => x.Order)
             .ToListAsync(cancellationToken);
 
+    // FHIR-resource rules are the mirror image of the five tiers above: they carry no DestinationField (a
+    // FHIR-native destination stores the resource itself, not columns), so they key on SourceField instead.
+    // One tier per call for the same reason the PostMapping tiers are split — the resolver walks from most to
+    // least specific and stops at the first tier with a match, so querying a tier it never reaches is wasted work.
+    public async Task<IReadOnlyList<TransformationRule>> GetFhirResourceRulesAsync(
+        TransformScope scope, string resourceType, string? sourceField, DestinationType? destinationType,
+        Guid? resourcePipelineRouteId, string? sourceSystem, CancellationToken cancellationToken) =>
+        await _db.TransformationRules
+            .Where(x =>
+                x.ExecutionPhase == TransformExecutionPhase.FhirResource &&
+                x.Scope == scope &&
+                // Global/DestinationType tiers are resource-agnostic defaults; the narrower three are not.
+                (scope == TransformScope.Global || scope == TransformScope.DestinationType ||
+                 x.ResourceType == resourceType) &&
+                (destinationType == null || x.DestinationType == null || x.DestinationType == destinationType) &&
+                // Exact match, NOT "a null rule route is a wildcard". A rule authored before its workflow
+                // existed is stored with a null route on purpose (see GetPendingWorkflowRulesAsync) and must
+                // stay inert until attached — treating null as "applies to anything" would make every such
+                // pending rule fire for every workflow, which is the leak this scoping exists to stop.
+                (resourcePipelineRouteId == null || x.ResourcePipelineRouteId == resourcePipelineRouteId) &&
+                (sourceSystem == null || x.SourceSystem == null || x.SourceSystem == sourceSystem) &&
+                // No "SourceField == null is a wildcard" branch here, unlike the DestinationField tiers above:
+                // a FhirResource rule always names a path (TransformationRule's constructor requires it), so a
+                // wildcard row cannot exist and allowing for one would only widen the query.
+                (sourceField == null || x.SourceField == sourceField))
+            .OrderBy(x => x.Order)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<TransformationRule>> ListAsync(
         TransformScope? scope, DestinationType? destinationType, string? resourceType, string? destinationField,
-        Guid? resourcePipelineRouteId, string? sourceSystem, string? sourceField, CancellationToken cancellationToken) =>
+        Guid? resourcePipelineRouteId, string? sourceSystem, string? sourceField,
+        TransformExecutionPhase? executionPhase, CancellationToken cancellationToken) =>
         await _db.TransformationRules
+            // A null phase means "everything the Rules modal has always shown" — PostMapping AND PreMapping —
+            // minus the FHIR-resource rules this screen has no column-oriented UI for. Filtering to PostMapping
+            // instead would have quietly removed de-identification rules from the list.
+            .Where(x => executionPhase == null
+                ? x.ExecutionPhase != TransformExecutionPhase.FhirResource
+                : x.ExecutionPhase == executionPhase)
             .Where(x => scope == null || x.Scope == scope)
             .Where(x => destinationType == null || x.DestinationType == destinationType)
             .Where(x => resourceType == null || x.ResourceType == resourceType)
@@ -104,6 +139,17 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
             .Where(x => sourceSystem == null || x.SourceSystem == sourceSystem)
             .Where(x => sourceField == null || x.SourceField == sourceField)
             .OrderBy(x => x.Scope).ThenBy(x => x.Order)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowRulesAsync(
+        IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken) =>
+        await _db.TransformationRules
+            .Where(x =>
+                x.Scope == TransformScope.Workflow &&
+                x.ResourcePipelineRouteId == null &&
+                // Narrowed to the destination types the saving workflow actually writes to, so a second
+                // unsaved builder session's pending rules for an unrelated destination are left alone.
+                (destinationTypes.Count == 0 || destinationTypes.Contains(x.DestinationType!.Value)))
             .ToListAsync(cancellationToken);
 
     public Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>

@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+﻿import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
@@ -8,6 +8,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
 import { PagedResult, RouteExecution } from '../../models/execution-history.model';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
+import { sourceSystemDisplayName } from '../../../data/source-system-display-names.data';
 
 type SortColumn = 'pipeline' | 'source' | 'status' | 'duration' | 'lastRun' | 'triggeredBy';
 type SortDirection = 'asc' | 'desc';
@@ -144,7 +145,10 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     return {
       Pending: 'Pending',
       Running: 'Running',
-      AwaitingBulkExport: 'Awaiting Bulk Export',
+      // Surfaced as plain "Running": it IS a run still in flight (a node deferred to an async $export job that
+      // BulkExportPollWorker will resume), and splitting it out as its own status made the Dashboard's Running
+      // tile disagree with what this list showed. The API keeps the distinct AwaitingBulkExport value.
+      AwaitingBulkExport: 'Running',
       Succeeded: 'Succeeded',
       PartialSuccess: 'Partial Success',
       Failed: 'Failed',
@@ -179,7 +183,8 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   sourceLabel(execution: RouteExecution): string {
     // Show the vendor type (Epic, Athenahealth, ...) to match the Workflows list's Source badge,
     // not the per-connection name (e.g. "Epic_gogo") — fall back to it only when the type is unknown.
-    return execution.sourceSystemType ?? execution.sourceName ?? '—';
+    // Through the same brand-name table that badge uses, or the two drift apart (eCW vs "Healow").
+    return sourceSystemDisplayName(execution.sourceSystemType) || execution.sourceName || '—';
   }
 
   formatDuration(ms: number | null): string {

@@ -87,12 +87,6 @@
           <ng-container matColumnDef="groupHeader">
             <td mat-cell *matCellDef="let row" [attr.colspan]="displayedCols.length" class="group-header-cell">
               <span>{{ row.label }}</span>
-              @if (row.label === 'Terminology Settings') {
-                <button class="btn-link" type="button" (click)="toggleAllTerminology()">
-                  <mat-icon>{{ allTerminologyCollapsed() ? 'unfold_more' : 'unfold_less' }}</mat-icon>
-                  {{ allTerminologyCollapsed() ? 'Expand all' : 'Collapse all' }}
-                </button>
-              }
             </td>
           </ng-container>
 

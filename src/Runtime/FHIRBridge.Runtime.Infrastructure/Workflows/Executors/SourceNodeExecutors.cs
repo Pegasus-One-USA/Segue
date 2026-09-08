@@ -286,10 +286,25 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var nodeRetrievalMethod = ReadStringConfiguration(node, "Retrieval method key");
         if (!string.IsNullOrWhiteSpace(nodeRetrievalMethod))
         {
-            var nodeExportScope = ReadStringConfiguration(node, "Export scope");
+            var isBulkExport = string.Equals(nodeRetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase);
+
+            // A Group-only vendor (everything but a plain FHIR server — see BulkExportScopes.IsGroupOnlyVendor) no
+            // longer shows an Export Scope picker at all, so its nodes write nothing here; and a legacy node still
+            // carrying "patient"/"system" could never have succeeded against one anyway. Both resolve to Group.
+            var nodeExportScope = isBulkExport && BulkExportScopes.IsGroupOnlyVendor(source.SourceType)
+                ? "group"
+                : ReadStringConfiguration(node, "Export scope");
+
             var nodeOutputFormatToken = ReadStringConfiguration(node, "FHIR output format");
             var nodePatientIds = (ReadStringConfiguration(node, "Patient ID / list") ?? string.Empty)
                 .Split([',', '\n', '\r', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            // Two retrieval methods write "Patient ID / list": bulk export's patient-scoped $export (a list, keyed
+            // off Export scope) and "single-patient" (at most one id, optional — the wizard's Single Patient
+            // method, which has no Export scope at all). Mirrors workflow-build-assembler.service.ts's
+            // buildRetrieval() gating exactly, so both paths agree on when a node's ids are meaningful.
+            var nodeCarriesPatientIds =
+                string.Equals(nodeExportScope, "patient", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(nodeRetrievalMethod, "single-patient", StringComparison.OrdinalIgnoreCase);
 
             source = source with
             {
@@ -298,13 +313,37 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 GroupId = string.Equals(nodeExportScope, "group", StringComparison.OrdinalIgnoreCase)
                     ? BulkExportGroupIds.ResolveAthenahealthGroupId(source.SourceType, ReadStringConfiguration(node, "Group ID"), source.PracticeId)
                     : null,
-                PatientIds = string.Equals(nodeExportScope, "patient", StringComparison.OrdinalIgnoreCase) && nodePatientIds.Length > 0
+                PatientIds = nodeCarriesPatientIds && nodePatientIds.Length > 0
                     ? nodePatientIds
                     : null,
-                OutputFormat = nodeOutputFormatToken is { Length: > 0 } token && token.StartsWith("ndjson", StringComparison.OrdinalIgnoreCase)
-                    ? "application/fhir+ndjson"
-                    : null,
+                // Accepts both the wizard's short token and the already-normalized MIME type. The wizard stores the
+                // latter ("application/fhir+ndjson"), so matching only a "ndjson" prefix silently resolved to null
+                // and dropped _outputFormat from every kick-off.
+                OutputFormat = nodeOutputFormatToken is { Length: > 0 } token
+                    && token.EndsWith("ndjson", StringComparison.OrdinalIgnoreCase)
+                        ? "application/fhir+ndjson"
+                        : null,
+                // Epic documents that it does not support _since for bulk data, and an incremental bulk export is no
+                // longer offered in the wizard, so never carry a cursor into a $export kick-off.
+                Since = isBulkExport ? null : source.Since,
             };
+        }
+
+        // "single-patient" retrieval (eCW's Backend Single Patient API) means every request must be scoped to one
+        // patient. The wizard's Patient ID field is optional so a connection can be drafted without it, but a RUN
+        // with no patient id resolved from anywhere is not a narrower fetch — it is an unscoped, tenant-wide search
+        // issued under system/ scopes. Fail loudly here instead: the searches would either return another patient's
+        // data (where the server allows it) or 403 per resource type (where it does not), and neither outcome should
+        // be reachable by leaving a field blank. Only this retrieval method is affected; every other one is
+        // untouched.
+        if (string.Equals(source.RetrievalMethod, "single-patient", StringComparison.OrdinalIgnoreCase)
+            && source.PatientIds is not { Count: > 0 }
+            && string.IsNullOrWhiteSpace(source.TargetPatientId))
+        {
+            throw new InvalidOperationException(
+                $"Source node '{node.Id}' ({node.NodeType}) uses the Single Patient retrieval method but no Patient " +
+                "ID is configured, so every request would be an unscoped tenant-wide search. Set the Patient ID on " +
+                "the source node's Retrieval Configuration.");
         }
 
         var client = _sourceClientFactory.Create(
@@ -372,6 +411,19 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var useBulkExport = string.Equals(source.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase)
             && _bulkExportClient is not null;
 
+        // Fail with the actual reason rather than letting a Group-only vendor answer a Group-less kick-off with a
+        // vendor-specific error that names neither the scope nor the missing id (Epic returns a FHIR "Invalid FHIR
+        // ID" OperationOutcome, because it reads "Patient/$export" as a Patient read whose id is "$export").
+        if (useBulkExport
+            && BulkExportScopes.IsGroupOnlyVendor(source.SourceType)
+            && string.IsNullOrWhiteSpace(source.GroupId))
+        {
+            throw new InvalidOperationException(
+                $"{source.SourceType} supports only the Group-level bulk export operation, which requires a Group ID. " +
+                "Set this node's Group ID (the FHIR Group id the healthcare organization provisioned and authorized " +
+                "for your client), or switch this node's Data Retrieval Method to Search (REST).");
+        }
+
         // Extract "Patient" first (regardless of where it falls in the wizard-authored order) so its resulting ids
         // become a cohort every sibling resource type is scoped to below — without this, a multi-resource selection
         // (e.g. Patient + Observation) would fetch Observation completely unscoped against the whole tenant.
@@ -423,7 +475,13 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             && BulkExportScopes.Parse(source.ExportScope) == BulkExportScope.Group
             && executionOrder is [{ } onlyResourceType] && string.Equals(onlyResourceType, "Patient", StringComparison.OrdinalIgnoreCase))
         {
-            var groupPatientIds = await ResolveGroupPatientIdsAsync(client, source, context, node, cancellationToken);
+            // Re-issuing this as a Patient-scoped export is only viable against a server that actually implements
+            // Patient-level $export. A Group-only vendor has no such endpoint (Epic answers Patient/$export by
+            // reading it as a Patient whose id is "$export"), so it never resolves membership here and always takes
+            // the throwaway-_type branch below — which keeps the job a Group export and still dodges rule 59159.
+            var groupPatientIds = BulkExportScopes.IsGroupOnlyVendor(source.SourceType)
+                ? (IReadOnlyList<string>)[]
+                : await ResolveGroupPatientIdsAsync(client, source, context, node, cancellationToken);
             if (groupPatientIds.Count > 0)
             {
                 source = source with { ExportScope = "patient", PatientIds = groupPatientIds, GroupId = null };
@@ -668,6 +726,16 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                     .Distinct()
                     .ToList();
             }
+        }
+
+        // Data the connector lost WITHOUT failing the call — a fan-out category the source rejected, or a page cap
+        // cutting a paged fetch short. Neither throws, so nothing above would otherwise notice: the resource list
+        // looks identical whether it holds everything or a fraction. Folding these into the same
+        // skippedResourceTypes the scope-skips above use routes them through RankedWorkflowOrchestrator's existing
+        // WorkflowRunStatus.PartialSuccess aggregation, so a short extraction stops reporting as a clean success.
+        if (client is IResourceExtractionDiagnostics extractionDiagnostics)
+        {
+            skippedResourceTypes.AddRange(extractionDiagnostics.DrainIncompleteReasons());
         }
 
         if (source.MaxRecords is { } maxRecords && resources.Count > maxRecords)
@@ -957,22 +1025,25 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
 
         for (var attempt = 1; ; attempt++)
         {
-            using var timeoutCts = effectiveSource.TimeoutSeconds is { } timeoutSeconds
-                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
-                : null;
-            timeoutCts?.CancelAfter(TimeSpan.FromSeconds(effectiveSource.TimeoutSeconds!.Value));
-
             try
             {
-                var result = await client.SearchAsync(resourceType, effectiveSource, timeoutCts?.Token ?? cancellationToken);
+                // No wall-clock budget around SearchAsync. It pages through the whole resource type, so a
+                // CancelAfter here was a CUMULATIVE deadline across every page: a source returning healthy pages
+                // in a few seconds each would blow it partway through and the in-flight page died mid-socket
+                // (TaskCanceledException -> IOException -> SocketException), which reads like a network fault but
+                // was self-inflicted. TimeoutSeconds is enforced per request inside the connector instead (see
+                // FhirSourceConnectorBase.SendWithRetryAsync), so a STALLED request is still cancelled promptly
+                // while a slow-but-progressing extraction runs to completion; total volume stays bounded by
+                // MaxPages/MaxRecordsPerRun.
+                var result = await client.SearchAsync(resourceType, effectiveSource, cancellationToken);
                 return result;
             }
             catch (Exception ex) when (ex is not FHIRBridge.Runtime.Domain.Exceptions.IResourceExtractionFailure
                 && attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
             {
-                // The outer token is still live, so whatever was caught is either a timeout (inner token fired) or a
-                // transient failure the connector's own retries didn't recover from — back off and try the whole
-                // resource-type fetch again.
+                // The outer token is still live, so whatever was caught is either a per-request timeout the
+                // connector's own retries didn't recover from, or another transient failure — back off and try the
+                // whole resource-type fetch again.
                 var delay = source.RetryPolicy == "exponential"
                     ? TimeSpan.FromSeconds(Math.Pow(2, attempt - 1))
                     : TimeSpan.FromSeconds(1);
@@ -1101,7 +1172,12 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 OutputFormat: source.OutputFormat);
         }
 
-        var effectiveScope = hasCohort ? BulkExportScope.Patient : configuredScope;
+        // Narrowing to a cohort rewrites the export to Patient scope, which again only exists on a server that
+        // implements Patient-level $export — a Group-only vendor keeps whatever it was configured with (always
+        // Group, since the node override above pins it there).
+        var effectiveScope = hasCohort && !BulkExportScopes.IsGroupOnlyVendor(source.SourceType)
+            ? BulkExportScope.Patient
+            : configuredScope;
         return new FhirBulkExportRequest(
             effectiveScope,
             GroupId: effectiveScope == BulkExportScope.Group ? source.GroupId : null,

@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
@@ -42,9 +42,9 @@ public sealed class EhrEndpointService : IEhrEndpointService
     }
 
     public async Task<PagedResult<EhrEndpointDto>> GetPagedAsync(
-        string? search, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken)
+        EhrEndpointFilter filter, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken)
     {
-        var paged = await _repository.GetPagedAsync(search, sortDescending, page, pageSize, cancellationToken);
+        var paged = await _repository.GetPagedAsync(filter, sortDescending, page, pageSize, cancellationToken);
         var dtos = await ResolveDisplayNamesAsync(paged.Items.Select(EhrEndpointMapper.ToDto).ToArray(), cancellationToken);
         return new PagedResult<EhrEndpointDto>(dtos, paged.TotalCount, paged.Page, paged.PageSize);
     }

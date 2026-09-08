@@ -53,17 +53,19 @@
           </div>
         }
         @case ('frequency') {
-          <mat-form-field appearance="outline" class="form-field">
-            <mat-label>Frequency</mat-label>
-            <mat-select formControlName="value">
-              @for (option of frequencyOptions; track option) {
-                <mat-option [value]="option">{{ option }}</mat-option>
-              }
-            </mat-select>
+          <div class="dw-field form-field" [class.dw-field--error]="hasError('value', 'required')">
+            <label class="dw-label" for="setting-value-frequency">Frequency</label>
+            <div class="dw-select-wrap">
+              <select id="setting-value-frequency" class="dw-select" formControlName="value">
+                @for (option of frequencyOptions; track option) {
+                  <option [value]="option">{{ option }}</option>
+                }
+              </select>
+            </div>
             @if (hasError('value', 'required')) {
-              <mat-error>Frequency is required.</mat-error>
+              <span class="dw-error">Frequency is required.</span>
             }
-          </mat-form-field>
+          </div>
         }
         @case ('time') {
           <mat-form-field appearance="outline" class="form-field">

@@ -1,4 +1,4 @@
-namespace FHIRBridge.Runtime.Application.Workflows.Catalog;
+﻿namespace FHIRBridge.Runtime.Application.Workflows.Catalog;
 
 public static class WorkflowNodeTypes
 {
@@ -15,6 +15,12 @@ public static class WorkflowNodeTypes
     public const string DataQualityScoring = "DataQualityScoringNode";
     public const string FlattenExtensions = "FlattenExtensionsNode";
     public const string PatientMatching = "PatientMatchingNode";
+    /// <summary>V2 workflow builder's consolidated "Transformation" chain step. Deliberately a distinct node
+    /// type from <see cref="Normalization"/> — which V1's "Normalize Data" step still uses — so that running
+    /// field-level transform rules against whole FHIR resources (the only place transformation can happen for a
+    /// FHIR-native destination, which has no mapped columns for a PostMapping rule to attach to) cannot execute
+    /// inside a V1 pipeline. Same in/out contract as Normalization, so it slots into the same graph positions.</summary>
+    public const string FhirResourceTransform = "FhirResourceTransformNode";
     public const string Mapping = "MappingNode";
     public const string RepeatingArrayMapping = "RepeatingArrayMappingNode";
     public const string Terminology = "TerminologyNode";

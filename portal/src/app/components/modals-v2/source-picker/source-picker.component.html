@@ -1,0 +1,25 @@
+<app-modal-overlay [open]="open()" (closed)="closed.emit()">
+  <section class="src-box">
+    <header class="src-head">
+      <div>
+        <h2>Add a data source</h2>
+        <p>Pick a connector. Epic opens the full connection wizard; the others drop a ready-to-wire source node.</p>
+      </div>
+      <button class="close-x" type="button" (click)="closed.emit()">×</button>
+    </header>
+    <div class="src-grid">
+      @for (src of sources; track src.id) {
+        <button class="src-card" type="button" (click)="select(src.id)">
+          <span class="src-icon" [style.background]="src.color">{{ src.abbr }}</span>
+          <span class="src-card-body">
+            <b>{{ src.name }}</b>
+            <span>{{ src.sub }}</span>
+          </span>
+          @if (src.id === 'epic') {
+            <span class="src-badge">Wizard</span>
+          }
+        </button>
+      }
+    </div>
+  </section>
+</app-modal-overlay>

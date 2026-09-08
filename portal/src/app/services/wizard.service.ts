@@ -15,6 +15,23 @@ import { EhrVendor } from '../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel, SourceConnectionRequest, AuthenticationTypeModel } from '../source-connections/models/source-connection.model';
 import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
+import { SOURCES } from '../data/sources.data';
+
+/** EhrVendor (SourceSystemType) enum member name → SOURCES catalog id — duplicated from
+ *  EHR_VENDOR_TO_SOURCE_FORM_KEY (source-form.registry.ts) rather than imported, so this service never pulls in
+ *  that registry's component classes (every vendor source-form component) and risks a circular import back
+ *  through EhrVendorSourceFormComponent, which already injects WizardService. */
+const EHR_VENDOR_TO_SOURCES_ID: Record<string, string> = {
+  Epic: 'epic',
+  Cerner: 'cerner',
+  Athenahealth: 'athena',
+  Allscripts: 'allscripts',
+  Healow: 'healow',
+  MeditechGreenfield: 'meditech',
+  GenericFhir: 'generic-fhir',
+  Hl7v2: 'hl7v2',
+  Sample: 'sample',
+};
 
 export type WizardMode = 'canvas' | 'entity';
 
@@ -255,7 +272,11 @@ export class WizardService {
     this.stepName.set(dto?.name ?? '');
     this.baseUrl.set(dto?.baseUrl ?? EPIC_ENV['sandbox'].base);
     this.token.set(dto?.authentication?.tokenEndpoint ?? '');
-    this.authorize.set('');
+    // Persisted since AddSourceAuthenticationAuthorizationEndpoint — a saved connection shows back the exact
+    // authorize URL it was configured with. Blank only for a connection saved before that column existed (or a
+    // Backend System one, which has no authorize endpoint); EhrVendorSourceFormComponent leaves the field empty
+    // in that case rather than substituting a per-vendor default, and Discover fills it in.
+    this.authorize.set(dto?.authentication?.authorizationEndpoint ?? '');
     // Entity mode has no Resource Type & Scopes picker UI at all (removed — see ehr-vendor-source-form.component.ts's
     // showResourcePickerSection remarks), so a brand-new connection needs a real, non-empty default here
     // regardless of audience: ScopeBuilderService.buildScopes returns scopes derived ONLY from this list for a
@@ -432,6 +453,10 @@ export class WizardService {
         authenticationType: AUTH_METHOD_TO_AUTHENTICATION_TYPE[liveAuthMethod] ?? 'OAuthClientCredentials',
         clientId:           liveClientId,
         tokenEndpoint:       fields['Token endpoint'] || null,
+        // Interactive audiences only — Backend System (client_credentials) never redirects a browser, so it has
+        // no authorize endpoint to store. Persisted so reopening this connection in Settings > Source Connections
+        // shows back what was configured (there's no workflow node to recover it from in entity mode).
+        authorizationEndpoint: audCfg.showRedirect ? (fields['Authorize endpoint'] || null) : null,
         // ScopeBuilderService.buildScopes already includes the base auth-flow scopes (openid/fhirUser/
         // launch/offline_access) for an interactive app regardless of how many resources are passed — so
         // this stays correct even with zero resources (the common case for a brand-new source; real
@@ -498,6 +523,11 @@ export class WizardService {
     // chance to load the existing-names list — a race that eager creation here would otherwise expose on every
     // single "Add to Pipeline" click, not just an edge case.
     if (this.wizardMode() === 'canvas') {
+      // Vendor-specific abbr/badge color/display name — this.ehrType() is kept in sync with whichever vendor form
+      // is actually open (see EhrVendorSourceFormComponent's constructor effect), so a Cerner/MEDITECH/Allscripts/
+      // etc. node gets its own SOURCES catalog entry instead of always falling back to Epic's.
+      const sourceMeta = SOURCES.find((s) => s.id === (EHR_VENDOR_TO_SOURCES_ID[this.ehrType()] ?? 'epic'))
+        ?? SOURCES.find((s) => s.id === 'epic')!;
       const editingId = this.store.editingNodeId();
       if (editingId) {
         // Merge onto the node's existing fields rather than replacing them outright — this form only manages a
@@ -505,7 +535,7 @@ export class WizardService {
         // by create-on-save, never surfaced as a form control) must survive an edit untouched.
         const previousFields = this.store.byId(editingId)?.fields ?? {};
         this.store.updateNode(editingId, { fields: { ...previousFields, ...fields }, connected: this.connected() } as any);
-        this.toast.show('Epic updated', `${fields['__name']} saved.`);
+        this.toast.show(`${sourceMeta.name} updated`, `${fields['__name']} saved.`);
       } else {
         const count = this.store.nodes().filter(n => !n.kind).length;
         const newNode: SourceNode = {
@@ -515,11 +545,12 @@ export class WizardService {
           y:         320 + count * 40,
           fields,
           connected: this.connected(),
-          abbr:      'EP',
-          color:     '#ff5a4f',
+          abbr:      sourceMeta.abbr,
+          color:     sourceMeta.color,
+          vendorId:  sourceMeta.id,
         };
         this.store.addNode(newNode);
-        this.toast.show('Epic added', `${fields['__name']} added to the canvas.`);
+        this.toast.show(`${sourceMeta.name} added`, `${fields['__name']} added to the canvas.`);
       }
 
       this.saveOutcome$.next({ success: true });

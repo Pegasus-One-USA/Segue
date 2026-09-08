@@ -25,7 +25,7 @@ public sealed class NotificationSettingsServiceTests
 
         dto.IsEnabled.Should().BeFalse();
         dto.HasPasswordConfigured.Should().BeFalse();
-        dto.FromName.Should().Be("FHIRBridge");
+        dto.FromName.Should().Be("Segue");
     }
 
     [Fact]
@@ -44,26 +44,38 @@ public sealed class NotificationSettingsServiceTests
     }
 
     [Fact]
-    public async Task UpdateAsync_with_no_password_creates_settings_with_no_password_reference_on_first_save()
+    public async Task UpdateAsync_rejects_a_blank_password_on_first_ever_save()
     {
+        // Allowing this would previously let an admin save email as "enabled" with no credentials at
+        // all — the settings would persist fine, but every real send would then fail at the SMTP auth
+        // step. A blank password is only acceptable on a later edit, once one is already on file (see
+        // UpdateAsync_with_a_blank_password_preserves_the_previously_saved_one below).
         _repository.Setup(x => x.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync((NotificationSettings?)null);
-        NotificationSettings? saved = null;
-        _repository
-            .Setup(x => x.SaveAsync(It.IsAny<NotificationSettings>(), It.IsAny<CancellationToken>()))
-            .Callback<NotificationSettings, CancellationToken>((s, _) => saved = s)
-            .Returns(Task.CompletedTask);
 
         var request = new UpdateNotificationSettingsRequest(
-            true, "smtp.example.com", 587, true, "user@example.com", "noreply@example.com", "FHIRBridge", Password: null);
+            true, "smtp.example.com", 587, true, "user@example.com", "noreply@example.com", "Segue", Password: null);
 
-        var dto = await Service().UpdateAsync(request, CancellationToken.None);
+        var act = () => Service().UpdateAsync(request, CancellationToken.None);
 
-        dto.HasPasswordConfigured.Should().BeFalse();
-        saved.Should().NotBeNull();
-        saved!.PasswordSecretReference.Should().BeNull();
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        _repository.Verify(x => x.SaveAsync(It.IsAny<NotificationSettings>(), It.IsAny<CancellationToken>()), Times.Never);
         _secretWriter.Verify(
             x => x.WriteSecretAsync(It.IsAny<SecretReference>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_rejects_a_blank_username()
+    {
+        _repository.Setup(x => x.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync((NotificationSettings?)null);
+
+        var request = new UpdateNotificationSettingsRequest(
+            true, "smtp.example.com", 587, true, "  ", "noreply@example.com", "Segue", Password: "hunter2");
+
+        var act = () => Service().UpdateAsync(request, CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        _repository.Verify(x => x.SaveAsync(It.IsAny<NotificationSettings>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

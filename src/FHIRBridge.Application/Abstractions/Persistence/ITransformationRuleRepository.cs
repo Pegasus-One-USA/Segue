@@ -36,9 +36,32 @@ public interface ITransformationRuleRepository
     Task<IReadOnlyList<TransformationRule>> GetPreMappingRulesAsync(
         Guid deIdentificationProfileId, string resourceType, CancellationToken cancellationToken);
 
+    /// <summary>FHIR-resource-phase rules for one resource type, resolved a tier at a time so the caller can
+    /// walk Workflow → Field → ResourceType → DestinationType → Global and stop at the first tier that matches
+    /// — the same "most specific tier wins outright, tiers never merge" contract as
+    /// <c>IEffectiveRuleResolver</c>, but keyed on <c>SourceField</c> (the FHIR read path) instead of
+    /// <c>DestinationField</c>, which a FHIR-native destination doesn't have.
+    ///
+    /// <paramref name="sourceField"/> null returns every rule at that tier regardless of path; non-null returns
+    /// rules with no path restriction OR matching this path, and the resolver prefers the latter.</summary>
+    Task<IReadOnlyList<TransformationRule>> GetFhirResourceRulesAsync(
+        TransformScope scope, string resourceType, string? sourceField, DestinationType? destinationType,
+        Guid? resourcePipelineRouteId, string? sourceSystem, CancellationToken cancellationToken);
+
+    /// <summary><paramref name="executionPhase"/> null excludes only
+    /// <see cref="TransformExecutionPhase.FhirResource"/> rules — NOT a filter to PostMapping. The Rules modal
+    /// has always listed PostMapping and PreMapping (de-identification) rows together, so narrowing the default
+    /// to one phase would silently drop de-identification rules from a screen that shows them today.</summary>
     Task<IReadOnlyList<TransformationRule>> ListAsync(
         TransformScope? scope, DestinationType? destinationType, string? resourceType, string? destinationField,
-        Guid? resourcePipelineRouteId, string? sourceSystem, string? sourceField, CancellationToken cancellationToken);
+        Guid? resourcePipelineRouteId, string? sourceSystem, string? sourceField,
+        TransformExecutionPhase? executionPhase, CancellationToken cancellationToken);
+
+    /// <summary>Workflow-scoped rules authored before their workflow existed — Workflow scope with a null
+    /// <c>ResourcePipelineRouteId</c>, which makes them inert until attached. See
+    /// <c>ITransformationRuleService.AttachPendingRulesToWorkflowAsync</c>.</summary>
+    Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowRulesAsync(
+        IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken);
 
     Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

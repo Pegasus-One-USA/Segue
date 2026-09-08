@@ -14,7 +14,7 @@ import { SOURCES } from '../../data/sources.data';
 import { TRANSFORMS } from '../../data/transforms.data';
 import { Source } from '../../models/source.model';
 import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node.model';
-import { environment } from '../../../environments/environment';
+import { APP_ORIGIN } from '../../core/api-endpoints';
 
 import { CanvasComponent } from '../../components/canvas/canvas.component';
 import { PayloadPreviewComponent } from '../../components/modals/payload-preview/payload-preview.component';
@@ -431,7 +431,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
 
       if (!isGeneratedOrImportedBackendKey) continue;
 
-      const jwksUrl = `${environment.apiBase}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
+      const jwksUrl = `${APP_ORIGIN}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
       if (fields['JWKS URL'] !== jwksUrl) {
         this.store.updateNode(nodeId, { fields: { ...fields, 'JWKS URL': jwksUrl } } as Partial<CanvasNode>);
         anyCorrected = true;
@@ -911,6 +911,7 @@ export class WorkflowBuilderComponent implements OnInit, HasUnsavedChanges {
       abbr:           s.abbr,
       color:          s.color,
       connectorLabel: s.name,
+      vendorId:       s.id,
       fields: {
         '__name':         s.name,
         'App context':    s.context,

@@ -118,12 +118,22 @@ export interface SourceAuthenticationRequest {
   authenticationType: string;                 // None | SmartBackendServices | OAuthClientCredentials | ApiKey
   clientId?: string | null;
   tokenEndpoint?: string | null;
+  /** The SMART authorization (browser redirect) endpoint resolved by the wizard's "Discover"
+   *  (SourceAuthenticationDto.AuthorizationEndpoint). Persisted so re-opening a saved connection shows back the
+   *  URL it was actually configured with; the interactive sign-in flow still re-discovers this live at authorize
+   *  time. Null for a non-interactive (client_credentials) app, which never uses one. */
+  authorizationEndpoint?: string | null;
   scopes?: string[];
   clientSecretKeyVaultName?: string | null;
   clientSecretName?: string | null;
   privateKeyKeyVaultName?: string | null;
   privateKeySecretName?: string | null;
   keyId?: string | null;
+  /** The URL actually registered with the EHR to fetch this connection's JWK Set (SourceAuthenticationDto.JwksUrl).
+   *  Purely informational — FHIRBridge never fetches it — but eCW additionally requires this URL's HOST to be
+   *  allow-listed on its own servers, so persisting what was really registered is what makes a later bare
+   *  `invalid_client` diagnosable. Null for connections that don't sign a JWT assertion. */
+  jwksUrl?: string | null;
   /** Scopes Epic (or another EHR) actually granted on the last successful Discover token exchange — distinct
    *  from `scopes` (what was requested). Null until Discover has run once. */
   discoveredScopes?: string[] | null;

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal, computed } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal, computed } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -16,6 +16,7 @@ import {
 import { ToastService } from '../../services/toast.service';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
 import { PermissionService } from '../../auth/services/permission.service';
+import { sourceSystemDisplayName } from '../../data/source-system-display-names.data';
 
 /** Debounce before a search-box keystroke triggers a server round-trip (see onSearch). */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -162,7 +163,15 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Audience options are the raw ApplicationType enum names (EhrLaunch/Standalone/...) — display the same
    *  friendly label the Audience column already uses; every other category displays its raw value as-is. */
   displayLabelFor(category: FilterCategory, value: string): string {
-    return category === 'audience' ? this.audienceLabel(value) : value;
+    if (category === 'audience') return this.audienceLabel(value);
+    // The filter's VALUE stays the enum member the API filters on; only the text changes.
+    if (category === 'source') return this.sourceSystemLabel(value);
+    return value;
+  }
+
+  /** Brand name for a source system — the Source badge and the Source filter must agree. */
+  sourceSystemLabel(sourceSystemType: string | null | undefined): string {
+    return sourceSystemDisplayName(sourceSystemType);
   }
 
   selectedSetFor(category: FilterCategory): Set<string> {
@@ -312,10 +321,26 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.searchDebounceHandle = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS);
   }
 
+  /** Which builder the New action opens — V2 (the Source → Mapping → Transformation →
+   *  De-identification → Destination canvas under pages/workflow-builder-v2) by default, V1 for the
+   *  original canvas. */
+  readonly builderVersion = signal<'v1' | 'v2'>('v2');
+
+  /** Whether the user actually picked a version, as opposed to this just holding its default. Edit reads
+   *  the same signal as an override (see onEdit), so without this the new V2 default would force EVERY
+   *  existing workflow into V2 — including V1-authored ones, whose V1-only steps (normalize, terminology,
+   *  patient matching) V2's catalog has no entry for and cannot render. */
+  private builderVersionTouched = false;
+
+  onBuilderVersionChange(value: string): void {
+    this.builderVersionTouched = true;
+    this.builderVersion.set(value === 'v2' ? 'v2' : 'v1');
+  }
+
   /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
   onNewWorkflow(): void {
     if (!this.canCreate()) return;
-    this.router.navigate(['/workflow-builder']);
+    this.router.navigate([this.builderVersion() === 'v2' ? '/workflow-builder-v2' : '/workflow-builder']);
   }
 
   /** Launch rows are unaffected (still their own thing — see below). Every Run row now always dispatches in the
@@ -422,9 +447,63 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Open the workflow in the Pipeline Builder for full graph editing (Save there issues a PUT update). */
+  /**
+   * Open the workflow in the Pipeline Builder for full graph editing (Save there issues a PUT update).
+   *
+   * A workflow authored in V2 MUST reopen in V2: the two builders read the same graph differently. V2's
+   * canvas order is Source → Mapping → Transformation → De-identification → Destination, while the
+   * persisted edges are in execution order (see WorkflowGraphMapperServiceV2.toAuthoringOrder, which
+   * reverses that on load). V1 has no such step, so it draws V2's execution-order edges against
+   * authoring-order node positions — every edge crosses backwards, and V2-only steps render as raw ids
+   * because V1's catalog has no entry for them.
+   *
+   * The builder is therefore detected from the graph itself rather than left to the toolbar selector:
+   * the presence of a V2-only chain step decides it. Detection needs the node list, which
+   * /workflows/summary doesn't carry, so this fetches the definition first; a failed fetch just falls
+   * back to the selected version rather than blocking navigation.
+   */
   onEdit(row: WorkflowSummary): void {
-    this.router.navigate(['/workflow-builder'], { queryParams: { id: row.workflowId } });
+    // The toolbar selector doubles as a manual override, for workflows saved before __builderVersion
+    // existed — those can't be detected and would otherwise always open in V1. Only counts once the user
+    // has actually picked a version: the default is V2 now, and treating that as an override would send
+    // every V1 workflow to a builder that cannot draw it.
+    const forcedV2 = this.builderVersionTouched && this.builderVersion() === 'v2';
+    this.api.load(row.workflowId).subscribe({
+      next: definition => this.openBuilder(row.workflowId, forcedV2 || this.isV2Definition(definition)),
+      error: () => this.openBuilder(row.workflowId, forcedV2),
+    });
+  }
+
+  private openBuilder(workflowId: string, useV2: boolean): void {
+    this.router.navigate([useV2 ? '/workflow-builder-v2' : '/workflow-builder'], {
+      queryParams: { id: workflowId },
+    });
+  }
+
+  /**
+   * Whether this graph was authored in V2. Prefers the explicit `__builderVersion` stamp
+   * (WorkflowGraphMapperServiceV2.nodeToRequest); falls back to spotting a V2-only chain step for
+   * workflows saved before that stamp existed. The fallback can't identify a V2 workflow that contains
+   * no such step — a bare Source → Destination looks identical either way — which is what the toolbar
+   * override above is for.
+   */
+  private isV2Definition(definition: { nodes: { configurationJson?: string | null }[] }): boolean {
+    return definition.nodes.some(node => {
+      const config = this.configOf(node);
+      if (config['__builderVersion'] === 'v2') return true;
+      const transformId = config['__transformId'];
+      return transformId === 'transformation' || transformId === 'deidentification';
+    });
+  }
+
+  private configOf(node: { configurationJson?: string | null }): Record<string, unknown> {
+    if (!node.configurationJson) return {};
+    try {
+      const parsed = JSON.parse(node.configurationJson) as unknown;
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
   }
 
   /** Enable/disable toggle via the activate/deactivate endpoints. */
@@ -576,13 +655,38 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     );
   }
 
+  /** Deliberately mirrors ExecutionHistoryListComponent's statusClass so the same run never renders as two
+   *  different badges across the two screens. AwaitingBulkExport is non-terminal (a node deferred to an async
+   *  $export job and the run is still in flight), so it reuses the Running badge rather than the queued one;
+   *  PartialSuccess is terminal and fully written, so it reuses Succeeded rather than reading as an error. */
   runStatusClass(status: string | null): string {
-    switch (status) {
-      case 'Succeeded': return 'badge badge-completed';
-      case 'Running':   return 'badge badge-running';
-      case 'Failed':    return 'badge badge-failed';
-      default:          return 'badge badge-queued';
-    }
+    const map: Record<string, string> = {
+      Pending: 'badge-queued',
+      Running: 'badge-running',
+      AwaitingBulkExport: 'badge-running',
+      Succeeded: 'badge-completed',
+      PartialSuccess: 'badge-completed',
+      Failed: 'badge-failed',
+      Cancelled: 'badge-inactive',
+    };
+    return `badge ${(status && map[status]) ?? 'badge-queued'}`;
+  }
+
+  /** Same label map as ExecutionHistoryListComponent.statusLabel — without it the raw enum name leaks into the
+   *  table ("AwaitingBulkExport" instead of "Awaiting Bulk Export"). */
+  runStatusLabel(status: string | null): string {
+    if (!status) return '';
+    return (
+      {
+        Pending: 'Pending',
+        Running: 'Running',
+        AwaitingBulkExport: 'Running',
+        Succeeded: 'Succeeded',
+        PartialSuccess: 'Partial Success',
+        Failed: 'Failed',
+        Cancelled: 'Cancelled',
+      }[status] ?? status
+    );
   }
 
   private messageOf(err: unknown, fallback: string): string {

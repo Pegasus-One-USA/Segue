@@ -19,7 +19,8 @@ public sealed class SourceAuthenticationConfiguration
         string? jwksUrl = null,
         string[]? discoveredScopes = null,
         string? practiceId = null,
-        string? authPlacement = null)
+        string? authPlacement = null,
+        string? authorizationEndpoint = null)
     {
         AuthenticationType = authenticationType;
         ClientId = clientId;
@@ -32,6 +33,7 @@ public sealed class SourceAuthenticationConfiguration
         DiscoveredScopes = discoveredScopes;
         PracticeId = practiceId;
         AuthPlacement = authPlacement;
+        AuthorizationEndpoint = authorizationEndpoint;
     }
 
     public AuthenticationType AuthenticationType { get; private set; }
@@ -58,12 +60,19 @@ public sealed class SourceAuthenticationConfiguration
     /// or <c>"basic"</c> (Authorization header), for vendors whose token endpoint rejects one of the two. Null
     /// behaves as <c>"post"</c>, unchanged from before this field existed.</summary>
     public string? AuthPlacement { get; private set; }
+    /// <summary>The SMART authorization (browser redirect) endpoint, as resolved by the portal's "Discover" against
+    /// the source's <c>/.well-known/smart-configuration</c>. Persisted purely so re-opening a saved connection shows
+    /// back the URL that was actually configured — the interactive sign-in flow itself still re-discovers this live
+    /// at authorize time (see InteractiveSourceAuthorizationService.DiscoverEndpointsAsync), so a stale stored value
+    /// can never send a user to the wrong authorization server. Null for a Backend System (client_credentials)
+    /// connection, which never uses an authorization endpoint at all.</summary>
+    public string? AuthorizationEndpoint { get; private set; }
 
     /// <summary>Returns a copy with only <see cref="Scopes"/> replaced — everything else carries over unchanged.</summary>
     public SourceAuthenticationConfiguration WithScopes(string[] scopes) => new(
-        AuthenticationType, ClientId, TokenEndpoint, scopes, ClientSecret, PrivateKey, KeyId, JwksUrl, DiscoveredScopes, PracticeId, AuthPlacement);
+        AuthenticationType, ClientId, TokenEndpoint, scopes, ClientSecret, PrivateKey, KeyId, JwksUrl, DiscoveredScopes, PracticeId, AuthPlacement, AuthorizationEndpoint);
 
     /// <summary>Returns a copy with only <see cref="DiscoveredScopes"/> replaced — everything else carries over unchanged.</summary>
     public SourceAuthenticationConfiguration WithDiscoveredScopes(string[]? discoveredScopes) => new(
-        AuthenticationType, ClientId, TokenEndpoint, Scopes, ClientSecret, PrivateKey, KeyId, JwksUrl, discoveredScopes, PracticeId, AuthPlacement);
+        AuthenticationType, ClientId, TokenEndpoint, Scopes, ClientSecret, PrivateKey, KeyId, JwksUrl, discoveredScopes, PracticeId, AuthPlacement, AuthorizationEndpoint);
 }

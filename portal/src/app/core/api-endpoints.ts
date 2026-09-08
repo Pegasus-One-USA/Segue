@@ -110,6 +110,11 @@ export const SOURCE_CONNECTIONS_ENDPOINTS = {
   // a connection is saved.
   generateSigningKey: `${API_V1_BASE}/source-connections/generate-signing-key`,
   importSigningKey: `${API_V1_BASE}/source-connections/import-signing-key`,
+  // PEM downloads for a SAVED connection's signing key (SourceConnectionsController) — the public half for an EHR
+  // app registration that takes an uploaded key instead of a JWKS URL, the private half (separately permissioned
+  // and audit-logged server-side) for keeping a copy of a key FHIRBridge generated.
+  publicKeyPem: (id: string) => `${API_V1_BASE}/source-connections/${id}/signing-key/public.pem`,
+  privateKeyPem: (id: string) => `${API_V1_BASE}/source-connections/${id}/signing-key/private.pem`,
 };
 
 // ─── Notification Settings (NotificationSettingsController — api/v1/notification-settings) ─
@@ -209,6 +214,7 @@ export const TRANSFORMATION_RULES_ENDPOINTS = {
   save:    `${API_V1_BASE}/transformation-rules`,
   delete:  (id: string) => `${API_V1_BASE}/transformation-rules/${id}`,
   preview: `${API_V1_BASE}/transformation-rules/preview`,
+  attachPending: (workflowId: string) => `${API_V1_BASE}/transformation-rules/attach-pending/${workflowId}`,
   nodeSchemas: `${API_V1_BASE}/transformation-rules/node-schemas`,
   hidden: `${API_V1_BASE}/transformation-rules/hidden`,
   effective: `${API_V1_BASE}/transformation-rules/effective`,
@@ -350,6 +356,15 @@ export const HAPI_TERMINOLOGY_ENDPOINTS = {
 export const SOURCE_DISCOVERY_ENDPOINTS = {
   probe: `${API_V1_BASE}/source-discovery/probe`,
   backendAuthScopes: `${API_V1_BASE}/source-discovery/backend-auth-scopes`,
+};
+
+// ─── Source capabilities (SourceCapabilitiesController — api/v1/source-connections/{id}/…) ──
+// Connection-scoped, hence the id in the path rather than a query parameter.
+export const SOURCE_CAPABILITIES_ENDPOINTS = {
+  /** Server-side scope generation for a SAVED connection: application type + selected resources + vendor
+   *  profile, validated against the source's live scopes_supported. The authoritative answer to "what will the
+   *  pipeline actually request", so Test Connection asks for exactly that instead of a wildcard of its own. */
+  derivedConfig: (id: string) => `${API_V1_BASE}/source-connections/${id}/derived-config`,
 };
 
 // ─── Execution History (WorkflowEndpoints — api/v1/workflow-runs) ──────────────

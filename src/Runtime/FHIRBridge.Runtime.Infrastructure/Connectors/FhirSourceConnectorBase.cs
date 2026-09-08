@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
@@ -22,8 +22,14 @@ namespace FHIRBridge.Runtime.Infrastructure.Connectors;
 /// This is the "vendor inherits" axis of the Bridge model; the access-token grant (Backend / EHR-launch /
 /// Standalone / Patient) is composed by the injected <see cref="IFhirAccessTokenProvider"/>.
 /// </summary>
-public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
+public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IResourceExtractionDiagnostics
 {
+    // Losses that did NOT fail the call: a rejected fan-out category, or a page cap cutting a fetch short.
+    // The executor drains these into the run's skippedResourceTypes so the run reports PartialSuccess
+    // rather than a clean success over a short result. Concurrent because the orchestrator runs resource
+    // extractions with bounded parallelism.
+    private readonly ConcurrentQueue<string> _incompleteReasons = new();
+
     private static readonly ConcurrentDictionary<string, SourceThrottle> SourceThrottles = new(StringComparer.Ordinal);
     private static readonly Random RetryJitter = new();
     private static readonly object RetryJitterLock = new();
@@ -48,6 +54,25 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
     /// <summary>Human-readable source name used in log and error messages (e.g. "Epic FHIR").</summary>
     protected abstract string SourceDisplayName { get; }
 
+    public IReadOnlyList<string> DrainIncompleteReasons()
+    {
+        if (_incompleteReasons.IsEmpty)
+        {
+            return [];
+        }
+
+        var reasons = new List<string>();
+        while (_incompleteReasons.TryDequeue(out var reason))
+        {
+            reasons.Add(reason);
+        }
+
+        return reasons;
+    }
+
+    private void ReportIncomplete(string resourceType, string reason) =>
+        _incompleteReasons.Enqueue($"{resourceType}: {reason}");
+
     public async Task<IReadOnlyList<ResourceEnvelope>> SearchAsync(
         string resourceType,
         FhirSourceConfiguration source,
@@ -58,7 +83,11 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             throw new InvalidOperationException($"{SourceDisplayName} base URL is required.");
         }
 
-        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        // NOT redundant with the per-page acquisition in SearchPagesAsync, and not the token those requests use:
+        // an interactive/launch grant carries the patient context in its token response, and ApplyPatientScopeAsync
+        // below reads that context off the provider — so the exchange has to have happened before it runs. Cached,
+        // so it costs a cache read.
+        _ = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
         var scopedSearchParameters = await ApplyPatientScopeAsync(resourceType, source, cancellationToken);
         scopedSearchParameters = MergeAdditionalQueryParameters(scopedSearchParameters, source);
 
@@ -72,7 +101,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         {
             var searchParameters = ApplyDefaultSearchParameters(resourceType, scopedSearchParameters);
             searchParameters = ApplyAdditionalRequiredParameters(resourceType, searchParameters);
-            return await SearchPagesAsync(resourceType, source, searchParameters, accessToken, cancellationToken);
+            return await SearchPagesAsync(resourceType, source, searchParameters, cancellationToken);
         }
 
         var seenResourceIds = new HashSet<string>(StringComparer.Ordinal);
@@ -87,7 +116,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             IReadOnlyList<ResourceEnvelope> page;
             try
             {
-                page = await SearchPagesAsync(resourceType, source, query, accessToken, cancellationToken);
+                page = await SearchPagesAsync(resourceType, source, query, cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -101,6 +130,13 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
                     "{Source} search for {ResourceType} with {Parameter}={Value} failed and was skipped; " +
                     "continuing with the remaining values.",
                     SourceDisplayName, resourceType, parameterName, value);
+
+                // Skipping the value keeps the other values' results, but whatever this one held is now missing
+                // from the run. Record it so the run says so instead of reporting the short merge as complete.
+                ReportIncomplete(
+                    resourceType,
+                    $"the '{parameterName}={value}' search was rejected and skipped, so any {resourceType} only " +
+                    $"that value would have returned is missing — {exception.Message}");
                 continue;
             }
 
@@ -155,6 +191,8 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         }
 
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        EnsureFhirJsonBody(json, requestUrl, response, resourceType);
+
         return FhirResourceParser.ParseResource(json);
     }
 
@@ -162,15 +200,28 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         string resourceType,
         FhirSourceConfiguration source,
         string? searchParameters,
-        string accessToken,
         CancellationToken cancellationToken)
     {
         var resources = new List<ResourceEnvelope>();
         var nextUrl = BuildSearchUrl(source.BaseUrl, resourceType, source.SearchCount, searchParameters);
         var maxPages = source.MaxPages <= 0 ? 1 : source.MaxPages;
 
+        // A "next" link is only worth following if it actually advances. eCW hands one out even when the page it
+        // just served was complete, and following it re-serves the same records — so paging never ends on its own.
+        // Both guards below detect that: the same URL coming round again, and a page that contributes no resource
+        // id we have not already seen (a paginator that increments an offset it then ignores defeats the first
+        // guard but not the second). A conforming server trips neither — its pages always bring new ids until it
+        // drops the link. Without them the loop ran until the ACCESS TOKEN EXPIRED: a live eCW run made 31
+        // successful Observation requests for 28 unique laboratory records, then 401'd on the six remaining
+        // categories, which the caller's per-category skip swallowed — 28 records reported as a success.
+        var requestedUrls = new HashSet<string>(StringComparer.Ordinal);
+        var seenResourceIds = new HashSet<string>(StringComparer.Ordinal);
+        var stoppedOnNonAdvancingPage = false;
+
         for (var page = 0; page < maxPages && nextUrl is not null; page++)
         {
+            requestedUrls.Add(nextUrl);
+
             // Explicit, structured request log — .NET's default IHttpClientFactory request logging doesn't surface
             // the query string at the levels enabled here, and this is exactly what needs to be greppable in Seq
             // when verifying _count/_sort/_include/_revinclude/search-criteria actually reached the outbound call.
@@ -181,8 +232,12 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
                 page + 1,
                 nextUrl);
 
-            // TEMP DEBUG — remove before committing.
-            Console.WriteLine($"===== {SourceDisplayName} search request for {resourceType} (page {page + 1}): {nextUrl}");
+
+            // Re-read the token per page rather than once per resource-type fetch. The provider is cache-backed
+            // (DistributedFhirAccessTokenCache: TTL = expiry minus a 1-minute skew), so this is a cache hit that
+            // silently re-mints an expired token. Acquiring once meant any fetch outliving the token — eCW's is
+            // ~5 minutes — started 401ing partway through with no way to recover.
+            var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
 
             using var response = await SendWithRetryAsync(nextUrl, accessToken, source, cancellationToken);
             if (!response.IsSuccessStatusCode)
@@ -210,8 +265,63 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            resources.AddRange(FhirResourceParser.ParseSearchBundle(json));
+            EnsureFhirJsonBody(json, nextUrl, response, resourceType);
+
+            var newOnThisPage = 0;
+            foreach (var resource in FhirResourceParser.ParseSearchBundle(json))
+            {
+                // An id-less resource can't be tracked for progress, so it's kept unconditionally and left for
+                // the caller's own dedupe.
+                if (string.IsNullOrWhiteSpace(resource.ResourceId) || seenResourceIds.Add(resource.ResourceId))
+                {
+                    resources.Add(resource);
+                    newOnThisPage++;
+                }
+            }
+
             nextUrl = FhirResourceParser.GetNextLink(json);
+            if (nextUrl is null)
+            {
+                break;
+            }
+
+            if (newOnThisPage == 0 || requestedUrls.Contains(nextUrl))
+            {
+                _logger.LogWarning(
+                    "{Source} stopped paging {ResourceType} after {Pages} page(s) ({ResourceCount} records): the " +
+                    "server offered a next link that does not advance ({Reason}). Treating the result as complete " +
+                    "— following it further would re-fetch the same records until the access token expired.",
+                    SourceDisplayName,
+                    resourceType,
+                    page + 1,
+                    resources.Count,
+                    newOnThisPage == 0 ? "the page repeated records already fetched" : "the link repeats a URL already fetched");
+
+                stoppedOnNonAdvancingPage = true;
+                nextUrl = null;
+                break;
+            }
+        }
+
+        // The loop can end two ways: the server stopped offering a next link (complete), or the page cap ran out
+        // while one was still on offer (truncated). Those are NOT the same outcome, and returning the short list
+        // unannounced is how a run reports 30 of 55 records as a success. Nothing downstream can tell the
+        // difference from the list alone, so say so here — with the numbers needed to act on it.
+        if (nextUrl is not null && !stoppedOnNonAdvancingPage)
+        {
+            _logger.LogWarning(
+                "{Source} stopped paging {ResourceType} after {MaxPages} page(s) ({ResourceCount} records) while " +
+                "the server was still offering more. This extraction is INCOMPLETE. Raise the connection's Max " +
+                "Records Per Run (the page cap is derived from it), or leave it unset to page to completion.",
+                SourceDisplayName,
+                resourceType,
+                maxPages,
+                resources.Count);
+
+            ReportIncomplete(
+                resourceType,
+                $"paging stopped at the {maxPages}-page cap with {resources.Count} record(s) while the server was " +
+                "still offering more; raise the connection's Max Records Per Run, or leave it unset to page to completion");
         }
 
         return resources;
@@ -273,14 +383,24 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         var maxRetryCount = Math.Max(0, _options.MaxRetryCount);
         Exception? lastException = null;
 
+        // The connection's own Timeout (seconds) wins over the client-wide default, and applies to ONE request —
+        // which is what the portal advertises it as ("Per-request timeout before the connector aborts and
+        // retries"). It deliberately does NOT bound the whole paged extraction: a healthy source that simply
+        // returns many pages must not be cut off mid-page, and total volume is already bounded by MaxPages/
+        // MaxRecordsPerRun. Enforcing it here is what makes a stalled request — rather than a slow-but-progressing
+        // one — the thing that gets cancelled.
+        var requestTimeoutSeconds = source.TimeoutSeconds is { } configured && configured > 0
+            ? configured
+            : _options.RequestTimeoutSeconds;
+
         for (var attempt = 0; attempt <= maxRetryCount; attempt++)
         {
             await WaitForSourceThrottleAsync(source, cancellationToken);
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            if (_options.RequestTimeoutSeconds > 0)
+            if (requestTimeoutSeconds > 0)
             {
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(_options.RequestTimeoutSeconds));
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(requestTimeoutSeconds));
             }
 
             using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
@@ -308,7 +428,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && attempt < maxRetryCount)
             {
-                lastException = new TimeoutException($"{SourceDisplayName} request timed out after {_options.RequestTimeoutSeconds} seconds.");
+                lastException = new TimeoutException($"{SourceDisplayName} request timed out after {requestTimeoutSeconds} seconds.");
                 var delay = GetRetryDelay(null, attempt);
                 _logger.LogWarning(
                     "{Source} request timed out. Retrying attempt {Attempt}/{MaxRetryCount} after {DelayMs} ms.",
@@ -654,6 +774,64 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient
         }
 
         return $"{baseUrl.TrimEnd('/')}/{resourceType}?{query}";
+    }
+
+    /// <summary>
+    /// Guards the success path against a 2xx response whose body isn't FHIR JSON at all. Servers fronted by a
+    /// gateway, WAF, SSO proxy or plain misconfiguration answer 200 with an HTML sign-in or error page, and a FHIR
+    /// server that ignores the <c>Accept: application/fhir+json</c> header answers with XML — both start with
+    /// '&lt;', so handing the body to the parser produced a bare
+    /// <c>JsonReaderException: '&lt;' is an invalid start of a value</c> naming neither the source, the resource
+    /// type, the URL, nor the content type. Thrown as a
+    /// <see cref="FHIRBridge.Runtime.Domain.Exceptions.ResourceRequestFailedException"/> so it is isolated to this
+    /// one resource type and excluded from the executor's retry loop, exactly like the non-success statuses above —
+    /// re-requesting will not turn an HTML page into a Bundle.
+    /// </summary>
+    private void EnsureFhirJsonBody(
+        string body,
+        string requestUrl,
+        HttpResponseMessage response,
+        string resourceType)
+    {
+        var trimmed = body?.TrimStart();
+        if (!string.IsNullOrEmpty(trimmed) && (trimmed[0] == '{' || trimmed[0] == '['))
+        {
+            return;
+        }
+
+        var contentType = response.Content.Headers.ContentType?.MediaType;
+        var cause = string.IsNullOrEmpty(trimmed)
+            ? "the response body was empty"
+            : trimmed[0] == '<'
+                ? trimmed.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase) ||
+                  trimmed.Contains("http://hl7.org/fhir", StringComparison.OrdinalIgnoreCase)
+                    ? "the server returned FHIR XML instead of JSON — it is ignoring the Accept: application/fhir+json " +
+                      "header, so add _format=json to the connection's additional query parameters"
+                    : "the server returned an HTML page instead of FHIR JSON — the base URL is most likely not a FHIR " +
+                      "R4 endpoint (check for a trailing path such as /fhir/R4), or a gateway/SSO proxy answered the " +
+                      "request with a sign-in or error page"
+                : "the response body was not JSON";
+
+        var redactedBody = RedactFailureBody(trimmed?.ReplaceLineEndings(" ").Trim() ?? string.Empty);
+        if (redactedBody.Length > 500)
+        {
+            redactedBody = redactedBody[..500] + "...";
+        }
+
+        var message =
+            $"{SourceDisplayName} returned {(int)response.StatusCode} ({response.ReasonPhrase}) with content type " +
+            $"'{contentType ?? "(none)"}' for {RedactRequestUrl(requestUrl)}, but {cause}. " +
+            $"Response body: {redactedBody}";
+
+        _logger.LogError(
+            "{Source} {ResourceType} request succeeded with a non-JSON body (content type {ContentType}): {Reason}",
+            SourceDisplayName,
+            resourceType,
+            contentType ?? "(none)",
+            cause);
+
+        throw new FHIRBridge.Runtime.Domain.Exceptions.ResourceRequestFailedException(
+            resourceType, (int)response.StatusCode, message);
     }
 
     private string BuildFailureMessage(

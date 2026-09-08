@@ -15,7 +15,23 @@ public sealed class BackendServicesJwtFactory : IBackendServicesJwtFactory
         }
 
         using var rsa = RSA.Create();
-        rsa.ImportFromPem(request.PrivateKeyPem);
+        try
+        {
+            rsa.ImportFromPem(request.PrivateKeyPem);
+        }
+        catch (ArgumentException exception)
+        {
+            // RSA.ImportFromPem's own message ("...not the path to such a file") blames a file path, which is
+            // almost never the real cause — a secret store returning an unset placeholder is. Callers that resolve
+            // the key from a secret reference diagnose this earlier and can name the exact (vault, secret): see
+            // SigningKeySecretGuard.EnsurePemShaped. This is the backstop for every other caller, and
+            // deliberately says nothing about the value itself, which is key material when it is valid.
+            throw new InvalidOperationException(
+                "The configured SMART Backend Services signing key is not a PEM-encoded private key. Store the " +
+                "PKCS#8 PEM (the whole '-----BEGIN PRIVATE KEY-----' block) at the connection's configured " +
+                "signing-key secret reference, or re-provision it via the Generate/Import signing-key source.",
+                exception);
+        }
 
         var now = DateTimeOffset.UtcNow;
         var expires = now.Add(request.Lifetime);

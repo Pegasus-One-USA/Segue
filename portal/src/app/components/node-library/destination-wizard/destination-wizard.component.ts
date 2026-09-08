@@ -63,6 +63,7 @@ import {
   LegacyMappingRow,
   PendingSchemaOp,
   MappingDestType,
+  SchemaLoadState,
   qualifyTableName,
   reconcileTargetsForDestTypeSwitch,
   checkColumnTypeCompatibility,
@@ -531,10 +532,10 @@ export class DestinationWizardComponent implements OnInit {
   private readonly discoverySvc = inject(EpicDiscoveryService);
   private readonly sourceConnectionSvc = inject(ISourceConnectionService);
 
-  // Feature flag: Settings > System Settings > General, "TransformationRules:Hidden" (default false —
-  // visible unless an admin explicitly hides it). Starts matching that default until the real value comes
+  // Feature flag: Settings > System Settings > General, "TransformationRules:Hidden" (default true —
+  // hidden unless an admin explicitly reveals it). Starts matching that default until the real value comes
   // back, so there's no flash on first paint in the common case.
-  readonly rulesHidden = signal(false);
+  readonly rulesHidden = signal(true);
 
   // True while "Add to Pipeline"/"Update" is waiting on POST mapping-profiles/import.
   readonly savingMappingProfiles = signal(false);
@@ -589,6 +590,14 @@ export class DestinationWizardComponent implements OnInit {
   private _lastExitTrigger: number | null = null;
   private _lastSaveTrigger: number | null = null;
   private _lastSaveSnapshotTrigger: number | null = null;
+  // Tracks the destType() this instance last loaded existingOptions() for. Unlike the trigger counters
+  // above, destType() is a required input that's always meaningful from the first read, so the first effect
+  // run just records the starting type (ngOnInit's own showConnectionModeToggle() branch already loads it
+  // for that type) — only a REAL later change means a different type's list needs (re)fetching. A genuine
+  // change is reachable here: NodeLibraryDialogComponent rebinds this same wizard instance's destType input
+  // when the user switches destination type on an already-open Step 1 (see its "Switch to X?" confirm flow)
+  // rather than destroying/recreating this component.
+  private _lastDestType: WizardDestType | null = null;
   // Same pattern, passed straight through to the mapping canvas — its "Load JSON payload"/"Preview
   // output" actions now live in the dialog header (see NodeLibraryDialogComponent), not this canvas's
   // own toolbar, so the wizard just forwards these without reacting to them itself.
@@ -1764,13 +1773,10 @@ export class DestinationWizardComponent implements OnInit {
   readonly resolvedSecretKeyVaultName = signal<string | null>(null);
   readonly resolvedSecretName = signal<string | null>(null);
   readonly provisioningDestination = signal(false);
+  // Outcome of the live schema read in _refreshSqlTablesFromLiveSchema — surfaced on the mapping canvas so
+  // a read that failed, or couldn't be attempted at all, never renders as "this database has no tables".
+  readonly schemaLoadState = signal<SchemaLoadState>('idle');
 
-  private static readonly SQL_TYPES: DestinationType[] = [
-    'SqlServer',
-    'AzureSql',
-    'PostgreSql',
-    'MySql',
-  ];
   private static readonly CSV_TYPES: DestinationType[] = ['Csv', 'Sftp'];
   private static readonly MONGO_TYPES: DestinationType[] = ['Mongo'];
   private static readonly MEDPLUM_TYPES: DestinationType[] = ['Medplum'];
@@ -1981,6 +1987,26 @@ export class DestinationWizardComponent implements OnInit {
         this._lastMarkAsMasterTrigger = v;
         if (v > 0) this.markActiveGroupAsMaster();
       }
+    });
+
+    // Re-scopes the "Existing connection" dropdown to the new type the moment destType() actually changes
+    // (see _lastDestType's own remarks for why this is reachable on a live instance, not just at mount).
+    // Without this, existingOptions() stayed stuck showing whatever type was loaded first — the Mongo/SQL/
+    // CSV filter in _loadExistingOptions() only ever ran once, from ngOnInit(). A previously-picked existing
+    // connection is also no longer valid for a different engine, so it's cleared the same way the picker's
+    // own "✕" button already does, rather than leaving a dangling selection the new list doesn't contain.
+    effect(() => {
+      const type = this.destType();
+      if (this._lastDestType === null) {
+        this._lastDestType = type;
+        return;
+      }
+      if (type === this._lastDestType) return;
+      this._lastDestType = type;
+      untracked(() => {
+        this.clearExistingConnection();
+        if (this.showConnectionModeToggle()) this._loadExistingOptions();
+      });
     });
 
     // Fetch the array-aware FHIR catalog for every data group on offer. The field picker prefers it
@@ -2314,6 +2340,17 @@ export class DestinationWizardComponent implements OnInit {
       // Mongo reaches here when the user already clicked Test Connection manually before Next — the branch
       // above only fires on a stale/idle probe, so this is the other place collections needs copying.
       if (isMongoForm(form)) this.mongoCollections.set(form.collections());
+      // SQL: same "already tested manually before Next" case, and the same fix shape — the branch above only
+      // fires on a stale/idle probe, so a user who clicks the form's own Test Connection button (getting
+      // form.probeState() to 'ok' there) and only then clicks Next falls straight through to here, and this
+      // wizard-level sqlTables()/probeState() — what hasSqlTables()/the Mapping screen's existing-table list
+      // actually read — was never synced from the form's already-probed result. The form itself shows
+      // "Connected", but the Mapping screen would show no existing tables. sqlForm's own reset-on-edit (see
+      // SqlFamilyDestinationFormComponent's constructor) guarantees form.sqlTables() here is never stale.
+      if (isSqlFamilyForm(form) && form.probeState() === 'ok') {
+        this.sqlTables.set(form.sqlTables());
+        this.probeState.set('ok');
+      }
       const metadata = form.getMetadata();
       if (!metadata) return;
       this.provisionDestinationConnection(metadata, () =>
@@ -3459,8 +3496,13 @@ export class DestinationWizardComponent implements OnInit {
       .getPaged({ isEnabled: true, page: 1, pageSize: 100 })
       .pipe(
         map((page) => {
+          // Each SQL-family destType configures exactly one specific engine, never "any SQL flavor" — a
+          // MySQL destination's dropdown must offer only MySql connections, not PostgreSql/SqlServer's too.
+          // registryKey() already resolves the exact DestinationType this wizard instance is configuring
+          // (MySql/PostgreSql/SqlServer — see its own doc comment for why AzureSql never appears here), so
+          // reuse it as a single-element list instead of a whole SQL-family bucket.
           const wantedTypes = this.isSql()
-            ? DestinationWizardComponent.SQL_TYPES
+            ? [this.registryKey()]
             : this.isMongo()
               ? DestinationWizardComponent.MONGO_TYPES
               : this.isMedplum()
@@ -3515,6 +3557,13 @@ export class DestinationWizardComponent implements OnInit {
     this.selectedExistingId.set(id);
     const selected = this.existingOptions().find((o) => o.id === id);
     if (!selected) return;
+
+    // Load this connection's real tables now, the same way _populateFromNode() does for an existing node's
+    // saved destination — needs only selectedExistingId() (just set above), not the Step 1 form component,
+    // so this fires correctly whether or not the outlet's child already exists (see patchFrom below/
+    // _pendingFormPatch for why the form itself might not). Self-guards on isSql()/destination type, so
+    // this is a no-op for every non-SQL destination.
+    this._refreshSqlTablesFromLiveSchema();
 
     // Read-only here — reusing an existing connection as-is never calls provisionDestinationConnection's
     // create/update branch (see _save()), so there's nothing to change the profile through in this mode.
@@ -4233,11 +4282,11 @@ export class DestinationWizardComponent implements OnInit {
    *
    *  Reopening an EXISTING/resolved destination never has a plaintext password to probe with — it's
    *  deliberately stripped before the node is persisted (see workflow-graph-mapper.service.ts's
-   *  SECRET_FIELD_KEYS), so dest_password is always empty here. Using resolvedDestinationId() instead
-   *  reads the schema server-side via the destination's real, already-provisioned secret reference
-   *  (DestinationSchemaController's GetSchema), which needs no password from the client at all. The
-   *  ad-hoc probe() (needs a real password) only applies to a brand-new, not-yet-saved connection, which
-   *  never reaches this method — see _populateFromNode's only caller, editing an existing node.*/
+   *  SECRET_FIELD_KEYS), so dest_password is always empty here. Using selectedExistingId()/
+   *  resolvedDestinationId() instead reads the schema server-side via the destination's real, already-
+   *  provisioned secret reference (DestinationSchemaController's GetSchema), which needs no password from
+   *  the client at all. The ad-hoc probe() (needs a real password) only applies to a brand-new, not-yet-
+   *  saved connection, which never has either id set. */
   private _refreshSqlTablesFromLiveSchema(): void {
     // MySQL/PostgreSQL are SQL-family too (see isSql()) — DestinationSchemaController.GetSchema already
     // supports all three (SqlDestinationSchemaService.IsSupported), so this used to silently skip the
@@ -4245,7 +4294,15 @@ export class DestinationWizardComponent implements OnInit {
     // stale table/column list the last saved mapping summary happened to restore.
     if (!this.isSql()) return;
 
-    const destinationId = this.resolvedDestinationId();
+    // selectedExistingId() (set by selectExisting() — picking an already-saved connection from the "Existing
+    // connection" dropdown) and resolvedDestinationId() (set by _populateFromNode()/provisionDestinationConnection()
+    // — editing a saved node, or one just created this session) are two independent records of the same fact;
+    // see the same selectedExistingId() ?? resolvedDestinationId() fallback already used at save/mapping-summary
+    // time elsewhere in this file. Checking resolvedDestinationId() alone here left selectExisting() with no way
+    // to load the picked connection's real tables at all — it never sets resolvedDestinationId() — so the
+    // Mapping screen fell back entirely to the ad-hoc probe() below, which always fails for a reused connection
+    // (its password is never returned by the API), leaving the existing-table list empty.
+    const destinationId = this.selectedExistingId() ?? this.resolvedDestinationId();
     const applyTables = (tables: DestinationTable[]) => {
       this.sqlTables.set(
         tables.map((t) => ({
@@ -4255,13 +4312,17 @@ export class DestinationWizardComponent implements OnInit {
         })),
       );
       this.probeState.set('ok');
+      this.schemaLoadState.set('loaded');
     };
 
     if (destinationId) {
+      this.schemaLoadState.set('loading');
       this.schemaSvc.getSchema(destinationId).subscribe({
         next: (res) => applyTables(res.tables),
         error: () => {
-          /* keep the mapping-summary-restored list; don't block editing on a failed reload */
+          // Keep the mapping-summary-restored list; don't block editing on a failed reload. The state flip
+          // is what stops that partial (or empty) list from passing itself off as the whole database.
+          this.schemaLoadState.set('failed');
         },
       });
       return;
@@ -4273,18 +4334,37 @@ export class DestinationWizardComponent implements OnInit {
     // and skipping just leaves the mapping-summary-restored (partial) table list in place, same fallback as
     // every other failure path here.
     const form = this.activeForm();
-    if (!isSqlFamilyForm(form)) return;
+    if (!isSqlFamilyForm(form)) {
+      this.schemaLoadState.set('unavailable');
+      return;
+    }
     const request = form.getProbeRequest();
-    if (!request.server || !request.database || !request.password) return;
+    if (!request.server || !request.database || !request.password) {
+      // The common case for a reopened node: no destinationId was ever persisted onto it AND dest_password
+      // was stripped before persisting (workflow-graph-mapper.service.ts's SECRET_FIELD_KEYS), so neither
+      // path can run. This used to return in silence — no request, no error, no tables — which the canvas
+      // then rendered as an empty database.
+      this.schemaLoadState.set('unavailable');
+      return;
+    }
 
+    this.schemaLoadState.set('loading');
     this.schemaSvc.probe(request).subscribe({
       next: (res) => {
         if (res.connected) applyTables(res.tables);
+        else this.schemaLoadState.set('failed');
       },
       error: () => {
-        /* keep the mapping-summary-restored list; don't block editing on a failed reconnect */
+        // Keep the mapping-summary-restored list; don't block editing on a failed reconnect.
+        this.schemaLoadState.set('failed');
       },
     });
+  }
+
+  /** Re-attempts the live schema read behind the mapping canvas's "Retry" — the same call ngOnInit makes,
+   *  so a transient failure no longer needs a full close/reopen of the wizard to clear. */
+  retrySchemaLoad(): void {
+    this._refreshSqlTablesFromLiveSchema();
   }
 
   // FHIR is hand-rolled, not registry-routed (see isFhir()'s doc comment), so it needs its own getFullConfig()/

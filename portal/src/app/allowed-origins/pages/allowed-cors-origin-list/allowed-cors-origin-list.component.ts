@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatTableModule } from '@angular/material/table';
@@ -37,6 +37,18 @@ export class AllowedCorsOriginListComponent implements OnInit {
   readonly loading = signal(true);
   readonly origins  = signal<AllowedCorsOrigin[]>([]);
 
+  /** Free-text filter on the Label column. Applied client-side: unlike the other listings this one has no
+   *  paged/filtered endpoint to defer to — the API returns the whole list because the CORS policy provider
+   *  needs every row anyway, and an allowed-origins list is inherently short. */
+  readonly labelFilter = signal('');
+
+  readonly filteredOrigins = computed(() => {
+    const term = this.labelFilter().trim().toLowerCase();
+    if (!term) return this.origins();
+    // A row with no label can never match a non-empty term — '—' is only how the table renders "unset".
+    return this.origins().filter(o => (o.label ?? '').toLowerCase().includes(term));
+  });
+
   readonly displayedCols = ['actions', 'originUrl', 'label', 'createdOnUtc', 'createdBy'];
 
   ngOnInit(): void {
@@ -55,6 +67,14 @@ export class AllowedCorsOriginListComponent implements OnInit {
         this.toast.error('Failed to load allowed origins.');
       },
     });
+  }
+
+  onLabelFilterChange(val: string): void {
+    this.labelFilter.set(val);
+  }
+
+  reset(): void {
+    this.labelFilter.set('');
   }
 
   openAdd(): void {

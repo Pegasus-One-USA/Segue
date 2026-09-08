@@ -18,9 +18,21 @@ public interface ITransformationRuleService
         Guid? resourcePipelineRouteId,
         string? sourceSystem = null,
         string? sourceField = null,
+        /// <summary>Null keeps the historical listing — PostMapping plus PreMapping de-identification rows —
+        /// and excludes only FhirResource rules, which are authored against a FHIR path rather than a
+        /// destination column and belong to V2's Transformation node. Pass it explicitly to list those.</summary>
+        TransformExecutionPhase? executionPhase = null,
         CancellationToken cancellationToken = default);
 
     Task<TransformationRuleDto> SaveRuleAsync(SaveTransformationRuleRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Binds rules authored before their workflow existed to that workflow, once it has been saved.
+    /// A builder session with no workflow id yet stores its rules at Workflow scope with a null route, which is
+    /// inert; this is what makes them live. Returns how many were attached.</summary>
+    Task<int> AttachPendingRulesToWorkflowAsync(
+        Guid workflowId,
+        IReadOnlyCollection<DestinationType> destinationTypes,
+        CancellationToken cancellationToken = default);
 
     Task DeleteRuleAsync(Guid ruleId, CancellationToken cancellationToken = default);
 
@@ -31,6 +43,9 @@ public interface ITransformationRuleService
     /// real, editable <see cref="TransformationRuleDto"/> (id, full config) rather than just a value trace.
     /// Lets the wizard's Rules dialog show/clone what's really running for a field with no Field-level rule of
     /// its own, instead of starting an override from blank schema defaults.</summary>
+    /// <param name="workflowScopedOnly">See <see cref="IEffectiveRuleResolver.ResolveAsync"/>'s own parameter —
+    /// true resolves at <see cref="TransformScope.Workflow"/> scope only, for a caller whose rules are authored
+    /// per pipeline and must not inherit another workflow's.</param>
     Task<List<TransformationRuleDto>> GetEffectiveRulesAsync(
         DestinationType destinationType,
         string resourceType,
@@ -38,7 +53,8 @@ public interface ITransformationRuleService
         Guid? resourcePipelineRouteId,
         string? sourceSystem,
         string? sourceField,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool workflowScopedOnly = false);
 
     /// <summary>The config schema for every node type — what keys it reads, what control to render, and its
     /// default — so the UI never has to hand-maintain a duplicate copy of this metadata.</summary>

@@ -1,0 +1,1064 @@
+/* ── Dialog shell ──────────────────────────────────────────────────────────── */
+/* Fills the whole content area (see app-modal-overlay's backdrop, absolutely positioned against
+   .shell-content in app-shell.component.scss) — not the whole viewport, so the sidebar/topbar/footer
+   stay visible outside it, but it does cover the canvas underneath while a node is being added or
+   configured. --maximized is unchanged: it's still the escape hatch to a true full-viewport
+   position: fixed view, covering the chrome too, exactly as it behaved before this panel existed. */
+.nld {
+  position: absolute;
+  inset: 0;
+  background: var(--color-surface);
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  &--maximized {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+}
+
+/* ── Confirm before discarding an in-progress destination config ─────────────── */
+// No border-radius here — matches .nld's own radius (always 0 now: edge-to-edge whether docked as
+// a drawer or maximized, since only the drawer's left edge is ever visible as a "corner").
+.nld-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  animation: fade-in var(--transition-base, 0.12s) ease;
+}
+
+.nld-confirm-dialog {
+  width: 380px;
+  background: var(--color-surface);
+  border-radius: var(--radius-modal, 14px);
+  box-shadow: var(--shadow-xl);
+  padding: 28px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.nld-confirm-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--color-warning);
+}
+
+.nld-confirm-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.nld-confirm-body {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.nld-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* ── Backdrop override (soft white blur) ────────────────────────────────────── */
+/* Applied to the CDK overlay backdrop via ::ng-deep or global styles.
+   The component emits this class via the dialog config panelClass.          */
+:host-context(.cdk-overlay-backdrop) {
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(2px);
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+.nld-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--color-border, var(--color-border));
+  flex-shrink: 0;
+  background: var(--color-surface);
+}
+
+.nld-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nld-brand-hex {
+  font-size: 28px;
+  color: var(--color-primary, var(--color-primary));
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.nld-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--color-ink, var(--color-ink));
+  margin: 0;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.nld-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* ── Mapping-canvas toolbar, relocated here from the canvas's own header row (see
+   field-mapping-canvas.component.html) so that row's height goes back to the canvas viewport, and shown
+   in the detail panel (see node-library-dialog.component.html) since the dialog has no header of its own
+   and the sidebar is hidden entirely while a group's mapping canvas is open. ── */
+.nld-mapping-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4, 8px);
+  padding: var(--space-4, 8px) 24px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-side);
+  flex-shrink: 0;
+}
+
+.nld-mapping-toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4, 8px);
+}
+
+.nld-mapping-badge {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill, 999px);
+  padding: 4px 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &--dest {
+    font-family: inherit;
+    font-weight: 700;
+    color: var(--color-primary-dark);
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary-mid);
+  }
+}
+
+.nld-mapping-tool-btn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base, 8px);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+
+  &:hover { background: var(--color-primary-soft); border-color: var(--color-primary-mid); color: var(--color-primary-dark); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+/* Global search sitting between the toolbar's two action groups (space-between fills this middle slot
+   naturally) — filters both the payload tree and every destination table's columns at once by name,
+   path, or real data type. Ordinary surface input, unlike the "glass on dark header" treatment each
+   card's own small search box uses (see field-mapping-source-tree.component.scss) — this toolbar's
+   background is light (--color-side), not a card's dark head. */
+.nld-mapping-toolbar-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 240px;
+  max-width: 420px;
+  min-width: 160px;
+}
+
+.nld-mapping-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 var(--space-8, 12px);
+  border-radius: var(--radius-pill, 999px);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 13px;
+  font-family: inherit;
+
+  &::placeholder { color: var(--color-muted); }
+  &::-webkit-search-cancel-button { display: none; }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-primary-mid);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+}
+
+.nld-mapping-search-clear {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm, 6px);
+
+  &:hover { color: var(--color-ink-2); background: var(--color-side); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+.nld-maximize {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  color: var(--color-muted-2, var(--color-muted-2));
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-sm, 6px);
+  flex-shrink: 0;
+
+  &:hover { background: var(--color-side, var(--color-side)); color: var(--color-ink-2, var(--color-ink-2)); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+.nld-maximize-ico {
+  width: 16px;
+  height: 16px;
+}
+
+.nld-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: var(--color-muted-2, var(--color-muted-2));
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm, 6px);
+  line-height: 1;
+  flex-shrink: 0;
+
+  &:hover { background: var(--color-side, var(--color-side)); color: var(--color-ink-2, var(--color-ink-2)); }
+}
+
+// Absolutely positioned over .nld (which is already position: relative) rather than living in a
+// full-width row — see the template's own comment for which states show this vs. rely on their own
+// topbar's controls instead.
+.nld-floating-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Body layout ───────────────────────────────────────────────────────────── */
+.nld-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LEFT: Node Library sidebar
+   ═══════════════════════════════════════════════════════════════════════════ */
+.nld-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border, var(--color-border));
+  display: flex;
+  flex-direction: column;
+  background: var(--color-side, var(--color-side));
+  overflow: hidden;
+}
+
+/* Search */
+.nld-search-wrap {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-border, var(--color-border));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.nld-search-icon {
+  color: var(--color-muted-2, var(--color-muted-2));
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.nld-search {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: var(--color-ink, var(--color-ink));
+  background: transparent;
+
+  &::placeholder { color: var(--color-muted-2, var(--color-muted-2)); }
+  &::-webkit-search-cancel-button { display: none; }
+}
+
+.nld-search-clear {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: var(--color-muted-2, var(--color-muted-2));
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm, 6px);
+
+  &:hover { color: var(--color-ink-2, var(--color-ink-2)); background: var(--color-bg, var(--color-bg)); }
+}
+
+/* Categories scroll area */
+.nld-cats {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0 8px;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: var(--color-border, var(--color-border)); border-radius: 4px; }
+}
+
+/* Category section header (e.g. "Source", "Destination") */
+.nld-cat-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted, #6B7280);
+
+  &:first-child { padding-top: 6px; }
+}
+
+.nld-cat-icon { font-size: 12px; line-height: 1; }
+
+/* Item list */
+.nld-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 14px;
+  background: var(--color-surface);
+  border: none;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, border-color 0.1s;
+
+  &:hover:not(:disabled) { background: var(--color-primary-soft, var(--color-primary-soft)); }
+
+  &.is-selected {
+    background: var(--color-primary-soft, var(--color-primary-soft));
+    border-left-color: var(--color-primary, var(--color-primary));
+  }
+
+  &.status-caveat { opacity: 0.85; }
+
+  &.status-disabled,
+  &:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+}
+
+.nld-item-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm, 6px);
+  display: grid;
+  place-items: center;
+  color: var(--color-on-primary);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+  flex-shrink: 0;
+}
+
+.nld-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.nld-item-name {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink, var(--color-ink));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nld-item-meta {
+  display: block;
+  font-size: 10.5px;
+  color: var(--color-muted-2, var(--color-muted-2));
+  line-height: 1.3;
+}
+
+.nld-item-indicator {
+  font-size: 11px;
+  flex-shrink: 0;
+
+  &.caveat { color: var(--color-warning, var(--color-warning)); }
+}
+
+.nld-merge-tag {
+  font-size: 12px;
+  color: var(--color-success, var(--color-success));
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* No results */
+.nld-no-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+
+  .nld-no-results-icon { font-size: 24px; color: var(--color-muted-2, var(--color-muted-2)); }
+
+  p { font-size: 13px; color: var(--color-muted, var(--color-muted)); margin: 0; }
+
+  button {
+    font-size: 12px;
+    color: var(--color-primary, var(--color-primary));
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RIGHT: Detail panel
+   ═══════════════════════════════════════════════════════════════════════════ */
+.nld-detail {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+.nld-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 40px 60px;
+  text-align: center;
+  gap: 16px;
+}
+
+.nld-empty-graphic {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  display: grid;
+  place-items: center;
+}
+
+.nld-empty-hex {
+  font-size: 80px;
+  color: var(--color-border, var(--color-border));
+  line-height: 1;
+}
+
+.nld-empty-plus {
+  position: absolute;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--color-primary, var(--color-primary));
+  line-height: 1;
+}
+
+.nld-empty-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-ink, var(--color-ink));
+  margin: 0;
+}
+
+.nld-empty-sub {
+  font-size: 13.5px;
+  color: var(--color-muted, var(--color-muted));
+  max-width: 380px;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.nld-empty-context {
+  margin-top: 8px;
+  border: 1px solid var(--color-border, var(--color-border));
+  border-radius: var(--radius-card, 12px);
+  overflow: hidden;
+  width: 100%;
+  max-width: 380px;
+}
+
+.nld-ctx-row {
+  display: flex;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--color-side, var(--color-side));
+
+  &:last-child { border-bottom: none; }
+}
+
+.nld-ctx-key {
+  min-width: 100px;
+  color: var(--color-muted, var(--color-muted));
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.nld-ctx-val {
+  color: var(--color-ink, var(--color-ink));
+  font-weight: 500;
+}
+
+/* ── Config panel ─────────────────────────────────────────────────────────── */
+.nld-config {
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  flex: 1;
+}
+
+/* Node identity */
+.nld-config-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.nld-config-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--color-on-primary);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-md, 0 8px 32px rgba(0, 0, 0, 0.10));
+}
+
+.nld-config-name {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-ink, var(--color-ink));
+  margin: 0 0 10px;
+  letter-spacing: -0.4px;
+}
+
+.nld-config-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.nld-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill, 999px);
+
+  &.source    { background: var(--color-primary-soft, var(--color-primary-soft)); color: var(--color-primary-dark, var(--color-primary-dark)); }
+  &.transform { color: var(--color-on-primary); }
+  &.merge     { background: var(--color-success-soft, var(--color-success-soft)); color: var(--color-success-strong); }
+  &.group     { background: color-mix(in srgb, var(--color-info) 15%, white); color: var(--color-info-strong); }
+}
+
+/* Description */
+.nld-config-desc {
+  font-size: 14px;
+  color: var(--color-ink-2, var(--color-ink-2));
+  line-height: 1.65;
+  padding: 16px 18px;
+  background: var(--color-side, var(--color-side));
+  border-radius: var(--radius-card, 12px);
+  border: 1px solid var(--color-border, var(--color-border));
+}
+
+/* Applicability */
+.nld-applicability {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nld-app-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--color-muted-2, var(--color-muted-2));
+}
+
+.nld-app-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: var(--radius-base, 8px);
+  align-self: flex-start;
+
+  &.applicable { background: var(--color-success-soft, var(--color-success-soft)); color: var(--color-success-strong); }
+  &.caveat     { background: var(--color-warning-soft, var(--color-warning-soft)); color: var(--color-warning-strong); }
+  &.disabled   { background: var(--color-bg, var(--color-bg)); color: var(--color-muted-2, var(--color-muted-2)); }
+}
+
+.nld-app-reason {
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  border-radius: var(--radius-base, 8px);
+  background: var(--color-side, var(--color-side));
+  border: 1px solid var(--color-border, var(--color-border));
+  color: var(--color-muted, var(--color-muted));
+
+  &.caveat { background: var(--color-warning-soft, var(--color-warning-soft)); border-color: color-mix(in srgb, var(--color-warning) 45%, white); color: var(--color-warning-strong); }
+}
+
+/* Fields card */
+.nld-fields-card {
+  border: 1px solid var(--color-border, var(--color-border));
+  border-radius: var(--radius-card, 12px);
+  overflow: hidden;
+}
+
+.nld-fields-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--color-muted-2, var(--color-muted-2));
+  padding: 9px 16px;
+  background: var(--color-side, var(--color-side));
+  border-bottom: 1px solid var(--color-border, var(--color-border));
+}
+
+.nld-field-row {
+  display: flex;
+  align-items: baseline;
+  padding: 9px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--color-side, var(--color-side));
+
+  &:last-child { border-bottom: none; }
+}
+
+.nld-fk {
+  min-width: 130px;
+  flex-shrink: 0;
+  color: var(--color-muted, var(--color-muted));
+  font-weight: 600;
+}
+
+.nld-fv {
+  color: var(--color-ink, var(--color-ink));
+  font-weight: 500;
+
+  &.mono {
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--color-ink-2, var(--color-ink-2));
+  }
+}
+
+/* CTA area */
+.nld-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.nld-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 26px;
+  background: var(--color-primary, var(--color-primary));
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: var(--radius-card, 12px);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+
+  &:hover:not(:disabled) { background: var(--color-primary-dark, var(--color-primary-dark)); transform: translateY(-1px); }
+  &:active:not(:disabled) { transform: translateY(0); }
+
+  &:disabled {
+    background: var(--color-border, var(--color-border));
+    color: var(--color-muted-2, var(--color-muted-2));
+    cursor: not-allowed;
+  }
+
+  &.wizard {
+    background: linear-gradient(135deg, var(--color-primary, var(--color-primary)), var(--color-primary-dark, var(--color-primary-dark)));
+    &:hover:not(:disabled) { background: linear-gradient(135deg, var(--color-primary-dark, var(--color-primary-dark)), var(--color-primary-dark)); }
+  }
+}
+
+.nld-back {
+  padding: 11px 18px;
+  background: var(--color-side, var(--color-side));
+  color: var(--color-muted, var(--color-muted));
+  border: 1px solid var(--color-border, var(--color-border));
+  border-radius: var(--radius-card, 12px);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: var(--color-bg, var(--color-bg)); color: var(--color-ink-2, var(--color-ink-2)); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Inline Generic FHIR Source Form
+   ═══════════════════════════════════════════════════════════════════════════ */
+.nld-generic-fhir {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px 4px;
+}
+
+.nld-generic-fhir-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink, var(--color-ink));
+  margin: 0 0 16px;
+}
+
+.nld-generic-fhir-error {
+  font-size: 13px;
+  color: var(--color-error, var(--color-error));
+  margin: 0 0 12px;
+}
+
+.nld-generic-fhir-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.nld-generic-fhir-cancel {
+  padding: 11px 18px;
+  background: var(--color-side, var(--color-side));
+  color: var(--color-muted, var(--color-muted));
+  border: 1px solid var(--color-border, var(--color-border));
+  border-radius: var(--radius-card, 12px);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover { background: var(--color-bg, var(--color-bg)); color: var(--color-ink-2, var(--color-ink-2)); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Inline Epic Form (inside nld-detail)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.nld-detail--form {
+  overflow-y: auto;
+  padding: 0;
+
+  &::-webkit-scrollbar { width: 5px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+}
+
+// While the mapping canvas is open, this pane must never scroll itself — the canvas needs a fixed,
+// bounded viewport (pan/zoom, no native scroll) and the mapping list below it already scrolls
+// internally (.fm-list-body's own max-height). Scrolling here too would let the canvas drift out of
+// view instead of just shrinking to fit, which is what produced the stray edge-of-dialog scrollbar.
+.nld-detail--canvas {
+  overflow-y: hidden;
+}
+
+.nld-wiz {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Wizard header */
+.nld-wiz-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--color-border, var(--color-border));
+  background: var(--color-side, var(--color-side));
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.nld-wiz-head-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nld-wiz-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--color-primary-soft, var(--color-primary-soft));
+  border-radius: var(--radius-base, 8px);
+  flex-shrink: 0;
+}
+
+.nld-wiz-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-ink, var(--color-ink));
+}
+
+.nld-wiz-verified {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--color-success);
+  background: var(--color-success-soft, var(--color-success-soft));
+  padding: 2px 8px;
+  border-radius: var(--radius-pill, 999px);
+}
+
+.nld-wiz-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.nld-wiz-adv {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--color-muted, var(--color-muted));
+  cursor: pointer;
+
+  input { cursor: pointer; }
+}
+
+.nld-wiz-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: var(--color-muted-2, var(--color-muted-2));
+  cursor: pointer;
+  padding: 4px 7px;
+  border-radius: var(--radius-sm, 6px);
+  line-height: 1;
+
+  &:hover { background: var(--color-bg, var(--color-bg)); color: var(--color-ink-2, var(--color-ink-2)); }
+}
+
+/* Stepper */
+.nld-wiz-stepper {
+  display: flex;
+  gap: 2px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--color-border, var(--color-border));
+  background: var(--color-side, var(--color-side));
+  flex-shrink: 0;
+  overflow-x: auto;
+
+  &::-webkit-scrollbar { height: 3px; }
+  &::-webkit-scrollbar-thumb { background: var(--color-border, var(--color-border)); border-radius: 2px; }
+}
+
+.nld-wiz-step {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-pill, 999px);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-muted-2, var(--color-muted-2));
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--color-bg, var(--color-bg)); color: var(--color-ink-2, var(--color-ink-2)); }
+
+  &.active {
+    background: var(--color-primary-soft, var(--color-primary-soft));
+    color: var(--color-primary-dark, var(--color-primary-dark));
+  }
+
+  &.done {
+    color: var(--color-success);
+    .nld-wiz-step-num { background: var(--color-success, var(--color-success)); color: var(--color-on-primary); }
+  }
+}
+
+.nld-wiz-step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-border, var(--color-border));
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--color-muted, var(--color-muted));
+  flex-shrink: 0;
+  transition: background 0.12s;
+
+  .active & { background: var(--color-primary, var(--color-primary)); color: var(--color-on-primary); }
+}
+
+.nld-wiz-step-lbl {
+  font-size: 11.5px;
+}
+
+/* Body */
+.nld-wiz-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+
+  &::-webkit-scrollbar { width: 5px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: var(--color-border, var(--color-border)); border-radius: 3px; }
+}
+
+/* Placeholder steps */
+.nld-wiz-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 32px;
+  text-align: center;
+
+  h3 { font-size: 17px; font-weight: 700; color: var(--color-ink, var(--color-ink)); margin: 0; }
+  p  { font-size: 13.5px; color: var(--color-muted, var(--color-muted)); margin: 0; max-width: 320px; line-height: 1.6; }
+}
+
+.nld-wiz-ph-icon {
+  font-size: 36px;
+  color: var(--color-muted-2, var(--color-muted-2));
+  line-height: 1;
+}
+
+/* Footer */
+.nld-wiz-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--color-border, var(--color-border));
+  background: var(--color-side, var(--color-side));
+  flex-shrink: 0;
+}
+
+.nld-wiz-step-info {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-muted-2, var(--color-muted-2));
+  font-weight: 500;
+}
+
+.nld-wiz-btn {
+  padding: 9px 20px;
+  border-radius: var(--radius-base, 8px);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--color-border, var(--color-border));
+  background: var(--color-side, var(--color-side));
+  color: var(--color-ink-2, var(--color-ink-2));
+  transition: background 0.12s;
+
+  &:hover:not(:disabled) { background: var(--color-bg, var(--color-bg)); }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  &--primary {
+    background: linear-gradient(135deg, var(--color-primary, var(--color-primary)), var(--color-primary-dark, var(--color-primary-dark)));
+    color: var(--color-on-primary);
+    border-color: transparent;
+
+    &:hover:not(:disabled) { background: linear-gradient(135deg, var(--color-primary-dark, var(--color-primary-dark)), var(--color-primary-dark)); }
+  }
+}

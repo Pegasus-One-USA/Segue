@@ -1,0 +1,9 @@
+<svg class="connector-svg" xmlns="http://www.w3.org/2000/svg">
+  @for (p of paths(); track p.id) {
+    <path [attr.d]="p.d" class="connector" />
+    <path [attr.d]="p.d" class="connector-flow" />
+  }
+  @if (tempPath()) {
+    <path [attr.d]="tempPath()!" class="connector-temp" />
+  }
+</svg>

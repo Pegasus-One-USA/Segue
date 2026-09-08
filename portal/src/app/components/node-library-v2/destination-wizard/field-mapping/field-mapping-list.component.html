@@ -1,0 +1,441 @@
+@if (!collapsed()) {
+  <div
+    class="fm-list-resize-handle"
+    (pointerdown)="onResizeHandlePointerDown($event)"
+    (pointermove)="onResizeHandlePointerMove($event)"
+    (pointerup)="onResizeHandlePointerUp($event)"
+    (pointercancel)="onResizeHandlePointerUp($event)"
+  ></div>
+}
+
+<div
+  class="fm-list-head"
+  role="button"
+  tabindex="0"
+  [attr.aria-expanded]="!collapsed()"
+  (click)="toggleCollapsed()"
+  (keydown.enter)="toggleCollapsed()"
+  (keydown.space)="$event.preventDefault(); toggleCollapsed()"
+>
+  <span class="fm-list-toggle">
+    <svg class="fm-list-caret" [class.fm-list-caret--collapsed]="collapsed()" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Mapping list
+  </span>
+  @if (!collapsed() && rulesDestinationType()) {
+    <span class="fm-list-divider" aria-hidden="true"></span>
+    <span class="fm-list-tabs">
+      <button type="button" class="fm-list-tab" [class.fm-list-tab--active]="activeTab() === 'mappings'" (click)="$event.stopPropagation(); switchTab('mappings')">
+        Mappings <span class="fm-list-count">{{ visibleRows().length }}</span>
+      </button>
+      <button type="button" class="fm-list-tab" [class.fm-list-tab--active]="activeTab() === 'transformations'" (click)="$event.stopPropagation(); switchTab('transformations')">
+        Transformations <span class="fm-list-count">{{ appliedRuleCount() }}</span>
+      </button>
+      <button type="button" class="fm-list-tab" [class.fm-list-tab--active]="activeTab() === 'deidentification'" (click)="$event.stopPropagation(); switchTab('deidentification')">
+        De-identification
+        @if (deIdRules(); as rules) {
+          <span class="fm-list-count">{{ rules.length }}</span>
+        }
+      </button>
+    </span>
+  } @else {
+    <span class="fm-list-count">{{ visibleRows().length }}</span>
+  }
+  <span class="fm-list-spacer"></span>
+  @if (!collapsed()) {
+    <!-- Filters by source field(s) or destination — same list/template for both CSV and SQL destinations.
+         The input/clear button stop propagation themselves (not this wrapper — an inert div with its own
+         click/keydown handlers isn't focusable, which eslint flags) since the whole row now toggles the
+         accordion on click/Enter/Space, which would otherwise fire while typing a space into the field. -->
+    <div class="fm-list-search-wrap">
+      <input
+        type="search"
+        class="fm-list-search"
+        [class.fm-list-search--clearable]="searchQuery()"
+        placeholder="Search mappings…"
+        aria-label="Search the mapping list"
+        [value]="searchQuery()"
+        (input)="onSearchInput($any($event.target).value)"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+      />
+      @if (searchQuery()) {
+        <button type="button" class="fm-list-search-clear" aria-label="Clear search" (click)="$event.stopPropagation(); clearSearch()">✕</button>
+      }
+    </div>
+  } @else {
+    <span class="fm-list-hint">Edit joins, delimiters, or instance selection here — no dragging required</span>
+  }
+</div>
+
+@if (!collapsed() && activeTab() === 'transformations' && rulesDestinationType()) {
+  <div class="fm-list-body">
+    <table class="data-table">
+      <thead class="data-table__header">
+        <tr>
+          <th>Source field(s)</th>
+          <th>Destination</th>
+          <th>Node type</th>
+          <th>Config</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of transformableRows(); track rowKey(row)) {
+          <tr class="data-table__row">
+            <td class="fm-mono">{{ sourceSummary(row) }}</td>
+            <td class="fm-mono">{{ row.tableName || row.resource }}.{{ row.targetName }}</td>
+            @if (ruleFor(row); as rule) {
+              <td>{{ rule.nodeType }}</td>
+              <td class="fm-mono">{{ ruleConfigSummary(rule) }}</td>
+              <td>
+                <button type="button" class="fm-list-link" (click)="onConfigureRule(row, $event)">Edit…</button>
+                <button type="button" class="fm-list-link fm-list-link--danger" (click)="removeRuleQuick(row)">Remove</button>
+              </td>
+            } @else if (ruleFor(row) === undefined) {
+              <td colspan="2" class="fm-list-dash">checking…</td>
+              <td></td>
+            } @else {
+              <td colspan="2" class="fm-list-dash">No rule</td>
+              <td>
+                <button type="button" class="fm-list-link" (click)="onConfigureRule(row, $event)">Add rule…</button>
+              </td>
+            }
+          </tr>
+        }
+        @if (!transformableRows().length) {
+          <tr><td colspan="5" class="fm-list-empty">No mapped fields yet — add a mapping first, then attach a transformation to it here.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (!collapsed() && activeTab() === 'deidentification' && rulesDestinationType()) {
+  <div class="fm-list-body">
+    <div class="fm-deid-card">
+      <div class="fm-deid-card__header">
+        <span class="fm-deid-card__title">De-identification Policy</span>
+      </div>
+
+      <div class="fm-deid-card__row">
+        <label class="fm-deid-policy-field">
+          <span>Policy</span>
+          <select
+            class="fm-deid-select"
+            [value]="selectedDeIdentificationProfileId() ?? ''"
+            (change)="onProfileSelectChange($any($event.target).value)"
+          >
+            <option value="">None</option>
+            @for (p of deIdentificationProfiles(); track p.id) {
+              <option [value]="p.id">{{ p.name }}</option>
+            }
+          </select>
+        </label>
+
+        @if (selectedDeIdentificationProfileId()) {
+          <span class="fm-deid-status">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" aria-hidden="true">
+              <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            {{ selectedProfileName() }} is active for this mapping
+          </span>
+        }
+
+        <input
+          type="text" class="fm-deid-name-input" placeholder="New policy name…"
+          [value]="newProfileName()"
+          (input)="onNewProfileNameInput($any($event.target).value)"
+        />
+        <button type="button" class="fm-list-add fm-deid-create-btn" [disabled]="!newProfileName().trim() || creatingProfile()" (click)="requestCreateProfile()">
+          {{ creatingProfile() ? 'Creating…' : '+ New Policy' }}
+        </button>
+      </div>
+
+      @if (!selectedDeIdentificationProfileId()) {
+        <div class="fm-deid-empty">
+          <strong>No de-identification policy selected</strong>
+          <span>Select an existing policy above, or name and create a new one, to configure de-identification for this mapping.</span>
+        </div>
+      }
+    </div>
+
+    @if (selectedDeIdentificationProfileId()) {
+      <table class="data-table">
+        <thead class="data-table__header">
+          <tr>
+            <th>Scope</th>
+            <th>Source field</th>
+            <th>Config</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (rule of deIdRules(); track rule.id) {
+            <tr class="data-table__row">
+              <td>{{ rule.scope === 'Global' ? 'Global' : rule.resourceType }}</td>
+              <td class="fm-mono">{{ rule.sourceField }}</td>
+              <td class="fm-mono">{{ ruleConfigSummary(rule) }}</td>
+              <td>
+                <button type="button" class="fm-list-link" (click)="editDeIdRule(rule)">Edit…</button>
+                <button type="button" class="fm-list-link fm-list-link--danger" (click)="removeDeIdRule(rule)">Remove</button>
+              </td>
+            </tr>
+          }
+          @if (deIdRules() === undefined) {
+            <tr><td colspan="4" class="fm-list-empty">Loading…</td></tr>
+          } @else if (!deIdRules()!.length && !deIdDraft()) {
+            <tr><td colspan="4" class="fm-list-empty">No rules on this policy yet.</td></tr>
+          }
+        </tbody>
+      </table>
+
+      @if (deIdDraft(); as d) {
+        <div class="fm-draft-form">
+          <div class="fm-draft-row">
+            <label class="fm-draft-field">
+              <span>Resource</span>
+              <select [value]="d.resource" (change)="updateDeIdDraftResource($any($event.target).value)">
+                @for (r of resources(); track r) { <option [value]="r">{{ r }}</option> }
+              </select>
+            </label>
+            <label class="fm-draft-field">
+              <span>Source field</span>
+              <select [value]="d.sourceField" (change)="updateDeIdDraftSourceField($any($event.target).value)">
+                <option value="" disabled [selected]="!d.sourceField">Select a field…</option>
+                @for (leaf of leavesFor(d.resource); track leaf.id) {
+                  <option [value]="leaf.field?.jsonPath ?? leaf.id">{{ leaf.label }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          <app-rule-config-form [schema]="deIdSchema()" [config]="d.config" />
+          <div class="fm-draft-actions">
+            <button type="button" class="fm-list-link" (click)="cancelDeIdDraft()">Cancel</button>
+            <button type="button" class="fm-draft-submit" [disabled]="!canSubmitDeIdDraft() || deIdSaving()" (click)="submitDeIdDraft()">
+              {{ deIdSaving() ? 'Saving…' : (deIdEditingId() ? 'Update rule' : 'Add rule') }}
+            </button>
+          </div>
+        </div>
+      } @else {
+        <button type="button" class="fm-list-add" (click)="startDeIdDraft()">+ Add rule</button>
+      }
+    }
+  </div>
+}
+
+@if (!collapsed() && activeTab() === 'mappings') {
+  <div class="fm-list-body">
+      <table class="data-table">
+        <thead class="data-table__header">
+          <tr>
+            <th>Source field(s)</th>
+            <th>Mode</th>
+            <th>Destination</th>
+            <th>Resolves to</th>
+            <th>Join delimiter</th>
+            <th>Instance selection</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of displayedRows(); track rowKey(row)) {
+            <tr class="data-table__row">
+              <td class="fm-mono">{{ sourceSummary(row) }}</td>
+              <td>
+                {{ modeLabel(row) }}
+                @if (isApproximated()(row)) {
+                  <span class="fm-list-caveat" title="Preview only — not yet enforced by the pipeline engine">⚠</span>
+                }
+              </td>
+              <td class="fm-mono">{{ row.tableName || row.resource }}.{{ row.targetName }}</td>
+              <td>
+                @if (isReferenceCandidate(row)) {
+                  <select
+                    class="fm-inline-select"
+                    [value]="row.referencesResource ?? ''"
+                    (change)="onReferenceResourceChange(row, $any($event.target).value)"
+                  >
+                    <option value="" [selected]="!row.referencesResource">(write verbatim)</option>
+                    @for (r of otherResources(row); track r) {
+                      <option [value]="r" [selected]="r === row.referencesResource">{{ r }}</option>
+                    }
+                  </select>
+                } @else {
+                  <span class="fm-list-dash">—</span>
+                }
+              </td>
+              <td>
+                @if (showsDelimiter(row)) {
+                  <select
+                    class="fm-inline-select"
+                    [value]="isCustomDelimiter(row) ? '__custom' : (row.delimiter ?? ',')"
+                    (change)="onDelimiterSelectChange(row, $any($event.target).value)"
+                  >
+                    @for (d of stdDelimiters; track d) { <option [value]="d">{{ d }}</option> }
+                    <option value="__custom">custom…</option>
+                  </select>
+                  @if (isCustomDelimiter(row)) {
+                    <input
+                      type="text" class="fm-inline-input" placeholder="delim"
+                      [value]="row.delimiter ?? ''"
+                      (input)="onDelimiterCustomInput(row, $any($event.target).value)"
+                    />
+                  }
+                } @else {
+                  <span class="fm-list-dash">—</span>
+                }
+              </td>
+              <td>
+                @if (hasArrayAncestor(row)) {
+                  <select
+                    class="fm-inline-select"
+                    [value]="row.instance?.type ?? 'first'"
+                    (change)="onInstanceTypeChange(row, $any($event.target).value)"
+                  >
+                    <option value="all">All records</option>
+                    <option value="first">First</option>
+                    <option value="nth">Nth</option>
+                    <option value="criteria">Criteria</option>
+                  </select>
+                  @switch (row.instance?.type) {
+                    @case ('nth') {
+                      <input
+                        type="number" min="1" class="fm-inline-input fm-inline-input--narrow"
+                        [value]="row.instance?.n ?? 1"
+                        (change)="onInstanceNChange(row, +$any($event.target).value)"
+                      />
+                    }
+                    @case ('criteria') {
+                      <input
+                        type="text" class="fm-inline-input" placeholder="field"
+                        [value]="row.instance?.field ?? ''"
+                        (change)="onInstanceCriteriaChange(row, $any($event.target).value, row.instance?.op ?? '=', row.instance?.value ?? '')"
+                      />
+                      <select
+                        class="fm-inline-select"
+                        [value]="row.instance?.op ?? '='"
+                        (change)="onInstanceCriteriaChange(row, row.instance?.field ?? '', $any($event.target).value, row.instance?.value ?? '')"
+                      >
+                        <option value="=">equals</option>
+                        <option value="contains">contains</option>
+                        <option value="!=">not equals</option>
+                      </select>
+                      <input
+                        type="text" class="fm-inline-input" placeholder="value"
+                        [value]="row.instance?.value ?? ''"
+                        (change)="onInstanceCriteriaChange(row, row.instance?.field ?? '', row.instance?.op ?? '=', $any($event.target).value)"
+                      />
+                    }
+                    @case ('all') {
+                      <label class="fm-inline-checkbox" title="Always on for &quot;All records&quot; — the alternative would duplicate this entire destination row once per array item.">
+                        <input
+                          type="checkbox"
+                          [checked]="row.instance?.aggregate === 'csv'"
+                          disabled
+                        />
+                        combine as one delimited row
+                      </label>
+                    }
+                  }
+                } @else {
+                  <span class="fm-list-dash">—</span>
+                }
+              </td>
+              <td>
+                <button type="button" class="fm-list-link" (click)="onEdit(row, $event)">Edit…</button>
+                <button type="button" class="fm-list-link fm-list-link--danger" (click)="onRemove(row)">Remove</button>
+              </td>
+            </tr>
+          }
+          @if (searchQuery() && !displayedRows().length && visibleRows().length) {
+            <tr><td colspan="7" class="fm-list-empty">No mappings match "{{ searchQuery() }}".</td></tr>
+          }
+          @if (!visibleRows().length && !draft()) {
+            <tr><td colspan="7" class="fm-list-empty">No mappings yet — drag a field onto a column, or use "+ Add mapping" below.</td></tr>
+          }
+        </tbody>
+      </table>
+
+      @if (draft(); as d) {
+        <div class="fm-draft-form">
+          <div class="fm-draft-row">
+            <label class="fm-draft-field">
+              <span>Resource</span>
+              <select [value]="d.resource" (change)="updateDraftResource($any($event.target).value)">
+                @for (r of resources(); track r) { <option [value]="r">{{ r }}</option> }
+              </select>
+            </label>
+            <label class="fm-draft-field">
+              <span>Target table</span>
+              <select [value]="d.tableName" (change)="updateDraftTable($any($event.target).value)">
+                @for (t of tablesForResource()(d.resource); track t) { <option [value]="t">{{ t }}</option> }
+              </select>
+            </label>
+            <label class="fm-draft-field">
+              <span>Mode</span>
+              <select [value]="d.mode" (change)="updateDraftMode($any($event.target).value)">
+                <option value="value">Value</option>
+                <option value="childJson">Whole node as JSON</option>
+              </select>
+            </label>
+            <label class="fm-draft-field">
+              <span>Target column</span>
+              <select [value]="d.targetName" (change)="updateDraftTarget($any($event.target).value)">
+                <option value="" disabled [selected]="!d.targetName">Select…</option>
+                @for (c of columnsFor()(d.resource, d.tableName); track c) { <option [value]="c">{{ c }}</option> }
+              </select>
+            </label>
+          </div>
+
+          @if (d.mode === 'value') {
+            <div class="fm-draft-row fm-draft-row--sources">
+              <span class="fm-draft-field-label">Source field(s)</span>
+              @for (path of d.sourcePaths; track $index; let i = $index) {
+                <select [value]="path" (change)="updateDraftSourcePath(i, $any($event.target).value)">
+                  <option value="" disabled [selected]="!path">Select a field…</option>
+                  @for (leaf of leavesFor(d.resource); track leaf.id) {
+                    <option [value]="leaf.id">{{ leaf.label }}</option>
+                  }
+                </select>
+                @if (d.sourcePaths.length > 1) {
+                  <button type="button" class="fm-list-link fm-list-link--danger" (click)="removeDraftSource(i)">✕</button>
+                }
+              }
+              <button type="button" class="fm-list-link" (click)="addDraftSource()">+ Add another source</button>
+            </div>
+            <div class="fm-draft-row">
+              <label class="fm-draft-field">
+                <span>Instance</span>
+                <select [value]="d.instanceType" (change)="updateDraftInstanceType($any($event.target).value)">
+                  <option value="all">All records</option>
+                  <option value="first">First</option>
+                  <option value="nth">Nth</option>
+                  <option value="criteria">Criteria</option>
+                </select>
+              </label>
+            </div>
+          } @else {
+            <div class="fm-draft-row">
+              <label class="fm-draft-field">
+                <span>Group (whole node)</span>
+                <select [value]="d.childNodeId" (change)="updateDraftChildNode($any($event.target).value)">
+                  <option value="" disabled [selected]="!d.childNodeId">Select a group…</option>
+                  @for (g of groupsFor(d.resource); track g.id) { <option [value]="g.id">{{ g.id }}</option> }
+                </select>
+              </label>
+            </div>
+          }
+
+          <div class="fm-draft-actions">
+            <button type="button" class="fm-list-link" (click)="cancelDraft()">Cancel</button>
+            <button type="button" class="fm-draft-submit" [disabled]="!canSubmitDraft()" (click)="submitDraft()">Add mapping</button>
+          </div>
+        </div>
+      } @else {
+        <button type="button" class="fm-list-add" (click)="startDraft()">+ Add mapping</button>
+      }
+    </div>
+  }
+

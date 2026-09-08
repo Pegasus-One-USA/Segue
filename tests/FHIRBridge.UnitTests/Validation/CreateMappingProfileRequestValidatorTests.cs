@@ -41,7 +41,8 @@ public sealed class CreateMappingProfileRequestValidatorTests
         _ruleResolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
+                It.IsAny<bool>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
 
         _sut = new CreateMappingProfileRequestValidator(
@@ -183,6 +184,88 @@ public sealed class CreateMappingProfileRequestValidatorTests
         result.Errors.Should().Contain(e => e.PropertyName == "Fields[0].ValueType" && e.ErrorMessage.Contains("expects Integer"));
     }
 
+    // No destination-schema probe (SqlDestinationSchemaService.MapSqlServerType/MapPostgresType/MapMySqlType)
+    // ever reports a column's own MappingValueType as literally "Json" — every character-string SQL type,
+    // including a real Postgres jsonb, collapses to "String" — so a column intentionally used to hold JSON
+    // must not be rejected purely on that exact-match mismatch, while a genuinely length-BOUNDED column
+    // can't hold it and must still fail (IsJsonSafeForColumn).
+    [Fact]
+    public async Task Json_field_onto_an_unbounded_max_length_String_column_passes()
+    {
+        // DataType here is the BARE type name a live probe actually reports (SqlDestinationSchemaService.
+        // ReadColumnsAsync reads DATA_TYPE, e.g. "nvarchar" — never a combined "nvarchar(max)" string);
+        // MaxLength null is what -1 (SQL Server) / a genuinely NULL character_maximum_length (PostgreSQL
+        // text) normalizes to.
+        StubSchema(new DestinationColumnSchemaDto("ComponentJson", "nvarchar", "String", true, null));
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("ComponentJson", "$.component", MappingValueType.Json, false, null, null),
+        ]);
+
+        var result = await _sut.ValidateAsync(request);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Json_field_onto_a_length_bounded_String_column_still_fails()
+    {
+        StubSchema(new DestinationColumnSchemaDto("ComponentJson", "nvarchar", "String", true, 200));
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("ComponentJson", "$.component", MappingValueType.Json, false, null, null),
+        ]);
+
+        var result = await _sut.ValidateAsync(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Fields[0].ValueType" && e.ErrorMessage.Contains("expects String"));
+    }
+
+    // The actual regression this exists for: a MySQL `text` column (or PostgreSQL `text`, whose information_
+    // schema DOES report a genuinely NULL character_maximum_length — already covered above). MySQL's own
+    // information_schema NEVER reports a null CHARACTER_MAXIMUM_LENGTH for TEXT/MEDIUMTEXT/LONGTEXT — it's
+    // always a real (if huge) number, because their capacity is fixed by the type keyword itself. So
+    // MaxLength alone can't be the only signal — the column must also be recognized by its DATA TYPE NAME.
+    [Theory]
+    [InlineData("text", 65535)]
+    [InlineData("mediumtext", 16777215)]
+    [InlineData("longtext", 4294967295)]
+    [InlineData("ntext", 1073741823)] // SQL Server's own legacy unbounded unicode type — same non-null quirk.
+    public async Task Json_field_onto_a_MySQL_style_unbounded_by_name_text_column_passes(string dataType, long maxLength)
+    {
+        StubSchema(new DestinationColumnSchemaDto("All", dataType, "String", true, (int)maxLength));
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("All", "$.component", MappingValueType.Json, false, null, null),
+        ]);
+
+        var result = await _sut.ValidateAsync(request);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    // TINYTEXT (255 chars) is genuinely too small for arbitrary JSON — must NOT be swept up by the same
+    // by-name exception as its larger siblings just because it shares the "*text" naming family.
+    [Fact]
+    public async Task Json_field_onto_MySQL_TINYTEXT_still_fails()
+    {
+        StubSchema(new DestinationColumnSchemaDto("All", "tinytext", "String", true, 255));
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("All", "$.component", MappingValueType.Json, false, null, null),
+        ]);
+
+        var result = await _sut.ValidateAsync(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Fields[0].ValueType" && e.ErrorMessage.Contains("expects String"));
+    }
+
     [Fact]
     public async Task Not_null_column_without_required_or_default_fails()
     {
@@ -248,7 +331,8 @@ public sealed class CreateMappingProfileRequestValidatorTests
         _ruleResolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
+                It.IsAny<bool>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
     [Fact]
@@ -299,6 +383,25 @@ public sealed class CreateMappingProfileRequestValidatorTests
         var request = ValidRequest(fields:
         [
             new MappingFieldDto("Age", "$.birthDate", MappingValueType.Integer, false, null, null),
+        ]);
+
+        (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Rule_with_matching_expected_type_passes_even_when_raw_source_type_differs_from_column()
+    {
+        // The field's own ValueType reflects the raw JsonPath extraction (Date, from birthDate) — the rule
+        // (DateMathAge) is what actually turns that into the Integer the column expects. The raw-type check
+        // must defer to the rule's declared output type instead of comparing Date against Integer itself.
+        StubSchema(new DestinationColumnSchemaDto("BirthDateAge", "int", "Integer", true, null));
+        StubRule(new TransformationRule(
+            TransformScope.Field, TransformNodeType.DateMathAge, "{}",
+            expectedValueType: MappingValueType.Integer));
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("BirthDateAge", "$.birthDate", MappingValueType.Date, false, null, null),
         ]);
 
         (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();

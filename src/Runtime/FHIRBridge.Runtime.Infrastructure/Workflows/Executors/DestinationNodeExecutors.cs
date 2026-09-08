@@ -712,14 +712,17 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         CancellationToken cancellationToken)
     {
         var records = PassThroughNodeExecutor.ReadMappedRecords(inputs).ToArray();
-        if (records.Length == 0 && _destinationType == DestinationType.FhirRepository)
+        if (records.Length == 0 && _destinationType is DestinationType.FhirRepository or DestinationType.Medplum or DestinationType.AzureFhirService)
         {
-            // FhirRepositoryDestination is exempt from the graph's upstream-Mapping-node requirement (see
-            // WorkflowGraphValidator.DestinationRequiresMappedRecords), so when it's wired directly to a
-            // source/transform node instead of a Mapping node, its input arrives as a raw ResourceBatch
-            // rather than a MappedRecordBatch. Convert each resource envelope straight into a passthrough
-            // record — the same shape the Part-1 MappingNodeExecutor passthrough branch already produces
-            // for the (now superseded) synthetic-node case.
+            // Whole-resource FHIR destinations (FHIR Repository, Medplum, Azure FHIR Service — the same
+            // WholeResourceFhirDestinationNodeTypes set the graph validator and MappingNodeExecutor's
+            // wholeResourceFhir branch use) are exempt from the graph's upstream-Mapping-node requirement (see
+            // WorkflowGraphValidator.DestinationRequiresMappedRecords), so when one is wired directly to a
+            // source/transform node instead of a Mapping node — e.g. a bulk Group $export straight into Medplum —
+            // its input arrives as a raw ResourceBatch rather than a MappedRecordBatch. Convert each resource
+            // envelope straight into a passthrough record — the same shape the Part-1 MappingNodeExecutor
+            // passthrough branch already produces for the (now superseded) synthetic-node case. (Previously this
+            // fallback was FhirRepository-only, so a bulk-export→Medplum/Azure graph silently wrote nothing.)
             records = PassThroughNodeExecutor.ReadResourceEnvelopes(inputs)
                 .Select(resource => new MappedDestinationRecord(
                     context.WorkflowRunId,

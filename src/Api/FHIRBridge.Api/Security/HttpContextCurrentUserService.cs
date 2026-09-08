@@ -32,11 +32,12 @@ public sealed class HttpContextCurrentUserService : ICurrentUserService
             var correlationId = httpContext?.Request.Headers["X-Correlation-Id"].FirstOrDefault()
                 ?? httpContext?.TraceIdentifier
                 ?? _ambientActorContext.CorrelationId;
+            var requestOrigin = ResolveRequestOrigin(httpContext);
 
             if (principal?.Identity?.IsAuthenticated != true)
             {
                 return new CurrentUserInfo(null, null, null, [], false,
-                    IpAddress: ipAddress, UserAgent: userAgent, CorrelationId: correlationId);
+                    IpAddress: ipAddress, UserAgent: userAgent, CorrelationId: correlationId, RequestOrigin: requestOrigin);
             }
 
             var permissions = principal.Claims
@@ -54,7 +55,35 @@ public sealed class HttpContextCurrentUserService : ICurrentUserService
                 IpAddress: ipAddress,
                 UserAgent: userAgent,
                 CorrelationId: correlationId,
+                RequestOrigin: requestOrigin,
                 UserId: CurrentUserClaimReader.GetUserId(principal));
         }
+    }
+
+    // Origin is what browsers actually send on same-origin POST/PUT/DELETE (not just cross-origin ones —
+    // see the Fetch spec's "Origin header" algorithm), so this is the primary source; Referer's
+    // scheme+authority is the fallback for a caller/browser combination that omits Origin. Neither is
+    // attested — the caller (UserManagementService/LocalAuthService) must validate this against
+    // IAllowedCorsOriginsCache before trusting it for anything.
+    private static string? ResolveRequestOrigin(HttpContext? httpContext)
+    {
+        if (httpContext is null)
+        {
+            return null;
+        }
+
+        var origin = httpContext.Request.Headers.Origin.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(origin))
+        {
+            return origin;
+        }
+
+        var referer = httpContext.Request.Headers.Referer.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(referer) && Uri.TryCreate(referer, UriKind.Absolute, out var refererUri))
+        {
+            return refererUri.GetLeftPart(UriPartial.Authority);
+        }
+
+        return null;
     }
 }

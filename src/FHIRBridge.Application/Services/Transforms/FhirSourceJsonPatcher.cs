@@ -1,11 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
+namespace FHIRBridge.Application.Services.Transforms;
 
 /// <summary>
 /// Writes a transform-rule's output value back into a source FHIR resource's own JSON, at a rule-configured
-/// path (<see cref="Domain.Entities.TransformationRule.FhirWriteBackJsonPath"/>) — the mechanism that lets a
+/// path (<see cref="FHIRBridge.Domain.Entities.TransformationRule.FhirWriteBackJsonPath"/>) — the mechanism that lets a
 /// FHIR-native destination (Aidbox, Medplum, any other FhirRepository-typed config) receive an enriched value
 /// (e.g. a CodeableConceptBuilder result with a real terminology display) instead of the untouched original
 /// coding a flat/tabular destination would otherwise be the only place to see it.
@@ -57,7 +57,7 @@ public static class FhirSourceJsonPatcher
     /// <summary>Reads the sibling "display" value next to a "...code" leaf in the source resource's own JSON —
     /// e.g. given source field path "code.coding.code", reads "code.coding.display" (taking the first element
     /// of any array segment along the way, matching the mapping engine's own "First" instance-selection
-    /// convention). Feeds <see cref="Application.Services.Transforms.ReservedTransformConfigKeys.SourceDisplayHint"/>.
+    /// convention). Feeds <see cref="ReservedTransformConfigKeys.SourceDisplayHint"/>.
     /// Returns null when <paramref name="sourceFieldPath"/> doesn't end in a "code" segment, the JSON isn't
     /// parseable, or no string value exists at the derived path — any of which just means this fallback tier
     /// has nothing to offer, not an error.</summary>
@@ -128,6 +128,39 @@ public static class FhirSourceJsonPatcher
 
             if (arrayIndex is null)
             {
+                // A segment with no explicit index that lands on an existing ARRAY must write into that
+                // array's first element — never over the array itself. FhirJsonPathReader reads exactly that
+                // element, so anything else means the rule reads one node and writes another; and because
+                // FHIR cardinality is structural, replacing a repeating element with a bare object/value
+                // produces a resource the server rejects outright. This is the "expected-array" 422 a rule on
+                // Patient.name.family used to cause: "name" resolved to an array, failed the object test
+                // below, and the whole array was replaced by { "family": ... }.
+                if (current[propertyName] is JsonArray existingArray)
+                {
+                    if (existingArray.Count == 0)
+                    {
+                        existingArray.Add(isLast ? ToJsonNode(value) : new JsonObject());
+                        if (isLast)
+                        {
+                            return;
+                        }
+                    }
+                    else if (isLast)
+                    {
+                        existingArray[0] = ToJsonNode(value);
+                        return;
+                    }
+
+                    if (existingArray[0] is not JsonObject arrayElement)
+                    {
+                        arrayElement = new JsonObject();
+                        existingArray[0] = arrayElement;
+                    }
+
+                    current = arrayElement;
+                    continue;
+                }
+
                 if (isLast)
                 {
                     current[propertyName] = ToJsonNode(value);
@@ -172,7 +205,11 @@ public static class FhirSourceJsonPatcher
         }
     }
 
-    private static (string PropertyName, int? ArrayIndex) ParseSegment(string segment)
+    /// <summary>Splits one path segment into its property name and optional array index. Internal rather than
+    /// private so <see cref="FhirJsonPathReader"/> parses paths with the exact same rules this writes them by —
+    /// a reader that disagreed with the writer about "[]" or a missing index would read one element and write
+    /// another.</summary>
+    internal static (string PropertyName, int? ArrayIndex) ParseSegment(string segment)
     {
         var bracketIndex = segment.IndexOf('[', StringComparison.Ordinal);
         if (bracketIndex < 0 || !segment.EndsWith("]", StringComparison.Ordinal))

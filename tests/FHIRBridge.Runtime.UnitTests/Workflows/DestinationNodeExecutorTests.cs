@@ -273,6 +273,47 @@ public sealed class DestinationNodeExecutorTests
         output.Metadata["filteredOutResourceTypes"].Should().BeNull();
     }
 
+    [Fact]
+    public async Task Medplum_writes_a_raw_ResourceBatch_wired_directly_from_a_bulk_source_without_a_mapping_node()
+    {
+        // Regression: a whole-resource FHIR destination (Medplum / FHIR Repository / Azure FHIR) can be wired straight
+        // to a source — e.g. a bulk Group $export → Medplum with no Mapping node — so its input arrives as a raw
+        // ResourceBatch, not a MappedRecordBatch. The executor must convert the resource envelopes into records and
+        // write them. Previously the ResourceBatch fallback was FhirRepository-only, so eCW bulk → Medplum matched no
+        // records, wrote 0, and reported success — silently losing the whole export.
+        var destinationId = Guid.NewGuid();
+
+        IReadOnlyCollection<MappedDestinationRecord>? writtenRecords = null;
+        var writer = new Mock<IConfiguredDestinationWriter>();
+        writer.Setup(w => w.WriteAsync(
+                It.IsAny<DestinationConfiguration>(), It.IsAny<MappingProfile>(),
+                It.IsAny<IReadOnlyCollection<MappedDestinationRecord>>(), It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
+            .Callback<DestinationConfiguration, MappingProfile, IReadOnlyCollection<MappedDestinationRecord>, PipelineWriteContext, CancellationToken>(
+                (_, _, records, _, _) => writtenRecords = records)
+            .ReturnsAsync((DestinationConfiguration _, MappingProfile _, IReadOnlyCollection<MappedDestinationRecord> records, PipelineWriteContext _, CancellationToken _)
+                => new FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult(records.Count));
+
+        var writerFactory = new Mock<IConfiguredDestinationWriterFactory>();
+        writerFactory.Setup(f => f.Create(DestinationType.Medplum)).Returns(writer.Object);
+
+        var executor = new MedplumDestinationNodeExecutor(writerFactory.Object);
+        var node = CreateMedplumNode(destinationId, resourceSelection: "Patient");
+
+        var batch = new ResourceBatch(new[]
+        {
+            new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient","id":"p1"}"""),
+            new ResourceEnvelope("Patient", "p2", """{"resourceType":"Patient","id":"p2"}"""),
+            new ResourceEnvelope("Patient", "p3", """{"resourceType":"Patient","id":"p3"}"""),
+        });
+        var upstream = new WorkflowNodeOutput(
+            Guid.NewGuid(), WorkflowNodeTypes.EpicSource, batch, WorkflowDataContract.ResourceBatch);
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        writtenRecords.Should().NotBeNull("a raw ResourceBatch into Medplum must be converted and written, not dropped");
+        writtenRecords!.Select(r => r.SourceResourceId).Should().BeEquivalentTo(["p1", "p2", "p3"]);
+    }
+
     private static WorkflowNode CreateMedplumNode(Guid destinationId, string? resourceSelection)
     {
         var config = new Dictionary<string, object>
