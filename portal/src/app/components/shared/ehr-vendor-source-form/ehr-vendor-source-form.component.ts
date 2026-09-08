@@ -1429,19 +1429,30 @@ export class EhrVendorSourceFormComponent
 
   // ── Data Retrieval Method (Backend System: Search REST / Bulk Export / Single Patient; Standalone: Search
   //    REST only, one-shot) ────────────────────────────────────────────────────────────────────
+  /** Never offered in the dropdown, for any audience or vendor. Subscription and Webhook are not executed by the
+   *  workflow engine — SourceNodeExecutor (Runtime plane) only ever runs search-rest/bulk-export/single-patient, and
+   *  SourceRetrievalConfiguration's own remarks note those two values are persisted for forward-compatibility only.
+   *  Offering them just lets an admin configure a connection that silently never delivers anything. The
+   *  RetrievalMethod type and their RETRIEVAL_METHOD_CONFIG entries stay (already-saved connections may still
+   *  reference them, and the Retrieval Configuration panel still renders their fields); only the selectable option
+   *  list is filtered. Applied ahead of the `current` exemption below, so a legacy connection holding one of these
+   *  does not resurrect it as a choice. Kept as data, exactly like VENDOR_DISABLED_AUDIENCES — re-enabling one is
+   *  removing it from this list. */
+  private static readonly NEVER_OFFERED_RETRIEVAL_METHODS: readonly RetrievalMethod[] =
+    ['subscription', 'webhook'];
+
   /** Methods hidden from the dropdown, per retrieval scope. Standalone only ever offers Search REST — every other
-   *  method is an async or unattended pattern that doesn't fit a user-initiated, one-shot launch. Backend System
-   *  hides Subscription and Webhook: neither is executed by the workflow engine (see SourceRetrievalConfiguration's
-   *  own remarks — those values are persisted for forward-compatibility only), so offering them just lets an admin
-   *  configure a connection that silently never delivers anything. Hidden rather than deleted, exactly like
-   *  VENDOR_DISABLED_AUDIENCES — re-enabling one is removing it from this list. */
+   *  method is an async or unattended pattern that doesn't fit a user-initiated, one-shot launch. Hidden rather
+   *  than deleted, exactly like VENDOR_DISABLED_AUDIENCES — re-enabling one is removing it from this list.
+   *  Subscription/Webhook are absent here because NEVER_OFFERED_RETRIEVAL_METHODS above already excludes them
+   *  unconditionally, for every scope. */
   private static readonly HIDDEN_RETRIEVAL_METHODS: Record<
     AudienceFieldConfig['retrievalScope'],
     readonly RetrievalMethod[]
   > = {
     none: [],
-    oneshot: ['subscription', 'webhook', 'bulk-export', 'single-patient'],
-    automated: ['subscription', 'webhook'],
+    oneshot: ['bulk-export', 'single-patient'],
+    automated: [],
   };
 
   /** Methods restricted to specific vendors, on top of the vendor-blind scope filter above. A method with no
@@ -1474,6 +1485,12 @@ export class EhrVendorSourceFormComponent
     // Retrieval Configuration panel below still showed that method's own fields.
     const current = this.retrievalMethodValue();
     return Object.values(RETRIEVAL_METHOD_CONFIG)
+      .filter(
+        (c) =>
+          !EhrVendorSourceFormComponent.NEVER_OFFERED_RETRIEVAL_METHODS.includes(
+            c.value,
+          ),
+      )
       .filter(
         (c) =>
           c.value === current ||

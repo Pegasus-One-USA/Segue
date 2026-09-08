@@ -97,12 +97,18 @@ const ATHENA_SANDBOX_TOKEN_URL =
 const ATHENA_SANDBOX_AUTHORIZE_URL =
   'https://api.preview.platform.athenahealth.com/oauth2/v1/authorize';
 
-// eClinicalWorks (Healow) — only the Patient audience is enabled so far (see VENDOR_DISABLED_AUDIENCES). This is
-// the new-source FHIR Base URL default (ngOnInit) for that one audience; Token/Authorization Endpoint are
+// eClinicalWorks (Healow) — the new-source FHIR Base URL default (ngOnInit) AND this vendor's FHIR Base URL
+// watermark (see baseUrlPlaceholder below), so the field shows the right host shape whether or not it has been
+// cleared. The trailing segment is the per-customer practice code (eCW issues one per EMR org), so this is a
+// format example rather than a value any real connection can keep as-is. Token/Authorization Endpoint are
 // watermarks only (see tokenEndpointPlaceholder/authzEndpointPlaceholder below), same treatment as Epic's.
-const HEALOW_SANDBOX_BASE_URL = 'https://fhir4.healow.com/fhir/r4/JAFJCD';
-const HEALOW_TOKEN_URL_PLACEHOLDER     = 'https://oauthserver.eclinicalworks.com/.../oauth2/token';
-const HEALOW_AUTHORIZE_URL_PLACEHOLDER = 'https://oauthserver.eclinicalworks.com/.../oauth2/authorize';
+const HEALOW_SANDBOX_BASE_URL = 'https://fhir.ecwcloud.com/fhir/r4/FFBJCD';
+// Watermarks only — Discover fills both in for real from the practice's /.well-known/smart-configuration, which
+// eCW does publish (verified against the FFBJCD staging sandbox: HTTP 200, token_endpoint +
+// authorization_endpoint + private_key_jwt + client_credentials + 486 scopes_supported). The host shape below is
+// that document's own, so a hand-typed value starts from the right pattern.
+const HEALOW_TOKEN_URL_PLACEHOLDER     = 'https://oauthserver.ecwcloud.com/oauth/oauth2/token';
+const HEALOW_AUTHORIZE_URL_PLACEHOLDER = 'https://oauthserver.ecwcloud.com/oauth/oauth2/authorize';
 
 /**
  * Determines the SMART scope version a source uses. Prefers the explicit permission-v1/permission-v2 capability
@@ -183,7 +189,8 @@ export type RetrievalMethod =
   | 'subscription'
   | 'webhook'
   | 'search-rest'
-  | 'bulk-export';
+  | 'bulk-export'
+  | 'single-patient';
 
 // Each retrieval method owns its own Resource Type control (never shared) so that
 // switching methods never shows two Resource Type pickers, or leaks one method's
@@ -193,6 +200,7 @@ type RetrievalFieldKey =
   | 'webhookResourceType'
   | 'searchRestResourceType'
   | 'bulkExportResourceType'
+  | 'singlePatientResourceType'
   | 'eventType'
   | 'notificationPayload'
   | 'endpointType'
@@ -224,6 +232,7 @@ const RETRIEVAL_FIELD_KEYS: readonly RetrievalFieldKey[] = [
   'webhookResourceType',
   'searchRestResourceType',
   'bulkExportResourceType',
+  'singlePatientResourceType',
   'eventType',
   'notificationPayload',
   'endpointType',
@@ -287,6 +296,7 @@ const RETRIEVAL_FIELD_DEFAULTS: Record<RetrievalFieldKey, unknown> = {
   webhookResourceType: [] as string[],
   searchRestResourceType: [] as string[],
   bulkExportResourceType: [] as string[],
+  singlePatientResourceType: [] as string[],
   eventType: '',
   notificationPayload: '',
   endpointType: '',
@@ -822,6 +832,45 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
         },
       ],
     },
+    // Single Patient: one authorized patient's record, fetched through the ordinary patient-scoped REST search
+    // (not $export). This is eCW's "Backend - Single Patient" API, where the app registration itself is authorized
+    // for one patient rather than a Group cohort, so the method is offered for eClinicalWorks (Healow) only - see
+    // RETRIEVAL_METHOD_VENDORS. Nothing in the field list or the runtime path is eCW-specific (it resolves to an
+    // ordinary patient-scoped search), so opening it to another vendor is one entry in that map.
+    //
+    // Deliberately just the Patient ID: no Run Mode, no scheduler, no incremental cursor, no advanced search
+    // options. A single-patient pull is a bounded, on-demand fetch, so there is nothing to schedule or to page
+    // through the way Search (REST) has.
+    'single-patient': {
+      value: 'single-patient',
+      label: 'Single Patient',
+      description:
+        'Fetches one authorized patient’s resources via a patient-scoped REST search.',
+      fields: [
+        // Hidden - see subscriptionResourceType above / ensureRetrievalResourceTypeDefault. Backend System has no
+        // shared Resource Type picker, so scope generation (activeRetrievalResourceTypes/scopeString) reads this.
+        {
+          key: 'singlePatientResourceType',
+          label: 'Resource Type',
+          type: 'multiselect',
+          required: false,
+          visibleWhen: () => false,
+        },
+        // Optional on purpose: blank means "whichever patient this app's registration already resolves to" (eCW's
+        // Backend Single Patient app is bound to one patient server-side, so the id is frequently redundant). When
+        // supplied it reuses Bulk Export's own control and 'Patient ID / list' save key, which already threads
+        // through to SourceRetrievalConfiguration.PatientIds and, at run time, to the connector's patient scoping
+        // (FhirSourceConnectorBase.ApplyPatientScopeAsync: `_id=` for Patient, `patient=` for compartment types).
+        {
+          key: 'patientIdList',
+          label: 'Patient ID',
+          type: 'text',
+          required: false,
+          placeholder: 'Patient FHIR ID',
+          hint: 'Optional. The Patient FHIR ID this app is authorized for — leave blank to use whichever patient the source resolves for this app registration.',
+        },
+      ],
+    },
   };
 
 @Component({
@@ -1052,6 +1101,7 @@ export class EhrVendorSourceFormComponent
     webhookResourceType: [[] as string[]],
     searchRestResourceType: [[] as string[]],
     bulkExportResourceType: [[] as string[]],
+    singlePatientResourceType: [[] as string[]],
     eventType: [''],
     notificationPayload: [''],
     endpointType: [''],
@@ -1193,6 +1243,10 @@ export class EhrVendorSourceFormComponent
     this.form.controls.bulkExportResourceType.valueChanges,
     { initialValue: this.form.controls.bulkExportResourceType.value },
   );
+  private readonly singlePatientResourceTypeValue = toSignal(
+    this.form.controls.singlePatientResourceType.valueChanges,
+    { initialValue: this.form.controls.singlePatientResourceType.value },
+  );
 
   protected readonly audience = computed(
     () => this.audienceValue() as EpicAudience,
@@ -1223,6 +1277,14 @@ export class EhrVendorSourceFormComponent
     this.vendor() === 'Athenahealth' ? ATHENA_SANDBOX_AUTHORIZE_URL :
     this.vendor() === 'Healow' ? HEALOW_AUTHORIZE_URL_PLACEHOLDER :
     'https://fhir.epic.com/…/oauth2/authorize');
+
+  /** FHIR Base URL watermark, keyed off the vendor for the same reason as the two endpoint placeholders above:
+   *  the field is per-customer, so the only useful hint is that vendor's real base-URL shape. Every vendor
+   *  without an entry here keeps the original Epic watermark unchanged. */
+  protected readonly baseUrlPlaceholder = computed(() =>
+    this.vendor() === 'Athenahealth' ? ATHENA_SANDBOX_BASE_URL :
+    this.vendor() === 'Healow' ? HEALOW_SANDBOX_BASE_URL :
+    'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4');
 
   /** True when this vendor doesn't support the given audience yet (see VENDOR_DISABLED_AUDIENCES) — used to
    *  grey out the option in the audience `<select>`. The strategy is fully implemented server-side; only the
@@ -1366,9 +1428,29 @@ export class EhrVendorSourceFormComponent
    *  plane) only ever executes search-rest/bulk-export today, so offering them would let a user pick a retrieval
    *  method the backend silently never runs. The RetrievalMethod type/config entries stay (existing saved
    *  connections may still reference them), only the selectable option list is filtered. */
+  /** Methods restricted to specific vendors, on top of the vendor-blind scope filter above. A method with no
+   *  entry here is offered to every vendor — an allow-list rather than VENDOR_DISABLED_AUDIENCES' disabled-list
+   *  shape, since these restrictions are "this one vendor's API" rather than "not verified yet for this vendor",
+   *  and listing the eight vendors that DON'T get a method would invert on every vendor added.
+   *
+   *  Single Patient is eClinicalWorks (Healow) only: it models eCW's Backend Single Patient API, where the app
+   *  registration is bound to one patient server-side. Opening it to another vendor is one more entry here. */
+  private static readonly RETRIEVAL_METHOD_VENDORS: Partial<
+    Record<RetrievalMethod, readonly EhrVendor[]>
+  > = {
+    'single-patient': ['Healow'],
+  };
+
   protected readonly retrievalMethodOptions = computed(() => {
+    const vendor = this.vendor();
+    const allowedForVendor = (method: RetrievalMethod): boolean => {
+      const vendors =
+        EhrVendorSourceFormComponent.RETRIEVAL_METHOD_VENDORS[method];
+      return !vendors || vendors.includes(vendor);
+    };
     const all = Object.values(RETRIEVAL_METHOD_CONFIG)
       .filter((c) => c.value !== 'subscription' && c.value !== 'webhook')
+      .filter((c) => allowedForVendor(c.value))
       .map((c) => ({
         value: c.value,
         label: c.label,
@@ -1553,6 +1635,8 @@ export class EhrVendorSourceFormComponent
         return this.searchRestResourceTypeValue() ?? [];
       case 'bulkExportResourceType':
         return this.bulkExportResourceTypeValue() ?? [];
+      case 'singlePatientResourceType':
+        return this.singlePatientResourceTypeValue() ?? [];
       default:
         return [];
     }
@@ -1648,10 +1732,37 @@ export class EhrVendorSourceFormComponent
       : [];
     // v2 = granular per-resource read+search (SMART v2 uses .rs); v1 = coarse per-resource .read.
     const suffix = this.scopeVersionValue() === 'v2' ? 'rs' : 'read';
-    return [
-      ...fixed,
-      ...res.map((r) => `${cfg.scopePrefix}/${r}.${suffix}`),
-    ].join('\n');
+    // A uniform suffix is only right for vendors that implement the SMART grammar uniformly across every
+    // resource type at all — eCW, for instance, has `.read` for most but ONLY `.r` for ServiceRequest,
+    // Coverage, RelatedPerson, Binary, Specimen, MedicationDispense, QuestionnaireResponse, Media and Claim, and
+    // fails the WHOLE token request on a single unrecognized scope. Mirror of the backend's VendorScopeCatalog,
+    // which is authoritative at run time; a vendor with no profile keeps the uniform suffix, unchanged. Scoped to
+    // the system/ prefix only, exactly like the backend, so interactive audiences are untouched.
+    const profile =
+      cfg.scopePrefix === 'system' ? vendorScopeProfile(this.vendor()) : null;
+    const resourceScopes = profile
+      ? res
+          .map((r) => {
+            const level = profile.readAccessLevelByResourceType[r];
+            return level ? `${cfg.scopePrefix}/${r}.${level}` : null;
+          })
+          .filter((s): s is string => s !== null)
+      : res.map((r) => `${cfg.scopePrefix}/${r}.${suffix}`);
+    return [...fixed, ...resourceScopes].join('\n');
+  });
+
+  /** Resource types the current vendor publishes no system/ read scope for, so scopeString() above leaves them
+   *  out of the request entirely. Surfaced under the Scopes preview so the omission is visible rather than
+   *  silent — empty for every vendor with no profile, and for any audience that isn't system/-scoped. */
+  protected readonly vendorOmittedResources = computed(() => {
+    const cfg = this.audienceConfig();
+    const profile =
+      cfg.scopePrefix === 'system' ? vendorScopeProfile(this.vendor()) : null;
+    if (!profile) return [];
+    const res = this.showResourcePickerSection()
+      ? this.selectedResources()
+      : this.activeRetrievalResourceTypes();
+    return res.filter((r) => !profile.readAccessLevelByResourceType[r]);
   });
 
   constructor() {
@@ -2271,6 +2382,7 @@ export class EhrVendorSourceFormComponent
         webhookResourceType: [],
         searchRestResourceType: [],
         bulkExportResourceType: [],
+        singlePatientResourceType: [],
         eventType: '',
         notificationPayload: '',
         endpointType: '',
@@ -2405,6 +2517,7 @@ export class EhrVendorSourceFormComponent
         webhook: 'webhookResourceType',
         'search-rest': 'searchRestResourceType',
         'bulk-export': 'bulkExportResourceType',
+        'single-patient': 'singlePatientResourceType',
       } as const
     )[this.form.controls.retrievalMethod.value as RetrievalMethod];
     if (!key) return;
@@ -2904,6 +3017,7 @@ export class EhrVendorSourceFormComponent
       webhook: 'webhookResourceType',
       'search-rest': 'searchRestResourceType',
       'bulk-export': 'bulkExportResourceType',
+      'single-patient': 'singlePatientResourceType',
     };
     // A connection created via Settings (entity mode) always has retrieval: null — narrowing Settings to
     // connection-only fields (docs/backend/13-source-connection-configuration-split-plan.md) means retrieval

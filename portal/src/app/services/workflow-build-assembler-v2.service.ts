@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { PipelineStoreV2 } from './pipeline-v2.store';
 import { WorkflowGraphMapperServiceV2 } from './workflow-graph-mapper-v2.service';
 import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
+import { vendorScopeProfile } from '../data/vendor-scope-catalog.data';
 import {
   CreateDestinationConfigurationRequest,
   CreateSourceConnectionRequest,
@@ -301,7 +302,32 @@ export class WorkflowBuildAssemblerServiceV2 {
     // System (see VENDOR_DISABLED_AUDIENCES) — the authentication block below handles all three (public / jwt /
     // secret), mirroring the Epic branch, so Backend System's private_key_jwt key material is persisted, not dropped.
     if (/healow/i.test(connector)) {
-      const healowScopes = (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
+      const healowIsBackend = this.applicationTypeFor(fields) === 'Backend';
+      // Resource types (and therefore OAuth scopes) come from what the destination actually maps — see
+      // destinationResourceTypesBySourceNodeId in assemble() — exactly as for athenahealth, and for the same
+      // reason: eCW fails the WHOLE token request on one unrecognized scope, so a broad guess is worse than a
+      // narrow truth. Falls back to whatever the node already held when no destination is wired up yet.
+      const healowResourceTypes = destinationResourceTypes.length
+        ? destinationResourceTypes
+        : (fields['Retrieval resource type'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      // eCW does not spell every system/ read scope the same way (ServiceRequest, Coverage, RelatedPerson,
+      // Binary, Specimen, MedicationDispense, QuestionnaireResponse, Media and Claim are '.r'-only; the rest are
+      // '.read'), and publishes none at all for some resource types. Use the vendor profile rather than a uniform
+      // suffix. The backend's SourceConnectionRuntimeResolver regenerates the real scope string from
+      // Retrieval.ResourceTypes on every run using its own copy of the same table — this is just what gets
+      // initially persisted and validated at build time.
+      const healowProfile = vendorScopeProfile('Healow');
+      const healowSystemScopes = healowResourceTypes
+        .map((rt) => {
+          const level = healowProfile?.readAccessLevelByResourceType[rt];
+          return level ? `system/${rt}.${level}` : null;
+        })
+        .filter((scope): scope is string => scope !== null);
+      const healowScopes = healowIsBackend
+        ? (healowSystemScopes.length
+            ? healowSystemScopes
+            : (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean))
+        : (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
       // A Group-level Bulk Data $export needs system/Group.read (to read the Group definition) on top of the
       // per-resource read scopes ScopeBuilderService derives from the selected resource types — otherwise eCW's
       // token omits it and Group/{id}/$export is rejected. eCW's app registration already grants Group.read, so
@@ -375,10 +401,12 @@ export class WorkflowBuildAssemblerServiceV2 {
         // Backend System / Provider Standalone carry a retrieval config (bulk-export or Search REST) just like Epic;
         // without this the connection persisted with null retrieval (method/scope/group), so a re-run or entity-mode
         // edit had to recover it from the workflow node instead. Null for Patient/EHR-launch (no retrieval section).
-        retrieval:
+        retrieval: this.withResourceTypes(
           healowAppType === 'Backend' || healowAppType === 'Standalone'
             ? this.buildRetrieval(fields)
             : null,
+          healowResourceTypes,
+        ),
       };
     }
 
@@ -468,6 +496,17 @@ export class WorkflowBuildAssemblerServiceV2 {
     return 'Backend';
   }
 
+  /** Overrides a retrieval config's resourceTypes with the destination-derived list when there is one, leaving
+   *  whatever buildRetrieval() already resolved when the graph has no destination wired up yet. Used by the vendor
+   *  branches that derive scopes from what the destination actually maps rather than from a wizard guess. */
+  private withResourceTypes(
+    retrieval: SourceRetrievalConfigurationRequest | null,
+    resourceTypes: string[],
+  ): SourceRetrievalConfigurationRequest | null {
+    if (!retrieval) return null;
+    return resourceTypes.length ? { ...retrieval, resourceTypes } : retrieval;
+  }
+
   /** Backend System (full method picker) and Provider Standalone (Search REST subset, one-shot — Run
    *  Mode/scheduler fields are never populated so they simply come through as null/default) — maps the wizard's
    *  Retrieval Configuration fields onto the backend's retrieval DTO. Returns null when no retrieval method was
@@ -506,6 +545,12 @@ export class WorkflowBuildAssemblerServiceV2 {
       .map((v) => v.trim())
       .filter(Boolean);
     const exportScope = fields['Export scope'] || null;
+    // Two retrieval methods carry patient ids: Bulk Export's patient-scoped $export (a list), and Single Patient
+    // (at most one id, optional — see RETRIEVAL_METHOD_CONFIG['single-patient']). Both write the same
+    // 'Patient ID / list' field, so gate on whichever one is actually selected rather than on exportScope alone,
+    // which Single Patient never sets.
+    const carriesPatientIds =
+      exportScope === 'patient' || retrievalMethod === 'single-patient';
     // The wizard uses short tokens; $export's _outputFormat expects the registered MIME type. Both ndjson variants
     // map to application/fhir+ndjson (gzip is negotiated via transport encoding, not a distinct _outputFormat value).
     const outputFormat = (fields['FHIR output format'] ?? '').startsWith(
@@ -531,8 +576,7 @@ export class WorkflowBuildAssemblerServiceV2 {
       // Bulk Data $export settings — only meaningful when retrievalMethod === 'bulk-export'.
       exportScope,
       groupId: exportScope === 'group' ? fields['Group ID'] || null : null,
-      patientIds:
-        exportScope === 'patient' && patientIds.length ? patientIds : null,
+      patientIds: carriesPatientIds && patientIds.length ? patientIds : null,
       outputFormat,
     };
   }

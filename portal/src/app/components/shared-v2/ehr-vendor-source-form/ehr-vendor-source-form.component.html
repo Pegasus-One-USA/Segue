@@ -144,7 +144,7 @@
             <label class="eaf-label" for="eaf-epicBaseUrl">FHIR Base URL <span class="eaf-req">*</span></label>
             <div class="eaf-input-row">
               <input id="eaf-epicBaseUrl" class="eaf-input" type="url" formControlName="epicBaseUrl"
-                     placeholder="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4" />
+                     [placeholder]="baseUrlPlaceholder()" />
               <button class="eaf-discover-btn" type="button"
                       [disabled]="discStatus() === 'loading' || isReadonly"
                       (click)="runDiscover()">
@@ -701,6 +701,13 @@
           @if (vendor() === 'Athenahealth') {
             <p class="eaf-section-sub">Resource types (and the OAuth scopes requested) are derived automatically
               from whatever is mapped on the destination — configure them there, not here.</p>
+          }
+
+          @if (vendorOmittedResources().length) {
+            <p class="eaf-section-sub">{{ displayVendor() }} publishes no <code>system/</code> read scope for
+              {{ vendorOmittedResources().join(', ') }}, so {{ vendorOmittedResources().length === 1 ? 'it is' : 'they are' }}
+              left out of this connection's scope request. Anything mapped for
+              {{ vendorOmittedResources().length === 1 ? 'it' : 'them' }} on a destination will not be retrieved.</p>
           }
 
           <div class="eaf-grid">
