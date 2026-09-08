@@ -1,0 +1,25 @@
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_85e5f4509df794::t_6c4ffab7d93b27 97
+  s_85e5f4509df794::t_aab8ed152d9747 160-166,172-178,182-183,185
+  s_85e5f4509df794::t_a773b45aea5672 39-40
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.ts
+  s_85e5f4509df794::t_ba85c3f44b8d3d 110
+  s_85e5f4509df794::t_4e8f894bd416b3 46-47
+  s_85e5f4509df794::t_a6625c0b2bf8e2 148-153,156-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "0ddd687164d0ac62921c3b32f8b0c67a35198dbf",
+  "prompts": {},
+  "sessions": {
+    "s_85e5f4509df794": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ce0dc8-ced5-4aba-a5f7-13b80b101734",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
