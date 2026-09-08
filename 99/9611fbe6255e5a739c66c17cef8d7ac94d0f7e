@@ -1,0 +1,25 @@
+portal/src/app/app.component.ts
+  s_85e5f4509df794::t_c4ff2c5051d309 18-31,43-44
+portal/src/app/components/shared/global-loader/global-loader.component.scss
+  s_85e5f4509df794::t_3738558429616d 1-23
+portal/src/styles.scss
+  s_85e5f4509df794::t_d7410c102c5842 297-304
+portal/src/app/components/shared/global-loader/global-loader.component.html
+  s_85e5f4509df794::t_745f386c3622b0 2-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "999611fbe6255e5a739c66c17cef8d7ac94d0f7e",
+  "prompts": {},
+  "sessions": {
+    "s_85e5f4509df794": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ce0dc8-ced5-4aba-a5f7-13b80b101734",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
