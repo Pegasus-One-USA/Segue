@@ -226,6 +226,10 @@ app.MapGet("/api/settings", async (HttpContext http, SessionStore sessions, Heal
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         standaloneBaseUrl = settings.StandaloneBaseUrl,
+        ecwProviderStandaloneListWorkflowId = settings.EcwProviderStandaloneListWorkflowId,
+        ecwProviderStandaloneDetailWorkflowId = settings.EcwProviderStandaloneDetailWorkflowId,
+        ecwProviderStandaloneBaseUrl = settings.EcwProviderStandaloneBaseUrl,
+        ecwProviderStandaloneEhrEndpointId = settings.EcwProviderStandaloneEhrEndpointId,
         providerInAppWorkflowId = settings.ProviderInAppWorkflowId,
         ecwProviderInAppWorkflowId = settings.EcwProviderInAppWorkflowId,
         backendSystemPractitionerImportWorkflowId = settings.BackendSystemPractitionerImportWorkflowId
@@ -301,6 +305,10 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
     settings.StandaloneWorkflowId = request.StandaloneWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneDetailWorkflowId = request.StandaloneDetailWorkflowId?.Trim() ?? string.Empty;
     settings.StandaloneBaseUrl = request.StandaloneBaseUrl?.Trim() ?? string.Empty;
+    settings.EcwProviderStandaloneListWorkflowId = request.EcwProviderStandaloneListWorkflowId?.Trim() ?? string.Empty;
+    settings.EcwProviderStandaloneDetailWorkflowId = request.EcwProviderStandaloneDetailWorkflowId?.Trim() ?? string.Empty;
+    settings.EcwProviderStandaloneBaseUrl = request.EcwProviderStandaloneBaseUrl?.Trim() ?? string.Empty;
+    settings.EcwProviderStandaloneEhrEndpointId = request.EcwProviderStandaloneEhrEndpointId?.Trim() ?? string.Empty;
     settings.ProviderInAppWorkflowId = request.ProviderInAppWorkflowId?.Trim() ?? string.Empty;
     settings.EcwProviderInAppWorkflowId = request.EcwProviderInAppWorkflowId?.Trim() ?? string.Empty;
     settings.BackendSystemPractitionerImportWorkflowId = request.BackendSystemPractitionerImportWorkflowId?.Trim() ?? string.Empty;
@@ -323,6 +331,10 @@ app.MapPost("/api/settings", async (SaveSettingsRequest request, HttpContext htt
         standaloneWorkflowId = settings.StandaloneWorkflowId,
         standaloneDetailWorkflowId = settings.StandaloneDetailWorkflowId,
         standaloneBaseUrl = settings.StandaloneBaseUrl,
+        ecwProviderStandaloneListWorkflowId = settings.EcwProviderStandaloneListWorkflowId,
+        ecwProviderStandaloneDetailWorkflowId = settings.EcwProviderStandaloneDetailWorkflowId,
+        ecwProviderStandaloneBaseUrl = settings.EcwProviderStandaloneBaseUrl,
+        ecwProviderStandaloneEhrEndpointId = settings.EcwProviderStandaloneEhrEndpointId,
         providerInAppWorkflowId = settings.ProviderInAppWorkflowId,
         ecwProviderInAppWorkflowId = settings.EcwProviderInAppWorkflowId,
         backendSystemPractitionerImportWorkflowId = settings.BackendSystemPractitionerImportWorkflowId
@@ -343,7 +355,11 @@ app.MapGet("/api/provider-standalone-workflow-ids", async (HttpContext http, Ses
     {
         standaloneWorkflowId = settings?.StandaloneWorkflowId ?? string.Empty,
         standaloneDetailWorkflowId = settings?.StandaloneDetailWorkflowId ?? string.Empty,
-        standaloneBaseUrl = settings?.StandaloneBaseUrl ?? string.Empty
+        standaloneBaseUrl = settings?.StandaloneBaseUrl ?? string.Empty,
+        ecwProviderStandaloneListWorkflowId = settings?.EcwProviderStandaloneListWorkflowId ?? string.Empty,
+        ecwProviderStandaloneDetailWorkflowId = settings?.EcwProviderStandaloneDetailWorkflowId ?? string.Empty,
+        ecwProviderStandaloneBaseUrl = settings?.EcwProviderStandaloneBaseUrl ?? string.Empty,
+        ecwProviderStandaloneEhrEndpointId = settings?.EcwProviderStandaloneEhrEndpointId ?? string.Empty
     });
 });
 
@@ -841,6 +857,10 @@ record SaveSettingsRequest(
     string StandaloneWorkflowId,
     string StandaloneDetailWorkflowId,
     string StandaloneBaseUrl,
+    string EcwProviderStandaloneListWorkflowId,
+    string EcwProviderStandaloneDetailWorkflowId,
+    string EcwProviderStandaloneBaseUrl,
+    string EcwProviderStandaloneEhrEndpointId,
     string ProviderInAppWorkflowId,
     string EcwProviderInAppWorkflowId,
     string BackendSystemPractitionerImportWorkflowId);

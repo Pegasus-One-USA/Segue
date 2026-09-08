@@ -50,13 +50,17 @@ import { EhrVendor } from '../../../ehr-endpoints/models/ehr-endpoint.model';
  */
 export const VENDOR_DISABLED_AUDIENCES: Partial<Record<EhrVendor, EpicAudience[]>> = {
   Athenahealth: ['provider-standalone', 'provider-ehr-launch'],
-  // eClinicalWorks (Healow): Patient, Provider EHR launch, AND Backend System are rolled out. Provider EHR launch
-  // (Provider EMR) was verified end-to-end against the live eCW sandbox (poc/ecw-ehr-launch-poc: EHR launch → PKCE →
-  // confidential client_secret_basic token → multi-resource FHIR reads). Backend System was verified end-to-end
-  // against the live eCW sandbox (SMART Backend Services: RS384 private_key_jwt → client_credentials token →
-  // Group/{id}/$export → poll → NDJSON; see docs/backend/17-ecw-backend-bulkexport-integration-plan.md). Provider
-  // standalone stays disabled until its own sandbox credentials/round-trip verification exist — re-enable when verified.
-  Healow: ['provider-standalone'],
+  // eClinicalWorks (Healow): Patient, Provider EHR launch, Backend System, AND Provider Standalone are all rolled out.
+  // Provider EHR launch (Provider EMR) was verified end-to-end against the live eCW sandbox (poc/ecw-ehr-launch-poc:
+  // EHR launch → PKCE → confidential client_secret_basic token → multi-resource FHIR reads). Backend System was
+  // verified end-to-end against the live eCW sandbox (SMART Backend Services: RS384 private_key_jwt → client_credentials
+  // token → Group/{id}/$export → poll → NDJSON; see docs/backend/17-ecw-backend-bulkexport-integration-plan.md).
+  // Provider Standalone reuses the same interactive SMART auth-code+PKCE round-trip as patient standalone / EHR launch
+  // (OAuthController + InteractiveSourceAuthorizationService, incl. eCW's request-derived callback), and was validated
+  // against the eCW SMART Standalone Launch documentation via the eCW_ProviderStandalone POC (discovery + authorize→302
+  // + full mock round-trip); enabled here so an eCW Provider Standalone source can be authored. Live provider-login
+  // round-trip still to be confirmed once sandbox provider credentials are available.
+  Healow: [],
 };
 
 export function isAudienceDisabledForVendor(vendor: EhrVendor, audience: EpicAudience): boolean {

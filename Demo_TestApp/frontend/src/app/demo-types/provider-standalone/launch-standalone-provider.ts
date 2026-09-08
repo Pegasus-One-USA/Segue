@@ -14,6 +14,13 @@ interface ProviderStandaloneWorkflowIds {
   standaloneWorkflowId: string;
   standaloneDetailWorkflowId: string;
   standaloneBaseUrl: string;
+  // eCW (eClinicalWorks) counterparts for the vendor toggle — a separate List/Detail workflow pair + base URL, plus
+  // a dedicated Epic-type EhrEndpoint id (distinct from the patient section's MyChart-type one) the eCW branch mints
+  // against instead of a picked hospital. See the vendor signal below.
+  ecwProviderStandaloneListWorkflowId: string;
+  ecwProviderStandaloneDetailWorkflowId: string;
+  ecwProviderStandaloneBaseUrl: string;
+  ecwProviderStandaloneEhrEndpointId: string;
 }
 
 /** Matches FHIRBridge's PublicEhrEndpointDto (GET /api/v1/ehr-public-endpoints?endpointType=Epic) — anonymous,
@@ -284,6 +291,82 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   private baseUrl = FHIRBRIDGE_BASE_URL;
   private workflowIdsLoadPromise: Promise<void> | null = null;
 
+  // eCW (eClinicalWorks) counterparts of the standalone* fields above, for the vendor toggle's list/detail flow —
+  // resolved by loadStandaloneWorkflowIds() from the same /api/provider-standalone-workflow-ids response. eCW's
+  // audience targets one fixed practice with no per-hospital directory, so instead of the Epic hospital picker its
+  // launch mints against ecwEhrEndpointId (a dedicated Epic-type EhrEndpoint row, distinct from the patient section's
+  // MyChart-type one). All four must be populated for the eCW branch to run (see hasEcwConfig).
+  private ecwListWorkflowId = '';
+  private ecwDetailWorkflowId = '';
+  private ecwBaseUrl = '';
+  private ecwEhrEndpointId = '';
+
+  // Epic vs eCW vendor toggle for this screen. Persisted to sessionStorage (not just this signal) because
+  // redirectToEpic is a full-page navigation away to the real Epic/eCW login and back — a plain in-memory signal
+  // would silently reset to 'epic' on return, exactly when ngOnInit's OAuth-callback branch needs to know which
+  // vendor's workflow/base URL to resolve the auto-fetch against. Mirrors the Patient Standalone screen's vendor
+  // signal.
+  readonly vendor = signal<'epic' | 'ecw'>('epic');
+  private static readonly VENDOR_STORAGE_KEY = 'providerStandaloneVendor';
+
+  private loadStoredVendor(): 'epic' | 'ecw' {
+    try {
+      return sessionStorage.getItem(LaunchStandaloneProviderComponent.VENDOR_STORAGE_KEY) === 'ecw' ? 'ecw' : 'epic';
+    } catch {
+      return 'epic';
+    }
+  }
+
+  // Vendor step of the flow — no network call by itself; loadHospitals() only runs for Epic (eCW has one fixed FHIR
+  // base URL, so there is nothing to pick — the html hides the hospital picker for eCW). Resets the same per-flow
+  // state Reset Token clears, since switching vendors starts the list step over.
+  selectVendor(next: 'epic' | 'ecw'): void {
+    if (this.vendor() === next) {
+      return;
+    }
+    this.vendor.set(next);
+    try {
+      sessionStorage.setItem(LaunchStandaloneProviderComponent.VENDOR_STORAGE_KEY, next);
+    } catch {
+      // Private-browsing/storage-disabled — the toggle just won't survive an Epic/eCW round trip, reverting to
+      // 'epic' on return; nothing else is affected.
+    }
+    this.hasEpicToken.set(false);
+    this.lastConfirmedValidUtc.set(null);
+    this.patientListError.set(null);
+    this.patientList.set(null);
+    this.selectedPatientId.set(null);
+    this.patientDetail.set(null);
+    this.patientDetailError.set(null);
+    this.hospitalSelectError.set(null);
+    if (next === 'epic' && this.hospitals().length === 0) {
+      void this.loadHospitals();
+    }
+  }
+
+  // True once every eCW field an admin must configure (Workflow Settings panel) is actually populated — gates the
+  // eCW branch of fetchPatientList()/needsReAuthorization() the same way isConfiguredWorkflowId gates the Epic path.
+  hasEcwConfig(): boolean {
+    return isConfiguredWorkflowId(this.ecwListWorkflowId)
+      && isConfiguredWorkflowId(this.ecwDetailWorkflowId)
+      && isConfiguredBaseUrl(this.ecwBaseUrl)
+      && !!this.ecwEhrEndpointId.trim();
+  }
+
+  // The list/detail workflow ids + base URL for whichever vendor is currently selected — Epic returns the existing
+  // standalone* fields unchanged (so the Epic path is byte-identical to before), eCW returns its own trio.
+  private activeListWorkflowId(): string {
+    return this.vendor() === 'ecw' ? this.ecwListWorkflowId : this.standaloneWorkflowId;
+  }
+
+  private activeDetailWorkflowId(): string {
+    return this.vendor() === 'ecw' ? this.ecwDetailWorkflowId : this.standaloneDetailWorkflowId;
+  }
+
+  private activeBaseUrl(): string {
+    return this.vendor() === 'ecw' ? this.ecwBaseUrl : this.baseUrl;
+  }
+
   // Purely informational badge — never gates whether the Fetch button is shown. The real, authoritative check is
   // always the next actual /run attempt (see fetchPatientList); this is just a "last known good" hint carried over
   // from HealthApp's own remembered session or the most recent successful fetch.
@@ -407,6 +490,10 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     // settled — a race that, on the exact page load right after this full-page redirect back from Epic, could read
     // back an empty query param map before the Router catches up, silently skipping the auto-fetch branch below
     // with no error at all. window.location.search has no such dependency.
+    // Restored before anything else — see the vendor signal's own remarks for why this must survive the full-page
+    // Epic/eCW round trip via sessionStorage rather than just staying an in-memory default.
+    this.vendor.set(this.loadStoredVendor());
+
     const params = new URLSearchParams(window.location.search);
     const workflowRunId = params.get('workflowRunId');
     const launchError = params.get('launchError');
@@ -420,7 +507,10 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       // would re-run this exact branch every time, re-triggering an auto-fetch even after Reset Token deliberately
       // cleared the session.
       window.history.replaceState(null, '', window.location.pathname);
-      void this.loadHospitals();
+      // Epic-only: eCW has one fixed FHIR base URL with no directory to pick from (see the html's @else branch).
+      if (this.vendor() === 'epic') {
+        void this.loadHospitals();
+      }
 
       // context_mismatch means the token exchange itself was rejected — this Epic account is permanently bound to
       // a different patient/practitioner (see InteractiveSourceAuthorizationService.EnforceUserFhirContextBindingAsync)
@@ -482,9 +572,12 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       return;
     }
 
-    // The hospital list is always visible from the start (step 1 of the flow), regardless of whether a remembered
-    // session exists — the user may still want to pick/change the target hospital before clicking Fetch.
-    void this.loadHospitals();
+    // The hospital list is always visible from the start (step 1 of the Epic flow), regardless of whether a
+    // remembered session exists — the user may still want to pick/change the target hospital before clicking Fetch.
+    // Skipped for eCW: its one fixed FHIR base URL has no directory to pick from (see the html's @else branch).
+    if (this.vendor() === 'epic') {
+      void this.loadHospitals();
+    }
     void this.checkRememberedEpicSession();
   }
 
@@ -529,7 +622,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
           // sessionId lets HealthApp's backend remember which FHIRBridge callerId this sign-in authorized a
           // token under (see ProviderStandaloneCallerIdStore) — the Backend System role's own Import
           // Practitioner flow deliberately reuses it, since that role has no interactive sign-in of its own.
-          { patientId: this.patientId, workflowId: this.standaloneWorkflowId, sessionId: this.sessionId },
+          { patientId: this.patientId, workflowId: this.activeListWorkflowId(), sessionId: this.sessionId },
           { withCredentials: true },
         ),
       );
@@ -566,6 +659,11 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       if (isConfiguredBaseUrl(ids.standaloneBaseUrl)) {
         this.baseUrl = ids.standaloneBaseUrl;
       }
+      // eCW counterparts — stored raw (no fallback config file); hasEcwConfig() guards the branch before use.
+      this.ecwListWorkflowId = ids.ecwProviderStandaloneListWorkflowId ?? '';
+      this.ecwDetailWorkflowId = ids.ecwProviderStandaloneDetailWorkflowId ?? '';
+      this.ecwBaseUrl = ids.ecwProviderStandaloneBaseUrl ?? '';
+      this.ecwEhrEndpointId = ids.ecwProviderStandaloneEhrEndpointId ?? '';
     } catch {
       // Non-fatal — falls back to whatever's in standalone-launch.config.ts (possibly still the placeholder,
       // which isConfiguredWorkflowId's callers below already guard against).
@@ -588,7 +686,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       await this.ensureWorkflowIdsLoaded();
       const result = await firstValueFrom(
         this.http.get<LaunchResultResponse>(
-          `${this.baseUrl}/api/v1/workflows/runs/${workflowRunId}/launch-result`,
+          `${this.activeBaseUrl()}/api/v1/workflows/runs/${workflowRunId}/launch-result`,
           { withCredentials: true },
         ),
       );
@@ -626,7 +724,16 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     this.patientListError.set(null);
     try {
       await this.ensureWorkflowIdsLoaded();
-      if (!isConfiguredWorkflowId(this.standaloneWorkflowId)) {
+      // vendor()==='ecw' resolves every call below against the admin-configured eCW workflow/base URL/EhrEndpoint
+      // instead of Epic's — see hasEcwConfig()/activeListWorkflowId()/selectVendor()'s own remarks.
+      if (this.vendor() === 'ecw') {
+        if (!this.hasEcwConfig()) {
+          this.patientListError.set(
+            'eCW is not configured yet. Ask an admin to set the eCW Provider Standalone List/Detail Workflow Id, Base URL, and EhrEndpoint Id in Workflow Settings.',
+          );
+          return;
+        }
+      } else if (!isConfiguredWorkflowId(this.standaloneWorkflowId)) {
         this.patientListError.set('No "Fetch Patient List" workflow id is configured. Ask an admin to set one in Settings.');
         return;
       }
@@ -639,7 +746,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       const criteria = (criteriaOverride ?? this.patientSearchCriteria()).trim();
       const result = await firstValueFrom(
         this.http.post<WorkflowRunResponse>(
-          `${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/run`,
+          `${this.activeBaseUrl()}/api/v1/workflows/${this.activeListWorkflowId()}/run`,
           {
             patientId: this.patientId,
             patientSearchCriteria: criteria || null,
@@ -697,7 +804,14 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     this.patientDetail.set(null);
     try {
       await this.ensureWorkflowIdsLoaded();
-      if (!isConfiguredWorkflowId(this.standaloneDetailWorkflowId)) {
+      if (this.vendor() === 'ecw') {
+        if (!this.hasEcwConfig()) {
+          this.patientDetailError.set(
+            'eCW is not configured yet. Ask an admin to set the eCW Provider Standalone List/Detail Workflow Id, Base URL, and EhrEndpoint Id in Workflow Settings.',
+          );
+          return;
+        }
+      } else if (!isConfiguredWorkflowId(this.standaloneDetailWorkflowId)) {
         this.patientDetailError.set('No "Patient Detail" workflow id is configured. Ask an admin to set one in Settings.');
         return;
       }
@@ -709,7 +823,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
 
       const result = await firstValueFrom(
         this.http.post<WorkflowRunResponse>(
-          `${this.baseUrl}/api/v1/workflows/${this.standaloneDetailWorkflowId}/run`,
+          `${this.activeBaseUrl()}/api/v1/workflows/${this.activeDetailWorkflowId()}/run`,
           {
             patientId: patient.id,
             patientSearchCriteria: null,
@@ -771,7 +885,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       }
       const status = await firstValueFrom(
         this.http.get<TokenStatusResponse>(
-          `${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/token-status`,
+          `${this.activeBaseUrl()}/api/v1/workflows/${this.activeListWorkflowId()}/token-status`,
           { params, withCredentials: true },
         ),
       );
@@ -805,13 +919,20 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     this.hasEpicToken.set(false);
     this.lastConfirmedValidUtc.set(null);
 
+    // eCW has no hospital directory to pick from — mint straight against the admin-configured EhrEndpoint id
+    // instead of a selected hospital (see hasEcwConfig / the html's eCW @else branch).
+    if (this.vendor() === 'ecw') {
+      await this.redirectToEpic(this.ecwEhrEndpointId);
+      return;
+    }
+
     const selectedHospital = this.hospitals().find(hospital => hospital.id === this.selectedHospitalId());
     if (!selectedHospital) {
       this.patientListError.set('Select a hospital above, then click Fetch Patient List again to sign in.');
       return;
     }
 
-    await this.redirectToEpic(selectedHospital);
+    await this.redirectToEpic(selectedHospital.id);
   }
 
   onHospitalSearchChange(value: string): void {
@@ -854,12 +975,12 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   // browser off to Epic's real authorization page. Must be a full top-level navigation, not an HttpClient call:
   // FHIRBridge's endpoint 302s to Epic, which an XHR/fetch can't complete interactively. Only reached from
   // handleFetchFailure, once a Fetch Patient List click has confirmed there's no usable token.
-  private async redirectToEpic(endpoint: EpicEndpoint): Promise<void> {
+  private async redirectToEpic(endpointId: string): Promise<void> {
     this.isRedirectingToEpic.set(true);
     this.hospitalSelectError.set(null);
     try {
       await this.ensureWorkflowIdsLoaded();
-      if (!isConfiguredWorkflowId(this.standaloneWorkflowId)) {
+      if (!isConfiguredWorkflowId(this.activeListWorkflowId())) {
         this.isRedirectingToEpic.set(false);
         this.hospitalSelectError.set('No "Fetch Patient List" workflow id is configured. Ask an admin to set one in Settings.');
         return;
@@ -886,7 +1007,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       // first-ever visit. Persist whatever comes back in the response either way, since FHIRBridge mints one when
       // none was supplied.
       const callerId = `${window.location.origin}${window.location.pathname}`;
-      const params: Record<string, string> = { ehrEndpointId: endpoint.id, callerId };
+      const params: Record<string, string> = { ehrEndpointId: endpointId, callerId };
       if (this.sessionId) {
         params['sessionId'] = this.sessionId;
       }
@@ -899,7 +1020,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       }
       const result = await firstValueFrom(
         this.http.get<PublicStandaloneUrlResponse>(
-          `${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/public-standalone-url`,
+          `${this.activeBaseUrl()}/api/v1/workflows/${this.activeListWorkflowId()}/public-standalone-url`,
           { params },
         ),
       );
@@ -935,7 +1056,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   private async discardFhirBridgeToken(): Promise<void> {
     try {
       await this.ensureWorkflowIdsLoaded();
-      if (!isConfiguredWorkflowId(this.standaloneWorkflowId)) {
+      if (!isConfiguredWorkflowId(this.activeListWorkflowId())) {
         return;
       }
 
@@ -948,7 +1069,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       }
       await firstValueFrom(
         this.http.post(
-          `${this.baseUrl}/api/v1/workflows/${this.standaloneWorkflowId}/discard-token`,
+          `${this.activeBaseUrl()}/api/v1/workflows/${this.activeListWorkflowId()}/discard-token`,
           {},
           { params, withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
         ),

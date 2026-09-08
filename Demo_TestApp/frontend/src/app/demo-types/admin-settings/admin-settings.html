@@ -132,6 +132,33 @@
           Provider Standalone Base URL
           <input type="text" [ngModel]="standaloneBaseUrl()" (ngModelChange)="standaloneBaseUrl.set($event)" placeholder="http://localhost:5000" />
         </label>
+
+        <h3>eClinicalWorks / eCW (vendor toggle on the Provider Standalone screen)</h3>
+        <p class="subtitle">
+          A separate List/Detail workflow pair + base URL for testing the eCW Provider Standalone flow instead of
+          Epic — the screen's vendor toggle skips the Epic hospital picker for eCW and mints against the endpoint id
+          below. The workflows' source node must be a Healow (eCW) Provider-audience connection, opted into public
+          launch. Unlike the Patient section's eCW endpoint (a MyChart-type row), provider-standalone's launch
+          requires an <strong>Epic-type</strong> <code>EhrEndpoint</code> row, so paste the id of a pre-seeded
+          Epic-type row whose FHIR base URL is the eCW practice's endpoint here (this is a distinct row from the
+          Patient section's shared eCW EhrEndpoint id).
+        </p>
+        <label class="field">
+          eCW Provider Standalone List Workflow Id
+          <input type="text" [ngModel]="ecwProviderStandaloneListWorkflowId()" (ngModelChange)="ecwProviderStandaloneListWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
+        <label class="field">
+          eCW Provider Standalone Detail Workflow Id
+          <input type="text" [ngModel]="ecwProviderStandaloneDetailWorkflowId()" (ngModelChange)="ecwProviderStandaloneDetailWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
+        <label class="field">
+          eCW Provider Standalone Base URL
+          <input type="text" [ngModel]="ecwProviderStandaloneBaseUrl()" (ngModelChange)="ecwProviderStandaloneBaseUrl.set($event)" placeholder="http://localhost:5000" />
+        </label>
+        <label class="field">
+          eCW Provider Standalone EhrEndpoint Id (Epic-type row pointing at the eCW practice's FHIR base)
+          <input type="text" [ngModel]="ecwProviderStandaloneEhrEndpointId()" (ngModelChange)="ecwProviderStandaloneEhrEndpointId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
       </section>
 
       <section class="settings-section">
