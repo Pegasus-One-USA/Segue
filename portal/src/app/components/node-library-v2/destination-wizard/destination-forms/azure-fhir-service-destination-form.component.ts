@@ -74,9 +74,9 @@ import { WizardDestinationFormApi } from './destination-form-api';
           </div>
 
           <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched">
-            <label class="dw-label" for="dw-azfhir-clientSecret">Client secret <span class="dw-req">*</span></label>
+            <label class="dw-label" for="dw-azfhir-clientSecret">Client secret @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
             <input id="dw-azfhir-clientSecret" type="password" class="dw-input" formControlName="clientSecret"
-              placeholder="client secret" autocomplete="new-password" />
+              [placeholder]="reusingExisting() ? 'Leave blank to keep the current client secret' : 'client secret'" autocomplete="new-password" />
             @if (fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched) {
               <span class="dw-error">A client secret is required.</span>
             }
@@ -270,11 +270,16 @@ export class AzureFhirServiceDestinationFormComponent implements WizardDestinati
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    // Reusing an already-saved client-credentials connection with the secret left blank means "keep what's
+    // already stored" — never bake a blank clientSecret into a rebuilt {clientId, clientSecret, tokenEndpoint}
+    // blob, which would silently overwrite the real stored secret.
+    const keepExisting =
+      this.reusingExisting() && config['dest_authType'] === 'clientCredentials' && !this.fhirForm.value.clientSecret;
     return {
       fields: JSON.parse(buildConnectionMetadata(config, 'fhir')) as Record<string, string>,
       // Managed identity never resolves a Key Vault secret — buildFhirSecretBlob returns '' for it. Client
       // credentials returns the {clientId, clientSecret, tokenEndpoint} blob FhirRepositoryAuthResolver expects.
-      secret: buildFhirSecretBlob(config),
+      secret: keepExisting ? null : buildFhirSecretBlob(config),
     };
   }
 

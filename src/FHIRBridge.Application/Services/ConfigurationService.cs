@@ -27,6 +27,7 @@ public sealed class ConfigurationService : IConfigurationService
     private readonly ISourceCapabilityRepository _capabilityRepository;
     private readonly ISourceCapabilityDiscoveryService _capabilityDiscoveryService;
     private readonly ISecretWriter _secretWriter;
+    private readonly ITenantSecretVaultResolver _tenantSecretVaultResolver;
     private readonly IParentReferenceResolver _parentReferenceResolver;
     private readonly IValidator<CreateMappingProfileRequest> _mappingProfileValidator;
     private readonly IValidator<CreateDestinationConfigurationRequest> _destinationConfigurationValidator;
@@ -38,6 +39,7 @@ public sealed class ConfigurationService : IConfigurationService
         ISourceCapabilityRepository capabilityRepository,
         ISourceCapabilityDiscoveryService capabilityDiscoveryService,
         ISecretWriter secretWriter,
+        ITenantSecretVaultResolver tenantSecretVaultResolver,
         IParentReferenceResolver parentReferenceResolver,
         IValidator<CreateMappingProfileRequest> mappingProfileValidator,
         IValidator<CreateDestinationConfigurationRequest> destinationConfigurationValidator,
@@ -48,6 +50,7 @@ public sealed class ConfigurationService : IConfigurationService
         _capabilityRepository = capabilityRepository;
         _capabilityDiscoveryService = capabilityDiscoveryService;
         _secretWriter = secretWriter;
+        _tenantSecretVaultResolver = tenantSecretVaultResolver;
         _parentReferenceResolver = parentReferenceResolver;
         _mappingProfileValidator = mappingProfileValidator;
         _destinationConfigurationValidator = destinationConfigurationValidator;
@@ -75,12 +78,12 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         await ValidateSourceConnectionRequestAsync(request, excludeId: null, cancellationToken);
-        await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
+        var authentication = await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
         var sourceConnection = new SourceConnection(
             request.Name,
             request.SourceSystemType,
             request.BaseUrl,
-            ConfigurationMapper.ToDomain(request.Authentication),
+            ConfigurationMapper.ToDomain(authentication),
             request.ApplicationType,
             ConfigurationMapper.ToDomain(request.Interactive),
             ConfigurationMapper.ToDomain(request.Retrieval));
@@ -104,9 +107,9 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         await ValidateSourceConnectionRequestAsync(request, sourceConnectionId, cancellationToken);
-        await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
+        var resolvedRequestAuthentication = await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
         var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
-        var authentication = PreserveSecretsIfBlank(ConfigurationMapper.ToDomain(request.Authentication), sourceConnection.Authentication);
+        var authentication = PreserveSecretsIfBlank(ConfigurationMapper.ToDomain(resolvedRequestAuthentication), sourceConnection.Authentication);
         sourceConnection.Update(
             request.Name,
             request.SourceSystemType,
@@ -146,13 +149,17 @@ public sealed class ConfigurationService : IConfigurationService
     /// <see cref="AddDestinationConfigurationAsync"/>/<see cref="UpdateDestinationConfigurationAsync"/> handle
     /// <c>InlineSecret</c>. No-op when the request carries no raw secret (an unedited "Existing Source" reuse, or
     /// a non-secret auth method) — the KeyVaultName/SecretName reference then just points at whatever was already
-    /// provisioned, or nothing has ever authenticated with a secret for that connection.
+    /// provisioned, or nothing has ever authenticated with a secret for that connection. Returns the
+    /// <paramref name="authentication"/> to actually map to the domain, with <c>ClientSecretKeyVaultName</c>
+    /// replaced by the resolved vault name when a secret was written — callers must use the returned value, not
+    /// the original parameter, when building the domain entity.
     /// </summary>
-    private async Task WriteInlineClientSecretAsync(SourceAuthenticationDto authentication, CancellationToken cancellationToken)
+    private async Task<SourceAuthenticationDto> WriteInlineClientSecretAsync(
+        SourceAuthenticationDto authentication, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(authentication.InlineClientSecret))
         {
-            return;
+            return authentication;
         }
 
         if (string.IsNullOrWhiteSpace(authentication.ClientSecretKeyVaultName) ||
@@ -161,8 +168,11 @@ public sealed class ConfigurationService : IConfigurationService
             throw new InvalidOperationException("A client secret Key Vault name and secret name are required to store the client secret.");
         }
 
-        var secretReference = new SecretReference(authentication.ClientSecretKeyVaultName, authentication.ClientSecretName);
+        var resolvedVaultName = _tenantSecretVaultResolver.ResolveVaultName(authentication.ClientSecretKeyVaultName);
+        var secretReference = new SecretReference(resolvedVaultName, authentication.ClientSecretName);
         await _secretWriter.WriteSecretAsync(secretReference, authentication.InlineClientSecret, cancellationToken);
+
+        return authentication with { ClientSecretKeyVaultName = resolvedVaultName };
     }
 
     // Neither the canvas rebuild path nor the entity-mode edit form ever re-displays a previously stored secret,
@@ -391,6 +401,8 @@ public sealed class ConfigurationService : IConfigurationService
         var secretReference = new SecretReference(request.KeyVaultName, request.SecretName);
         if (!string.IsNullOrWhiteSpace(request.InlineSecret))
         {
+            secretReference = new SecretReference(
+                _tenantSecretVaultResolver.ResolveVaultName(request.KeyVaultName), request.SecretName);
             await _secretWriter.WriteSecretAsync(secretReference, request.InlineSecret!, cancellationToken);
         }
 
@@ -441,9 +453,19 @@ public sealed class ConfigurationService : IConfigurationService
         await ValidateRequestAsync(_destinationConfigurationValidator, request, cancellationToken);
 
         var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
-        var secretReference = new SecretReference(request.KeyVaultName, request.SecretName);
+
+        // Neither the destination list dialog nor the wizard canvas flow ever re-displays a previously stored
+        // secret, so KeyVaultName/SecretName on a re-save are not a reliable signal — CreateDestinationConfiguration
+        // RequestValidator requires them non-empty on every request (including edits that don't touch the secret
+        // at all), so a caller can end up resending stale or even freshly-fabricated values alongside a blank
+        // InlineSecret. InlineSecret itself is the only unambiguous "the user actually wants to replace the
+        // secret" signal; when it's blank, keep the entity's current reference untouched — mirrors
+        // PreserveSecretsIfBlank's rationale for SourceConnection above.
+        var secretReference = destinationConfiguration.SecretReference;
         if (!string.IsNullOrWhiteSpace(request.InlineSecret))
         {
+            secretReference = new SecretReference(
+                _tenantSecretVaultResolver.ResolveVaultName(request.KeyVaultName), request.SecretName);
             await _secretWriter.WriteSecretAsync(secretReference, request.InlineSecret!, cancellationToken);
         }
 

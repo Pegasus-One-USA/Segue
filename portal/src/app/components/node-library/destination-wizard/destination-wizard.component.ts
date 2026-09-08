@@ -701,22 +701,21 @@ export class DestinationWizardComponent implements OnInit {
       () => DESTINATION_FORM_REGISTRY[this.registryKey()] ?? null,
     );
 
-  /** Only Csv's and BlobStorage's own components declare `reusingExisting` (gates sftpPassword's/secretValue's
-   *  required validator) — see CsvDestinationFormComponent/BlobStorageDestinationFormComponent. Passing an
-   *  input key a loaded component doesn't declare would throw (NgComponentOutlet uses ComponentRef.setInput
-   *  under the hood), so this is scoped to those branches only. Deliberately a plain method, not computed() —
-   *  hasExistingChanged() reads the live FormGroup underneath activeForm(), which isn't itself a tracked
-   *  signal, so a computed() here would never invalidate as the user types; template bindings re-evaluate
-   *  this fresh on every change-detection pass instead. */
+  /** Every registry-routed form (SQL family, Mongo, Medplum, Blob, Sftp, Csv, AzureFhirService) now declares
+   *  both `reusingExisting` and `existingDestinationId` — the former gates each form's own secret-field
+   *  validator (never require retyping a secret that's never repopulated), the latter lets Test Connection
+   *  resolve the stored secret server-side instead (see e.g. SqlFamilyDestinationFormComponent,
+   *  MongoDestinationFormComponent). FHIR (Aidbox) never reaches this at all (isFhir() is never
+   *  registry-routed — see registryKey()), so it isn't handled here — see _fhirReusingExisting() instead.
+   *  Deliberately a plain method, not computed() — hasExistingChanged() reads the live FormGroup underneath
+   *  activeForm(), which isn't itself a tracked signal, so a computed() here would never invalidate as the
+   *  user types; template bindings re-evaluate this fresh on every change-detection pass instead. */
   activeFormInputs(): Record<string, unknown> {
-    // Medplum's own form (like Mongo's) has no `reusingExisting` input — passing it would throw via
-    // ComponentRef.setInput. FHIR (Aidbox) never reaches this at all (isFhir() is never registry-routed —
-    // see registryKey()), so it isn't listed here. AzureFhirServiceDestinationFormComponent DOES declare
-    // `reusingExisting` (like Blob's), so 'azurefhir' is deliberately NOT added to this exclusion.
-    if (this.isSql() || this.isMongo() || this.isMedplum()) return {};
     return {
       reusingExisting:
         this.connectionMode() === 'existing' && !this.hasExistingChanged(),
+      existingDestinationId:
+        this.selectedExistingId() ?? this.resolvedDestinationId(),
     };
   }
 
@@ -2218,23 +2217,44 @@ export class DestinationWizardComponent implements OnInit {
     return destWriteMode || 'upsert';
   }
 
+  /** True while the FHIR (Aidbox) dialog is reusing a previously-saved connection unchanged — mirrors every
+   *  registry-routed form's own `reusingExisting` input (see activeFormInputs()), computed the same way since
+   *  the hand-rolled fhirForm bypasses the registry/outlet entirely (see isFhir()'s doc comment) and so never
+   *  receives that input. Covers both ways a connection can already exist: picked from the "Select Existing"
+   *  dropdown (connectionMode() === 'existing') and re-opening an already-saved canvas node
+   *  (_populateFromNode() sets resolvedDestinationId() but never touches connectionMode()) — same
+   *  selectedExistingId() ?? resolvedDestinationId() equivalence used elsewhere in this file (e.g.
+   *  canSelectExistingProfile). clientSecret/password/bearerToken are never repopulated when patching from an
+   *  existing connection, so requiring them here would permanently block reuse unless retyped. */
+  protected _fhirReusingExisting(): boolean {
+    return (
+      (this.connectionMode() === 'existing' || !!this.resolvedDestinationId()) &&
+      !this.hasExistingChanged()
+    );
+  }
+
   private _syncFhirAuthValidators(authType: string | null): void {
+    const reusingExisting = this._fhirReusingExisting();
     // tokenEndpoint is deliberately NOT in this list — it's no longer user-entered. For oauth2/clientCredentials
     // it's discovered from baseUrl (GET {baseUrl}/.well-known/smart-configuration) during testFhirConnection()
     // and patched into this same control, so it still ends up in dest_tokenEndpoint at save time.
-    (['clientId', 'clientSecret'] as const).forEach((name) => {
-      const ctrl = this.fhirForm.get(name)!;
-      ctrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
-      ctrl.updateValueAndValidity({ emitEvent: false });
-    });
-    (['username', 'password'] as const).forEach((name) => {
-      const ctrl = this.fhirForm.get(name)!;
-      ctrl.setValidators(authType === 'basic' ? [Validators.required] : []);
-      ctrl.updateValueAndValidity({ emitEvent: false });
-    });
+    const clientCtrl = this.fhirForm.get('clientId')!;
+    clientCtrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
+    clientCtrl.updateValueAndValidity({ emitEvent: false });
+    const clientSecretCtrl = this.fhirForm.get('clientSecret')!;
+    clientSecretCtrl.setValidators(authType === 'oauth2' && !reusingExisting ? [Validators.required] : []);
+    clientSecretCtrl.updateValueAndValidity({ emitEvent: false });
+
+    const usernameCtrl = this.fhirForm.get('username')!;
+    usernameCtrl.setValidators(authType === 'basic' ? [Validators.required] : []);
+    usernameCtrl.updateValueAndValidity({ emitEvent: false });
+    const passwordCtrl = this.fhirForm.get('password')!;
+    passwordCtrl.setValidators(authType === 'basic' && !reusingExisting ? [Validators.required] : []);
+    passwordCtrl.updateValueAndValidity({ emitEvent: false });
+
     const bearerToken = this.fhirForm.get('bearerToken')!;
     bearerToken.setValidators(
-      authType === 'bearer' ? [Validators.required] : [],
+      authType === 'bearer' && !reusingExisting ? [Validators.required] : [],
     );
     bearerToken.updateValueAndValidity({ emitEvent: false });
   }
@@ -3602,8 +3622,12 @@ export class DestinationWizardComponent implements OnInit {
           ? Number(metadata['dest_autoFetchMaxCount'])
           : 25,
       });
-      this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
+      // Captured BEFORE syncing validators — _fhirReusingExisting() reads hasExistingChanged(), which compares
+      // against this baseline; syncing first would transiently compare the freshly-patched values against a
+      // STALE baseline from whatever existing connection was selected previously (or null), wrongly requiring
+      // the secret fields again right when this selection means to relax them.
       this._existingBaseline = this.fhirForm.getRawValue();
+      this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
       return;
     }
 
@@ -3634,6 +3658,21 @@ export class DestinationWizardComponent implements OnInit {
     }
   }
 
+  /** Every secret-bearing form control name across every registry-routed form + the hand-rolled FHIR form —
+   *  password (SQL family), sftpPassword (Sftp/Csv), connectionString (Mongo), secretValue (Blob), clientSecret
+   *  (AzureFhirService/the FHIR dialog), bearerToken (the FHIR dialog), secret (Medplum). Kept as one shared list
+   *  so hasExistingChanged() and isStep1Dirty() can never drift out of sync on which keys count as secrets — see
+   *  each method's own remarks for why secret fields must always be excluded. */
+  private static readonly SECRET_FORM_CONTROL_KEYS = new Set([
+    'password',
+    'sftpPassword',
+    'connectionString',
+    'secretValue',
+    'clientSecret',
+    'bearerToken',
+    'secret',
+  ]);
+
   /** True once the user has edited any connection field away from what selectExisting() just patched in — the
    *  save-time signal for "fork a new connection" vs "reuse this one untouched" (see _save()). Secret fields
    *  (password/sftpPassword) are excluded on both sides: selectExisting() always leaves them blank (secrets never
@@ -3642,14 +3681,7 @@ export class DestinationWizardComponent implements OnInit {
    *  (because something ELSE changed) does use it, same as a brand-new connection. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
-    const secretKeys = new Set([
-      'password',
-      'sftpPassword',
-      'connectionString',
-      'secretValue',
-      'clientSecret',
-      'bearerToken',
-    ]);
+    const secretKeys = DestinationWizardComponent.SECRET_FORM_CONTROL_KEYS;
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(
         Object.entries(v).filter(([key]) => !secretKeys.has(key)),
@@ -3671,13 +3703,7 @@ export class DestinationWizardComponent implements OnInit {
    *  key list as hasExistingChanged(). */
   isStep1Dirty(): boolean {
     if (!this._step1Baseline) return false;
-    const secretKeys = new Set([
-      'password',
-      'sftpPassword',
-      'connectionString',
-      'clientSecret',
-      'bearerToken',
-    ]);
+    const secretKeys = DestinationWizardComponent.SECRET_FORM_CONTROL_KEYS;
     const strip = (v: Record<string, unknown>) =>
       Object.fromEntries(
         Object.entries(v).filter(([key]) => !secretKeys.has(key)),
@@ -4449,7 +4475,18 @@ export class DestinationWizardComponent implements OnInit {
       if (!DestinationWizardComponent.FHIR_SECRET_FIELD_KEYS.includes(key))
         fields[key] = value;
     }
-    const secret = buildFhirSecretBlob(full);
+    // Reusing an already-saved connection with its auth secret left blank means "keep what's already stored" —
+    // never bake a blank clientSecret/password/bearerToken into a rebuilt secret blob, which would silently
+    // overwrite the real stored secret. Each auth type's own secret-bearing field is checked, not all three,
+    // since only one is ever populated/required at a time (see _syncFhirAuthValidators).
+    const v = this.fhirForm.value;
+    const secretFieldBlank =
+      v.authType === 'oauth2' ? !v.clientSecret :
+      v.authType === 'basic' ? !v.password :
+      v.authType === 'bearer' ? !v.bearerToken :
+      true;
+    const keepExisting = this._fhirReusingExisting() && secretFieldBlank;
+    const secret = keepExisting ? null : buildFhirSecretBlob(full);
     return { fields, secret };
   }
 

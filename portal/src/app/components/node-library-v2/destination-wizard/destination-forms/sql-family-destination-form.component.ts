@@ -27,6 +27,16 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
 
   readonly engine = input.required<SqlFamilyEngine>();
 
+  /** True while the host is reusing a previously-saved connection unchanged — password is a secret that is
+   *  never repopulated when patching from an existing connection, so baking a blank one into a rebuilt
+   *  connection string here would silently overwrite the real stored secret (password has no Validators.required
+   *  of its own, so this doesn't gate form validity — only getMetadata()'s secret and the test-connection path). */
+  readonly reusingExisting = input<boolean>(false);
+  /** The already-saved destination's id when reusing it unchanged — lets Test Connection introspect the live
+   *  schema via the stored secret server-side (DestinationSchemaService.getSchema) instead of requiring the
+   *  password retyped. */
+  readonly existingDestinationId = input<string | null>(null);
+
   /** AzureSql has no live UI anywhere prior to this refactor — it reuses SqlServer's exact fields/behavior,
    *  differing only in the DestinationType/dest_engine tag it's saved under (see _destinationTypeFor below). */
   readonly showSslToggle = () => this.engine() === 'mysql' || this.engine() === 'postgres';
@@ -111,9 +121,14 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    // Reusing an already-saved connection with the password left blank means "keep what's already stored" —
+    // never bake a blank password into a rebuilt connection string, which would silently overwrite the real
+    // stored secret. Only applies to sql-auth; Active Directory Default auth has no password at all.
+    const keepExisting =
+      this.reusingExisting() && (this.sqlForm.value.auth ?? 'sql-auth') === 'sql-auth' && !this.sqlForm.value.password;
     return {
       fields: JSON.parse(buildConnectionMetadata(config, 'sql')) as Record<string, string>,
-      secret: buildSqlConnectionString(config),
+      secret: keepExisting ? null : buildSqlConnectionString(config),
     };
   }
 
@@ -163,6 +178,31 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
   testConnection(onSettled?: (result: { connected: boolean; tables: DestinationTable[] }) => void): void {
     this.probeState.set('testing');
     this.probeError.set(null);
+
+    // Reusing an already-saved connection without retyping the password can't run the raw credential probe
+    // (there's nothing to send) — introspect the live schema through the stored secret server-side instead.
+    const destinationId = this.existingDestinationId();
+    if (this.reusingExisting() && !this.sqlForm.value.password && destinationId) {
+      this.schemaSvc.getSchema(destinationId).subscribe({
+        next: res => {
+          const tables = res.tables.map(t => ({
+            ...t,
+            origin: 'probed' as const,
+            columns: t.columns.map(c => ({ ...c, origin: 'probed' as const })),
+          }));
+          this.sqlTables.set(tables);
+          this.probeState.set('ok');
+          onSettled?.({ connected: true, tables });
+        },
+        error: err => {
+          this.probeState.set('error');
+          this.probeError.set(err?.error?.error ?? err?.message ?? 'Connection failed.');
+          onSettled?.({ connected: false, tables: [] });
+        },
+      });
+      return;
+    }
+
     this.schemaSvc.probe(this.getProbeRequest()).subscribe({
       next: res => {
         if (res.connected) {

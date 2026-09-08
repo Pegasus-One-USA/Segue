@@ -77,6 +77,9 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
    *  never repopulated when patching from an existing connection, so requiring it here would permanently block
    *  reuse unless the user retypes it just to satisfy validation. */
   readonly reusingExisting = input<boolean>(false);
+  /** The already-saved destination's id when reusing it unchanged — lets Test Connection resolve the stored
+   *  secret server-side instead of requiring it retyped (see DestinationSchemaService.testBlob). */
+  readonly existingDestinationId = input<string | null>(null);
 
   constructor() {
     effect(() => {
@@ -126,7 +129,11 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
   canTest(): boolean {
     const v = this.blobForm.value;
     if (!v.container) return false;
-    return v.authMode === 'managedIdentity' || !!v.secretValue;
+    return (
+      v.authMode === 'managedIdentity' ||
+      !!v.secretValue ||
+      (this.reusingExisting() && !!this.existingDestinationId())
+    );
   }
 
   /** Live connectivity check before saving: builds the container client for the chosen auth mode and does a
@@ -146,6 +153,7 @@ export class BlobStorageDestinationFormComponent implements WizardDestinationFor
       tenantId: v.tenantId ?? '',
       clientId: v.clientId ?? '',
       managedIdentityClientId: v.managedIdentityClientId ?? '',
+      destinationId: this.existingDestinationId() ?? undefined,
     }).subscribe({
       next: res => {
         if (res.connected) {

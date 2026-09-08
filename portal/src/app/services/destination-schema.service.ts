@@ -121,6 +121,9 @@ export interface SftpConnectionTestRequest {
   username: string;
   password?: string;
   remoteFolder?: string;
+  /** When re-testing an already-saved destination without retyping its password, carries the destination's id
+   *  so the backend can resolve the stored password instead. */
+  destinationId?: string;
 }
 
 // No tokenEndpoint — for "oauth2"/"clientcredentials" it's discovered server-side from baseUrl via
@@ -165,6 +168,9 @@ export interface MongoConnectionTestRequest {
   collection?: string;
   /** Mirrors the form's "Create collection if not exists" checkbox — skips the missing-collection failure. */
   createIfNotExists?: boolean;
+  /** When re-testing an already-saved destination without retyping its connection string, carries the
+   *  destination's id so the backend can resolve the stored one instead. */
+  destinationId?: string;
 }
 
 export interface MongoConnectionTestResult extends ConnectionTestResult {
@@ -185,6 +191,9 @@ export interface BlobConnectionTestRequest {
   tenantId?: string;
   clientId?: string;
   managedIdentityClientId?: string;
+  /** When re-testing an already-saved destination without retyping its secret, carries the destination's id so
+   *  the backend can resolve the stored one instead. */
+  destinationId?: string;
 }
 
 /** FHIR-specific test result — adds the discovered token endpoint so the wizard can persist it into the

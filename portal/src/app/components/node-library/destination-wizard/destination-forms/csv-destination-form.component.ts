@@ -28,6 +28,9 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
    *  never sends whatever's typed there anywhere, so it doesn't need one; only a genuinely new connection (or
    *  an edited existing one that forks) does. */
   readonly reusingExisting = input<boolean>(false);
+  /** The already-saved destination's id when reusing it unchanged — lets Test Connection resolve the stored
+   *  password server-side instead of requiring it retyped (see DestinationSchemaService.testSftp). */
+  readonly existingDestinationId = input<string | null>(null);
 
   readonly csvForm = this.fb.group({
     name: ['CSV Export', [Validators.required]],
@@ -90,6 +93,7 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
       username: v.sftpUsername ?? '',
       password: v.sftpPassword ?? undefined,
       remoteFolder: v.sftpRemoteFolder ?? undefined,
+      destinationId: this.existingDestinationId() ?? undefined,
     }).subscribe({
       next: res => {
         this.probeState.set(res.connected ? 'ok' : 'error');
@@ -132,9 +136,13 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    const isSftp = config['dest_deliveryMode'] === 'sftp';
+    // Reusing an already-saved sftp-mode connection with the password left blank means "keep what's already
+    // stored" — never bake a blank password into a rebuilt URI, which would silently overwrite the real secret.
+    const keepExisting = isSftp && this.reusingExisting() && !this.csvForm.value.sftpPassword;
     return {
       fields: JSON.parse(buildConnectionMetadata(config, 'csv')) as Record<string, string>,
-      secret: config['dest_deliveryMode'] === 'sftp' ? buildSftpUri(config) : '',
+      secret: !isSftp ? '' : keepExisting ? null : buildSftpUri(config),
     };
   }
 

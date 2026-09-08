@@ -30,6 +30,7 @@ public sealed class MappingProfileCapabilityGatingTests
         _sut = new ConfigurationService(
             _repository, _capabilityRepository, _discovery.Object,
             Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>(),
+            new FHIRBridge.UnitTests.Security.PassthroughTenantSecretVaultResolver(),
             Mock.Of<IParentReferenceResolver>(),
             new CreateMappingProfileRequestValidator(
                 new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService(),

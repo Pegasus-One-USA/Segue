@@ -35,6 +35,9 @@ export class SftpDestinationFormComponent implements WizardDestinationFormApi {
    *  is never repopulated when patching from an existing connection, so requiring it here would permanently
    *  block reuse unless the user retypes it just to satisfy validation. */
   readonly reusingExisting = input<boolean>(false);
+  /** The already-saved destination's id when reusing it unchanged — lets Test Connection resolve the stored
+   *  password server-side instead of requiring it retyped (see DestinationSchemaService.testSftp). */
+  readonly existingDestinationId = input<string | null>(null);
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
 
@@ -67,6 +70,7 @@ export class SftpDestinationFormComponent implements WizardDestinationFormApi {
       username: v.sftpUsername ?? '',
       password: v.sftpPassword ?? undefined,
       remoteFolder: v.sftpRemoteFolder ?? undefined,
+      destinationId: this.existingDestinationId() ?? undefined,
     }).subscribe({
       next: res => {
         this.probeState.set(res.connected ? 'ok' : 'error');
@@ -95,9 +99,12 @@ export class SftpDestinationFormComponent implements WizardDestinationFormApi {
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    // Reusing an already-saved connection with the password left blank means "keep what's already stored" —
+    // never bake a blank password into a rebuilt URI, which would silently overwrite the real stored secret.
+    const keepExisting = this.reusingExisting() && !this.sftpForm.value.sftpPassword;
     return {
       fields: JSON.parse(buildConnectionMetadata(config, 'csv')) as Record<string, string>,
-      secret: buildSftpUri(config),
+      secret: keepExisting ? null : buildSftpUri(config),
     };
   }
 

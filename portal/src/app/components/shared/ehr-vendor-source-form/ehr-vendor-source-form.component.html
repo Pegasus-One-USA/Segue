@@ -298,9 +298,10 @@
 
           @if (showSecret()) {
             <div class="eaf-field eaf-field--full" [class.eaf-field--error]="form.controls.clientSecret.touched && form.controls.clientSecret.invalid">
-              <label class="eaf-label" for="eaf-clientSecret">Client Secret <span class="eaf-req">*</span></label>
+              <label class="eaf-label" for="eaf-clientSecret">Client Secret @if (!isEditing) {<span class="eaf-req">*</span>}</label>
               <input id="eaf-clientSecret" class="eaf-input" type="password" formControlName="clientSecret"
-                     placeholder="Stored securely — never logged" autocomplete="new-password" />
+                     [placeholder]="isEditing ? 'Leave blank to keep the current client secret' : 'Stored securely — never logged'"
+                     autocomplete="new-password" />
               @if (form.controls.clientSecret.touched && form.controls.clientSecret.invalid) {
                 <p class="eaf-error-msg">Client Secret is required.</p>
               }

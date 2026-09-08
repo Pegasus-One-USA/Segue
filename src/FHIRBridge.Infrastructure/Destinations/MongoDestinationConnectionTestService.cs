@@ -1,5 +1,8 @@
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.SharedKernel.Exceptions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -14,10 +17,31 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// </summary>
 public sealed class MongoDestinationConnectionTestService : IMongoDestinationConnectionTestService
 {
+    private readonly IConfigurationRepository _configurationRepository;
+    private readonly ISecretProvider _secretProvider;
+
+    public MongoDestinationConnectionTestService(
+        IConfigurationRepository configurationRepository, ISecretProvider secretProvider)
+    {
+        _configurationRepository = configurationRepository;
+        _secretProvider = secretProvider;
+    }
+
     public async Task<MongoConnectionTestResultDto> TestConnectionAsync(
         MongoConnectionTestRequest request,
         CancellationToken cancellationToken)
     {
+        // Re-testing an already-saved destination: the form never re-displays the stored connection string, so a
+        // blank one here means "use what's already saved" — resolve it from the vault instead.
+        if (string.IsNullOrWhiteSpace(request.ConnectionString) && request.DestinationId is { } destinationId)
+        {
+            var storedConnectionString = await ResolveStoredSecretAsync(destinationId, cancellationToken);
+            if (storedConnectionString is not null)
+            {
+                request = request with { ConnectionString = storedConnectionString };
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(request.ConnectionString))
         {
             return new MongoConnectionTestResultDto(false, "Connection string is required.");
@@ -75,6 +99,24 @@ public sealed class MongoDestinationConnectionTestService : IMongoDestinationCon
         catch (Exception exception)
         {
             return new MongoConnectionTestResultDto(false, exception.Message);
+        }
+    }
+
+    private async Task<string?> ResolveStoredSecretAsync(Guid destinationId, CancellationToken cancellationToken)
+    {
+        var destination = await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+        if (destination is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
+        }
+        catch (SecretNotConfiguredException)
+        {
+            return null;
         }
     }
 }

@@ -1,4 +1,4 @@
-import { Component, viewChild } from '@angular/core';
+import { Component, input, viewChild } from '@angular/core';
 import { SqlFamilyDestinationFormComponent } from './sql-family-destination-form.component';
 import { SqlFamilyFormApi } from './destination-form-api';
 
@@ -7,9 +7,11 @@ import { SqlFamilyFormApi } from './destination-form-api';
   selector: 'app-sql-server-destination-form',
   standalone: true,
   imports: [SqlFamilyDestinationFormComponent],
-  template: `<app-sql-family-destination-form engine="sqlserver" />`,
+  template: `<app-sql-family-destination-form engine="sqlserver" [reusingExisting]="reusingExisting()" [existingDestinationId]="existingDestinationId()" />`,
 })
 export class SqlServerDestinationFormComponent implements SqlFamilyFormApi {
+  readonly reusingExisting = input<boolean>(false);
+  readonly existingDestinationId = input<string | null>(null);
   private readonly engineForm = viewChild.required(SqlFamilyDestinationFormComponent);
 
   get sqlTables() { return this.engineForm().sqlTables; }
