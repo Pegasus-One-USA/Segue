@@ -1,0 +1,58 @@
+portal/src/app/auth/components/mfa-enrollment-panel/mfa-enrollment-panel.component.scss
+  s_41b72370f301d8::t_d6063b9e0ca69e 26
+  s_41b72370f301d8::t_1e86bc201b4531 65
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.scss
+  s_41b72370f301d8::t_239cb2a6ca34e2 119-124
+docker-compose.yml
+  s_41b72370f301d8::t_3fbc5463846e12 20-40
+  s_41b72370f301d8::t_a8de9968539fb8 311
+  s_41b72370f301d8::t_d7b0ef625a371c 298-299
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.ts
+  s_41b72370f301d8::t_f5bbc54cc6a317 72-75,140,167-168
+  s_41b72370f301d8::t_76b8de308089e1 13
+  s_41b72370f301d8::t_f860c634917154 154-162,166
+  s_41b72370f301d8::t_673dd14f37d538 91-94
+  s_41b72370f301d8::t_49b504331a7af6 115-122,125-139
+  s_41b72370f301d8::t_5bbcf8c237ef0f 148,153,163-165
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_41b72370f301d8::t_df442bad35f38b 151
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.scss
+  s_41b72370f301d8::t_ffb97d3d190b31 38-48
+  s_41b72370f301d8::t_55b432a0fe2bca 36-37
+portal/src/app/settings/layout/settings-shell.component.scss
+  s_41b72370f301d8::t_52d577029032a4 3-14
+portal/src/app/onboarding/pages/setup-super-admin/setup-super-admin.component.html
+  s_41b72370f301d8::t_08bbf562f9620f 272
+  s_41b72370f301d8::t_c9eea2720d2528 268
+  s_41b72370f301d8::t_4eaced868db771 265-267,269,271,282
+src/Api/FHIRBridge.Api/appsettings.json
+  s_41b72370f301d8::t_4b2ad4f1178936 60
+portal/src/app/settings/layout/workflow-configurations-shell/workflow-configurations-shell.component.scss
+  s_41b72370f301d8::t_a0ad0f0eccd96e 3-8
+portal/src/app/onboarding/components/terms-and-conditions-dialog/terms-and-conditions-dialog.component.ts
+  s_41b72370f301d8::t_e1651549201a0f 1
+  s_41b72370f301d8::t_c971807a28f831 12-15,26-27,35,84
+portal/src/app/auth/pages/signup/signup.component.html
+  s_41b72370f301d8::t_9180680d2dc2ff 158
+portal/src/app/auth/pages/signup/signup.component.ts
+  s_41b72370f301d8::t_1af353bd1649c4 114-115
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_41b72370f301d8::t_af3bd82727fcbf 318
+  s_41b72370f301d8::t_b684b7a96c2fbd 282-298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b8e1c34c21ba96847d843fd351b5d63649038895",
+  "prompts": {},
+  "sessions": {
+    "s_41b72370f301d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "95bb9773-87ef-49e7-95a8-9ae0c4bf0992",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

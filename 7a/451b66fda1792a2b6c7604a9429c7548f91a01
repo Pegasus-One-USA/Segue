@@ -1,0 +1,21 @@
+portal/src/app/components/node-library-v2/node-library-dialog.component.html
+  s_f72cc3aac83253::t_aef23a7cd1138c 163-165
+portal/src/app/components/node-library-v2/node-library-dialog.component.ts
+  s_f72cc3aac83253::t_1bd3144d058ccd 603-605,608,611
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "7a451b66fda1792a2b6c7604a9429c7548f91a01",
+  "prompts": {},
+  "sessions": {
+    "s_f72cc3aac83253": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "99510800-b942-496b-8cbc-cc416d8d65af",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

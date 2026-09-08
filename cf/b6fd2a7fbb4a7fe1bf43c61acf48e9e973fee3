@@ -1,0 +1,24 @@
+portal/src/app/core/services/unsaved-changes-prompt.service.ts
+  s_5849c970b9c366::t_f8086f4b361659 7,18,22-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "cfb6fd2a7fbb4a7fe1bf43c61acf48e9e973fee3",
+  "prompts": {},
+  "humans": {
+    "h_09a923a1991c96": {
+      "author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  },
+  "sessions": {
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

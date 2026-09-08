@@ -1,0 +1,19 @@
+portal/scripts/token-baseline.json
+  s_f72cc3aac83253::t_485851b73a64f3 2-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "843b85932cac1b3fe840d610c2a0154378385d17",
+  "prompts": {},
+  "sessions": {
+    "s_f72cc3aac83253": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "99510800-b942-496b-8cbc-cc416d8d65af",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+portal/src/app/_permission-checkbox.scss
+  s_85e5f4509df794::t_479d78fffb5265 1-113
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.scss
+  s_85e5f4509df794::t_f82435454d8d52 2
+  s_85e5f4509df794::t_9d9f5820155e72 477-478
+  s_85e5f4509df794::t_d5b50eb7fefcd6 289-295
+portal/scripts/token-baseline.json
+  s_85e5f4509df794::t_d5eb12bf245ca2 3
+portal/src/styles.scss
+  s_85e5f4509df794::t_7c976a073980fc 1082-1093
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.scss
+  s_85e5f4509df794::t_8abb94551449bd 2
+  s_85e5f4509df794::t_afb0f13136b365 265-267
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "f583beb05e5f1d6a4eb25ba12ee3424afee7a237",
+  "prompts": {},
+  "sessions": {
+    "s_85e5f4509df794": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ce0dc8-ced5-4aba-a5f7-13b80b101734",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}

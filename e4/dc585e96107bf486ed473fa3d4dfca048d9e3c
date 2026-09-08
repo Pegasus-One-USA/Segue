@@ -1,0 +1,25 @@
+portal/src/app/settings/pages/email-settings/email-settings.component.html
+  s_569e47a9591572::t_57bc3ed287ef8c 48,50-52,56,59-61
+src/FHIRBridge.Application/Services/NotificationSettingsService.cs
+  s_569e47a9591572::t_df5c7a410a40c4 39-53
+portal/src/app/settings/pages/email-settings/email-settings.component.ts
+  s_569e47a9591572::t_6da87852dd5e40 79-82
+  s_569e47a9591572::t_5f3d4a2db4ed95 39-46,52,56
+  s_569e47a9591572::t_a3e4d2a5ad0caa 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e4dc585e96107bf486ed473fa3d4dfca048d9e3c",
+  "prompts": {},
+  "sessions": {
+    "s_569e47a9591572": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e4bfd2b-5859-48de-9457-82c786ac4e83",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

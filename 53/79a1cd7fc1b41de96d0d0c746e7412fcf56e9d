@@ -1,0 +1,20 @@
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_f72cc3aac83253::t_43455827937c44 20-21,165,172,190
+  s_f72cc3aac83253::t_3da87db0396497 31-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "5379a1cd7fc1b41de96d0d0c746e7412fcf56e9d",
+  "prompts": {},
+  "sessions": {
+    "s_f72cc3aac83253": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "99510800-b942-496b-8cbc-cc416d8d65af",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

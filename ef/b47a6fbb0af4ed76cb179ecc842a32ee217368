@@ -1,0 +1,21 @@
+portal/scripts/lint-baseline.json
+  s_f72cc3aac83253::t_3b9b4b8434ac19 2
+portal/src/app/services/applicability-v2.service.ts
+  s_f72cc3aac83253::t_5ec16240c7ef79 3-4,18-21,124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "efb47a6fbb0af4ed76cb179ecc842a32ee217368",
+  "prompts": {},
+  "sessions": {
+    "s_f72cc3aac83253": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "99510800-b942-496b-8cbc-cc416d8d65af",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
