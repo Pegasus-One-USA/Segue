@@ -1,0 +1,48 @@
+src/FHIRBridge.Infrastructure/Sources/BackendAuthScopeProbeService.cs
+  s_58bc1e11ff251d::t_910812a0298d60 9,33-34,234-235,299-367
+  s_58bc1e11ff251d::t_a943a9ec62117b 1,203,236-237,250-255,257-265,267,270-289,291,294-295
+  s_58bc1e11ff251d::t_678a75019f009d 238-249,256,266,268-269,290,292-293,296-298
+  s_58bc1e11ff251d::t_89c035eff840a1 58,98-99,134-135,137,144-151,155-163,165-168,172,201-202,209-211,218,222-225
+  s_58bc1e11ff251d::t_098e0823f9f269 10
+  s_58bc1e11ff251d::t_8326e0969aea07 61,63,77-78,83,95,97,100,102-130,132-133,140-143,154,164
+portal/src/app/services/epic-discovery.service.ts
+  s_58bc1e11ff251d::t_89658622534cf8 51-55
+src/FHIRBridge.Infrastructure/Security/CompositeSecretProvider.cs
+  s_58bc1e11ff251d::t_a26c0a3393e69b 3,41,45,54,56,58-74,77-101,103-108,112-144,146-159
+tests/FHIRBridge.UnitTests/Security/CompositeSecretProviderTests.cs
+  s_58bc1e11ff251d::t_a26c0a3393e69b 122-196,213-226
+src/FHIRBridge.Application/DTOs/BackendAuthScopesDtos.cs
+  s_58bc1e11ff251d::t_48c0287f8c45bd 25-34
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_58bc1e11ff251d::t_593169ec35b89b 3329-3335
+  s_58bc1e11ff251d::t_6b885699c99897 3357,3369
+  s_58bc1e11ff251d::t_18b052fd10add3 3342-3348
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_58bc1e11ff251d::t_6b885699c99897 3207,3219
+  s_58bc1e11ff251d::t_593169ec35b89b 3179-3185
+  s_58bc1e11ff251d::t_18b052fd10add3 3192-3198
+tests/FHIRBridge.UnitTests/Sources/BackendAuthScopeProbeServiceTests.cs
+  s_58bc1e11ff251d::t_4d1750ce35ca8f 167-207,211-224,400-401
+  s_58bc1e11ff251d::t_3d2496e9440c14 266,275-313
+  s_58bc1e11ff251d::t_3178e83099e22a 208-210
+  s_58bc1e11ff251d::t_5e75597186dab9 321-373
+  s_58bc1e11ff251d::t_a1ba705969688e 20,28,225-265,267-274,314-320,374-399
+src/FHIRBridge.Infrastructure/Security/ConfigurationSecretProvider.cs
+  s_58bc1e11ff251d::t_a26c0a3393e69b 30-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "73389d27fdfe94e85215b9f2e073f72bcc63a4eb",
+  "prompts": {},
+  "sessions": {
+    "s_58bc1e11ff251d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26edf78c-b331-4af6-8ee9-b83034814e21",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
