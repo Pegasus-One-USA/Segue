@@ -1079,8 +1079,18 @@ textarea {
    Excludes .checkbox-visual__input (rule-config-form's transform-rule config
    editor), which already hand-implements this exact look via a hidden native
    input + a custom sibling box, to avoid fighting that component's own
-   absolute-positioned hit target. */
-input[type='checkbox']:not(.checkbox-visual__input) {
+   absolute-positioned hit target.
+   Also excludes .mdc-checkbox__native-control — Angular Material's own <mat-checkbox> renders a
+   real native <input type="checkbox"> under the hood (visually hidden via opacity, per its own
+   compiled template), which this selector was matching too: this rule's own background/border/
+   checked-mark then painted directly on top of (and slightly offset from) Material's real
+   .mdc-checkbox__background box, defeating Material's opacity:0 for that element. Net effect on
+   every <mat-checkbox> in the app: two independently-colored, offset boxes layered on each other
+   ("double checkbox"). role-permissions.component.scss originally worked around this locally
+   (re-neutralizing the native control there) rather than risk this shared rule — excluding the
+   class here fixes it at the source for every current and future <mat-checkbox>, hand-rolled
+   native checkboxes are unaffected since none of them carry Material's own internal class. */
+input[type='checkbox']:not(.checkbox-visual__input):not(.mdc-checkbox__native-control) {
   appearance:    none;
   -webkit-appearance: none;
   width:         18px;
