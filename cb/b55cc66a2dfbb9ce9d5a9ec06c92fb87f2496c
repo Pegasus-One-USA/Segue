@@ -1,0 +1,67 @@
+src/Api/FHIRBridge.Api/Workflows/WorkflowRunHistoryDto.cs
+  s_3f7f7b78334c2f::t_2be5bc22fc86eb 30-42
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_3f7f7b78334c2f::t_3b544e474daa78 439-443,445-446,450-454
+  s_3f7f7b78334c2f::t_73f4ad47d1b685 95-97
+  s_3f7f7b78334c2f::t_82c117fc88c992 92-94
+  s_3f7f7b78334c2f::t_2dbc940a3bedf9 86-91
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.scss
+  s_3f7f7b78334c2f::t_1582f07ccd3811 99-197
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_3f7f7b78334c2f::t_f505d98eeff387 95-97
+  s_3f7f7b78334c2f::t_048229c8bc80e4 92-94
+  s_3f7f7b78334c2f::t_eae11335fdfbc5 86-91
+portal/src/app/_list-page.scss
+  s_3f7f7b78334c2f::t_1333b0f25d0254 79-127
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_3f7f7b78334c2f::t_24845a12c31b15 17
+  s_3f7f7b78334c2f::t_a14b31ea67b2fe 28,35
+  s_3f7f7b78334c2f::t_08f783221e0d1c 42
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_3f7f7b78334c2f::t_b1b572c1eefe1f 21-35,37-59
+  s_3f7f7b78334c2f::t_e0efdc466481dd 233,240
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_3f7f7b78334c2f::t_c35c4b2031b83d 1
+  s_3f7f7b78334c2f::t_1841e6ed42362c 16-19
+  s_3f7f7b78334c2f::t_f253fe093aac04 111-144,148
+  s_3f7f7b78334c2f::t_bbc86e764ef71e 221-226
+  s_3f7f7b78334c2f::t_01e62d46da4795 42-46
+  s_3f7f7b78334c2f::t_ebde28e8ac2319 99
+  s_3f7f7b78334c2f::t_733dff0aef4a11 57-60
+  s_3f7f7b78334c2f::t_ec5a482b198dbe 89
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_3f7f7b78334c2f::t_789c012f907cc4 55-58,65
+  s_3f7f7b78334c2f::t_a99be8fa51cb50 259-286
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_3f7f7b78334c2f::t_d93df6299b7848 1622,1624-1628
+  s_3f7f7b78334c2f::t_d3475bb353fa25 1544-1546
+  s_3f7f7b78334c2f::t_9c188e0dd9e291 1621,1623
+  s_3f7f7b78334c2f::t_27e6eee186411a 1651-1652
+  s_3f7f7b78334c2f::t_de3ffe2f3d5969 1591-1599
+  s_3f7f7b78334c2f::t_d61add80f5b04e 1543
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_3f7f7b78334c2f::t_ac7e81b8b22837 2887-2889
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_3f7f7b78334c2f::t_dbc1e41c741389 359-380
+  s_3f7f7b78334c2f::t_3d99b579db7dbd 142-164
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_3f7f7b78334c2f::t_e751c9b62177cc 40-46,50-52
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_3f7f7b78334c2f::t_4b386f9e643d9c 2931-2933
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "cbb55cc66a2dfbb9ce9d5a9ec06c92fb87f2496c",
+  "prompts": {},
+  "sessions": {
+    "s_3f7f7b78334c2f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ef3f9c1b-a3c8-4d09-a49d-f4a4effcf9bb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
