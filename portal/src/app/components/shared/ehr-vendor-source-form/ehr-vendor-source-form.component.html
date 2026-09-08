@@ -863,16 +863,21 @@
   </div><!-- /eaf-body -->
 
   <!-- ── Sticky footer ─────────────────────────────────────────────────────── -->
-  <div class="eaf-footer">
-    @if (!isReadonly && form.invalid && missingRequiredFields().length > 0) {
-      <span class="eaf-missing-hint" [title]="missingRequiredFields().join(', ')">
-        {{ missingRequiredFields().length === 1
-          ? '1 required field left: ' + missingRequiredFields()[0]
-          : missingRequiredFields().length + ' required fields left: ' + missingRequiredFields().slice(0, 2).join(', ') + (missingRequiredFields().length > 2 ? ', …' : '') }}
-      </span>
-    }
-    <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
-    @if (!isReadonly) {
+  <!-- Read-only ("View") mode: the footer would render nothing but a "Close" button — purely
+       redundant with the sticky header's own × (.eaf-close-btn above, also wired to closeAll.emit()),
+       so it's dropped entirely here rather than shown as an otherwise-empty bar. Edit/Create mode
+       keeps the full footer — it also carries the actual Save/Test Connection action, which has no
+       other affordance. -->
+  @if (!isReadonly) {
+    <div class="eaf-footer">
+      @if (form.invalid && missingRequiredFields().length > 0) {
+        <span class="eaf-missing-hint" [title]="missingRequiredFields().join(', ')">
+          {{ missingRequiredFields().length === 1
+            ? '1 required field left: ' + missingRequiredFields()[0]
+            : missingRequiredFields().length + ' required fields left: ' + missingRequiredFields().slice(0, 2).join(', ') + (missingRequiredFields().length > 2 ? ', …' : '') }}
+        </span>
+      }
+      <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">Cancel</button>
       @if (testStatus() === 'fail' && connectionTestError() && !form.invalid) {
         <span class="eaf-missing-hint" [title]="connectionTestError()!">
           Connection test failed: {{ connectionTestError() }}
@@ -892,7 +897,7 @@
           Test Connection {{ isEditing ? '& Update' : (wiz.wizardMode() === 'entity' ? '& Save' : '& Add to Workflow') }}
         }
       </button>
-    }
-  </div>
+    </div>
+  }
 
 </div>
