@@ -22,7 +22,16 @@ public sealed record BackendAuthScopesRequest(
     string? PrivateKeySecretName,
     string? ClientSecret,
     string? AuthPlacement,
-    string? Scope);
+    string? Scope,
+    /// <summary>
+    /// The source's vendor (a <c>SourceSystemType</c> name, e.g. <c>"Healow"</c>), when known. Vendors registered
+    /// in <c>VendorScopeCatalog</c> do not accept the generic <c>system/{Resource}.{read|rs}</c> vocabulary — eCW's
+    /// only system wildcard is <c>system/*.r</c>, and it fails the WHOLE token request with <c>invalid_scope</c> on
+    /// one unrecognized scope — so the probe respells <see cref="Scope"/> for that vendor rather than testing
+    /// credentials with a scope string the server could never accept. Null (or an unregistered vendor) keeps
+    /// <see cref="Scope"/> exactly as sent.
+    /// </summary>
+    string? Vendor = null);
 
 /// <summary>
 /// Result of a backend-services auth probe. <see cref="GrantedScopes"/> is the source's actual <c>scope</c>

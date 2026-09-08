@@ -3176,17 +3176,26 @@ export class EhrVendorSourceFormComponent
 
   /** Shared by runBackendAuthScopeProbe() (Discover's passive auto-probe) and testConnectionAndNext() (the
    *  footer's explicit gate): builds and sends the real client_credentials exchange for whichever Backend System
-   *  auth method is selected, requesting the fixed wildcard scope 'system/*.*'. Most Backend Services servers
-   *  (Epic included) reject a literal wildcard access-level as invalid_scope — the access level must be a real
-   *  suffix: '.read' for v1 (coarse), '.rs' for v2 (granular), matching whichever version scopeString() elsewhere
-   *  already uses for this connection. */
+   *  auth method is selected, requesting this connection's own scope string (or a wildcard when it has none yet —
+   *  see the `scope` const below). Note the access level must always be a real suffix: '.read' for v1 (coarse),
+   *  '.rs' for v2 (granular), matching whichever version scopeString() elsewhere already uses — most Backend
+   *  Services servers (Epic included) reject a literal wildcard access-level as invalid_scope. `vendor` travels
+   *  with the request because even that grammar isn't universal — eCW's only system wildcard is 'system/*.r' —
+   *  and the backend respells the scope from that vendor's own profile (VendorScopeCatalog) rather than the
+   *  wizard duplicating each vendor's vocabulary here. */
   private runRealCredentialTest(
     method: 'secret' | 'jwt',
     tokenEndpoint: string,
   ): Observable<BackendAuthScopesResult> {
     const clientId = this.form.controls.clientId.value.trim();
     const suffix = this.scopeVersionValue() === 'v2' ? 'rs' : 'read';
-    const scope = `system/*.${suffix}`;
+    // Test with the exact scope string a real run of this connection will request (scopeString(), the same value
+    // save() persists) whenever this form has one — a wildcard is only a stand-in for "whatever this app is
+    // allowed", and vendors whose app registration selects an explicit scope list (eCW) reject it outright, so a
+    // wildcard test can fail on credentials that work perfectly. Falls back to the wildcard when no resource
+    // types are in play yet (e.g. Single Patient, whose types are derived from the destination mapping).
+    const scope =
+      this.scopeString().split(/\s+/).filter(Boolean).join(' ') || `system/*.${suffix}`;
     if (method === 'secret') {
       return this.discovery.testBackendAuthScopes({
         tokenEndpoint,
@@ -3195,6 +3204,7 @@ export class EhrVendorSourceFormComponent
         clientSecret: this.form.controls.clientSecret.value,
         authPlacement: this.form.controls.authPlacement.value,
         scope,
+        vendor: this.wiz.ehrType(),
       });
     }
     const keyId = this.form.controls.jwtKid.value.trim();
@@ -3206,6 +3216,7 @@ export class EhrVendorSourceFormComponent
       privateKeyVaultName: this.form.controls.privateKeyRef.value.trim(),
       privateKeySecretName: this.form.controls.privateKeySecretName.value.trim(),
       scope,
+      vendor: this.wiz.ehrType(),
     });
   }
 

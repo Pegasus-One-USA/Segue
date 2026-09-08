@@ -48,6 +48,11 @@ export interface BackendAuthScopesRequest {
   clientSecret?: string;
   /** Where to place client id/secret — 'post' (form body, the default) or 'basic' (Authorization header). */
   authPlacement?: 'post' | 'basic' | null;
+  /** The source's vendor (a SourceSystemType name, e.g. 'Healow'). Vendors with their own scope vocabulary — eCW
+   *  spells its only system wildcard 'system/*.r' and fails the whole token request on one unrecognized scope —
+   *  need the backend to respell `scope` from that vendor's profile before the exchange, or the credential test
+   *  fails with invalid_scope on credentials that are actually fine. */
+  vendor?: string | null;
 }
 
 export interface BackendAuthScopesResult {

@@ -27,4 +27,15 @@ public sealed class ConfigurationSecretProvider : ISecretProvider
 
         return Task.FromResult(value);
     }
+
+    /// <summary>
+    /// Null-returning twin of <see cref="GetSecretAsync"/>, so <see cref="CompositeSecretProvider"/> can probe
+    /// several candidate references in turn and raise one exception naming them all, instead of the first miss
+    /// throwing an exception that names only one of the vaults it looked in.
+    /// </summary>
+    public string? TryGetSecret(SecretReference secretReference)
+    {
+        var value = _configuration[$"Secrets:{secretReference.KeyVaultName}:{secretReference.SecretName}"];
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
 }

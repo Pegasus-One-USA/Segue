@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -37,17 +38,11 @@ public sealed class CompositeSecretProvider : ISecretProvider
         var useAzureKeyVault = _configuration.GetValue("KeyVault:UseAzureKeyVault", false);
         var allowLocalFallback = _configuration.GetValue("KeyVault:AllowConfigurationFallback", true);
 
-        // Resolved here (not left to each caller) so EVERY secret reference — tenant SourceConnection/
-        // DestinationConfiguration secrets AND app-level secrets (JWT signing key, terminology credentials,
-        // which historically passed a hardcoded "app" placeholder straight through, uncorrected) — reaches
-        // the real configured vault when Key Vault mode is on. Idempotent: ConfigurationService.cs's own
-        // explicit resolve-before-call sites still work fine, resolving an already-resolved name is a no-op.
-        secretReference = new SecretReference(
-            _vaultResolver.ResolveVaultName(secretReference.KeyVaultName), secretReference.SecretName);
+        var candidates = BuildCandidates(secretReference);
 
         if (!useAzureKeyVault)
         {
-            return await ResolveLocalAsync(secretReference, cancellationToken);
+            return await ResolveLocalAsync(candidates, cancellationToken);
         }
 
         // KeyVault:SecretPrefix (see SecretPrefixing) distinguishes environments/developers sharing one vault
@@ -56,29 +51,111 @@ public sealed class CompositeSecretProvider : ISecretProvider
         // never applied to the local fallback below: each environment already has its own separate database,
         // so there's no local collision to prevent, and prefixing that lookup too would make an
         // already-stored local secret suddenly unfindable under its old, unprefixed key.
-        var keyVaultReference = SecretPrefixing.Apply(secretReference, _configuration["KeyVault:SecretPrefix"]);
+        var prefix = _configuration["KeyVault:SecretPrefix"];
 
-        try
+        for (var i = 0; i < candidates.Count; i++)
         {
-            return await _azureKeyVaultSecretProvider.GetSecretAsync(keyVaultReference, cancellationToken);
-        }
-        catch (Exception exception) when (allowLocalFallback)
-        {
-            _logger.LogWarning(
-                exception,
-                "Azure Key Vault lookup failed for secret {SecretName} in vault {KeyVaultName}. Trying local fallback.",
-                keyVaultReference.SecretName,
-                keyVaultReference.KeyVaultName);
+            var keyVaultReference = SecretPrefixing.Apply(candidates[i], prefix);
 
-            return await ResolveLocalAsync(secretReference, cancellationToken);
+            try
+            {
+                return await _azureKeyVaultSecretProvider.GetSecretAsync(keyVaultReference, cancellationToken);
+            }
+            // A miss on a non-final candidate is never fatal — there's still another vault to look in, whatever
+            // KeyVault:AllowConfigurationFallback says (that flag governs falling back to LOCAL storage, not
+            // whether the as-stored vault gets tried at all).
+            catch (Exception exception) when (allowLocalFallback || i < candidates.Count - 1)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Azure Key Vault lookup failed for secret {SecretName} in vault {KeyVaultName}. Trying the next candidate.",
+                    keyVaultReference.SecretName,
+                    keyVaultReference.KeyVaultName);
+            }
         }
+
+        return await ResolveLocalAsync(candidates, cancellationToken);
+    }
+
+    /// <summary>
+    /// The references to look the secret up under, most-likely first: the vault name as resolved by
+    /// <see cref="ITenantSecretVaultResolver"/> (the one configured tenant-secrets vault every app-provisioned
+    /// secret is written to when Key Vault mode is on), then — when the resolver actually rewrote it — the
+    /// reference exactly as persisted on the entity.
+    /// <para>
+    /// That second candidate matters in two real cases the resolved-name-only lookup silently broke: a secret
+    /// provisioned BEFORE Key Vault mode was switched on (stored locally under its original vault name, e.g.
+    /// "workflow-secrets" or "signing-keys", and instantly unreadable the moment the rewrite kicked in), and a
+    /// hand-entered reference to a vault the operator genuinely owns, whose whole point is naming a specific
+    /// vault — silently redirecting that one to the configured vault makes the reference unresolvable by
+    /// construction. Reads have to be the tolerant side of this: writes still go to exactly one place
+    /// (see <see cref="CompositeSecretWriter"/>), so nothing here creates a second copy or an ambiguous winner.
+    /// </para>
+    /// </summary>
+    private IReadOnlyList<SecretReference> BuildCandidates(SecretReference secretReference)
+    {
+        var resolvedVaultName = _vaultResolver.ResolveVaultName(secretReference.KeyVaultName);
+
+        if (string.Equals(resolvedVaultName, secretReference.KeyVaultName, StringComparison.OrdinalIgnoreCase))
+        {
+            return new[] { secretReference };
+        }
+
+        return new[]
+        {
+            new SecretReference(resolvedVaultName, secretReference.SecretName),
+            secretReference,
+        };
     }
 
     // App-provisioned (B1) secrets take precedence over configuration/env secrets so a wizard-provisioned connection
-    // string resolves without any config change; falls back to configuration for operator-provided secrets.
-    private async Task<string> ResolveLocalAsync(SecretReference secretReference, CancellationToken cancellationToken)
+    // string resolves without any config change; falls back to configuration for operator-provided secrets. Each
+    // tier is exhausted across every candidate reference before dropping to the next, so a locally provisioned
+    // value always beats a same-named configuration entry regardless of which vault name it was stored under.
+    private async Task<string> ResolveLocalAsync(
+        IReadOnlyList<SecretReference> candidates, CancellationToken cancellationToken)
     {
-        var provisioned = await _dbSecretStore.TryGetSecretAsync(secretReference, cancellationToken);
-        return provisioned ?? await _configurationSecretProvider.GetSecretAsync(secretReference, cancellationToken);
+        foreach (var candidate in candidates)
+        {
+            var provisioned = await _dbSecretStore.TryGetSecretAsync(candidate, cancellationToken);
+            if (provisioned is not null)
+            {
+                return provisioned;
+            }
+        }
+
+        foreach (var candidate in candidates)
+        {
+            var configured = _configurationSecretProvider.TryGetSecret(candidate);
+            if (configured is not null)
+            {
+                return configured;
+            }
+        }
+
+        throw NotFound(candidates);
+    }
+
+    /// <summary>
+    /// Names every vault actually searched. The single-candidate message is the historical wording; the
+    /// two-candidate one has to name both, because reporting only the resolved vault reads as a nonsense error to
+    /// an operator whose connection shows the other name on screen.
+    /// </summary>
+    private static SecretNotConfiguredException NotFound(IReadOnlyList<SecretReference> candidates)
+    {
+        // The as-stored reference (always last) is the one the operator configured, so it owns the exception's
+        // KeyVaultName property.
+        var stored = candidates[^1];
+
+        if (candidates.Count == 1)
+        {
+            return new SecretNotConfiguredException(stored.SecretName, stored.KeyVaultName);
+        }
+
+        return new SecretNotConfiguredException(
+            stored.SecretName,
+            stored.KeyVaultName,
+            $"Secret '{stored.SecretName}' was not found in vault '{stored.KeyVaultName}' or in the configured " +
+            $"Key Vault '{candidates[0].KeyVaultName}'.");
     }
 }
