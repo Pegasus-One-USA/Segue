@@ -1,0 +1,42 @@
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_efbaa89739e59f::t_99ffe34f67278d 1490-1493
+  s_efbaa89739e59f::t_07a28bbd43d54f 1432-1443,1445-1448,1454-1455,1488-1489
+portal/src/app/services/workflow-build-assembler-v2.ecw.spec.ts
+  s_efbaa89739e59f::t_34f2ce5c69b3c3 1-199
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_efbaa89739e59f::t_04d2e14291f6d3 1735-1765
+  s_efbaa89739e59f::t_e831c9e4062eb0 1431-1443,1448
+  s_efbaa89739e59f::t_556eab96649e47 835-873
+  s_efbaa89739e59f::t_c310e2e74265a8 1281-1288
+  s_efbaa89739e59f::t_0fd914476273db 1445-1447,1449-1450,1453
+  s_efbaa89739e59f::t_13ee8aaa139ba1 203,235,299,1104,1246-1249,2385,2520,3020
+  s_efbaa89739e59f::t_bfc53a64ed2030 192-193
+  s_efbaa89739e59f::t_53e05425ae42c2 100-103,105-111
+  s_efbaa89739e59f::t_d11904d20e5434 1638-1639
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_efbaa89739e59f::t_ce8f23f8036bab 305-330
+  s_efbaa89739e59f::t_9e409ad361e64b 548-553
+  s_efbaa89739e59f::t_28376a055c1485 499-509
+  s_efbaa89739e59f::t_61160b4768583c 404,408-409
+  s_efbaa89739e59f::t_22c97b6de0f354 5
+  s_efbaa89739e59f::t_840a4ff3a3b592 579
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_efbaa89739e59f::t_af9fbdc555ae2f 706-712
+  s_efbaa89739e59f::t_94699922c84fcc 147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "c334962740e4f5d3e44945003e139324ab8ec031",
+  "prompts": {},
+  "sessions": {
+    "s_efbaa89739e59f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e89dd790-f636-4f2a-8851-fcdaa93ae6de",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
