@@ -1,0 +1,71 @@
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_5efbfd58cf2e78::t_e06e2df34d2621 159-163,171-173,175
+  s_5efbfd58cf2e78::t_68980cd03f8408 164-170,174
+  s_5efbfd58cf2e78::t_da24125ddb0b48 540
+  s_5efbfd58cf2e78::t_30de7353af3a72 537-539
+Demo_TestApp/backend/Program.cs
+  s_5efbfd58cf2e78::t_16df345a802b2c 308-310
+  s_5efbfd58cf2e78::t_4a7cbd3d3b5888 229-231
+  s_5efbfd58cf2e78::t_b1f8e7edc35444 358-362
+  s_5efbfd58cf2e78::t_d20654a38e4219 860-863
+  s_5efbfd58cf2e78::t_fc3549cf0d670e 232,337
+  s_5efbfd58cf2e78::t_94ed3eae64017e 311
+  s_5efbfd58cf2e78::t_566389180ac0ec 334-336
+portal/src/app/components/epic-source-wizard/models/audience-field-config.data.ts
+  s_5efbfd58cf2e78::t_3f1fe1936795c5 53-63
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts
+  s_5efbfd58cf2e78::t_64a852af78f98b 625
+  s_5efbfd58cf2e78::t_63d40181b30393 888
+  s_5efbfd58cf2e78::t_92b4ce6b4d47b5 1023
+  s_5efbfd58cf2e78::t_e3989f98e8cd35 493-496
+  s_5efbfd58cf2e78::t_30883ff824dcdb 689
+  s_5efbfd58cf2e78::t_210f7347ab38e2 922-928,935
+  s_5efbfd58cf2e78::t_cce8b2628c64cf 1010
+  s_5efbfd58cf2e78::t_34cfe8ff634ffa 17-23
+  s_5efbfd58cf2e78::t_925eac550dd70d 510-513
+  s_5efbfd58cf2e78::t_6de528208ff945 662-666
+  s_5efbfd58cf2e78::t_6805a97a2c9110 575-580
+  s_5efbfd58cf2e78::t_ea441afdf3b492 294-369
+  s_5efbfd58cf2e78::t_9c3fd4a69b5941 727-736,749
+  s_5efbfd58cf2e78::t_ecb041fcaf8a5c 1059,1072
+  s_5efbfd58cf2e78::t_6b0e81c2860087 807-814,826
+  s_5efbfd58cf2e78::t_4096e5eca43cea 978,983
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.html
+  s_5efbfd58cf2e78::t_6544c18ccde723 55-70,72-74,76-82,84-127
+  s_5efbfd58cf2e78::t_a4ef0abc01fd99 156
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_5efbfd58cf2e78::t_d354e74fe9b11e 924
+  s_5efbfd58cf2e78::t_1d730ef811ad71 565,676
+  s_5efbfd58cf2e78::t_8b4a6ac92fee72 372
+  s_5efbfd58cf2e78::t_bea602e02cc94a 1
+  s_5efbfd58cf2e78::t_62bb64433866c4 911-923,925-954
+  s_5efbfd58cf2e78::t_dda66bd4458ffb 822
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_5efbfd58cf2e78::t_f0ac3cc0a9f133 135-161
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.ts
+  s_5efbfd58cf2e78::t_6b116a3ce36c6b 224-227
+  s_5efbfd58cf2e78::t_54151957f4628d 88-94
+  s_5efbfd58cf2e78::t_063e6f04a24875 28-31
+  s_5efbfd58cf2e78::t_3fdb5aaadf261b 262-265
+  s_5efbfd58cf2e78::t_4dd5eda724ab41 288-291
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.scss
+  s_5efbfd58cf2e78::t_7b2065a9d06389 172-204
+tests/FHIRBridge.UnitTests/Destinations/MappedSqlServerDestinationWriterTests.cs
+  s_5efbfd58cf2e78::t_4f6ec719f859ce 1-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4684c796fc0516df65f8435b0619e188cad4b3c8",
+  "prompts": {},
+  "sessions": {
+    "s_5efbfd58cf2e78": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c581937a-5297-4992-bb3c-c53308893595",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
