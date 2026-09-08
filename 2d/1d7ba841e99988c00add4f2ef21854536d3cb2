@@ -1,0 +1,26 @@
+portal/src/app/user-management/pages/role-permissions/permission-matrix.config.ts
+  s_85e5f4509df794::t_fcff1125a8d933 150-153,166-172
+portal/src/app/data/transforms-v2.data.ts
+  s_85e5f4509df794::t_1052358bb76fe4 29-31
+src/FHIRBridge.Application/Rbac/PermissionGroupCode.cs
+  s_85e5f4509df794::t_cbef71f790dcc2 168-182
+  s_85e5f4509df794::t_c1096621223bd7 73-78
+portal/src/app/data/transforms.data.ts
+  s_85e5f4509df794::t_587c0cee0bdcd6 30-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "2d1d7ba841e99988c00add4f2ef21854536d3cb2",
+  "prompts": {},
+  "sessions": {
+    "s_85e5f4509df794": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ce0dc8-ced5-4aba-a5f7-13b80b101734",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

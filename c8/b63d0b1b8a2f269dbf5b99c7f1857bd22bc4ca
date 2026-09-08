@@ -1,0 +1,19 @@
+portal/src/app/user-management/pages/user-detail/tri-state-toggle.component.scss
+  s_85e5f4509df794::t_ecd78bd82b7c23 2-8,17-18,20-21,24,34-38,46-48,53,58-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "c8b63d0b1b8a2f269dbf5b99c7f1857bd22bc4ca",
+  "prompts": {},
+  "sessions": {
+    "s_85e5f4509df794": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ce0dc8-ced5-4aba-a5f7-13b80b101734",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": null
+    }
+  }
+}
