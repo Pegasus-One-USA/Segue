@@ -424,6 +424,11 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
    * node (before resetCanvasAndWorkflowState() would otherwise throw that state away), then persists the
    * correction with a plain definition save (PUT /workflows/{id} — NOT another /workflows/build) so it doesn't
    * re-touch the source/destinations/mappings just created/synced above, or re-trigger capability discovery.
+   *
+   * Only a blank field or another hosted /.well-known/jwks.json URL is treated as that stale placeholder. An
+   * Imported key may already be registered with the vendor against the app's own JWKS URL (often issued during
+   * app creation), and the source form lets the admin type that URL over the pre-filled one — overwriting it here
+   * would silently undo the edit on the very save that was meant to persist it.
    */
   private reconcileGeneratedJwksUrls(
     workflowId: string,
@@ -444,8 +449,15 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
       if (!isGeneratedOrImportedBackendKey) continue;
 
+      const existingJwksUrl = (fields['JWKS URL'] ?? '').trim();
+      const isPlaceholder =
+        !existingJwksUrl ||
+        (existingJwksUrl.startsWith(`${APP_ORIGIN}/api/v1/source-connections/`) &&
+          existingJwksUrl.endsWith('/.well-known/jwks.json'));
+      if (!isPlaceholder) continue;
+
       const jwksUrl = `${APP_ORIGIN}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
-      if (fields['JWKS URL'] !== jwksUrl) {
+      if (existingJwksUrl !== jwksUrl) {
         this.store.updateNode(nodeId, { fields: { ...fields, 'JWKS URL': jwksUrl } } as Partial<CanvasNode>);
         anyCorrected = true;
       }
