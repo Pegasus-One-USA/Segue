@@ -12,8 +12,10 @@ export type EhrVendor =
   | 'NewEHR'
   | 'NewEHRTwo';
 
-/** Vendor sandbox vs a specific customer's production instance — must match the backend's EhrEndpointType enum. */
-export type EhrEndpointType = 'MyChart' | 'Epic';
+/** Vendor sandbox vs a specific customer's production instance — must match the backend's EhrEndpointType enum.
+ *  'Epic' and 'Ecw' are vendor-sandbox rows (Provider Standalone audience); 'MyChart' is a customer production
+ *  instance (Patient Standalone audience). */
+export type EhrEndpointType = 'MyChart' | 'Epic' | 'Ecw';
 
 /** Matches the API's EhrEndpointDto shape exactly, so no DTO↔model mapping is needed. */
 export interface EhrEndpoint {
