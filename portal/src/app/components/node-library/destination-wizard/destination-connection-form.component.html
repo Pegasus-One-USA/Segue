@@ -44,8 +44,9 @@
             }
           </div>
           <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched">
-            <label class="dw-label" for="dcf-fhir-clientSecret">Client secret <span class="dw-req">*</span></label>
-            <input id="dcf-fhir-clientSecret" type="password" class="dw-input" formControlName="clientSecret" autocomplete="new-password" />
+            <label class="dw-label" for="dcf-fhir-clientSecret">Client secret @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
+            <input id="dcf-fhir-clientSecret" type="password" class="dw-input" formControlName="clientSecret" autocomplete="new-password"
+              [placeholder]="reusingExisting() ? 'Leave blank to keep the current client secret' : ''" />
             @if (fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched) {
               <span class="dw-error">Client secret is required.</span>
             }
@@ -61,8 +62,9 @@
             }
           </div>
           <div class="dw-field" [class.dw-field--error]="fhirForm.get('password')!.invalid && fhirForm.get('password')!.touched">
-            <label class="dw-label" for="dcf-fhir-password">Password <span class="dw-req">*</span></label>
-            <input id="dcf-fhir-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+            <label class="dw-label" for="dcf-fhir-password">Password @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
+            <input id="dcf-fhir-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password"
+              [placeholder]="reusingExisting() ? 'Leave blank to keep the current password' : ''" />
             @if (fhirForm.get('password')!.invalid && fhirForm.get('password')!.touched) {
               <span class="dw-error">Password is required.</span>
             }
@@ -71,8 +73,9 @@
 
         @if (fhirForm.get('authType')!.value === 'bearer') {
           <div class="dw-field dw-field--full" [class.dw-field--error]="fhirForm.get('bearerToken')!.invalid && fhirForm.get('bearerToken')!.touched">
-            <label class="dw-label" for="dcf-fhir-bearerToken">Bearer token <span class="dw-req">*</span></label>
-            <input id="dcf-fhir-bearerToken" type="password" class="dw-input" formControlName="bearerToken" autocomplete="new-password" />
+            <label class="dw-label" for="dcf-fhir-bearerToken">Bearer token @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
+            <input id="dcf-fhir-bearerToken" type="password" class="dw-input" formControlName="bearerToken" autocomplete="new-password"
+              [placeholder]="reusingExisting() ? 'Leave blank to keep the current bearer token' : ''" />
             @if (fhirForm.get('bearerToken')!.invalid && fhirForm.get('bearerToken')!.touched) {
               <span class="dw-error">Bearer token is required.</span>
             }
@@ -110,6 +113,6 @@
       <div class="dw-callout dw-callout--info">Connected — the base URL and credentials are valid.</div>
     }
   } @else {
-    <ng-container [ngComponentOutlet]="formType()" />
+    <ng-container [ngComponentOutlet]="formType()" [ngComponentOutletInputs]="formOutletInputs()" />
   }
 </div>
