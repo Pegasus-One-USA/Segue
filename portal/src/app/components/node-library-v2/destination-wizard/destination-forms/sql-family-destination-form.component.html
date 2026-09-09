@@ -46,7 +46,7 @@
       <div class="dw-field">
         <label class="dw-label" for="sf-password">Password</label>
         <input id="sf-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password"
-          [placeholder]="reusingExisting() ? 'Leave blank to keep the current password' : ''" />
+          [placeholder]="existingDestinationId() ? 'Leave blank to keep the current password' : ''" />
       </div>
     }
 

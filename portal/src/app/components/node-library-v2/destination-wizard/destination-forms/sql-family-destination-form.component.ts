@@ -32,9 +32,15 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
    *  connection string here would silently overwrite the real stored secret (password has no Validators.required
    *  of its own, so this doesn't gate form validity — only getMetadata()'s secret and the test-connection path). */
   readonly reusingExisting = input<boolean>(false);
-  /** The already-saved destination's id when reusing it unchanged — lets Test Connection introspect the live
-   *  schema via the stored secret server-side (DestinationSchemaService.getSchema) instead of requiring the
-   *  password retyped. */
+  /** The already-saved destination's id this form was originally patched from (via selectExisting()) or has
+   *  already provisioned this session — stays populated even after the user edits some OTHER field and
+   *  reusingExisting() above flips false (destination-wizard.component.ts's activeFormInputs()). Used for: (1)
+   *  Test Connection introspecting the live schema via the stored secret server-side instead of requiring the
+   *  password retyped; (2) the password placeholder below — even when forking a new connection because of an
+   *  unrelated edit (e.g. "Require SSL"), destination-wizard.component.ts's _save() carries this id through as
+   *  dest_inheritSecretFromDestinationId, and the backend (ISqlConnectionSecretMerger) inherits the stored
+   *  password from it when left blank, so "leave blank to keep it" stays true for the whole session a
+   *  connection was picked, not just while nothing else has changed. */
   readonly existingDestinationId = input<string | null>(null);
 
   /** AzureSql has no live UI anywhere prior to this refactor — it reuses SqlServer's exact fields/behavior,
