@@ -1,5 +1,15 @@
 <div class="list-page">
 
+  <!-- Drill-down context from the Workflows list's "Execution History" row action (?workflowId=...) — a
+       persistent scope, not a togglable filter (see workflowIdFilter's own doc comment), so it gets its own
+       banner rather than living in the filter bar below. -->
+  @if (workflowIdFilter()) {
+    <div class="workflow-scope-banner">
+      Showing runs for <strong>{{ workflowFilterLabel() }}</strong> only.
+      <button type="button" class="link-btn" (click)="clearWorkflowFilter()">Show all workflows</button>
+    </div>
+  }
+
   <!-- Filter Bar -->
   <div class="filter-card">
     <div class="filter-row">

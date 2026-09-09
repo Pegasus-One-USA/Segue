@@ -177,6 +177,10 @@
                     {{ canEdit() ? 'Edit' : 'View' }}
                   </button>
 
+                  <button mat-menu-item type="button" (click)="onViewExecutionHistory(w)">
+                    <mat-icon>history</mat-icon> Execution History
+                  </button>
+
                   @if (canEdit()) {
                     <button
                       mat-menu-item

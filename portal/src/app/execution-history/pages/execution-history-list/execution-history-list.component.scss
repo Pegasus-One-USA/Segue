@@ -7,6 +7,21 @@
 // partial, so those other list pages' non-clickable rows don't wrongly show a pointer too.
 .data-row { cursor: pointer; }
 
+// Drill-down banner for the ?workflowId= scope (see workflowIdFilter's doc comment in the .ts) — informational,
+// not a warning/error, so it reuses the same info tokens the Trigger badges above use for their scheduled kind.
+.workflow-scope-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; margin-bottom: 12px; border-radius: var(--radius-md);
+  background: var(--color-info-soft); color: var(--color-info-strong);
+  font-size: 13px;
+}
+
+.link-btn {
+  background: none; border: none; padding: 0; margin: 0;
+  color: inherit; font: inherit; font-weight: 600; text-decoration: underline;
+  cursor: pointer;
+}
+
 .cell-name { display: flex; align-items: center; gap: 12px; }
 
 .mono { font-family: monospace; font-size: 12px; }

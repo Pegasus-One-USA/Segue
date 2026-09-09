@@ -30,6 +30,7 @@ export class ExecutionHistoryApiService {
       .set('page', filter.page)
       .set('pageSize', filter.pageSize);
 
+    if (filter.workflowId) params = params.set('workflowId', filter.workflowId);
     if (filter.status) params = params.set('status', filter.status);
     if (filter.source) params = params.set('source', filter.source);
     for (const source of filter.sources ?? []) params = params.append('sources', source);
