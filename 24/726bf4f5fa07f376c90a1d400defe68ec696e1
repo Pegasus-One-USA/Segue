@@ -1,0 +1,23 @@
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_d2be898c479d78::t_84518d113e75d7 186-247
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_d2be898c479d78::t_433b514e34258f 923-967
+  s_d2be898c479d78::t_82e49d1da28a06 844-855,858-869
+  s_d2be898c479d78::t_acdd27277da74d 968
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "24726bf4f5fa07f376c90a1d400defe68ec696e1",
+  "prompts": {},
+  "sessions": {
+    "s_d2be898c479d78": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b230e9ca-b4a1-47d9-9cfd-7c4fe437410d",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
