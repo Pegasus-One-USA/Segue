@@ -54,6 +54,15 @@ public sealed class InMemoryEhrEndpointRepository : IEhrEndpointRepository
         return Task.FromResult(new PagedResult<EhrEndpoint>(items, all.Length, page, pageSize));
     }
 
+    public Task<IReadOnlyList<SourceSystemType>> GetDistinctVendorsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<SourceSystemType>>(
+            _store.Values
+                .Where(x => !x.IsDeleted)
+                .Select(x => x.Vendor)
+                .Distinct()
+                .OrderBy(vendor => vendor)
+                .ToArray());
+
     public Task<IReadOnlyList<EhrEndpoint>> GetPublicAsync(
         EhrEndpointType endpointType, string? search, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<EhrEndpoint>>(

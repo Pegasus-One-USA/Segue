@@ -10,8 +10,9 @@ public interface IEhrEndpointService
 
     /// <summary>Server-side paged/filtered listing backing the admin EHR Endpoints screen — see
     /// <see cref="Abstractions.Persistence.IEhrEndpointRepository.GetPagedAsync"/> and
-    /// <see cref="EhrEndpointFilter"/>.</summary>
-    Task<PagedResult<EhrEndpointDto>> GetPagedAsync(
+    /// <see cref="EhrEndpointFilter"/>. Carries the Source filter's options alongside the rows; see
+    /// <see cref="EhrEndpointPageDto.AvailableVendors"/>.</summary>
+    Task<EhrEndpointPageDto> GetPagedAsync(
         EhrEndpointFilter filter, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>Anonymous-safe listing/search of EhrEndpoint rows for one audience, scoped by

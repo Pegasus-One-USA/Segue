@@ -52,22 +52,17 @@
           </svg>
           Reset
         </button>
-        <!-- Vendor for the new connection — replaces the in-form EHR `<select>` this page used to rely on before
-             that control was removed from the shared engine (see ehr-vendor-source-form.component.ts).
-             Narrowed to vendors this role can actually create (permittedCreateVendorOptions) — there is no
-             `sourceconnections.create` code; Create is authorized per-vendor (epic.create, cerner.create, ...),
+        <!-- New opens an EHR card picker (see the modal at the bottom of this template), the same create flow
+             Destination Connections uses — instead of a toolbar `<select>` the user has to set first. The cards
+             are still narrowed to vendors this role can actually create (permittedCreateVendorOptions): there is
+             no `sourceconnections.create` code; Create is authorized per-vendor (epic.create, cerner.create, ...),
              so offering a vendor the role can't create would let them fill out the whole form only to hit a
              403 on save. -->
         @if (permittedCreateVendorOptions().length > 0) {
-          <select class="type-filter-select" [value]="addVendor()" (change)="addVendor.set($any($event.target).value)">
-            @for (o of permittedCreateVendorOptions(); track o.value) {
-              <option [value]="o.value">{{ o.label }}</option>
-            }
-          </select>
           <button
             class="btn-add"
             type="button"
-            (click)="openAdd()">
+            (click)="openVendorPicker()">
             New
           </button>
         }
@@ -260,6 +255,34 @@
     }
 
   </div>
+
+  <!-- EHR picker — the step between "New" and the vendor's own form. Card grid rather than a dropdown, matching
+       the Destination Connections create flow, so the choice is visible and described rather than hidden in a
+       toolbar select. Picking a card runs the same per-vendor create permission guard openAdd() always did. -->
+  @if (vendorPickerOpen()) {
+    <div class="sc-modal-backdrop" tabindex="0" (click)="onVendorPickerBackdropClick($event)" (keydown.escape)="closeVendorPicker()">
+      <div class="sc-picker-panel">
+        <div class="sc-picker-head">
+          <div>
+            <h2 class="sc-picker-title">New Source Connection</h2>
+            <p class="sc-picker-sub">Choose the EHR this connection reads from.</p>
+          </div>
+          <button class="sc-picker-close" type="button" title="Close" (click)="closeVendorPicker()">×</button>
+        </div>
+        <div class="sc-picker-grid">
+          @for (card of createVendorCards(); track card.value) {
+            <button type="button" class="sc-picker-card" (click)="chooseCreateVendor(card.value)">
+              <span class="sc-picker-card__abbr" [style.background]="card.color">{{ card.abbr }}</span>
+              <span class="sc-picker-card__text">
+                <strong>{{ card.label }}</strong>
+                <span>{{ card.sub }}</span>
+              </span>
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+  }
 
   <!-- The @if must wrap the per-vendor form tag directly (not be routed through another component's
        <ng-content>) — ng-content-projected components are instantiated once by this template and merely

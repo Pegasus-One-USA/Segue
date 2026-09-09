@@ -21,7 +21,7 @@
       <div class="type-filter-wrap">
         <select class="type-filter-select" [value]="sourceFilter()" (change)="onSourceFilterChange($any($event.target).value)">
           <option value="">All sources</option>
-          @for (o of sourceOptions; track o.value) {
+          @for (o of sourceOptions(); track o.value) {
             <option [value]="o.value">{{ o.label }}</option>
           }
         </select>
@@ -87,7 +87,7 @@
           <ng-container matColumnDef="vendor">
             <th mat-header-cell *matHeaderCellDef>Vendor</th>
             <td mat-cell *matCellDef="let e">
-              <span class="vendor-badge">{{ e.vendor }}</span>
+              <span class="vendor-badge">{{ vendorLabel(e.vendor) }}</span>
             </td>
           </ng-container>
 
