@@ -1789,7 +1789,15 @@ export class DestinationWizardComponent implements OnInit {
   // against the chosen id, which the backend now rejects (409) once a destination has run history, since an
   // update there would silently overwrite a record other routes depend on staying put.
   readonly connectionMode = signal<'new' | 'existing'>('new');
-  readonly showConnectionModeToggle = computed(() => !this.editNode());
+  // Also shown when re-editing an already-placed node whose connection was itself picked from "Existing"
+  // (_populateFromNode() restores connectionMode() to 'existing' for it — see dest_connectionMode below) —
+  // otherwise re-opening a node before the whole workflow is ever saved permanently loses any way back to the
+  // dropdown, even though nothing about it could possibly have run yet. Still hidden for a node configured as
+  // a brand-new connection (connectionMode() stays 'new' on reopen), where the execution-history/409 concern
+  // in the comment above still applies once the containing workflow itself has actually been saved.
+  readonly showConnectionModeToggle = computed(
+    () => !this.editNode() || this.connectionMode() === 'existing',
+  );
   readonly existingOptions = signal<DestinationConfigurationDto[]>([]);
   readonly existingOptionsLoading = signal(false);
   readonly selectedExistingId = signal<string | null>(null);
@@ -4320,6 +4328,16 @@ export class DestinationWizardComponent implements OnInit {
           ? Number(f['dest_autoFetchMaxCount'])
           : 25,
       });
+      // Restores the "picked from Existing" mode itself (see dest_connectionMode in _save()) — without this,
+      // reopening such a node before the whole workflow is saved left connectionMode() stuck at its 'new'
+      // default, hiding the "Existing connection" dropdown (showConnectionModeToggle()) with no way back to
+      // it. Baseline captured now, same as selectExisting()'s own FHIR branch, so hasExistingChanged()/
+      // _fhirReusingExisting() compare against the just-restored values, not stale/absent state.
+      if (f['dest_connectionMode'] === 'existing') {
+        this.connectionMode.set('existing');
+        this.selectedExistingId.set(f['destinationId'] || null);
+        this._existingBaseline = this.fhirForm.getRawValue();
+      }
       this._syncFhirAuthValidators(this.fhirForm.value.authType ?? null);
       if (f['dest_fhirMapMode']) {
         this.fhirMapMode.set(
@@ -4342,7 +4360,15 @@ export class DestinationWizardComponent implements OnInit {
       const fields = { ...f };
       if (this.isSql() && !fields['dest_auth'])
         fields['dest_auth'] = 'managed-identity';
-      this._pendingFormPatch.set({ fields, target: null });
+      // Same restore as the FHIR branch above (see its comment) for every registry-routed form — isExistingSelection
+      // tells _flushPendingFormPatch to (re)capture _existingBaseline once patchFrom actually runs, the same way
+      // selectExisting() does, so hasExistingChanged() has a real baseline to compare against afterward.
+      const wasExisting = f['dest_connectionMode'] === 'existing';
+      if (wasExisting) {
+        this.connectionMode.set('existing');
+        this.selectedExistingId.set(f['destinationId'] || null);
+      }
+      this._pendingFormPatch.set({ fields, target: null, isExistingSelection: wasExisting });
     }
     // The mapping-restore branches below (loadMappingSummary included, each of which returns early) only
     // ever populate sqlTables() with tables this mapping already uses — a saved Mapping JSON was never
@@ -4920,6 +4946,10 @@ export class DestinationWizardComponent implements OnInit {
     //  - Edited, name also changed by hand: honor that name as typed (only deduped on an actual collision) rather
     //    than silently suffixing a name the user deliberately chose.
     if (this.connectionMode() === 'existing' && this.selectedExistingId()) {
+      // Restored by _populateFromNode() on reopen (see its own comment) so the "Existing connection" dropdown
+      // stays reachable — without this marker, re-editing a node before the whole workflow is saved would
+      // otherwise look identical to a node that was configured from scratch.
+      config['dest_connectionMode'] = 'existing';
       const selected = this.existingOptions().find(
         (o) => o.id === this.selectedExistingId(),
       );
