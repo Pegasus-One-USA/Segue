@@ -82,6 +82,12 @@ public sealed class EhrEndpointService : IEhrEndpointService
         return endpoint is not null && endpoint.EndpointType == endpointType;
     }
 
+    public async Task<bool> IsKnownEndpointAsync(Guid ehrEndpointId, IReadOnlyCollection<EhrEndpointType> allowedTypes, CancellationToken cancellationToken)
+    {
+        var endpoint = await _repository.GetByIdAsync(ehrEndpointId, cancellationToken);
+        return endpoint is not null && allowedTypes.Contains(endpoint.EndpointType);
+    }
+
     public async Task<EhrEndpointDto> AddAsync(CreateEhrEndpointRequest request, CancellationToken cancellationToken)
     {
         ValidateRequest(request);

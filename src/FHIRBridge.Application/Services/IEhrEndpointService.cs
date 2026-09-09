@@ -30,6 +30,12 @@ public interface IEhrEndpointService
     /// Epic-sandbox row (or vice versa).</summary>
     Task<bool> IsKnownEndpointAsync(Guid ehrEndpointId, EhrEndpointType endpointType, CancellationToken cancellationToken);
 
+    /// <summary>Whether <paramref name="ehrEndpointId"/> resolves to an EhrEndpoint row whose type is one of
+    /// <paramref name="allowedTypes"/> — the multi-type form for an audience that spans more than one endpoint type
+    /// (Provider Standalone accepts both <see cref="EhrEndpointType.Epic"/> and <see cref="EhrEndpointType.Ecw"/>
+    /// vendor-sandbox rows). Patient Standalone keeps the single-type overload above.</summary>
+    Task<bool> IsKnownEndpointAsync(Guid ehrEndpointId, IReadOnlyCollection<EhrEndpointType> allowedTypes, CancellationToken cancellationToken);
+
     Task<EhrEndpointDto> AddAsync(CreateEhrEndpointRequest request, CancellationToken cancellationToken);
 
     Task<EhrEndpointDto> UpdateAsync(Guid id, CreateEhrEndpointRequest request, CancellationToken cancellationToken);
