@@ -7,6 +7,7 @@ using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.ValueObjects;
+using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -45,6 +46,7 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         FhirSourceConfiguration source,
         CancellationToken cancellationToken)
     {
+        var exportStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
         var statusUrl = await KickOffExportAsync(request, source, cancellationToken);
 
         IReadOnlyList<BulkExportFile> files;
@@ -74,8 +76,11 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
         var resources = await DownloadResultsAsync(files, source, cancellationToken);
 
         _logger.LogInformation(
-            "Bulk export produced {ResourceCount} resources across {FileCount} NDJSON files.",
-            resources.Count, files.Count);
+            LogEvents.BulkExportCompleted,
+            "Bulk export completed for {SourceName}: {ResourceCount} resource(s) across {FileCount} NDJSON file(s) "
+            + "in {ElapsedMs}ms.",
+            source.Name, resources.Count, files.Count,
+            (long)System.Diagnostics.Stopwatch.GetElapsedTime(exportStartedAt).TotalMilliseconds);
 
         return resources;
     }
@@ -317,7 +322,15 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
             throw new InvalidOperationException("Bulk export kick-off did not return a Content-Location status URL.");
         }
 
-        _logger.LogInformation("Bulk export kicked off; polling status at {StatusUrl}.", statusUrl);
+        // StatusUrl is the job's identity for its whole life — polling, completion, and the BulkExportJob row that
+        // survives a Worker restart — so it is the join key between this submit and the completion event.
+        _logger.LogInformation(
+            LogEvents.BulkExportSubmitted,
+            "Bulk export submitted against {BaseUrl}: Scope={ExportScope} GroupId={GroupId} "
+            + "ResourceTypes=[{ResourceTypes}] Since={Since} OutputFormat={OutputFormat}. Polling status at {StatusUrl}.",
+            baseUrl, request.Scope, request.GroupId,
+            request.ResourceTypes is { Count: > 0 } types ? string.Join(", ", types) : "all",
+            request.Since, request.OutputFormat, statusUrl);
 
         return statusUrl;
     }

@@ -7,6 +7,9 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Governance;
+using FHIRBridge.Observability.Logging;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Application.Services;
@@ -24,6 +27,7 @@ public sealed class LocalAuthService : ILocalAuthService
     private readonly LocalAuthOptions _localAuthOptions;
     private readonly ITenantRepository _tenantRepository;
     private readonly IAllowedCorsOriginsCache? _allowedOriginsCache;
+    private readonly ILogger<LocalAuthService> _logger;
 
     public LocalAuthService(
         IUserAccessRepository repository,
@@ -36,7 +40,8 @@ public sealed class LocalAuthService : ILocalAuthService
         ISystemSettingsCache settingsCache,
         IOptions<LocalAuthOptions> localAuthOptions,
         ITenantRepository tenantRepository,
-        IAllowedCorsOriginsCache? allowedOriginsCache = null)
+        IAllowedCorsOriginsCache? allowedOriginsCache = null,
+        ILogger<LocalAuthService>? logger = null)
     {
         _repository = repository;
         _passwordHasher = passwordHasher;
@@ -49,6 +54,7 @@ public sealed class LocalAuthService : ILocalAuthService
         _localAuthOptions = localAuthOptions.Value;
         _tenantRepository = tenantRepository;
         _allowedOriginsCache = allowedOriginsCache;
+        _logger = logger ?? NullLogger<LocalAuthService>.Instance;
     }
 
     private async Task<(int MaxFailedAttempts, int LockoutMinutes)> ResolveLockoutPolicyAsync(
@@ -76,6 +82,12 @@ public sealed class LocalAuthService : ILocalAuthService
                 new AuthenticationEntry("Local", Success: false, email, "Account is locked out"), cancellationToken);
             await _governanceLogger.LogSecurityEventAsync(
                 new SecurityEventEntry("LoginAttemptWhileLocked", "Medium", email), cancellationToken);
+
+            _logger.LogWarning(
+                LogEvents.LoginFailed,
+                "Local login rejected for user {UserId}: account is locked out until {LockoutEndsOnUtc}.",
+                user.Id, user.LockoutEndUtc);
+
             throw new InvalidOperationException("Account is temporarily locked due to too many failed login attempts. Try again later.");
         }
 
@@ -99,11 +111,33 @@ public sealed class LocalAuthService : ILocalAuthService
                         new SecurityEventEntry("AccountLockedThresholdReached", "High", email,
                             $"{maxFailedAttempts} consecutive failed login attempts"),
                         cancellationToken);
+
+                    // A burst of these across different UserIds is the signature of credential stuffing, which is
+                    // only visible if the lockouts land somewhere queryable rather than one row per account.
+                    _logger.LogWarning(
+                        LogEvents.AccountLockedOut,
+                        "User {UserId} locked out after {MaxFailedAttempts} consecutive failed login attempts; " +
+                        "lockout ends {LockoutEndsOnUtc}.",
+                        user.Id, maxFailedAttempts, user.LockoutEndUtc);
                 }
             }
 
             await _governanceLogger.LogAuthenticationAsync(
                 new AuthenticationEntry("Local", Success: false, email, "Invalid email or password"), cancellationToken);
+
+            // The client response stays deliberately generic ("Invalid email or password") so it can't be used to
+            // enumerate accounts. The log is server-side and may be specific -- without the distinction, a
+            // disabled account and a mistyped password are indistinguishable to whoever is supporting the user.
+            _logger.LogWarning(
+                LogEvents.LoginFailed,
+                "Local login failed for user {UserId}: {LoginFailureReason}.",
+                user?.Id,
+                user is null ? "no account with that address"
+                    : !user.IsEnabled ? "account is disabled"
+                    : !user.IsLocalLoginEnabled ? "local login is not enabled for this account (SSO-only)"
+                    : string.IsNullOrWhiteSpace(user.PasswordHash) ? "account has no password set"
+                    : "incorrect password");
+
             throw new InvalidOperationException("Invalid email or password.");
         }
 
@@ -119,6 +153,13 @@ public sealed class LocalAuthService : ILocalAuthService
             var challengeExpiresOnUtc = DateTime.UtcNow.AddMinutes(5);
             user.SetMfaChallengeToken(challengeToken, challengeExpiresOnUtc);
             await _repository.UpdateUserAsync(user, cancellationToken);
+
+            // challengeToken is a bearer credential for the second factor -- deliberately absent here; only the
+            // fact a challenge was issued and when it expires.
+            _logger.LogInformation(
+                LogEvents.MfaChallengeIssued,
+                "MFA challenge issued for user {UserId}, expiring {MfaChallengeExpiresOnUtc}.",
+                user.Id, challengeExpiresOnUtc);
 
             return LocalLoginResponse.MfaRequired(challengeToken, challengeExpiresOnUtc);
         }
@@ -185,6 +226,14 @@ public sealed class LocalAuthService : ILocalAuthService
         await _governanceLogger.LogAuthenticationAsync(
             new AuthenticationEntry(authenticationType, Success: true, user.Email), cancellationToken);
 
+        // Every successful login funnels through here regardless of how it was authenticated (password, MFA
+        // completion, magic link, SSO), so AuthenticationType is what distinguishes them.
+        _logger.LogInformation(
+            LogEvents.LoginSucceeded,
+            "Login succeeded for user {UserId} via {AuthenticationType}. MfaEnabled={MfaEnabled} " +
+            "MustChangePassword={MustChangePassword} RememberMe={RememberMe}",
+            user.Id, authenticationType, user.MfaEnabled, user.MustChangePassword, rememberMe);
+
         return await CreateLoginResponseAsync(user, rememberMe, cancellationToken);
     }
 
@@ -212,6 +261,10 @@ public sealed class LocalAuthService : ILocalAuthService
 
         user.SetPassword(_passwordHasher.Hash(request.NewPassword), mustChangePassword: false);
         await _repository.UpdateUserAsync(user, cancellationToken);
+
+        _logger.LogInformation(
+            LogEvents.PasswordChanged,
+            "User {UserId} changed their own password.", user.Id);
 
         // Re-issuing a session mid-change-password must not silently downgrade an already-remembered
         // session to session-only — carry forward whatever this user's CURRENT refresh token was
@@ -267,6 +320,13 @@ public sealed class LocalAuthService : ILocalAuthService
                 cancellationToken);
         }
 
+        // Only reached for a real, local-login-enabled account (the no-account path returns earlier with an
+        // identical response, deliberately). The token and reset link are never logged -- they are a credential.
+        _logger.LogInformation(
+            LogEvents.PasswordResetRequested,
+            "Password reset requested for user {UserId}; token expires {ResetTokenExpiresOnUtc}.",
+            user.Id, expiresOnUtc);
+
         return new ForgotPasswordResponse(true, token, expiresOnUtc);
     }
 
@@ -287,6 +347,13 @@ public sealed class LocalAuthService : ILocalAuthService
         {
             throw new InvalidOperationException("Reset token is invalid or expired.");
         }
+
+        // Higher signal than a self-service change: this one completes out-of-band, without an authenticated
+        // session, on the assumption the previous credential may be compromised.
+        _logger.LogWarning(
+            LogEvents.PasswordResetCompleted,
+            "Password reset completed for user {UserId} via an emailed reset token; existing refresh tokens are being invalidated.",
+            user.Id);
 
         user.SetPassword(_passwordHasher.Hash(request.NewPassword), mustChangePassword: false);
         // SetPassword() already clears PasswordResetTokenHash/ExpiresOnUtc (see User.cs) — that alone
@@ -322,6 +389,12 @@ public sealed class LocalAuthService : ILocalAuthService
             "Your Segue sign-in link",
             BuildMagicLinkEmailBody(user.DisplayName, BuildMagicLink(email, token), expiresOnUtc),
             cancellationToken);
+
+        // The link itself embeds the single-use token, so neither it nor the token is logged.
+        _logger.LogInformation(
+            LogEvents.MagicLinkRequested,
+            "Magic sign-in link issued for user {UserId}; expires {MagicLinkExpiresOnUtc}.",
+            user.Id, expiresOnUtc);
 
         return new MagicLinkResponse(true);
     }
@@ -359,6 +432,14 @@ public sealed class LocalAuthService : ILocalAuthService
 
             await _governanceLogger.LogAuthenticationAsync(
                 new AuthenticationEntry("MagicLink", Success: false, email, "Invalid or expired sign-in link"), cancellationToken);
+
+            // Only the rejection is logged here; a successful redemption reaches LoginSucceeded with
+            // AuthenticationType=MagicLink through FinishSuccessfulLoginAsync, so logging it twice would double-count.
+            _logger.LogWarning(
+                LogEvents.MagicLinkRedeemed,
+                "Magic sign-in link rejected for user {UserId}: the link is invalid, expired, or already used.",
+                user?.Id);
+
             throw new InvalidOperationException("This sign-in link is invalid or has expired.");
         }
 
@@ -371,6 +452,13 @@ public sealed class LocalAuthService : ILocalAuthService
             var challengeExpiresOnUtc = DateTime.UtcNow.AddMinutes(5);
             user.SetMfaChallengeToken(challengeToken, challengeExpiresOnUtc);
             await _repository.UpdateUserAsync(user, cancellationToken);
+
+            // challengeToken is a bearer credential for the second factor -- deliberately absent here; only the
+            // fact a challenge was issued and when it expires.
+            _logger.LogInformation(
+                LogEvents.MfaChallengeIssued,
+                "MFA challenge issued for user {UserId}, expiring {MfaChallengeExpiresOnUtc}.",
+                user.Id, challengeExpiresOnUtc);
 
             return LocalLoginResponse.MfaRequired(challengeToken, challengeExpiresOnUtc);
         }
@@ -410,6 +498,13 @@ public sealed class LocalAuthService : ILocalAuthService
         // first one. The client never resends rememberMe here (the /refresh request carries only
         // the token itself); the server is the sole source of truth for it, by design.
         var rememberMe = user.RefreshTokenRememberMe;
+
+        // Debug, not Information: an active session refreshes on a timer, so at Information this would be the
+        // single highest-volume event in the log while saying nothing new most of the time.
+        _logger.LogDebug(
+            LogEvents.TokenRefreshed,
+            "Access token refreshed for user {UserId}. RememberMe={RememberMe}", user.Id, rememberMe);
+
         return await CreateLoginResponseAsync(user, rememberMe, cancellationToken);
     }
 
@@ -450,6 +545,9 @@ public sealed class LocalAuthService : ILocalAuthService
         await _repository.UpdateUserAsync(user, cancellationToken);
         await _governanceLogger.LogAuthenticationAsync(
             new AuthenticationEntry("Logout", Success: true, user.Email), cancellationToken);
+
+        _logger.LogInformation(
+            LogEvents.LogoutCompleted, "User {UserId} logged out; refresh token cleared.", user.Id);
     }
 
     /// <summary>`rememberMe` decides whether the refresh token minted here backs a persistent or

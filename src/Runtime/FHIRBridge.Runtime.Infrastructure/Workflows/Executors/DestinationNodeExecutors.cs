@@ -643,7 +643,11 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             [WorkflowNodeTypes.EpicSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Epic,
             [WorkflowNodeTypes.CernerSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Cerner,
             [WorkflowNodeTypes.EClinicalWorksSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Healow,
-            [WorkflowNodeTypes.AthenahealthSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.GenericFhir,
+            // Athenahealth, NOT GenericFhir: this mapped to the generic type while AthenahealthSourceNode was gated
+            // out of the catalog and therefore unreachable, but a saved athenahealth node now carries it — and the
+            // generic type selects EpicFhirSourceClient, which has none of athenahealth's ah-practice/practice_code
+            // request handling.
+            [WorkflowNodeTypes.AthenahealthSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Athenahealth,
             [WorkflowNodeTypes.AllscriptsSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.Allscripts,
             [WorkflowNodeTypes.MeditechSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.MeditechGreenfield,
             [WorkflowNodeTypes.GenericFhirSource] = FHIRBridge.Runtime.Domain.Enums.RuntimeSourceType.GenericFhir,

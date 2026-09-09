@@ -8,6 +8,7 @@ using FHIRBridge.Domain.Enums;
 using FHIRBridge.Governance;
 using FHIRBridge.Infrastructure.Pipeline;
 using FHIRBridge.Infrastructure.Security;
+using FHIRBridge.Observability.Logging;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -41,7 +42,9 @@ public sealed class Worker : BackgroundService
             var enabled = await _settingsCache.GetBoolAsync("RuntimeWorker:Enabled", defaultValue: false, stoppingToken);
             if (!enabled)
             {
-                _logger.LogInformation("FHIRBridge runtime worker is disabled. Set RuntimeWorker:Enabled=true to run scheduled Phase 1 jobs.");
+                _logger.LogInformation(
+                    LogEvents.SchedulerDisabled,
+                    "FHIRBridge runtime worker is disabled. Set RuntimeWorker:Enabled=true to run scheduled Phase 1 jobs.");
                 await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
                 continue;
             }
@@ -151,6 +154,7 @@ public sealed class Worker : BackgroundService
         var governanceLogger = scope.ServiceProvider.GetRequiredService<IGovernanceLogger>();
         var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
         var workflows = await store.ListAsync(cancellationToken);
+        var dueCount = 0;
         foreach (var workflow in workflows)
         {
             if (!workflow.IsEnabled || workflow.Trigger is null || !IsWorkflowDue(workflow, nowUtc))
@@ -158,7 +162,35 @@ public sealed class Worker : BackgroundService
                 continue;
             }
 
+            dueCount++;
             var correlationId = Guid.NewGuid().ToString("N");
+
+            // Emitted before the run is attempted, so the schedule that selected this workflow is on record even if
+            // the execution below throws. TimeZone* come from DescribeTimeZone rather than the raw trigger value: an
+            // id this host can't resolve silently degrades to UTC (shifting every fire by the zone's offset), and
+            // TimeZoneResolved=false is the only signal anywhere that this happened.
+            var timeZone = ScheduleExpressionMatcher.DescribeTimeZone(workflow.Trigger.TimeZoneId);
+            _logger.LogInformation(
+                LogEvents.WorkflowScheduleDue,
+                "Workflow {WorkflowId} '{WorkflowName}' is due at {ScheduledAtUtc:o}. " +
+                "Trigger={TriggerType} Schedule={ScheduleExpression} IntervalMinutes={IntervalMinutes} " +
+                "TimeZoneId={TimeZoneId} TimeZoneResolved={TimeZoneResolved} TimeZoneOffset={TimeZoneOffset} " +
+                "LastTriggeredOnUtc={LastTriggeredOnUtc} CorrelationId={CorrelationId}",
+                workflow.Id, workflow.Name, nowUtc,
+                workflow.Trigger.Type, workflow.Trigger.ScheduleExpression, workflow.Trigger.IntervalMinutes,
+                timeZone.RequestedId, timeZone.Resolved, timeZone.BaseUtcOffset,
+                workflow.LastTriggeredOnUtc, correlationId);
+
+            if (!timeZone.Resolved)
+            {
+                // Warning, not Error: the run still happens, just at the wrong wall-clock time.
+                _logger.LogWarning(
+                    LogEvents.TimeZoneResolutionFailed,
+                    "Workflow {WorkflowId} '{WorkflowName}' is scheduled in time zone '{TimeZoneId}', which this host " +
+                    "could not resolve — the schedule is being evaluated in UTC instead, so it fires at the wrong " +
+                    "local time. Install the host's tzdata/ICU zone data, or pick a zone id this host knows.",
+                    workflow.Id, workflow.Name, timeZone.RequestedId);
+            }
 
             await governanceLogger.LogSchedulerRunAsync(
                 new SchedulerRunEntry($"Scheduler (Workflow: {workflow.Name})", "Dispatched", 1, correlationId),
@@ -173,17 +205,29 @@ public sealed class Worker : BackgroundService
                     correlationId,
                     triggeredBy: "scheduler",
                     triggerType: "Scheduled");
+                var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
                 var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
                 workflow.MarkTriggered(nowUtc);
                 await store.SaveAsync(workflow, cancellationToken);
 
                 _logger.LogInformation(
-                    "Scheduled workflow {WorkflowId} '{Name}' fired at {ScheduledAtUtc} → {Status}.",
-                    workflow.Id, workflow.Name, nowUtc, result.WorkflowRun.Status);
+                    LogEvents.SchedulerTickCompleted,
+                    "Scheduled workflow {WorkflowId} '{Name}' fired at {ScheduledAtUtc} → {Status} in {ElapsedMs}ms. " +
+                    "WorkflowRunId={WorkflowRunId} CorrelationId={CorrelationId}",
+                    workflow.Id, workflow.Name, nowUtc, result.WorkflowRun.Status,
+                    (long)System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+                    result.WorkflowRun.Id, correlationId);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
-                _logger.LogError(exception, "Scheduled workflow {WorkflowId} '{Name}' failed.", workflow.Id, workflow.Name);
+                // MarkTriggered above is deliberately not reached on a failure, so this workflow stays due and
+                // re-fires on the next tick until its slot leaves the catch-up window — expect repeats of this event.
+                _logger.LogError(
+                    LogEvents.WorkflowRunFailed,
+                    exception,
+                    "Scheduled workflow {WorkflowId} '{Name}' failed after {ScheduledAtUtc}; it stays due and will " +
+                    "retry on the next tick. CorrelationId={CorrelationId}",
+                    workflow.Id, workflow.Name, nowUtc, correlationId);
                 var exceptionManager = scope.ServiceProvider.GetRequiredService<IGlobalExceptionManager>();
                 await exceptionManager.CaptureAsync(
                     exception,
@@ -191,6 +235,15 @@ public sealed class Worker : BackgroundService
                     CancellationToken.None);
             }
         }
+
+        // Debug, not Information: this fires on every tick (every 5 minutes in a deployed host) and would otherwise
+        // dominate the log. Raise FHIRBridge.Worker to Debug when diagnosing "my schedule never ran" — a tick
+        // reporting Due=0 against a non-zero Enabled count means the trigger isn't matching, not that the worker
+        // is asleep, which is otherwise indistinguishable from the outside.
+        _logger.LogDebug(
+            LogEvents.WorkflowScheduleEvaluated,
+            "Workflow schedule evaluation at {ScheduledAtUtc}: {WorkflowCount} defined, {EnabledCount} enabled, {DueCount} due.",
+            nowUtc, workflows.Count, workflows.Count(w => w.IsEnabled && w.Trigger is not null), dueCount);
     }
 
     private static bool IsWorkflowDue(WorkflowDefinition workflow, DateTime nowUtc)

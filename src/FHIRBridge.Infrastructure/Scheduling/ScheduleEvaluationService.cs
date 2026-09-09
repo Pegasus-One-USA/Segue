@@ -5,6 +5,7 @@ using FHIRBridge.Application.Scheduling;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Pipeline;
+using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Scheduling;
@@ -92,15 +93,40 @@ public sealed class ScheduleEvaluationService : IScheduleEvaluationService
 
             var isDue = ScheduleExpressionMatcher.IsDueSince(route.ScheduleExpression, route.LastTriggeredOnUtc, utcNow, route.TimeZoneId);
 
+            // The cron above is evaluated in this zone, not UTC and not the host's local time. A zone id this host
+            // can't resolve degrades silently to UTC inside DescribeTimeZone, shifting every run by the zone's
+            // offset with no other symptom -- TimeZoneResolved is the only place that becomes visible.
+            var routeTimeZone = ScheduleExpressionMatcher.DescribeTimeZone(route.TimeZoneId);
+            if (!routeTimeZone.Resolved)
+            {
+                // Warning regardless of heartbeatLoggingEnabled: this is a misconfiguration that silently changes
+                // when the route runs, not routine per-tick chatter that flag exists to suppress.
+                _logger.LogWarning(
+                    LogEvents.TimeZoneResolutionFailed,
+                    "Route {RouteId} ({RouteLabel}) is scheduled in time zone '{TimeZoneId}', which this host could " +
+                    "not resolve -- '{ScheduleExpression}' is being evaluated in UTC instead, so it fires at the " +
+                    "wrong local time. Install the host's tzdata/ICU zone data, or pick a zone id this host knows.",
+                    route.Id,
+                    routeLabel ?? "unnamed",
+                    routeTimeZone.RequestedId,
+                    route.ScheduleExpression);
+            }
+
             if (heartbeatLoggingEnabled)
             {
                 _logger.LogInformation(
-                    "Route {RouteId} ({RouteLabel}, '{ScheduleExpression}') evaluated at {UtcNow}: {Status}. Last triggered: {LastTriggeredOnUtc}.",
+                    LogEvents.WorkflowScheduleEvaluated,
+                    "Route {RouteId} ({RouteLabel}, '{ScheduleExpression}') evaluated at {UtcNow}: {Status}. " +
+                    "TimeZoneId={TimeZoneId} TimeZoneResolved={TimeZoneResolved} TimeZoneOffset={TimeZoneOffset} " +
+                    "Last triggered: {LastTriggeredOnUtc}.",
                     route.Id,
                     routeLabel ?? "unnamed",
                     route.ScheduleExpression,
                     utcNow,
                     isDue ? "DUE -- dispatching now" : "not due yet",
+                    routeTimeZone.RequestedId,
+                    routeTimeZone.Resolved,
+                    routeTimeZone.BaseUtcOffset,
                     route.LastTriggeredOnUtc);
             }
 

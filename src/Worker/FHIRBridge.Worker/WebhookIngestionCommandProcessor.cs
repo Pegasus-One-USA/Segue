@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Messaging;
+using FHIRBridge.Observability.Logging;
 using FHIRBridge.Governance;
 
 namespace FHIRBridge.Worker;
@@ -36,7 +37,9 @@ public sealed class WebhookIngestionCommandProcessor : BackgroundService
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Webhook ingestion command processor started; waiting for webhook commands.");
+        _logger.LogInformation(
+            LogEvents.MessageProcessorStarted,
+            "Webhook ingestion command processor started; waiting for webhook commands.");
         return _consumer.StartAsync(HandleAsync, stoppingToken);
     }
 
@@ -45,9 +48,31 @@ public sealed class WebhookIngestionCommandProcessor : BackgroundService
         using var scope = _serviceScopeFactory.CreateScope();
         var handler = scope.ServiceProvider.GetRequiredService<IWebhookIngestionCommandHandler>();
 
+        // WebhookIngestionCommand.ResourceJson is the raw inbound FHIR payload -- PHI. It is deliberately absent
+        // from every message here; PayloadHash (the idempotency key) identifies the payload without carrying it.
+        using var commandLogScope = _logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["MessageId"] = command.MessageId,
+            ["WebhookConfigurationId"] = command.WebhookConfigurationId,
+            ["CorrelationId"] = command.CorrelationId,
+        });
+
+        var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        _logger.LogInformation(
+            LogEvents.MessageConsumed,
+            "Consuming webhook ingestion command {MessageId} for webhook {WebhookConfigurationId} "
+            + "(payload hash {PayloadHash}, triggered by {TriggeredBy}).",
+            command.MessageId, command.WebhookConfigurationId, command.PayloadHash, command.TriggeredBy);
+
         try
         {
             await handler.HandleAsync(command, cancellationToken);
+
+            _logger.LogInformation(
+                LogEvents.MessageCompleted,
+                "Webhook ingestion command {MessageId} completed in {ElapsedMs}ms.",
+                command.MessageId,
+                (long)System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -56,6 +81,16 @@ public sealed class WebhookIngestionCommandProcessor : BackgroundService
                 exception,
                 new ExceptionContext(Module: "Webhook Ingestion", CorrelationId: command.CorrelationId),
                 CancellationToken.None);
+
+            // Rethrown to the transport, so expect repeats of this event for the same MessageId across retries.
+            _logger.LogError(
+                LogEvents.MessageFailed,
+                exception,
+                "Webhook ingestion command {MessageId} for webhook {WebhookConfigurationId} failed after "
+                + "{ElapsedMs}ms and is being handed back to the transport for retry/dead-lettering: {FailureReason}",
+                command.MessageId, command.WebhookConfigurationId,
+                (long)System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+                exception.Message);
             throw;
         }
     }

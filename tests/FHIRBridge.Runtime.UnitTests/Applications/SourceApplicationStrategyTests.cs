@@ -12,7 +12,7 @@ namespace FHIRBridge.Runtime.UnitTests.Applications;
 
 public sealed class SourceApplicationStrategyTests
 {
-    private static EpicAccessTokenProvider Epic() =>
+    private static SmartBackendServicesTokenProvider Epic() =>
         new(new HttpClient(new NoopHandler()), new FakeJwtFactory());
 
     private static OAuth2ClientCredentialsTokenProvider ClientSecret() =>

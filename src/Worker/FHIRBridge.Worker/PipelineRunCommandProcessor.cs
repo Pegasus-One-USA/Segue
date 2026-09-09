@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Governance;
+using FHIRBridge.Observability.Logging;
 
 namespace FHIRBridge.Worker;
 
@@ -32,7 +33,9 @@ public sealed class PipelineRunCommandProcessor : BackgroundService
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Pipeline run command processor started; waiting for scheduled run commands.");
+        _logger.LogInformation(
+            LogEvents.MessageProcessorStarted,
+            "Pipeline run command processor started; waiting for scheduled run commands.");
         return _consumer.StartAsync(HandleAsync, stoppingToken);
     }
 
@@ -41,9 +44,34 @@ public sealed class PipelineRunCommandProcessor : BackgroundService
         using var scope = _serviceScopeFactory.CreateScope();
         var handler = scope.ServiceProvider.GetRequiredService<IPipelineRunCommandHandler>();
 
+        // This is the DEFAULT route-scheduling path (RuntimeWorkerOptions.DirectRouteSchedulingEnabled is off), so
+        // it carries most scheduled route runs — yet until now it logged only at startup. Everything the handler
+        // and the configured pipeline write beneath this inherits the message identity from the scope.
+        using var commandLogScope = _logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["MessageId"] = command.MessageId,
+            ["CorrelationId"] = command.CorrelationId,
+        });
+
+        var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        _logger.LogInformation(
+            LogEvents.MessageConsumed,
+            "Consuming pipeline run command {MessageId}: ResourceTypes=[{ResourceTypes}] RouteIds=[{RouteIds}] "
+            + "RunDueSchedulesOnly={RunDueSchedulesOnly} UseBulkExport={UseBulkExport} "
+            + "ScheduledAtUtc={ScheduledAtUtc} TriggeredBy={TriggeredBy}",
+            command.MessageId, string.Join(", ", command.ResourceTypes),
+            command.RouteIds is null ? "all" : string.Join(", ", command.RouteIds),
+            command.RunDueSchedulesOnly, command.UseBulkExport, command.ScheduledAtUtc, command.TriggeredBy);
+
         try
         {
             await handler.HandleAsync(command, cancellationToken);
+
+            _logger.LogInformation(
+                LogEvents.MessageCompleted,
+                "Pipeline run command {MessageId} completed in {ElapsedMs}ms.",
+                command.MessageId,
+                (long)System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -54,6 +82,17 @@ public sealed class PipelineRunCommandProcessor : BackgroundService
                 exception,
                 new ExceptionContext(Module: "Pipeline Run", CorrelationId: command.CorrelationId),
                 CancellationToken.None);
+
+            // Rethrowing hands this to the transport's retry/dead-letter machinery, so expect this event to repeat
+            // for the same MessageId across attempts — that repetition is the retry, not duplicate work.
+            _logger.LogError(
+                LogEvents.MessageFailed,
+                exception,
+                "Pipeline run command {MessageId} failed after {ElapsedMs}ms and is being handed back to the "
+                + "transport for retry/dead-lettering: {FailureReason}",
+                command.MessageId,
+                (long)System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+                exception.Message);
             throw;
         }
     }

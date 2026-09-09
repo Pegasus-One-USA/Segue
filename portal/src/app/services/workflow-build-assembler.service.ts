@@ -294,11 +294,11 @@ export class WorkflowBuildAssemblerService {
     // per-resource system/ scope vocabulary — see VENDOR_SCOPE_PROFILES / the backend's VendorScopeCatalog — plus,
     // for the interactive audiences, the mandatory practice_code derived from the FHIR base URL's last path segment
     // and no offline_access; see SmartAuthorizationCodeTokenProvider.BuildAuthorizationRequest). The canvas node
-    // itself still resolves to NodeType "EpicSourceNode" (see workflow-graph-mapper.service.ts's transformIdForNode
-    // — the backend's workflow node catalog gates EClinicalWorksSourceNode out until the generic Source hierarchy
-    // lands), so this connection's actual pipeline RUN executes via EpicSourceNodeExecutor — which still picks
-    // EClinicalWorksFhirSourceClient at the HTTP-client-selection step based on this SourceSystemType (see
-    // SourceNodeExecutors.cs's TrustResolverSourceType), just not via a dedicated Healow executor class.
+    // now resolves to NodeType "EClinicalWorksSourceNode" (see workflow-graph-mapper.service.ts's
+    // transformIdForNode), so the run executes via EClinicalWorksSourceNodeExecutor and the run's node history
+    // names eCW rather than Epic. A workflow saved BEFORE that still carries "EpicSourceNode" and keeps running
+    // correctly: EpicSourceNodeExecutor picks EClinicalWorksFhirSourceClient at the HTTP-client-selection step
+    // from this SourceSystemType (see SourceNodeExecutors.cs's TrustResolverSourceType).
     if (/healow/i.test(connector)) {
       const healowAppType = this.applicationTypeFor(fields);
       // Backend System is eCW's "Backend — Single Patient" API: client_credentials + RS384 private_key_jwt,

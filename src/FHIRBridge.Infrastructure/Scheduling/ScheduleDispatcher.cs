@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Scheduling;
 using FHIRBridge.Application.Messaging;
 using FHIRBridge.Governance;
+using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Scheduling;
@@ -62,6 +63,19 @@ public sealed class ScheduleDispatcher : IScheduleDispatcher
 
             await _pipelineRunDispatcher.EnqueueAsync(command, cancellationToken);
 
+            // MessageId is deterministic (routes + minute slot), so it is the join key between this dispatch and
+            // the PipelineRunCommandProcessor consume/complete events on the other side of the queue -- including
+            // across transport retries of the same message.
+            _logger.LogInformation(
+                LogEvents.WorkflowScheduleDue,
+                "Enqueued scheduled pipeline run command {MessageId} for slot {SlotUtc}: " +
+                "{RouteCount} route(s) [{RouteLabels}] covering resource types [{ResourceTypes}].",
+                messageId,
+                slotUtc,
+                dueRun.RouteIds.Count,
+                dueRun.RouteLabels.Count > 0 ? string.Join(", ", dueRun.RouteLabels) : routeKey,
+                string.Join(", ", dueRun.ResourceTypes));
+
             var schedulerLabel = dueRun.RouteLabels.Count > 0
                 ? $"Scheduler ({string.Join(", ", dueRun.RouteLabels)})"
                 : $"Scheduler ({routeKey})";
@@ -73,7 +87,11 @@ public sealed class ScheduleDispatcher : IScheduleDispatcher
 
         if (dueRuns.Count > 0)
         {
-            _logger.LogInformation("Dispatched {DueRunCount} scheduled pipeline run command(s).", dueRuns.Count);
+            _logger.LogInformation(
+                LogEvents.SchedulerTickCompleted,
+                "Dispatched {DueRunCount} scheduled pipeline run command(s) for slot {SlotUtc}.",
+                dueRuns.Count,
+                slotUtc);
         }
 
         return dueRuns.Count;

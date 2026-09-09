@@ -18,7 +18,13 @@ namespace FHIRBridge.Infrastructure.Sources;
 /// </summary>
 public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnectionScopeSyncService
 {
-    private const string EpicSourceNodeType = "EpicSourceNode";
+    // Any source node, not just "EpicSourceNode". Every vendor used to persist under that single NodeType, so
+    // matching it literally was enough; a node saved since now carries its own vendor type (AthenahealthSourceNode,
+    // EClinicalWorksSourceNode, ...) and a literal match would silently stop finding the workflows that reference
+    // this connection — leaving an athenahealth connection's scopes frozen at whatever they were, which is the one
+    // vendor whose token request fails outright on a stale resource list (see the athenahealth note in SyncAsync).
+    // Matched by suffix rather than an enumerated list so a vendor added to the catalog later needs no change here.
+    private const string SourceNodeTypeSuffix = "SourceNode";
     private const string SourceConnectionIdConfigKey = "sourceConnectionId";
     private const string DestinationResourcesConfigKey = "dest_resources";
     private const string AutoFetchMissingReferencesConfigKey = "dest_autoFetchMissingReferences";
@@ -160,7 +166,7 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         return changed;
     }
 
-    // Every EpicSourceNode across every workflow that references this connection contributes its sibling
+    // Every source node across every workflow that references this connection contributes its sibling
     // destination nodes' selected resource types — the union across ALL such workflows, not just one.
     private static IReadOnlyList<string> GetUsedResourceTypes(
         IReadOnlyCollection<WorkflowDefinition> workflows, Guid sourceConnectionId)
@@ -170,7 +176,7 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         foreach (var workflow in workflows)
         {
             var referencesThisConnection = workflow.Nodes.Any(node =>
-                string.Equals(node.NodeType, EpicSourceNodeType, StringComparison.OrdinalIgnoreCase) &&
+                node.NodeType.EndsWith(SourceNodeTypeSuffix, StringComparison.OrdinalIgnoreCase) &&
                 TryGetSourceConnectionId(node) == sourceConnectionId);
 
             if (!referencesThisConnection)

@@ -140,6 +140,27 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
             await CaptureLineageAsync(context, node, resource, result, destination, sourceSystem, cancellationToken);
         }
 
+        if (ruleErrors.Count > 0)
+        {
+            // Warning, not Error: a failed rule hop degrades one field, it doesn't fail the run — so nothing
+            // else reports it. FirstRuleError is included because the full list can be long and is already
+            // preserved on the node's lineage metadata.
+            Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(
+                Logger,
+                FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
+                "Transform applied to {RecordCount} resource(s); {TransformedCount} changed, "
+                + "{RuleErrorCount} rule hop(s) failed. FirstRuleError={FirstRuleError}",
+                transformed.Count, transformedCount, ruleErrors.Count, ruleErrors[0]);
+        }
+        else
+        {
+            Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
+                Logger,
+                FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
+                "Transform applied to {RecordCount} resource(s); {TransformedCount} changed.",
+                transformed.Count, transformedCount);
+        }
+
         return new WorkflowNodeOutput(
             node.Id,
             node.NodeType,
@@ -217,8 +238,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         ITransformNodeRegistry? transformNodeRegistry = null,
         ISystemSettingsCache? settingsCache = null,
         IAppSecretAccessor? secretAccessor = null,
-        ILineageCaptureDispatcher? lineageCaptureDispatcher = null)
-        : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch)
+        ILineageCaptureDispatcher? lineageCaptureDispatcher = null,
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
+        : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, loggerFactory)
     {
         _mappingEngine = mappingEngine;
         _mappingMaterializer = mappingMaterializer;
@@ -535,6 +557,19 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 }
             }
         }
+
+        // The record count entering the destination stage. Comparing this against the source stage's
+        // ResourceTypeExtracted counts is how a silent drop in mapping is found — previously only possible by
+        // decoding node metadata after the fact.
+        Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
+            Logger,
+            FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
+            "Mapping produced {RecordCount} destination record(s) across {ResourceTypeCount} resource type(s): [{ResourceTypeCounts}]",
+            records.Count,
+            records.Select(record => record.ResourceType).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+            string.Join(", ", records
+                .GroupBy(record => record.ResourceType, StringComparer.OrdinalIgnoreCase)
+                .Select(group => $"{group.Key}={group.Count()}")));
 
         return new WorkflowNodeOutput(
             node.Id,
@@ -1139,6 +1174,12 @@ public sealed class TerminologyNodeExecutor : PassThroughNodeExecutor
                 cancellationToken));
         }
 
+        Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
+            Logger,
+            FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
+            "Terminology normalization applied to {RecordCount} record(s) across {FieldCount} configured field(s).",
+            records.Count, fields.Count);
+
         return new WorkflowNodeOutput(node.Id, node.NodeType, new MappedRecordBatch(records), WorkflowDataContract.MappedRecordBatch);
     }
 }
@@ -1190,8 +1231,9 @@ public abstract class PassThroughNodeExecutor : WorkflowNodeExecutorBase
     protected PassThroughNodeExecutor(
         string nodeType,
         WorkflowDataContract outputContract,
-        IResourceNormalizationService? normalizationService = null)
-        : base(nodeType, outputContract)
+        IResourceNormalizationService? normalizationService = null,
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
+        : base(nodeType, outputContract, loggerFactory)
     {
         _normalizationService = normalizationService;
     }

@@ -79,26 +79,27 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 // restart/redeploy and surface as "The launch context is invalid or has been tampered with." on launch.
 //   • A MULTI-INSTANCE deployment MUST set DataProtection:KeyRingPath to SHARED, backed-up storage
 //     (Azure Files, K8s PVC, etc.) so every node shares one ring.
-//   • When no path is configured we still persist to a stable, user-writable local folder (never an ephemeral
-//     ring) so single-instance restarts keep working; a multi-instance deployment without a shared path is warned.
+//   • When no path is configured we still persist to a stable MACHINE-WIDE folder (never an ephemeral ring, and
+//     never one scoped to the account this process happens to run as) so single-instance restarts keep working
+//     even if the service identity changes; a multi-instance deployment without a shared path is warned.
 var dataProtection = builder.Services.AddDataProtection()
     .SetApplicationName(builder.Configuration["DataProtection:ApplicationName"] ?? "FHIRBridge");
 
-var keyRingPath = builder.Configuration["DataProtection:KeyRingPath"];
-if (string.IsNullOrWhiteSpace(keyRingPath))
-{
-    keyRingPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "FHIRBridge",
-        "dataprotection-keys");
+// Shared with the Worker host (DataProtectionKeyRingPathResolver) precisely so the two can never compute
+// different paths — see that class's remarks for what a forked ring costs.
+var keyRingResolution = DataProtectionKeyRingPathResolver.Resolve(builder.Configuration["DataProtection:KeyRingPath"]);
+var keyRingPath = keyRingResolution.Path;
 
-    if (!builder.Environment.IsDevelopment())
-    {
-        Console.Error.WriteLine(
-            $"[WARN] DataProtection:KeyRingPath is not set; using a machine-local key ring at '{keyRingPath}'. " +
-            "OAuth/launch tokens will NOT be decryptable across instances — set a shared, persistent path for " +
-            "any multi-instance deployment.");
-    }
+if (keyRingResolution.Warning is not null && !builder.Environment.IsDevelopment())
+{
+    Console.Error.WriteLine($"[WARN] {keyRingResolution.Warning}");
+}
+else if (!keyRingResolution.WasConfigured && !builder.Environment.IsDevelopment())
+{
+    Console.Error.WriteLine(
+        $"[WARN] DataProtection:KeyRingPath is not set; using the machine-wide key ring at '{keyRingPath}'. " +
+        "Every host on this machine shares it, but a MULTI-INSTANCE deployment must set an explicitly shared, " +
+        "persistent path or OAuth/launch tokens will not be decryptable across instances.");
 }
 
 Directory.CreateDirectory(keyRingPath);
@@ -545,6 +546,55 @@ BootstrapDatabase(app);
 ProvisionAppSecrets(app);
 SyncDiscoveredPermissions(app);
 
+// One structured event per HTTP request (method, path, status, duration) instead of the framework's several
+// per-request lines. Placed before the static-file and auth middleware so it times the whole pipeline, including
+// anything short-circuited by CORS/CSRF/auth — a 401 that never reaches a handler is exactly the request you
+// need to see. Health-check and static-asset polling is dropped to Verbose so it doesn't drown the log.
+app.UseSerilogRequestLogging(options =>
+{
+    options.GetLevel = (httpContext, elapsedMs, exception) =>
+    {
+        if (exception is not null || httpContext.Response.StatusCode >= 500)
+        {
+            return Serilog.Events.LogEventLevel.Error;
+        }
+
+        if (httpContext.Response.StatusCode >= 400)
+        {
+            return Serilog.Events.LogEventLevel.Warning;
+        }
+
+        var path = httpContext.Request.Path.Value ?? string.Empty;
+        var isNoise = path.StartsWith("/health", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/_", StringComparison.Ordinal)
+            || System.IO.Path.HasExtension(path);
+
+        return isNoise ? Serilog.Events.LogEventLevel.Verbose : Serilog.Events.LogEventLevel.Information;
+    };
+
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        // Only non-PHI request metadata. Query strings are deliberately NOT enriched: a FHIR search URL can carry
+        // patient identifiers, and the PHI-masking enricher matches on property NAME, so it would not catch them
+        // inside a single "QueryString" value.
+        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
+        diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
+        diagnosticContext.Set("ClientIp", httpContext.Connection.RemoteIpAddress?.ToString());
+        diagnosticContext.Set("CorrelationId",
+            httpContext.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? httpContext.TraceIdentifier);
+
+        // The acting user, when authenticated — makes "who changed this configuration" answerable from the log
+        // alone. Falls back to null for anonymous endpoints rather than inventing a value.
+        if (httpContext.User?.Identity?.IsAuthenticated == true)
+        {
+            diagnosticContext.Set("UserId",
+                httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? httpContext.User.FindFirst("sub")?.Value);
+        }
+    };
+});
+
 // Serves the Angular portal's production build when it's been copied into wwwroot (see deploy/windows) —
 // a no-op in local dev, where wwwroot doesn't exist and the portal runs separately via `ng serve`.
 app.UseDefaultFiles();
@@ -677,10 +727,56 @@ static void BootstrapDatabase(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
 
+    // Startup runs before the host is listening, so a slow or failed step here shows up only as "the service
+    // didn't come up". These events make a first deploy legible: which step ran, how long it took, and which
+    // migrations were actually applied.
+    var logger = app.Logger;
+    var bootstrapStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+
     var dbContext = scope.ServiceProvider.GetService<FHIRBridgeDbContext>();
     if (dbContext is not null)
     {
-        dbContext.Database.Migrate();
+        // Enumerated before migrating so the log names the migrations this boot is about to apply — afterwards
+        // the pending list is empty and the information is gone. Best-effort: an unreachable database throws
+        // here just as Migrate() would a line later, so it must not change the failure the operator sees.
+        string[] pendingMigrations;
+        try
+        {
+            pendingMigrations = dbContext.Database.GetPendingMigrations().ToArray();
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                "Could not enumerate pending EF migrations before applying them: {FailureReason}", exception.Message);
+            pendingMigrations = [];
+        }
+
+        var migrationStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            dbContext.Database.Migrate();
+
+            logger.Log(
+                pendingMigrations.Length > 0 ? LogLevel.Information : LogLevel.Debug,
+                "Database migration completed in {ElapsedMs}ms: {PendingMigrationCount} migration(s) applied [{PendingMigrations}].",
+                (long)System.Diagnostics.Stopwatch.GetElapsedTime(migrationStartedAt).TotalMilliseconds,
+                pendingMigrations.Length,
+                string.Join(", ", pendingMigrations));
+        }
+        catch (Exception exception)
+        {
+            // Rethrown — a failed migration must still abort startup. Logged first because at this point in
+            // boot the Serilog file/Seq sinks are configured but nothing else will describe what was being
+            // attempted, and "service won't start" is otherwise the only symptom.
+            logger.LogCritical(
+                exception,
+                "Database migration FAILED after {ElapsedMs}ms while applying {PendingMigrationCount} migration(s) "
+                + "[{PendingMigrations}]. The application will not start.",
+                (long)System.Diagnostics.Stopwatch.GetElapsedTime(migrationStartedAt).TotalMilliseconds,
+                pendingMigrations.Length,
+                string.Join(", ", pendingMigrations));
+            throw;
+        }
     }
 
     var bootstrapper = scope.ServiceProvider.GetService<IRbacBootstrapper>();
@@ -688,9 +784,11 @@ static void BootstrapDatabase(WebApplication app)
 
     // Runs every registered vendor endpoint-directory seeder (currently just Epic's) — adding a new vendor never
     // touches this call site, only DependencyInjection.cs's registration list.
+    var seederCount = 0;
     foreach (var seeder in scope.ServiceProvider.GetServices<IEhrEndpointDirectorySeeder>())
     {
         seeder.EnsureAsync(CancellationToken.None).GetAwaiter().GetResult();
+        seederCount++;
     }
 
     // One-time: populate SystemSettings with the value each DB-backed config key is already effectively
@@ -698,6 +796,14 @@ static void BootstrapDatabase(WebApplication app)
     // edits a row. Insert-only; never overwrites a row an admin has since customized.
     var systemSettingsSeeder = scope.ServiceProvider.GetService<ISystemSettingsSeeder>();
     systemSettingsSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+    logger.LogInformation(
+        "Database bootstrap completed in {ElapsedMs}ms. RbacBootstrapper={RbacBootstrapperRan} "
+        + "EndpointDirectorySeeders={EndpointDirectorySeederCount} SystemSettingsSeeder={SystemSettingsSeederRan}",
+        (long)System.Diagnostics.Stopwatch.GetElapsedTime(bootstrapStartedAt).TotalMilliseconds,
+        bootstrapper is not null,
+        seederCount,
+        systemSettingsSeeder is not null);
 
     // De-identification profiles/rules are no longer auto-seeded on a fresh environment — de-identification
     // policy is now a deliberate, explicitly-authored decision (created via the mapping screen's

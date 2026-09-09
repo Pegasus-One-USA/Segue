@@ -3,7 +3,10 @@ using FHIRBridge.Runtime.Application.Abstractions.Applications;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
+using FHIRBridge.Observability.Logging;
 using FHIRBridge.SharedKernel.Enums;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FHIRBridge.Runtime.Infrastructure.Auth;
 
@@ -24,19 +27,21 @@ namespace FHIRBridge.Runtime.Infrastructure.Auth;
 public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider, IFhirPatientContextProvider, IFhirGrantedScopeProvider
 {
     private readonly ISourceApplicationStrategyRegistry _applicationStrategies;
-    private readonly EpicAccessTokenProvider _smartBackendServices;
+    private readonly SmartBackendServicesTokenProvider _smartBackendServices;
     private readonly OAuth2ClientCredentialsTokenProvider _clientCredentials;
     private readonly HealowAuthorizationCodeTokenProvider _healow;
     private readonly MeditechGreenfieldTokenProvider _meditechGreenfield;
     private readonly IGovernanceLogger _governanceLogger;
+    private readonly ILogger<CompositeFhirAccessTokenProvider> _logger;
 
     public CompositeFhirAccessTokenProvider(
         ISourceApplicationStrategyRegistry applicationStrategies,
-        EpicAccessTokenProvider smartBackendServices,
+        SmartBackendServicesTokenProvider smartBackendServices,
         OAuth2ClientCredentialsTokenProvider clientCredentials,
         HealowAuthorizationCodeTokenProvider healow,
         MeditechGreenfieldTokenProvider meditechGreenfield,
-        IGovernanceLogger governanceLogger)
+        IGovernanceLogger governanceLogger,
+        ILogger<CompositeFhirAccessTokenProvider>? logger = null)
     {
         _applicationStrategies = applicationStrategies;
         _smartBackendServices = smartBackendServices;
@@ -44,6 +49,7 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
         _healow = healow;
         _meditechGreenfield = meditechGreenfield;
         _governanceLogger = governanceLogger;
+        _logger = logger ?? NullLogger<CompositeFhirAccessTokenProvider>.Instance;
     }
 
     public async Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
@@ -52,6 +58,8 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
         // on a cache miss — see DistributedFhirAccessTokenCache, which wraps this provider) funnels through,
         // so logging here once covers all of them instead of touching each per-vendor provider.
         var grantType = DetermineGrantType(source);
+
+        var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
 
         try
         {
@@ -62,6 +70,16 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
                     $"OAuth:{grantType}", Success: !string.IsNullOrEmpty(token), source.Name, DescribeTokenKey(source)),
                 cancellationToken);
 
+            // The token itself is never logged — only the grant that produced it and how long it took. A mint that
+            // takes hundreds of ms every run means the distributed token cache is missing, which is otherwise
+            // invisible: the run still succeeds, just slower and with extra load on the EHR's token endpoint.
+            _logger.LogInformation(
+                LogEvents.SourceTokenAcquired,
+                "Acquired an access token for {SourceName} via {GrantType} in {ElapsedMs}ms. " +
+                "ApplicationType={ApplicationType} TokenEndpoint={TokenEndpoint} ClientId={ClientId}",
+                source.Name, grantType, ElapsedMs(startedAt),
+                source.ApplicationType, source.TokenEndpoint, source.ClientId);
+
             return token;
         }
         catch (Exception exception)
@@ -70,6 +88,16 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
                 new AuthenticationEntry(
                     $"OAuth:{grantType}", Success: false, source.Name, $"{exception.Message} {DescribeTokenKey(source)}"),
                 cancellationToken);
+
+            // Auth is the most common first-time-setup failure (wrong client id, unregistered JWKS, scopes the EHR
+            // never granted), and until now it reached only the governance table — never a log sink.
+            _logger.LogError(
+                LogEvents.SourceTokenFailed,
+                exception,
+                "Failed to acquire an access token for {SourceName} via {GrantType} after {ElapsedMs}ms. " +
+                "ApplicationType={ApplicationType} TokenEndpoint={TokenEndpoint} ClientId={ClientId} Reason={FailureReason}",
+                source.Name, grantType, ElapsedMs(startedAt),
+                source.ApplicationType, source.TokenEndpoint, source.ClientId, exception.Message);
             throw;
         }
     }
@@ -198,4 +226,7 @@ public sealed class CompositeFhirAccessTokenProvider : IFhirAccessTokenProvider,
             _ => Task.FromResult<string?>(null)
         };
     }
+
+    private static long ElapsedMs(long startedAt) =>
+        (long)System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
 }

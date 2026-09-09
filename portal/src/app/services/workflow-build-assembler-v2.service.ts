@@ -293,12 +293,11 @@ export class WorkflowBuildAssemblerServiceV2 {
     // ...), but its own sourceSystemType so the backend's Healow-specific authorize-request handling actually
     // applies (v1-only .read resource scopes, mandatory practice_code derived from the FHIR base URL's last path
     // segment, no offline_access — see SmartAuthorizationCodeTokenProvider.BuildAuthorizationRequest). The canvas
-    // node itself still resolves to NodeType "EpicSourceNode" (see workflow-graph-mapper.service.ts's
-    // transformIdForNode — the backend's workflow node catalog gates EClinicalWorksSourceNode out until the
-    // generic Source hierarchy lands), so this connection's actual pipeline RUN executes via
-    // EpicSourceNodeExecutor — which still picks EClinicalWorksFhirSourceClient at the HTTP-client-selection step
-    // based on this SourceSystemType (see SourceNodeExecutors.cs's TrustResolverSourceType), just not via a
-    // dedicated Healow executor class. Healow now supports Patient (standalone), Provider EHR launch, AND Backend
+    // node now resolves to NodeType "EClinicalWorksSourceNode" (see workflow-graph-mapper.service.ts's
+    // transformIdForNode), so the run executes via EClinicalWorksSourceNodeExecutor and the run's node history
+    // names eCW rather than Epic. A workflow saved BEFORE that still carries "EpicSourceNode" and keeps running
+    // correctly: EpicSourceNodeExecutor picks EClinicalWorksFhirSourceClient at the HTTP-client-selection step
+    // from this SourceSystemType (see SourceNodeExecutors.cs's TrustResolverSourceType). Healow now supports Patient (standalone), Provider EHR launch, AND Backend
     // System (see VENDOR_DISABLED_AUDIENCES) — the authentication block below handles all three (public / jwt /
     // secret), mirroring the Epic branch, so Backend System's private_key_jwt key material is persisted, not dropped.
     if (/healow/i.test(connector)) {

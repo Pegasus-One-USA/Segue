@@ -22,6 +22,7 @@ using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.Runtime.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Exceptions;
 using FHIRBridge.SharedKernel.Observability;
+using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 using System.IO.Compression;
 using System.Text.Json.Nodes;
@@ -668,6 +669,27 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             mappingProfile.SourceConnectionId,
             "SourceConnection");
 
+        // Mirrors RankedWorkflowOrchestrator's per-node scope on the Runtime plane, so a configured-pipeline run
+        // is just as traceable: every log written beneath this route — mapping, governance, and the destination
+        // writer decorator — carries the same identity without restating it.
+        using var routeLogScope = _logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["PipelineRunId"] = pipelineRunId,
+            ["RouteId"] = route.Route.Id,
+            ["MappingProfileId"] = mappingProfile.Id,
+            ["ResourceType"] = resourceType,
+            ["SourceConnectionId"] = sourceConnection.Id,
+            ["CorrelationId"] = correlationId,
+        });
+
+        var routeStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        _logger.LogInformation(
+            LogEvents.NodeExecutionStarted,
+            "Configured pipeline route {RouteId} started for {ResourceType} via mapping profile '{MappingProfileName}' "
+            + "from source '{SourceName}' ({SourceSystemType}) with {ResourceCount} extracted resource(s).",
+            route.Route.Id, resourceType, mappingProfile.Name, sourceConnection.Name,
+            sourceConnection.SourceSystemType, resources.Count);
+
         // One durable row per route execution — the Execution History screen's display grain. Name/source are
         // snapshotted now so history still reads correctly if the mapping profile or source is later renamed.
         var routeExecutionId = await _routeExecutionRepository.CreateRunningAsync(
@@ -786,6 +808,29 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 DateTime.UtcNow,
                 cancellationToken);
 
+            // Extracted → mapped → written on one line: the drop-off between those three numbers is the single
+            // most useful thing to see when a run "succeeds" but the destination is short of rows.
+            var routeElapsedMs = (long)System.Diagnostics.Stopwatch.GetElapsedTime(routeStartedAt).TotalMilliseconds;
+            if (routeHadErrors)
+            {
+                _logger.LogWarning(
+                    LogEvents.NodeExecutionCompleted,
+                    "Configured pipeline route {RouteId} for {ResourceType} finished as {RouteStatus} in {ElapsedMs}ms: "
+                    + "{ExtractedCount} extracted → {MappedCount} mapped → {WrittenCount} written. Errors={RouteErrors}",
+                    route.Route.Id, resourceType, routeStatus, routeElapsedMs,
+                    resources.Count, mappedRecords.Count, writtenCount,
+                    string.Join("; ", errors.Skip(errorCountBefore)));
+            }
+            else
+            {
+                _logger.LogInformation(
+                    LogEvents.NodeExecutionCompleted,
+                    "Configured pipeline route {RouteId} for {ResourceType} completed in {ElapsedMs}ms: "
+                    + "{ExtractedCount} extracted → {MappedCount} mapped → {WrittenCount} written.",
+                    route.Route.Id, resourceType, routeElapsedMs,
+                    resources.Count, mappedRecords.Count, writtenCount);
+            }
+
             return new RouteExecutionResult(
                 mappedRecords.Count,
                 writtenCount,
@@ -804,10 +849,13 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         catch (Exception exception)
         {
             _logger.LogError(
+                LogEvents.NodeExecutionFailed,
                 exception,
-                "Configured pipeline route failed for resource {ResourceType}, route {RouteId}.",
+                "Configured pipeline route {RouteId} for {ResourceType} failed after {ElapsedMs}ms: {FailureReason}",
+                route.Route.Id,
                 resourceType,
-                route.Route.Id);
+                (long)System.Diagnostics.Stopwatch.GetElapsedTime(routeStartedAt).TotalMilliseconds,
+                exception.Message);
 
             var failureDescription = DescribeFailure(exception);
             errors.Add($"{resourceType}/route/{route.Route.Id}: {failureDescription}");
@@ -992,6 +1040,22 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 : "Failed";
 
         var completedOnUtc = DateTime.UtcNow;
+
+        // The configured pipeline's counterpart to WorkflowRunSucceeded/Failed on the Runtime plane. Logged at
+        // Warning for anything other than a clean Completed, so a run that half-worked doesn't read as success.
+        _logger.Log(
+            status == "Completed" ? LogLevel.Information : LogLevel.Warning,
+            status == "Completed" ? LogEvents.WorkflowRunSucceeded
+                : status == "Failed" ? LogEvents.WorkflowRunFailed
+                : LogEvents.WorkflowRunPartiallySucceeded,
+            "Configured pipeline run {PipelineRunId} finished as {Status} in {ElapsedMs}ms: "
+            + "{ExtractedCount} extracted → {MappedCount} mapped → {WrittenCount} written across "
+            + "{ResourceTypeCount} resource type(s), {ErrorCount} error(s). TriggeredBy={TriggeredBy} "
+            + "TriggerType={TriggerType} CorrelationId={CorrelationId}",
+            pipelineRunId, status, (long)(completedOnUtc - startedOnUtc).TotalMilliseconds,
+            extractedCount, mappedCount, writtenCount,
+            resourceTypes.Distinct(StringComparer.OrdinalIgnoreCase).Count(), errors.Count,
+            triggeredBy, triggerType, correlationId);
 
         var pipelineRun = new ConfiguredPipelineRunDto(
             pipelineRunId,

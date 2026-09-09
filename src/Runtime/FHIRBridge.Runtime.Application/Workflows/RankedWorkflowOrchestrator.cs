@@ -4,6 +4,7 @@ using FHIRBridge.Runtime.Application.Workflows.Audit;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.Extensions.DependencyInjection;
+using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -100,6 +101,17 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         // its entire in-flight duration, not just retroactively once it finishes. SqlWorkflowRunStore.SaveAsync
         // replaces this placeholder wholesale with the fully-populated terminal aggregate once Succeed()/Fail()
         // is called below. Best-effort: a transient failure here must never abort the run itself.
+        // Logged before the first node runs so a run that dies inside node execution still has its identity,
+        // trigger and shape on record. WorkflowRunId is the join key for every node event below, and matches the
+        // WorkflowRun row id the portal shows.
+        _logger.LogInformation(
+            LogEvents.WorkflowRunStarted,
+            "Workflow run {WorkflowRunId} started for {WorkflowId} '{WorkflowName}' v{WorkflowVersion}. " +
+            "Nodes={NodeCount} TriggerType={TriggerType} TriggeredBy={TriggeredBy} TargetNodeId={TargetNodeId} " +
+            "CorrelationId={CorrelationId}",
+            workflowRun.Id, workflowDefinition.Id, workflowDefinition.Name, workflowDefinition.Version,
+            orderedNodes.Count, context.TriggerType, context.TriggeredBy, targetNodeId, context.CorrelationId);
+
         await PersistRunStartedAsync(workflowRun, cancellationToken);
         await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Running", DateTimeOffset.UtcNow, null, cancellationToken);
 
@@ -165,6 +177,22 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         var orderedNodes = TopologicalSort(effectiveDefinition);
         var outputsByNodeId = DeserializePriorNodeOutputs(priorNodeOutputsJson);
         var skippedResourceTypesAcrossRun = new List<string>();
+
+        // The counterpart to the WorkflowRunAwaitingBulkExport event written when this run paused. A resume very
+        // likely happens in a different process (BulkExportPollWorker) minutes or hours later, so without this the
+        // run appears to stall at the pause and then silently continue — and none of the pre-pause context, which
+        // was reconstructed from the BulkExportJob row rather than held in memory, is otherwise on record.
+        _logger.LogInformation(
+            LogEvents.WorkflowRunResumed,
+            "Workflow run {WorkflowRunId} resumed at node {NodeType} ({NodeId}) after bulk export delivered "
+            + "{ResourceCount} resource(s); {PriorNodeOutputCount} prior node output(s) restored, "
+            + "{RemainingNodeCount} node(s) left to run. SkippedResourceTypes={SkippedResourceTypeCount} "
+            + "CorrelationId={CorrelationId}",
+            workflowRunId, pausedNode.NodeType, pausedNode.Id, resources.Count,
+            outputsByNodeId.Count,
+            orderedNodes.SkipWhile(n => n.Id != pausedNode.Id).Skip(1).Count(),
+            skippedResourceTypeReasons?.Count ?? 0,
+            context.CorrelationId);
 
         var materializedOutput = new WorkflowNodeOutput(
             pausedNode.Id,
@@ -247,6 +275,25 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                     WorkflowDataContract.None,
                     DateTimeOffset.UtcNow), cancellationToken);
 
+                // Every log written anywhere beneath executor.ExecuteAsync — connector, governance, destination
+                // writer — inherits these properties, so a Seq filter on WorkflowRunId returns the whole run and
+                // one on NodeType returns just that stage, without each component having to re-log the ids.
+                using var nodeLogScope = _logger.BeginScope(new Dictionary<string, object?>
+                {
+                    ["WorkflowRunId"] = workflowRun.Id,
+                    ["WorkflowId"] = workflowDefinition.Id,
+                    ["NodeId"] = node.Id,
+                    ["NodeType"] = node.NodeType,
+                    ["NodeRank"] = node.Rank,
+                    ["CorrelationId"] = context.CorrelationId,
+                });
+
+                var nodeStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+                _logger.LogDebug(
+                    LogEvents.NodeExecutionStarted,
+                    "Node {NodeType} ({NodeId}) started at rank {NodeRank}.{NodeSubRank} with input contract {InputContract}.",
+                    node.NodeType, node.Id, node.Rank, node.SubRank, inputContract);
+
                 try
                 {
                     var executor = _executorRegistry.GetRequired(node.NodeType);
@@ -265,6 +312,12 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                             await _bulkExportPauseRecorder.RecordPauseAsync(
                                 deferredJobId, SerializePriorNodeOutputs(outputsByNodeId), cancellationToken);
                         }
+
+                        _logger.LogInformation(
+                            LogEvents.WorkflowRunAwaitingBulkExport,
+                            "Workflow run {WorkflowRunId} paused at node {NodeType} ({NodeId}) awaiting bulk export job " +
+                            "{BulkExportJobId}; BulkExportPollWorker resumes it once the job completes.",
+                            workflowRun.Id, node.NodeType, node.Id, deferredJobId);
 
                         workflowRun.AwaitBulkExport();
                         await _auditRecorder.RecordAsync(new(
@@ -317,6 +370,15 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                         inputContract,
                         output.Contract,
                         DateTimeOffset.UtcNow), cancellationToken);
+
+                    // Information rather than Debug: this is the per-stage timing/volume line the whole pipeline is
+                    // read through — which node was slow, and where the record count changed between stages.
+                    _logger.LogInformation(
+                        LogEvents.NodeExecutionCompleted,
+                        "Node {NodeType} ({NodeId}) completed in {ElapsedMs}ms → contract {OutputContract}, {RecordCount} record(s).",
+                        node.NodeType, node.Id,
+                        (long)System.Diagnostics.Stopwatch.GetElapsedTime(nodeStartedAt).TotalMilliseconds,
+                        output.Contract, DescribePayloadSize(output));
                 }
                 catch (FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException cancelException)
                 {
@@ -362,6 +424,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 }
                 catch (Exception exception)
                 {
+                    _logger.LogError(
+                        LogEvents.NodeExecutionFailed,
+                        exception,
+                        "Node {NodeType} ({NodeId}) failed after {ElapsedMs}ms: {FailureReason}",
+                        node.NodeType, node.Id,
+                        (long)System.Diagnostics.Stopwatch.GetElapsedTime(nodeStartedAt).TotalMilliseconds,
+                        exception.Message);
+
                     workflowRun.AddNodeRun(nodeRun);
                     nodeRun.Fail(exception.Message, DateTimeOffset.UtcNow);
                     await _auditRecorder.RecordAsync(new(
@@ -410,6 +480,26 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 workflowRun.Succeed(DateTimeOffset.UtcNow);
             }
 
+            if (workflowRun.Status == WorkflowRunStatus.PartialSuccess)
+            {
+                // Warning: a partial success is a normal completion path (it does not throw, and it does advance the
+                // scheduler's LastTriggeredOn), so it never reaches any error sink — without this it is invisible in
+                // logs despite resource types having been dropped from the run.
+                _logger.LogWarning(
+                    LogEvents.WorkflowRunPartiallySucceeded,
+                    "Workflow run {WorkflowRunId} partially succeeded: {SkippedResourceTypeCount} resource type(s) were " +
+                    "excluded. Reason={PartialSuccessReason} ErrorReferenceId={ErrorReferenceId}",
+                    workflowRun.Id, skippedResourceTypesAcrossRun.Count, workflowRun.ErrorMessage,
+                    workflowRun.ErrorReferenceId);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    LogEvents.WorkflowRunSucceeded,
+                    "Workflow run {WorkflowRunId} succeeded: {NodeCount} node(s) executed.",
+                    workflowRun.Id, workflowRun.NodeRuns.Count);
+            }
+
             await _auditRecorder.RecordAsync(new(
                 WorkflowAuditEventType.WorkflowRunCompleted,
                 workflowDefinition.Id,
@@ -428,6 +518,11 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         }
         catch (FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException cancelException)
         {
+            _logger.LogWarning(
+                LogEvents.WorkflowRunCancelled,
+                "Workflow run {WorkflowRunId} was cancelled after {CompletedNodeCount} completed node(s): {CancelReason}",
+                workflowRun.Id, workflowRun.NodeRuns.Count, cancelException.Message);
+
             workflowRun.Cancel(cancelException.Message, DateTimeOffset.UtcNow);
             await _auditRecorder.RecordAsync(new(
                 WorkflowAuditEventType.WorkflowRunCancelled,
@@ -535,6 +630,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            _logger.LogError(
+                LogEvents.WorkflowRunFailed,
+                exception,
+                "Workflow run {WorkflowRunId} for {WorkflowId} '{WorkflowName}' failed after {CompletedNodeCount} " +
+                "completed node(s): {FailureReason}",
+                workflowRun.Id, workflowDefinition.Id, workflowDefinition.Name, workflowRun.NodeRuns.Count,
+                exception.Message);
+
             workflowRun.Fail(exception.Message, DateTimeOffset.UtcNow);
             await _auditRecorder.RecordAsync(new(
                 WorkflowAuditEventType.WorkflowRunFailed,
@@ -594,6 +697,20 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
         return new WorkflowRunResult(workflowRun, outputsByNodeId);
     }
+
+    /// <summary>
+    /// The record count to log for a node's output, or <c>-1</c> when the payload isn't a counted collection
+    /// (<see cref="WorkflowDataContract.None"/> outputs, and any future payload shape that isn't enumerable).
+    /// Deliberately only reads the count — never the payload itself — so nothing derived from resource content can
+    /// reach a log sink from here.
+    /// </summary>
+    private static int DescribePayloadSize(WorkflowNodeOutput output) => output.Payload switch
+    {
+        null => -1,
+        System.Collections.ICollection collection => collection.Count,
+        FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceBatch batch => batch.Resources.Count,
+        _ => -1,
+    };
 
     private Task PersistRunAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
         => _runStore is null

@@ -7,6 +7,7 @@ using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
+using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -177,6 +178,7 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         _logger.LogInformation(
+            LogEvents.SourceResolved,
             "SourceConnectionRuntimeResolver: resolved connection {SourceConnectionId} ({SourceSystemType}) — " +
             "baseUrl={BaseUrl} tokenEndpoint={TokenEndpoint} practiceId={PracticeId} authPlacement={AuthPlacement} " +
             "scopesFrom={ScopesFrom} scope=\"{Scope}\"",

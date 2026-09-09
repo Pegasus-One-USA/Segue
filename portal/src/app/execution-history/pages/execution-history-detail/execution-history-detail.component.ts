@@ -280,15 +280,14 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
     return ExecutionHistoryDetailComponent.CONTRACT_ICONS[(contract ?? '').toLowerCase()] ?? 'bolt';
   }
 
-  /** Every *Source node run for a gated-vendor connector (eClinicalWorks/Healow, Athenahealth, etc. —
-   *  see workflow-graph-mapper.service.ts's transformIdForNode) shares the internal 'EpicSourceNode'
-   *  NodeType regardless of the connection's real vendor, since the backend's node catalog doesn't yet
-   *  allow a dedicated NodeType per EHR ("GATED (SQL/CSV phase)"). Only that technical label is
-   *  generic — extraction itself is genuinely vendor-correct (SourceNodeExecutors.cs resolves the real
-   *  HTTP client from the connection's actual SourceSystemType), so this is a display-only fix: label a
-   *  source node from this run's real configured source instead of the shared internal type, so e.g. an
-   *  eClinicalWorks run doesn't read as "EpicSourceNode" here just because that's still the shared
-   *  technical NodeType underneath. Same sourceName-first fallback the header above already uses. */
+  /** A source node run now carries its vendor's own NodeType for every vendor the backend catalog accepts
+   *  (Epic, athenahealth, eClinicalWorks, generic FHIR, Sample). Two cases still arrive as the shared
+   *  'EpicSourceNode': a run of a workflow saved before per-vendor node types existed (those rows are not
+   *  migrated), and a vendor still gated out of that catalog (Cerner/Allscripts/Meditech). Extraction was
+   *  always vendor-correct either way — SourceNodeExecutors.cs resolves the real HTTP client from the
+   *  connection's SourceSystemType — so this stays a display-only fix: label a source node from this run's
+   *  real configured source, so those older runs don't read as "EpicSourceNode" either. Same sourceName-first
+   *  fallback the header above already uses. */
   nodeLabel(entry: NodeRunHistoryEntry): string {
     if (!entry.nodeType.endsWith('SourceNode')) {
       return entry.nodeType;

@@ -24,7 +24,7 @@ namespace FHIRBridge.SharedKernel.Exceptions;
 /// </summary>
 public sealed class TokenEndpointException : FHIRBridgeException
 {
-    // Matches the truncation EpicAccessTokenProvider.BuildFailureMessageAsync already applied, so a vendor that
+    // Matches the truncation SmartBackendServicesTokenProvider.BuildFailureMessageAsync already applied, so a vendor that
     // returns a large HTML error page can't put an unbounded payload into the log message.
     private const int MaxBodyLength = 1000;
 

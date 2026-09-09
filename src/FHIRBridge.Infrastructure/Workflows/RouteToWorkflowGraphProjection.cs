@@ -223,11 +223,18 @@ public sealed class RouteToWorkflowGraphProjection : ILaunchWorkflowProjection
         _ => RuntimeSourceType.GenericFhir
     };
 
-    // Only Epic + Sample source nodes are currently exposed in the catalog; other vendors reuse the Epic search
-    // client, so they project onto the Epic source node (the FhirSourceConfiguration still carries the real vendor).
+    // One node type per vendor, for every vendor the workflow node catalog actually accepts (see
+    // DefaultWorkflowNodeCatalog.Items) — so a projected route's node history names the real EHR instead of
+    // reporting every vendor as Epic. The remaining vendors (Cerner, Allscripts, MEDITECH Greenfield, HL7 v2 and
+    // the placeholder NewEHR types) have no registered IFhirSourceClient yet and so are not in that catalog: they
+    // keep projecting onto the Epic source node, which is the shared Epic-shaped search client they already run
+    // through. The FhirSourceConfiguration carries the real vendor either way, so extraction is unaffected.
     private static string MapSourceNodeType(SourceSystemType sourceSystemType) => sourceSystemType switch
     {
         SourceSystemType.Sample => WorkflowNodeTypes.SampleSource,
+        SourceSystemType.Athenahealth => WorkflowNodeTypes.AthenahealthSource,
+        SourceSystemType.Healow => WorkflowNodeTypes.EClinicalWorksSource,
+        SourceSystemType.GenericFhir => WorkflowNodeTypes.GenericFhirSource,
         _ => WorkflowNodeTypes.EpicSource
     };
 

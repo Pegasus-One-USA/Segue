@@ -1,7 +1,10 @@
 using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Observability.Logging;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FHIRBridge.Infrastructure.Persistence.Workflows;
 
@@ -19,11 +22,16 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
 {
     private readonly FHIRBridgeDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ILogger<SqlWorkflowDefinitionStore> _logger;
 
-    public SqlWorkflowDefinitionStore(FHIRBridgeDbContext dbContext, ICurrentUserService currentUserService)
+    public SqlWorkflowDefinitionStore(
+        FHIRBridgeDbContext dbContext,
+        ICurrentUserService currentUserService,
+        ILogger<SqlWorkflowDefinitionStore>? logger = null)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _logger = logger ?? NullLogger<SqlWorkflowDefinitionStore>.Instance;
     }
 
     public async Task<WorkflowDefinition> SaveAsync(
@@ -72,6 +80,20 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
         {
             await transaction.CommitAsync(cancellationToken);
         }
+
+        // The trigger is included because it is what the scheduler will act on, and a save is the only moment it
+        // changes — an unexpected Manual trigger here explains a workflow that later "never runs" (see
+        // Worker.IsWorkflowDue, which skips anything that isn't Schedule or Poll).
+        _logger.LogInformation(
+            LogEvents.WorkflowDefinitionSaved,
+            "Workflow definition '{WorkflowName}' ({WorkflowId}) {SaveKind} as v{WorkflowVersion} by {Actor}: " +
+            "{NodeCount} node(s), {EdgeCount} edge(s), IsEnabled={IsEnabled}, Trigger={TriggerType} " +
+            "Schedule={ScheduleExpression} IntervalMinutes={IntervalMinutes} TimeZoneId={TimeZoneId}",
+            workflowDefinition.Name, workflowDefinition.Id, existing is not null ? "updated" : "created",
+            workflowDefinition.Version, actor,
+            workflowDefinition.Nodes.Count, workflowDefinition.Edges.Count, workflowDefinition.IsEnabled,
+            workflowDefinition.Trigger?.Type, workflowDefinition.Trigger?.ScheduleExpression,
+            workflowDefinition.Trigger?.IntervalMinutes, workflowDefinition.Trigger?.TimeZoneId);
 
         return workflowDefinition;
     }
