@@ -2282,6 +2282,13 @@ export class DestinationWizardComponent implements OnInit {
     const edit = this.editNode();
     if (edit) {
       this._populateFromNode(edit);
+      // _populateFromNode() may have just restored connectionMode() to 'existing' (dest_connectionMode),
+      // making showConnectionModeToggle() true and the dropdown visible again — but this branch used to
+      // return before ever loading existingOptions(), so it rendered with no rows and no visible selection
+      // even though selectedExistingId() was already correctly restored (nothing for the <select> to match).
+      if (this.showConnectionModeToggle()) {
+        this._loadExistingOptions();
+      }
       return;
     }
     // New destination: no data group is pre-selected — the user picks explicitly, even when an upstream
