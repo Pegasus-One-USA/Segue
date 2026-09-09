@@ -3572,6 +3572,16 @@ export class DestinationWizardComponent implements OnInit {
     const v = this.fhirForm.value;
     this.probeState.set('testing');
     this.probeError.set(null);
+    // Reusing an existing destination unchanged (_fhirReusingExisting()): clientSecret/password/bearerToken are
+    // never repopulated from the API, so a blank one here means "use what's already saved" — pass the
+    // destination's id so the backend resolves it (FhirDestinationConnectionTestService.
+    // ResolveStoredSecretAsync), same fallback SqlFamilyDestinationFormComponent's testConnection() uses via
+    // existingDestinationId. Gated on _fhirReusingExisting() (not just "an id exists") — once the user edits an
+    // identity field away from what was selected, testing against the OLD stored secret under the NEW field
+    // values would be meaningless.
+    const destinationId = this._fhirReusingExisting()
+      ? (this.selectedExistingId() ?? this.resolvedDestinationId() ?? undefined)
+      : undefined;
     this.schemaSvc
       .testFhir({
         baseUrl: v.baseUrl ?? '',
@@ -3581,6 +3591,7 @@ export class DestinationWizardComponent implements OnInit {
         username: v.username ?? undefined,
         password: v.password ?? undefined,
         bearerToken: v.bearerToken ?? undefined,
+        destinationId,
       })
       .subscribe({
         next: (res) => {

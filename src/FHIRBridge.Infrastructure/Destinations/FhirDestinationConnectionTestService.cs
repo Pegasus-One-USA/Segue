@@ -2,8 +2,11 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Infrastructure.Destinations.Auth;
+using FHIRBridge.SharedKernel.Exceptions;
 
 namespace FHIRBridge.Infrastructure.Destinations;
 
@@ -25,15 +28,21 @@ public sealed class FhirDestinationConnectionTestService : IFhirDestinationConne
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IFhirDestinationTokenProvider _tokenProvider;
     private readonly IAzureManagedIdentityFhirTokenProvider _managedIdentityTokenProvider;
+    private readonly IConfigurationRepository _configurationRepository;
+    private readonly ISecretProvider _secretProvider;
 
     public FhirDestinationConnectionTestService(
         IHttpClientFactory httpClientFactory,
         IFhirDestinationTokenProvider tokenProvider,
-        IAzureManagedIdentityFhirTokenProvider managedIdentityTokenProvider)
+        IAzureManagedIdentityFhirTokenProvider managedIdentityTokenProvider,
+        IConfigurationRepository configurationRepository,
+        ISecretProvider secretProvider)
     {
         _httpClientFactory = httpClientFactory;
         _tokenProvider = tokenProvider;
         _managedIdentityTokenProvider = managedIdentityTokenProvider;
+        _configurationRepository = configurationRepository;
+        _secretProvider = secretProvider;
     }
 
     public async Task<FhirConnectionTestResultDto> TestConnectionAsync(
@@ -43,6 +52,26 @@ public sealed class FhirDestinationConnectionTestService : IFhirDestinationConne
         if (string.IsNullOrWhiteSpace(request.BaseUrl))
         {
             return new FhirConnectionTestResultDto(false, "Base URL is required.", null);
+        }
+
+        // Re-testing an already-saved destination: the form never re-displays the stored secret, so a blank
+        // ClientSecret/Password/BearerToken here means "use what's already saved" — resolve just that field from
+        // the vault instead (mirrors MongoDestinationConnectionTestService's identical DestinationId fallback).
+        // ClientId/Username aren't secret (they round-trip via ConnectionMetadataJson, already current in the
+        // form), so only the actual secret field is filled in — never the whole request overwritten.
+        if (request.DestinationId is { } destinationId && NeedsResolvedSecret(request))
+        {
+            var resolved = await ResolveStoredSecretAsync(destinationId, request.AuthType, cancellationToken);
+            if (resolved is not null)
+            {
+                request = request.AuthType.ToLowerInvariant() switch
+                {
+                    "bearer" => request with { BearerToken = resolved.Token },
+                    "basic" => request with { Password = resolved.Password },
+                    "clientcredentials" or "oauth2" => request with { ClientSecret = resolved.ClientSecret },
+                    _ => request,
+                };
+            }
         }
 
         AuthenticationHeaderValue? authHeader;
@@ -86,6 +115,51 @@ public sealed class FhirDestinationConnectionTestService : IFhirDestinationConne
         return writeCheckError is null
             ? new FhirConnectionTestResultDto(true, null, resolvedTokenEndpoint)
             : new FhirConnectionTestResultDto(false, writeCheckError, null);
+    }
+
+    /// <summary>Whether this request's auth type actually needs a secret at all, and the caller left it blank —
+    /// the signal that DestinationId's stored value should be resolved rather than failing outright. Managed
+    /// identity/none never need a secret regardless of DestinationId.</summary>
+    private static bool NeedsResolvedSecret(FhirConnectionTestRequest request) =>
+        request.AuthType.ToLowerInvariant() switch
+        {
+            "bearer" => string.IsNullOrWhiteSpace(request.BearerToken),
+            "basic" => string.IsNullOrWhiteSpace(request.Password),
+            "clientcredentials" or "oauth2" => string.IsNullOrWhiteSpace(request.ClientSecret),
+            _ => false,
+        };
+
+    /// <summary>Resolves and parses the already-saved destination's Key Vault secret — reuses
+    /// FhirRepositoryAuthResolver's own secret-blob shape/parser so this never drifts out of sync with what a
+    /// saved FhirRepository/AzureFhirService destination's secret actually looks like. Returns null (falls back
+    /// to whatever blank value the caller sent, which then fails validation with a clear message) when the
+    /// destination doesn't exist, has no secret configured, or its stored secret doesn't parse for this auth
+    /// type — never throws, matching this service's "never throws for connection failures" contract.</summary>
+    private async Task<FhirRepositoryAuthResolver.FhirRepositoryAuthSecret?> ResolveStoredSecretAsync(
+        Guid destinationId, string authType, CancellationToken cancellationToken)
+    {
+        var destination = await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+        if (destination is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var secretJson = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
+            return FhirRepositoryAuthResolver.FhirRepositoryAuthSecret.Parse(secretJson, authType);
+        }
+        catch (SecretNotConfiguredException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            // Stored secret doesn't parse as JSON, or is shaped for a different auth type than requested —
+            // fall back to the blank value the caller sent rather than surfacing a confusing parse error for
+            // what the user experiences as "I left the secret blank to reuse it."
+            return null;
+        }
     }
 
     // Fixed id (not a fresh Guid per call) so repeated tests overwrite/clean up the same one resource rather

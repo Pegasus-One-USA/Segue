@@ -143,6 +143,11 @@ export interface FhirConnectionTestRequest {
   scope?: string;
   managedIdentityClientId?: string;
   authorityHost?: string;
+  /** When re-testing an already-saved destination without retyping its secret (clientSecret/password/
+   *  bearerToken left blank — "Leave blank to keep the current X"), carries the destination's id so the backend
+   *  can resolve the stored one instead. Mirrors MongoConnectionTestRequest.destinationId/
+   *  BlobConnectionTestRequest.destinationId. */
+  destinationId?: string;
 }
 
 export interface ConnectionTestResult {

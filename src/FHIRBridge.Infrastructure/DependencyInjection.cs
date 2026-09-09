@@ -458,7 +458,9 @@ public static class DependencyInjection
             new Destinations.FhirDestinationConnectionTestService(
                 sp.GetRequiredService<IHttpClientFactory>(),
                 sp.GetRequiredService<Destinations.Auth.IFhirDestinationTokenProvider>(),
-                sp.GetRequiredService<Destinations.Auth.IAzureManagedIdentityFhirTokenProvider>()));
+                sp.GetRequiredService<Destinations.Auth.IAzureManagedIdentityFhirTokenProvider>(),
+                sp.GetRequiredService<Application.Abstractions.Persistence.IConfigurationRepository>(),
+                sp.GetRequiredService<Application.Abstractions.Security.ISecretProvider>()));
 
         services.AddHttpClient(nameof(Destinations.MedplumDestinationConnectionTestService));
         services.AddScoped<IMedplumDestinationConnectionTestService>(sp =>
