@@ -1022,6 +1022,20 @@ export class EhrVendorSourceFormComponent
     return this.wiz.isEditing();
   }
 
+  /** Whether leaving Client Secret blank is safe — i.e. save() resolves to reusing/updating the SAME already-
+   *  saved SourceConnection rather than forking a brand-new one with no secret at all. True when genuinely
+   *  re-opening an already-saved node/entity (isEditing) — but that alone misses canvas mode's "Existing
+   *  Source" picker (onExistingConnectionSelected/populateFormFromSourceConnection): picking a connection
+   *  there never touches wiz.isEditing() (see its own doc comment), so isEditing stayed false and this field
+   *  wrongly looked like a brand-new required field with "Stored securely — never logged" instead of
+   *  "Leave blank to keep the current client secret" (reported bug). Also requires !hasExistingChanged():
+   *  the moment the user edits an identity field after picking one, save() forks a genuinely new connection
+   *  (resolvedSourceConnectionId's own doc comment) that needs its own real secret — the placeholder must go
+   *  back to demanding one at that point, same as it always has. */
+  protected reusingExistingSecret(): boolean {
+    return this.isEditing || (this.sourceMode() === 'existing' && !this.hasExistingChanged());
+  }
+
   protected readonly discStatus = signal<'idle' | 'loading' | 'done' | 'error'>(
     'idle',
   );
@@ -2648,8 +2662,9 @@ export class EhrVendorSourceFormComponent
     // secret (ConfigurationService.PreserveSecretsIfBlank keeps it server-side when the field comes back blank),
     // so requiring it unconditionally on every re-save made an already-saved connection's edit form permanently
     // invalid unless the secret was retyped. Only require it when actually creating a new connection or when the
-    // form isn't reusing an already-saved one.
-    apply('clientSecret', method === 'secret' && !this.isEditing);
+    // form isn't reusing an already-saved one — see reusingExistingSecret()'s doc comment for why this is NOT
+    // just isEditing (canvas mode's "Existing Source" picker never touches wiz.isEditing() at all).
+    apply('clientSecret', method === 'secret' && !this.reusingExistingSecret());
     // Generate/Import (Backend System only) leave this blank on purpose — the real JWKS URL is this connection's
     // own .well-known/jwks.json, only known once it has an id after save (see the readonly condition on this field
     // in the template and generateKeyPair()/importPrivateKey() above, neither of which populate it). Import keeps

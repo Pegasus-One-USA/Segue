@@ -3807,6 +3807,20 @@ export class DestinationWizardComponent implements OnInit {
     'clientSecret',
     'bearerToken',
     'secret',
+    // Non-identity behavioral toggles — verified NOT to feed into any per-type getMetadata()'s `secret` (see
+    // buildFhirSecretBlob/AzureFhirServiceDestinationFormComponent.getMetadata for autoFetch*,
+    // MongoDestinationFormComponent.getMetadata for createIfNotExists, BlobStorageDestinationFormComponent.
+    // getMetadata for createContainerIfNotExists — none of them read these fields). Toggling one of these alone
+    // must not flip reusingExisting()/hasExistingChanged() to "changed": that would silently drop the "Leave
+    // blank to keep the current X" placeholder and re-impose Validators.required on the secret field, forcing a
+    // retype for a field the user never touched (reported bug — toggling "Auto-fetch missing references" on an
+    // Azure FHIR Service destination reset the Client secret field back to required). Deliberately does NOT
+    // include requireSsl (SQL family): that one IS embedded in buildSqlConnectionString's output, so it must
+    // keep counting as a real change — the rebuilt connection string genuinely needs the real password.
+    'autoFetchMissingReferences',
+    'autoFetchMaxCount',
+    'createIfNotExists',
+    'createContainerIfNotExists',
   ]);
 
   /** True once the user has edited any connection field away from what selectExisting() just patched in — the
@@ -3814,7 +3828,10 @@ export class DestinationWizardComponent implements OnInit {
    *  (password/sftpPassword) are excluded on both sides: selectExisting() always leaves them blank (secrets never
    *  come back from the API), so a real password typed in there to satisfy validation — or just out of habit —
    *  must not by itself count as "changed". Reusing as-is never sends whatever was typed there anywhere; forking
-   *  (because something ELSE changed) does use it, same as a brand-new connection. */
+   *  (because something ELSE changed) does use it, same as a brand-new connection. Non-identity behavioral
+   *  toggles (autoFetchMissingReferences/autoFetchMaxCount/createIfNotExists/createContainerIfNotExists) are
+   *  excluded too — see
+   *  SECRET_FORM_CONTROL_KEYS's doc comment. */
   hasExistingChanged(): boolean {
     if (!this._existingBaseline) return false;
     const secretKeys = DestinationWizardComponent.SECRET_FORM_CONTROL_KEYS;

@@ -3677,6 +3677,20 @@ export class DestinationWizardComponent implements OnInit {
     'clientSecret',
     'bearerToken',
     'secret',
+    // Non-identity behavioral toggles — verified NOT to feed into any per-type getMetadata()'s `secret` (see
+    // buildFhirSecretBlob/AzureFhirServiceDestinationFormComponent.getMetadata for autoFetch*,
+    // MongoDestinationFormComponent.getMetadata for createIfNotExists, BlobStorageDestinationFormComponent.
+    // getMetadata for createContainerIfNotExists — none of them read these fields). Toggling one of these alone
+    // must not flip reusingExisting()/hasExistingChanged() to "changed": that would silently drop the "Leave
+    // blank to keep the current X" placeholder and re-impose Validators.required on the secret field, forcing a
+    // retype for a field the user never touched (reported bug — toggling "Auto-fetch missing references" on an
+    // Azure FHIR Service destination reset the Client secret field back to required). Deliberately does NOT
+    // include requireSsl (SQL family): that one IS embedded in buildSqlConnectionString's output, so it must
+    // keep counting as a real change — the rebuilt connection string genuinely needs the real password.
+    'autoFetchMissingReferences',
+    'autoFetchMaxCount',
+    'createIfNotExists',
+    'createContainerIfNotExists',
   ]);
 
   /** True once the user has edited any connection field away from what selectExisting() just patched in — the
