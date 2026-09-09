@@ -1,0 +1,49 @@
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.ts
+  s_f23a6d63e0880f::t_5b3fe614110f0f 18-23
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  s_f23a6d63e0880f::t_5fe93aaf2bb78a 74,76-80
+  s_f23a6d63e0880f::t_3a62621ce5c0c2 123
+  s_f23a6d63e0880f::t_11e44a4c09e359 68-73,75
+  s_f23a6d63e0880f::t_471874acd6acee 16-17
+src/FHIRBridge.Application/DTOs/EhrEndpointDto.cs
+  s_f23a6d63e0880f::t_e24368ffa8464a 18-31
+src/FHIRBridge.Application/Services/IEhrEndpointService.cs
+  s_f23a6d63e0880f::t_92108ffa26f982 13-15
+src/Api/FHIRBridge.Api/Controllers/V1/EhrEndpointsController.cs
+  s_f23a6d63e0880f::t_02b182ceecb1ab 41
+portal/src/app/ehr-endpoints/services/api-ehr-endpoint.service.ts
+  s_f23a6d63e0880f::t_de1b1755956e05 7
+  s_f23a6d63e0880f::t_ffda731be05827 29
+  s_f23a6d63e0880f::t_bf2eb9db4ca5cf 19
+src/FHIRBridge.Infrastructure/Persistence/InMemoryEhrEndpointRepository.cs
+  s_f23a6d63e0880f::t_3d7c817f339329 57-65
+src/FHIRBridge.Infrastructure/Persistence/EfEhrEndpointRepository.cs
+  s_f23a6d63e0880f::t_253c5ae97284cc 70-76
+src/FHIRBridge.Application/Services/EhrEndpointService.cs
+  s_f23a6d63e0880f::t_4771c07c84d6ee 44,49-50
+portal/src/app/ehr-endpoints/models/ehr-endpoint.model.ts
+  s_f23a6d63e0880f::t_2319bd9cda6c88 41-54
+src/FHIRBridge.Application/Abstractions/Persistence/IEhrEndpointRepository.cs
+  s_f23a6d63e0880f::t_fb149a8350084b 23-27
+portal/src/app/ehr-endpoints/services/i-ehr-endpoint.service.ts
+  s_f23a6d63e0880f::t_d1b455a8a585ba 2,6
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_f23a6d63e0880f::t_cbb40c67595964 90
+  s_f23a6d63e0880f::t_9842cacdbb1280 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "13bcd48782d1d7e5fbb1e4a3284350c7c7f83b23",
+  "prompts": {},
+  "sessions": {
+    "s_f23a6d63e0880f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1b35613-6419-4a3b-952d-5bc6f9a3cfd2",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
