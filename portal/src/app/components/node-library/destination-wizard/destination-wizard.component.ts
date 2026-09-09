@@ -706,14 +706,20 @@ export class DestinationWizardComponent implements OnInit {
    *  validator (never require retyping a secret that's never repopulated), the latter lets Test Connection
    *  resolve the stored secret server-side instead (see e.g. SqlFamilyDestinationFormComponent,
    *  MongoDestinationFormComponent). FHIR (Aidbox) never reaches this at all (isFhir() is never
-   *  registry-routed — see registryKey()), so it isn't handled here — see _fhirReusingExisting() instead.
-   *  Deliberately a plain method, not computed() — hasExistingChanged() reads the live FormGroup underneath
-   *  activeForm(), which isn't itself a tracked signal, so a computed() here would never invalidate as the
-   *  user types; template bindings re-evaluate this fresh on every change-detection pass instead. */
+   *  registry-routed — see registryKey()), so it isn't handled here — see _fhirReusingExisting() instead,
+   *  which this mirrors exactly. Covers both ways a connection can already exist: picked from the "Select
+   *  Existing" dropdown (connectionMode() === 'existing') and re-opening an already-saved canvas node
+   *  (_populateFromNode() sets resolvedDestinationId() but never touches connectionMode() — checking
+   *  connectionMode() alone left every registry-routed form thinking a re-opened node's secret was brand new,
+   *  requiring it retyped and minting a fresh Key Vault entry on every re-save). Deliberately a plain method,
+   *  not computed() — hasExistingChanged() reads the live FormGroup underneath activeForm(), which isn't
+   *  itself a tracked signal, so a computed() here would never invalidate as the user types; template
+   *  bindings re-evaluate this fresh on every change-detection pass instead. */
   activeFormInputs(): Record<string, unknown> {
     return {
       reusingExisting:
-        this.connectionMode() === 'existing' && !this.hasExistingChanged(),
+        (this.connectionMode() === 'existing' || !!this.resolvedDestinationId()) &&
+        !this.hasExistingChanged(),
       existingDestinationId:
         this.selectedExistingId() ?? this.resolvedDestinationId(),
     };
