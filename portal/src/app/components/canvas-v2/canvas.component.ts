@@ -12,6 +12,7 @@ import { MergeNodeComponent } from '../nodes-v2/merge-node/merge-node.component'
 import { CanvasConnectorsComponent } from './canvas-connectors/canvas-connectors.component';
 import { ZoomDockComponent } from './zoom-dock/zoom-dock.component';
 import { PermissionService } from '../../auth/services/permission.service';
+import { buildNodeDeletePlanV2, NodeDeletePlan } from '../../services/node-delete-plan-v2.util';
 import { sourceFormKeyForNode } from '../node-library-v2/source-node-vendor.util';
 import { SOURCES } from '../../data/sources-v2.data';
 import { TRANSFORMS } from '../../data/transforms-v2.data';
@@ -158,7 +159,10 @@ export class CanvasComponent {
   }
 
   // ── node delete (with confirmation) ──────────────────────────────────────
-  protected readonly pendingDeleteId = signal<string | null>(null);
+  /** The pending delete, as the full plan of what it will take with it (see buildNodeDeletePlanV2) —
+   *  not just the clicked node's id, because a delete here cascades along the chain and strips the
+   *  configuration those steps stored on their destination. The confirmation enumerates all of it. */
+  protected readonly pendingDelete = signal<NodeDeletePlan | null>(null);
 
   // Removing a node from the canvas requires BOTH workflow.edit/create (readOnly(), checked first) AND
   // that node's own vendor `.delete` permission (epic.delete, sqlserver.delete, ...) — the same AND
@@ -178,7 +182,22 @@ export class CanvasComponent {
       this.toast.show('Not permitted', "You don't have permission to remove this node from the workflow.");
       return;
     }
-    this.pendingDeleteId.set(nodeId);
+
+    const plan = buildNodeDeletePlanV2(nodeId, this.store.nodes(), this.store.edges());
+    if (!plan) return;
+
+    // Every node the cascade reaches has to clear the same vendor `.delete` gate as the clicked one —
+    // otherwise deleting a destination you may delete would be a way to remove a source you may not.
+    const forbidden = plan.removals.find(removal => !this.canDeleteNode(removal.id));
+    if (forbidden) {
+      this.toast.show(
+        'Not permitted',
+        `Deleting this also removes ${forbidden.label}, which you don't have permission to remove.`,
+      );
+      return;
+    }
+
+    this.pendingDelete.set(plan);
   }
 
   /** Resolves the node's vendor (via source-node-vendor.util.ts for a source node, TRANSFORMS lookup for
@@ -202,15 +221,44 @@ export class CanvasComponent {
   }
 
   confirmDelete(): void {
-    const id = this.pendingDeleteId();
-    if (!id) return;
-    this.store.removeNode(id);
-    this.toast.show('Node removed', 'Node and its connections deleted.');
-    this.pendingDeleteId.set(null);
+    const plan = this.pendingDelete();
+    if (!plan) return;
+
+    // Strip the removed steps' configuration off the destinations that host it BEFORE the nodes go, so
+    // the two can't get out of step if one half throws. A chain node's data lives on its destination
+    // (see CHAIN_STEP_OWNED_FIELDS), so skipping this would leave the canvas carrying mappings for a
+    // Mapping node that no longer exists — and the graph mapper would still send them on the next Save.
+    for (const clear of plan.fieldClears) {
+      const owner = this.store.byId(clear.nodeId);
+      if (!owner) continue;
+      const fields = { ...owner.fields };
+      for (const key of clear.keys) delete fields[key];
+      this.store.updateNode(clear.nodeId, { fields });
+    }
+
+    for (const removal of plan.removals) this.store.removeNode(removal.id);
+
+    // Reconnect what the removal sat between (source → destination after a Mapping delete, predecessor
+    // → successor after a single step) — removeNode drops the edges on both sides, so without this the
+    // surviving chain would be split into disconnected halves and fail WorkflowGraphValidator on Save.
+    for (const edge of plan.relink) {
+      if (!this.store.byId(edge.from) || !this.store.byId(edge.to)) continue;
+      if (this.store.hasEdge(edge.from, edge.to)) continue;
+      this.store.addEdge({ id: this.store.nextEdgeId(), from: edge.from, to: edge.to });
+    }
+
+    const count = plan.removals.length;
+    this.toast.show(
+      count === 1 ? 'Module removed' : `${count} modules removed`,
+      count === 1
+        ? `${plan.targetLabel} and its connections deleted.`
+        : `${plan.removals.map(removal => removal.label).join(', ')} deleted.`,
+    );
+    this.pendingDelete.set(null);
   }
 
   cancelDelete(): void {
-    this.pendingDeleteId.set(null);
+    this.pendingDelete.set(null);
   }
 
   onConfirmBackdropClick(e: MouseEvent): void {
@@ -317,15 +365,6 @@ export class CanvasComponent {
     const id = this.ctxMenu()?.nodeId;
     const node = id ? this.store.byId(id) : undefined;
     return node?.kind === 'merge';
-  }
-
-  /** The Field Mapping transform node can't be deleted from the context menu — every destination node
-   *  downstream of it depends on its mapping to actually write anything, so removing it silently breaks
-   *  the pipeline instead of prompting the usual "delete this and its connections" confirmation. */
-  protected ctxNodeIsFieldMapping(): boolean {
-    const id = this.ctxMenu()?.nodeId;
-    const node = id ? this.store.byId(id) : undefined;
-    return node?.kind === 'transform' && node.transformId === 'field-mapping';
   }
 
   /** Drives whether the context menu's Delete item renders at all for the node currently under it —

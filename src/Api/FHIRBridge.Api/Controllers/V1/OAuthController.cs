@@ -160,15 +160,21 @@ public sealed class OAuthController : ControllerBase
         return Ok(BuildLaunchResponse(applicationType, context));
     }
 
+    /// <summary>The EhrEndpoint vendor-sandbox types the Provider Standalone audience may launch against — Epic and
+    /// eCW sandboxes. Patient Standalone uses <see cref="EhrEndpointType.MyChart"/> instead.</summary>
+    private static readonly IReadOnlyCollection<EhrEndpointType> ProviderStandaloneEndpointTypes =
+        [EhrEndpointType.Epic, EhrEndpointType.Ecw];
+
     /// <summary>
     /// Anonymous counterpart to <see cref="GetWorkflowLaunchUrl"/>, for a third-party app whose own end user picks a
     /// hospital before launching (e.g. Demo_TestApp's Provider_Standalone hospital picker, backed by the
     /// ehr-public-endpoints listing). Only mints a context for a workflow the admin has explicitly opted in via
     /// <c>POST /workflows/{workflowId}/enable-public-launch</c> — <see cref="WorkflowDefinition.IsPubliclyLaunchable"/>
     /// is the only gate standing between "any caller who knows this workflowId" and a working login link for it,
-    /// since minting itself needs no PHI and no FHIRBridge session. <paramref name="ehrEndpointId"/> must resolve to
-    /// a known EhrEndpoint row of type <see cref="EhrEndpointType.Epic"/> — the vendor sandbox rows the Provider
-    /// Standalone picker lists, never a customer's own MyChart row.
+    /// since minting itself needs no PHI and no FHIRBridge session. When supplied, <paramref name="ehrEndpointId"/>
+    /// must resolve to a known Provider Standalone vendor-sandbox row — type <see cref="EhrEndpointType.Epic"/> or
+    /// <see cref="EhrEndpointType.Ecw"/>, the rows the picker lists — never a customer's own MyChart row. An empty
+    /// GUID means "no override": launch against the workflow's own source base URL.
     /// </summary>
     [AllowAnonymous]
     [EnableRateLimiting("oauth")]
@@ -193,7 +199,14 @@ public sealed class OAuthController : ControllerBase
             return NotFound();
         }
 
-        if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, EhrEndpointType.Epic, cancellationToken))
+        // An all-zero GUID means the caller supplied no endpoint override (the [FromQuery] Guid defaults to
+        // Guid.Empty when the param is absent or blank) — treat it as "none" and launch against the workflow's own
+        // source base URL, exactly like the EHR-launch public-launch-context path passes null. A non-empty but
+        // unrecognized id is still rejected. Provider Standalone against a single configured practice (e.g. eCW,
+        // whose source connection already carries the practice base URL) needs no endpoint override at all.
+        var overrideEndpointId = ehrEndpointId == Guid.Empty ? (Guid?)null : ehrEndpointId;
+        if (overrideEndpointId is { } knownEndpointId
+            && !await _ehrEndpointService.IsKnownEndpointAsync(knownEndpointId, ProviderStandaloneEndpointTypes, cancellationToken))
         {
             _logger.LogWarning(
                 "[Step 1/6] public-standalone-url rejected: ehrEndpointId={EhrEndpointId} is not a known endpoint",
@@ -231,7 +244,7 @@ public sealed class OAuthController : ControllerBase
         var effectiveUserIdentity = !string.IsNullOrWhiteSpace(userIdentity) && userIdentity.Length <= 200 ? userIdentity : null;
 
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId, effectiveSessionId, effectiveUserIdentity);
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, overrideEndpointId, callerId, effectiveSessionId, effectiveUserIdentity);
         var response = BuildLaunchResponse(applicationType, context, effectiveSessionId);
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url resolved: workflowId={WorkflowId} applicationType={ApplicationType} response={@Response}",

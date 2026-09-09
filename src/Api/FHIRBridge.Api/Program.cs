@@ -566,7 +566,17 @@ app.Use(async (context, next) =>
                           HttpMethods.IsPatch(context.Request.Method) ||
                           HttpMethods.IsDelete(context.Request.Method);
 
-    if (isStateChanging &&
+    // Anonymous endpoints ([AllowAnonymous]: login/SSO/magic-link/setup, plus the anonymous public-launch OAuth
+    // and public workflow /run endpoints that third-party apps like Demo_TestApp call cross-origin) do NOT
+    // authenticate via the session cookie, so the double-submit CSRF check must not gate them. Otherwise a
+    // stale/expired fhirbridge_access_token cookie left in the browser locks the user out of logging back IN
+    // (the login POST itself gets 403'd), and an anonymous third-party POST is rejected for a CSRF token it can
+    // never have. CSRF only protects cookie-AUTHENTICATED state-changing requests — authenticated endpoints
+    // (e.g. internal/change-password) keep the check. GetEndpoint is populated here because WebApplication
+    // auto-inserts UseRouting ahead of user middleware once endpoints are mapped.
+    var isAnonymousEndpoint = context.GetEndpoint()?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
+
+    if (isStateChanging && !isAnonymousEndpoint &&
         context.Request.Path.StartsWithSegments("/api/v1") &&
         context.Request.Cookies.ContainsKey("fhirbridge_access_token"))
     {

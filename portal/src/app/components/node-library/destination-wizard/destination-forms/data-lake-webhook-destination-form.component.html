@@ -1,0 +1,259 @@
+<form [formGroup]="webhookForm" class="dw-form" autocomplete="off">
+  <div class="dw-grid-2">
+
+    <div class="dw-field" [class.dw-field--error]="webhookForm.get('name')!.invalid && webhookForm.get('name')!.touched">
+      <label class="dw-label" for="dw-dlw-name">Destination name <span class="dw-req">*</span></label>
+      <input id="dw-dlw-name" class="dw-input" formControlName="name" placeholder="e.g. Data Lake Webhook" />
+      @if (webhookForm.get('name')!.invalid && webhookForm.get('name')!.touched) {
+        <span class="dw-error">Destination name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-dlw-authMode">Authentication</label>
+      <div class="dw-select-wrap">
+        <select id="dw-dlw-authMode" class="dw-select" formControlName="authMode">
+          <option value="bearer">Bearer token</option>
+          <option value="apiKeyHeader">API key header</option>
+          <option value="basic">Basic</option>
+          <option value="hmacSha256">HMAC-SHA256 body signature</option>
+          <option value="oauth2ClientCredentials">OAuth2 client credentials</option>
+          <option value="none">None — the endpoint URL is the credential</option>
+        </select>
+      </div>
+      @if (webhookForm.get('authMode')!.value === 'hmacSha256') {
+        <span class="dw-hint">Each request body is signed as "{{ '{timestamp}' }}.{{ '{body}' }}" and the timestamp is sent in its own header, so a captured request can't be replayed indefinitely.</span>
+      } @else if (webhookForm.get('authMode')!.value === 'none') {
+        <span class="dw-hint">For a pre-authorized ingest URL (Fabric Eventstream, Event Grid). Leave Endpoint URL blank to store the whole URL as the encrypted secret instead of alongside the connection.</span>
+      }
+    </div>
+
+    <div class="dw-field dw-field--full" [class.dw-field--error]="webhookForm.get('endpointUrl')!.invalid && webhookForm.get('endpointUrl')!.touched">
+      <label class="dw-label" for="dw-dlw-endpointUrl">
+        Endpoint URL
+        @if (webhookForm.get('authMode')!.value !== 'none') { <span class="dw-req">*</span> }
+      </label>
+      <input id="dw-dlw-endpointUrl" class="dw-input" formControlName="endpointUrl"
+        placeholder="https://ingest.example.com/v1/events" />
+      @if (webhookForm.get('endpointUrl')!.hasError('required') && webhookForm.get('endpointUrl')!.touched) {
+        <span class="dw-error">Endpoint URL is required for this authentication mode.</span>
+      } @else if (webhookForm.get('endpointUrl')!.hasError('pattern') && webhookForm.get('endpointUrl')!.touched) {
+        <span class="dw-error">Must be an https URL. This destination sends mapped record data, so plaintext http is only allowed for a loopback address in local development.</span>
+      }
+    </div>
+
+    <div class="dw-field dw-field--full" [class.dw-field--error]="webhookForm.get('secretValue')!.invalid && webhookForm.get('secretValue')!.touched">
+      <label class="dw-label" for="dw-dlw-secret">
+        {{ secretLabel() }}
+        @if (secretRequired()) { <span class="dw-req">*</span> }
+      </label>
+      <input id="dw-dlw-secret" class="dw-input" type="password" formControlName="secretValue" autocomplete="new-password" />
+      @if (webhookForm.get('secretValue')!.hasError('required') && webhookForm.get('secretValue')!.touched) {
+        <span class="dw-error">{{ secretLabel() }} is required.</span>
+      } @else {
+        <span class="dw-hint">Stored encrypted in the key vault — never returned to this form again once saved.</span>
+      }
+    </div>
+
+    @if (webhookForm.get('authMode')!.value === 'apiKeyHeader') {
+      <div class="dw-field" [class.dw-field--error]="webhookForm.get('authHeaderName')!.invalid && webhookForm.get('authHeaderName')!.touched">
+        <label class="dw-label" for="dw-dlw-authHeaderName">Header name <span class="dw-req">*</span></label>
+        <input id="dw-dlw-authHeaderName" class="dw-input" formControlName="authHeaderName" placeholder="X-Api-Key" />
+        @if (webhookForm.get('authHeaderName')!.hasError('required') && webhookForm.get('authHeaderName')!.touched) {
+          <span class="dw-error">Header name is required for API key authentication.</span>
+        }
+      </div>
+    }
+
+    @if (webhookForm.get('authMode')!.value === 'oauth2ClientCredentials') {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="webhookForm.get('tokenEndpoint')!.invalid && webhookForm.get('tokenEndpoint')!.touched">
+        <label class="dw-label" for="dw-dlw-tokenEndpoint">Token endpoint <span class="dw-req">*</span></label>
+        <input id="dw-dlw-tokenEndpoint" class="dw-input" formControlName="tokenEndpoint"
+          placeholder="https://login.example.com/oauth2/v2.0/token" />
+        @if (webhookForm.get('tokenEndpoint')!.hasError('required') && webhookForm.get('tokenEndpoint')!.touched) {
+          <span class="dw-error">Token endpoint is required for OAuth2 client credentials.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="webhookForm.get('clientId')!.invalid && webhookForm.get('clientId')!.touched">
+        <label class="dw-label" for="dw-dlw-clientId">Client ID <span class="dw-req">*</span></label>
+        <input id="dw-dlw-clientId" class="dw-input" formControlName="clientId" />
+        @if (webhookForm.get('clientId')!.hasError('required') && webhookForm.get('clientId')!.touched) {
+          <span class="dw-error">Client ID is required for OAuth2 client credentials.</span>
+        }
+      </div>
+    }
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-dlw-payloadShape">Payload shape</label>
+      <div class="dw-select-wrap">
+        <select id="dw-dlw-payloadShape" class="dw-select" formControlName="payloadShape">
+          <option value="ndjson">NDJSON — one record per line</option>
+          <option value="jsonArray">JSON array</option>
+          <option value="envelope">Envelope — run metadata plus records</option>
+          <option value="recordPerRequest">One request per record (bare object, ignores batch settings)</option>
+        </select>
+      </div>
+      @if (webhookForm.get('payloadShape')!.value === 'recordPerRequest') {
+        <span class="dw-hint">Sends each record as a bare JSON object and pins the batch to one record — "Records per request" and "Max request size" no longer apply. Choose it only for an endpoint that cannot accept a batch.</span>
+      } @else if (webhookForm.get('payloadShape')!.value === 'jsonArray') {
+        <span class="dw-hint">Always an array, even for a single record.</span>
+      } @else {
+        <span class="dw-hint">Batches are split on whichever limit is reached first: record count or request size.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="webhookForm.get('batchSize')!.invalid && webhookForm.get('batchSize')!.touched">
+      <label class="dw-label" for="dw-dlw-batchSize">Records per request</label>
+      <input id="dw-dlw-batchSize" class="dw-input" type="number" min="1" max="50000" formControlName="batchSize"
+        [attr.disabled]="webhookForm.get('payloadShape')!.value === 'recordPerRequest' ? true : null" />
+      @if (webhookForm.get('batchSize')!.invalid && webhookForm.get('batchSize')!.touched) {
+        <span class="dw-error">Must be between 1 and 50000.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-dlw-onFailure">If a batch still fails</label>
+      <div class="dw-select-wrap">
+        <select id="dw-dlw-onFailure" class="dw-select" formControlName="onFailure">
+          <option value="fail">Fail the run</option>
+          <option value="isolateBatch">Skip the batch and continue</option>
+        </select>
+      </div>
+      @if (webhookForm.get('onFailure')!.value === 'isolateBatch') {
+        <span class="dw-hint">The run finishes as Partial Success and the skipped batch is recorded in execution history. Only choose this if the lake feed is not the system of record.</span>
+      }
+    </div>
+
+    <div class="dw-field dw-field--checkbox">
+      <label class="dw-label">
+        <input type="checkbox" formControlName="includeSourceJson" />
+        Include the full source FHIR resource in each record
+      </label>
+      <span class="dw-hint">Off by default. Mapped values have already been through this destination's mapping and de-identification profiles; the raw resource is the complete FHIR document, which is far more PHI than most lake consumers need.</span>
+    </div>
+
+    <!-- ── Advanced ─────────────────────────────────────────────────────────────────────────────────
+         Everything below has a working default, so it stays collapsed until asked for. It force-opens
+         when one of its own controls is invalid — otherwise a min/max violation in here would block
+         Save with the offending field hidden and no visible reason why. -->
+    <div class="dw-field dw-field--full dlw-adv">
+      <button type="button" class="dlw-adv-toggle" (click)="toggleAdvanced()"
+        [attr.aria-expanded]="advancedOpen() || hasAdvancedError()">
+        <span class="dlw-adv-caret" [class.dlw-adv-caret--open]="advancedOpen() || hasAdvancedError()">▸</span>
+        Advanced options
+        @if (hasAdvancedError()) {
+          <span class="dlw-adv-badge">needs attention</span>
+        } @else if (!advancedOpen()) {
+          <span class="dlw-adv-sub">transport, retries, headers</span>
+        }
+      </button>
+    </div>
+
+    @if (advancedOpen() || hasAdvancedError()) {
+      <div class="dw-field">
+        <label class="dw-label" for="dw-dlw-httpMethod">HTTP method</label>
+        <div class="dw-select-wrap">
+          <select id="dw-dlw-httpMethod" class="dw-select" formControlName="httpMethod">
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="PATCH">PATCH</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-dlw-compression">Compression</label>
+        <div class="dw-select-wrap">
+          <select id="dw-dlw-compression" class="dw-select" formControlName="compression">
+            <option value="none">None</option>
+            <option value="gzip">gzip</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="webhookForm.get('maxRequestBytes')!.invalid && webhookForm.get('maxRequestBytes')!.touched">
+        <label class="dw-label" for="dw-dlw-maxRequestBytes">Max request size (bytes)</label>
+        <input id="dw-dlw-maxRequestBytes" class="dw-input" type="number" min="1024" max="100663296" formControlName="maxRequestBytes" />
+        @if (webhookForm.get('maxRequestBytes')!.invalid && webhookForm.get('maxRequestBytes')!.touched) {
+          <span class="dw-error">Must be between 1024 (1 KB) and 100663296 (96 MB).</span>
+        } @else {
+          <span class="dw-hint">Match your endpoint's own request limit — most managed ingest endpoints reject an oversized batch with 413.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="webhookForm.get('timeoutSeconds')!.invalid && webhookForm.get('timeoutSeconds')!.touched">
+        <label class="dw-label" for="dw-dlw-timeoutSeconds">Timeout (seconds)</label>
+        <input id="dw-dlw-timeoutSeconds" class="dw-input" type="number" min="1" max="600" formControlName="timeoutSeconds" />
+        @if (webhookForm.get('timeoutSeconds')!.invalid && webhookForm.get('timeoutSeconds')!.touched) {
+          <span class="dw-error">Must be between 1 and 600 seconds.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="webhookForm.get('retryCount')!.invalid && webhookForm.get('retryCount')!.touched">
+        <label class="dw-label" for="dw-dlw-retryCount">Retries per batch</label>
+        <input id="dw-dlw-retryCount" class="dw-input" type="number" min="0" max="10" formControlName="retryCount" />
+        @if (webhookForm.get('retryCount')!.invalid && webhookForm.get('retryCount')!.touched) {
+          <span class="dw-error">Must be between 0 and 10.</span>
+        } @else {
+          <span class="dw-hint">Only transport errors, timeouts, 429 and 5xx are retried — a 400/413 rejection is reported immediately instead of burning the budget.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="webhookForm.get('retryBackoffSeconds')!.invalid && webhookForm.get('retryBackoffSeconds')!.touched">
+        <label class="dw-label" for="dw-dlw-retryBackoffSeconds">Retry backoff (seconds)</label>
+        <input id="dw-dlw-retryBackoffSeconds" class="dw-input" type="number" min="0" max="60" formControlName="retryBackoffSeconds" />
+        @if (webhookForm.get('retryBackoffSeconds')!.invalid && webhookForm.get('retryBackoffSeconds')!.touched) {
+          <span class="dw-error">Must be between 0 and 60 seconds.</span>
+        } @else {
+          <span class="dw-hint">Doubles each attempt. A Retry-After header from the endpoint takes precedence.</span>
+        }
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-dlw-contentType">Content type override</label>
+        <input id="dw-dlw-contentType" class="dw-input" formControlName="contentType"
+          placeholder="Default: application/x-ndjson for NDJSON, else application/json" />
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-dlw-expectedStatusCodes">Accepted status codes</label>
+        <input id="dw-dlw-expectedStatusCodes" class="dw-input" formControlName="expectedStatusCodes" placeholder="Default: any 2xx" />
+        <span class="dw-hint">Comma-separated, e.g. "200, 202, 204".</span>
+      </div>
+
+      @if (webhookForm.get('authMode')!.value === 'oauth2ClientCredentials') {
+        <div class="dw-field">
+          <label class="dw-label" for="dw-dlw-scope">Scope</label>
+          <input id="dw-dlw-scope" class="dw-input" formControlName="scope" placeholder="e.g. https://ingest.example.com/.default" />
+        </div>
+      }
+
+      @if (webhookForm.get('authMode')!.value === 'hmacSha256') {
+        <div class="dw-field">
+          <label class="dw-label" for="dw-dlw-signatureHeaderName">Signature header</label>
+          <input id="dw-dlw-signatureHeaderName" class="dw-input" formControlName="signatureHeaderName"
+            placeholder="Default: X-Signature-256" />
+        </div>
+
+        <div class="dw-field">
+          <label class="dw-label" for="dw-dlw-timestampHeaderName">Timestamp header</label>
+          <input id="dw-dlw-timestampHeaderName" class="dw-input" formControlName="timestampHeaderName"
+            placeholder="Default: X-Signature-Timestamp" />
+        </div>
+      }
+
+      <div class="dw-field dw-field--full" [class.dw-field--error]="webhookForm.get('headersJson')!.invalid && webhookForm.get('headersJson')!.touched">
+        <label class="dw-label" for="dw-dlw-headersJson">Static headers (JSON)</label>
+        <input id="dw-dlw-headersJson" class="dw-input" formControlName="headersJson"
+          placeholder='e.g. {{ "{" }}"X-Splunk-Channel":"a1b2c3"{{ "}" }}' />
+        @if (webhookForm.get('headersJson')!.hasError('jsonObject') && webhookForm.get('headersJson')!.touched) {
+          <span class="dw-error">Must be a JSON object of header name to value.</span>
+        } @else {
+          <span class="dw-hint">Sent on every request. Each request also carries an idempotency key that stays stable across retries, so an endpoint that honours it can de-duplicate.</span>
+        }
+      </div>
+    }
+
+  </div>
+</form>

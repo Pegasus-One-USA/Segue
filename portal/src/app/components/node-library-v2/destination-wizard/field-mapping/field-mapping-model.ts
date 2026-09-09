@@ -24,7 +24,13 @@ export type PendingSchemaOp =
 /** The wizard's destination family — SQL Server/MySQL/PostgreSQL share the relational (sqlTables/columns)
  *  path, Mongo and CSV don't. Kept as one union (rather than a plain boolean) so summary/snapshot code can
  *  still tell the SQL engines apart where it matters (e.g. destination.type on the wire). */
-export type MappingDestType = 'sql' | 'csv' | 'mysql' | 'postgres' | 'mongo' | 'medplum' | 'fhir' | 'blob';
+export type MappingDestType =
+  | 'sql' | 'csv' | 'mysql' | 'postgres' | 'mongo' | 'medplum' | 'fhir' | 'blob'
+  // Lake destinations. Both map fields like CSV/Blob do — no live schema, no table qualification — so
+  // they deliberately stay OUT of SQL_FAMILY_TYPES below, which makes isSqlFamilyDestType/
+  // qualifyTableName/splitTableName/reconcileTargetsForDestTypeSwitch all no-op for them exactly as
+  // they already do for 'csv' and 'blob'.
+  | 'datalake' | 'fabric';
 
 /** Outcome of the live destination-schema read that populates the SQL table list. Distinguishes the three
  *  states an empty table list can mean, which an empty array alone cannot: never attempted ('idle'), in

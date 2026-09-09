@@ -62,7 +62,9 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
         new(DestinationType.Databricks, typeof(MappedDatabricksDestinationWriter)),
         new(DestinationType.Mongo, typeof(MappedMongoDestinationWriter)),
         new(DestinationType.Medplum, typeof(MappedMedplumDestinationWriter)),
-        new(DestinationType.AzureFhirService, typeof(MappedFhirRepositoryDestinationWriter))
+        new(DestinationType.AzureFhirService, typeof(MappedFhirRepositoryDestinationWriter)),
+        new(DestinationType.DataLakeWebhook, typeof(MappedDataLakeWebhookDestinationWriter)),
+        new(DestinationType.DataFabricAzure, typeof(MappedDataFabricDestinationWriter))
     ];
 
     private static IReadOnlyDictionary<DestinationType, Type> BuildRegistry(

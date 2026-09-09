@@ -25,5 +25,25 @@ public enum DestinationType
     Databricks = 20,
     Mongo = 21,
     Medplum = 22,
-    AzureFhirService = 23
+    AzureFhirService = 23,
+
+    /// <summary>
+    /// Data-plane HTTP delivery of mapped records to a data-lake ingestion endpoint — a Fabric Eventstream custom
+    /// endpoint, Databricks/Snowpipe Streaming REST ingest, an API-Gateway/Lambda front door over S3, an Event Grid
+    /// or Splunk HEC collector. Deliberately distinct from two neighbours it is often confused with:
+    /// <see cref="RestApi"/> POSTs one record per request with no auth beyond the raw secret, no batching and no
+    /// retry; and the Runtime plane's <c>WebhookNotifierNode</c> is a CONTROL-plane ping that carries a write
+    /// summary only and refuses record-level data outright. This type carries PHI, so it batches, signs, retries
+    /// and is HTTPS-only. See <c>DataLakeWebhookSettings</c>.
+    /// </summary>
+    DataLakeWebhook = 24,
+
+    /// <summary>
+    /// Microsoft Fabric. Landing surface is selected per destination by <c>dest_fabricMode</c> — today OneLake's
+    /// Files area (Entra-only auth over the OneLake blob endpoint, NDJSON/CSV/Parquet); Warehouse COPY INTO and
+    /// Eventstream are declared but not yet implemented and fail fast rather than silently mis-writing. Writing
+    /// into a Lakehouse <c>Tables/</c> path is rejected on purpose: a registered Fabric table requires the Delta
+    /// transaction log, which this writer does not produce. See <c>FabricDestinationSettings</c>.
+    /// </summary>
+    DataFabricAzure = 25
 }

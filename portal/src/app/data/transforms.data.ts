@@ -26,6 +26,8 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-tableau',     rank: 7, category: 'Analytics',    destinationType: 'Tableau',        name: 'Tableau',            sub: 'Publish to Tableau.',               permissionPrefix: 'sourceconnections' },
   { id: 'dest-databricks',  rank: 7, category: 'Analytics',    destinationType: 'Databricks',     name: 'Databricks',         sub: 'Load into Databricks.',             permissionPrefix: 'sourceconnections' },
   { id: 'dest-blob',        rank: 7, category: 'Cloud / FHIR', destinationType: 'BlobStorage',    name: 'Azure Blob Storage', sub: 'Write objects to Azure Blob.',      permissionPrefix: 'blobstorage' },
+  { id: 'dest-datalake-webhook', rank: 7, category: 'Cloud / FHIR', destinationType: 'DataLakeWebhook', name: 'Data Lake Webhook', sub: 'Push batched records to a lake ingestion endpoint.', permissionPrefix: 'sourceconnections' },
+  { id: 'dest-fabric',      rank: 7, category: 'Cloud / FHIR', destinationType: 'DataFabricAzure', name: 'Microsoft Fabric', sub: 'Land files in a Fabric Lakehouse (OneLake).', permissionPrefix: 'sourceconnections' },
   { id: 'dest-s3',          rank: 7, category: 'Cloud / FHIR', destinationType: 'S3',             name: 'Amazon S3',          sub: 'Write objects to Amazon S3.',       permissionPrefix: 'sourceconnections' },
   { id: 'dest-fhir',        rank: 7, category: 'Cloud / FHIR', destinationType: 'FhirRepository', name: 'Aidbox',             sub: 'POST a transaction bundle to a FHIR store.', permissionPrefix: 'sourceconnections' },
   { id: 'dest-medplum',     rank: 7, category: 'Cloud / FHIR', destinationType: 'Medplum',        name: 'Medplum (FHIR)',     sub: 'Write FHIR resources to a Medplum store', permissionPrefix: 'sourceconnections' },

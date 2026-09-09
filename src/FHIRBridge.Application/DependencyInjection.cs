@@ -77,6 +77,7 @@ public static class DependencyInjection
         services.AddScoped<IFhirResourceRuleResolver, FhirResourceRuleResolver>();
         services.AddScoped<IFhirResourceTransformService, FhirResourceTransformService>();
         services.AddScoped<ITransformationRuleService, TransformationRuleService>();
+        services.AddScoped<IWorkflowConfigurationCleanupService, WorkflowConfigurationCleanupService>();
         services.AddScoped<IEhrEndpointService, EhrEndpointService>();
         services.AddScoped<IAllowedCorsOriginsService, AllowedCorsOriginsService>();
         services.AddSingleton<IScopeGeneratorService, ScopeGeneratorService>();

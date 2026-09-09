@@ -63,6 +63,8 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'dest-fhir': 'FhirRepositoryDestinationNode',
   'dest-azurefhir': 'AzureFhirServiceDestinationNode',
   'dest-blob': 'BlobDestinationNode',
+  'dest-datalake-webhook': 'DataLakeWebhookDestinationNode',
+  'dest-fabric': 'DataFabricAzureDestinationNode',
   'dest-csv': 'CsvDestinationNode',
   'audit-lineage': 'AuditLineageNode',
   hedis: 'HedisMeasureReportNode',
@@ -76,6 +78,10 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
 const SECRET_FIELD_KEYS = new Set([
   'dest_password', 'dest_sftpPassword', 'dest_connectionString', 'dest_clientSecret', 'dest_bearerToken',
   'dest_blobSecret', 'dest_medplumSecret', 'Client Secret',
+  // Lake destinations: the webhook credential (bearer token / API key / HMAC secret / OAuth2 client
+  // secret) and the Fabric service-principal client secret. Both live only in the provisioned Key
+  // Vault entry — never on the node.
+  'dest_dlwSecret', 'dest_fabricSecret',
 ]);
 
 @Injectable({ providedIn: 'root' })

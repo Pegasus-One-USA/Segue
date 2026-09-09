@@ -296,6 +296,10 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         return Task.FromResult(e);
     }
 
+    public Task<IReadOnlyList<MappingProfile>> GetMappingProfilesByDestinationAsync(Guid destinationId, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<MappingProfile>>(
+            _mappingProfiles.Values.Where(x => x.DestinationId == destinationId).OrderBy(x => x.Name).ToList());
+
     public Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct)
     {
         _mappingProfiles[e.Id] = e;

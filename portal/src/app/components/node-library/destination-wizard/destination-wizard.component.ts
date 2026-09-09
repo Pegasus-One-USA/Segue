@@ -683,6 +683,10 @@ export class DestinationWizardComponent implements OnInit {
         return 'Csv';
       case 'blob':
         return 'BlobStorage';
+      case 'datalake':
+        return 'DataLakeWebhook';
+      case 'fabric':
+        return 'DataFabricAzure';
       case 'medplum':
         return 'Medplum';
       case 'azurefhir':
@@ -1796,6 +1800,8 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly FHIR_TYPES: DestinationType[] = ['FhirRepository'];
   private static readonly BLOB_TYPES: DestinationType[] = ['BlobStorage'];
   private static readonly AZUREFHIR_TYPES: DestinationType[] = ['AzureFhirService'];
+  private static readonly DATALAKE_TYPES: DestinationType[] = ['DataLakeWebhook'];
+  private static readonly FABRIC_TYPES: DestinationType[] = ['DataFabricAzure'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -1821,6 +1827,12 @@ export class DestinationWizardComponent implements OnInit {
    *  (unlike them) is registry-routed — see registryKey() — since its own form declares `reusingExisting`. */
   readonly isAzureFhir = computed(() => this.destType() === 'azurefhir');
   readonly isBlob = computed(() => this.destType() === 'blob');
+  /** Data-plane HTTP delivery to a lake ingestion endpoint. Mapping behaves like CSV/Blob (target
+   *  fields are typed, not read from a live schema); there is no table or collection to probe, so
+   *  Step 1 has no "Test connection & Next" gate — isSql() already excludes it from that branch. */
+  readonly isDataLake = computed(() => this.destType() === 'datalake');
+  /** Microsoft Fabric (OneLake Files) — same file-shaped mapping as isBlob(). */
+  readonly isFabric = computed(() => this.destType() === 'fabric');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
 
@@ -1852,7 +1864,11 @@ export class DestinationWizardComponent implements OnInit {
                   ? 'Azure FHIR Service'
                   : this.destType() === 'blob'
                     ? 'Azure Blob Storage'
-                    : 'CSV',
+                    : this.destType() === 'datalake'
+                      ? 'Data Lake Webhook'
+                      : this.destType() === 'fabric'
+                        ? 'Microsoft Fabric (OneLake)'
+                        : 'CSV',
   );
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -2492,6 +2508,8 @@ export class DestinationWizardComponent implements OnInit {
     if (this.isFhir()) return 'FhirRepository';
     if (this.isAzureFhir()) return 'AzureFhirService';
     if (this.isBlob()) return 'BlobStorage';
+    if (this.isDataLake()) return 'DataLakeWebhook';
+    if (this.isFabric()) return 'DataFabricAzure';
     if (!this.isSql()) return 'Csv';
     return this.isMySql()
       ? 'MySql'
@@ -3565,7 +3583,11 @@ export class DestinationWizardComponent implements OnInit {
                     ? DestinationWizardComponent.AZUREFHIR_TYPES
                     : this.isBlob()
                       ? DestinationWizardComponent.BLOB_TYPES
-                      : DestinationWizardComponent.CSV_TYPES;
+                      : this.isDataLake()
+                        ? DestinationWizardComponent.DATALAKE_TYPES
+                        : this.isFabric()
+                          ? DestinationWizardComponent.FABRIC_TYPES
+                          : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter((item) =>
             wantedTypes.includes(item.destinationType),
           );
@@ -4137,7 +4159,7 @@ export class DestinationWizardComponent implements OnInit {
       targets[r] =
         type === 'csv'
           ? def.csvFile
-          : type === 'blob'
+          : type === 'blob' || type === 'datalake' || type === 'fabric'
             ? def.csvFile.replace(/\.csv$/i, '')
             : this._qualifyDefaultTable(def.sqlTable, type);
     }
@@ -4642,6 +4664,8 @@ export class DestinationWizardComponent implements OnInit {
     const isFhir = this.isFhir();
     const isAzureFhir = this.isAzureFhir();
     const isBlob = this.isBlob();
+    const isDataLake = this.isDataLake();
+    const isFabric = this.isFabric();
     const name =
       metadata.fields['dest_name'] ||
       (isSql
@@ -4656,7 +4680,11 @@ export class DestinationWizardComponent implements OnInit {
                 ? 'Azure FHIR Service Destination'
                 : isBlob
                   ? 'Azure Blob Destination'
-                  : 'File Destination');
+                  : isDataLake
+                    ? 'Data Lake Webhook Destination'
+                    : isFabric
+                      ? 'Microsoft Fabric Destination'
+                      : 'File Destination');
     const secretName = newSecretName(name);
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
@@ -4744,6 +4772,40 @@ export class DestinationWizardComponent implements OnInit {
                   target: metadata.fields['dest_blobContainer'] || null,
                   // BlobStorageDestinationFormComponent.getMetadata() already folds Managed Identity's "no Key Vault
                   // secret" rule into metadata.secret — no extra auth-mode check needed here.
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
+              : isDataLake
+              ? {
+                  name,
+                  destinationType: 'DataLakeWebhook',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  // The endpoint URL doubles as the destination's target, same convention the FHIR/
+                  // Medplum branches use for their base URL — DataLakeWebhookSettings.Parse reads
+                  // Target as the fallback for dest_dlwEndpointUrl, and it's what a later "select
+                  // existing" repopulates the field from. Null when auth mode is 'none' with a blank
+                  // endpoint, where the secret carries the whole pre-authorized URL instead.
+                  target: metadata.fields['dest_dlwEndpointUrl'] || null,
+                  // DataLakeWebhookDestinationFormComponent.getMetadata() already folds the "auth mode
+                  // none needs no credential" rule into metadata.secret — no extra check needed here,
+                  // mirroring the Blob branch above.
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
+              : isFabric
+              ? {
+                  name,
+                  destinationType: 'DataFabricAzure',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  // The workspace is the target — FabricDestinationSettings.Parse reads Target as the
+                  // fallback for dest_fabricWorkspace, the same dual read Blob does for its container.
+                  target: metadata.fields['dest_fabricWorkspace'] || null,
+                  // Managed identity resolves no Key Vault secret at all; the form's getMetadata()
+                  // already returns '' for it (see FabricDestinationSettings.RequiresSecret).
                   inlineSecret: metadata.secret ?? '',
                   connectionMetadataJson: JSON.stringify(metadata.fields),
                   deIdentificationProfileId,
@@ -4931,7 +4993,11 @@ export class DestinationWizardComponent implements OnInit {
                         ? 'dest-azurefhir'
                         : type === 'blob'
                           ? 'dest-blob'
-                          : 'dest-csv',
+                          : type === 'datalake'
+                            ? 'dest-datalake-webhook'
+                            : type === 'fabric'
+                              ? 'dest-fabric'
+                              : 'dest-csv',
         status: 'enabled',
         config,
       });

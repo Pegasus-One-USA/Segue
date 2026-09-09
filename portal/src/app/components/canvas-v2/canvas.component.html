@@ -97,7 +97,7 @@
               <button class="ctx-item" (click)="ctxToggleCheckpoint()">Enable checkpoint</button>
             }
           }
-          @if (!ctxNodeIsFieldMapping() && ctxNodeCanDelete()) {
+          @if (ctxNodeCanDelete()) {
             <div class="ctx-sep"></div>
             <button class="ctx-item ctx-item--danger" (click)="ctxDelete()">
               <svg class="ctx-ico" viewBox="0 0 16 16"><polyline points="2,4 14,4"/><path d="M6,4V2h4v2"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>
@@ -121,18 +121,69 @@
   }
 
   <!-- Delete confirmation -->
-  @if (pendingDeleteId()) {
+  @if (pendingDelete(); as plan) {
     <div class="confirm-backdrop" tabindex="0"
          (click)="onConfirmBackdropClick($event)"
          (keydown.escape)="cancelDelete()"
          (pointerdown)="$event.stopPropagation()">
-      <div class="confirm-dialog">
-        <div class="confirm-icon">🗑</div>
-        <h3 class="confirm-title">Delete module?</h3>
-        <p class="confirm-body">Are you sure you want to delete this module? This will remove all its connections too.</p>
+      <div class="confirm-dialog confirm-dialog--danger" role="alertdialog" aria-modal="true"
+           aria-labelledby="canvas-delete-title">
+        <div class="confirm-icon confirm-icon--danger" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3.2 1.8 20.8h20.4L12 3.2Z"/>
+            <line x1="12" y1="9" x2="12" y2="15"/>
+            <line x1="12" y1="17.6" x2="12" y2="17.7"/>
+          </svg>
+        </div>
+        <h3 class="confirm-title" id="canvas-delete-title">Delete {{ plan.targetLabel }}?</h3>
+
+        @if (plan.removals.length > 1) {
+          <p class="confirm-body">
+            This cannot be undone. {{ plan.removals.length }} modules depend on each other and will be
+            removed together, along with their connections:
+          </p>
+        } @else {
+          <p class="confirm-body">
+            This cannot be undone. The module below and its connections will be removed:
+          </p>
+        }
+
+        <ul class="confirm-list">
+          @for (removal of plan.removals; track removal.id) {
+            <li class="confirm-list__item">
+              <span class="confirm-list__name">{{ removal.label }}</span>
+              @if (removal.detail) {
+                <span class="confirm-list__detail">{{ removal.detail }}</span>
+              }
+            </li>
+          }
+        </ul>
+
+        @if (plan.fieldClears.length) {
+          <p class="confirm-body confirm-body--warn">
+            Configuration deleted with them (a removed step's setup is stored on its destination, so it
+            goes too):
+          </p>
+          <ul class="confirm-list confirm-list--warn">
+            @for (clear of plan.fieldClears; track clear.nodeId) {
+              <li class="confirm-list__item">{{ clear.label }}</li>
+            }
+          </ul>
+        }
+
+        @if (plan.serverSideLeftovers.length) {
+          <ul class="confirm-list confirm-list--note">
+            @for (note of plan.serverSideLeftovers; track note) {
+              <li class="confirm-list__item">{{ note }}</li>
+            }
+          </ul>
+        }
+
         <div class="confirm-actions">
           <button type="button" class="btn btn-secondary" (click)="cancelDelete()">Cancel</button>
-          <button type="button" class="btn btn-danger" (click)="confirmDelete()">Delete</button>
+          <button type="button" class="btn btn-danger" (click)="confirmDelete()">
+            {{ plan.removals.length > 1 ? 'Delete ' + plan.removals.length + ' modules' : 'Delete' }}
+          </button>
         </div>
       </div>
     </div>

@@ -56,6 +56,17 @@ public static class WorkflowNodeTypes
     public const string MongoDestination = "MongoDestinationNode";
     public const string MedplumDestination = "MedplumDestinationNode";
     public const string AzureFhirServiceDestination = "AzureFhirServiceDestinationNode";
+
+    /// <summary>
+    /// Data-plane HTTP delivery of mapped records to a data-lake ingestion endpoint. Note the deliberate contrast
+    /// with <see cref="WebhookNotifier"/> below: that node is the CONTROL plane (a write-summary ping that refuses
+    /// record-level data), while this is an ordinary Destination-category node that carries the records themselves
+    /// and therefore requires an upstream Mapping node like every other destination.
+    /// </summary>
+    public const string DataLakeWebhookDestination = "DataLakeWebhookDestinationNode";
+
+    /// <summary>Microsoft Fabric — mapped records landed as files in a Lakehouse's Files area over OneLake.</summary>
+    public const string DataFabricAzureDestination = "DataFabricAzureDestinationNode";
     /// <summary>Phase 2 example: a Destination-category node whose input is a previous destination's write result,
     /// not fresh mapped records — demonstrates chaining a destination into another node via a bespoke catalog rank
     /// tier (71, above Destination's 70) rather than relaxing the graph validator. See

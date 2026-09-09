@@ -21,6 +21,8 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-tableau':     { abbr: 'TAB', color: '#E97627' },
   'dest-databricks':  { abbr: 'DBR', color: '#FF3621' },
   'dest-blob':        { abbr: 'BLB', color: '#0089D6' },
+  'dest-datalake-webhook': { abbr: 'DLW', color: '#7C3AED' },
+  'dest-fabric':      { abbr: 'FAB', color: '#117865' },
   'dest-s3':          { abbr: 'S3',  color: '#FF9900' },
   'dest-fhir':        { abbr: 'AB',  color: '#00A89D' },
   'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },

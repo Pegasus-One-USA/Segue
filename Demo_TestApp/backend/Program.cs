@@ -44,6 +44,9 @@ builder.Services.AddScoped<PatientDataSourceResolver>();
 builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<EpicSessionStore>();
 builder.Services.AddSingleton<ProviderStandaloneCallerIdStore>();
+// Access tokens issued by this app's own client-credentials endpoint (see DataLakeWebhookEndpoints).
+// Singleton so the token endpoint and the webhook receiver see the same set.
+builder.Services.AddSingleton<DataLakeTokenStore>();
 builder.Services.AddHttpClient("Workflow");
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy => policy
     .WithOrigins(allowedFrontendOrigin)
@@ -767,6 +770,12 @@ app.MapBackendSystemEndpoints();
 
 // "New 11" menu data — read-only GETs over the curated _11 tables, available to any authenticated role.
 app.MapResource11Endpoints();
+
+// Data Lake Webhook receiver — the "lake" side of FHIRBridge's DataLakeWebhook destination, so a
+// workflow can be run end to end against this app. POST /api/datalake/webhook is anonymous by design
+// (server-to-server, no session cookie); see DataLakeWebhookEndpoints for the optional
+// DataLakeWebhook:AuthMode credential check.
+app.MapDataLakeWebhookEndpoints();
 
 // SPA fallback: any GET that doesn't match a mapped route or an existing static file resolves to
 // index.html instead of 404ing, so Angular's client-side routes work on refresh/deep link. Fallback

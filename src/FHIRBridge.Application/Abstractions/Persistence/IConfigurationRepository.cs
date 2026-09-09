@@ -67,6 +67,11 @@ public interface IConfigurationRepository
     Task<MappingProfile?> FindMappingProfileAsync(
         string resourceType, Guid sourceConnectionId, Guid destinationId, CancellationToken ct);
 
+    /// <summary>Every profile targeting one destination. Used by the workflow-save cleanup pass to retire
+    /// the profiles of a destination that has just been removed from its workflow, including any whose id
+    /// was never stamped back onto a node and so can't be found from the node configuration alone.</summary>
+    Task<IReadOnlyList<MappingProfile>> GetMappingProfilesByDestinationAsync(Guid destinationId, CancellationToken ct);
+
     Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct);
     Task UpdateMappingProfileAsync(MappingProfile e, CancellationToken ct);
     Task RemoveMappingProfileAsync(MappingProfile e, CancellationToken ct);

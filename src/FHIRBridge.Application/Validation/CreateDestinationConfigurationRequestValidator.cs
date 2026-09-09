@@ -73,6 +73,267 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         {
             ValidateBlobMetadata(context, metadata);
         }
+        else if (request.DestinationType == DestinationType.DataLakeWebhook)
+        {
+            ValidateDataLakeWebhookMetadata(request, context, metadata);
+        }
+        else if (request.DestinationType == DestinationType.DataFabricAzure)
+        {
+            ValidateDataFabricMetadata(request, context, metadata);
+        }
+    }
+
+    private static readonly string[] SupportedDataLakeWebhookAuthModes =
+        ["none", "bearer", "apiKeyHeader", "basic", "hmacSha256", "oauth2ClientCredentials"];
+
+    private static readonly string[] SupportedDataLakeWebhookPayloadShapes =
+        ["ndjson", "jsonArray", "envelope", "recordPerRequest"];
+
+    /// <summary>
+    /// Server-side mirror of the Data Lake Webhook wizard form, and the first place a misconfiguration can be
+    /// reported inline instead of at first write. The https-only rule is the important one: unlike the Runtime
+    /// plane's notifier node — which carries a write summary and refuses record-level data — this destination
+    /// sends mapped record values, so plaintext delivery would put PHI on the wire in cleartext. Loopback is
+    /// excepted so a developer can target a local collector. Mirrors
+    /// <c>DataLakeWebhookSettings.ValidateEndpointUrl</c>, the writer-level last line of defense for the same rule
+    /// (which also covers a URL arriving via the stored secret rather than through this request).
+    /// </summary>
+    private static void ValidateDataLakeWebhookMetadata(
+        CreateDestinationConfigurationRequest request,
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        var authMode = metadata.GetValueOrDefault("dest_dlwAuthMode", "none");
+        if (!SupportedDataLakeWebhookAuthModes.Contains(authMode, StringComparer.OrdinalIgnoreCase))
+        {
+            context.AddFailure(
+                "dest_dlwAuthMode",
+                $"Unsupported auth mode '{authMode}'. Supported values: "
+                    + string.Join(", ", SupportedDataLakeWebhookAuthModes) + ".");
+            return;
+        }
+
+        var payloadShape = metadata.GetValueOrDefault("dest_dlwPayloadShape", "ndjson");
+        if (!SupportedDataLakeWebhookPayloadShapes.Contains(payloadShape, StringComparer.OrdinalIgnoreCase))
+        {
+            context.AddFailure(
+                "dest_dlwPayloadShape",
+                $"Unsupported payload shape '{payloadShape}'. Supported values: "
+                    + string.Join(", ", SupportedDataLakeWebhookPayloadShapes) + ".");
+        }
+
+        var endpointUrl = FirstNonBlank(metadata.GetValueOrDefault("dest_dlwEndpointUrl"), request.Target);
+
+        if (string.IsNullOrWhiteSpace(endpointUrl))
+        {
+            // Blank is legal for auth mode "none" only, where the stored secret is itself the pre-authorized
+            // ingest URL (a Fabric Eventstream / Event Grid endpoint) — see DataLakeWebhookSettings.
+            if (!string.Equals(authMode, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                context.AddFailure(
+                    "dest_dlwEndpointUrl",
+                    "Endpoint URL is required unless auth mode is 'none', in which case the stored secret must be "
+                        + "the full ingest URL.");
+            }
+        }
+        else if (!IsHttpsOrLoopback(endpointUrl))
+        {
+            context.AddFailure(
+                "dest_dlwEndpointUrl",
+                "Endpoint URL must use https — a data lake webhook carries mapped record data (PHI), so plaintext "
+                    + "delivery is not allowed (http is permitted only for loopback addresses in development).");
+        }
+
+        if (string.Equals(authMode, "apiKeyHeader", StringComparison.OrdinalIgnoreCase))
+        {
+            RequireField(context, metadata, "dest_dlwAuthHeaderName", "Header name is required for API key auth.");
+        }
+
+        if (string.Equals(authMode, "oauth2ClientCredentials", StringComparison.OrdinalIgnoreCase))
+        {
+            RequireField(context, metadata, "dest_dlwTokenEndpoint", "Token endpoint is required.");
+            RequireField(context, metadata, "dest_dlwClientId", "Client ID is required.");
+        }
+
+        RequireOptionalIntInRange(
+            context, metadata, "dest_dlwBatchSize", 1, 50000, "Batch size must be between 1 and 50000.");
+        RequireOptionalIntInRange(
+            context, metadata, "dest_dlwMaxRequestBytes", 1024, 100663296,
+            "Max request size must be between 1 KB and 96 MB.");
+        RequireOptionalIntInRange(
+            context, metadata, "dest_dlwTimeoutSeconds", 1, 600, "Timeout must be between 1 and 600 seconds.");
+        RequireOptionalIntInRange(
+            context, metadata, "dest_dlwRetryCount", 0, 10, "Retry count must be between 0 and 10.");
+    }
+
+    private static readonly string[] SupportedFabricModes = ["oneLakeFiles", "warehouseTable", "eventstream"];
+    private static readonly string[] SupportedFabricItemTypes =
+        ["Lakehouse", "Warehouse", "KQLDatabase", "MirroredDatabase"];
+    private static readonly string[] SupportedFabricFileFormats = ["ndjson", "parquet", "csv"];
+    private static readonly string[] SupportedFabricAuthModes = ["managedIdentity", "servicePrincipal"];
+    private static readonly string[] SupportedFabricPartitionSchemes =
+        ["none", "resourceType", "ingestDate", "resourceTypeAndIngestDate"];
+
+    /// <summary>
+    /// Server-side mirror of the Microsoft Fabric wizard form. Two rules here exist to stop a configuration that
+    /// would look accepted and then never produce what the customer expects: a landing mode other than OneLake
+    /// Files is not implemented (Eventstream is served by the Data Lake Webhook destination instead), and a path
+    /// under the Lakehouse <c>Tables/</c> area cannot work at all, because a Fabric table is a Delta table and this
+    /// destination writes plain files. Mirrors <c>FabricDestinationSettings</c>, which enforces both again at
+    /// write time for rows saved before this check existed.
+    /// </summary>
+    private static void ValidateDataFabricMetadata(
+        CreateDestinationConfigurationRequest request,
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        var mode = metadata.GetValueOrDefault("dest_fabricMode", "oneLakeFiles");
+        if (!SupportedFabricModes.Contains(mode, StringComparer.OrdinalIgnoreCase))
+        {
+            context.AddFailure(
+                "dest_fabricMode",
+                $"Unsupported Fabric landing mode '{mode}'. Supported values: "
+                    + string.Join(", ", SupportedFabricModes) + ".");
+            return;
+        }
+
+        if (string.Equals(mode, "eventstream", StringComparison.OrdinalIgnoreCase))
+        {
+            context.AddFailure(
+                "dest_fabricMode",
+                "Fabric Eventstream is not available as a Fabric landing mode. An Eventstream custom endpoint is "
+                    + "authenticated HTTP — create a Data Lake Webhook destination with that endpoint URL instead.");
+            return;
+        }
+
+        if (!string.Equals(mode, "oneLakeFiles", StringComparison.OrdinalIgnoreCase))
+        {
+            context.AddFailure(
+                "dest_fabricMode",
+                $"Fabric landing mode '{mode}' is not implemented yet. Use OneLake Files, and promote to a table "
+                    + "with a Fabric shortcut, notebook or pipeline.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                FirstNonBlank(metadata.GetValueOrDefault("dest_fabricWorkspace"), request.Target)))
+        {
+            context.AddFailure("dest_fabricWorkspace", "Workspace is required.");
+        }
+
+        RequireField(context, metadata, "dest_fabricItemName", "Lakehouse (item) name is required.");
+        RequireOneOf(context, metadata, "dest_fabricItemType", SupportedFabricItemTypes, "item type");
+        RequireOneOf(context, metadata, "dest_fabricFileFormat", SupportedFabricFileFormats, "file format");
+        RequireOneOf(context, metadata, "dest_fabricPartitionBy", SupportedFabricPartitionSchemes, "partition scheme");
+        RequireOneOf(context, metadata, "dest_fabricAuthMode", SupportedFabricAuthModes, "authentication mode");
+
+        if (string.Equals(
+                metadata.GetValueOrDefault("dest_fabricAuthMode", "managedIdentity"),
+                "servicePrincipal",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            RequireField(context, metadata, "dest_fabricTenantId", "Tenant ID is required.");
+            RequireField(context, metadata, "dest_fabricClientId", "Client ID is required.");
+        }
+
+        ValidateFabricPath(context, metadata);
+    }
+
+    private static void ValidateFabricPath(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        if (!metadata.TryGetValue("dest_fabricPath", out var raw) || string.IsNullOrWhiteSpace(raw))
+        {
+            // Blank means the writer's own default ("fhirbridge") applies — nothing to check.
+            return;
+        }
+
+        var path = raw.Trim().Replace('\\', '/').Trim('/');
+
+        if (path.Contains("://", StringComparison.Ordinal))
+        {
+            context.AddFailure("dest_fabricPath", "Path must be relative to the item's Files area, not a full URL.");
+            return;
+        }
+
+        if (path.StartsWith("Files/", StringComparison.OrdinalIgnoreCase))
+        {
+            path = path["Files/".Length..].Trim('/');
+        }
+
+        if (path.Equals("Tables", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("Tables/", StringComparison.OrdinalIgnoreCase))
+        {
+            context.AddFailure(
+                "dest_fabricPath",
+                "The Lakehouse 'Tables/' area holds Delta tables, and this destination writes plain files (no Delta "
+                    + "transaction log), so files landed there would never register as a table. Use the Files area "
+                    + "and surface it as a table with a Fabric shortcut, notebook or pipeline.");
+            return;
+        }
+
+        if (path.Contains(".Lakehouse", StringComparison.OrdinalIgnoreCase)
+            || path.Contains(".Warehouse", StringComparison.OrdinalIgnoreCase))
+        {
+            context.AddFailure(
+                "dest_fabricPath",
+                "Path must not repeat the item name — the item is already addressed by the Lakehouse name and type.");
+            return;
+        }
+
+        if (path.Split('/').Any(segment => segment is "." or ".."))
+        {
+            context.AddFailure("dest_fabricPath", "Path must not contain '.' or '..' segments.");
+        }
+    }
+
+    private static bool IsHttpsOrLoopback(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback));
+
+    private static string? FirstNonBlank(params string?[] candidates)
+        => candidates.FirstOrDefault(candidate => !string.IsNullOrWhiteSpace(candidate));
+
+    /// <summary>Blank is valid — it means "use the writer's default"; only a supplied value is checked.</summary>
+    private static void RequireOneOf(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata,
+        string key,
+        string[] allowed,
+        string fieldLabel)
+    {
+        if (!metadata.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        if (!allowed.Contains(value, StringComparer.OrdinalIgnoreCase))
+        {
+            context.AddFailure(
+                key, $"Unsupported {fieldLabel} '{value}'. Supported values: " + string.Join(", ", allowed) + ".");
+        }
+    }
+
+    /// <summary>Like <see cref="RequireIntInRange"/> but a missing/blank value is accepted (the writer's default
+    /// applies) — only a supplied one must parse and be in range.</summary>
+    private static void RequireOptionalIntInRange(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata,
+        string key,
+        int min,
+        int max,
+        string message)
+    {
+        if (!metadata.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
+        {
+            return;
+        }
+
+        if (!int.TryParse(raw, out var value) || value < min || value > max)
+        {
+            context.AddFailure(key, message);
+        }
     }
 
     private static readonly string[] SupportedFhirAuthTypes = ["none", "bearer", "basic", "clientCredentials", "managedIdentity"];

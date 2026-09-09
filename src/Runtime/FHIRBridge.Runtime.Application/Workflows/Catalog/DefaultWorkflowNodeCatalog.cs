@@ -73,6 +73,8 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.FhirRepositoryDestination),
         Destination(WorkflowNodeTypes.AzureFhirServiceDestination),
         Destination(WorkflowNodeTypes.BlobDestination),
+        Destination(WorkflowNodeTypes.DataLakeWebhookDestination),
+        Destination(WorkflowNodeTypes.DataFabricAzureDestination),
         // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FhirRepository +
         // AzureFhirService + Blob destinations are exposed in the palette. The writers below remain registered in
         // ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
@@ -242,6 +244,8 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.FhirRepositoryDestination => "dest-fhir",
             WorkflowNodeTypes.AzureFhirServiceDestination => "dest-azurefhir",
             WorkflowNodeTypes.BlobDestination => "dest-blob",
+            WorkflowNodeTypes.DataLakeWebhookDestination => "dest-datalake-webhook",
+            WorkflowNodeTypes.DataFabricAzureDestination => "dest-fabric",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
             WorkflowNodeTypes.HedisMeasureReport => "hedis",
             WorkflowNodeTypes.AnomalyDetection => "anomaly",
@@ -263,6 +267,8 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.FhirRepositoryDestination => "FHIR Repository (Aidbox)",
             WorkflowNodeTypes.AzureFhirServiceDestination => "Azure FHIR Service",
             WorkflowNodeTypes.BlobDestination => "Azure Blob Storage",
+            WorkflowNodeTypes.DataLakeWebhookDestination => "Data Lake Webhook",
+            WorkflowNodeTypes.DataFabricAzureDestination => "Microsoft Fabric (OneLake)",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
             WorkflowNodeTypes.AnomalyDetection => "Anomaly Detection",
@@ -284,6 +290,10 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.FhirRepositoryDestination => "Write FHIR resources to a FHIR repository (e.g. Aidbox).",
             WorkflowNodeTypes.AzureFhirServiceDestination => "Write FHIR resources to Azure Health Data Services (Azure AD client credentials or managed identity).",
             WorkflowNodeTypes.BlobDestination => "Write mapped records to Azure Blob Storage.",
+            WorkflowNodeTypes.DataLakeWebhookDestination =>
+                "Push mapped records to a data-lake ingestion endpoint over HTTPS (batched NDJSON, signed, retried).",
+            WorkflowNodeTypes.DataFabricAzureDestination =>
+                "Land mapped records as files in a Microsoft Fabric Lakehouse (OneLake Files; NDJSON, Parquet or CSV).",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
             WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",
             WorkflowNodeTypes.AnomalyDetection => "Flag statistical anomalies.",

@@ -36,6 +36,7 @@ export const EHR_VENDOR_OPTIONS: { value: EhrVendor; label: string }[] = [
 export const EHR_ENDPOINT_TYPE_OPTIONS: { value: EhrEndpointType; label: string }[] = [
   { value: 'MyChart', label: 'MyChart (customer production instance)' },
   { value: 'Epic',    label: 'Epic (vendor sandbox)' },
+  { value: 'Ecw',     label: 'eCW (vendor sandbox)' },
 ];
 
 @Component({

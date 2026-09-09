@@ -24,6 +24,8 @@ import { PdfDestinationFormComponent } from './pdf-destination-form.component';
 import { AvroDestinationFormComponent } from './avro-destination-form.component';
 import { ProtobufDestinationFormComponent } from './protobuf-destination-form.component';
 import { DatabricksDestinationFormComponent } from './databricks-destination-form.component';
+import { DataLakeWebhookDestinationFormComponent } from './data-lake-webhook-destination-form.component';
+import { DataFabricDestinationFormComponent } from './data-fabric-destination-form.component';
 
 /**
  * Single source of truth mapping every DestinationType to the standalone component that configures it —
@@ -57,4 +59,6 @@ export const DESTINATION_FORM_REGISTRY: DestinationFormRegistry<DestinationType>
   Avro: AvroDestinationFormComponent,
   Protobuf: ProtobufDestinationFormComponent,
   Databricks: DatabricksDestinationFormComponent,
+  DataLakeWebhook: DataLakeWebhookDestinationFormComponent,
+  DataFabricAzure: DataFabricDestinationFormComponent,
 };

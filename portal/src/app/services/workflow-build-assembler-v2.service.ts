@@ -616,8 +616,14 @@ export class WorkflowBuildAssemblerServiceV2 {
     const isBlob =
       node.nodeType.includes('Blob') ||
       (fields['__transformId'] ?? '') === 'dest-blob';
+    const isDataLake =
+      node.nodeType.includes('DataLakeWebhook') ||
+      (fields['__transformId'] ?? '') === 'dest-datalake-webhook';
+    const isFabric =
+      node.nodeType.includes('DataFabric') ||
+      (fields['__transformId'] ?? '') === 'dest-fabric';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : isDataLake ? 'Data Lake Webhook Destination' : isFabric ? 'Microsoft Fabric Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -762,6 +768,49 @@ export class WorkflowBuildAssemblerServiceV2 {
       };
     }
 
+    if (isDataLake) {
+      return {
+        name,
+        destinationType: 'DataLakeWebhook',
+        keyVaultName,
+        secretName,
+        // The endpoint URL doubles as the target — DataLakeWebhookSettings.Parse reads Target as the
+        // fallback for dest_dlwEndpointUrl. Null for auth mode 'none' with a blank endpoint, where the
+        // stored secret carries the whole pre-authorized ingest URL instead.
+        target: fields['dest_dlwEndpointUrl'] || null,
+        // Auth mode 'none' with an endpoint configured resolves no credential at all (see
+        // DataLakeWebhookSettings.RequiresSecret) — same shape as Blob's Managed Identity case, and the
+        // same "don't overwrite an already-provisioned secret unless the user typed a new one" guard.
+        inlineSecret:
+          fields['dest_dlwAuthMode'] === 'none' && fields['dest_dlwEndpointUrl']
+            ? ''
+            : hasExistingSecret && !fields['dest_dlwSecret']
+              ? null
+              : fields['dest_dlwSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'datalake'),
+      };
+    }
+
+    if (isFabric) {
+      return {
+        name,
+        destinationType: 'DataFabricAzure',
+        keyVaultName,
+        secretName,
+        // The workspace is the target — FabricDestinationSettings.Parse reads Target as the fallback
+        // for dest_fabricWorkspace, the same dual read Blob does for its container name.
+        target: fields['dest_fabricWorkspace'] || null,
+        // Managed identity resolves no Key Vault secret at all (FabricDestinationSettings.RequiresSecret).
+        inlineSecret:
+          fields['dest_fabricAuthMode'] !== 'servicePrincipal'
+            ? ''
+            : hasExistingSecret && !fields['dest_fabricSecret']
+              ? null
+              : fields['dest_fabricSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'fabric'),
+      };
+    }
+
     const isSftp = fields['dest_deliveryMode'] === 'sftp';
     return {
       name,
@@ -788,10 +837,53 @@ export class WorkflowBuildAssemblerServiceV2 {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob',
+    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric',
   ): string {
     const keys =
-      kind === 'sql'
+      kind === 'datalake'
+        ? [
+            'dest_name',
+            'dest_dlwEndpointUrl',
+            'dest_dlwAuthMode',
+            'dest_dlwAuthHeaderName',
+            'dest_dlwSignatureHeaderName',
+            'dest_dlwTimestampHeaderName',
+            'dest_dlwTokenEndpoint',
+            'dest_dlwClientId',
+            'dest_dlwScope',
+            'dest_dlwPayloadShape',
+            'dest_dlwHttpMethod',
+            'dest_dlwContentType',
+            'dest_dlwCompression',
+            'dest_dlwBatchSize',
+            'dest_dlwMaxRequestBytes',
+            'dest_dlwTimeoutSeconds',
+            'dest_dlwRetryCount',
+            'dest_dlwRetryBackoffSeconds',
+            'dest_dlwExpectedStatusCodes',
+            'dest_dlwHeadersJson',
+            'dest_dlwIncludeSourceJson',
+            'dest_dlwOnFailure',
+          ]
+        : kind === 'fabric'
+        ? [
+            'dest_name',
+            'dest_fabricMode',
+            'dest_fabricWorkspace',
+            'dest_fabricItemName',
+            'dest_fabricItemType',
+            'dest_fabricPath',
+            'dest_fabricFileFormat',
+            'dest_fabricPartitionBy',
+            'dest_fabricAuthMode',
+            'dest_fabricTenantId',
+            'dest_fabricClientId',
+            'dest_fabricManagedIdentityClientId',
+            'dest_fabricEndpointSuffix',
+            'dest_fabricAuthorityHost',
+            'dest_fabricAccountUrl',
+          ]
+        : kind === 'sql'
         ? [
             'dest_name',
             'dest_server',

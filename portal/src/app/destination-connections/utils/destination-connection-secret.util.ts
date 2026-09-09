@@ -91,9 +91,35 @@ export function buildFhirSecretBlob(f: Record<string, string>): string {
  * DestinationConfiguration.ConnectionMetadataJson so a later "select existing" can repopulate a form's
  * non-secret fields without ever reading the secret back.
  */
-export function buildConnectionMetadata(f: Record<string, string>, kind: 'sql' | 'csv' | 'fhir' | 'blob'): string {
+export function buildConnectionMetadata(
+  f: Record<string, string>,
+  kind: 'sql' | 'csv' | 'fhir' | 'blob' | 'datalake' | 'fabric',
+): string {
   const keys =
-    kind === 'sql'
+    // Data Lake Webhook — every field here is non-secret transport/framing configuration. The credential
+    // (bearer token / API key / "user:password" / HMAC shared secret / OAuth2 client secret) is dest_dlwSecret
+    // and is deliberately absent from this list: it only ever lives in the encrypted secret. Note that
+    // dest_dlwEndpointUrl IS carried here even though it also becomes DestinationConfiguration.target, for the
+    // same reason dest_medplumBaseUrl is — the workflow-graph run path can reconstruct the destination with an
+    // empty Target, and DataLakeWebhookSettings.Parse falls back to this key.
+    kind === 'datalake'
+      ? ['dest_name', 'dest_dlwEndpointUrl', 'dest_dlwAuthMode', 'dest_dlwAuthHeaderName',
+         'dest_dlwSignatureHeaderName', 'dest_dlwTimestampHeaderName',
+         'dest_dlwTokenEndpoint', 'dest_dlwClientId', 'dest_dlwScope',
+         'dest_dlwPayloadShape', 'dest_dlwHttpMethod', 'dest_dlwContentType', 'dest_dlwCompression',
+         'dest_dlwBatchSize', 'dest_dlwMaxRequestBytes', 'dest_dlwTimeoutSeconds',
+         'dest_dlwRetryCount', 'dest_dlwRetryBackoffSeconds', 'dest_dlwExpectedStatusCodes',
+         'dest_dlwHeadersJson', 'dest_dlwIncludeSourceJson', 'dest_dlwOnFailure']
+    // Microsoft Fabric (OneLake) — workspace/item/path/format/partitioning plus the Entra identity's non-secret
+    // parts. The service-principal client secret is dest_fabricSecret and never appears here; managed-identity
+    // mode has no secret at all (see FabricDestinationSettings.RequiresSecret).
+    : kind === 'fabric'
+      ? ['dest_name', 'dest_fabricMode', 'dest_fabricWorkspace', 'dest_fabricItemName', 'dest_fabricItemType',
+         'dest_fabricPath', 'dest_fabricFileFormat', 'dest_fabricPartitionBy',
+         'dest_fabricAuthMode', 'dest_fabricTenantId', 'dest_fabricClientId',
+         'dest_fabricManagedIdentityClientId', 'dest_fabricEndpointSuffix', 'dest_fabricAuthorityHost',
+         'dest_fabricAccountUrl']
+    : kind === 'sql'
       ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
       : kind === 'fhir'
         ? ['dest_name', 'dest_baseUrl', 'dest_project', 'dest_writeMode', 'dest_fhirWriteMode',

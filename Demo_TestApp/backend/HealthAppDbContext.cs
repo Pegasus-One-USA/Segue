@@ -285,6 +285,14 @@ public sealed class HealthAppDbContext : DbContext
     // rather than via HasData, so it works against an already-existing HealthAppDb too.
     public DbSet<Resource11WorkflowSettingsEntity> Resource11WorkflowSettings => Set<Resource11WorkflowSettingsEntity>();
 
+    // Landing tables for the Data Lake Webhook receiver (DataLakeWebhookEndpoints). Created on startup by
+    // DatabaseSchemaReconciler from this model — no migration needed.
+    public DbSet<DataLakeBatchEntity> DataLakeBatches => Set<DataLakeBatchEntity>();
+
+    public DbSet<DataLakeRecordEntity> DataLakeRecords => Set<DataLakeRecordEntity>();
+
+    public DbSet<DataLakeRecordValueEntity> DataLakeRecordValues => Set<DataLakeRecordValueEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Table/key mapping only — these 11 tables already exist in HealthAppDb (created outside EnsureCreated,
@@ -350,6 +358,28 @@ public sealed class HealthAppDbContext : DbContext
         // "_11" curated tables. On a brand-new database EnsureCreated builds these from the entity model; on an
         // existing HealthAppDb they must be created out-of-band by "9 resource tables _11 (curated).sql" (same
         // caveat as the tables above — EnsureCreated never alters an already-existing database).
+        modelBuilder.Entity<DataLakeBatchEntity>(e =>
+        {
+            e.ToTable("DataLake_Batch");
+            e.HasKey(x => x.BatchId);
+            // Looked up on every received request to recognise a retry or a re-run.
+            e.HasIndex(x => x.IdempotencyKey);
+        });
+
+        modelBuilder.Entity<DataLakeRecordEntity>(e =>
+        {
+            e.ToTable("DataLake_Record");
+            e.HasKey(x => x.RecordId);
+            e.HasIndex(x => x.BatchId);
+        });
+
+        modelBuilder.Entity<DataLakeRecordValueEntity>(e =>
+        {
+            e.ToTable("DataLake_RecordValue");
+            e.HasKey(x => x.ValueId);
+            e.HasIndex(x => x.RecordId);
+        });
+
         modelBuilder.Entity<Patient11Entity>(e =>
         {
             e.ToTable("Patient_11");

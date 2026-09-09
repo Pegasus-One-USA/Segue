@@ -25,7 +25,9 @@ export type DestinationTypeV2 =
   | 'Databricks'
   | 'Mongo'
   | 'Medplum'
-  | 'AzureFhirService';
+  | 'AzureFhirService'
+  | 'DataLakeWebhook'
+  | 'DataFabricAzure';
 
 /** SQL-family destinations are the only ones Mapping applies to in the V2 chain (Source → Destination →
  *  [Mapping →] Transformation → De-identification). "NoSQL" in the product spec maps to Mongo — the only

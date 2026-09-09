@@ -1,7 +1,7 @@
 <span class="port port-in"></span>
 <span class="port port-out" (pointerdown)="onPortPointerDown($event)"></span>
 
-@if (!isMapping() && !readOnly() && canDelete()) {
+@if (!readOnly() && canDelete()) {
   <button
     class="sn-del-btn"
     (click)="onDeleteClick($event)"

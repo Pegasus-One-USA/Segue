@@ -183,6 +183,43 @@ public sealed class AzureFhirServiceDestinationNodeExecutor : DestinationNodeExe
     }
 }
 
+/// <summary>
+/// Data-plane webhook destination. An ordinary <see cref="DestinationNodeExecutor"/> — it consumes a
+/// MappedRecordBatch and requires an upstream Mapping node, exactly like the SQL/CSV/Blob destinations — which is
+/// precisely what distinguishes it from <see cref="WebhookNotifierNodeExecutor"/> further down this file: that one
+/// consumes a previous destination's write RESULT and carries no record data at all.
+/// </summary>
+public sealed class DataLakeWebhookDestinationNodeExecutor : DestinationNodeExecutor
+{
+    public DataLakeWebhookDestinationNodeExecutor(
+        IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null,
+        IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.DataLakeWebhookDestination, DestinationType.DataLakeWebhook, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+    {
+    }
+}
+
+/// <summary>
+/// Microsoft Fabric destination (OneLake Files). Listed in MultiTableRelationalDestinationTypes for the same
+/// reason Blob is: <c>MappedDataFabricDestinationWriter.BuildFilePath</c> takes both the file name and the
+/// hive-style <c>resourceType=</c> partition folder from the PROFILE's resource type, so a mixed batch has to be
+/// split per resource type by the base executor first — otherwise every record lands under whichever single type
+/// the profile happened to carry.
+/// </summary>
+public sealed class DataFabricAzureDestinationNodeExecutor : DestinationNodeExecutor
+{
+    public DataFabricAzureDestinationNodeExecutor(
+        IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null,
+        IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.DataFabricAzureDestination, DestinationType.DataFabricAzure, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+    {
+    }
+}
+
 public sealed class CsvDestinationNodeExecutor : DestinationNodeExecutor
 {
     public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
@@ -587,6 +624,14 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         DestinationType.Snowflake,
         DestinationType.Mongo,
         DestinationType.BlobStorage,
+        // Same reason as BlobStorage, one layer up: neither of these writers groups by resource type
+        // internally either. MappedDataFabricDestinationWriter names its file (and its hive-style
+        // resourceType= partition folder) from the PROFILE's resource type, and
+        // MappedDataLakeWebhookDestinationWriter stamps the profile's resource type onto each batch's routing
+        // header and envelope metadata — so a mixed batch arriving in one call would land under a folder, or
+        // be announced to the lake, as a resource type most of its records are not.
+        DestinationType.DataFabricAzure,
+        DestinationType.DataLakeWebhook,
     ];
 
     // NodeType -> RuntimeSourceType for every source node executor's own hardcoded mapping (see SourceNodeExecutors.cs
@@ -833,10 +878,13 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                     ? matched
                     : await ResolveMappingProfileAsync(node, group.Key, groupRecords, cancellationToken);
                 // The ";mode=..." suffix convention only means anything to MappedSqlServerDestinationWriter's
-                // ParseDestinationTarget — Blob reads its write mode straight off the destination's own
-                // ConnectionMetadataJson (BlobDestinationSettings.Parse) regardless of grouping, so splicing this
-                // onto its DestinationObject would just corrupt the blob name/folder for no benefit.
-                var effectiveProfile = _destinationType == DestinationType.BlobStorage
+                // ParseDestinationTarget. Every file/stream destination below reads whatever it needs straight off
+                // the destination's own ConnectionMetadataJson (BlobDestinationSettings.Parse,
+                // FabricDestinationSettings.Parse, DataLakeWebhookSettings.Parse) regardless of grouping, so
+                // splicing this on would only corrupt what each derives from DestinationObject: the blob
+                // name/folder, the OneLake file name, and the webhook's routing header plus its idempotency key —
+                // which must stay byte-stable across re-runs to be worth anything.
+                var effectiveProfile = WriteModeSuffixIsMeaningless(_destinationType)
                     ? profile
                     : ApplyWriteModeSuffix(profile, writeModeSuffix);
                 var groupResult = await writer.WriteAsync(destination, effectiveProfile, groupRecords, writeContext, cancellationToken);
@@ -1119,6 +1167,14 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     /// this destination writes) straight off the node's own "dest_writeMode" config, as a ";mode=X" suffix ready
     /// to splice onto a resolved profile's plain DestinationObject. Null when no write mode is configured (the
     /// writer's own "Insert" default then applies, exactly as if this suffix were never spliced on).</summary>
+    /// <summary>Destination types whose writer derives a file name, path or message identity from
+    /// <c>MappingProfile.DestinationObject</c> rather than a table name — see the call site for what each one
+    /// would corrupt. They read their write behavior from their own connection metadata instead.</summary>
+    private static bool WriteModeSuffixIsMeaningless(DestinationType destinationType)
+        => destinationType is DestinationType.BlobStorage
+            or DestinationType.DataFabricAzure
+            or DestinationType.DataLakeWebhook;
+
     private static string? BuildWriteModeSuffix(WorkflowNode node)
     {
         var writeMode = ReadStringConfiguration(node, "dest_writeMode");
