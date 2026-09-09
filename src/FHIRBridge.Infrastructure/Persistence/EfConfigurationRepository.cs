@@ -403,6 +403,13 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
                     && x.DestinationId == destinationId,
                 ct);
 
+    public async Task<IReadOnlyList<MappingProfile>> GetMappingProfilesByDestinationAsync(
+        Guid destinationId, CancellationToken ct) =>
+        await _db.MappingProfiles
+            .Include(x => x.Fields)
+            .Where(x => x.DestinationId == destinationId)
+            .ToListAsync(ct);
+
     public async Task AddMappingProfileAsync(MappingProfile e, CancellationToken ct)
     {
         await _db.MappingProfiles.AddAsync(e, ct);

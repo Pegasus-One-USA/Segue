@@ -177,10 +177,97 @@
   text-align: center;
 }
 
+// A cascading delete is destructive and irreversible, so it reads as a danger dialog: red rail, red
+// warning triangle, and an explicit list of everything going with it (see buildNodeDeletePlanV2).
+.confirm-dialog--danger {
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  align-items: stretch;
+  text-align: left;
+  border-top: 3px solid var(--color-error);
+}
+
 .confirm-icon {
   font-size: 32px;
   line-height: 1;
   margin-bottom: 4px;
+}
+
+.confirm-icon--danger {
+  align-self: center;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-error-soft);
+
+  svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: var(--color-error-strong);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.confirm-dialog--danger .confirm-title {
+  text-align: center;
+}
+
+.confirm-body--warn {
+  color: var(--color-error-strong);
+  font-weight: 600;
+}
+
+.confirm-list {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-bg);
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.confirm-list--warn {
+  background: var(--color-error-soft);
+  color: var(--color-error-strong);
+}
+
+.confirm-list--note {
+  background: transparent;
+  padding: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--color-muted);
+}
+
+.confirm-list__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1.45;
+}
+
+.confirm-list__name {
+  font-weight: 600;
+}
+
+.confirm-list__detail {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.confirm-dialog--danger .confirm-actions {
+  align-self: flex-end;
 }
 
 .confirm-title {

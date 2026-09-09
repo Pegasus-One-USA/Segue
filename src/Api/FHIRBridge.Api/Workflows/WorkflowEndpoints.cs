@@ -76,6 +76,7 @@ public static class WorkflowEndpoints
             IConfigurationService configurationService,
             IConfigurationRepository configurationRepository,
             IWorkflowDefinitionStore store,
+            IWorkflowConfigurationCleanupService workflowConfigurationCleanup,
             IEpicSourceConnectionScopeSyncService scopeSyncService,
             IParentReferenceResolver parentReferenceResolver,
             IDestinationSchemaService destinationSchemaService,
@@ -437,6 +438,20 @@ public static class WorkflowEndpoints
             var workflow = BuildWorkflow(
                 request.WorkflowId ?? Guid.NewGuid(), definitionRequest, (existingDefinition?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
+
+            // Retire the mapping profiles / workflow-scoped rules this save just stopped referencing (a
+            // destination removed from the canvas takes its Mapping / Transformation / De-identification
+            // configuration with it). Soft deletes, so the rows stay resolvable for audit and lineage —
+            // see IWorkflowConfigurationCleanupService. Judged against definitionRequest.Nodes, not
+            // request.Nodes: the created-entity ids were injected into the former, so reading the raw
+            // request would see a brand-new destination as "no destinationId" and retire the old one's
+            // profiles even when this save is only re-pointing the same nodes. Inside the transaction, so
+            // a later failure rolls the retirement back with everything else.
+            await workflowConfigurationCleanup.SoftDeleteUnreferencedAsync(
+                workflow.Id,
+                existingDefinition,
+                definitionRequest.Nodes.Select(node => node.ConfigurationJson).ToArray(),
+                cancellationToken);
 
             // Everything above (destinations, sources, mappings, the workflow definition itself) is durable only
             // from this point on — nothing before here survives if any step failed or threw.
@@ -898,6 +913,7 @@ public static class WorkflowEndpoints
             Guid workflowId,
             WorkflowDefinitionRequest request,
             IWorkflowDefinitionStore store,
+            IWorkflowConfigurationCleanupService workflowConfigurationCleanup,
             IConfigurationService configurationService,
             IConfigurationRepository configurationRepository,
             IAuthorizationService authorizationService,
@@ -939,6 +955,15 @@ public static class WorkflowEndpoints
 
             var workflow = BuildWorkflow(workflowId, request, (existing?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
+
+            // Same retirement pass as /workflows/build — see the comment there. This path provisions
+            // nothing, so the request's own node configuration already carries the final ids.
+            await workflowConfigurationCleanup.SoftDeleteUnreferencedAsync(
+                workflowId,
+                existing,
+                request.Nodes.Select(node => node.ConfigurationJson).ToArray(),
+                cancellationToken);
+
             return Results.Ok(workflow);
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
             PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.Edit)));

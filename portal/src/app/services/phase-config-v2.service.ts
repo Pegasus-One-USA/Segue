@@ -29,7 +29,7 @@ export interface PhaseConfig {
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
 // Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB + FHIR Repository (Aidbox) + Medplum +
-//               Azure FHIR Service + Azure Blob only
+//               Azure FHIR Service + Azure Blob + Data Lake Webhook only
 const PHASE_1_CONFIG: PhaseConfig = {
   enabledSourceIds: [
     'epic',
@@ -50,6 +50,13 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-fhir',
     'dest-azurefhir',
     'dest-blob',
+    // Lake destinations — backend writers, Step 1 forms and canvas wizard families are all in place
+    // (see MappedDataLakeWebhookDestinationWriter / MappedDataFabricDestinationWriter).
+    'dest-datalake-webhook',
+    // Microsoft Fabric is hidden from the UI until a Fabric tenant is available to verify a live write
+    // against. Everything behind it is complete and registered — writer, node executor, catalog entry,
+    // Step 1 form, wizard family — so re-listing this one id is the only change needed to bring it back.
+    // 'dest-fabric',
     // V2's chain steps — all three are the point of this builder, so none is phase-gated. (In V1 these
     // were 'field-mapping' plus the granular normalize/terminology/deid-* ids, all held back to a later
     // phase; V2 collapses them into these two consolidated steps — see transforms-v2.data.ts.)

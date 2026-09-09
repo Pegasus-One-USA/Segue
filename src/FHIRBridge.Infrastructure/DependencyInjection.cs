@@ -421,6 +421,18 @@ public static class DependencyInjection
         services.AddScoped<MappedProtobufDestinationWriter>();
         services.AddHttpClient(nameof(MappedDatabricksDestinationWriter));
         services.AddScoped<MappedDatabricksDestinationWriter>();
+
+        // Data Lake Webhook: the writer owns batching/framing, DataLakeWebhookSender owns the wire (auth, HMAC
+        // signing, gzip, retry classification) behind IDataLakeWebhookSender so the writer is unit-testable
+        // without a live endpoint — the same split IBlobContainerClientFactory gives the blob writer.
+        services.AddHttpClient(nameof(Destinations.Webhook.DataLakeWebhookSender));
+        services.AddScoped<Destinations.Webhook.IDataLakeWebhookSender, Destinations.Webhook.DataLakeWebhookSender>();
+        services.AddScoped<MappedDataLakeWebhookDestinationWriter>();
+
+        // Microsoft Fabric / OneLake: reuses the singleton BlobContainerClientCache registered above (OneLake
+        // speaks the blob protocol), with its own Entra-only credential dispatch.
+        services.AddScoped<Destinations.Fabric.IOneLakeClientFactory, Destinations.Fabric.OneLakeClientFactory>();
+        services.AddScoped<MappedDataFabricDestinationWriter>();
         services.AddScoped<MappedMongoDestinationWriter>();
         services.AddHttpClient(nameof(MedplumTokenProvider));
         services.AddHttpClient(nameof(MappedMedplumDestinationWriter));

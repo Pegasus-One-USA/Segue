@@ -1,0 +1,157 @@
+<form [formGroup]="fabricForm" class="dw-form" autocomplete="off">
+  <div class="dw-grid-2">
+
+    <div class="dw-field" [class.dw-field--error]="fabricForm.get('name')!.invalid && fabricForm.get('name')!.touched">
+      <label class="dw-label" for="dw-fab-name">Destination name <span class="dw-req">*</span></label>
+      <input id="dw-fab-name" class="dw-input" formControlName="name" placeholder="e.g. Clinical Lakehouse" />
+      @if (fabricForm.get('name')!.invalid && fabricForm.get('name')!.touched) {
+        <span class="dw-error">Destination name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="fabricForm.get('workspace')!.invalid && fabricForm.get('workspace')!.touched">
+      <label class="dw-label" for="dw-fab-workspace">Workspace <span class="dw-req">*</span></label>
+      <input id="dw-fab-workspace" class="dw-input" formControlName="workspace" placeholder="Workspace name or GUID" />
+      @if (fabricForm.get('workspace')!.hasError('required') && fabricForm.get('workspace')!.touched) {
+        <span class="dw-error">Workspace is required.</span>
+      } @else if (fabricForm.get('workspace')!.hasError('pattern') && fabricForm.get('workspace')!.touched) {
+        <span class="dw-error">Cannot contain a slash or control characters — this is the workspace name only, not a path.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="fabricForm.get('itemName')!.invalid && fabricForm.get('itemName')!.touched">
+      <label class="dw-label" for="dw-fab-itemName">Lakehouse name <span class="dw-req">*</span></label>
+      <input id="dw-fab-itemName" class="dw-input" formControlName="itemName" placeholder="e.g. ClinicalLake" />
+      @if (fabricForm.get('itemName')!.hasError('required') && fabricForm.get('itemName')!.touched) {
+        <span class="dw-error">Lakehouse name is required.</span>
+      } @else if (fabricForm.get('itemName')!.hasError('pattern') && fabricForm.get('itemName')!.touched) {
+        <span class="dw-error">Cannot contain a slash or control characters — the name only, without the ".Lakehouse" suffix.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-fab-itemType">Item type</label>
+      <div class="dw-select-wrap">
+        <select id="dw-fab-itemType" class="dw-select" formControlName="itemType">
+          <option value="Lakehouse">Lakehouse</option>
+          <option value="Warehouse">Warehouse</option>
+          <option value="KQLDatabase">KQL Database</option>
+          <option value="MirroredDatabase">Mirrored Database</option>
+        </select>
+      </div>
+      <span class="dw-hint">Almost always Lakehouse — this is the OneLake item that owns the Files area written to.</span>
+    </div>
+
+    <div class="dw-field dw-field--full" [class.dw-field--error]="fabricForm.get('path')!.invalid && fabricForm.get('path')!.touched">
+      <label class="dw-label" for="dw-fab-path">Path under Files</label>
+      <input id="dw-fab-path" class="dw-input" formControlName="path" placeholder="Default: fhirbridge" />
+      @if (fabricForm.get('path')!.hasError('pattern') && fabricForm.get('path')!.touched) {
+        <span class="dw-error">Must be a relative path inside the Files area — not a full URL, not a "Tables/" path, and without "." or ".." segments. A Fabric table is a Delta table, so plain files written under Tables/ would never register as one.</span>
+      } @else {
+        <span class="dw-hint">Files land here; promote them to a table afterwards with a Fabric shortcut, notebook or pipeline (one-time setup, not per run).</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-fab-fileFormat">File format</label>
+      <div class="dw-select-wrap">
+        <select id="dw-fab-fileFormat" class="dw-select" formControlName="fileFormat">
+          <option value="ndjson">NDJSON — schema-flexible</option>
+          <option value="parquet">Parquet — columnar</option>
+          <option value="csv">CSV</option>
+        </select>
+      </div>
+      @if (fabricForm.get('fileFormat')!.value === 'parquet') {
+        <span class="dw-hint">What a Spark or Warehouse consumer wants at analytics volume. Every column is written as a nullable string; readers cast on load.</span>
+      } @else if (fabricForm.get('fileFormat')!.value === 'ndjson') {
+        <span class="dw-hint">A later mapping change adds fields without breaking files already written.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-fab-partitionBy">Partition folders</label>
+      <div class="dw-select-wrap">
+        <select id="dw-fab-partitionBy" class="dw-select" formControlName="partitionBy">
+          <option value="resourceType">By resource type</option>
+          <option value="ingestDate">By ingest date</option>
+          <option value="resourceTypeAndIngestDate">By resource type, then ingest date</option>
+          <option value="none">None — everything in one folder</option>
+        </select>
+      </div>
+      <span class="dw-hint">Hive-style "key=value" folders, which Spark, a Fabric shortcut and Warehouse OPENROWSET all recognize as partition columns automatically.</span>
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-fab-authMode">Authentication</label>
+      <div class="dw-select-wrap">
+        <select id="dw-fab-authMode" class="dw-select" formControlName="authMode">
+          <option value="managedIdentity">Managed identity</option>
+          <option value="servicePrincipal">Service principal (Entra app registration)</option>
+        </select>
+      </div>
+      <span class="dw-hint">Entra only — OneLake does not accept storage account keys or SAS tokens. Grant the identity Contributor (or a Write-capable role) on the Fabric workspace.</span>
+    </div>
+
+    @if (fabricForm.get('authMode')!.value === 'servicePrincipal') {
+      <div class="dw-field" [class.dw-field--error]="fabricForm.get('tenantId')!.invalid && fabricForm.get('tenantId')!.touched">
+        <label class="dw-label" for="dw-fab-tenantId">Tenant ID <span class="dw-req">*</span></label>
+        <input id="dw-fab-tenantId" class="dw-input" formControlName="tenantId" />
+        @if (fabricForm.get('tenantId')!.hasError('required') && fabricForm.get('tenantId')!.touched) {
+          <span class="dw-error">Tenant ID is required for a service principal.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="fabricForm.get('clientId')!.invalid && fabricForm.get('clientId')!.touched">
+        <label class="dw-label" for="dw-fab-clientId">Client ID <span class="dw-req">*</span></label>
+        <input id="dw-fab-clientId" class="dw-input" formControlName="clientId" />
+        @if (fabricForm.get('clientId')!.hasError('required') && fabricForm.get('clientId')!.touched) {
+          <span class="dw-error">Client ID is required for a service principal.</span>
+        }
+      </div>
+
+      <div class="dw-field dw-field--full" [class.dw-field--error]="fabricForm.get('secretValue')!.invalid && fabricForm.get('secretValue')!.touched">
+        <label class="dw-label" for="dw-fab-secret">Client secret @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
+        <input id="dw-fab-secret" class="dw-input" type="password" formControlName="secretValue" autocomplete="new-password" />
+        @if (fabricForm.get('secretValue')!.hasError('required') && fabricForm.get('secretValue')!.touched) {
+          <span class="dw-error">Client secret is required for a service principal.</span>
+        } @else {
+          <span class="dw-hint">Stored encrypted in the key vault — never returned to this form again once saved.</span>
+        }
+      </div>
+    }
+
+    @if (fabricForm.get('authMode')!.value === 'managedIdentity') {
+      <div class="dw-field">
+        <label class="dw-label" for="dw-fab-miClientId">Managed identity client ID</label>
+        <input id="dw-fab-miClientId" class="dw-input" formControlName="managedIdentityClientId" />
+        <span class="dw-hint">Only needed for a user-assigned identity. Leave blank to use the host's system-assigned identity.</span>
+      </div>
+    }
+
+    <div class="dw-field dw-field--full">
+      <label class="dw-label" for="dw-fab-accountUrl">Storage account URL override</label>
+      <input id="dw-fab-accountUrl" class="dw-input" formControlName="accountUrl"
+        placeholder="Leave blank for OneLake — e.g. https://mystorage.blob.core.windows.net" />
+      <span class="dw-hint">Leave blank for real Fabric. Set it to write to an ordinary ADLS Gen2 / Blob account instead — same paths, partitioning and Entra auth, useful for rehearsing before a Fabric tenant is available. Workspace then means the container name, so it must follow Azure container rules (lowercase).</span>
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-fab-endpointSuffix">OneLake endpoint suffix</label>
+      <input id="dw-fab-endpointSuffix" class="dw-input" formControlName="endpointSuffix"
+        placeholder="fabric.microsoft.com" />
+      <span class="dw-hint">Change only for a sovereign or government Fabric cloud.</span>
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-fab-authorityHost">Entra authority host</label>
+      <input id="dw-fab-authorityHost" class="dw-input" formControlName="authorityHost"
+        placeholder="Default: https://login.microsoftonline.com" />
+    </div>
+
+    <div class="dw-field dw-field--full">
+      <span class="dw-label">Files will be written to</span>
+      <span class="dw-hint">{{ resolvedPathPreview() }}</span>
+    </div>
+
+  </div>
+</form>

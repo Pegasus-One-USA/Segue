@@ -24,6 +24,8 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-powerbi',     rank: 1, category: 'Analytics',    destinationType: 'PowerBi',        name: 'Power BI',           sub: 'Push to a Power BI dataset.',       permissionPrefix: 'sourceconnections' },
   { id: 'dest-tableau',     rank: 1, category: 'Analytics',    destinationType: 'Tableau',        name: 'Tableau',            sub: 'Publish to Tableau.',               permissionPrefix: 'sourceconnections' },
   { id: 'dest-databricks',  rank: 1, category: 'Analytics',    destinationType: 'Databricks',     name: 'Databricks',         sub: 'Load into Databricks.',             permissionPrefix: 'sourceconnections' },
+  { id: 'dest-datalake-webhook', rank: 1, category: 'Cloud / FHIR', destinationType: 'DataLakeWebhook', name: 'Data Lake Webhook', sub: 'Push batched records to a lake ingestion endpoint.', permissionPrefix: 'sourceconnections' },
+  { id: 'dest-fabric',      rank: 1, category: 'Cloud / FHIR', destinationType: 'DataFabricAzure', name: 'Microsoft Fabric', sub: 'Land files in a Fabric Lakehouse (OneLake).', permissionPrefix: 'sourceconnections' },
   { id: 'dest-blob',        rank: 1, category: 'Cloud / FHIR', destinationType: 'BlobStorage',    name: 'Azure Blob Storage', sub: 'Write objects to Azure Blob.',      permissionPrefix: 'blobstorage' },
   { id: 'dest-s3',          rank: 1, category: 'Cloud / FHIR', destinationType: 'S3',             name: 'Amazon S3',          sub: 'Write objects to Amazon S3.',       permissionPrefix: 'sourceconnections' },
   { id: 'dest-fhir',        rank: 1, category: 'Cloud / FHIR', destinationType: 'FhirRepository', name: 'Aidbox',             sub: 'POST a transaction bundle to a FHIR store.', permissionPrefix: 'sourceconnections' },

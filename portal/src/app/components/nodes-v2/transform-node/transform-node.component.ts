@@ -58,7 +58,7 @@ export class TransformNodeComponent {
   readonly canAddNext = input<boolean>(true);
   /** Further hides just the delete button (add-next/configure stay available) — set by canvas.component
    *  from canDeleteNode(), the vendor's own `{prefix}.delete` permission. Defaults true so a node type
-   *  with no resolvable vendor (or the Field Mapping node, already excluded via isMapping()) is unaffected. */
+   *  with no resolvable vendor is unaffected. */
   readonly canDelete = input(true);
 
   readonly delete    = output<string>();
@@ -97,12 +97,6 @@ export class TransformNodeComponent {
 
   protected isDestination(): boolean {
     return this.transformId().startsWith('dest-');
-  }
-
-  /** Field Mapping nodes aren't independently removable from the canvas via this button — by product
-   *  decision, not a technical restriction. */
-  protected isMapping(): boolean {
-    return this.transformId() === 'field-mapping';
   }
 
   onAddNextClick(e: MouseEvent): void {

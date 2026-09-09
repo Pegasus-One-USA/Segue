@@ -34,6 +34,10 @@ export interface DestinationConnectionDialogData {
  *  (transforms.data.ts), so this stays in sync with the workflow builder's Node Library. */
 const CREATE_TYPES: DestinationType[] = [
   'SqlServer', 'PostgreSql', 'MySql', 'Mongo', 'BlobStorage', 'Csv', 'FhirRepository', 'Medplum',
+  'DataLakeWebhook',
+  // 'DataFabricAzure' — hidden alongside its phase-config entry (see phase-config.service.ts). Note this
+  // list is gated by permission only, NOT by isTransformEnabled, so removing it from the phase config
+  // alone would still leave the New Connection card visible here.
 ];
 
 /** Types whose connection secret can be replaced from the Edit flow (their form loads here). Superset of
@@ -58,7 +62,10 @@ function permissionPrefixFor(type: DestinationType): string {
 /** DestinationConfiguration.target for a freshly-built connection, mirroring workflow-build-assembler's
  *  per-type target: FHIR base URL / Medplum base URL / blob container / Mongo collection / CSV file pattern.
  *  SQL-family destinations have no natural target (null), same as before. */
-const TARGET_FIELD_KEYS = ['dest_baseUrl', 'dest_medplumBaseUrl', 'dest_blobContainer', 'dest_collection', 'dest_filePattern'];
+// dest_dlwEndpointUrl / dest_fabricWorkspace are the Target for the two lake destinations — both writers
+// read Target as the fallback for their own metadata key (see DataLakeWebhookSettings.Parse and
+// FabricDestinationSettings.Parse), so a row created here works on either resolution path.
+const TARGET_FIELD_KEYS = ['dest_baseUrl', 'dest_medplumBaseUrl', 'dest_blobContainer', 'dest_collection', 'dest_filePattern', 'dest_dlwEndpointUrl', 'dest_fabricWorkspace'];
 function resolveTarget(fields: Record<string, string>): string | null {
   for (const key of TARGET_FIELD_KEYS) {
     if (fields[key]) return fields[key];

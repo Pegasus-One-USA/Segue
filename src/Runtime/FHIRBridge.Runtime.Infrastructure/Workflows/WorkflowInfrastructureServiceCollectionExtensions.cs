@@ -55,6 +55,8 @@ public static class WorkflowInfrastructureServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, SftpDestinationNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, RestApiDestinationNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, InMemoryDestinationNodeExecutor>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, DataLakeWebhookDestinationNodeExecutor>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, DataFabricAzureDestinationNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, WebhookNotifierNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, PowerBiDestinationNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, TableauDestinationNodeExecutor>());
