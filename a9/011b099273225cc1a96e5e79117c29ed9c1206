@@ -1,0 +1,19 @@
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.scss
+  s_d513accac0e8fe::t_cadbe3246e3196 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "a9011b099273225cc1a96e5e79117c29ed9c1206",
+  "prompts": {},
+  "sessions": {
+    "s_d513accac0e8fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ef8c0a5-b7a0-4d67-b45b-621adaf8895d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
