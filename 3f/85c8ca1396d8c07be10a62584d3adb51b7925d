@@ -1,0 +1,27 @@
+containerization/azure-deploy/main.bicep
+  s_b5e012a0d1456f::t_9835a57b0e5813 490-498,502-504
+containerization/compose/docker-compose.yml
+  s_b5e012a0d1456f::t_6219dc63fd3de1 153-160
+src/FHIRBridge.Infrastructure/Security/AppSecretProvisioner.cs
+  s_b5e012a0d1456f::t_dff7e26e284378 4
+  s_b5e012a0d1456f::t_31c2bfc663b0a4 25-26,31-32,34,36,38,40,45-53,57,59,74-95,98-117
+containerization/azure-deploy/main.json
+  s_b5e012a0d1456f::t_fbca4eb6393899 517,637-646,651-657,667
+  s_b5e012a0d1456f::t_f0bee1b885d542 7-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "3f85c8ca1396d8c07be10a62584d3adb51b7925d",
+  "prompts": {},
+  "sessions": {
+    "s_b5e012a0d1456f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "30374075-2d4e-4f00-916b-77a7cd4c5899",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
