@@ -1,4 +1,4 @@
-import { Component, OnInit, input, output, signal } from '@angular/core';
+import { Component, OnInit, computed, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -49,6 +49,33 @@ const NEW11_ROLE_LABELS: Record<string, string> = {
   ProviderStandalone: 'Provider Standalone',
   ProviderInApp: 'Provider InApp',
   BackendSystem: 'Backend System',
+};
+
+/** The Default tab's two-level tab grid: an EHR vendor (level 1) x an audience within it (level 2).
+ *  Mirrors the vendor toggle the launch screens show (Epic (MyChart) | athenahealth | eCW). */
+type VendorKey = 'epic' | 'athena' | 'ecw';
+type AudienceKey = 'patient' | 'providerStandalone' | 'providerInApp' | 'backendSystem';
+
+const VENDORS: ReadonlyArray<{ key: VendorKey; label: string }> = [
+  { key: 'epic', label: 'Epic (MyChart)' },
+  { key: 'athena', label: 'athenahealth' },
+  { key: 'ecw', label: 'eCW' },
+];
+
+const AUDIENCES: ReadonlyArray<{ key: AudienceKey; label: string }> = [
+  { key: 'patient', label: 'Patient Standalone' },
+  { key: 'providerStandalone', label: 'Provider Standalone' },
+  { key: 'providerInApp', label: 'Provider InApp' },
+  { key: 'backendSystem', label: 'Backend System' },
+];
+
+// Which vendor x audience cells have settings behind them today. Every cell still gets a tab — the
+// unsupported ones render an explanatory empty state, so the audience strip never changes shape
+// when you switch vendors.
+const SUPPORTED_COMBINATIONS: Record<VendorKey, Record<AudienceKey, boolean>> = {
+  epic: { patient: true, providerStandalone: true, providerInApp: true, backendSystem: true },
+  athena: { patient: true, providerStandalone: false, providerInApp: false, backendSystem: false },
+  ecw: { patient: true, providerStandalone: true, providerInApp: true, backendSystem: false },
 };
 
 @Component({
@@ -106,6 +133,26 @@ export class AdminSettingsComponent implements OnInit {
   // Default | New 11 section switch (the workflow config for each surface lives on its own tab).
   readonly section = signal<'default' | 'new11'>('default');
 
+  // The New 11 surface is hidden for now: no Default | New 11 tab strip and no feature-flag
+  // checkbox, so the page opens straight onto the Default content. Everything behind it is left
+  // intact — flip this to true to bring the tab and the flag back.
+  readonly new11UiVisible = false;
+
+  // Default tab: EHR vendor (level 1) x audience (level 2).
+  readonly vendors = VENDORS;
+  readonly audiences = AUDIENCES;
+  readonly selectedVendor = signal<VendorKey>('epic');
+  readonly selectedAudience = signal<AudienceKey>('patient');
+  readonly selectedVendorLabel = computed(
+    () => VENDORS.find((vendor) => vendor.key === this.selectedVendor())?.label ?? ''
+  );
+  readonly selectedAudienceLabel = computed(
+    () => AUDIENCES.find((audience) => audience.key === this.selectedAudience())?.label ?? ''
+  );
+  readonly isCombinationSupported = computed(
+    () => SUPPORTED_COMBINATIONS[this.selectedVendor()][this.selectedAudience()]
+  );
+
   // New 11 per-role workflow settings.
   readonly new11Roles = NEW11_ROLES;
   readonly roleLabels = NEW11_ROLE_LABELS;
@@ -139,6 +186,16 @@ export class AdminSettingsComponent implements OnInit {
     if (section === 'new11' && !this.new11Loaded()) {
       void this.loadNew11Settings();
     }
+  }
+
+  selectVendor(vendor: VendorKey): void {
+    this.selectedVendor.set(vendor);
+    this.saved.set(false);
+  }
+
+  selectAudience(audience: AudienceKey): void {
+    this.selectedAudience.set(audience);
+    this.saved.set(false);
   }
 
   selectNew11Role(role: string): void {
