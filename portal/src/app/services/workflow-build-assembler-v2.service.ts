@@ -655,6 +655,11 @@ export class WorkflowBuildAssemblerServiceV2 {
             ? null
             : this.buildSqlConnectionString(fields, isMySql, isPostgres),
         connectionMetadataJson: this.buildConnectionMetadata(fields, 'sql'),
+        // Forking off a picked connection (destination-wizard.component.ts's _save() stashes this) never
+        // re-populates the password field, so the connection string just built above may be missing
+        // credentials the user never meant to change — lets the backend inherit them from the connection
+        // being forked from instead of forcing a retype (see ISqlConnectionSecretMerger).
+        inheritSecretFromDestinationId: fields['dest_inheritSecretFromDestinationId'] || undefined,
       };
     }
 

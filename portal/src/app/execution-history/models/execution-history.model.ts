@@ -45,6 +45,9 @@ export interface RouteExecutionPage extends PagedResult<RouteExecution> {
 }
 
 export interface RouteExecutionFilter {
+  /** Set when the Workflows list's "Execution History" row action deep-links here — narrows to one workflow's
+   *  runs, exact match on WorkflowDefinitionId (see ExecutionHistoryListComponent's workflowIdFilter). */
+  workflowId?: string;
   status?: string;
   source?: string;
   /** Multi-select Source filter — sent as repeated `sources` params. `source` above stays for single-value

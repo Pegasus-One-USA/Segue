@@ -52,6 +52,9 @@ export interface DestinationProbeRequest {
   // PostgreSQL / MySQL only — see DestinationConnectionProbeRequest.RequireSsl on the backend for why this
   // defaults false rather than being hardcoded true like SQL Server's trustServerCertificate/encrypt above.
   requireSsl?: boolean;
+  // Set when forking from an already-saved destination with the password left blank — lets the backend
+  // inherit that destination's stored password (see DestinationConnectionProbeRequest.ExistingDestinationId).
+  existingDestinationId?: string | null;
 }
 
 export interface SchemaMutationResult {
@@ -121,6 +124,9 @@ export interface SftpConnectionTestRequest {
   username: string;
   password?: string;
   remoteFolder?: string;
+  /** When re-testing an already-saved destination without retyping its password, carries the destination's id
+   *  so the backend can resolve the stored password instead. */
+  destinationId?: string;
 }
 
 // No tokenEndpoint — for "oauth2"/"clientcredentials" it's discovered server-side from baseUrl via
@@ -140,6 +146,11 @@ export interface FhirConnectionTestRequest {
   scope?: string;
   managedIdentityClientId?: string;
   authorityHost?: string;
+  /** When re-testing an already-saved destination without retyping its secret (clientSecret/password/
+   *  bearerToken left blank — "Leave blank to keep the current X"), carries the destination's id so the backend
+   *  can resolve the stored one instead. Mirrors MongoConnectionTestRequest.destinationId/
+   *  BlobConnectionTestRequest.destinationId. */
+  destinationId?: string;
 }
 
 export interface ConnectionTestResult {
@@ -165,6 +176,9 @@ export interface MongoConnectionTestRequest {
   collection?: string;
   /** Mirrors the form's "Create collection if not exists" checkbox — skips the missing-collection failure. */
   createIfNotExists?: boolean;
+  /** When re-testing an already-saved destination without retyping its connection string, carries the
+   *  destination's id so the backend can resolve the stored one instead. */
+  destinationId?: string;
 }
 
 export interface MongoConnectionTestResult extends ConnectionTestResult {
@@ -185,6 +199,9 @@ export interface BlobConnectionTestRequest {
   tenantId?: string;
   clientId?: string;
   managedIdentityClientId?: string;
+  /** When re-testing an already-saved destination without retyping its secret, carries the destination's id so
+   *  the backend can resolve the stored one instead. */
+  destinationId?: string;
 }
 
 /** FHIR-specific test result — adds the discovered token endpoint so the wizard can persist it into the

@@ -45,6 +45,11 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   /** True while the Source checkbox panel is open — see toggleSourceMenu / closeSourceMenuIfOutside. */
   readonly sourceMenuOpen = signal(false);
 
+  /** Set when the Workflows list's "Execution History" row action deep-links here (?workflowId=...) — narrows
+   *  every load() to that one workflow's runs. Deliberately NOT cleared by reset() (the "Reset filters" button):
+   *  it represents which page you're on (a drill-down into one workflow), not a togglable filter alongside
+   *  status/source/search — only its own "Show all workflows" control (see clearWorkflowFilter) leaves it. */
+  readonly workflowIdFilter = signal<string | null>(null);
   readonly searchQuery   = signal('');
   readonly statusFilter  = signal('');
   readonly triggerFilter = signal('');
@@ -56,7 +61,15 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   readonly result        = signal<PagedResult<RouteExecution>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
   /** Any filter active — drives the two "no results" messages below the table. */
   readonly hasActiveFilters = computed(
-    () => !!this.searchQuery() || !!this.statusFilter() || !!this.triggerFilter() || this.selectedSources().size > 0,
+    () => !!this.searchQuery() || !!this.statusFilter() || !!this.triggerFilter() || this.selectedSources().size > 0
+      || !!this.workflowIdFilter(),
+  );
+
+  /** The filtered-to workflow's own name, once a page of its (already server-filtered) runs has loaded — every
+   *  row shares the same pipelineName, so there's no need to pass a separate ?workflowName= just for display.
+   *  Falls back to a generic label while loading or if the workflow has no runs at all yet. */
+  readonly workflowFilterLabel = computed(() =>
+    this.workflowIdFilter() ? (this.result().items[0]?.pipelineName ?? 'this workflow') : null,
   );
 
   readonly displayedCols = ['name', 'source', 'status', 'duration', 'lastRun', 'triggeredBy', 'correlationId'];
@@ -75,6 +88,13 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
       this.statusFilter.set(statusFromQuery);
     }
 
+    // The Workflows list's "Execution History" row action deep-links here with ?workflowId=<id> — narrow to
+    // that one workflow's runs before the first load (see workflowIdFilter's own doc comment).
+    const workflowIdFromQuery = this.route.snapshot.queryParamMap.get('workflowId');
+    if (workflowIdFromQuery) {
+      this.workflowIdFilter.set(workflowIdFromQuery);
+    }
+
     this.load();
   }
 
@@ -85,6 +105,7 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   load(): void {
     this.loading.set(true);
     this.api.list({
+      workflowId: this.workflowIdFilter() || undefined,
       status: this.statusFilter() || undefined,
       sources: this.selectedSources().size ? [...this.selectedSources()] : undefined,
       triggeredBy: this.triggerFilter() || undefined,
@@ -148,6 +169,15 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.selectedSources.set(new Set());
     this.triggerFilter.set('');
     this.pageIndex.set(0);
+    this.load();
+  }
+
+  /** Leaves the "Execution History" row-action drill-down (see workflowIdFilter) and returns to the
+   *  unfiltered, all-workflows list — also strips ?workflowId from the URL so a refresh doesn't restore it. */
+  clearWorkflowFilter(): void {
+    this.workflowIdFilter.set(null);
+    this.pageIndex.set(0);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { workflowId: null }, queryParamsHandling: 'merge' });
     this.load();
   }
 

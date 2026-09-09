@@ -85,13 +85,16 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
     private readonly IConfigurationRepository _repository;
     private readonly ISecretProvider _secretProvider;
+    private readonly ISqlConnectionSecretMerger _sqlConnectionSecretMerger;
 
     public SqlDestinationSchemaService(
         IConfigurationRepository repository,
-        ISecretProvider secretProvider)
+        ISecretProvider secretProvider,
+        ISqlConnectionSecretMerger sqlConnectionSecretMerger)
     {
         _repository = repository;
         _secretProvider = secretProvider;
+        _sqlConnectionSecretMerger = sqlConnectionSecretMerger;
     }
 
     public async Task<DestinationSchemaDto> GetSchemaAsync(
@@ -125,7 +128,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         string connectionString;
         try
         {
-            connectionString = BuildConnectionString(request);
+            connectionString = await ResolveProbeConnectionStringAsync(request, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -142,6 +145,47 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             // Connection/auth failures are an expected UI outcome, not a server error.
             return new DestinationSchemaProbeDto(false, exception.Message, []);
         }
+    }
+
+    /// <summary>
+    /// Builds the probe's connection string from the request's discrete fields (server/database/auth/etc.,
+    /// possibly a blank password), then — when the request forked from an already-saved destination
+    /// (<see cref="DestinationConnectionProbeRequest.ExistingDestinationId"/>) and left the password blank —
+    /// splices in that destination's stored credentials via <see cref="ISqlConnectionSecretMerger"/>. This lets
+    /// Test Connection succeed for the exact scenario ConfigurationService.ResolveInlineSecretAsync already
+    /// handles at save time: an existing SQL connection forked by editing an unrelated field (e.g. Require SSL)
+    /// without retyping the password.
+    /// </summary>
+    private async Task<string> ResolveProbeConnectionStringAsync(
+        DestinationConnectionProbeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var connectionString = BuildConnectionString(request);
+
+        if (!string.IsNullOrWhiteSpace(request.Password) || request.ExistingDestinationId is not { } existingId)
+        {
+            return connectionString;
+        }
+
+        var existing = await _repository.GetDestinationAsync(existingId, cancellationToken);
+        if (existing is null)
+        {
+            return connectionString;
+        }
+
+        string existingSecret;
+        try
+        {
+            existingSecret = await _secretProvider.GetSecretAsync(existing.SecretReference, cancellationToken);
+        }
+        catch (SecretNotConfiguredException)
+        {
+            return connectionString;
+        }
+
+        var merged = _sqlConnectionSecretMerger.TryInheritCredentials(
+            request.DestinationType, existingSecret, connectionString);
+        return merged ?? connectionString;
     }
 
     public async Task<SchemaMutationResultDto> AddColumnAsync(

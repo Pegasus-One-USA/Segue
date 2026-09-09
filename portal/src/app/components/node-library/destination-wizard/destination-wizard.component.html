@@ -72,16 +72,24 @@
           <label class="dw-label" for="dw-existing">Existing {{ destLabel() }} connection</label>
           <div class="dw-existing-connection-row">
             <div class="dw-select-wrap">
+              <!-- existingOptions() loads async (getPaged + a hasExecutionHistory check per candidate) — on
+                   first render (e.g. reopening a node whose connection was already picked) selectedExistingId()
+                   is already restored, but no matching <option> exists yet. A [value] binding on the <select>
+                   itself doesn't work around this: Angular updates a host element's own property bindings
+                   BEFORE processing its child content, so even once existingOptions() loads, [value] would be
+                   (re-)applied in the same change-detection pass but strictly before the @for below inserts the
+                   matching <option> — so it still finds nothing to select. [selected] per <option> instead is
+                   evaluated as part of THAT option's own creation, which by construction only happens once it
+                   already exists — no ordering race. -->
               <select
                 id="dw-existing"
                 class="dw-select"
                 [disabled]="existingOptionsLoading()"
-                [value]="selectedExistingId() ?? ''"
                 (change)="selectExisting($any($event.target).value)"
               >
-                <option value="" disabled>{{ existingOptionsLoading() ? 'Loading…' : 'Choose a connection…' }}</option>
+                <option value="" disabled [selected]="!selectedExistingId()">{{ existingOptionsLoading() ? 'Loading…' : 'Choose a connection…' }}</option>
                 @for (o of existingOptions(); track o.id) {
-                  <option [value]="o.id">{{ o.name }} ({{ o.destinationType }})</option>
+                  <option [value]="o.id" [selected]="o.id === selectedExistingId()">{{ o.name }} ({{ o.destinationType }})</option>
                 }
               </select>
             </div>
@@ -143,8 +151,9 @@
                 }
               </div>
               <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched">
-                <label class="dw-label" for="dw-fhir-clientSecret">Client secret <span class="dw-req">*</span></label>
-                <input id="dw-fhir-clientSecret" type="password" class="dw-input" formControlName="clientSecret" autocomplete="new-password" />
+                <label class="dw-label" for="dw-fhir-clientSecret">Client secret @if (!_fhirReusingExisting()) { <span class="dw-req">*</span> }</label>
+                <input id="dw-fhir-clientSecret" type="password" class="dw-input" formControlName="clientSecret" autocomplete="new-password"
+                  [placeholder]="_fhirReusingExisting() ? 'Leave blank to keep the current client secret' : ''" />
                 @if (fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched) {
                   <span class="dw-error">Client secret is required.</span>
                 }
@@ -160,8 +169,9 @@
                 }
               </div>
               <div class="dw-field" [class.dw-field--error]="fhirForm.get('password')!.invalid && fhirForm.get('password')!.touched">
-                <label class="dw-label" for="dw-fhir-password">Password <span class="dw-req">*</span></label>
-                <input id="dw-fhir-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password" />
+                <label class="dw-label" for="dw-fhir-password">Password @if (!_fhirReusingExisting()) { <span class="dw-req">*</span> }</label>
+                <input id="dw-fhir-password" type="password" class="dw-input" formControlName="password" autocomplete="new-password"
+                  [placeholder]="_fhirReusingExisting() ? 'Leave blank to keep the current password' : ''" />
                 @if (fhirForm.get('password')!.invalid && fhirForm.get('password')!.touched) {
                   <span class="dw-error">Password is required.</span>
                 }
@@ -170,8 +180,9 @@
 
             @if (fhirForm.get('authType')!.value === 'bearer') {
               <div class="dw-field dw-field--full" [class.dw-field--error]="fhirForm.get('bearerToken')!.invalid && fhirForm.get('bearerToken')!.touched">
-                <label class="dw-label" for="dw-fhir-bearerToken">Bearer token <span class="dw-req">*</span></label>
-                <input id="dw-fhir-bearerToken" type="password" class="dw-input" formControlName="bearerToken" autocomplete="new-password" />
+                <label class="dw-label" for="dw-fhir-bearerToken">Bearer token @if (!_fhirReusingExisting()) { <span class="dw-req">*</span> }</label>
+                <input id="dw-fhir-bearerToken" type="password" class="dw-input" formControlName="bearerToken" autocomplete="new-password"
+                  [placeholder]="_fhirReusingExisting() ? 'Leave blank to keep the current bearer token' : ''" />
                 @if (fhirForm.get('bearerToken')!.invalid && fhirForm.get('bearerToken')!.touched) {
                   <span class="dw-error">Bearer token is required.</span>
                 }

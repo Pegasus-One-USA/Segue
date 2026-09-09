@@ -27,13 +27,19 @@ export interface DestinationConnectionDialogData {
   destination?: DestinationConfigurationDto;
 }
 
-/** The DestinationTypes this admin dialog's create-flow offers, in display order. A curated safe subset of the
- *  full catalog — each has a working form here (registry-routed, or the hand-rolled FHIR form) and a real
- *  backend writer. Analytics/File/Delivery types (Snowflake/Parquet/…) aren't offered yet: their standalone
- *  forms aren't verified in this dialog. Labels/descriptions/permission all come from the TRANSFORMS catalog
- *  (transforms.data.ts), so this stays in sync with the workflow builder's Node Library. */
+/** The DestinationTypes this admin dialog's create-flow offers, in display order. Deliberately kept identical
+ *  to PhaseConfigService's PHASE_1_CONFIG.enabledTransformIds destination set (phase-config.service.ts /
+ *  phase-config-v2.service.ts — both list the exact same 9) — this dialog must offer exactly what's visible
+ *  in the workflow builder's Node Library today, no more and no less. AzureSql and Sftp each have a fully
+ *  working registry-routed form and their own dedicated RBAC permission group (PermissionGroupCode.AzureSql/
+ *  .Sftp) — same caliber as every type below — but are explicitly commented out as "Phase 2+" in both phase
+ *  configs, so they're deliberately NOT offered here either; see EDITABLE_TYPES below for why existing rows
+ *  of those two types can still be edited. Analytics/File/Delivery types (Snowflake/Parquet/RestApi/…) are
+ *  Phase 2+ too, and additionally still SimpleStubFormEngine stubs (name/target only, no secret collection at
+ *  all) even once phase-enabled. Labels/descriptions/permission all come from the TRANSFORMS catalog
+ *  (transforms.data.ts). When a type is phase-enabled for real, add it here to match. */
 const CREATE_TYPES: DestinationType[] = [
-  'SqlServer', 'PostgreSql', 'MySql', 'Mongo', 'BlobStorage', 'Csv', 'FhirRepository', 'Medplum',
+  'SqlServer', 'PostgreSql', 'MySql', 'Mongo', 'BlobStorage', 'Csv', 'FhirRepository', 'Medplum', 'AzureFhirService',
   'DataLakeWebhook',
   // 'DataFabricAzure' — hidden alongside its phase-config entry (see phase-config.service.ts). Note this
   // list is gated by permission only, NOT by isTransformEnabled, so removing it from the phase config
@@ -41,8 +47,11 @@ const CREATE_TYPES: DestinationType[] = [
 ];
 
 /** Types whose connection secret can be replaced from the Edit flow (their form loads here). Superset of
- *  CREATE_TYPES plus AzureSql/Sftp, which have always been edit-supported by collapsing onto the
- *  SqlServer/Csv registry forms. Anything else is name/target-only on edit (see unsupportedType()). */
+ *  CREATE_TYPES plus AzureSql/Sftp: both are Phase 2+ (not offered as a create-flow card — see CREATE_TYPES),
+ *  but each has a real registry-routed form, so a row of either type that already exists (created before
+ *  being phase-gated, seeded, or migrated) can still be edited/have its secret replaced here rather than
+ *  falling back to name/target-only. Anything else not listed is name/target-only on edit (see
+ *  unsupportedType()). */
 const EDITABLE_TYPES: ReadonlySet<DestinationType> = new Set<DestinationType>([
   ...CREATE_TYPES, 'AzureSql', 'Sftp',
 ]);
@@ -146,6 +155,22 @@ export class DestinationConnectionDialogComponent {
   readonly replaceSecret = signal(false);
   readonly saving = signal(false);
   readonly errorMessage = signal<string | null>(null);
+
+  /** The saved destination's own non-secret dest_* fields (server/database/username/folder/etc.), parsed once
+   *  from its ConnectionMetadataJson — handed to DestinationConnectionFormComponent as `initialConfig` so
+   *  "Replace connection secret" pre-fills everything it can (the loaded registry form's own patchFrom()
+   *  already knows to leave only the secret field blank, same as the workflow canvas). Never carries a
+   *  password/connection string — that's the whole point of ConnectionMetadataJson never storing one. */
+  readonly existingConnectionMetadata = computed<Record<string, string> | null>(() => {
+    const raw = this.data.destination?.connectionMetadataJson;
+    if (!raw) return null;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, string>) : null;
+    } catch {
+      return null;
+    }
+  });
 
   constructor() {
     if (this.isView) {

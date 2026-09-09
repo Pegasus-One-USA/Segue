@@ -1,4 +1,6 @@
 using System.Net;
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Infrastructure.Destinations;
 using FHIRBridge.Infrastructure.Destinations.Auth;
@@ -35,7 +37,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
         tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("minted-token");
 
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "oauth2", "cid", "csec", null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -62,7 +64,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
         tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("minted-token");
 
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "clientcredentials", "cid", "csec", null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -80,7 +82,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
             _ => (HttpStatusCode.OK, "{}"),
         });
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "oauth2", "cid", "csec", null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -99,7 +101,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
             _ => (HttpStatusCode.OK, "{}"),
         });
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "oauth2", "cid", "csec", null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -121,7 +123,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
             _ => (HttpStatusCode.NotFound, ""), // discovery would fail loudly if ever called
         });
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(
             BaseUrl, authType,
             ClientId: null, ClientSecret: null,
@@ -137,6 +139,79 @@ public sealed class FhirDestinationConnectionTestServiceTests
     }
 
     [Fact]
+    public async Task Reusing_an_existing_destination_with_a_blank_secret_resolves_the_stored_one()
+    {
+        var handler = new RoutingHandler(url => url switch
+        {
+            DiscoveryUrl => (HttpStatusCode.OK, $$"""{"token_endpoint":"{{DiscoveredTokenEndpoint}}"}"""),
+            MetadataUrl => (HttpStatusCode.OK, "{}"),
+            ProbeUrl => (HttpStatusCode.OK, ""),
+            _ => (HttpStatusCode.NotFound, ""),
+        });
+        var destinationId = Guid.NewGuid();
+        var destination = new FHIRBridge.Domain.Entities.DestinationConfiguration(
+            "Existing Aidbox", FHIRBridge.Domain.Enums.DestinationType.FhirRepository,
+            new FHIRBridge.Domain.ValueObjects.SecretReference("kv", "secret-name"), BaseUrl);
+
+        var configRepo = new Mock<IConfigurationRepository>();
+        configRepo.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(destination);
+        var secretProvider = new Mock<ISecretProvider>();
+        secretProvider.Setup(s => s.GetSecretAsync(destination.SecretReference, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("""{"clientId":"stored-cid","clientSecret":"stored-secret","tokenEndpoint":"https://aidbox.example.com/auth/token"}""");
+
+        var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
+        tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("minted-token");
+
+        var service = new FhirDestinationConnectionTestService(
+            FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(),
+            configRepo.Object, secretProvider.Object);
+        // ClientSecret left blank ("Leave blank to keep the current client secret") — DestinationId carries
+        // which saved destination's stored secret to resolve instead of failing "client secret is required".
+        var request = new FhirConnectionTestRequest(
+            BaseUrl, "oauth2", "cid", ClientSecret: null, null, null, null, DestinationId: destinationId);
+
+        var result = await service.TestConnectionAsync(request, CancellationToken.None);
+
+        result.Connected.Should().BeTrue();
+        tokenProvider.Verify(p => p.GetAccessTokenAsync(
+            It.Is<FhirDestinationOAuth2Options>(o => o.ClientSecret == "stored-secret"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        // Only ClientSecret is merged in from the stored secret (see the switch in TestConnectionAsync) — the
+        // stored blob's own tokenEndpoint is deliberately not consulted, so this still discovers fresh from
+        // BaseUrl exactly like any other oauth2 test.
+        handler.RequestedUrls.Should().Contain(DiscoveryUrl);
+    }
+
+    [Fact]
+    public async Task Reusing_an_existing_destination_with_no_stored_secret_falls_back_to_the_blank_value()
+    {
+        var handler = new RoutingHandler(url => url switch
+        {
+            DiscoveryUrl => (HttpStatusCode.OK, $$"""{"token_endpoint":"{{DiscoveredTokenEndpoint}}"}"""),
+            _ => (HttpStatusCode.OK, "{}"),
+        });
+        var destinationId = Guid.NewGuid();
+        var configRepo = new Mock<IConfigurationRepository>();
+        configRepo.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((FHIRBridge.Domain.Entities.DestinationConfiguration?)null);
+
+        var service = new FhirDestinationConnectionTestService(
+            FactoryFor(handler), Mock.Of<IFhirDestinationTokenProvider>(), Mock.Of<IAzureManagedIdentityFhirTokenProvider>(),
+            configRepo.Object, Mock.Of<ISecretProvider>());
+        var request = new FhirConnectionTestRequest(
+            BaseUrl, "oauth2", "cid", ClientSecret: null, null, null, null, DestinationId: destinationId);
+
+        var result = await service.TestConnectionAsync(request, CancellationToken.None);
+
+        // "Client secret is required" — same error as a genuinely new connection with no secret typed, since
+        // there was nothing stored to fall back to.
+        result.Connected.Should().BeFalse();
+        result.Error.Should().Contain("secret");
+    }
+
+    [Fact]
     public async Task Token_exchange_failure_after_successful_discovery_surfaces_as_a_connection_failure()
     {
         var handler = new RoutingHandler(url => url switch
@@ -148,7 +223,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
         tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("invalid_client"));
 
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "oauth2", "cid", "wrong-secret", null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -171,7 +246,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
         tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("minted-token");
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(
             BaseUrl, "clientCredentials", "cid", "csec", null, null, null,
             TenantId: "d5ae9301-08f4-4e80-b0b0-1b8a97b7687f");
@@ -201,7 +276,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
         managedIdentityProvider
             .Setup(p => p.GetAccessTokenAsync($"{BaseUrl}/.default", null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync("mi-token");
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), Mock.Of<IFhirDestinationTokenProvider>(), managedIdentityProvider.Object);
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), Mock.Of<IFhirDestinationTokenProvider>(), managedIdentityProvider.Object, Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(BaseUrl, "managedIdentity", null, null, null, null, null);
 
         var result = await service.TestConnectionAsync(request, CancellationToken.None);
@@ -229,7 +304,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
         tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("minted-token");
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(
             BaseUrl, "clientCredentials", "cid", "csec", null, null, null,
             TenantId: "d5ae9301-08f4-4e80-b0b0-1b8a97b7687f");
@@ -252,7 +327,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
         tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("minted-token");
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(
             BaseUrl, "clientCredentials", "cid", "csec", null, null, null,
             TenantId: "d5ae9301-08f4-4e80-b0b0-1b8a97b7687f");
@@ -277,7 +352,7 @@ public sealed class FhirDestinationConnectionTestServiceTests
         var tokenProvider = new Mock<IFhirDestinationTokenProvider>();
         tokenProvider.Setup(p => p.GetAccessTokenAsync(It.IsAny<FhirDestinationOAuth2Options>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("minted-token");
-        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>());
+        var service = new FhirDestinationConnectionTestService(FactoryFor(handler), tokenProvider.Object, Mock.Of<IAzureManagedIdentityFhirTokenProvider>(), Mock.Of<IConfigurationRepository>(), Mock.Of<ISecretProvider>());
         var request = new FhirConnectionTestRequest(
             BaseUrl, "clientCredentials", "cid", "csec", null, null, null,
             TenantId: "d5ae9301-08f4-4e80-b0b0-1b8a97b7687f");

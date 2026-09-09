@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { WizardDestinationFormApi } from './destination-form-api';
@@ -44,9 +44,10 @@ import { DestinationSchemaService } from '../../../../services/destination-schem
         </div>
 
         <div class="dw-field" [class.dw-field--error]="medplumForm.get('secret')!.invalid && medplumForm.get('secret')!.touched">
-          <label class="dw-label" for="dw-medplum-secret">Client secret / private key <span class="dw-req">*</span></label>
+          <label class="dw-label" for="dw-medplum-secret">Client secret / private key @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
           <input id="dw-medplum-secret" type="password" class="dw-input" formControlName="secret"
-            placeholder="client secret or PEM private key" autocomplete="new-password" />
+            [placeholder]="reusingExisting() ? 'Leave blank to keep the current client secret / private key' : 'client secret or PEM private key'"
+            autocomplete="new-password" />
           @if (medplumForm.get('secret')!.invalid && medplumForm.get('secret')!.touched) {
             <span class="dw-error">A client secret or private key is required.</span>
           }
@@ -127,6 +128,26 @@ export class MedplumDestinationFormComponent implements WizardDestinationFormApi
     batchSize: ['100', []],
     identifierSystem: ['', []],
   });
+
+  /** True while the host is reusing a previously-saved connection unchanged — secret is never repopulated when
+   *  patching from an existing connection, so requiring it here would permanently block reuse unless the user
+   *  retypes it just to satisfy validation. */
+  readonly reusingExisting = input<boolean>(false);
+  /** Not used by this form (Medplum's Test Connection has no server-side stored-secret resolution yet) — only
+   *  declared so DestinationWizardComponent.activeFormInputs() can pass it uniformly to every registry-routed
+   *  form without ComponentRef.setInput throwing on an undeclared input. */
+  readonly existingDestinationId = input<string | null>(null);
+
+  constructor() {
+    effect(() => {
+      const requireSecret = !this.reusingExisting();
+      untracked(() => {
+        const ctrl = this.medplumForm.get('secret')!;
+        ctrl.setValidators(requireSecret ? [Validators.required] : []);
+        ctrl.updateValueAndValidity({ emitEvent: false });
+      });
+    });
+  }
 
   isValid(): boolean {
     return this.medplumForm.valid;

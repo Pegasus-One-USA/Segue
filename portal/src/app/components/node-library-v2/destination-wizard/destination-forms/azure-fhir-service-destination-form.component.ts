@@ -74,9 +74,9 @@ import { WizardDestinationFormApi } from './destination-form-api';
           </div>
 
           <div class="dw-field" [class.dw-field--error]="fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched">
-            <label class="dw-label" for="dw-azfhir-clientSecret">Client secret <span class="dw-req">*</span></label>
+            <label class="dw-label" for="dw-azfhir-clientSecret">Client secret @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
             <input id="dw-azfhir-clientSecret" type="password" class="dw-input" formControlName="clientSecret"
-              placeholder="client secret" autocomplete="new-password" />
+              [placeholder]="reusingExisting() ? 'Leave blank to keep the current client secret' : 'client secret'" autocomplete="new-password" />
             @if (fhirForm.get('clientSecret')!.invalid && fhirForm.get('clientSecret')!.touched) {
               <span class="dw-error">A client secret is required.</span>
             }
@@ -142,6 +142,11 @@ export class AzureFhirServiceDestinationFormComponent implements WizardDestinati
    *  never repopulated when patching from an existing connection, so requiring it here would permanently block
    *  reuse unless the user retypes it just to satisfy validation. Mirrors BlobStorageDestinationFormComponent. */
   readonly reusingExisting = input<boolean>(false);
+  /** The already-saved destination's id when reusing it unchanged — lets Test Connection resolve the stored
+   *  secret server-side (see FhirDestinationConnectionTestService.ResolveStoredSecretAsync) instead of requiring
+   *  the client secret retyped, mirroring SqlFamilyDestinationFormComponent/MongoDestinationFormComponent/
+   *  BlobStorageDestinationFormComponent's identical existingDestinationId input. */
+  readonly existingDestinationId = input<string | null>(null);
 
   readonly fhirForm = this.fb.group({
     name: ['Azure FHIR Service', [Validators.required]],
@@ -189,21 +194,25 @@ export class AzureFhirServiceDestinationFormComponent implements WizardDestinati
     secretCtrl.updateValueAndValidity({ emitEvent: false });
   }
 
-  /** Base URL is always required to test; client credentials mode additionally needs tenant/client/secret. */
+  /** Base URL is always required to test; client credentials mode additionally needs tenant/client, plus either
+   *  a typed secret or a stored one to fall back to (reusing an existing destination unchanged — the secret is
+   *  never repopulated, so requiring it retyped here blocked Test Connection entirely; testConnection() below
+   *  passes existingDestinationId() so the backend resolves the stored one instead). */
   canTestConnection(): boolean {
     const v = this.fhirForm.value;
     if (!v.baseUrl) return false;
     if (v.authMode === 'clientCredentials') {
-      return !!(v.tenantId && v.clientId && v.clientSecret);
+      return !!(v.tenantId && v.clientId && (v.clientSecret || (this.reusingExisting() && this.existingDestinationId())));
     }
     return true;
   }
 
-  /** Tests the connection with the form's CURRENT (not-yet-saved) field values — never a stored secret, since
-   *  nothing may be persisted yet. Backed by POST /destination-schema/fhir-test
-   *  (FhirDestinationConnectionTestService), the same ad-hoc test endpoint the generic Aidbox form's
-   *  testFhirConnection() uses, extended to accept tenantId (skips SMART-configuration discovery, computing
-   *  the Entra ID token endpoint directly instead) and a managedIdentity auth type. */
+  /** Tests the connection with the form's CURRENT (not-yet-saved) field values, falling back to the stored
+   *  secret server-side when reusing an existing destination unchanged and clientSecret was left blank (see
+   *  canTestConnection()). Backed by POST /destination-schema/fhir-test (FhirDestinationConnectionTestService),
+   *  the same ad-hoc test endpoint the generic Aidbox form's testFhirConnection() uses, extended to accept
+   *  tenantId (skips SMART-configuration discovery, computing the Entra ID token endpoint directly instead) and
+   *  a managedIdentity auth type. */
   testConnection(): void {
     if (!this.canTestConnection()) return;
     const v = this.fhirForm.value;
@@ -218,6 +227,7 @@ export class AzureFhirServiceDestinationFormComponent implements WizardDestinati
         tenantId: v.authMode === 'clientCredentials' ? (v.tenantId ?? undefined) : undefined,
         scope: v.scope || undefined,
         managedIdentityClientId: v.authMode === 'managedIdentity' ? (v.managedIdentityClientId ?? undefined) : undefined,
+        destinationId: this.reusingExisting() ? (this.existingDestinationId() ?? undefined) : undefined,
       })
       .subscribe({
         next: (res) => {
@@ -270,11 +280,16 @@ export class AzureFhirServiceDestinationFormComponent implements WizardDestinati
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {
     if (!this.isValid()) return null;
     const config = this.getFullConfig();
+    // Reusing an already-saved client-credentials connection with the secret left blank means "keep what's
+    // already stored" — never bake a blank clientSecret into a rebuilt {clientId, clientSecret, tokenEndpoint}
+    // blob, which would silently overwrite the real stored secret.
+    const keepExisting =
+      this.reusingExisting() && config['dest_authType'] === 'clientCredentials' && !this.fhirForm.value.clientSecret;
     return {
       fields: JSON.parse(buildConnectionMetadata(config, 'fhir')) as Record<string, string>,
       // Managed identity never resolves a Key Vault secret — buildFhirSecretBlob returns '' for it. Client
       // credentials returns the {clientId, clientSecret, tokenEndpoint} blob FhirRepositoryAuthResolver expects.
-      secret: buildFhirSecretBlob(config),
+      secret: keepExisting ? null : buildFhirSecretBlob(config),
     };
   }
 

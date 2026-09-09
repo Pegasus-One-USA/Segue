@@ -15,7 +15,11 @@ namespace FHIRBridge.Application.DTOs;
 public sealed record MongoConnectionTestRequest(
     string ConnectionString,
     string? Collection = null,
-    bool CreateIfNotExists = false);
+    bool CreateIfNotExists = false,
+    // When re-testing an already-saved destination without retyping its connection string, ConnectionString is
+    // blank and this carries the destination's id so the test service can resolve the stored one via
+    // ISecretProvider instead.
+    Guid? DestinationId = null);
 
 /// <summary>
 /// Result of a Mongo connection test — extends the shared <see cref="ConnectionTestResultDto"/> shape with the

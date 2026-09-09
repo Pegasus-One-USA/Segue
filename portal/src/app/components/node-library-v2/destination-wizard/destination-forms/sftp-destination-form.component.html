@@ -32,7 +32,8 @@
 
     <div class="dw-field" [class.dw-field--error]="sftpForm.get('sftpPassword')!.invalid && sftpForm.get('sftpPassword')!.touched">
       <label class="dw-label" for="sd-password">Password @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
-      <input id="sd-password" type="password" class="dw-input" formControlName="sftpPassword" autocomplete="new-password" />
+      <input id="sd-password" type="password" class="dw-input" formControlName="sftpPassword" autocomplete="new-password"
+        [placeholder]="reusingExisting() ? 'Leave blank to keep the current password' : ''" />
     </div>
 
     <div class="dw-field dw-field--full" [class.dw-field--error]="sftpForm.get('sftpRemoteFolder')!.invalid && sftpForm.get('sftpRemoteFolder')!.touched">

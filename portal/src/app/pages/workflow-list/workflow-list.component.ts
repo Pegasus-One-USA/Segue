@@ -592,6 +592,13 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.copy(row.workflowId, 'Workflow ID');
   }
 
+  /** Deep-links to the Execution History screen pre-filtered to this one workflow's runs (see
+   *  ExecutionHistoryListComponent's workflowIdFilter/?workflowId= handling) — same backend param the
+   *  Dashboard's ?status= tile links already established the pattern for. */
+  onViewExecutionHistory(row: WorkflowSummary): void {
+    this.router.navigate(['/execution-history'], { queryParams: { workflowId: row.workflowId } });
+  }
+
   /** Opens the duplicate-workflow modal, pre-filling a "<name> (copy)" suggestion. Duplicating produces a
    *  brand-new workflow (+ cloned source/destination rows) — create semantics, same as the backend's own
    *  POST /workflows/{id}/copy gate. */

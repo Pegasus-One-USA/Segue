@@ -10,9 +10,10 @@
     </div>
 
     <div class="dw-field dw-field--full" [class.dw-field--error]="mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched">
-      <label class="dw-label" for="mf-conn">Connection string <span class="dw-req">*</span></label>
+      <label class="dw-label" for="mf-conn">Connection string @if (!reusingExisting()) { <span class="dw-req">*</span> }</label>
       <input id="mf-conn" type="password" class="dw-input" formControlName="connectionString"
-        placeholder="mongodb://user:pass@host:27017/dbname?authSource=admin" autocomplete="new-password" />
+        [placeholder]="reusingExisting() ? 'Leave blank to keep the current connection string' : 'mongodb://user:pass@host:27017/dbname?authSource=admin'"
+        autocomplete="new-password" />
       @if (mongoForm.get('connectionString')!.invalid && mongoForm.get('connectionString')!.touched) {
         <span class="dw-error">Connection string is required.</span>
       }

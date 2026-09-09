@@ -58,15 +58,21 @@
             <label class="eaf-label" for="eaf-existingConnection">Existing {{ displayVendor() }} Connection</label>
             <div class="eaf-existing-connection-row">
               <div class="eaf-select-wrap">
+                <!-- existingConnections() loads async — on reopen, selectedExistingId() is already restored
+                     but no matching <option> exists yet. A [value] binding on the <select> itself doesn't work
+                     around this (see destination-wizard.component.html's identical fix for the full reasoning):
+                     Angular updates a host element's own bindings BEFORE processing its child content, so
+                     [value] still finds nothing to select even once existingConnections() loads, in the same
+                     change-detection pass that inserts the matching <option>. [selected] per <option> instead
+                     is evaluated as part of that option's own creation — no ordering race. -->
                 <select id="eaf-existingConnection" class="eaf-select"
                         [disabled]="loadingExisting()"
-                        [value]="selectedExistingId() ?? ''"
                         (change)="onExistingConnectionSelected($any($event.target).value)">
-                  <option value="" disabled>
+                  <option value="" disabled [selected]="!selectedExistingId()">
                     {{ loadingExisting() ? 'Loading…' : '— Select a connection —' }}
                   </option>
                   @for (conn of existingConnections(); track conn.id) {
-                    <option [value]="conn.id">{{ existingConnectionLabel(conn) }}</option>
+                    <option [value]="conn.id" [selected]="conn.id === selectedExistingId()">{{ existingConnectionLabel(conn) }}</option>
                   }
                 </select>
               </div>
@@ -309,9 +315,10 @@
 
           @if (showSecret()) {
             <div class="eaf-field eaf-field--full" [class.eaf-field--error]="form.controls.clientSecret.touched && form.controls.clientSecret.invalid">
-              <label class="eaf-label" for="eaf-clientSecret">Client Secret <span class="eaf-req">*</span></label>
+              <label class="eaf-label" for="eaf-clientSecret">Client Secret @if (!reusingExistingSecret()) {<span class="eaf-req">*</span>}</label>
               <input id="eaf-clientSecret" class="eaf-input" type="password" formControlName="clientSecret"
-                     placeholder="Stored securely — never logged" autocomplete="new-password" />
+                     [placeholder]="reusingExistingSecret() ? 'Leave blank to keep the current client secret' : 'Stored securely — never logged'"
+                     autocomplete="new-password" />
               @if (form.controls.clientSecret.touched && form.controls.clientSecret.invalid) {
                 <p class="eaf-error-msg">Client Secret is required.</p>
               }

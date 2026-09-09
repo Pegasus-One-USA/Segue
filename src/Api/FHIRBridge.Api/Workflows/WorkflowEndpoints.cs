@@ -1563,6 +1563,11 @@ public static class WorkflowEndpoints
         // "Run" and interactive (EHR launch / standalone) launches, as opposed to the Configured Pipeline's
         // separate route-execution history under /api/v1/pipeline-runs/route-executions.
         group.MapGet("/workflow-runs", async (
+            // Set when the Workflows list's "Execution History" row action deep-links here — narrows to one
+            // workflow's runs before anything else (including the Source filter's own option list below), so
+            // browsing that filter afterward only ever offers sources relevant to THIS workflow, not every
+            // source across every workflow.
+            Guid? workflowId,
             string? status,
             string? source,
             // Multi-select Source filter (repeated ?sources=), matching the Workflows list. `source` above stays for
@@ -1613,8 +1618,14 @@ public static class WorkflowEndpoints
                     run.ErrorReferenceId));
             }
 
-            // Computed before any filter is applied, so the Source filter's options are "vendors that have actually
-            // run" rather than every EHR the platform supports — and don't vanish as the user narrows the list.
+            if (workflowId is { } wfId)
+            {
+                items = items.Where(x => x.WorkflowDefinitionId == wfId).ToList();
+            }
+
+            // Computed before any OTHER filter is applied, so the Source filter's options are "vendors that have
+            // actually run" (within whatever workflowId already narrowed it to above) rather than every EHR the
+            // platform supports — and don't vanish as the user narrows the list further.
             var availableSourceSystemTypes = items
                 .Select(x => x.SourceSystemType)
                 .OfType<string>()

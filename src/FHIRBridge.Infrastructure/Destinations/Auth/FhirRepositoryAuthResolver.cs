@@ -81,7 +81,9 @@ internal static class FhirRepositoryAuthResolver
         };
     }
 
-    private sealed class FhirRepositoryAuthSecret
+    // Internal (not private) so FhirDestinationConnectionTestService can reuse the exact same secret-blob shape
+    // when re-testing an already-saved destination via DestinationId, instead of duplicating this parsing logic.
+    internal sealed class FhirRepositoryAuthSecret
     {
         [JsonPropertyName("token")]
         public string? Token { get; init; }

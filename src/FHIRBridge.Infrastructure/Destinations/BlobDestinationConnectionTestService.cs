@@ -2,7 +2,10 @@ using Azure.Identity;
 using Azure.Storage;
 using Azure.Storage.Blobs;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.SharedKernel.Exceptions;
 
 namespace FHIRBridge.Infrastructure.Destinations;
 
@@ -19,6 +22,16 @@ public sealed class BlobDestinationConnectionTestService : IBlobDestinationConne
 {
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(12);
 
+    private readonly IConfigurationRepository _configurationRepository;
+    private readonly ISecretProvider _secretProvider;
+
+    public BlobDestinationConnectionTestService(
+        IConfigurationRepository configurationRepository, ISecretProvider secretProvider)
+    {
+        _configurationRepository = configurationRepository;
+        _secretProvider = secretProvider;
+    }
+
     public async Task<ConnectionTestResultDto> TestConnectionAsync(
         BlobConnectionTestRequest request,
         CancellationToken cancellationToken)
@@ -26,6 +39,17 @@ public sealed class BlobDestinationConnectionTestService : IBlobDestinationConne
         if (string.IsNullOrWhiteSpace(request.Container))
         {
             return new ConnectionTestResultDto(false, "Container name is required.");
+        }
+
+        // Re-testing an already-saved destination: the form never re-displays the stored secret, so a blank
+        // Secret here means "use what's already saved", not "no secret" — resolve it from the vault instead.
+        if (string.IsNullOrWhiteSpace(request.Secret) && request.DestinationId is { } destinationId)
+        {
+            var storedSecret = await ResolveStoredSecretAsync(destinationId, cancellationToken);
+            if (storedSecret is not null)
+            {
+                request = request with { Secret = storedSecret };
+            }
         }
 
         BlobContainerClient container;
@@ -132,6 +156,24 @@ public sealed class BlobDestinationConnectionTestService : IBlobDestinationConne
         if (string.IsNullOrWhiteSpace(secret))
         {
             throw new InvalidOperationException(message);
+        }
+    }
+
+    private async Task<string?> ResolveStoredSecretAsync(Guid destinationId, CancellationToken cancellationToken)
+    {
+        var destination = await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+        if (destination is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
+        }
+        catch (SecretNotConfiguredException)
+        {
+            return null;
         }
     }
 }

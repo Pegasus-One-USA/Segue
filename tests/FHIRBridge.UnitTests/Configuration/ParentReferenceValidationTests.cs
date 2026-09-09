@@ -43,6 +43,9 @@ public sealed class ParentReferenceValidationTests
         _sut = new ConfigurationService(
             _repository, _capabilityRepository, _discovery.Object,
             Mock.Of<ISecretWriter>(),
+            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretProvider>(),
+            Mock.Of<FHIRBridge.Application.Abstractions.Destinations.ISqlConnectionSecretMerger>(),
+            new FHIRBridge.UnitTests.Security.PassthroughTenantSecretVaultResolver(),
             _resolver.Object,
             new CreateMappingProfileRequestValidator(
                 new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService(),

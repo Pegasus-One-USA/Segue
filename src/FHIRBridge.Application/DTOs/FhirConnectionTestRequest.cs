@@ -23,4 +23,9 @@ public sealed record FhirConnectionTestRequest(
     string? TenantId = null,
     string? Scope = null,
     string? ManagedIdentityClientId = null,
-    string? AuthorityHost = null);
+    string? AuthorityHost = null,
+    // When re-testing an already-saved destination without retyping its secret (ClientSecret/Password/
+    // BearerToken left blank), carries the destination's id so the test service can resolve the stored one via
+    // ISecretProvider instead — mirrors MongoConnectionTestRequest.DestinationId/BlobConnectionTestRequest.
+    // DestinationId.
+    Guid? DestinationId = null);

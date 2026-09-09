@@ -17,6 +17,13 @@ using Serilog;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+// Pulls ConnectionStrings/messaging-broker secrets from Azure Key Vault when KeyVault:UseAzureKeyVault is set
+// — as early as possible, since ConnectionStrings:FHIRBridgeDb itself is one of them and the Worker needs it
+// to set up Data Protection/EF below. Mirrors FHIRBridge.Api/Program.cs exactly — see
+// KeyVaultConfigurationExtensions' remarks for what this does and doesn't cover, and its graceful-on-failure
+// behavior.
+builder.Configuration.AddFhirBridgeKeyVaultConfiguration();
+
 // No-ops unless actually launched by that OS's service manager — lets the same published output
 // run as a systemd service on Linux or a Windows Service, with `dotnet run` unaffected.
 builder.Services.AddWindowsService(options => options.ServiceName = "FHIRBridge.Worker");
@@ -61,6 +68,15 @@ if (!string.IsNullOrWhiteSpace(workerDataProtectionCertPath) && !builder.Environ
         : System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(
             workerDataProtectionCertPath, workerDataProtectionCertPassword);
     workerDataProtection.ProtectKeysWithCertificate(workerDataProtectionCert);
+}
+
+// Alternative to the certificate above — mirrors the Api host exactly (see its Program.cs comment). Off by
+// default; set DataProtection:KeyVaultKeyId to enable.
+var workerDataProtectionKeyVaultKeyId = builder.Configuration["DataProtection:KeyVaultKeyId"];
+if (!string.IsNullOrWhiteSpace(workerDataProtectionKeyVaultKeyId))
+{
+    workerDataProtection.ProtectKeysWithAzureKeyVault(
+        new Uri(workerDataProtectionKeyVaultKeyId), new Azure.Identity.DefaultAzureCredential());
 }
 
 // Same reasoning as the Api host — see its Program.cs comment. AddAspNetCoreInstrumentation() is a no-op here

@@ -39,6 +39,9 @@ public sealed class DestinationExecutionHistoryGateTests
             Mock.Of<ISourceCapabilityRepository>(),
             Mock.Of<ISourceCapabilityDiscoveryService>(),
             Mock.Of<ISecretWriter>(),
+            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretProvider>(),
+            Mock.Of<FHIRBridge.Application.Abstractions.Destinations.ISqlConnectionSecretMerger>(),
+            new FHIRBridge.UnitTests.Security.PassthroughTenantSecretVaultResolver(),
             Mock.Of<IParentReferenceResolver>(),
             new CreateMappingProfileRequestValidator(
                 new FHIRBridge.UnitTests.Validation.NoOpDestinationSchemaService(),

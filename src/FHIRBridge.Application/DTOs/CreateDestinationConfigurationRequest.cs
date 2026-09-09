@@ -17,4 +17,10 @@ public sealed record CreateDestinationConfigurationRequest(
     // is already saved (ConfigurationService.UpdateDestinationConfigurationAsync only overwrites when non-null).
     string? ConnectionMetadataJson = null,
     // Which DeIdentificationProfile applies to this destination — null means no de-identification.
-    Guid? DeIdentificationProfileId = null);
+    Guid? DeIdentificationProfileId = null,
+    // Set when this request is forking a brand-new connection off an existing one the user picked but then
+    // edited (the workflow wizard never mutates a shared connection in place) — lets
+    // ConfigurationService.AddDestinationConfigurationAsync resolve this destination's own already-stored
+    // secret and inherit its credentials into InlineSecret when the latter is missing them (e.g. the user only
+    // toggled "Require SSL" and never intended to change the password). See ISqlConnectionSecretMerger.
+    Guid? InheritSecretFromDestinationId = null);

@@ -43,10 +43,25 @@ export class DestinationConnectionFormComponent {
   /** dest_* keyed config bag to pre-populate the loaded form with, if any (see patchFrom on each
    *  destination-forms/ component, or _populateFhirFromConfig below for the FHIR special case). */
   readonly initialConfig = input<Record<string, string> | null>(null);
+  /** The already-saved destination's id in edit mode — lets a registry form's own Test Connection resolve the
+   *  stored secret server-side instead of requiring it retyped (see e.g. SqlFamilyDestinationFormComponent). */
+  readonly existingDestinationId = input<string | null>(null);
 
   readonly isFhir = computed(() => this.destType() === 'FhirRepository');
   readonly isReadOnly = computed(() => this.mode() === 'view');
   readonly formType = computed<Type<DestinationConfigFormComponent> | null>(() => DESTINATION_FORM_REGISTRY[this.destType()] ?? null);
+  /** True whenever this host is editing an already-saved destination — every registry form's secret field is
+   *  never repopulated by patchFrom() (secrets never come back from the API), so requiring it here would
+   *  permanently block "Replace connection secret" unless the user retypes it just to satisfy validation.
+   *  Unlike the workflow canvas's reusingExisting (which also tracks a live "has the user forked this by
+   *  editing it" diff), this host has no such fork concept — mode()==='edit' alone is the whole signal. */
+  readonly reusingExisting = computed(() => this.mode() === 'edit');
+  /** Every registry-routed form now declares both `reusingExisting` and `existingDestinationId` — see the
+   *  matching activeFormInputs() on DestinationWizardComponent for the identical contract. */
+  readonly formOutletInputs = computed(() => ({
+    reusingExisting: this.reusingExisting(),
+    existingDestinationId: this.existingDestinationId(),
+  }));
 
   // Field-for-field identical to DestinationWizardComponent's own fhirForm — duplicated rather than shared
   // so the already-shipped, live-verified canvas wizard is never touched (see this component's header comment).
@@ -172,9 +187,20 @@ export class DestinationConnectionFormComponent {
     if (this.isFhir()) {
       if (!this.fhirForm.valid) return null;
       const config = this._buildFhirConfig();
+      // Reusing an already-saved connection with its auth secret left blank means "keep what's already
+      // stored" — never bake a blank clientSecret/password/bearerToken into a rebuilt secret blob, which
+      // would silently overwrite the real stored secret. Each auth type's own secret-bearing field is
+      // checked, not all three, since only one is ever populated/required at a time.
+      const v = this.fhirForm.value;
+      const secretFieldBlank =
+        v.authType === 'oauth2' ? !v.clientSecret :
+        v.authType === 'basic' ? !v.password :
+        v.authType === 'bearer' ? !v.bearerToken :
+        true;
+      const keepExisting = this.reusingExisting() && secretFieldBlank;
       return {
         fields: JSON.parse(buildConnectionMetadata(config, 'fhir')) as Record<string, string>,
-        secret: buildFhirSecretBlob(config),
+        secret: keepExisting ? null : buildFhirSecretBlob(config),
       };
     }
     return this.activeForm()?.getMetadata() ?? null;
@@ -268,19 +294,24 @@ export class DestinationConnectionFormComponent {
   }
 
   private _syncFhirAuthValidators(authType: string | null): void {
+    const reusingExisting = this.reusingExisting();
     // tokenEndpoint is deliberately NOT in this list — see _testFhir()'s comment.
-    (['clientId', 'clientSecret'] as const).forEach(name => {
-      const ctrl = this.fhirForm.get(name)!;
-      ctrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
-      ctrl.updateValueAndValidity({ emitEvent: false });
-    });
-    (['username', 'password'] as const).forEach(name => {
-      const ctrl = this.fhirForm.get(name)!;
-      ctrl.setValidators(authType === 'basic' ? [Validators.required] : []);
-      ctrl.updateValueAndValidity({ emitEvent: false });
-    });
+    const clientCtrl = this.fhirForm.get('clientId')!;
+    clientCtrl.setValidators(authType === 'oauth2' ? [Validators.required] : []);
+    clientCtrl.updateValueAndValidity({ emitEvent: false });
+    const clientSecretCtrl = this.fhirForm.get('clientSecret')!;
+    clientSecretCtrl.setValidators(authType === 'oauth2' && !reusingExisting ? [Validators.required] : []);
+    clientSecretCtrl.updateValueAndValidity({ emitEvent: false });
+
+    const usernameCtrl = this.fhirForm.get('username')!;
+    usernameCtrl.setValidators(authType === 'basic' ? [Validators.required] : []);
+    usernameCtrl.updateValueAndValidity({ emitEvent: false });
+    const passwordCtrl = this.fhirForm.get('password')!;
+    passwordCtrl.setValidators(authType === 'basic' && !reusingExisting ? [Validators.required] : []);
+    passwordCtrl.updateValueAndValidity({ emitEvent: false });
+
     const bearerToken = this.fhirForm.get('bearerToken')!;
-    bearerToken.setValidators(authType === 'bearer' ? [Validators.required] : []);
+    bearerToken.setValidators(authType === 'bearer' && !reusingExisting ? [Validators.required] : []);
     bearerToken.updateValueAndValidity({ emitEvent: false });
   }
 }

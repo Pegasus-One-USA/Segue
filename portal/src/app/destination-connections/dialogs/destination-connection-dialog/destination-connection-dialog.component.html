@@ -86,10 +86,12 @@
       </label>
       @if (replaceSecret()) {
         <p class="dcd-hint">
-          Enter the full connection details below — they'll replace the existing secret. Leaving this
-          collapsed keeps the current connection secret unchanged.
+          The connection details below are pre-filled from what's saved — edit whatever you need. Leave the
+          secret field (password / connection string / client secret) blank to keep it unchanged, or type a
+          new one to replace it. Leaving this section collapsed entirely also keeps the current secret unchanged.
         </p>
-        <app-destination-connection-form [destType]="formDestinationType()!" mode="edit" />
+        <app-destination-connection-form [destType]="formDestinationType()!" mode="edit"
+          [initialConfig]="existingConnectionMetadata()" [existingDestinationId]="data.destination!.id" />
       }
     }
   }

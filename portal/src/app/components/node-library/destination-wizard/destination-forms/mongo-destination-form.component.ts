@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { WizardDestinationFormApi } from './destination-form-api';
@@ -44,14 +44,34 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     createIfNotExists: [false, []],
   });
 
+  /** True while the host is reusing a previously-saved connection unchanged — connectionString is a secret that
+   *  is never repopulated when patching from an existing connection, so requiring it here would permanently
+   *  block reuse unless the user retypes it just to satisfy validation. */
+  readonly reusingExisting = input<boolean>(false);
+  /** The already-saved destination's id when reusing it unchanged — lets Test Connection resolve the stored
+   *  connection string server-side instead of requiring it retyped (see DestinationSchemaService.testMongo). */
+  readonly existingDestinationId = input<string | null>(null);
+
+  constructor() {
+    effect(() => {
+      const requireConnectionString = !this.reusingExisting();
+      untracked(() => {
+        const ctrl = this.mongoForm.get('connectionString')!;
+        ctrl.setValidators(requireConnectionString ? [Validators.required] : []);
+        ctrl.updateValueAndValidity({ emitEvent: false });
+      });
+    });
+  }
+
   isValid(): boolean {
     return this.mongoForm.valid;
   }
 
   /** The probe only needs the connection string (which embeds host/db/credentials); the other required fields
-   *  (name, collection) aren't part of the connectivity check. */
+   *  (name, collection) aren't part of the connectivity check. Reusing an already-saved connection can test via
+   *  its stored connection string instead, once a destinationId is known. */
   canTest(): boolean {
-    return !!this.mongoForm.value.connectionString;
+    return !!this.mongoForm.value.connectionString || (this.reusingExisting() && !!this.existingDestinationId());
   }
 
   /** Live connectivity + collection-existence check before saving: opens a Mongo client on the entered
@@ -69,6 +89,7 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
         connectionString: v.connectionString ?? '',
         collection: v.collection || undefined,
         createIfNotExists: v.createIfNotExists ?? false,
+        destinationId: this.existingDestinationId() ?? undefined,
       })
       .subscribe({
         next: res => {

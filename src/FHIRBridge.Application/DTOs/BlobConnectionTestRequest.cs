@@ -17,4 +17,7 @@ public sealed record BlobConnectionTestRequest(
     string? EndpointSuffix,
     string? TenantId,
     string? ClientId,
-    string? ManagedIdentityClientId);
+    string? ManagedIdentityClientId,
+    // When re-testing an already-saved destination without retyping its secret, Secret is blank and this carries
+    // the destination's id so the test service can resolve its stored secret via ISecretProvider instead.
+    Guid? DestinationId = null);
