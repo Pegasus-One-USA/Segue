@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -8,6 +9,7 @@ using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.SharedKernel.Exceptions;
 using FluentAssertions;
 using Moq;
 
@@ -24,6 +26,8 @@ public sealed class DestinationSecretPreservationTests
 {
     private readonly Mock<IConfigurationRepository> _repository = new();
     private readonly Mock<ISecretWriter> _secretWriter = new();
+    private readonly Mock<ISecretProvider> _secretProvider = new();
+    private readonly Mock<ISqlConnectionSecretMerger> _secretMerger = new();
     private readonly ConfigurationService _sut;
     private readonly DestinationConfiguration _destination = new(
         "Warehouse", DestinationType.SqlServer, new SecretReference("kv", "warehouse-secret"), "dbo.Patients");
@@ -40,6 +44,8 @@ public sealed class DestinationSecretPreservationTests
             Mock.Of<ISourceCapabilityRepository>(),
             Mock.Of<ISourceCapabilityDiscoveryService>(),
             _secretWriter.Object,
+            _secretProvider.Object,
+            _secretMerger.Object,
             new FHIRBridge.UnitTests.Security.PassthroughTenantSecretVaultResolver(),
             Mock.Of<IParentReferenceResolver>(),
             new CreateMappingProfileRequestValidator(
@@ -103,5 +109,89 @@ public sealed class DestinationSecretPreservationTests
                 "Server=x;Password=y;",
                 It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    // ── inherit credentials when forking off an existing SQL connection ─────────────────────────────
+
+    [Fact]
+    public async Task Add_with_InheritSecretFromDestinationId_writes_the_merger_s_output_not_the_blank_password_one()
+    {
+        _secretProvider.Setup(x => x.GetSecretAsync(_destination.SecretReference, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Server=old;User Id=admin;Password=hunter2;");
+        _secretMerger
+            .Setup(x => x.TryInheritCredentials(
+                DestinationType.PostgreSql, "Server=old;User Id=admin;Password=hunter2;", "Host=new;SSL Mode=Require;Password=;"))
+            .Returns("Host=new;SSL Mode=Require;Password=hunter2;");
+
+        var request = new CreateDestinationConfigurationRequest(
+            "Warehouse-1", DestinationType.PostgreSql, "kv", "warehouse-1-secret", "dbo.Patients",
+            InlineSecret: "Host=new;SSL Mode=Require;Password=;",
+            InheritSecretFromDestinationId: _destination.Id);
+
+        await _sut.AddDestinationConfigurationAsync(request, CancellationToken.None);
+
+        _secretWriter.Verify(
+            x => x.WriteSecretAsync(
+                It.IsAny<SecretReference>(), "Host=new;SSL Mode=Require;Password=hunter2;", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Add_with_InheritSecretFromDestinationId_falls_back_to_the_original_secret_when_the_merger_finds_nothing_to_inherit()
+    {
+        _secretProvider.Setup(x => x.GetSecretAsync(_destination.SecretReference, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Server=old;Password=hunter2;");
+        _secretMerger
+            .Setup(x => x.TryInheritCredentials(It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns((string?)null);
+
+        var request = new CreateDestinationConfigurationRequest(
+            "Warehouse-1", DestinationType.SqlServer, "kv", "warehouse-1-secret", "dbo.Patients",
+            InlineSecret: "Server=new;Password=typed-by-user;",
+            InheritSecretFromDestinationId: _destination.Id);
+
+        await _sut.AddDestinationConfigurationAsync(request, CancellationToken.None);
+
+        _secretWriter.Verify(
+            x => x.WriteSecretAsync(
+                It.IsAny<SecretReference>(), "Server=new;Password=typed-by-user;", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Add_with_InheritSecretFromDestinationId_falls_back_gracefully_when_the_old_secret_was_never_configured()
+    {
+        _secretProvider.Setup(x => x.GetSecretAsync(_destination.SecretReference, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new SecretNotConfiguredException("warehouse-secret", "kv"));
+
+        var request = new CreateDestinationConfigurationRequest(
+            "Warehouse-1", DestinationType.PostgreSql, "kv", "warehouse-1-secret", "dbo.Patients",
+            InlineSecret: "Host=new;Password=;",
+            InheritSecretFromDestinationId: _destination.Id);
+
+        await _sut.AddDestinationConfigurationAsync(request, CancellationToken.None);
+
+        _secretMerger.Verify(
+            x => x.TryInheritCredentials(It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+        _secretWriter.Verify(
+            x => x.WriteSecretAsync(It.IsAny<SecretReference>(), "Host=new;Password=;", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Add_without_InheritSecretFromDestinationId_never_touches_the_merger()
+    {
+        var request = new CreateDestinationConfigurationRequest(
+            "New Destination", DestinationType.PostgreSql, "kv", "new-secret", "dbo.Orders",
+            InlineSecret: "Host=x;Password=y;");
+
+        await _sut.AddDestinationConfigurationAsync(request, CancellationToken.None);
+
+        _secretMerger.Verify(
+            x => x.TryInheritCredentials(It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+        _secretProvider.Verify(
+            x => x.GetSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

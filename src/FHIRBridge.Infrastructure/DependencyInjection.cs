@@ -452,6 +452,7 @@ public static class DependencyInjection
         services.Configure<GeneratedFileDownloadOptions>(configuration.GetSection("GeneratedFileDownload"));
         services.AddSingleton<IGeneratedFileDownloadLinkService, GeneratedFileDownloadLinkService>();
         services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
+        services.AddSingleton<ISqlConnectionSecretMerger, Destinations.SqlConnectionSecretMerger>();
         services.AddScoped<ICsvDestinationConnectionTestService, SftpDestinationConnectionTestService>();
         services.AddHttpClient(nameof(Destinations.FhirDestinationConnectionTestService));
         services.AddScoped<IFhirDestinationConnectionTestService>(sp =>

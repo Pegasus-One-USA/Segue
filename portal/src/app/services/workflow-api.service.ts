@@ -195,6 +195,10 @@ export interface CreateDestinationConfigurationRequest {
   target?: string | null;
   inlineSecret?: string | null;               // raw connstr / sftp:// URI — provisioned encrypted server-side
   connectionMetadataJson?: string | null;     // non-secret dest_* fields, JSON — lets a later "existing" pick repopulate
+  // Set when forking a brand-new connection off an existing one the user picked but then edited — lets the
+  // backend resolve that destination's own stored secret and inherit its credentials into inlineSecret when
+  // the latter is missing them (e.g. only "Require SSL" changed, never the password). SQL-family only.
+  inheritSecretFromDestinationId?: string | null;
 }
 
 export interface MappingFieldRequest {

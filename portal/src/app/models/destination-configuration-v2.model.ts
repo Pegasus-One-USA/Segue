@@ -61,6 +61,12 @@ export interface CreateDestinationConfigurationRequest {
   inlineSecret?: string | null;
   connectionMetadataJson?: string | null;
   deIdentificationProfileId?: string | null;
+  /** Set when this request forks a brand-new connection off an existing one the user picked but then edited
+   *  (the wizard never mutates a shared connection in place) — lets the backend resolve THIS destination's own
+   *  already-stored secret and inherit its credentials into inlineSecret when the latter is missing them (e.g.
+   *  the user only toggled "Require SSL" and never intended to change the password). SQL-family destinations
+   *  only; ignored for every other type. */
+  inheritSecretFromDestinationId?: string | null;
 }
 
 export interface DeIdentificationProfileDto {

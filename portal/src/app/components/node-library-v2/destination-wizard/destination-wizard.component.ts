@@ -4935,6 +4935,13 @@ export class DestinationWizardComponent implements OnInit {
         config['dest_name'] = nameWasEdited
           ? this._resolveUniqueName(currentName, false)
           : this._resolveUniqueName(selected.name, true);
+        // Forking off a picked connection never re-populates its secret field(s) (secrets don't come back
+        // from the API), so whatever gets built at workflow-build time is missing credentials unless the
+        // user retyped them — even when the edit was e.g. only "Require SSL", nothing credential-related.
+        // Carries the id being forked from through to WorkflowBuildAssemblerService(V2).buildDestination()
+        // so the backend can inherit the old connection's stored credentials instead of forcing a retype
+        // (see ISqlConnectionSecretMerger — SQL-family destinations only, a no-op for every other type).
+        config['dest_inheritSecretFromDestinationId'] = selected.id;
       }
     } else if (
       this.connectionMode() === 'new' &&

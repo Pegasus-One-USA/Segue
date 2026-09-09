@@ -30,6 +30,8 @@ public sealed class CompositeRouteTests
         _sut = new ConfigurationService(
             _repository, _capabilityRepository, _discovery.Object,
             Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>(),
+            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretProvider>(),
+            Mock.Of<FHIRBridge.Application.Abstractions.Destinations.ISqlConnectionSecretMerger>(),
             new FHIRBridge.UnitTests.Security.PassthroughTenantSecretVaultResolver(),
             Mock.Of<IParentReferenceResolver>(),
             new CreateMappingProfileRequestValidator(

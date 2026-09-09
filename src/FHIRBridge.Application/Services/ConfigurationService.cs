@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -27,6 +28,8 @@ public sealed class ConfigurationService : IConfigurationService
     private readonly ISourceCapabilityRepository _capabilityRepository;
     private readonly ISourceCapabilityDiscoveryService _capabilityDiscoveryService;
     private readonly ISecretWriter _secretWriter;
+    private readonly ISecretProvider _secretProvider;
+    private readonly ISqlConnectionSecretMerger _sqlConnectionSecretMerger;
     private readonly ITenantSecretVaultResolver _tenantSecretVaultResolver;
     private readonly IParentReferenceResolver _parentReferenceResolver;
     private readonly IValidator<CreateMappingProfileRequest> _mappingProfileValidator;
@@ -39,6 +42,8 @@ public sealed class ConfigurationService : IConfigurationService
         ISourceCapabilityRepository capabilityRepository,
         ISourceCapabilityDiscoveryService capabilityDiscoveryService,
         ISecretWriter secretWriter,
+        ISecretProvider secretProvider,
+        ISqlConnectionSecretMerger sqlConnectionSecretMerger,
         ITenantSecretVaultResolver tenantSecretVaultResolver,
         IParentReferenceResolver parentReferenceResolver,
         IValidator<CreateMappingProfileRequest> mappingProfileValidator,
@@ -50,6 +55,8 @@ public sealed class ConfigurationService : IConfigurationService
         _capabilityRepository = capabilityRepository;
         _capabilityDiscoveryService = capabilityDiscoveryService;
         _secretWriter = secretWriter;
+        _secretProvider = secretProvider;
+        _sqlConnectionSecretMerger = sqlConnectionSecretMerger;
         _tenantSecretVaultResolver = tenantSecretVaultResolver;
         _parentReferenceResolver = parentReferenceResolver;
         _mappingProfileValidator = mappingProfileValidator;
@@ -398,12 +405,14 @@ public sealed class ConfigurationService : IConfigurationService
     {
         await ValidateRequestAsync(_destinationConfigurationValidator, request, cancellationToken);
 
+        var inlineSecret = await ResolveInlineSecretAsync(request, cancellationToken);
+
         var secretReference = new SecretReference(request.KeyVaultName, request.SecretName);
-        if (!string.IsNullOrWhiteSpace(request.InlineSecret))
+        if (!string.IsNullOrWhiteSpace(inlineSecret))
         {
             secretReference = new SecretReference(
                 _tenantSecretVaultResolver.ResolveVaultName(request.KeyVaultName), request.SecretName);
-            await _secretWriter.WriteSecretAsync(secretReference, request.InlineSecret!, cancellationToken);
+            await _secretWriter.WriteSecretAsync(secretReference, inlineSecret!, cancellationToken);
         }
 
         var destinationConfiguration = new DestinationConfiguration(
@@ -417,6 +426,43 @@ public sealed class ConfigurationService : IConfigurationService
         await _repository.AddDestinationAsync(destinationConfiguration, cancellationToken);
 
         return ConfigurationMapper.ToDto(destinationConfiguration);
+    }
+
+    /// <summary>
+    /// When this create request is forking a new connection off an existing one the user edited
+    /// (<see cref="CreateDestinationConfigurationRequest.InheritSecretFromDestinationId"/> set) and the freshly
+    /// built <see cref="CreateDestinationConfigurationRequest.InlineSecret"/> is missing credentials (the
+    /// wizard never re-populates a secret field from the API), resolves the connection being forked from and
+    /// splices its stored credentials in via <see cref="ISqlConnectionSecretMerger"/> — so a fork triggered by
+    /// an unrelated field (e.g. "Require SSL") doesn't force the user to retype a password they never meant to
+    /// change. Falls back to <c>request.InlineSecret</c> unchanged (today's behavior) whenever there's nothing
+    /// to inherit from, the old destination/secret can't be resolved, or the merger finds nothing to do.
+    /// </summary>
+    private async Task<string?> ResolveInlineSecretAsync(
+        CreateDestinationConfigurationRequest request, CancellationToken cancellationToken)
+    {
+        if (request.InheritSecretFromDestinationId is not { } inheritFromId
+            || string.IsNullOrWhiteSpace(request.InlineSecret))
+        {
+            return request.InlineSecret;
+        }
+
+        var source = await _repository.GetDestinationAsync(inheritFromId, cancellationToken);
+        if (source is null) return request.InlineSecret;
+
+        string existingSecret;
+        try
+        {
+            existingSecret = await _secretProvider.GetSecretAsync(source.SecretReference, cancellationToken);
+        }
+        catch (SecretNotConfiguredException)
+        {
+            return request.InlineSecret;
+        }
+
+        var merged = _sqlConnectionSecretMerger.TryInheritCredentials(
+            request.DestinationType, existingSecret, request.InlineSecret!);
+        return merged ?? request.InlineSecret;
     }
 
     public async Task<PagedResult<DestinationConfigurationDto>> GetDestinationConfigurationsPagedAsync(

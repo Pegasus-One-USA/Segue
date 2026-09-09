@@ -31,6 +31,8 @@ public sealed class SourceConfigurationAutoProvisionTests
             new InMemorySourceCapabilityRepository(),
             Mock.Of<ISourceCapabilityDiscoveryService>(),
             Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretWriter>(),
+            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretProvider>(),
+            Mock.Of<FHIRBridge.Application.Abstractions.Destinations.ISqlConnectionSecretMerger>(),
             new FHIRBridge.UnitTests.Security.PassthroughTenantSecretVaultResolver(),
             Mock.Of<IParentReferenceResolver>(),
             new CreateMappingProfileRequestValidator(

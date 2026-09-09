@@ -33,6 +33,8 @@ public sealed class ConfigurationServiceMappingProfileLookupTests
             new InMemorySourceCapabilityRepository(),
             Mock.Of<ISourceCapabilityDiscoveryService>(),
             Mock.Of<ISecretWriter>(),
+            Mock.Of<FHIRBridge.Application.Abstractions.Security.ISecretProvider>(),
+            Mock.Of<FHIRBridge.Application.Abstractions.Destinations.ISqlConnectionSecretMerger>(),
             new FHIRBridge.UnitTests.Security.PassthroughTenantSecretVaultResolver(),
             Mock.Of<IParentReferenceResolver>(),
             new CreateMappingProfileRequestValidator(
