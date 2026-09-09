@@ -18,19 +18,45 @@
         />
       </div>
 
-      <!-- Source filter -->
-      <div class="select-wrap">
-        <div class="select-box">
-          <select [value]="sourceFilter()" (change)="onSource($any($event.target).value)">
-            <option value="">All Sources</option>
-            @for (opt of sourceOptions; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
-          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Source filter — multi-select over the vendors that actually have runs, same control the Workflows
+           list uses. Options come from the server's facet list, not a hardcoded roster of every EHR. -->
+      <div class="filter-dropdown">
+        <button
+          type="button"
+          class="filter-dropdown-btn"
+          [class.filter-dropdown-btn--active]="selectedSources().size > 0"
+          (click)="toggleSourceMenu()"
+        >
+          Source
+          @if (selectedSources().size > 0) {
+            <span class="filter-count-badge">{{ selectedSources().size }}</span>
+          }
+          <svg class="select-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+            <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-        </div>
+        </button>
+
+        @if (sourceMenuOpen()) {
+          <div class="filter-dropdown-panel">
+            @if (availableSources().length === 0) {
+              <div class="filter-dropdown-empty">No values yet</div>
+            } @else {
+              @for (value of availableSources(); track value) {
+                <label class="filter-checkbox-row">
+                  <input
+                    type="checkbox"
+                    [checked]="isSourceSelected(value)"
+                    (change)="toggleSourceValue(value)"
+                  />
+                  <span>{{ sourceOptionLabel(value) }}</span>
+                </label>
+              }
+            }
+            @if (selectedSources().size > 0) {
+              <button type="button" class="filter-clear-btn" (click)="clearSources()">Clear</button>
+            }
+          </div>
+        }
       </div>
 
       <!-- Status filter -->
@@ -204,14 +230,14 @@
           <mat-icon>bolt</mat-icon>
         </div>
         <h3 class="empty-state__title">
-          @if (searchQuery() || statusFilter() || sourceFilter() || triggerFilter()) {
+          @if (hasActiveFilters()) {
             No executions matched your filters
           } @else {
             No workflow runs yet
           }
         </h3>
         <p class="empty-state__sub">
-          @if (searchQuery() || statusFilter() || sourceFilter() || triggerFilter()) {
+          @if (hasActiveFilters()) {
             Try adjusting your search or filters.
           } @else {
             Execution history will appear here once a workflow runs.

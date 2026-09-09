@@ -67,6 +67,13 @@ public sealed class EfEhrEndpointRepository : IEhrEndpointRepository
         return new PagedResult<EhrEndpoint>(items, totalCount, page, pageSize);
     }
 
+    public async Task<IReadOnlyList<SourceSystemType>> GetDistinctVendorsAsync(CancellationToken cancellationToken) =>
+        await _db.EhrEndpoints
+            .Select(x => x.Vendor)
+            .Distinct()
+            .OrderBy(vendor => vendor)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<EhrEndpoint>> GetPublicAsync(
         EhrEndpointType endpointType, string? search, CancellationToken cancellationToken)
     {

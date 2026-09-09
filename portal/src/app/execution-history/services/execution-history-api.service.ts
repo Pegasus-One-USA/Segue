@@ -14,6 +14,7 @@ import {
   ResourceTypeSummary,
   RouteExecution,
   RouteExecutionFilter,
+  RouteExecutionPage,
   WorkflowRunStatusCounts,
 } from '../models/execution-history.model';
 
@@ -24,20 +25,21 @@ export class ExecutionHistoryApiService {
   // `silent` is opt-in and defaults to false — every existing caller (the real Execution History list
   // page included) keeps showing the global loader exactly as before. Only a background/periodic
   // refetch (Dashboard's auto-refresh, SignalR-triggered refresh) should ever pass true.
-  list(filter: RouteExecutionFilter, options?: { silent?: boolean }): Observable<PagedResult<RouteExecution>> {
+  list(filter: RouteExecutionFilter, options?: { silent?: boolean }): Observable<RouteExecutionPage> {
     let params = new HttpParams()
       .set('page', filter.page)
       .set('pageSize', filter.pageSize);
 
     if (filter.status) params = params.set('status', filter.status);
     if (filter.source) params = params.set('source', filter.source);
+    for (const source of filter.sources ?? []) params = params.append('sources', source);
     if (filter.triggeredBy) params = params.set('triggeredBy', filter.triggeredBy);
     if (filter.search) params = params.set('search', filter.search);
     if (filter.sortColumn) params = params.set('sortColumn', filter.sortColumn);
     if (filter.sortDirection) params = params.set('sortDirection', filter.sortDirection);
 
     const context = options?.silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
-    return this.http.get<PagedResult<RouteExecution>>(EXECUTION_HISTORY_ENDPOINTS.list, { params, context });
+    return this.http.get<RouteExecutionPage>(EXECUTION_HISTORY_ENDPOINTS.list, { params, context });
   }
 
   /** Requests a graceful stop of a still-running run — the currently in-flight node finishes normally, no

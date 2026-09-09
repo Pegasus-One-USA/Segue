@@ -841,9 +841,32 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
     {
         var message = $"{SourceDisplayName} request returned {(int)response.StatusCode} ({response.ReasonPhrase}) for {RedactRequestUrl(requestUrl)}.";
 
+        // RedactRequestUrl drops the whole query string because it can carry patient identifiers — but the
+        // parameter NAMES carry none, and they are what distinguishes "we sent an unqualified search the server was
+        // always going to refuse" from "we sent a properly qualified one it refused anyway". That distinction
+        // decides whether the fix is in this connection's config or in the vendor's app registration, and it was
+        // previously unrecoverable from the stored error alone (a live 403 on Epic cost a full investigation to
+        // establish that the search HAD been qualified).
+        var parameterNames = DescribeQueryParameterNames(requestUrl);
+        if (parameterNames is not null)
+        {
+            message += $" Search parameters sent: {parameterNames}.";
+        }
+
         if (string.IsNullOrWhiteSpace(body))
         {
-            return message;
+            // An empty body is itself diagnostic and must be stated, not left as a silently absent section: a FHIR
+            // server rejecting on its own validation ALWAYS returns an OperationOutcome, so a bodiless 401/403 means
+            // the request never reached that validation — it was refused by the authorization layer in front of the
+            // FHIR server (an app registration that doesn't grant this resource or interaction). Omitting the
+            // section made "the vendor sent nothing" indistinguishable from "the body was lost on the way to this
+            // log", which are opposite diagnoses. The challenge header is where a bodiless 401/403 carries its
+            // reason, so surface it here or say plainly that there wasn't one.
+            var challenge = DescribeAuthenticationChallenge(response);
+            return challenge is null
+                ? $"{message} The response carried an empty body and no WWW-Authenticate challenge, which points at " +
+                  "the vendor's app registration rather than the request itself."
+                : $"{message} The response carried an empty body. WWW-Authenticate: {challenge}.";
         }
 
         var redactedBody = RedactFailureBody(body.ReplaceLineEndings(" ").Trim());
@@ -895,6 +918,52 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// The distinct query-parameter NAMES on a failed request, comma-joined (e.g. <c>identifier, _count</c>), or
+    /// null when the URL carried no query at all — which is itself the answer, since an unqualified search is the
+    /// most common reason a vendor refuses one. Values are deliberately never included: those are exactly what
+    /// <see cref="RedactRequestUrl"/> strips, and a parameter name is not PHI while its value can be.
+    /// </summary>
+    private static string? DescribeQueryParameterNames(string requestUrl)
+    {
+        if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Query))
+        {
+            return null;
+        }
+
+        var names = uri.Query
+            .TrimStart('?')
+            .Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part =>
+            {
+                var separator = part.IndexOf('=');
+                return separator < 0 ? part : part[..separator];
+            })
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return names.Count == 0 ? null : string.Join(", ", names);
+    }
+
+    /// <summary>
+    /// The response's <c>WWW-Authenticate</c> challenge, joined when a server sends several, or null when it sent
+    /// none. This is where a bodiless 401/403 carries its reason (an OAuth2 <c>error</c>/<c>error_description</c>
+    /// parameter on the challenge), so it is the only diagnostic available when the body is empty. Server-generated
+    /// text about the token, never about the patient — no redaction needed.
+    /// </summary>
+    private static string? DescribeAuthenticationChallenge(HttpResponseMessage response)
+    {
+        var challenges = response.Headers.WwwAuthenticate
+            .Select(header => string.IsNullOrWhiteSpace(header.Parameter)
+                ? header.Scheme
+                : $"{header.Scheme} {header.Parameter}")
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToList();
+
+        return challenges.Count == 0 ? null : string.Join("; ", challenges);
     }
 
     private static string RedactRequestUrl(string requestUrl)

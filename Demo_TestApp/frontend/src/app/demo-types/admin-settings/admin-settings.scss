@@ -55,6 +55,23 @@
       color: var(--color-on-primary);
     }
   }
+
+  // Level 1 (EHR vendor) sits tight above level 2 (audience) so the two read as one grouped header.
+  &--vendor {
+    margin-bottom: 8px;
+  }
+
+  // Level 2 (audience) is deliberately lighter than level 1, so the hierarchy is legible.
+  &--audience .settings-tabs__item {
+    padding: 5px 13px;
+    font-size: 12px;
+
+    &.active {
+      background: transparent;
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+  }
 }
 
 .page-header {
@@ -89,6 +106,17 @@
 
   .field:last-child {
     margin-bottom: 0;
+  }
+
+  // A vendor x audience combination Demo_TestApp doesn't wire up yet.
+  &--empty {
+    border-style: dashed;
+
+    .subtitle {
+      margin: 0;
+      color: var(--color-ink-2);
+      font-size: 13px;
+    }
   }
 }
 

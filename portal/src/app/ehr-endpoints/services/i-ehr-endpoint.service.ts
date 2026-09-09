@@ -1,9 +1,9 @@
 import { Observable } from 'rxjs';
-import { EhrEndpoint, EhrEndpointFilter, EhrEndpointRequest, PagedResult } from '../models/ehr-endpoint.model';
+import { EhrEndpoint, EhrEndpointFilter, EhrEndpointPage, EhrEndpointRequest } from '../models/ehr-endpoint.model';
 
 export abstract class IEhrEndpointService {
   abstract getAll(): Observable<EhrEndpoint[]>;
-  abstract getPaged(filter: EhrEndpointFilter): Observable<PagedResult<EhrEndpoint>>;
+  abstract getPaged(filter: EhrEndpointFilter): Observable<EhrEndpointPage>;
   abstract getById(id: string): Observable<EhrEndpoint>;
   abstract create(req: EhrEndpointRequest): Observable<EhrEndpoint>;
   abstract update(id: string, req: EhrEndpointRequest): Observable<EhrEndpoint>;

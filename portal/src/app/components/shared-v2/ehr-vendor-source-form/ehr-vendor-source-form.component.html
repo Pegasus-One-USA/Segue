@@ -83,7 +83,18 @@
           </div>
         }
 
-        <div class="eaf-field" [class.eaf-field--full]="!showSourcePicker()" [class.eaf-field--error]="saveErrorMessage()">
+        <!-- The EHR this connection reads from. Chosen in the card picker before this form opens (Source
+             Connections page) or fixed by the canvas node's vendor, and never editable here: every field below
+             is shaped by it, so changing it mid-form would invalidate the whole entry. Shown as the first row so
+             the choice stays visible while filling the rest in, rather than only living in the topbar title. -->
+        <div class="eaf-field">
+          <label class="eaf-label" for="eaf-ehrVendor">EHR / Source System</label>
+          <input id="eaf-ehrVendor" class="eaf-input" type="text" [value]="displayVendor()" readonly />
+        </div>
+
+        <!-- No longer full-width when there is no "Existing connection" picker: the EHR row above now fills that
+             first grid cell, so App Name pairs with it instead of leaving a gap beside it. -->
+        <div class="eaf-field" [class.eaf-field--error]="saveErrorMessage()">
           <label class="eaf-label" for="eaf-appName">App Name</label>
           <input id="eaf-appName" class="eaf-input" type="text" formControlName="appName"
                  placeholder="e.g. Segue Provider Launch" />
@@ -326,12 +337,14 @@
             <div class="eaf-field" [class.eaf-field--error]="form.controls.jwksUrl.touched && form.controls.jwksUrl.invalid">
               <label class="eaf-label" for="eaf-jwksUrl">Private Key / JWKS URL <span class="eaf-req">*</span></label>
               <input id="eaf-jwksUrl" class="eaf-input" type="url" formControlName="jwksUrl"
-                     [readonly]="audience() === 'backend-system' && (isGenKey() || isImportKey())"
+                     [readonly]="audience() === 'backend-system' && isGenKey()"
                      placeholder="https://segue.com/.well-known/jwks.json" />
               @if (form.controls.jwksUrl.touched && form.controls.jwksUrl.invalid) {
                 <p class="eaf-error-msg">Enter a valid JWKS URL.</p>
               }
-              @if (audience() === 'backend-system' && (isGenKey() || isImportKey())) {
+              @if (audience() === 'backend-system' && isImportKey()) {
+                <p class="eaf-hint">Pre-filled with this connection's own hosted JWKS URL once known. <strong>If the key you imported is already registered in {{ displayVendor() }} against a different JWKS URL — including one issued while the app was being created — replace this with that exact URL</strong>; leave the pre-filled value if you will be registering FHIRBridge's URL instead. Save first if it still shows a placeholder.</p>
+              } @else if (audience() === 'backend-system' && isGenKey()) {
                 <p class="eaf-hint">Auto-filled with this connection's real JWKS URL once known — save first if it still shows a placeholder.</p>
               } @else if (keyLoadedFromExistingConnection()) {
                 <p class="eaf-hint">Auto-filled with FHIRBridge's hosted JWKS URL for this connection's existing key. If {{ displayVendor() }} is actually configured to fetch from a different, self-hosted URL, replace this with that URL instead.</p>

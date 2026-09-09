@@ -1540,6 +1540,10 @@ public static class WorkflowEndpoints
         group.MapGet("/workflow-runs", async (
             string? status,
             string? source,
+            // Multi-select Source filter (repeated ?sources=), matching the Workflows list. `source` above stays for
+            // the single-value callers that link straight here (the Dashboard's widgets); both are honoured. Named
+            // sourceFilters locally because the handler body already binds `sources` to the source CONNECTIONS.
+            [Microsoft.AspNetCore.Mvc.FromQuery(Name = "sources")] string[]? sourceFilters,
             string? triggeredBy,
             string? search,
             int? page,
@@ -1584,6 +1588,15 @@ public static class WorkflowEndpoints
                     run.ErrorReferenceId));
             }
 
+            // Computed before any filter is applied, so the Source filter's options are "vendors that have actually
+            // run" rather than every EHR the platform supports — and don't vanish as the user narrows the list.
+            var availableSourceSystemTypes = items
+                .Select(x => x.SourceSystemType)
+                .OfType<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
             if (!string.IsNullOrWhiteSpace(status))
             {
                 // AwaitingBulkExport is non-terminal — a node deferred to an async $export job while the run is
@@ -1603,6 +1616,14 @@ public static class WorkflowEndpoints
                 items = items.Where(x =>
                     string.Equals(x.SourceName, source, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(x.SourceSystemType, source, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            if (sourceFilters is { Length: > 0 })
+            {
+                var selectedSources = new HashSet<string>(sourceFilters, StringComparer.OrdinalIgnoreCase);
+                items = items.Where(x =>
+                    (x.SourceName is not null && selectedSources.Contains(x.SourceName))
+                    || (x.SourceSystemType is not null && selectedSources.Contains(x.SourceSystemType))).ToList();
             }
 
             if (!string.IsNullOrWhiteSpace(triggeredBy))
@@ -1627,7 +1648,8 @@ public static class WorkflowEndpoints
                 .Take(effectivePageSize)
                 .ToList();
 
-            return Results.Ok(new PagedResult<WorkflowRunHistoryDto>(paged, totalCount, effectivePage, effectivePageSize));
+            return Results.Ok(new WorkflowRunHistoryPageDto(
+                paged, totalCount, effectivePage, effectivePageSize, availableSourceSystemTypes));
         // Menu-level gate: backs both the Dashboard's "Recent Workflows" widget and the Execution History
         // page — both reuse workflow.view rather than a dedicated permission (see sidebar/route changes).
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(

@@ -13,7 +13,8 @@ import { MatMenuModule } from '@angular/material/menu';
 import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import { IEhrEndpointService } from '../../services/i-ehr-endpoint.service';
 import { EhrEndpoint, EhrVendor } from '../../models/ehr-endpoint.model';
-import { EhrEndpointDialogComponent, EhrEndpointDialogData, EHR_VENDOR_OPTIONS } from '../../dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component';
+import { EhrEndpointDialogComponent, EhrEndpointDialogData } from '../../dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component';
+import { sourceSystemDisplayName } from '../../../data/source-system-display-names.data';
 import { ConfirmDialogComponent } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
@@ -64,8 +65,19 @@ export class EhrEndpointListComponent implements OnInit {
 
   private readonly searchChanged = new Subject<string>();
 
-  /** Same vendor list the add/edit dialog offers, so the filter can never name a vendor a row can't hold. */
-  readonly sourceOptions = EHR_VENDOR_OPTIONS;
+  /** Vendors that actually have endpoint rows, from the server's last response — not the full roster of every
+   *  vendor the platform supports. Same facet contract the Workflows and Execution History Source filters use, so
+   *  a deployment holding only Epic and eCW endpoints sees two options rather than every SourceSystemType. */
+  readonly availableVendors = signal<EhrVendor[]>([]);
+
+  readonly sourceOptions = computed(() =>
+    this.availableVendors().map(vendor => ({ value: vendor, label: this.vendorLabel(vendor) }))
+  );
+
+  /** Brand name for a vendor — the Vendor badge and the Source filter must agree, so both go through this. */
+  vendorLabel(vendor: string | null | undefined): string {
+    return sourceSystemDisplayName(vendor);
+  }
 
   toggleActionOnSort(): void {
     this.actionOnSortDirection.set(this.actionOnSortDirection() === 'desc' ? 'asc' : 'desc');
@@ -108,6 +120,7 @@ export class EhrEndpointListComponent implements OnInit {
       next: result => {
         this.endpoints.set(result.items);
         this.totalCount.set(result.totalCount);
+        this.availableVendors.set(result.availableVendors ?? []);
         this.loading.set(false);
       },
       error: () => {

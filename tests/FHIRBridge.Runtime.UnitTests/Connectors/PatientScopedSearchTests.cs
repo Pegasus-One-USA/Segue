@@ -183,6 +183,68 @@ public sealed class PatientScopedSearchTests
             Task.CompletedTask;
     }
 
+    [Fact]
+    public async Task Bodiless_403_names_the_search_parameters_and_says_the_body_was_empty()
+    {
+        // A live Epic 403 arrived with NO body at all, so the failure message ended at the redacted URL: it could
+        // not say whether the search had been qualified, nor that the vendor had sent nothing. Both facts are the
+        // diagnosis — a FHIR server rejecting on its own validation always returns an OperationOutcome, so a
+        // bodiless 403 means the authorization layer in front of it refused the app.
+        var handler = new EmptyBodyHandler(HttpStatusCode.Forbidden);
+        var source = Source with { PatientSearchCriteria = "identifier=E3233,E3231" };
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(null));
+
+        var act = () => client.SearchAsync("Patient", source, CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<InvalidOperationException>();
+        exception.Which.Message.Should().Contain("Search parameters sent: identifier, _count");
+        exception.Which.Message.Should().Contain("empty body");
+        exception.Which.Message.Should().Contain("app registration");
+        // The names are safe to log; the values they carried are not, and must stay redacted.
+        exception.Which.Message.Should().NotContain("E3233").And.NotContain("E3231");
+    }
+
+    [Fact]
+    public async Task Bodiless_403_surfaces_the_www_authenticate_challenge_when_the_vendor_sends_one()
+    {
+        var handler = new EmptyBodyHandler(
+            HttpStatusCode.Forbidden,
+            challenge: "Bearer error=\"insufficient_scope\", error_description=\"Patient.Search not granted\"");
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(null));
+
+        var act = () => client.SearchAsync("Patient", Source, CancellationToken.None);
+
+        var exception = await act.Should().ThrowAsync<InvalidOperationException>();
+        exception.Which.Message.Should().Contain("WWW-Authenticate:");
+        exception.Which.Message.Should().Contain("insufficient_scope");
+        exception.Which.Message.Should().Contain("Patient.Search not granted");
+    }
+
+    /// <summary>Returns a failure with a genuinely empty body, and optionally a challenge header — the shape a live
+    /// Epic 403 actually took, which <see cref="CapturingHandler"/> (always bodied) cannot reproduce.</summary>
+    private sealed class EmptyBodyHandler : HttpMessageHandler
+    {
+        private readonly HttpStatusCode _statusCode;
+        private readonly string? _challenge;
+
+        public EmptyBodyHandler(HttpStatusCode statusCode, string? challenge = null)
+        {
+            _statusCode = statusCode;
+            _challenge = challenge;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(_statusCode) { Content = new StringContent(string.Empty) };
+            if (_challenge is not null)
+            {
+                response.Headers.TryAddWithoutValidation("WWW-Authenticate", _challenge);
+            }
+
+            return Task.FromResult(response);
+        }
+    }
+
     private sealed class CapturingHandler : HttpMessageHandler
     {
         private readonly HttpStatusCode _statusCode;

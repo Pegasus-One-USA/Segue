@@ -1859,13 +1859,16 @@ export class EhrVendorSourceFormComponent
     // while jwksUrlRestoredFromBackend() is false: JwksUrl is now persisted server-side (see that signal's own
     // remarks), so a connection that already has a real saved URL — hosted or external — must show that back
     // exactly as saved, not have it overwritten by a guess just because key-reference fields also happen to be
-    // present (which is also true of a manually-registered external key). isGenKey()/isImportKey() stay
-    // unconditional: a key just Generated/Imported *this session* is always genuinely hosted at that URL, so
-    // there's nothing legitimate to type over it.
+    // present (which is also true of a manually-registered external key). isGenKey() stays unconditional: a key
+    // FHIRBridge generated *this session* exists nowhere else, so the hosted URL is the only correct one and
+    // there's nothing legitimate to type over it. isImportKey() is now guarded by jwksUrlUserEdited() for the same
+    // reason its `kid` is editable — an imported key may already be registered with the vendor against the app's
+    // own JWKS URL (often minted during app creation), and that URL, not FHIRBridge's, is the one the vendor will
+    // fetch; without this guard the effect reverts the admin's typed URL on any later recompute.
     effect(() => {
       const url = this.liveJwksUrl();
       if (!url) return;
-      if (this.isGenKey() || this.isImportKey()) {
+      if (this.isGenKey() || (this.isImportKey() && !this.jwksUrlUserEdited())) {
         this.form.controls.jwksUrl.setValue(url, { emitEvent: false });
       } else if (
         this.keyLoadedFromExistingConnection() &&
@@ -2605,7 +2608,9 @@ export class EhrVendorSourceFormComponent
     apply('clientSecret', method === 'secret' && !this.isEditing);
     // Generate/Import (Backend System only) leave this blank on purpose — the real JWKS URL is this connection's
     // own .well-known/jwks.json, only known once it has an id after save (see the readonly condition on this field
-    // in the template and generateKeyPair()/importPrivateKey() above, neither of which populate it).
+    // in the template and generateKeyPair()/importPrivateKey() above, neither of which populate it). Import keeps
+    // the exemption even though its field is editable: the pre-fill still can't arrive before the first save, so
+    // requiring it would block save for an admin who intends to keep FHIRBridge's own hosted URL.
     const jwksUrlServerManaged =
       this.audience() === 'backend-system' &&
       (this.isGenKey() || this.isImportKey());
@@ -2889,9 +2894,10 @@ export class EhrVendorSourceFormComponent
           this.keyGenStatus.set('generated');
           this.toast.show(
             'Private key imported',
-            `Key ID ${key.keyId} was generated for this key — if it is already registered in ` +
-              `${this.displayVendor()} under a different kid, replace it in the Key ID field below. ` +
-              "The JWKS URL becomes available at this connection's .well-known/jwks.json once you save.",
+            `Key imported. Key ID ${key.keyId} was generated for it. Note: update the Key ID and the ` +
+              `Private Key / JWKS URL manually if this key is already registered on ${this.displayVendor()} — ` +
+              'both must match what that app registration uses. Otherwise leave them: the JWKS URL fills in ' +
+              "with this connection's own .well-known/jwks.json once you save.",
           );
         },
         error: (err) => {

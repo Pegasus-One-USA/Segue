@@ -38,6 +38,20 @@ export interface PagedResult<T> {
   pageSize: number;
 }
 
+/**
+ * One page of the EHR Endpoints listing. `availableVendors` is the distinct set of vendors that actually have
+ * endpoint rows, computed server-side over the UNFILTERED set — the same facet contract the Workflows and
+ * Execution History lists use for their Source filters, so all three screens offer only vendors with real data
+ * behind them rather than every SourceSystemType the platform supports.
+ */
+export interface EhrEndpointPage {
+  items: EhrEndpoint[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  availableVendors: EhrVendor[];
+}
+
 export interface EhrEndpointFilter {
   search?: string;
   /** The "Source" dropdown — the row's Vendor (backend SourceSystemType). */

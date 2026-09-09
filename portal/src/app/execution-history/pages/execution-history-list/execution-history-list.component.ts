@@ -1,4 +1,4 @@
-﻿import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+﻿import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
@@ -13,20 +13,10 @@ import { sourceSystemDisplayName } from '../../../data/source-system-display-nam
 type SortColumn = 'pipeline' | 'source' | 'status' | 'duration' | 'lastRun' | 'triggeredBy';
 type SortDirection = 'asc' | 'desc';
 
-/** Options for the Source filter dropdown — the SourceSystemType enum's raw values (what the backend's
- *  `source` query param and each row's sourceSystemType actually carry) paired with a friendly label,
- *  same vendor set as sources.data.ts (the Source Connections picker). */
-const SOURCE_FILTER_OPTIONS: { value: string; label: string }[] = [
-  { value: 'Epic',               label: 'Epic' },
-  { value: 'Cerner',              label: 'Cerner (Oracle Health)' },
-  { value: 'Athenahealth',        label: 'Athenahealth' },
-  { value: 'Allscripts',          label: 'Allscripts (Veradigm)' },
-  { value: 'Healow',              label: 'Healow (eClinicalWorks)' },
-  { value: 'MeditechGreenfield',  label: 'Meditech Greenfield' },
-  { value: 'GenericFhir',         label: 'Generic FHIR' },
-  { value: 'Hl7v2',               label: 'HL7 v2 / MLLP' },
-  { value: 'Sample',              label: 'Sample (sandbox)' },
-];
+/** The Source filter's option list is no longer a hardcoded roster of every EHR the platform supports — it comes
+ *  from the runs themselves (WorkflowRunHistoryPageDto.availableSourceSystemTypes), so a deployment that only ever
+ *  ran Epic and eCW sees two options rather than nine. Same facet contract, multi-select UI and brand labels the
+ *  Workflows list uses, so the two screens' Source filters agree. */
 
 @Component({
   selector: 'app-execution-history-list',
@@ -49,11 +39,14 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly search$ = new Subject<string>();
 
-  readonly sourceOptions = SOURCE_FILTER_OPTIONS;
+  /** Source systems that actually appear in the run history, from the server's last response. */
+  readonly availableSources = signal<string[]>([]);
+  readonly selectedSources = signal<Set<string>>(new Set());
+  /** True while the Source checkbox panel is open — see toggleSourceMenu / closeSourceMenuIfOutside. */
+  readonly sourceMenuOpen = signal(false);
 
   readonly searchQuery   = signal('');
   readonly statusFilter  = signal('');
-  readonly sourceFilter  = signal('');
   readonly triggerFilter = signal('');
   readonly pageIndex     = signal(0);
   readonly pageSize      = signal(10);
@@ -61,6 +54,10 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   readonly sortDirection = signal<SortDirection>('desc');
   readonly loading       = signal(false);
   readonly result        = signal<PagedResult<RouteExecution>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
+  /** Any filter active — drives the two "no results" messages below the table. */
+  readonly hasActiveFilters = computed(
+    () => !!this.searchQuery() || !!this.statusFilter() || !!this.triggerFilter() || this.selectedSources().size > 0,
+  );
 
   readonly displayedCols = ['name', 'source', 'status', 'duration', 'lastRun', 'triggeredBy', 'correlationId'];
 
@@ -89,7 +86,7 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     this.api.list({
       status: this.statusFilter() || undefined,
-      source: this.sourceFilter() || undefined,
+      sources: this.selectedSources().size ? [...this.selectedSources()] : undefined,
       triggeredBy: this.triggerFilter() || undefined,
       search: this.searchQuery() || undefined,
       page: this.pageIndex() + 1,
@@ -99,6 +96,7 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: result => {
         this.result.set(result);
+        this.availableSources.set(result.availableSourceSystemTypes ?? []);
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
@@ -108,13 +106,46 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   onSearch(val: string): void { this.search$.next(val); }
 
   onStatus(val: string): void  { this.statusFilter.set(val);  this.pageIndex.set(0); this.load(); }
-  onSource(val: string): void  { this.sourceFilter.set(val);  this.pageIndex.set(0); this.load(); }
   onTrigger(val: string): void { this.triggerFilter.set(val); this.pageIndex.set(0); this.load(); }
+
+  // ── Source multi-select (mirrors the Workflows list's filter dropdown) ──────
+  toggleSourceMenu(): void {
+    this.sourceMenuOpen.update(open => !open);
+  }
+
+  /** Reads the click's real target rather than scattering stopPropagation() through the template — a click
+   *  still inside .filter-dropdown (the trigger, or the open panel that is its DOM descendant) is left alone. */
+  @HostListener('document:click', ['$event'])
+  closeSourceMenuIfOutside(event: MouseEvent): void {
+    if (this.sourceMenuOpen() && !(event.target as HTMLElement).closest('.filter-dropdown')) {
+      this.sourceMenuOpen.set(false);
+    }
+  }
+
+  isSourceSelected(value: string): boolean {
+    return this.selectedSources().has(value);
+  }
+
+  toggleSourceValue(value: string): void {
+    this.selectedSources.update(current => {
+      const next = new Set(current);
+      if (next.has(value)) next.delete(value); else next.add(value);
+      return next;
+    });
+    this.pageIndex.set(0);
+    this.load();
+  }
+
+  clearSources(): void {
+    this.selectedSources.set(new Set());
+    this.pageIndex.set(0);
+    this.load();
+  }
 
   reset(): void {
     this.searchQuery.set('');
     this.statusFilter.set('');
-    this.sourceFilter.set('');
+    this.selectedSources.set(new Set());
     this.triggerFilter.set('');
     this.pageIndex.set(0);
     this.load();
@@ -185,6 +216,12 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     // not the per-connection name (e.g. "Epic_gogo") — fall back to it only when the type is unknown.
     // Through the same brand-name table that badge uses, or the two drift apart (eCW vs "Healow").
     return sourceSystemDisplayName(execution.sourceSystemType) || execution.sourceName || '—';
+  }
+
+  /** Brand name for a Source filter option — same table the Source badge above uses, so the filter's text and
+   *  the column's text can't drift (eCW vs "Healow"). The VALUE stays the raw enum the API filters on. */
+  sourceOptionLabel(sourceSystemType: string): string {
+    return sourceSystemDisplayName(sourceSystemType) || sourceSystemType;
   }
 
   formatDuration(ms: number | null): string {

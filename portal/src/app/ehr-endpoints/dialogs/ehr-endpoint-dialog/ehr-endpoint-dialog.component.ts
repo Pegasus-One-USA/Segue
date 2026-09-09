@@ -15,6 +15,12 @@ export interface EhrEndpointDialogData {
   endpoint?: EhrEndpoint;
 }
 
+/**
+ * Vendors offerable when creating or editing an endpoint. Unlike the listing's Source filter — which is driven by
+ * the vendors that actually have rows — a create form has to offer vendors with no endpoints yet, so this roster
+ * stays explicit. `NewEHR`/`NewEHRTwo` are deliberately absent: they are unnamed placeholder members of the
+ * backend's SourceSystemType enum, not products an admin could meaningfully pick.
+ */
 export const EHR_VENDOR_OPTIONS: { value: EhrVendor; label: string }[] = [
   { value: 'Epic',               label: 'Epic' },
   { value: 'Cerner',             label: 'Cerner (Oracle Health)' },
@@ -25,8 +31,6 @@ export const EHR_VENDOR_OPTIONS: { value: EhrVendor; label: string }[] = [
   { value: 'GenericFhir',        label: 'Generic FHIR R4' },
   { value: 'Hl7v2',              label: 'HL7 v2 / MLLP' },
   { value: 'Sample',             label: 'Sample (sandbox)' },
-  { value: 'NewEHR',             label: 'New EHR' },
-  { value: 'NewEHRTwo',          label: 'New EHR (2)' },
 ];
 
 export const EHR_ENDPOINT_TYPE_OPTIONS: { value: EhrEndpointType; label: string }[] = [

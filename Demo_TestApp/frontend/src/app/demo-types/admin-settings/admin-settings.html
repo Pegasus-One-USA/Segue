@@ -21,170 +21,241 @@
       <p class="subtitle">FHIRBridge connection points for every demo experience, in one place.</p>
     </header>
 
-    <nav class="settings-tabs" aria-label="Settings section">
-      <button type="button" class="settings-tabs__item" [class.active]="section() === 'default'" (click)="selectSection('default')">Default</button>
-      <button type="button" class="settings-tabs__item" [class.active]="section() === 'new11'" (click)="selectSection('new11')">New 11</button>
-    </nav>
+    <!-- Default | New 11 section switch - hidden for now, so the page opens straight onto Default.
+         Flip new11UiVisible back to true in admin-settings.ts to bring the New 11 tab back. -->
+    @if (new11UiVisible) {
+      <nav class="settings-tabs" aria-label="Settings section">
+        <button type="button" class="settings-tabs__item" [class.active]="section() === 'default'" (click)="selectSection('default')">Default</button>
+        <button type="button" class="settings-tabs__item" [class.active]="section() === 'new11'" (click)="selectSection('new11')">New 11</button>
+      </nav>
+    }
 
     @if (section() === 'default') {
     @if (isLoading()) {
-      <p>Loading current settings…</p>
+      <p>Loading current settings&hellip;</p>
     } @else {
       @if (loadError()) {
         <p class="error-banner">{{ loadError() }}</p>
       }
 
-      <section class="settings-section">
-        <h2>New 11 Feature Flag</h2>
-        <label class="field field--checkbox">
-          <input
-            type="checkbox"
-            [ngModel]="new11Enabled()"
-            (ngModelChange)="toggleNew11Enabled($event)"
-          />
-          Enable New 11 (shows the New 11 tab in every role's Default | New 11 menu)
-        </label>
-      </section>
+      @if (new11UiVisible) {
+        <section class="settings-section">
+          <h2>New 11 Feature Flag</h2>
+          <label class="field field--checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="new11Enabled()"
+              (ngModelChange)="toggleNew11Enabled($event)"
+            />
+            Enable New 11 (shows the New 11 tab in every role's Default | New 11 menu)
+          </label>
+        </section>
+      }
 
-      <section class="settings-section">
-        <h2>Patient_Standalone (Role: Patient)</h2>
-        <label class="field">
-          Workflow URL
-          <input type="text" [ngModel]="workflowUrl()" (ngModelChange)="workflowUrl.set($event)" placeholder="https://..." />
-        </label>
-        <label class="field">
-          Patient Standalone Workflow Id (list)
-          <input type="text" [ngModel]="patientWorkflowId()" (ngModelChange)="patientWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
-        <label class="field">
-          Patient Standalone Detail Workflow Id
-          <input type="text" [ngModel]="patientDetailWorkflowId()" (ngModelChange)="patientDetailWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
-        <label class="field">
-          Patient Standalone Base URL
-          <input type="text" [ngModel]="patientBaseUrl()" (ngModelChange)="patientBaseUrl.set($event)" placeholder="http://localhost:5000" />
-        </label>
-        <label class="field">
-          CSV Export Workflow Id ("Download Patient Information")
-          <input type="text" [ngModel]="patientCsvExportWorkflowId()" (ngModelChange)="patientCsvExportWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
-        <label class="field">
-          CSV Email Export Workflow Id ("Email Patient Information")
-          <input type="text" [ngModel]="patientCsvEmailExportWorkflowId()" (ngModelChange)="patientCsvEmailExportWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
+      <!-- Level 1: EHR vendor. Level 2: audience within that vendor. Every vendor shows every
+           audience - combinations Demo_TestApp doesn't wire up yet render an empty state rather
+           than disappearing, so the tab strip keeps the same shape across vendors. -->
+      <nav class="settings-tabs settings-tabs--vendor" aria-label="EHR vendor">
+        @for (vendor of vendors; track vendor.key) {
+          <button
+            type="button"
+            class="settings-tabs__item"
+            [class.active]="selectedVendor() === vendor.key"
+            (click)="selectVendor(vendor.key)"
+          >{{ vendor.label }}</button>
+        }
+      </nav>
 
-        <h3>athenahealth (vendor toggle on the Patient Standalone screen)</h3>
-        <p class="subtitle">
-          A separate workflow/base URL for testing the athenahealth Patient Standalone flow instead of Epic/MyChart —
-          used only for the connect/list step (no detail or CSV export). The workflow's source node must be an
-          athenahealth Patient-audience connection, opted into public launch. athenahealth's sandbox has one fixed
-          FHIR base URL (no per-hospital directory), so instead of a picker, paste the id of a pre-seeded
-          <code>EhrEndpoint</code> row (type MyChart) whose FHIR base URL is the athenahealth sandbox — FHIRBridge's
-          public-patient-standalone-url endpoint requires one to mint against.
-        </p>
-        <label class="field">
-          Athena Patient Standalone Workflow Id
-          <input type="text" [ngModel]="athenaPatientWorkflowId()" (ngModelChange)="athenaPatientWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
-        <label class="field">
-          Athena Patient Standalone Base URL
-          <input type="text" [ngModel]="athenaPatientBaseUrl()" (ngModelChange)="athenaPatientBaseUrl.set($event)" placeholder="http://localhost:5000" />
-        </label>
-        <label class="field">
-          Athena EhrEndpoint Id (MyChart-type row pointing at the athenahealth sandbox)
-          <input type="text" [ngModel]="athenaEhrEndpointId()" (ngModelChange)="athenaEhrEndpointId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
+      <nav class="settings-tabs settings-tabs--audience" aria-label="Audience">
+        @for (audience of audiences; track audience.key) {
+          <button
+            type="button"
+            class="settings-tabs__item"
+            [class.active]="selectedAudience() === audience.key"
+            (click)="selectAudience(audience.key)"
+          >{{ audience.label }}</button>
+        }
+      </nav>
 
-        <h3>eClinicalWorks / eCW (vendor toggle on the Patient Standalone screen)</h3>
-        <p class="subtitle">
-          A separate workflow/base URL for testing the eCW Patient Standalone flow instead of Epic/MyChart or
-          athenahealth — used only for the connect/list step (no detail or CSV export). The workflow's source node
-          must be a Healow (eCW) Patient-audience connection, opted into public launch. eCW's Patient audience
-          currently targets one fixed practice (no per-hospital directory), so instead of a picker, paste the id of
-          a pre-seeded <code>EhrEndpoint</code> row (type MyChart) whose FHIR base URL is that eCW practice's
-          endpoint — FHIRBridge's public-patient-standalone-url endpoint requires one to mint against.
-        </p>
-        <label class="field">
-          eCW Patient Standalone Workflow Id
-          <input type="text" [ngModel]="ecwPatientWorkflowId()" (ngModelChange)="ecwPatientWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
-        <label class="field">
-          eCW Patient Standalone Base URL
-          <input type="text" [ngModel]="ecwPatientBaseUrl()" (ngModelChange)="ecwPatientBaseUrl.set($event)" placeholder="http://localhost:5000" />
-        </label>
-        <label class="field">
-          eCW EhrEndpoint Id (MyChart-type row pointing at the eCW practice's FHIR base URL)
-          <input type="text" [ngModel]="ecwEhrEndpointId()" (ngModelChange)="ecwEhrEndpointId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
-      </section>
+      @if (!isCombinationSupported()) {
+        <section class="settings-section settings-section--empty">
+          <h2>{{ selectedVendorLabel() }} &mdash; {{ selectedAudienceLabel() }}</h2>
+          <p class="subtitle">
+            Demo_TestApp has no {{ selectedVendorLabel() }} workflow settings for the
+            {{ selectedAudienceLabel() }} audience yet, so there is nothing to configure here.
+          </p>
+        </section>
+      }
 
-      <section class="settings-section">
-        <h2>Provider_Standalone (Role: ProviderStandalone)</h2>
-        <label class="field">
-          Fetch Patient List Workflow Id
-          <input type="text" [ngModel]="standaloneWorkflowId()" (ngModelChange)="standaloneWorkflowId.set($event)" placeholder="e.g. 5930ff91-9235-4ef1-8e94-8752651d4d2a" />
-        </label>
-        <label class="field">
-          Patient Detail Workflow Id
-          <input type="text" [ngModel]="standaloneDetailWorkflowId()" (ngModelChange)="standaloneDetailWorkflowId.set($event)" placeholder="e.g. dc666cee-f674-400f-a4b5-c826e3f4c3a0" />
-        </label>
-        <label class="field">
-          Provider Standalone Base URL
-          <input type="text" [ngModel]="standaloneBaseUrl()" (ngModelChange)="standaloneBaseUrl.set($event)" placeholder="http://localhost:5000" />
-        </label>
+      <!-- Epic (MyChart) -->
 
-        <h3>eClinicalWorks / eCW (vendor toggle on the Provider Standalone screen)</h3>
-        <p class="subtitle">
-          A separate List/Detail workflow pair + base URL for testing the eCW Provider Standalone flow instead of
-          Epic — the screen's vendor toggle skips the Epic hospital picker for eCW and mints against the endpoint id
-          below. The workflows' source node must be a Healow (eCW) Provider-audience connection, opted into public
-          launch. Unlike the Patient section's eCW endpoint (a MyChart-type row), provider-standalone's launch
-          requires an <strong>Epic-type</strong> <code>EhrEndpoint</code> row, so paste the id of a pre-seeded
-          Epic-type row whose FHIR base URL is the eCW practice's endpoint here (this is a distinct row from the
-          Patient section's shared eCW EhrEndpoint id).
-        </p>
-        <label class="field">
-          eCW Provider Standalone List Workflow Id
-          <input type="text" [ngModel]="ecwProviderStandaloneListWorkflowId()" (ngModelChange)="ecwProviderStandaloneListWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
-        <label class="field">
-          eCW Provider Standalone Detail Workflow Id
-          <input type="text" [ngModel]="ecwProviderStandaloneDetailWorkflowId()" (ngModelChange)="ecwProviderStandaloneDetailWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
-        <label class="field">
-          eCW Provider Standalone Base URL
-          <input type="text" [ngModel]="ecwProviderStandaloneBaseUrl()" (ngModelChange)="ecwProviderStandaloneBaseUrl.set($event)" placeholder="http://localhost:5000" />
-        </label>
-        <label class="field">
-          eCW Provider Standalone EhrEndpoint Id (Epic-type row pointing at the eCW practice's FHIR base)
-          <input type="text" [ngModel]="ecwProviderStandaloneEhrEndpointId()" (ngModelChange)="ecwProviderStandaloneEhrEndpointId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
-        </label>
-      </section>
+      @if (selectedVendor() === 'epic' && selectedAudience() === 'patient') {
+        <section class="settings-section">
+          <h2>Patient_Standalone (Role: Patient)</h2>
+          <label class="field">
+            Workflow URL (shared default - used by every audience unless overridden)
+            <input type="text" [ngModel]="workflowUrl()" (ngModelChange)="workflowUrl.set($event)" placeholder="https://..." />
+          </label>
+          <label class="field">
+            Patient Standalone Workflow Id (list)
+            <input type="text" [ngModel]="patientWorkflowId()" (ngModelChange)="patientWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+          <label class="field">
+            Patient Standalone Detail Workflow Id
+            <input type="text" [ngModel]="patientDetailWorkflowId()" (ngModelChange)="patientDetailWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+          <label class="field">
+            Patient Standalone Base URL
+            <input type="text" [ngModel]="patientBaseUrl()" (ngModelChange)="patientBaseUrl.set($event)" placeholder="http://localhost:5000" />
+          </label>
+          <label class="field">
+            CSV Export Workflow Id ("Download Patient Information")
+            <input type="text" [ngModel]="patientCsvExportWorkflowId()" (ngModelChange)="patientCsvExportWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+          <label class="field">
+            CSV Email Export Workflow Id ("Email Patient Information")
+            <input type="text" [ngModel]="patientCsvEmailExportWorkflowId()" (ngModelChange)="patientCsvEmailExportWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+        </section>
+      }
 
-      <section class="settings-section">
-        <h2>Provider_InApp (Role: ProviderInApp)</h2>
-        <p class="subtitle">Uses the Provider Standalone Base URL above for its FHIRBridge connection. Must be a workflow opted into public launch via <code>POST /api/v1/workflows/{{ '{' }}id{{ '}' }}/enable-public-launch</code>.</p>
-        <label class="field">
-          EHR Launch Workflow Id (Epic / default)
-          <input type="text" [ngModel]="providerInAppWorkflowId()" (ngModelChange)="providerInAppWorkflowId.set($event)" placeholder="e.g. 5930ff91-9235-4ef1-8e94-8752651d4d2a" />
-        </label>
+      @if (selectedVendor() === 'epic' && selectedAudience() === 'providerStandalone') {
+        <section class="settings-section">
+          <h2>Provider_Standalone (Role: ProviderStandalone)</h2>
+          <label class="field">
+            Fetch Patient List Workflow Id
+            <input type="text" [ngModel]="standaloneWorkflowId()" (ngModelChange)="standaloneWorkflowId.set($event)" placeholder="e.g. 5930ff91-9235-4ef1-8e94-8752651d4d2a" />
+          </label>
+          <label class="field">
+            Patient Detail Workflow Id
+            <input type="text" [ngModel]="standaloneDetailWorkflowId()" (ngModelChange)="standaloneDetailWorkflowId.set($event)" placeholder="e.g. dc666cee-f674-400f-a4b5-c826e3f4c3a0" />
+          </label>
+          <label class="field">
+            Provider Standalone Base URL (shared - Provider InApp and Backend System use this too)
+            <input type="text" [ngModel]="standaloneBaseUrl()" (ngModelChange)="standaloneBaseUrl.set($event)" placeholder="http://localhost:5000" />
+          </label>
+        </section>
+      }
 
-        <h3>eClinicalWorks / eCW (Provider EMR)</h3>
-        <p class="subtitle">A separate EHR-launch workflow for the eCW Provider EMR launch instead of Epic. Its source node must be a Healow (eCW) Provider EHR-launch connection, opted into public launch. Both share the one registered Launch URL — when a launch arrives, the app auto-selects this workflow if the launching EHR's <code>iss</code> is an eCW practice (host <code>*.ecwcloud.com</code>); otherwise it uses the Epic/default one above. Leave blank to keep eCW Provider EMR off.</p>
-        <label class="field">
-          eCW EHR Launch Workflow Id
-          <input type="text" [ngModel]="ecwProviderInAppWorkflowId()" (ngModelChange)="ecwProviderInAppWorkflowId.set($event)" placeholder="e.g. 29a8c94f-1f64-44ea-a900-1fb97d90dea9" />
-        </label>
-      </section>
+      @if (selectedVendor() === 'epic' && selectedAudience() === 'providerInApp') {
+        <section class="settings-section">
+          <h2>Provider_InApp (Role: ProviderInApp)</h2>
+          <p class="subtitle">Uses the Provider Standalone Base URL (Epic &rarr; Provider Standalone tab) for its FHIRBridge connection. Must be a workflow opted into public launch via <code>POST /api/v1/workflows/{{ '{' }}id{{ '}' }}/enable-public-launch</code>.</p>
+          <label class="field">
+            EHR Launch Workflow Id (Epic / default)
+            <input type="text" [ngModel]="providerInAppWorkflowId()" (ngModelChange)="providerInAppWorkflowId.set($event)" placeholder="e.g. 5930ff91-9235-4ef1-8e94-8752651d4d2a" />
+          </label>
+        </section>
+      }
 
-      <section class="settings-section">
-        <h2>Backend_System (Role: BackendSystem)</h2>
-        <p class="subtitle">The workflow run (FHIRBridge <code>/run</code>) behind the Practitioners view's <strong>Import Practitioner</strong> button. The submitted practitioner ids are passed as its search criteria. Uses the Provider Standalone Base URL above for its FHIRBridge connection.</p>
-        <label class="field">
-          Practitioner Import Workflow Id
-          <input type="text" [ngModel]="backendSystemPractitionerImportWorkflowId()" (ngModelChange)="backendSystemPractitionerImportWorkflowId.set($event)" placeholder="e.g. 17c81a2c-b266-4ed3-9afb-8fc54910f577" />
-        </label>
-      </section>
+      @if (selectedVendor() === 'epic' && selectedAudience() === 'backendSystem') {
+        <section class="settings-section">
+          <h2>Backend_System (Role: BackendSystem)</h2>
+          <p class="subtitle">The workflow run (FHIRBridge <code>/run</code>) behind the Practitioners view's <strong>Import Practitioner</strong> button. The submitted practitioner ids are passed as its search criteria. Uses the Provider Standalone Base URL (Epic &rarr; Provider Standalone tab) for its FHIRBridge connection.</p>
+          <label class="field">
+            Practitioner Import Workflow Id
+            <input type="text" [ngModel]="backendSystemPractitionerImportWorkflowId()" (ngModelChange)="backendSystemPractitionerImportWorkflowId.set($event)" placeholder="e.g. 17c81a2c-b266-4ed3-9afb-8fc54910f577" />
+          </label>
+        </section>
+      }
+
+      <!-- athenahealth -->
+
+      @if (selectedVendor() === 'athena' && selectedAudience() === 'patient') {
+        <section class="settings-section">
+          <h2>athenahealth &mdash; Patient Standalone</h2>
+          <p class="subtitle">
+            A separate workflow/base URL for testing the athenahealth Patient Standalone flow instead of Epic/MyChart -
+            used only for the connect/list step (no detail or CSV export). The workflow's source node must be an
+            athenahealth Patient-audience connection, opted into public launch. athenahealth's sandbox has one fixed
+            FHIR base URL (no per-hospital directory), so instead of a picker, paste the id of a pre-seeded
+            <code>EhrEndpoint</code> row (type MyChart) whose FHIR base URL is the athenahealth sandbox - FHIRBridge's
+            public-patient-standalone-url endpoint requires one to mint against.
+          </p>
+          <label class="field">
+            Athena Patient Standalone Workflow Id
+            <input type="text" [ngModel]="athenaPatientWorkflowId()" (ngModelChange)="athenaPatientWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+          <label class="field">
+            Athena Patient Standalone Base URL
+            <input type="text" [ngModel]="athenaPatientBaseUrl()" (ngModelChange)="athenaPatientBaseUrl.set($event)" placeholder="http://localhost:5000" />
+          </label>
+          <label class="field">
+            Athena EhrEndpoint Id (MyChart-type row pointing at the athenahealth sandbox)
+            <input type="text" [ngModel]="athenaEhrEndpointId()" (ngModelChange)="athenaEhrEndpointId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+        </section>
+      }
+
+      <!-- eClinicalWorks / eCW -->
+
+      @if (selectedVendor() === 'ecw' && selectedAudience() === 'patient') {
+        <section class="settings-section">
+          <h2>eClinicalWorks / eCW &mdash; Patient Standalone</h2>
+          <p class="subtitle">
+            A separate workflow/base URL for testing the eCW Patient Standalone flow instead of Epic/MyChart or
+            athenahealth - used only for the connect/list step (no detail or CSV export). The workflow's source node
+            must be a Healow (eCW) Patient-audience connection, opted into public launch. eCW's Patient audience
+            currently targets one fixed practice (no per-hospital directory), so instead of a picker, paste the id of
+            a pre-seeded <code>EhrEndpoint</code> row (type MyChart) whose FHIR base URL is that eCW practice's
+            endpoint - FHIRBridge's public-patient-standalone-url endpoint requires one to mint against.
+          </p>
+          <label class="field">
+            eCW Patient Standalone Workflow Id
+            <input type="text" [ngModel]="ecwPatientWorkflowId()" (ngModelChange)="ecwPatientWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+          <label class="field">
+            eCW Patient Standalone Base URL
+            <input type="text" [ngModel]="ecwPatientBaseUrl()" (ngModelChange)="ecwPatientBaseUrl.set($event)" placeholder="http://localhost:5000" />
+          </label>
+          <label class="field">
+            eCW EhrEndpoint Id (MyChart-type row pointing at the eCW practice's FHIR base URL)
+            <input type="text" [ngModel]="ecwEhrEndpointId()" (ngModelChange)="ecwEhrEndpointId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+        </section>
+      }
+
+      @if (selectedVendor() === 'ecw' && selectedAudience() === 'providerStandalone') {
+        <section class="settings-section">
+          <h2>eClinicalWorks / eCW &mdash; Provider Standalone</h2>
+          <p class="subtitle">
+            A separate List/Detail workflow pair + base URL for testing the eCW Provider Standalone flow instead of
+            Epic - the screen's vendor toggle skips the Epic hospital picker for eCW and mints against the endpoint id
+            below. The workflows' source node must be a Healow (eCW) Provider-audience connection, opted into public
+            launch. Unlike the Patient tab's eCW endpoint (a MyChart-type row), provider-standalone's launch
+            requires an <strong>Epic-type</strong> <code>EhrEndpoint</code> row, so paste the id of a pre-seeded
+            Epic-type row whose FHIR base URL is the eCW practice's endpoint here (this is a distinct row from the
+            Patient tab's shared eCW EhrEndpoint id).
+          </p>
+          <label class="field">
+            eCW Provider Standalone List Workflow Id
+            <input type="text" [ngModel]="ecwProviderStandaloneListWorkflowId()" (ngModelChange)="ecwProviderStandaloneListWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+          <label class="field">
+            eCW Provider Standalone Detail Workflow Id
+            <input type="text" [ngModel]="ecwProviderStandaloneDetailWorkflowId()" (ngModelChange)="ecwProviderStandaloneDetailWorkflowId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+          <label class="field">
+            eCW Provider Standalone Base URL
+            <input type="text" [ngModel]="ecwProviderStandaloneBaseUrl()" (ngModelChange)="ecwProviderStandaloneBaseUrl.set($event)" placeholder="http://localhost:5000" />
+          </label>
+          <label class="field">
+            eCW Provider Standalone EhrEndpoint Id (Epic-type row pointing at the eCW practice's FHIR base)
+            <input type="text" [ngModel]="ecwProviderStandaloneEhrEndpointId()" (ngModelChange)="ecwProviderStandaloneEhrEndpointId.set($event)" placeholder="00000000-0000-0000-0000-000000000000" />
+          </label>
+        </section>
+      }
+
+      @if (selectedVendor() === 'ecw' && selectedAudience() === 'providerInApp') {
+        <section class="settings-section">
+          <h2>eClinicalWorks / eCW &mdash; Provider InApp (Provider EMR)</h2>
+          <p class="subtitle">A separate EHR-launch workflow for the eCW Provider EMR launch instead of Epic. Its source node must be a Healow (eCW) Provider EHR-launch connection, opted into public launch. Both share the one registered Launch URL - when a launch arrives, the app auto-selects this workflow if the launching EHR's <code>iss</code> is an eCW practice (host <code>*.ecwcloud.com</code>); otherwise it uses the Epic/default one on the Epic tab. Leave blank to keep eCW Provider EMR off.</p>
+          <label class="field">
+            eCW EHR Launch Workflow Id
+            <input type="text" [ngModel]="ecwProviderInAppWorkflowId()" (ngModelChange)="ecwProviderInAppWorkflowId.set($event)" placeholder="e.g. 29a8c94f-1f64-44ea-a900-1fb97d90dea9" />
+          </label>
+        </section>
+      }
 
       @if (saveError()) {
         <p class="error-banner">{{ saveError() }}</p>
@@ -201,14 +272,14 @@
 
     @if (section() === 'new11') {
     @if (new11Loading()) {
-      <p>Loading New 11 workflow settings…</p>
+      <p>Loading New 11 workflow settings&hellip;</p>
     } @else {
       @if (new11LoadError()) {
         <p class="error-banner">{{ new11LoadError() }}</p>
       }
 
       <section class="settings-section">
-        <h2>New 11 — per-role workflow URLs</h2>
+        <h2>New 11 &mdash; per-role workflow URLs</h2>
         <p class="subtitle">Each role has a <strong>List</strong> workflow and a <strong>Details</strong> workflow. Import Practitioners uses the selected role's Details URL (falling back to List).</p>
 
         <nav class="settings-tabs" aria-label="New 11 role">
@@ -223,7 +294,7 @@
         </nav>
 
         <label class="field">
-          {{ roleLabels[new11SelectedRole()] }} — List Workflow URL
+          {{ roleLabels[new11SelectedRole()] }} &mdash; List Workflow URL
           <input
             type="text"
             [ngModel]="new11()[new11SelectedRole()]?.list"
@@ -232,7 +303,7 @@
           />
         </label>
         <label class="field">
-          {{ roleLabels[new11SelectedRole()] }} — Details Workflow URL
+          {{ roleLabels[new11SelectedRole()] }} &mdash; Details Workflow URL
           <input
             type="text"
             [ngModel]="new11()[new11SelectedRole()]?.details"
