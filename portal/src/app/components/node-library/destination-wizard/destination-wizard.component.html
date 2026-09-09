@@ -74,21 +74,22 @@
             <div class="dw-select-wrap">
               <!-- existingOptions() loads async (getPaged + a hasExecutionHistory check per candidate) — on
                    first render (e.g. reopening a node whose connection was already picked) selectedExistingId()
-                   is already restored, but no matching <option> exists yet, so the browser can't select it and
-                   silently falls back to whatever it defaults to. Angular's [value] binding only re-applies when
-                   the bound expression's VALUE changes, not merely when new <option>s appear — gating on
-                   existingOptions().length forces that value to actually change (''  → the real id) once the
-                   list has real rows to match against, so the binding re-fires and the correct row gets selected. -->
+                   is already restored, but no matching <option> exists yet. A [value] binding on the <select>
+                   itself doesn't work around this: Angular updates a host element's own property bindings
+                   BEFORE processing its child content, so even once existingOptions() loads, [value] would be
+                   (re-)applied in the same change-detection pass but strictly before the @for below inserts the
+                   matching <option> — so it still finds nothing to select. [selected] per <option> instead is
+                   evaluated as part of THAT option's own creation, which by construction only happens once it
+                   already exists — no ordering race. -->
               <select
                 id="dw-existing"
                 class="dw-select"
                 [disabled]="existingOptionsLoading()"
-                [value]="existingOptions().length ? (selectedExistingId() ?? '') : ''"
                 (change)="selectExisting($any($event.target).value)"
               >
-                <option value="" disabled>{{ existingOptionsLoading() ? 'Loading…' : 'Choose a connection…' }}</option>
+                <option value="" disabled [selected]="!selectedExistingId()">{{ existingOptionsLoading() ? 'Loading…' : 'Choose a connection…' }}</option>
                 @for (o of existingOptions(); track o.id) {
-                  <option [value]="o.id">{{ o.name }} ({{ o.destinationType }})</option>
+                  <option [value]="o.id" [selected]="o.id === selectedExistingId()">{{ o.name }} ({{ o.destinationType }})</option>
                 }
               </select>
             </div>
