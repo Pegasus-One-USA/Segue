@@ -1,3 +1,21 @@
+// DialogService renders this component through ngComponentOutlet, so THIS host element is the direct
+// child of dialog-shell's `.app-dialog-panel` — which is already `display: flex; flex-direction: column`
+// with `max-height: 88vh; overflow: hidden`. Without the same treatment here the flex chain breaks at the
+// host: it stays a plain block that grows to its content, `.dcd-content`'s `flex: 1` has no flex parent to
+// resolve against, and its `overflow-y: auto` never gets a bounded height to scroll inside. The panel then
+// clips whatever doesn't fit — taking `mat-dialog-actions` (and with it the Save button) out of reach for
+// any connection form taller than the viewport. `min-height: 0` is the load-bearing half: a flex item
+// defaults to `min-height: auto`, which refuses to shrink below its content and would keep the overflow
+// unreachable even once the host is a flex container.
+//
+// Short forms are unaffected — the host still shrink-wraps its content when everything fits.
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 // ─── Header ─── same icon-avatar + title + subtitle pattern as role-dialog.component.scss, for visual
 // consistency across every custom-DialogService dialog.
 .dialog-header {
