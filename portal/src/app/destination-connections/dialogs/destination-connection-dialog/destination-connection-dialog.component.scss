@@ -7,7 +7,7 @@
 // any connection form taller than the viewport. `min-height: 0` is the load-bearing half: a flex item
 // defaults to `min-height: auto`, which refuses to shrink below its content and would keep the overflow
 // unreachable even once the host is a flex container.
-//
+
 // Short forms are unaffected — the host still shrink-wraps its content when everything fits.
 :host {
   display: flex;
