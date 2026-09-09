@@ -957,10 +957,14 @@ export class EhrVendorSourceFormComponent
    *  existing connection verbatim, and leaving a brand-new node on its default/reused App Name — otherwise the
    *  create call collides with "A source connection named '<name>' already exists." only at workflow-build time. */
   private _allConnectionNames = new Set<string>();
-  /** Only offered when creating a brand-new canvas node — editing an existing node already has its own data, and
-   *  entity mode (Source Connections page) has its own dedicated Create flow, no "clone from existing" need yet. */
+  /** Only offered when creating a brand-new canvas node, or re-opening one whose connection was itself picked
+   *  from this same dropdown (sourceMode() restored to 'existing' by restoreExtendedFieldsFromEditingNode() —
+   *  see its own comment on src_connectionMode) — otherwise re-opening a node before the whole workflow is
+   *  ever saved permanently lost any way back to the dropdown. Still hidden for a node configured as a
+   *  brand-new connection (sourceMode() stays 'new' on reopen); entity mode (Source Connections page) has its
+   *  own dedicated Create flow, no "clone from existing" need yet. */
   protected readonly showSourcePicker = computed(
-    () => this.wiz.wizardMode() === 'canvas' && !this.isEditing,
+    () => this.wiz.wizardMode() === 'canvas' && (!this.isEditing || this.sourceMode() === 'existing'),
   );
 
   // Snapshot of the form's raw value taken once discovery settles after populateFormFromSourceConnection() patches
@@ -1900,14 +1904,6 @@ export class EhrVendorSourceFormComponent
   }
 
   ngOnInit(): void {
-    // "New Source" (the default picker state) needs the same collision defense as "Existing Source" cloning —
-    // otherwise a brand-new node left on the default App Name silently collides with a prior connection of that
-    // exact name, and the raw backend "already exists" error only surfaces later, at workflow build time.
-    if (this.showSourcePicker()) {
-      this.loadAllConnectionNames();
-      this.loadExistingConnections();
-    }
-
     if (this.wiz.isEditing()) {
       // Pre-populate all fields from saved node data
       this.form.controls.audience.setValue(
@@ -1920,7 +1916,18 @@ export class EhrVendorSourceFormComponent
       this.form.controls.authPlacement.setValue(this.wiz.authPlacement());
       this.form.controls.callbackUrl.setValue(this.wiz.redirectUri());
       this.form.controls.launchUrl.setValue(this.wiz.launchUrlWiz());
+      // May restore sourceMode() to 'existing' (src_connectionMode) — must run before the showSourcePicker()
+      // check below, so a re-opened node whose connection was picked from Existing still loads the dropdown's
+      // options instead of rendering it (now visible again) with nothing in it.
       this.restoreExtendedFieldsFromEditingNode();
+    }
+
+    // "New Source" (the default picker state) needs the same collision defense as "Existing Source" cloning —
+    // otherwise a brand-new node left on the default App Name silently collides with a prior connection of that
+    // exact name, and the raw backend "already exists" error only surfaces later, at workflow build time.
+    if (this.showSourcePicker()) {
+      this.loadAllConnectionNames();
+      this.loadExistingConnections();
     }
 
     if (this.wiz.discovered()) {
@@ -2121,6 +2128,15 @@ export class EhrVendorSourceFormComponent
     if (this.isReadonly) {
       this.form.disable({ emitEvent: false });
     }
+
+    // hasExistingChanged()'s baseline for a node re-opened with sourceMode() restored to 'existing' (see
+    // restoreExtendedFieldsFromEditingNode()) — captured last, once every synchronous restoration above has
+    // settled, same snapshot shape used at the discovery-settled callback elsewhere in this file. Safe to take
+    // synchronously here (unlike that callback, which waits out an async Discover call): a plain reopen never
+    // triggers a live re-discovery — the wiz.discovered() block above only replays already-known values.
+    if (this.sourceMode() === 'existing') {
+      this._existingBaseline = this.form.getRawValue();
+    }
   }
 
   /**
@@ -2133,6 +2149,18 @@ export class EhrVendorSourceFormComponent
   private restoreExtendedFieldsFromEditingNode(): void {
     const fields = this.wiz.editingFields() ?? this.fieldsFromEntityDto();
     if (!fields) return;
+
+    // Restores the "picked from Existing" mode itself (see src_connectionMode in save()'s fieldsToSave) —
+    // without this, re-opening such a node before the whole workflow is saved left sourceMode() stuck at its
+    // 'new' default, hiding the "Existing connection" dropdown (showSourcePicker()) with no way back to it.
+    // sourceConnectionId is only ever persisted for the "picked, left untouched" branch (never for a forked/
+    // edited pick, which has no id of its own to restore yet) — falls back to null there, same as
+    // resolvedSourceConnectionId elsewhere in this file. The hasExistingChanged() baseline itself is captured
+    // separately, at the very end of ngOnInit() once the form has fully settled.
+    if (fields['src_connectionMode'] === 'existing') {
+      this.sourceMode.set('existing');
+      this.selectedExistingId.set(fields['sourceConnectionId'] || null);
+    }
 
     const setIfPresent = (control: string, key: string): void => {
       const value = fields[key];
@@ -3835,6 +3863,11 @@ export class EhrVendorSourceFormComponent
             sourceConnectionId: resolvedSourceConnectionId,
           }
         : {}),
+      // Lets restoreExtendedFieldsFromEditingNode() bring sourceMode() back to 'existing' on reopen, so
+      // showSourcePicker() keeps the "Existing connection" dropdown reachable — same always-explicit reasoning
+      // as sourceConnectionResolved above (an omitted key would never clear a stale 'existing' after switching
+      // back to "New Source").
+      src_connectionMode: this.sourceMode() === 'existing' ? 'existing' : '',
     };
 
     // Subscribe BEFORE calling save() — it fires synchronously on success/failure once the HTTP call

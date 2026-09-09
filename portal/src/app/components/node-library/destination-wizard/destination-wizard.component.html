@@ -72,11 +72,18 @@
           <label class="dw-label" for="dw-existing">Existing {{ destLabel() }} connection</label>
           <div class="dw-existing-connection-row">
             <div class="dw-select-wrap">
+              <!-- existingOptions() loads async (getPaged + a hasExecutionHistory check per candidate) — on
+                   first render (e.g. reopening a node whose connection was already picked) selectedExistingId()
+                   is already restored, but no matching <option> exists yet, so the browser can't select it and
+                   silently falls back to whatever it defaults to. Angular's [value] binding only re-applies when
+                   the bound expression's VALUE changes, not merely when new <option>s appear — gating on
+                   existingOptions().length forces that value to actually change (''  → the real id) once the
+                   list has real rows to match against, so the binding re-fires and the correct row gets selected. -->
               <select
                 id="dw-existing"
                 class="dw-select"
                 [disabled]="existingOptionsLoading()"
-                [value]="selectedExistingId() ?? ''"
+                [value]="existingOptions().length ? (selectedExistingId() ?? '') : ''"
                 (change)="selectExisting($any($event.target).value)"
               >
                 <option value="" disabled>{{ existingOptionsLoading() ? 'Loading…' : 'Choose a connection…' }}</option>

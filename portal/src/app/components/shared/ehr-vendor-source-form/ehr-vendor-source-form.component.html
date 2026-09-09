@@ -58,9 +58,12 @@
             <label class="eaf-label" for="eaf-existingConnection">Existing {{ displayVendor() }} Connection</label>
             <div class="eaf-existing-connection-row">
               <div class="eaf-select-wrap">
+                <!-- existingConnections() loads async — see destination-wizard.component.html's identical
+                     [value] fix for why this must gate on the list actually having rows, not just
+                     selectedExistingId() alone, or a restored selection on reopen never visually sticks. -->
                 <select id="eaf-existingConnection" class="eaf-select"
                         [disabled]="loadingExisting()"
-                        [value]="selectedExistingId() ?? ''"
+                        [value]="existingConnections().length ? (selectedExistingId() ?? '') : ''"
                         (change)="onExistingConnectionSelected($any($event.target).value)">
                   <option value="" disabled>
                     {{ loadingExisting() ? 'Loading…' : '— Select a connection —' }}
