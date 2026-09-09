@@ -25,7 +25,12 @@ public sealed record DestinationConnectionProbeRequest(
     // against a plain server), these providers refuse to connect at all if SSL is required but the server
     // doesn't offer it — so this must default false to keep working against local/docker instances with SSL
     // off, and be explicitly opted into for providers that enforce it (e.g. AWS RDS's rds.force_ssl).
-    bool RequireSsl = false);
+    bool RequireSsl = false,
+    // Set when this probe is forking from an already-saved destination (picked "Existing" in the wizard, then
+    // some other field like RequireSsl edited) and Password was left blank — lets the service inherit that
+    // destination's stored password the same way AddDestinationConfigurationAsync does at save time, so testing
+    // a connection doesn't require retyping a password the user never meant to change.
+    Guid? ExistingDestinationId = null);
 
 /// <summary>Result of a connection probe: whether it connected, any error, and the introspected tables.</summary>
 public sealed record DestinationSchemaProbeDto(

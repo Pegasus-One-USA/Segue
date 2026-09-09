@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -24,7 +25,8 @@ public sealed class SqlDestinationSchemaServiceTests
 {
     private readonly SqlDestinationSchemaService _sut = new(
         Mock.Of<IConfigurationRepository>(),
-        Mock.Of<ISecretProvider>());
+        Mock.Of<ISecretProvider>(),
+        Mock.Of<ISqlConnectionSecretMerger>());
 
     private static DestinationConnectionProbeRequest SqlServerConnection() => new(
         DestinationType.SqlServer, Server: "localhost", Database: "FHIRBridge");

@@ -52,6 +52,9 @@ export interface DestinationProbeRequest {
   // PostgreSQL / MySQL only — see DestinationConnectionProbeRequest.RequireSsl on the backend for why this
   // defaults false rather than being hardcoded true like SQL Server's trustServerCertificate/encrypt above.
   requireSsl?: boolean;
+  // Set when forking from an already-saved destination with the password left blank — lets the backend
+  // inherit that destination's stored password (see DestinationConnectionProbeRequest.ExistingDestinationId).
+  existingDestinationId?: string | null;
 }
 
 export interface SchemaMutationResult {

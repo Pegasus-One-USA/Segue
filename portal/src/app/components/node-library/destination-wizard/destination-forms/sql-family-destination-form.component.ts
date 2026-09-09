@@ -178,6 +178,10 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
       trustServerCertificate: true,
       encrypt: true,
       requireSsl: v.requireSsl ?? false,
+      // Harmless when password is filled in (the backend only consults this when password is blank) — always
+      // included so a fork-and-edit-one-field probe (e.g. toggling Require SSL) can still inherit the stored
+      // password instead of failing with an auth error.
+      existingDestinationId: this.existingDestinationId() || undefined,
     };
   }
 
@@ -185,8 +189,13 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
     this.probeState.set('testing');
     this.probeError.set(null);
 
-    // Reusing an already-saved connection without retyping the password can't run the raw credential probe
-    // (there's nothing to send) — introspect the live schema through the stored secret server-side instead.
+    // Fast path for the fully-unchanged case: nothing edited since an existing connection was picked, so
+    // introspect the live schema through the stored secret server-side rather than round-tripping the same
+    // fields back out as a raw probe. If something ELSE has since changed (e.g. Require SSL) while the
+    // password is still blank, this falls through to schemaSvc.probe() below instead — getProbeRequest()
+    // carries existingDestinationId() through so the backend can still inherit the stored password there too
+    // (see DestinationConnectionProbeRequest.ExistingDestinationId), rather than sending a blank one and
+    // getting an auth error.
     const destinationId = this.existingDestinationId();
     if (this.reusingExisting() && !this.sqlForm.value.password && destinationId) {
       this.schemaSvc.getSchema(destinationId).subscribe({
