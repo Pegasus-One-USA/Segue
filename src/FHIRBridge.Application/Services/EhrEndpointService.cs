@@ -41,12 +41,13 @@ public sealed class EhrEndpointService : IEhrEndpointService
         }).ToArray();
     }
 
-    public async Task<PagedResult<EhrEndpointDto>> GetPagedAsync(
+    public async Task<EhrEndpointPageDto> GetPagedAsync(
         EhrEndpointFilter filter, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken)
     {
         var paged = await _repository.GetPagedAsync(filter, sortDescending, page, pageSize, cancellationToken);
         var dtos = await ResolveDisplayNamesAsync(paged.Items.Select(EhrEndpointMapper.ToDto).ToArray(), cancellationToken);
-        return new PagedResult<EhrEndpointDto>(dtos, paged.TotalCount, paged.Page, paged.PageSize);
+        var availableVendors = await _repository.GetDistinctVendorsAsync(cancellationToken);
+        return new EhrEndpointPageDto(dtos, paged.TotalCount, paged.Page, paged.PageSize, availableVendors);
     }
 
     public async Task<IReadOnlyList<PublicEhrEndpointDto>> GetPublicEndpointsAsync(

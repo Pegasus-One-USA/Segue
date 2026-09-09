@@ -38,7 +38,7 @@ public sealed class EhrEndpointsController : ControllerBase
 
     [HttpGet("paged")]
     [StandardPermission(PermissionGroupCode.EhrEndpoints, PermissionActionCode.View, description: "View the EHR endpoint directory.")]
-    [ProducesResponseType(typeof(PagedResult<EhrEndpointDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(EhrEndpointPageDto), StatusCodes.Status200OK)]
     /// <param name="vendor">The screen's "Source" dropdown — a <see cref="SourceSystemType"/> member name.</param>
     /// <param name="isActive">The screen's "Status" dropdown; see <see cref="EhrEndpointFilter.IsActive"/>.</param>
     public async Task<IActionResult> ListPaged(

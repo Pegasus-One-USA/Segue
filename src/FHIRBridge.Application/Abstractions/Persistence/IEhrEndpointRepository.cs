@@ -20,6 +20,11 @@ public interface IEhrEndpointRepository
     Task<PagedResult<EhrEndpoint>> GetPagedAsync(
         EhrEndpointFilter filter, bool? sortDescending, int page, int pageSize, CancellationToken cancellationToken);
 
+    /// <summary>Distinct vendors that actually have endpoint rows, for the listing's Source filter options.
+    /// Deliberately unfiltered: the option list must not shrink as filters are applied, or picking a vendor would
+    /// remove every other vendor from the dropdown it was picked from.</summary>
+    Task<IReadOnlyList<SourceSystemType>> GetDistinctVendorsAsync(CancellationToken cancellationToken);
+
     /// <summary>Filtered at the query level (not GetAllAsync + in-memory filter) — the directory can be in the
     /// hundreds of rows. <paramref name="endpointType"/> scopes the anonymous public listing to one audience (Epic
     /// sandbox rows for Provider Standalone, MyChart rows for Patient Standalone — see EhrPublicEndpointsController)

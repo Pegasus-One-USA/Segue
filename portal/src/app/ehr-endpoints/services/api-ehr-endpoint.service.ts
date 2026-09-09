@@ -4,7 +4,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { EHR_ENDPOINTS_ENDPOINTS } from '../../core/api-endpoints';
 import { IEhrEndpointService } from './i-ehr-endpoint.service';
-import { EhrEndpoint, EhrEndpointFilter, EhrEndpointRequest, PagedResult } from '../models/ehr-endpoint.model';
+import { EhrEndpoint, EhrEndpointFilter, EhrEndpointPage, EhrEndpointRequest } from '../models/ehr-endpoint.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApiEhrEndpointService extends IEhrEndpointService {
@@ -16,7 +16,7 @@ export class ApiEhrEndpointService extends IEhrEndpointService {
     );
   }
 
-  getPaged(filter: EhrEndpointFilter): Observable<PagedResult<EhrEndpoint>> {
+  getPaged(filter: EhrEndpointFilter): Observable<EhrEndpointPage> {
     let params = new HttpParams()
       .set('page', String(filter.page))
       .set('pageSize', String(filter.pageSize));
@@ -26,7 +26,7 @@ export class ApiEhrEndpointService extends IEhrEndpointService {
     if (filter.isActive !== undefined) params = params.set('isActive', String(filter.isActive));
     if (filter.sortDescending !== undefined) params = params.set('sortDescending', String(filter.sortDescending));
 
-    return this.http.get<PagedResult<EhrEndpoint>>(EHR_ENDPOINTS_ENDPOINTS.paged, { params }).pipe(
+    return this.http.get<EhrEndpointPage>(EHR_ENDPOINTS_ENDPOINTS.paged, { params }).pipe(
       catchError(err => throwError(() => err))
     );
   }
