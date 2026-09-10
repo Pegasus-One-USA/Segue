@@ -1,0 +1,283 @@
+src/FHIRBridge.Application/Services/Transforms/IEffectiveRuleResolver.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 26-38,47-48,68-69,85-87,93-106
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_ff1783aeb2308e::t_49dfa45eecb7bf 213-218,238-243
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260910055856_AddApiRequestLogDirection.cs
+  s_ff1783aeb2308e::t_cf5470129141e3 1-39
+src/Api/FHIRBridge.Api/Workflows/WorkflowSummaryModels.cs
+  s_0ec8c47e2242b5::t_fc4bac94c1c282 27-28
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_0ec8c47e2242b5::t_1cbebdc0ee4f9c 425-435
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineTransformTypedFieldTests.cs
+  s_9887a5542e9450::t_c3719c541d1fe8 1-50
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRunStatus.cs
+  s_ff1783aeb2308e::t_1afa7afbfe5b01 1,18-35
+portal/src/app/services/workflow-api.service.ts
+  s_0ec8c47e2242b5::t_c401a7cd8ecb66 51-52,84,274,304-305,489-493
+src/Api/FHIRBridge.Api/Controllers/V1/PatientStandaloneLaunchController.cs
+  s_ff1783aeb2308e::t_ad4302918d1fe5 1,6,35-36,42-44,50-68,82-87,93-96,103-108,132-136,143-149
+tests/FHIRBridge.UnitTests/Validation/CreateMappingProfileRequestValidatorTests.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 45,187-261,410
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_ff1783aeb2308e::t_07d57dd1564024 464-467,599-656,696,929
+src/FHIRBridge.Infrastructure/Security/DataProtectionLaunchTokenProtector.cs
+  s_ff1783aeb2308e::t_b2934af7e172d5 236
+  s_ff1783aeb2308e::t_0b54efb25ebe65 1,46-52,57-58,62,67-68,79-81,135-148,215-216,221,230-231
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260910055856_AddApiRequestLogDirection.Designer.cs
+  s_ff1783aeb2308e::t_cf5470129141e3 1-5993
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceLogger.cs
+  s_ff1783aeb2308e::t_07d57dd1564024 1,211-212
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_9887a5542e9450::t_cae9c4a057ff58 211-214,218,231-236
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260910080410_AddWorkflowDefinitionDescription.cs
+  s_0ec8c47e2242b5::t_9e8a1c3f1e4fec 1-29
+portal/src/app/governance/pages/correlation-search/correlation-search.component.scss
+  s_ff1783aeb2308e::t_ce05475d56f22b 1,244-256,258-266
+portal/src/app/services/workflow-build-assembler-v2.whole-payload-json.spec.ts
+  s_4885132b851241::t_f3671ea8acee3c 1-48
+src/Api/FHIRBridge.Api/Security/InboundApiRequestLoggingMiddleware.cs
+  s_ff1783aeb2308e::t_8f9de37ade5629 1-91
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Validation/WorkflowRunValidationModels.cs
+  s_ff1783aeb2308e::t_f7458a586c3d58 1-71
+src/FHIRBridge.Application/DTOs/MappingFieldDto.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 38-46
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_0ec8c47e2242b5::t_fc4bac94c1c282 21-22
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_9887a5542e9450::t_69be8065685806 152-157,188-193
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260910080410_AddWorkflowDefinitionDescription.Designer.cs
+  s_0ec8c47e2242b5::t_9e8a1c3f1e4fec 1-5997
+portal/src/app/operations/pages/api-requests/api-requests.component.html
+  s_ff1783aeb2308e::t_b7a2895eaf6fa4 1,43-49
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_0ec8c47e2242b5::t_c401a7cd8ecb66 99,103
+  s_4885132b851241::t_f47e7791588f85 1284-1289
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_ff1783aeb2308e::t_954307c6c3f51d 1,125-128
+  s_ff1783aeb2308e::t_dd86f0d2b532b1 129
+tests/FHIRBridge.UnitTests/Configuration/MappingImportServiceTests.cs
+  s_4885132b851241::t_8bee9b7432a2b4 38-40,52-56,161-185,187-226
+  s_4885132b851241::t_8468ff1ce5979a 186
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.ts
+  s_ff1783aeb2308e::t_a47ba4289f037d 1,69-85,285-294,407-438,540-551,739-746,786-843,876-892,906,1040,1122-1129,1155,1184-1186,1236
+src/FHIRBridge.Domain/Entities/Governance/ApiRequestLog.cs
+  s_ff1783aeb2308e::t_07d57dd1564024 1,6-12,28-29,39,49-62
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260910080349_AddWorkflowDefinitionDescription.Designer.cs
+  s_0ec8c47e2242b5::t_a7e40d847312e8 1-6031
+src/Worker/FHIRBridge.Worker/ValidatedRunExpiryWorker.cs
+  s_ff1783aeb2308e::t_954307c6c3f51d 1-78
+Demo_TestApp/backend/BackendSystemEndpoints.cs
+  s_ff1783aeb2308e::t_4dfbda298b8d70 1,111,118-119,162-197,201-210,710-714
+src/Api/FHIRBridge.Api/Security/HttpContextRequestCorrelationStamper.cs
+  s_ff1783aeb2308e::t_5c3b43747cf3c7 1-24
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_4885132b851241::t_810e821b3a7a8f 244,289-301,314
+src/FHIRBridge.Application/Abstractions/Security/WorkflowCorrelationId.cs
+  s_ff1783aeb2308e::t_8f9de37ade5629 1-67
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_0ec8c47e2242b5::t_1cbebdc0ee4f9c 40,251-253
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_4885132b851241::t_17fa16eb6bf7ec 235-273
+src/FHIRBridge.Application/DTOs/GovernanceDtos.cs
+  s_ff1783aeb2308e::t_c847e38bcb82aa 1,125-130
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_0ec8c47e2242b5::t_9e8a1c3f1e4fec 4879-4882
+  s_ff1783aeb2308e::t_cf5470129141e3 718-724,756-757
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Validation/WorkflowRunValidator.cs
+  s_ff1783aeb2308e::t_8f9de37ade5629 1-42
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.scss
+  s_0ec8c47e2242b5::t_e52bb95fede294 239
+  s_0ec8c47e2242b5::t_9c9f2dff69586e 238,240-277
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/launch-standalone-patient.ts
+  s_ff1783aeb2308e::t_00cb2730be84cd 1,176-178,484-510
+Demo_TestApp/backend/Program.cs
+  s_ff1783aeb2308e::t_f60bd96158f5cb 1,419-427,430-458
+  s_ff1783aeb2308e::t_4e8347697e589f 3
+portal/src/app/operations/pages/api-requests/api-requests.component.ts
+  s_ff1783aeb2308e::t_b7a2895eaf6fa4 1,27
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Validation/WorkflowIsRunnableRule.cs
+  s_ff1783aeb2308e::t_8f9de37ade5629 1-40
+tests/FHIRBridge.UnitTests/Transforms/EffectiveRuleResolverTests.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 36-58,62-112
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260910080349_AddWorkflowDefinitionDescription.cs
+  s_0ec8c47e2242b5::t_a7e40d847312e8 1-29
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_ff1783aeb2308e::t_f7458a586c3d58 1,77-113,291-382,409-412,416-420
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_ff1783aeb2308e::t_97f7d822c5180d 1,74-102
+src/FHIRBridge.Application/Validation/CreateMappingProfileRequestValidator.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 172,174-181,218-223,231,234-235
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_0ec8c47e2242b5::t_fc4bac94c1c282 11,13,69-71
+  s_ff1783aeb2308e::t_94b37adfa81cfa 57-60
+  s_0ec8c47e2242b5::t_c3de8ca91761cf 1,12
+src/Api/FHIRBridge.Api/Program.cs
+  s_ff1783aeb2308e::t_07d57dd1564024 1,166-168,377-388,564-569
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_ff1783aeb2308e::t_49dfa45eecb7bf 1,232-237
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowDefinition.cs
+  s_0ec8c47e2242b5::t_85e76ac661b16e 8-14,31,38-42,119,140-142,161-163
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_ff1783aeb2308e::t_f7458a586c3d58 971
+  s_ff1783aeb2308e::t_6e7c167d3f961f 291,298,313-314,349-350,503-507,695,1156-1174
+  s_ff1783aeb2308e::t_60173aa21c9a75 1,24,57-58,77-79,98-99,260-261,426-427,474-475,497-502,508,666-671,684-688,692-694,696,956-970,972,974-975,1175-1190
+  s_ff1783aeb2308e::t_aa900446a4bb93 105
+  s_ff1783aeb2308e::t_ad4302918d1fe5 106
+portal/src/app/operations/pages/api-requests/api-requests.component.scss
+  s_ff1783aeb2308e::t_b7a2895eaf6fa4 79-81,83-84
+  s_ff1783aeb2308e::t_90981696d787d4 1,70-71,74-78
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 233-234,238
+src/Api/FHIRBridge.Api/Workflows/WorkflowBuildModels.cs
+  s_0ec8c47e2242b5::t_fc4bac94c1c282 28,30
+  s_0ec8c47e2242b5::t_c3de8ca91761cf 29
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_4885132b851241::t_17fa16eb6bf7ec 235-273
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_ff1783aeb2308e::t_65335999fe5f60 765
+  s_ff1783aeb2308e::t_5c64eec0ae6675 726-732,764
+  s_0ec8c47e2242b5::t_a7e40d847312e8 4913-4916
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 547,602,658
+Demo_TestApp/frontend/src/app/demo-types/patient-standalone/core/services/patient-standalone-launch.service.ts
+  s_ff1783aeb2308e::t_a3746da48a956f 277-279
+  s_ff1783aeb2308e::t_00cb2730be84cd 1,98-105,328,334-382,395,425-427,445
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.html
+  s_0ec8c47e2242b5::t_74c5b6d65c5192 85-97
+  s_0ec8c47e2242b5::t_47e3f0bb331030 84
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_ff1783aeb2308e::t_ce05475d56f22b 280,282-289
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_9887a5542e9450::t_505dddb3c9f4b7 103-106
+tests/FHIRBridge.UnitTests/Validation/NoOpEffectiveRuleResolver.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 22-23
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_0ec8c47e2242b5::t_c401a7cd8ecb66 116,214
+src/FHIRBridge.Application/Abstractions/Security/IRequestCorrelationStamper.cs
+  s_ff1783aeb2308e::t_5c3b43747cf3c7 1-33
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_9887a5542e9450::t_69be8065685806 271
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_4885132b851241::t_f47e7791588f85 1281-1286
+src/FHIRBridge.Application/Services/Transforms/ITransformationRuleService.cs
+  s_ff1783aeb2308e::t_07d57dd1564024 31-36,54-56,65-66
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260910055827_AddApiRequestLogDirection.cs
+  s_ff1783aeb2308e::t_5c64eec0ae6675 1-39
+src/Worker/FHIRBridge.Worker/ValidatedRunExpiryOptions.cs
+  s_ff1783aeb2308e::t_954307c6c3f51d 1-21
+src/Api/FHIRBridge.Api/Controllers/V1/TransformationRulesController.cs
+  s_ff1783aeb2308e::t_07d57dd1564024 89-93,152-156,161
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_ff1783aeb2308e::t_3a268506b8e835 340,342
+  s_ff1783aeb2308e::t_c847e38bcb82aa 8,341,345-352
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowServiceCollectionExtensions.cs
+  s_ff1783aeb2308e::t_07d57dd1564024 1,5,23-28
+src/FHIRBridge.Application/Abstractions/Persistence/ITransformationRuleRepository.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 66-77
+src/FHIRBridge.Application/Abstractions/Sources/IInteractiveSourceAuthorizationService.cs
+  s_ff1783aeb2308e::t_aa900446a4bb93 1,88
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260910055827_AddApiRequestLogDirection.Designer.cs
+  s_ff1783aeb2308e::t_5c64eec0ae6675 1-6027
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IWorkflowRunStore.cs
+  s_ff1783aeb2308e::t_f7458a586c3d58 1,16-37
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_9887a5542e9450::t_7b79c8e93a94d0 3104-3105,3108-3115
+  s_0ec8c47e2242b5::t_ff8b86554c5fa5 2801-2812,4569-4571
+src/FHIRBridge.Infrastructure/Workflows/Validation/PatientScopeRequiredRule.cs
+  s_ff1783aeb2308e::t_8fff0513625d1e 1-66
+src/FHIRBridge.Application/Governance/ApiRequestStepDescriber.cs
+  s_ff1783aeb2308e::t_494e10b6020427 1-83
+src/FHIRBridge.Infrastructure/Workflows/Validation/LaunchEndpointKnownRule.cs
+  s_ff1783aeb2308e::t_9cf979a60f215e 1,17-20,22
+  s_ff1783aeb2308e::t_f9ae0a0d566fa2 2-16,21,23-49
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_ff1783aeb2308e::t_ad4302918d1fe5 1-2,29,37,44,48-85,121-127,148-152,252-258,274-278,305-310,318-322
+src/Api/FHIRBridge.Api/Security/WorkflowCorrelationResolver.cs
+  s_ff1783aeb2308e::t_5c3b43747cf3c7 1-108
+src/FHIRBridge.Application/Abstractions/Security/ILaunchTokenProtector.cs
+  s_ff1783aeb2308e::t_0b54efb25ebe65 1,15,22,53-56
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 155-172
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_9887a5542e9450::t_5d26453b930ba9 909-924,927,969-971
+  s_0ec8c47e2242b5::t_e05bd5e3477349 101-103,262-265,312,487,950-951,1087
+  s_0ec8c47e2242b5::t_e52bb95fede294 513,968
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 55,74,499-500,507-517,572-573,575-581
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Governance/ApiRequestLogConfiguration.cs
+  s_ff1783aeb2308e::t_07d57dd1564024 1,18-19,24-26
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_9887a5542e9450::t_1c7ff8c860730d 117-118
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowRunStore.cs
+  s_ff1783aeb2308e::t_f7458a586c3d58 1,84-131,171-173
+src/FHIRBridge.Application/DTOs/CreateMappingProfileRequest.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 13-20
+tests/FHIRBridge.UnitTests/Configuration/WorkflowConfigurationCleanupServiceTests.cs
+  s_9887a5542e9450::t_505dddb3c9f4b7 235-239
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_4885132b851241::t_810e821b3a7a8f 244,289-301,314
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_ff1783aeb2308e::t_18489f72af216b 1,20,296-302,441-442,603-604,631-632,1165-1169,1202-1292,1297,1308-1314,1361-1373,1376,2740-2741
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Auth/IOAuthAuthorizationStateStore.cs
+  s_ff1783aeb2308e::t_b2934af7e172d5 1,51-54
+src/FHIRBridge.Infrastructure/Governance/ApiRequestLoggingHandler.cs
+  s_ff1783aeb2308e::t_3773188ecbbb7a 1,60-82
+portal/src/app/operations/models/operations.model.ts
+  s_ff1783aeb2308e::t_ce05475d56f22b 1,96-100
+src/BuildingBlocks/FHIRBridge.Governance/GovernanceEntries.cs
+  s_ff1783aeb2308e::t_07d57dd1564024 1,98-101
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_0ec8c47e2242b5::t_ff8b86554c5fa5 2931-2942,4705-4707
+  s_9887a5542e9450::t_505dddb3c9f4b7 3234-3238,3241-3248
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_ff1783aeb2308e::t_db4ab8fe420e38 43-44,685-691
+src/FHIRBridge.Application/Services/MappingImportService.cs
+  s_4885132b851241::t_0a3161bfd08dd5 78,84,96,169,284,302-307,404-413,455-477
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_ff1783aeb2308e::t_dc160f7d999e31 1,22,31-32,40,55-62
+  s_ff1783aeb2308e::t_645f45eb8f9dbf 3
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/InMemoryWorkflowRunStore.cs
+  s_ff1783aeb2308e::t_f7458a586c3d58 1,25-56
+src/FHIRBridge.Application/Services/Transforms/RuleSourceFieldFormat.cs
+  s_9887a5542e9450::t_88231ff93b0b65 1-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a99f70b7b597c4b0f84f20ac772a18538392f7c8",
+  "prompts": {},
+  "sessions": {
+    "s_0ec8c47e2242b5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "734f1967-8e1f-4ec2-a25c-6451c9703c30",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_4885132b851241": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b8525ced-41dc-4577-b051-b14d66fa3a49",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_9887a5542e9450": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dc423aa5-82a0-4df7-9696-752cf66f2ddd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_ff1783aeb2308e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36ab59bd-46b6-49c5-8ef3-39a55a61c86f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
