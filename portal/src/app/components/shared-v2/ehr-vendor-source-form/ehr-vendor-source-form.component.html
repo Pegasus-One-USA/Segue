@@ -299,7 +299,14 @@
             </label>
             <div class="eaf-select-wrap">
               <select id="eaf-authMethod" class="eaf-select" formControlName="authMethod">
-                <option value="public">Public Client + PKCE (no secret)</option>
+                <!-- Public Client + PKCE is only valid for interactive audiences (EHR launch / standalone /
+                     patient). Backend System is client_credentials — no authorization code for PKCE to protect,
+                     no user/redirect — so it authenticates only with a Client Secret (plain OAuth2) or a signed
+                     JWT (private_key_jwt / SMART Backend Services). Vendor portals reflect this: e.g. athenahealth's
+                     Backend app registration offers only Client Secret and JWT, never a public/PKCE client. -->
+                @if (audience() !== 'backend-system') {
+                  <option value="public">Public Client + PKCE (no secret)</option>
+                }
                 <option value="secret">Client Secret</option>
                 <option value="jwt">JWT / Private Key (JWKS)</option>
               </select>

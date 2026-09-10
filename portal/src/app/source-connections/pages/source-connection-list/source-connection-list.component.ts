@@ -285,9 +285,17 @@ export class SourceConnectionListComponent implements OnInit, OnDestroy {
 
     // Independent of the list load above — a failure here shouldn't block the grid from rendering, it just
     // leaves Edit/Delete enabled until it succeeds (fails safe toward "editable", not toward "silently blocked").
+    // The usage endpoint (/workflows/source-connection-usage) is UnifiedAdmin-only — it walks every workflow's
+    // nodes, see WorkflowEndpoints.cs — so a non-admin role (e.g. Audit with only sourceconnections.view) always
+    // gets 401/403 here. That's expected, not a real failure: the check only pre-disables Edit/Delete on in-use
+    // connections, and the backend re-validates the same in-use guard on the actual edit/delete regardless. So
+    // swallow an auth denial silently; surface the toast only for a genuine (network/server) failure worth acting on.
     this.svc.getUsedIds().subscribe({
       next: ids => this.usedConnectionIds.set(new Set(ids)),
-      error: () => this.toast.error('Could not check workflow usage — Edit/Delete may be enabled for a connection still in use.'),
+      error: (err: HttpErrorResponse) => {
+        if (err.status === 401 || err.status === 403) return;
+        this.toast.error('Could not check workflow usage — Edit/Delete may be enabled for a connection still in use.');
+      },
     });
   }
 
