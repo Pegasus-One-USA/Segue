@@ -18,9 +18,8 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// <see cref="ConfigurationsController"/>.
 /// </summary>
 /// <remarks>
-/// No class-level policy: Source Connections listing stays UnifiedAdmin (unchanged, out of scope for the
-/// menu-level permission tree — see per-action attributes below), while Destinations and Mapping Profiles
-/// listing now use their own dedicated View permission instead.
+/// No class-level policy: Source Connections, Destinations, and Mapping Profiles listing each use their
+/// own dedicated View permission (see per-action attributes below) rather than a shared class-wide policy.
 /// </remarks>
 [ApiController]
 [Authorize]
@@ -45,7 +44,7 @@ public sealed class ConfigurationCatalogController : ControllerBase
     }
 
     [HttpGet("source-connections")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.View, description: "View the list of source connections.")]
     [ProducesResponseType(typeof(IReadOnlyList<SourceConnectionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListSourceConnections(CancellationToken cancellationToken)
     {
@@ -63,7 +62,7 @@ public sealed class ConfigurationCatalogController : ControllerBase
     }
 
     [HttpGet("source-connections/paged")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.View, description: "View the list of source connections.")]
     [ProducesResponseType(typeof(PagedResult<SourceConnectionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListSourceConnectionsPaged(
         [FromQuery] string? search,
