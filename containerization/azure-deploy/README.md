@@ -128,29 +128,33 @@ customer a genuinely native "Deploy" experience inside their own Portal:
 
 ## Notes and known limitations (same as the Terraform Azure environment)
 
-- **Postgres + Redis are containerized by default**, pinned to a single replica each. Set
-  `useAzurePostgresql=true` to use a managed Azure Database for PostgreSQL Flexible Server instead
-  (no container, no volume; Azure manages patching/backups/HA). Set `useAzureCacheForRedis=true` to
-  use an Azure Managed Redis cluster instead of the containerized Redis (no container, no
-  volume, no self-signed cert to generate — `redisPassword`/`redisTrustedCertificateThumbprint` are
-  ignored in that mode). Classic Azure Cache for Redis (`Microsoft.Cache/redis`) is being retired and
-  is already blocked for new caches in some subscriptions — see
-  https://aka.ms/AzureCacheForRedisRetirement — so this path deploys the newer
-  `Microsoft.Cache/redisEnterprise` resource instead. Both toggles are exposed in the `createUiDefinition.json` wizard (Tier 3)
-  as "deployment type" choices; the plain Tier 2 button auto-generates its form from `main.json`
-  and exposes the same two booleans directly.
-- **Containerized Postgres does NOT actually live on Azure Files**, despite the volume mount on
-  `postgresApp` — Postgres's own startup permission check (`chmod 0700` on the data directory,
-  enforced on every start, not just first init) can never pass on Azure Files, since it's SMB and
-  Container Apps' `azureFile` storage type exposes no mount-options/NFS alternative. The custom
-  `fhirbridge-postgres` image (`containerization/docker/postgres-local`) instead runs Postgres on
-  the container's own local (ephemeral) disk, and uses the Azure Files mount purely as an at-rest
-  backup target — restored into local storage on container start, saved back out only on a
-  **graceful** stop. Anything written since the last graceful shutdown is lost on a crash, a
-  forcibly-killed replica, or Container Apps exceeding the (generously set, 90s)
-  `terminationGracePeriodSeconds`. This is a real durability tradeoff, acceptable for a demo/test
-  environment specifically — for anything that needs guaranteed durability, use
-  `useAzurePostgresql=true` instead, which has no such caveat.
+- **Postgres defaults to managed (`useAzurePostgresql=true`), Redis defaults to containerized.**
+  Managed Postgres (Azure Database for PostgreSQL Flexible Server — no container, no volume; Azure
+  manages patching AND automated daily backups with point-in-time restore) became the default
+  specifically for that last part — see the next bullet for what you're opting into by switching it
+  to `false`. Set `useAzureCacheForRedis=true` to use an Azure Managed Redis cluster instead of the
+  containerized Redis (no container, no volume, no self-signed cert to generate —
+  `redisPassword`/`redisTrustedCertificateThumbprint` are ignored in that mode). Classic Azure Cache
+  for Redis (`Microsoft.Cache/redis`) is being retired and is already blocked for new caches in some
+  subscriptions — see https://aka.ms/AzureCacheForRedisRetirement — so this path deploys the newer
+  `Microsoft.Cache/redisEnterprise` resource instead. Both toggles are exposed in the
+  `createUiDefinition.json` wizard (Tier 3) as "deployment type" choices; the plain Tier 2 button
+  auto-generates its form from `main.json` and exposes the same two booleans directly.
+- **Containerized Postgres (`useAzurePostgresql=false`) does NOT actually live on Azure Files**,
+  despite the volume mount on `postgresApp` — Postgres's own startup permission check (`chmod 0700`
+  on the data directory, enforced on every start, not just first init) can never pass on Azure
+  Files, since it's SMB and Container Apps' `azureFile` storage type exposes no mount-options/NFS
+  alternative. The custom `fhirbridge-postgres` image (`containerization/docker/postgres-local`)
+  instead runs Postgres on the container's own local (ephemeral) disk, and uses the Azure Files
+  mount purely as an at-rest backup target — restored into local storage on container start, saved
+  back out only on a **graceful** stop. Anything written since the last graceful shutdown is lost on
+  a crash, a forcibly-killed replica, or Container Apps exceeding the (generously set, 90s)
+  `terminationGracePeriodSeconds`. Choosing this path also creates `postgresBackupJob` — a
+  Container Apps Job (`containerization/docker/postgres-backup`) that runs `pg_dump` hourly and
+  uploads the result to a dedicated `postgres-backups` blob container, as a compensating control —
+  it bounds data loss to one hour instead of "unpredictable," but restoring is a manual
+  `gunzip | psql` from the newest dump, not a one-click Azure restore. For anything that needs
+  guaranteed, one-click-restorable durability, use `useAzurePostgresql=true` (the default) instead.
 - **`fhirbridge-app` and `worker` both auto-migrate `FHIRBridgeDb`** on first boot and can race on
   the initial `CREATE DATABASE` on a brand-new database; Container Apps replaces crashed replicas
   automatically, turning a lost race into a self-healing retry. See the containerization guide
@@ -168,7 +172,33 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   an automatic fallback). Granting that RBAC needs Owner/User Access Administrator on the resource
   group — see `enableTenantSecretsKeyVault`'s description in `main.bicep` for the manual fallback if
   the deploying identity only has Contributor. Exposed in the wizard as the "Tenant/app secret
-  storage" choice.
+  storage" choice. The vault always has purge protection on (`enablePurgeProtection: true`,
+  alongside the existing 7-day soft-delete) — this specifically protects `phi-encryption-key` (one
+  of the 4 app-level secrets provisioned once this is enabled), which is never rotated by design;
+  losing the vault before its recovery window is up would have the same effect as losing that key
+  outright. This is a one-way setting on Azure's side — it can't later be turned off for this vault.
+- **Storage account defaults to zone-redundant (`storageRedundancy=Standard_ZRS`)**, applying to
+  Azure Files data (whichever of Postgres/Redis/Seq are containerized) and the Postgres backup
+  container above — synchronously replicated across 3 datacenters in the region instead of one.
+  Not every Azure region supports it; switch to `Standard_LRS` if a deploy fails with a SKU/region
+  error on the storage account. Exposed in the wizard as the "Storage redundancy" choice.
+- **No Web Application Firewall by default.** Set `enableFrontDoorWaf=true` to put an Azure Front
+  Door (Standard tier) profile with a managed-rule WAF policy in front of `fhirbridge-app` — Front
+  Door is both a WAF and a global load balancer in one resource, so this single toggle gets both.
+  Created in this same deployment (unlike custom domains above, Front Door only needs the app's
+  FQDN as a one-way origin reference, not a circular self-reference). `wafPolicyMode` (default
+  `Prevention`) controls whether it actually blocks flagged requests or only logs them
+  (`Detection`) — Prevention is the default here rather than the more commonly advised "start in
+  Detection, graduate later," specifically because this template ships to many independent client
+  installs with no central place to watch each one's logs and decide when it's safe to flip; left
+  in Detection, it would likely just stay a no-op indefinitely. Once enabled, use the deployment's
+  `frontDoorEndpointUrl` output as the real entry point instead of `fhirbridgeAppUrl` — traffic sent
+  straight to `fhirbridgeAppUrl` still reaches the app directly, bypassing the WAF entirely, since
+  Standard tier has no Private Link to hide that origin address behind. That gap is low-risk in
+  practice (the address isn't published anywhere once a custom domain is set) but not fully closed;
+  closing it needs either a Premium-tier Private Link origin or an app-side check rejecting requests
+  missing a header Front Door injects — neither is done by this toggle. Both are exposed in the
+  wizard as the "Web Application Firewall" and "WAF policy mode" choices.
 - **No centralized log viewing by default.** Set `enableSeq=true` to add a Seq container
   (`datalust/seq`, public image) with its own external ingress — `Observability:SeqServerUrl` is
   automatically pointed at it on `fhirbridge-app` (both the Api and Gateway processes read this same

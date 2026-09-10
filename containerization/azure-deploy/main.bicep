@@ -39,8 +39,8 @@ param namePrefix string = 'fhirbridge'
 @description('Azure region for every resource. Defaults to the resource group\'s own region.')
 param location string = resourceGroup().location
 
-@description('Chooses which Postgres FHIRBridge\'s own database (FHIRBridgeDb) gets. false (default) keeps a containerized Postgres (stock postgres:16-alpine, Azure Files-backed persistence, single replica, internal-only network access). true creates a managed Azure Database for PostgreSQL Flexible Server instead and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no volume; Azure manages patching/backups/HA.')
-param useAzurePostgresql bool = false
+@description('Chooses which Postgres FHIRBridge\'s own database (FHIRBridgeDb) gets. true (default, recommended) creates a managed Azure Database for PostgreSQL Flexible Server and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no volume; Azure manages patching, and (the reason this became the default) automated daily backups with point-in-time restore for a configurable window. false instead keeps a containerized Postgres (stock postgres:16-alpine, single replica) — its data lives on the container\'s own local disk and is only copied out to Azure Files on a graceful shutdown (see postgresApp\'s own comment), so a crash can lose recent data with no fixed limit. Choosing false also creates postgresBackupJob below — a scheduled pg_dump-to-Blob-Storage job that meaningfully reduces that risk (bounds data loss to one backup interval instead of "unpredictable"), but it is a compensating control, not parity with Flexible Server\'s point-in-time restore: restoring means manually running psql against the newest dump, not a one-click Azure restore.')
+param useAzurePostgresql bool = true
 
 @description('Password for FHIRBridge\'s own Postgres database. In the containerized path (useAzurePostgresql = false) this is the \'fhirbridge\' role\'s password; in the managed path (true) this is the Flexible Server\'s administrator password directly. Required either way.')
 @secure()
@@ -98,6 +98,13 @@ param seqAdminPassword string = ''
 @description('Seq container size. Only consulted when enableSeq is true.')
 @allowed(['Small', 'Medium', 'Large', 'XLarge'])
 param seqSize string = 'Small'
+
+@description('false (default) — fhirbridgeApp is reached directly at its *.azurecontainerapps.io URL, with no inspection layer in front of it. true creates an Azure Front Door (Standard tier) profile with a WAF policy in front of fhirbridgeApp — Front Door is both a global HTTP load balancer and a WAF in one resource, so this single toggle gets both. Standard (not Premium) keeps cost down and is enough to start; the one thing it does not close is that fhirbridgeApp\'s own *.azurecontainerapps.io address stays technically reachable directly, bypassing Front Door, since Standard has no Private Link to hide the origin behind — that address is not published anywhere once a custom domain is set, so real-world exposure is low. See wafPolicyMode below for whether the WAF actually blocks anything, and the Front Door resources further down for the full reasoning, including why this can be created in this SAME deployment unlike the custom-domain flow above.')
+param enableFrontDoorWaf bool = false
+
+@description('Only consulted when enableFrontDoorWaf is true. Prevention (default) actually blocks requests the managed rule set flags. Detection only logs/scores them — the WAF exists but blocks nothing, which is a real, deliberate choice for a cautious rollout (watch its logs for false positives against this app\'s own traffic before switching), not just a lesser default. Prevention is the default here rather than the more common "start in Detection, graduate later" advice specifically because this template ships to many independent client installs with no central place for anyone to watch logs and decide when it\'s safe to flip each one — left in Detection, it would likely just stay a no-op indefinitely. Microsoft\'s Default Rule Set (used below) has a well-established low false-positive rate against ordinary REST API traffic, which is what makes Prevention-by-default reasonable here.')
+@allowed(['Prevention', 'Detection'])
+param wafPolicyMode string = 'Prevention'
 
 // Granting an RBAC role needs Microsoft.Authorization/roleAssignments/write (Owner or User Access
 // Administrator) on the vault/resource group — a Contributor-only account can create the vault
@@ -248,6 +255,15 @@ resource tenantSecretsKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' = if (enab
     sku: { family: 'A', name: 'standard' }
     enableRbacAuthorization: true
     softDeleteRetentionInDays: 7
+    // Without this, someone with the vault's purge permission can force-delete it immediately,
+    // skipping the 7-day soft-delete window above entirely. That matters specifically because
+    // phi-encryption-key (one of the 4 app-level secrets this vault holds once enabled) is never
+    // rotated by design — losing the vault before its recovery window is up would have the same
+    // effect as losing that key outright: every previously-encrypted execution-history row becomes
+    // permanently undecryptable. This flag is irreversible once set (by Azure's own design, so it
+    // can't be turned off to bypass itself) — the vault is guaranteed to survive its full retention
+    // window no matter what, then auto-purges on schedule same as before.
+    enablePurgeProtection: true
   }
 }
 
@@ -366,12 +382,42 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 
 // --- Persistent storage for the containerized Postgres + Redis (Container Apps are otherwise stateless) ---
 
+@description('Replication for the storage account backing Azure Files (containerized Postgres/Redis/keys/Seq data) and, when useAzurePostgresql is false, the postgres-backups blob container. Standard_ZRS (default) synchronously replicates across 3 availability zones in the region, protecting against a single-datacenter outage — Standard_LRS keeps all copies in one datacenter and is only cheaper. Exposed as a dropdown, not hardcoded, because ZRS is not available in every Azure region — if a deploy fails on this resource with a SKU/region error, redeploy with Standard_LRS instead.')
+@allowed(['Standard_ZRS', 'Standard_LRS'])
+param storageRedundancy string = 'Standard_ZRS'
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
   location: location
   tags: commonTags
-  sku: { name: 'Standard_LRS' }
+  sku: { name: storageRedundancy }
   kind: 'StorageV2'
+}
+
+// Blob-level soft-delete + versioning — separate from, and in addition to, the file-share backup
+// pattern used elsewhere in this template. Only matters in practice once postgresBackupsContainer
+// below actually holds something (useAzurePostgresql = false), but costs nothing to leave on
+// unconditionally: an account with no blob containers just has no blobs for these policies to ever
+// apply to.
+resource blobServices 'Microsoft.Storage/storageAccounts/blobServices@2023-01-01' = {
+  parent: storageAccount
+  name: 'default'
+  properties: {
+    deleteRetentionPolicy: { enabled: true, days: 30 }
+    containerDeleteRetentionPolicy: { enabled: true, days: 30 }
+    isVersioningEnabled: true
+  }
+}
+
+// Destination for postgresBackupJob's scheduled pg_dump uploads — see that job's own comment
+// (alongside postgresApp below) for the full backup-plan reasoning. Only created for the
+// containerized Postgres path; the managed path (useAzurePostgresql = true) has no use for it.
+resource postgresBackupsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = if (!useAzurePostgresql) {
+  parent: blobServices
+  name: 'postgres-backups'
+  properties: {
+    publicAccess: 'None'
+  }
 }
 
 // Only needed for the containerized Postgres path — Azure Database for PostgreSQL is a managed
@@ -537,6 +583,81 @@ resource postgresApp 'Microsoft.App/containerApps@2024-03-01' = if (!useAzurePos
       scale: { minReplicas: 1, maxReplicas: 1 }
     }
   }
+}
+
+// --- Scheduled backup fallback for the containerized Postgres path (see useAzurePostgresql's own
+//     description above for the full reasoning). A Container Apps Job, not a Container App — runs
+//     to completion on a cron schedule instead of staying up continuously. Every run does a
+//     pg_dump + gzip of postgresApp, then uploads it to the postgres-backups blob container via
+//     azcopy (containerization/docker/postgres-backup) — a compensating control, not parity with
+//     Flexible Server's automated backups: it bounds data loss to one interval (hourly, by
+//     default) instead of "whatever was lost since the last graceful shutdown," but restoring is a
+//     manual step (download the newest dump, `gunzip | psql` into a fresh database), not a
+//     one-click Azure restore. Only created for the containerized path — the managed path already
+//     has real backups, so this would just be redundant cost and complexity there. ---
+
+// Account-scoped, not container-scoped, because Bicep's storage account SAS functions only offer
+// account-level SAS generation — acceptable here since this account's only blob containers are the
+// ones this template creates (postgres-backups), and 'b' (blob service only) doesn't reach the
+// Azure Files shares living in the same account. signedExpiry is a fixed far-future date rather
+// than something rotated automatically — a real long-term product would want rotation; out of
+// scope for this fallback control specifically.
+var postgresBackupSasProperties = {
+  signedServices: 'b'
+  signedResourceTypes: 'co'
+  signedPermission: 'rwc'
+  signedProtocol: 'https'
+  signedExpiry: '2035-01-01T00:00:00Z'
+}
+
+var postgresBackupContainerSasUrl = !useAzurePostgresql
+  ? '${storageAccount.properties.primaryEndpoints.blob}postgres-backups?${storageAccount.listAccountSas('2023-01-01', postgresBackupSasProperties).accountSasToken}'
+  : ''
+
+resource postgresBackupJob 'Microsoft.App/jobs@2024-03-01' = if (!useAzurePostgresql) {
+  name: '${namePrefix}-postgres-backup'
+  location: location
+  tags: commonTags
+  properties: {
+    environmentId: containerAppEnv.id
+    configuration: {
+      triggerType: 'Schedule'
+      scheduleTriggerConfig: {
+        // Hourly — matches the backup plan's stated interval. Adjust if a different RPO is agreed.
+        cronExpression: '0 * * * *'
+        parallelism: 1
+        replicaCompletionCount: 1
+      }
+      replicaTimeout: 900
+      replicaRetryLimit: 1
+      secrets: concat([
+        { name: 'postgres-password', value: postgresPassword }
+        { name: 'backup-container-sas-url', value: postgresBackupContainerSasUrl }
+      ], registrySecret)
+      registries: registryConfig
+    }
+    template: {
+      containers: [
+        {
+          name: 'postgres-backup'
+          image: '${imageRegistryServer}/fhirbridge-postgres-backup:${imageTag}'
+          resources: containerSizes.Small
+          env: [
+            // postgresName is the same predictable internal hostname postgresApp is reached at
+            // elsewhere in this template (see fhirbridgeDbConnectionString) — Container Apps Jobs
+            // share the environment's internal DNS with its Container Apps.
+            { name: 'POSTGRES_HOST', value: postgresName }
+            { name: 'POSTGRES_PORT', value: string(postgresPort) }
+            { name: 'POSTGRES_USER', value: 'fhirbridge' }
+            { name: 'POSTGRES_DB', value: 'FHIRBridge' }
+            { name: 'POSTGRES_PASSWORD', secretRef: 'postgres-password' }
+            { name: 'BACKUP_CONTAINER_SAS_URL', secretRef: 'backup-container-sas-url' }
+          ]
+        }
+      ]
+    }
+  }
+  dependsOn: [postgresApp, postgresBackupsContainer]
 }
 
 // --- FHIRBridge's own database: Azure Database for PostgreSQL Flexible Server — only when
@@ -908,7 +1029,152 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
     : (!useAzureCacheForRedis ? [redisApp, fhirbridgeApp] : [fhirbridgeApp])
 }
 
+// --- Front Door (Standard) + WAF — only when enableFrontDoorWaf is true. Fronts fhirbridgeApp
+//     with Microsoft's global HTTP load balancer plus a managed-rule WAF policy, closing the gap
+//     where the app's public ingress otherwise has no inspection layer in front of it at all —
+//     relevant since this app processes PHI. Unlike the custom-domain flow above, this can be
+//     created in THIS SAME deployment: Front Door only needs fhirbridgeApp's FQDN as a one-way
+//     origin reference, not the circular self-reference that binding a domain to fhirbridgeApp
+//     itself would be (see the custom-domain comment above for why THAT one genuinely needs a
+//     separate deployment).
+//
+//     Standard tier, not Premium — cheaper, and enough to start: same WAF managed rules, same
+//     global load-balancing, just without Premium's Private Link origin support. The one thing
+//     Standard doesn't close: fhirbridgeApp's own *.azurecontainerapps.io address stays technically
+//     reachable directly, bypassing Front Door/the WAF, since there's no Private Link to hide it
+//     behind. It isn't published anywhere once a custom domain is set, so real-world exposure is
+//     low — if a client's compliance review needs that gap fully closed, the fix is either
+//     upgrading to Premium + Private Link, or an app-side check that rejects requests missing a
+//     header Front Door injects; neither is done here.
+//
+//     WAF policy mode (Prevention/Detection) is wafPolicyMode above, defaulting to Prevention — see
+//     that parameter's own description for why this template doesn't default to the more commonly
+//     advised "start in Detection, graduate later" pattern.
+
+var wafPolicyName = toLower('${replace(namePrefix, '-', '')}wafpolicy')
+var frontDoorEndpointName = toLower('${namePrefix}-${take(uniqueSuffix, 8)}')
+
+resource frontDoorWafPolicy 'Microsoft.Network/frontdoorWebApplicationFirewallPolicies@2022-05-01' = if (enableFrontDoorWaf) {
+  name: wafPolicyName
+  location: 'global'
+  tags: commonTags
+  sku: {
+    name: 'Standard_AzureFrontDoor'
+  }
+  properties: {
+    policySettings: {
+      enabledState: 'Enabled'
+      mode: wafPolicyMode
+    }
+    managedRules: {
+      managedRuleSets: [
+        {
+          ruleSetType: 'Microsoft_DefaultRuleSet'
+          ruleSetVersion: '2.1'
+        }
+      ]
+    }
+  }
+}
+
+resource frontDoorProfile 'Microsoft.Cdn/profiles@2024-02-01' = if (enableFrontDoorWaf) {
+  name: '${namePrefix}-afd'
+  location: 'global'
+  tags: commonTags
+  sku: {
+    name: 'Standard_AzureFrontDoor'
+  }
+}
+
+resource frontDoorEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2024-02-01' = if (enableFrontDoorWaf) {
+  parent: frontDoorProfile
+  name: frontDoorEndpointName
+  location: 'global'
+  properties: {
+    enabledState: 'Enabled'
+  }
+}
+
+resource frontDoorOriginGroup 'Microsoft.Cdn/profiles/originGroups@2024-02-01' = if (enableFrontDoorWaf) {
+  parent: frontDoorProfile
+  name: '${namePrefix}-app-origin-group'
+  properties: {
+    loadBalancingSettings: {
+      sampleSize: 4
+      successfulSamplesRequired: 3
+    }
+    healthProbeSettings: {
+      // Matches the health-check path the AWS ALB target group already uses (environments/aws/alb.tf) —
+      // same app, same endpoint, one consistent convention across cloud environments.
+      probePath: '/health'
+      probeRequestType: 'GET'
+      probeProtocol: 'Https'
+      probeIntervalInSeconds: 30
+    }
+  }
+}
+
+// hostName/originHostHeader both point at fhirbridgeApp's own FQDN — Container Apps ingress
+// validates the Host header against the app's registered hostnames, so these have to match for
+// Front Door's forwarded requests to actually reach it.
+resource frontDoorOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2024-02-01' = if (enableFrontDoorWaf) {
+  parent: frontDoorOriginGroup
+  name: '${namePrefix}-app-origin'
+  properties: {
+    hostName: fhirbridgeApp.properties.configuration.ingress.fqdn
+    originHostHeader: fhirbridgeApp.properties.configuration.ingress.fqdn
+    httpPort: 80
+    httpsPort: 443
+    priority: 1
+    weight: 1000
+  }
+}
+
+resource frontDoorRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2024-02-01' = if (enableFrontDoorWaf) {
+  parent: frontDoorEndpoint
+  name: '${namePrefix}-app-route'
+  properties: {
+    originGroup: {
+      id: frontDoorOriginGroup.id
+    }
+    supportedProtocols: ['Https']
+    patternsToMatch: ['/*']
+    forwardingProtocol: 'HttpsOnly'
+    httpsRedirect: 'Enabled'
+    linkToDefaultDomain: 'Enabled'
+  }
+  dependsOn: [frontDoorOrigin]
+}
+
+resource frontDoorSecurityPolicy 'Microsoft.Cdn/profiles/securityPolicies@2024-02-01' = if (enableFrontDoorWaf) {
+  parent: frontDoorProfile
+  name: '${namePrefix}-app-security-policy'
+  properties: {
+    parameters: {
+      type: 'WebApplicationFirewall'
+      wafPolicy: {
+        id: frontDoorWafPolicy.id
+      }
+      associations: [
+        {
+          domains: [
+            { id: frontDoorEndpoint.id }
+          ]
+          patternsToMatch: ['/*']
+        }
+      ]
+    }
+  }
+  dependsOn: [frontDoorRoute]
+}
+
 output fhirbridgeAppUrl string = 'https://${fhirbridgeAppName}.${containerAppEnv.properties.defaultDomain}'
+
+@description('Populated only when enableFrontDoorWaf is true. The actual public entry point once Front Door + WAF is enabled — send traffic here, not to fhirbridgeAppUrl directly, so the WAF actually inspects it. fhirbridgeAppUrl above still works underneath (Standard tier has no Private Link to hide it) — a documented, accepted tradeoff, see the comment above the Front Door resources.')
+output frontDoorEndpointUrl string = enableFrontDoorWaf ? 'https://${frontDoorEndpoint.?properties.hostName ?? ''}' : ''
+
+@description('true when the containerized Postgres path is active — meaning postgresBackupJob is running hourly pg_dump backups to the postgres-backups blob container as a compensating control. false means useAzurePostgresql is active instead, which has real automated backups from Azure directly and needs no such job.')
+output postgresScheduledBackupActive bool = !useAzurePostgresql
 
 @description('Populated only when enableSeq is true. Log into this with the seqAdminPassword you set to browse structured logs from Api/Gateway/Worker.')
 output seqUrl string = enableSeq ? 'https://${seqApp.?properties.configuration.ingress.fqdn ?? ''}' : ''
@@ -963,10 +1229,12 @@ var postgresManifestItems = useAzurePostgresql ? [
   postgresFlexibleServerDatabase.id
   postgresFlexibleServer.id
 ] : [
+  postgresBackupJob.id
   postgresApp.id
 ]
 var postgresStorageManifestItems = useAzurePostgresql ? [] : [postgresDataStorage.id]
 var postgresShareManifestItems = useAzurePostgresql ? [] : [postgresDataShare.id]
+var postgresBackupManifestItems = useAzurePostgresql ? [] : [postgresBackupsContainer.id]
 
 // Whichever Redis resource actually exists for the active path — the managed cache instance, or
 // the container app plus its own data storage/share (folded into the storage/share groups below).
@@ -980,6 +1248,18 @@ var redisShareManifestItems = useAzureCacheForRedis ? [] : [redisDataShare.id]
 var seqManifestItems = enableSeq ? [seqApp.id] : []
 var seqStorageManifestItems = enableSeq ? [seqDataStorage.id] : []
 var seqShareManifestItems = enableSeq ? [seqDataShare.id] : []
+
+// Children before parents, matching the pattern of every other manifest group above — the security
+// policy/route reference the WAF policy/origin group respectively, so list them first.
+var frontDoorManifestItems = enableFrontDoorWaf ? [
+  frontDoorSecurityPolicy.id
+  frontDoorRoute.id
+  frontDoorOrigin.id
+  frontDoorOriginGroup.id
+  frontDoorEndpoint.id
+  frontDoorProfile.id
+  frontDoorWafPolicy.id
+] : []
 
 // Every resource this deployment created, in a dependency-safe DELETION order (children before
 // their parents — e.g. the Container Apps before the environment they run in). Azure keeps this
@@ -1004,6 +1284,7 @@ output resourceManifest array = concat(
   postgresShareManifestItems,
   redisShareManifestItems,
   seqShareManifestItems,
+  postgresBackupManifestItems,
   [
     keysDataShare.id
     containerAppEnv.id
@@ -1012,5 +1293,6 @@ output resourceManifest array = concat(
   ],
   // The Key resource and role assignments are children/scoped to the vault and get deleted
   // automatically when it does — only the vault itself needs listing here.
-  enableTenantSecretsKeyVault ? [tenantSecretsKeyVault.id] : []
+  enableTenantSecretsKeyVault ? [tenantSecretsKeyVault.id] : [],
+  frontDoorManifestItems
 )

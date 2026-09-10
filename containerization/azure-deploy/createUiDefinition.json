@@ -14,7 +14,9 @@
             "Microsoft.Storage",
             "Microsoft.DBforPostgreSQL",
             "Microsoft.Cache",
-            "Microsoft.KeyVault"
+            "Microsoft.KeyVault",
+            "Microsoft.Cdn",
+            "Microsoft.Network"
           ]
         },
         "location": {
@@ -46,17 +48,17 @@
             "name": "postgresMode",
             "type": "Microsoft.Common.OptionsGroup",
             "label": "Postgres deployment type",
-            "defaultValue": "Containerized",
-            "toolTip": "Containerized keeps a single-replica Postgres container with Azure Files-backed storage (default, cheapest). Managed creates an Azure Database for PostgreSQL Flexible Server instead — no container, no volume; Azure handles patching/backups/HA.",
+            "defaultValue": "Managed",
+            "toolTip": "Managed (default, recommended) creates an Azure Database for PostgreSQL Flexible Server — no container, no volume; Azure handles patching and automated daily backups with point-in-time restore. Containerized instead keeps a single-replica Postgres container with Azure Files-backed storage — cheaper, but its data only survives a graceful shutdown; choosing it also adds an hourly scheduled backup job as a compensating control (see 'What Gets Created').",
             "constraints": {
               "allowedValues": [
                 {
-                  "label": "Containerized (default)",
-                  "value": "Containerized"
+                  "label": "Managed — Azure Database for PostgreSQL (recommended)",
+                  "value": "Managed"
                 },
                 {
-                  "label": "Managed — Azure Database for PostgreSQL",
-                  "value": "Managed"
+                  "label": "Containerized (cheaper, weaker durability)",
+                  "value": "Containerized"
                 }
               ],
               "required": true
@@ -286,6 +288,67 @@
             "options": {
               "hideConfirmation": false
             }
+          },
+          {
+            "name": "wafMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Web Application Firewall",
+            "defaultValue": "None",
+            "toolTip": "None (default) — Segue is reached directly with no inspection layer in front of it. Front Door WAF creates an Azure Front Door (Standard tier) profile with a managed-rule WAF policy in front of the app — Front Door is both a WAF and a global load balancer in one resource. Recommended since this app processes PHI; most healthcare security reviews ask about this specifically.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "None (default)",
+                  "value": "None"
+                },
+                {
+                  "label": "Front Door WAF (Standard) — recommended",
+                  "value": "Front Door WAF"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "wafPolicyMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "WAF policy mode",
+            "defaultValue": "Prevention",
+            "toolTip": "Prevention (default) actually blocks requests the managed rule set flags. Detection only logs/scores them and blocks nothing — a valid choice if you'd rather watch its findings against your own traffic for a while first, but it provides no real protection until switched to Prevention. Only used when Web Application Firewall above is enabled.",
+            "visible": "[equals(steps('fhirbridgeSettings').wafMode, 'Front Door WAF')]",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Prevention — actually blocks malicious requests (recommended)",
+                  "value": "Prevention"
+                },
+                {
+                  "label": "Detection — logs only, blocks nothing",
+                  "value": "Detection"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "storageRedundancy",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Storage redundancy",
+            "defaultValue": "Standard_ZRS",
+            "toolTip": "Applies to the storage account backing Azure Files data (Postgres/Redis/keys/Seq, whichever are containerized) and the Postgres backup container. Zone-redundant synchronously replicates across 3 datacenters in the region, protecting against a single-datacenter outage. Locally-redundant keeps all copies in one datacenter and is only cheaper. Not every Azure region supports zone-redundant storage — switch to Locally-redundant if deployment fails with a SKU/region error.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Zone-redundant (recommended)",
+                  "value": "Standard_ZRS"
+                },
+                {
+                  "label": "Locally-redundant (cheaper, single datacenter)",
+                  "value": "Standard_LRS"
+                }
+              ],
+              "required": true
+            }
           }
         ]
       },
@@ -486,7 +549,7 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "This deployment creates resources in the selected resource group only:\n\n• 4 Container Apps — Postgres, Redis, Segue (Api + Gateway), Worker (plus a 5th, Seq, if you enabled centralized log viewing)\n• 1 Container Apps Environment hosting all of the above\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (Postgres data, Redis data, Data Protection keys, and Seq data if enabled)\n\nCustom domains are optional and activated in a SEPARATE deployment (Step 2 - custom-domain.bicep) after this one finishes — any domain entered on the Network Access step here is just a reminder, not yet active. Postgres and Redis are internal-only by default; Seq (if enabled) gets its own public URL specifically so you can browse to it. Deployment outputs include a resourceManifest used by the cleanup scripts."
+              "text": "This deployment creates resources in the selected resource group only:\n\n• Container Apps — Redis, Segue (Api + Gateway), Worker, plus Postgres too if you chose Containerized (plus a 5th, Seq, if you enabled centralized log viewing)\n• 1 Container Apps Environment hosting all of the above\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (Redis data, Data Protection keys, Postgres data if Containerized, Seq data if enabled) and zone-redundant replication by default\n• If Postgres deployment type is Managed (the default): 1 Azure Database for PostgreSQL Flexible Server with automated daily backups\n• If Postgres deployment type is Containerized instead: 1 scheduled backup job (hourly pg_dump to a dedicated blob container) as a compensating control, since that path's own data only survives a graceful shutdown otherwise\n• If Web Application Firewall is enabled: 1 Azure Front Door (Standard) profile with a WAF policy in front of the Segue app — use the deployment's frontDoorEndpointUrl output afterward, not the app's own default URL, so traffic actually passes through the WAF\n\nCustom domains are optional and activated in a SEPARATE deployment (Step 2 - custom-domain.bicep) after this one finishes — any domain entered on the Network Access step here is just a reminder, not yet active. Postgres and Redis are internal-only by default; Seq (if enabled) gets its own public URL specifically so you can browse to it. Deployment outputs include a resourceManifest used by the cleanup scripts."
             }
           },
           {
@@ -515,6 +578,9 @@
       "enableTenantSecretsKeyVault": "[equals(steps('fhirbridgeSettings').secretsMode, 'Azure Key Vault')]",
       "enableSeq": "[equals(steps('fhirbridgeSettings').seqMode, 'Seq')]",
       "seqAdminPassword": "[if(equals(steps('fhirbridgeSettings').seqMode, 'Seq'), steps('fhirbridgeSettings').seqAdminPassword, '')]",
+      "enableFrontDoorWaf": "[equals(steps('fhirbridgeSettings').wafMode, 'Front Door WAF')]",
+      "wafPolicyMode": "[steps('fhirbridgeSettings').wafPolicyMode]",
+      "storageRedundancy": "[steps('fhirbridgeSettings').storageRedundancy]",
       "postgresSize": "[steps('containerSizing').postgresSize]",
       "redisSize": "[steps('containerSizing').redisSize]",
       "fhirbridgeAppSize": "[steps('containerSizing').fhirbridgeAppSize]",

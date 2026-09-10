@@ -161,13 +161,17 @@ and apply as usual. Tear the vendor registry down (rarely needed — it's meant 
 
 ## Notes and known limitations
 
-- **Postgres + Redis are containerized by default in every environment** (including Azure/AWS),
+- **Postgres + Redis are containerized by default in the Terraform environments** (local/azure/aws),
   per an explicit choice to match the product topology exactly rather than always require a
   managed service. Each can be swapped for a managed PaaS equivalent instead via a per-environment
   boolean toggle (see the Topology section above) — the local environment has no such toggle, since
   there's no cloud to provision a managed service in. Whichever containerized option stays in use
   is pinned to a single replica/task — its data directory (Azure Files / EFS) isn't safe for
-  concurrent multi-instance access.
+  concurrent multi-instance access. **The Bicep one-click path (`azure-deploy/`) defaults
+  differently**: Postgres defaults to managed (`useAzurePostgresql=true`) specifically for its
+  automated-backup guarantees, while Redis stays containerized by default — see
+  `azure-deploy/README.md` for the full reasoning and the compensating scheduled-backup job that
+  path adds if a client opts back into containerized Postgres.
 - **Messaging is `InMemory`** in all 3 environments to keep the container count at exactly 4 —
   adding a RabbitMQ/Azure Service Bus/SQS container or managed queue later just means changing
   `Messaging__Provider` and adding one more container/service definition.
