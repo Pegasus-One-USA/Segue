@@ -6,10 +6,11 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "Step 2 of the Segue custom-domain flow. Binds a domain (hostname + free Azure-managed SSL certificate) to the Segue app from an already-deployed Segue stack, in ONE deploy. The domain field below is optional - leave it blank to skip this app entirely this run. IMPORTANT: create the CNAME + asuid TXT records shown below at your DNS provider and wait for them to propagate BEFORE deploying - Azure validates DNS as part of this same deploy and rejects it if the records are not there yet (InvalidCustomHostNameValidation); just wait and redeploy once they resolve.",
+        "description": "Step 2 of the Segue custom-domain flow. Binds a domain (hostname + free Azure-managed SSL certificate) to the Segue app from an already-deployed Segue stack. The domain field below is optional - leave it blank to skip this app entirely this run. If Step 1 did NOT enable Web Application Firewall: this is ONE deploy that registers the hostname, creates the certificate, and binds it together - but create the CNAME + asuid TXT records shown below at your DNS provider and wait for them to propagate BEFORE deploying (InvalidCustomHostNameValidation otherwise). If Step 1 DID enable it: the domain binds to Front Door instead, and its DNS validation token only appears in this deployment's Outputs AFTER you deploy - see the info box below once you select that option.",
         "subscription": {
           "resourceProviders": [
-            "Microsoft.App"
+            "Microsoft.App",
+            "Microsoft.Cdn"
           ]
         }
       }
@@ -34,6 +35,26 @@
         "label": "Segue app",
         "elements": [
           {
+            "name": "usesFrontDoorWaf",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Web Application Firewall in Step 1?",
+            "defaultValue": "No",
+            "toolTip": "Must match whatever you chose for Web Application Firewall when you first deployed Segue (Step 1) — this wizard has no way to detect that on its own. Yes routes this domain through Front Door + the WAF instead of binding it directly to the app; the DNS/validation flow below is different for each.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "No — Step 1 did not enable it (default)",
+                  "value": "No"
+                },
+                {
+                  "label": "Yes — Step 1 enabled Front Door WAF",
+                  "value": "Yes"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
             "name": "appNameInfo",
             "type": "Microsoft.Common.InfoBox",
             "options": {
@@ -52,6 +73,7 @@
           {
             "name": "liveInfo",
             "type": "Microsoft.Common.InfoBox",
+            "visible": "[equals(steps('fhirbridgeAppStep').usesFrontDoorWaf, 'No')]",
             "options": {
               "icon": "Info",
               "text": "[concat('Default URL: https://', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', 'Domain verification ID: ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')))]"
@@ -72,10 +94,19 @@
           {
             "name": "dnsRecords",
             "type": "Microsoft.Common.InfoBox",
-            "visible": "[not(empty(steps('fhirbridgeAppStep').domain))]",
+            "visible": "[and(equals(steps('fhirbridgeAppStep').usesFrontDoorWaf, 'No'), not(empty(steps('fhirbridgeAppStep').domain)))]",
             "options": {
               "icon": "Info",
               "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'Create these records and wait for them to propagate BEFORE deploying - this one deploy registers the hostname, creates the certificate, and binds it, all together. Deploying before DNS is ready fails cleanly (InvalidCustomHostNameValidation) - just wait and redeploy once it resolves.')]"
+            }
+          },
+          {
+            "name": "frontDoorDnsInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": "[and(equals(steps('fhirbridgeAppStep').usesFrontDoorWaf, 'Yes'), not(empty(steps('fhirbridgeAppStep').domain)))]",
+            "options": {
+              "icon": "Info",
+              "text": "Front Door's validation token is different from the Container App's, and only exists once the domain is actually created — it cannot be shown here before you deploy. After this deployment finishes, open its Outputs tab and copy frontDoorCustomDomainValidationToken, then create a TXT record at _dnsauth.<your domain> with that value. Azure detects it and issues the certificate automatically in the background — no second deploy needed for this path."
             }
           }
         ]
@@ -83,7 +114,8 @@
     ],
     "outputs": {
       "namePrefix": "[basics('namePrefix')]",
-      "fhirbridgeAppDomain": "[steps('fhirbridgeAppStep').domain]"
+      "fhirbridgeAppDomain": "[steps('fhirbridgeAppStep').domain]",
+      "enableFrontDoorWaf": "[equals(steps('fhirbridgeAppStep').usesFrontDoorWaf, 'Yes')]"
     }
   }
 }

@@ -57,17 +57,21 @@ param fhirbridgeAppDomain string = ''
 @description('Region for the (re)deployed container app + managed certificate. An existing container app\'s own location can\'t be read back at compile time (Bicep BCP120), so this must match wherever the environment/app actually lives — defaults to the resource group\'s region, which is what main.bicep itself uses.')
 param location string = resourceGroup().location
 
+@description('MUST match whatever enableFrontDoorWaf was set to on the original main.bicep deployment for this namePrefix — this template has no way to detect that on its own. false (default) binds the domain directly to the Container App, exactly as this template always has. true instead binds it to Front Door\'s endpoint (skipping the Container App binding entirely — Front Door reaches the app using its own default hostname, so the app never needs the custom domain registered on it), so traffic through the domain actually passes through the WAF instead of bypassing it. Passing true when Front Door was never actually enabled fails outright — the Front Door resources this template then tries to read simply won\'t exist.')
+param enableFrontDoorWaf bool = false
+
 // Only the module needs an actual reference to the environment (to parent the managed
 // certificate) - this template only ever needs its name, to derive the app name alongside.
 var environmentName = '${namePrefix}-env'
 
 // The app this template touches, with its computed name and the domain the caller gave it.
 // Filtered down to just this entry if it was actually requested this run — an empty domain gets no
-// resource read, no resource write, not even a no-op deployment operation for it.
+// resource read, no resource write, not even a no-op deployment operation for it. Empty entirely
+// when enableFrontDoorWaf is true — that path is handled by the Front Door resources below instead.
 var allAppConfigs = [
   { key: 'fhirbridgeApp', name: '${namePrefix}-app', domain: fhirbridgeAppDomain }
 ]
-var activeAppConfigs = filter(allAppConfigs, c => !empty(c.domain))
+var activeAppConfigs = enableFrontDoorWaf ? [] : filter(allAppConfigs, c => !empty(c.domain))
 
 resource apps 'Microsoft.App/containerApps@2024-03-01' existing = [for c in activeAppConfigs: {
   name: c.name
@@ -143,3 +147,80 @@ output results array = [for (c, i) in activeAppConfigs: {
   domainVerificationId: apps[i].properties.customDomainVerificationId
   customDomainUrl: 'https://${c.domain}'
 }]
+
+// --- Front Door path — only when enableFrontDoorWaf is true. Resource names recomputed the same
+//     deterministic way main.bicep generated them (uniqueString(resourceGroup().id, namePrefix) is
+//     a pure function of inputs already known here), so nothing needs to be plumbed from that
+//     deployment's outputs to find the right Front Door profile/endpoint/route/policy to attach to.
+//
+//     Unlike the Container-App-direct path above, creating the domain AND associating it with the
+//     route/WAF policy can happen in this SAME deploy: AFDX domain validation runs asynchronously
+//     in the background once the _dnsauth TXT record exists — it does not block these resources
+//     from being created first the way Container Apps' RequireCustomHostnameInEnvironment does. The
+//     domain just won't actually serve traffic correctly (TLS handshake fails) until validation
+//     completes and Azure auto-issues the managed certificate — both happen on their own, no further
+//     deployment needed once the TXT record is in place. So there is no bindCustomDomainCertificates
+//     equivalent on this path — one deploy is genuinely enough. NOT LIVE-TESTED (unlike the
+//     Container-App-direct path above, which has real deploy history behind it) — validate this
+//     against a real subscription before relying on it.
+
+var uniqueSuffix = uniqueString(resourceGroup().id, namePrefix)
+var frontDoorEndpointName = toLower('${namePrefix}-${take(uniqueSuffix, 8)}')
+var frontDoorProfileName = '${namePrefix}-afd'
+var frontDoorRouteName = '${namePrefix}-app-route'
+var frontDoorSecurityPolicyName = '${namePrefix}-app-security-policy'
+
+resource frontDoorProfile 'Microsoft.Cdn/profiles@2024-02-01' existing = if (enableFrontDoorWaf) {
+  name: frontDoorProfileName
+}
+
+resource frontDoorEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2024-02-01' existing = if (enableFrontDoorWaf) {
+  parent: frontDoorProfile
+  name: frontDoorEndpointName
+}
+
+resource frontDoorRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2024-02-01' existing = if (enableFrontDoorWaf) {
+  parent: frontDoorEndpoint
+  name: frontDoorRouteName
+}
+
+resource frontDoorSecurityPolicy 'Microsoft.Cdn/profiles/securityPolicies@2024-02-01' existing = if (enableFrontDoorWaf) {
+  parent: frontDoorProfile
+  name: frontDoorSecurityPolicyName
+}
+
+// ManagedCertificate can be requested immediately — it just won't actually issue until the
+// _dnsauth TXT record validates, same "requested now, materializes once DNS is ready" pattern as
+// the Container Apps managed certificate above, minus that path's hard ordering requirement.
+resource frontDoorCustomDomain 'Microsoft.Cdn/profiles/customDomains@2024-02-01' = if (enableFrontDoorWaf && !empty(fhirbridgeAppDomain)) {
+  parent: frontDoorProfile
+  name: replace(fhirbridgeAppDomain, '.', '-')
+  properties: {
+    hostName: fhirbridgeAppDomain
+    tlsSettings: {
+      certificateType: 'ManagedCertificate'
+    }
+  }
+}
+
+// Same circular-dependency restriction as the Container App path — writing the route/security
+// policy using values read from those SAME resources (via the `existing` references above) in this
+// same template would self-reference. The write lives in its own module instead; see
+// custom-domain-frontdoor-update.bicep's own header comment for the details.
+module frontDoorRouteAndWafUpdate 'custom-domain-frontdoor-update.bicep' = if (enableFrontDoorWaf && !empty(fhirbridgeAppDomain)) {
+  name: 'frontdoor-route-waf-customdomain-update'
+  params: {
+    profileName: frontDoorProfileName
+    endpointName: frontDoorEndpointName
+    routeName: frontDoorRouteName
+    securityPolicyName: frontDoorSecurityPolicyName
+    newCustomDomainId: frontDoorCustomDomain.id
+    existingRouteProperties: frontDoorRoute.properties
+    existingSecurityPolicyParameters: frontDoorSecurityPolicy.properties.parameters
+  }
+}
+
+@description('Populated only when enableFrontDoorWaf is true and fhirbridgeAppDomain is set. A Front Door-specific validation token — different from fhirbridgeAppDomainVerificationId\'s asuid.<domain> mechanism, which only applies to the Container-App-direct path. Add a TXT record at _dnsauth.<your domain> with this value; Azure auto-detects it and issues the managed certificate once found — no further deployment needed.')
+output frontDoorCustomDomainValidationToken string = (enableFrontDoorWaf && !empty(fhirbridgeAppDomain)) ? frontDoorCustomDomain.properties.validationProperties.validationToken : ''
+
+output frontDoorCustomDomainUrl string = (enableFrontDoorWaf && !empty(fhirbridgeAppDomain)) ? 'https://${fhirbridgeAppDomain}' : ''

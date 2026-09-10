@@ -155,6 +155,44 @@ Drives `custom-domain.bicep` itself (not raw `az containerapp hostname` commands
 the IaC-drift problem Path B below has. Safe to re-run — a domain that's already bound is reported
 and skipped without deploying anything.
 
+### If Step 1 enabled Web Application Firewall (Front Door) — a different flow, same template
+
+Binding a custom domain directly to the Container App (everything above) would let traffic through
+that domain **bypass Front Door and the WAF entirely** — Front Door reaches the app using its own
+default `*.azurecontainerapps.io` hostname, so the app never needs the custom domain registered on
+it once Front Door is in front of it. `custom-domain.bicep` handles this automatically via its
+`enableFrontDoorWaf` parameter — set it to match whatever you chose in Step 1 (it can't be
+auto-detected):
+
+```bash
+az deployment group create -g <rg> -f custom-domain.bicep \
+  -p namePrefix=segue12 fhirbridgeAppDomain=app.example.com enableFrontDoorWaf=true
+```
+
+This binds the domain to Front Door's endpoint instead, and adds it to the WAF security policy's
+domain list so the WAF actually applies to it. The DNS/validation flow is genuinely different, not
+just a different target:
+
+- **No two-phase deploy needed** — unlike the Container App path above, Front Door's domain
+  validation runs asynchronously in the background once its TXT record exists; the domain and its
+  route/WAF association can be created in the same single deploy. The domain just won't serve
+  traffic correctly (TLS handshake fails) until validation completes and the managed certificate
+  auto-issues — no second `az deployment group create` required for that to happen.
+- **The validation token can't be known before you deploy** — Container Apps exposes
+  `customDomainVerificationId` on the app itself, independent of any domain ever being set, so this
+  doc could show it to you upfront. Front Door's token is scoped to the domain resource itself, which
+  doesn't exist until this deploy creates it. So the order is necessarily: deploy once (with the
+  domain set) → read `frontDoorCustomDomainValidationToken` from the deployment's Outputs → create a
+  TXT record at `_dnsauth.<your domain>` with that value → wait for Azure to auto-validate.
+- The Step 2 wizard (`createUiDefinition.custom-domain.json`) has a "Web Application Firewall in
+  Step 1?" toggle for this — set it to match Step 1, same as the CLI parameter above. It shows an
+  info box explaining the Outputs-tab step instead of trying to pre-show DNS records it can't yet
+  know.
+
+**Not yet supported**: `auto-bind-custom-domain.ps1`/`.sh` still only automates the Container-App-
+direct flow above — it doesn't know about `enableFrontDoorWaf` or the `_dnsauth` record yet. Use the
+manual CLI flow (or the wizard) for the Front Door path until that script is updated.
+
 ### main.bicep's own domain parameters (fallback, not recommended)
 
 `main.bicep` still has `fhirbridgeAppCustomDomain`/`bindCustomDomainCertificates` — same 3-deploy
@@ -198,9 +236,14 @@ After this domain flow is validated live:
 
 ## Do not
 
-- Deploy Path A (`custom-domain.bicep` / the Step 2 wizard) before DNS (CNAME + `asuid` TXT) has
-  actually propagated — it fails cleanly with `InvalidCustomHostNameValidation`, but there's no way
-  to skip that wait
+- Deploy Path A (`custom-domain.bicep` / the Step 2 wizard) before DNS (CNAME + `asuid` TXT, or
+  `_dnsauth` TXT for the Front Door variant) has actually propagated — the Container App variant
+  fails cleanly with `InvalidCustomHostNameValidation`; the Front Door variant deploys but the
+  domain won't serve traffic until validation completes, so there's no way to skip that wait either
+  way
+- Run Path A with `enableFrontDoorWaf` set differently from what Step 1 actually used — it can't be
+  auto-detected, and getting it wrong either binds the domain to the wrong thing or fails outright
+  trying to reference Front Door resources that don't exist
 - Test in subscriptions other than the agreed Ragu / Sponsorship test directory
 - Leave custom domains out of template params after binding them with the script (Path B) or
   Terraform (Path C)
