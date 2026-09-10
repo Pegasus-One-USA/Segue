@@ -2,6 +2,7 @@ import { Component, inject, computed } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthStore } from '../../../auth/store/auth.store';
+import { TERMINOLOGY_FEATURE_ENABLED } from '../../../data/terminology-feature.config';
 
 interface SystemSettingsSection {
   label: string;
@@ -21,16 +22,16 @@ const SYSTEM_SETTINGS_SECTIONS: SystemSettingsSection[] = [
   { label: 'Email', route: 'email', icon: 'mail', permissions: ['configuration.view', 'configuration.write'] },
   { label: 'General', route: 'general', icon: 'tune', superAdminOnly: true },
   { label: 'Security', route: 'security', icon: 'security', superAdminOnly: true },
-  // 'Terminology Codes' tab hidden from navigation — its settings now live under the "Terminology
-  // Settings" group on the General tab instead. The route (settings.routes.ts) and its backend
-  // controllers are untouched, so this is reversible by restoring this entry; nothing behind it was
-  // changed or disabled.
-  // {
-  //   label: 'Terminology Codes', route: 'terminology', icon: 'biotech',
-  //   permissions: [
-  //     'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
-  //   ],
-  // },
+  // Restored — was previously hidden from navigation while still fully reachable via its route guard
+  // (settings.routes.ts), leaving a role that holds only these terminology permissions with no visible
+  // way to reach or leave Terminology at all once Email/General/Security/SSO were also hidden for it.
+  // Same permission list the route guard already checks — a role needs at least one to see the tab.
+  {
+    label: 'Terminology Codes', route: 'terminology', icon: 'biotech',
+    permissions: [
+      'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
+    ],
+  },
   // SuperAdmin-role-only, matching settings.routes.ts's own sso-configurations child guard and the
   // backend's SsoConfigurationsController policy.
   { label: 'SSO Configurations', route: 'sso-configurations', icon: 'admin_panel_settings', superAdminOnly: true },
@@ -48,8 +49,12 @@ export class SystemSettingsShellComponent {
 
   // Same visibility rule as settings-shell.component.ts's own tab list — kept in sync deliberately
   // so a section only appears here if the user could also reach it via this shell's own route guard.
+  // Terminology Codes additionally requires the feature flag — see data/terminology-feature.config.ts
+  // — since its route is unreachable (featureFlagGuard in settings.routes.ts) while disabled, and this
+  // tab would otherwise still show for a role holding terminology permissions.
   readonly sections = computed<SystemSettingsSection[]>(() =>
     SYSTEM_SETTINGS_SECTIONS.filter(section => {
+      if (section.route === 'terminology' && !TERMINOLOGY_FEATURE_ENABLED) return false;
       if (section.superAdminOnly) return this.store.hasRole('SuperAdmin');
       if (!section.permissions?.length) return true;
       if (this.store.isAdmin()) return true;

@@ -45,6 +45,7 @@ import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-wi
 import { PermissionGroup, PermissionAction as PermCode, permissionCode } from '../../../auth/models/permission.constants';
 import { PhaseConfigService } from '../../../services/phase-config.service';
 import { isNodePermissionPrefixVisible } from '../../../data/node-permission-visibility.util';
+import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_PREFIXES } from '../../../data/terminology-feature.config';
 
 // One row of a category table — a Permission Group. Mirrors role-permissions.component's grid:
 // `cells` holds only the actions that actually have a Permission for this group; an action with
@@ -149,12 +150,16 @@ export class UserPermissionOverridesComponent
   // add yet (phase-gated — see PhaseConfigService/node-permission-visibility.util.ts), the same
   // filter role-permissions.component.ts's own Workflow Nodes table and Effective Permissions
   // already apply — without it, this screen let an admin set direct overrides on a vendor no one
-  // can actually reach from a workflow (e.g. Cerner, Sftp). A group with no permissions has no
-  // resource to check and is dropped too.
+  // can actually reach from a workflow (e.g. Cerner, Sftp). Also drops the four Terminology Codes
+  // groups while TERMINOLOGY_FEATURE_ENABLED is false (see data/terminology-feature.config.ts) —
+  // same reasoning, just keyed off that flag instead of the phase catalog. A group with no
+  // permissions has no resource to check and is dropped too.
   private readonly gridCategories = computed<GridCategory[]>(() => {
     return this.catalog().map((cat) => {
       const visibleGroups = cat.groups.filter(
-        (g) => g.permissions.length > 0 && isNodePermissionPrefixVisible(g.permissions[0].resource, this.phaseCfg),
+        (g) => g.permissions.length > 0
+          && (TERMINOLOGY_FEATURE_ENABLED || !TERMINOLOGY_PERMISSION_PREFIXES.has(g.permissions[0].resource))
+          && isNodePermissionPrefixVisible(g.permissions[0].resource, this.phaseCfg),
       );
       const rows: GridRow[] = visibleGroups.map((g) => {
         const cells = new Map<string, Permission>();

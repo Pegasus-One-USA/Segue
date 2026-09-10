@@ -24,6 +24,7 @@ import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-wi
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 import { PhaseConfigService } from '../../../services/phase-config.service';
 import { isNodePermissionPrefixVisible } from '../../../data/node-permission-visibility.util';
+import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_PREFIXES } from '../../../data/terminology-feature.config';
 
 // A resolved permission plus, where the static config set one, a tooltip that should replace the
 // catalog's own perm.description on this specific checkbox — see MatrixAction.tooltipOverride.
@@ -180,11 +181,17 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   // *displays* what's currently reachable. A non-node row (role, user, workflow, settings, ...) has
   // no vendor prefix to check, so isNodePermissionPrefixVisible always keeps it — this only ever
   // narrows the Workflow Nodes table.
+  // The four Terminology Codes rows (loinc/snomed-ct/rxnorm/icd-10, in the 'settings' section) are
+  // additionally dropped while TERMINOLOGY_FEATURE_ENABLED is false — see
+  // data/terminology-feature.config.ts — the same "hide the whole shown-elsewhere-as-unreachable
+  // feature" reasoning as the phase-gated vendor rows above, just keyed off a feature flag instead of
+  // the Workflow Builder's own catalog.
   private readonly visibleMatrixSections = computed<MatrixSection[]>(() =>
     MATRIX_SECTIONS.map(section => ({
       ...section,
       rows: section.rows.filter(row => {
         const prefix = row.actions?.[0]?.code.split('.')[0];
+        if (prefix && TERMINOLOGY_PERMISSION_PREFIXES.has(prefix) && !TERMINOLOGY_FEATURE_ENABLED) return false;
         return !prefix || isNodePermissionPrefixVisible(prefix, this.phaseCfg);
       }),
     }))

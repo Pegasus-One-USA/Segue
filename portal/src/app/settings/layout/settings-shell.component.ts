@@ -2,6 +2,7 @@ import { Component, inject, computed } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthStore } from '../../auth/store/auth.store';
+import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_CODES } from '../../data/terminology-feature.config';
 
 interface SettingsTab {
   label: string;
@@ -32,9 +33,12 @@ const SETTINGS_TABS: SettingsTab[] = [
   // system-settings-shell.component.ts's own section filtering, not by hiding this whole tab.
   {
     label: 'System Settings', route: 'system-settings', icon: 'tune',
+    // Terminology's codes only count toward this tab's visibility while the feature is enabled —
+    // see data/terminology-feature.config.ts; otherwise a terminology-only role would see this tab
+    // but find nothing reachable inside it.
     permissions: [
       'configuration.view', 'configuration.write',
-      'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
+      ...(TERMINOLOGY_FEATURE_ENABLED ? TERMINOLOGY_PERMISSION_CODES : []),
     ],
   },
 ];

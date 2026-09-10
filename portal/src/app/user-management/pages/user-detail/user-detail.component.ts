@@ -38,6 +38,7 @@ import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-wi
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 import { PhaseConfigService } from '../../../services/phase-config.service';
 import { isNodePermissionPrefixVisible } from '../../../data/node-permission-visibility.util';
+import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_PREFIXES } from '../../../data/terminology-feature.config';
 
 // A permission within the effective-permissions preview — same shape as `Permission` plus
 // whether the user's roles actually grant it. Mirrors AssignRolesDialogComponent's preview.
@@ -162,15 +163,19 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   // filter role-permissions.component.ts's own Workflow Nodes table and the Assign Roles dialog's
   // preview already apply — without it, Effective Permissions disagreed with both of those and
   // with what the workflow canvas actually offers (e.g. still listing Cerner/Sftp as a full group).
-  // A group with no permissions at all can't have a resource to check, so it's dropped too — never
-  // shown as an empty, always-"0 allowed" card.
+  // Also drops the four Terminology Codes groups while TERMINOLOGY_FEATURE_ENABLED is false (see
+  // data/terminology-feature.config.ts) — same reasoning, just keyed off that flag instead of the
+  // phase catalog. A group with no permissions at all can't have a resource to check, so it's
+  // dropped too — never shown as an empty, always-"0 allowed" card.
   catalogWithStatus = computed<StatusCategory[]>(() => {
     const allowedIds = this.effectivePermissionIds();
     return this.catalog().map(cat => ({
       id:          cat.id,
       displayName: cat.displayName,
       groups: cat.groups
-        .filter(g => g.permissions.length > 0 && isNodePermissionPrefixVisible(g.permissions[0].resource, this.phaseCfg))
+        .filter(g => g.permissions.length > 0
+          && (TERMINOLOGY_FEATURE_ENABLED || !TERMINOLOGY_PERMISSION_PREFIXES.has(g.permissions[0].resource))
+          && isNodePermissionPrefixVisible(g.permissions[0].resource, this.phaseCfg))
         .map(g => ({
           id:          g.id,
           displayName: g.displayName,
