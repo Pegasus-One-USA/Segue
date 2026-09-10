@@ -1,0 +1,48 @@
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_85e5f4509df794::t_263e8139682007 5
+  s_85e5f4509df794::t_d0ab026e662ba1 36-38,41
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  s_85e5f4509df794::t_8565bf976d3e87 5
+  s_85e5f4509df794::t_d3d00d836ce4b2 52-54,57
+  s_85e5f4509df794::t_5e94eaaaa5ebaa 25-34
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.ts
+  s_85e5f4509df794::t_359e66f9d201f1 28
+  s_85e5f4509df794::t_534b817e5ed22d 120-122,128
+portal/src/app/data/terminology-feature.config.ts
+  s_85e5f4509df794::t_6f718cb827b852 24
+  s_85e5f4509df794::t_29a29398eddd0c 1-23,25-36
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_85e5f4509df794::t_e2b93ff15ac784 184-188,194
+  s_85e5f4509df794::t_fb1a0120590088 27
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.ts
+  s_85e5f4509df794::t_b6c293ef1fbe3c 153-156,160-162
+  s_85e5f4509df794::t_81597e9e32e4cb 48
+portal/src/app/settings/guards/feature-flag.guard.ts
+  s_85e5f4509df794::t_df4cf354aaabcf 1-18
+portal/src/app/settings/settings.routes.ts
+  s_85e5f4509df794::t_ebaae81ba86765 181-185,187
+  s_85e5f4509df794::t_477411351a05ff 267-270,273
+  s_85e5f4509df794::t_369f5337c95b58 6-7,11-14,18-22
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_85e5f4509df794::t_53e1ee5e3f0aed 166-169,176-178
+  s_85e5f4509df794::t_53e5ae328ac791 41
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_85e5f4509df794::t_d8140218acaa30 6
+  s_85e5f4509df794::t_6f3c00dcbb51a0 62-64,69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "5514097fe95f081d5c95bda56b63bd373dfaf4b1",
+  "prompts": {},
+  "sessions": {
+    "s_85e5f4509df794": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ce0dc8-ced5-4aba-a5f7-13b80b101734",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

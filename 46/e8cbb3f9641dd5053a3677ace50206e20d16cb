@@ -1,0 +1,224 @@
+src/FHIRBridge.Application/Services/WorkflowConfigurationCleanupService.cs
+  s_8fef5b661553a0::t_1a53be646402ac 6
+  s_8fef5b661553a0::t_b80d6deb016261 1-5,7-55,58-190,193-199,201-268
+  s_8fef5b661553a0::t_a5e31f71e374a4 56-57,191-192,200
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-lake-webhook-destination-form.component.html
+  s_d513accac0e8fe::t_929eb0e6fd7295 1-259
+src/FHIRBridge.Infrastructure/Destinations/Fabric/IOneLakeClientFactory.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-22
+src/FHIRBridge.Infrastructure/Destinations/Webhook/DataLakeWebhookEnums.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-58
+src/FHIRBridge.Infrastructure/Destinations/Webhook/DataLakeWebhookSettings.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-224
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 76-336
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form.registry.ts
+  s_d513accac0e8fe::t_13bc67ed700bf6 27-28,62-63
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_d513accac0e8fe::t_a8f5e8eaeaee34 706,982-1019
+src/FHIRBridge.Infrastructure/Destinations/MappedDataLakeWebhookDestinationWriter.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-259
+portal/src/app/components/nodes-v2/transform-node/transform-node.component.ts
+  s_8fef5b661553a0::t_2589693684a42c 61
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_d513accac0e8fe::t_a8299b494df23d 4566-4567,4582-4586,4678-4711
+  s_d513accac0e8fe::t_a8f5e8eaeaee34 686-689,1790-1791,1817-1822,1854-1858,2470-2471,3534-3538,4090,4884-4888
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_d513accac0e8fe::t_a8f5e8eaeaee34 758,1050-1087
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 424-435
+Demo_TestApp/backend/DataLakeWebhookEndpoints.cs
+  s_d513accac0e8fe::t_423b135cb76b9a 1-41,43-62,64-193,255-377,380-385,389-407,451-481,484-655,692
+  s_d513accac0e8fe::t_da6d5cdc549391 42,63,194-254,378-379,386-388,408-450,482-483,656-691
+tests/FHIRBridge.UnitTests/Configuration/WorkflowConfigurationCleanupServiceTests.cs
+  s_8fef5b661553a0::t_1dd02339ed505c 149,152
+  s_8fef5b661553a0::t_0e5f9818c49e28 1-148,150-151,153-226,230-244
+  s_8fef5b661553a0::t_a59d7994a0aec9 227-229
+portal/src/app/services/phase-config.service.ts
+  s_d513accac0e8fe::t_0fcecfaa6110cf 50-52
+  s_d513accac0e8fe::t_d8366632698443 29,53-56
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_8fef5b661553a0::t_2d1ebb43c96670 80
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_d513accac0e8fe::t_dc83578db33945 131-137
+  s_838728789f20ee::t_7ef74e331dda2c 1-130,138-157
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_d513accac0e8fe::t_13bc67ed700bf6 28-30
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-lake-webhook-destination-form.component.ts
+  s_d513accac0e8fe::t_929eb0e6fd7295 1,23-43,100-127
+  s_838728789f20ee::t_7ef74e331dda2c 2-22,44-99,128-278
+tests/FHIRBridge.UnitTests/Destinations/Fabric/FabricDestinationSettingsTests.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-203
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/destination-form.registry.ts
+  s_d513accac0e8fe::t_13bc67ed700bf6 27-28,62-63
+portal/src/app/components/node-library-v2/node-library-dialog.component.ts
+  s_d513accac0e8fe::t_a8f5e8eaeaee34 101-102,273,405,443,552,658-660,680,799,812-816,820,828,855-856
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d513accac0e8fe::t_a8f5e8eaeaee34 758-761,1862-1863,1889-1894,1926-1930,2563-2564,3664-3668,4220,5014-5018
+  s_d513accac0e8fe::t_a8299b494df23d 4696-4697,4712-4716,4808-4841
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_d513accac0e8fe::t_a8f5e8eaeaee34 27-33
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_d513accac0e8fe::t_6671d4cacdd5d8 619-624,626,766-807
+  s_d513accac0e8fe::t_dc83578db33945 879
+  s_d513accac0e8fe::t_c774b6a15387ee 835,838-878,880-881
+  s_d513accac0e8fe::t_974fe32dfeca2b 808
+Demo_TestApp/backend/DataLakeWebhookEntities.cs
+  s_d513accac0e8fe::t_23decee61e04d5 1-101
+Demo_TestApp/backend/Program.cs
+  s_d513accac0e8fe::t_da6d5cdc549391 47-49
+  s_d513accac0e8fe::t_1a1e0249da4af7 774-779
+portal/src/app/services/node-delete-plan-v2.util.ts
+  s_8fef5b661553a0::t_9008c6d1355011 300-304
+  s_8fef5b661553a0::t_85726a167db23a 171-173,178
+  s_8fef5b661553a0::t_7f9b8718d7ab91 1-170,174-177,179-299,305-314
+src/FHIRBridge.Infrastructure/Destinations/MappedParquetDestinationWriter.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 9-12,39,42
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_838728789f20ee::t_7ef74e331dda2c 1-52,58-134,136-164,166-175,177-180
+  s_d513accac0e8fe::t_dc83578db33945 53-57,135,165,176
+src/FHIRBridge.Infrastructure/Destinations/Webhook/DataLakeWebhookSender.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-301
+Demo_TestApp/backend/appsettings.json
+  h_44b3eb0c92b6da 17,19
+  s_d513accac0e8fe::t_55e8b4d9678335 14-15,18,20-22,31
+  s_d513accac0e8fe::t_ea359f9740b098 16,23-30
+src/FHIRBridge.Application/Services/IWorkflowConfigurationCleanupService.cs
+  s_8fef5b661553a0::t_cef5946e840151 1-45
+portal/src/app/components/canvas-v2/canvas.component.ts
+  s_8fef5b661553a0::t_cf515d7b0495fa 224-257,261
+  s_8fef5b661553a0::t_0f109932cef52c 162-165
+  s_8fef5b661553a0::t_92f2fb80e8407d 15
+  s_8fef5b661553a0::t_3bee940a57baa1 185-200
+src/FHIRBridge.Application/Abstractions/Persistence/IConfigurationRepository.cs
+  s_8fef5b661553a0::t_4574c6c2f558d7 70-74
+src/FHIRBridge.Infrastructure/Destinations/MappedDataFabricDestinationWriter.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-196
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_838728789f20ee::t_7ef74e331dda2c 1-130,138-157
+  s_d513accac0e8fe::t_dc83578db33945 131-137
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 186-222,627-634,881-887,1170-1177
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_d513accac0e8fe::t_d8366632698443 37-40,65-68
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-lake-webhook-destination-form.component.ts
+  s_d513accac0e8fe::t_929eb0e6fd7295 1,23-43,100-127
+  s_838728789f20ee::t_7ef74e331dda2c 2-22,44-99,128-278
+src/FHIRBridge.Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 65-67
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-lake-webhook-destination-form.component.html
+  s_d513accac0e8fe::t_2fc2f281999e89 1-259
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_8fef5b661553a0::t_d5be241afe17e1 450
+  s_8fef5b661553a0::t_7288395ddbd449 79,442-449,451-455,916,958-966
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_d513accac0e8fe::t_219fc9b9e02028 66-67,81-84
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricEnums.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-75
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_838728789f20ee::t_7ef74e331dda2c 1-52,58-134,136-164,166-175,177-180
+  s_d513accac0e8fe::t_dc83578db33945 53-57,135,165,176
+tests/FHIRBridge.UnitTests/Destinations/Fabric/MappedDataFabricDestinationWriterTests.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-245
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricDestinationSettings.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-224
+src/FHIRBridge.Domain/Enums/DestinationType.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 28-48
+portal/src/app/data/transforms.data.ts
+  s_d513accac0e8fe::t_13bc67ed700bf6 29-30
+portal/src/app/data/transforms-v2.data.ts
+  s_d513accac0e8fe::t_13bc67ed700bf6 27-28
+portal/src/app/services/workflow-build-assembler.service.ts
+  s_d513accac0e8fe::t_dc83578db33945 876
+  s_d513accac0e8fe::t_6671d4cacdd5d8 616-621,623,763-804
+  s_d513accac0e8fe::t_c774b6a15387ee 832,835-875,877-878
+  s_d513accac0e8fe::t_31b1b9de810251 805
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_d513accac0e8fe::t_219fc9b9e02028 41-42,56-59
+src/FHIRBridge.Infrastructure/Destinations/Webhook/IDataLakeWebhookSender.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-50
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_d513accac0e8fe::t_a8f5e8eaeaee34 97-98,208,340,370,480,575-577,597,716,729-733,737,745,765-766
+portal/src/app/components/canvas-v2/canvas.component.html
+  s_8fef5b661553a0::t_f2ce8168aa12c2 100
+  s_8fef5b661553a0::t_5a06a498512f1b 124,129-181,184-186
+tests/FHIRBridge.UnitTests/Destinations/Webhook/DataLakeWebhookSettingsTests.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-196
+portal/src/app/components/nodes-v2/transform-node/transform-node.component.html
+  s_8fef5b661553a0::t_2589693684a42c 4
+portal/src/app/components/nodes/transform-node/transform-node.component.ts
+  s_d513accac0e8fe::t_13bc67ed700bf6 24-25
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_8fef5b661553a0::t_a5e31f71e374a4 299-302
+tests/FHIRBridge.Runtime.UnitTests/Workflows/LakeDestinationNodeExecutorTests.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-172
+portal/src/app/services/node-delete-plan-v2.util.spec.ts
+  s_8fef5b661553a0::t_c1c4df69f8145b 1-163
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_8fef5b661553a0::t_273436f1da515d 229-230
+Demo_TestApp/backend/HealthAppDbContext.cs
+  s_d513accac0e8fe::t_1a1e0249da4af7 288-295,361-382
+portal/src/app/components/canvas-v2/canvas.component.scss
+  s_8fef5b661553a0::t_6250372e29fcef 235
+  s_8fef5b661553a0::t_c92ff1e83ee58d 180-191,198-234,236-272
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_d513accac0e8fe::t_dc83578db33945 94-97,99-122
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 76-77,247-248,270-271,293-296
+portal/src/app/models/destination-configuration-v2.model.ts
+  s_d513accac0e8fe::t_13bc67ed700bf6 28-30
+src/FHIRBridge.Infrastructure/Destinations/Fabric/OneLakeClientFactory.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-97
+tests/FHIRBridge.UnitTests/Destinations/Webhook/MappedDataLakeWebhookDestinationWriterTests.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-287
+src/FHIRBridge.Infrastructure/Destinations/MappedDestinationParquetSerializer.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 1-41
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 58-59
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs
+  s_d513accac0e8fe::t_13bc67ed700bf6 59-69
+portal/src/app/services/phase-config-v2.service.ts
+  s_d513accac0e8fe::t_d8366632698443 32,56-59
+  s_d513accac0e8fe::t_0fcecfaa6110cf 53-55
+src/FHIRBridge.Infrastructure/Persistence/EfConfigurationRepository.cs
+  s_8fef5b661553a0::t_86def30c317597 406-412
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_d513accac0e8fe::t_07e4f93d48c9c6 27-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "46e8cbb3f9641dd5053a3677ace50206e20d16cb",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_838728789f20ee": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "887c92d5-6dbb-4a5d-a2f2-a72369e877ba",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_8fef5b661553a0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a0e98a7-a516-499f-aed8-186b6fbd7006",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d513accac0e8fe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ef8c0a5-b7a0-4d67-b45b-621adaf8895d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
