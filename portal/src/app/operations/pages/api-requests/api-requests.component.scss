@@ -1,4 +1,4 @@
-.list-page {
+﻿.list-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -67,13 +67,21 @@
   font-size: 12px;
 }
 
+// Shown in full rather than ellipsised — see the matching rule in correlation-search.component.scss. The title
+// attribute in the template stays, so a hover still reveals the URL on a narrow viewport where it wraps heavily.
 .url-cell {
   display: inline-block;
-  max-width: 420px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  max-width: 100%;
+}
+
+// Sized to its content and never wrapped: the step is the column people scan down, so it has to stay on one line
+// even when the URL beside it wraps to three.
+.step-cell {
   white-space: nowrap;
-  vertical-align: bottom;
+  width: 1%;
+  font-weight: 500;
 }
 
 .status-badge {

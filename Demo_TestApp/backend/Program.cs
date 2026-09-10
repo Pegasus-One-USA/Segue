@@ -1,5 +1,6 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text;
 using HealthAppBackend;
 using Microsoft.EntityFrameworkCore;
 
@@ -415,9 +416,46 @@ app.MapGet("/api/provider-in-app-launch-context", async (
             : "providerinapp@healthapp.local";
     var mintUrl = $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/public-launch-context?userIdentity={Uri.EscapeDataString(providerInAppUserIdentity)}";
 
+    // Pre-flight this launch before handing the browser off to the EHR. An EHR launch has no natural "click" to
+    // validate on — the flow starts at the EHR — so this is the only moment before the round trip begins. The
+    // correlation id it mints is passed into the mint call below, which bakes it into the encrypted launch
+    // context; /oauth/callback then restores it and continues the very row validate-run created, so an EHR launch
+    // becomes one Execution History entry rather than a validated row plus a separate run.
+    //
+    // Best-effort: this app cannot usefully block a real EHR launch on its own pre-flight failing, and a refusal
+    // is already recorded server-side as a ValidationFailed row.
+    string? attemptCorrelationId = null;
     try
     {
-        var response = await client.GetAsync(mintUrl);
+        var validateResponse = await client.PostAsync(
+            $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/validate-run",
+            new StringContent(
+                JsonSerializer.Serialize(new { patientId = (string?)null, patientSearchCriteria = (string?)null, callerId = (string?)null }),
+                Encoding.UTF8,
+                "application/json"));
+
+        if (validateResponse.IsSuccessStatusCode)
+        {
+            var validation = JsonSerializer.Deserialize<ValidateRunResult>(
+                await validateResponse.Content.ReadAsStringAsync(), jsonOptions);
+            attemptCorrelationId = validation?.CorrelationId;
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "validate-run pre-flight could not be completed for ProviderInAppWorkflowId={WorkflowId}.", workflowId);
+    }
+
+
+    try
+    {
+        using var mintRequest = new HttpRequestMessage(HttpMethod.Get, mintUrl);
+        if (!string.IsNullOrWhiteSpace(attemptCorrelationId))
+        {
+            mintRequest.Headers.TryAddWithoutValidation("X-Correlation-Id", attemptCorrelationId);
+        }
+
+        var response = await client.SendAsync(mintRequest);
         if (!response.IsSuccessStatusCode)
         {
             logger.LogWarning(

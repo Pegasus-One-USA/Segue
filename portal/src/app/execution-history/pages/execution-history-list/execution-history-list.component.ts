@@ -210,6 +210,12 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
       // BulkExportPollWorker will resume), and splitting it out as its own status made the Dashboard's Running
       // tile disagree with what this list showed. The API keeps the distinct AwaitingBulkExport value.
       AwaitingBulkExport: 'Running',
+      // validate-run outcomes. Validated is non-terminal ("checked, waiting to run"); Expired is what the
+      // sweep turns an abandoned one into. Spelled out rather than left to the ?? fallback, which would show
+      // raw PascalCase enum names to the user.
+      Validated: 'Validated',
+      ValidationFailed: 'Validation Failed',
+      Expired: 'Expired',
       Succeeded: 'Succeeded',
       PartialSuccess: 'Partial Success',
       Failed: 'Failed',
@@ -229,6 +235,12 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
       Pending: 'badge-queued',
       Running: 'badge-running',
       AwaitingBulkExport: 'badge-running',
+      // Validated is pending-like (nothing has run yet); ValidationFailed is a genuine refusal so it reads as
+      // failed; Expired is neither success nor failure — nothing was attempted — so it takes the muted badge
+      // Cancelled uses.
+      Validated: 'badge-queued',
+      ValidationFailed: 'badge-failed',
+      Expired: 'badge-inactive',
       Succeeded: 'badge-completed',
       PartialSuccess: 'badge-completed',
       Failed: 'badge-failed',

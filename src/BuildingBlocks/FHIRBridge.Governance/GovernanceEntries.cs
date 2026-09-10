@@ -1,4 +1,4 @@
-namespace FHIRBridge.Governance;
+﻿namespace FHIRBridge.Governance;
 
 /// <summary>
 /// A configuration/entity change to be written to the immutable, hash-chained audit trail.
@@ -95,7 +95,10 @@ public sealed record ApiRequestEntry(
     int? StatusCode,
     long DurationMs,
     string? Error = null,
-    string? CorrelationId = null);
+    string? CorrelationId = null,
+    /// <summary>"Outbound" (a call this system made) or "Inbound" (a call made to this system's API). Defaults
+    /// to outbound so every existing caller — all of which are outbound HttpClient handlers — is unaffected.</summary>
+    string Direction = "Outbound");
 
 /// <summary>One destination write ("export") completing.</summary>
 public sealed record ExportEntry(

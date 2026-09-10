@@ -1278,6 +1278,12 @@ export class WorkflowBuildAssemblerService {
     let p = path.trim();
     if (p.startsWith(`${resourceType}.`)) p = p.slice(resourceType.length + 1);
     if (p.startsWith('$')) return p;
+    // The resource's own ROOT node ("Patient", with nothing after it) is what a whole-node-as-JSON mapping
+    // of the entire payload carries — field-mapping-model's serializeRowsFlat writes the group's node id as
+    // the row's path, and for the root that id is just the resourceType. Only "$" means "the whole document"
+    // to JsonMappingEngine.ResolveAll; the "$.{p}" fallback below would produce "$.Patient", which resolves
+    // to nothing and writes NULL into the target column on every record.
+    if (!p || p === resourceType) return '$';
     return `$.${p}`;
   }
 

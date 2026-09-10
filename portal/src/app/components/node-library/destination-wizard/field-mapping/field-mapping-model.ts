@@ -241,7 +241,7 @@ export function serializeRowsFlat(
   sqlTables: DestinationTable[] = [],
   childTableRelationsByTable: Record<string, FlatChildTableRelation> = {},
 ): (LegacyMappingRow & {
-  arrayPolicy: string; approximated: boolean; isUpsertKey: boolean;
+  arrayPolicy: string; approximated: boolean; isUpsertKey: boolean; isRequired?: boolean;
   parentTable?: string; parentKeyColumn?: string; foreignKeyColumn?: string;
   referencesResource?: string;
 })[] {
@@ -286,6 +286,19 @@ export function serializeRowsFlat(
     const isUpsertKey = resourcesWithExplicitKey.has(row.resource)
       ? row.isUpsertKey === true
       : !!targetTable?.columns.some(c => c.name === row.targetName && c.isPrimaryKey);
+
+    // A column the destination declares NOT NULL has to be marked required, or the save gate rejects the
+    // whole workflow ("'content' does not allow NULLs — mark this field as required or supply a default
+    // value." from CreateMappingProfileRequestValidator) — and this wizard has no per-row "required"
+    // toggle a user could satisfy it with by hand, so mapping anything onto such a column (e.g. the whole
+    // payload as JSON into a HAPI-style `content text NOT NULL`) was previously unsaveable. Read off the
+    // live schema exactly like isUpsertKey above, and OMITTED rather than sent as false when the column is
+    // nullable or its schema isn't known here, so workflow-build-assembler's own
+    // `row.isRequired ?? row === idRow` default still decides those (an explicit false would strip the id
+    // row's required flag). IsRequired only ever adds a per-record mapping error message at run time
+    // (JsonMappingEngine) — it never changes what gets written.
+    const targetColumn = targetTable?.columns.find(c => c.name === row.targetName);
+    const isRequired = row.isRequired ?? (targetColumn?.isNullable === false ? true : undefined);
     return {
       resource: row.resource,
       field: primary?.label ?? '',
@@ -298,6 +311,7 @@ export function serializeRowsFlat(
       arrayPolicy,
       approximated,
       isUpsertKey,
+      ...(isRequired ? { isRequired: true } : {}),
       ...(genuineRelation ? {
         parentTable: genuineRelation.parentTable,
         parentKeyColumn: genuineRelation.parentColumn,

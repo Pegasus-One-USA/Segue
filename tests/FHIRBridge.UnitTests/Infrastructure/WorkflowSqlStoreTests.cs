@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Security;
+﻿using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Persistence;
@@ -71,6 +71,43 @@ public sealed class WorkflowSqlStoreTests
             reloaded.Nodes.Single(node => node.NodeType == "SqlServerDestinationNode")
                 .Configuration.Should().ContainSingle(configuration =>
                     configuration.Key == "table" && configuration.Value == "dbo.Patient");
+        }
+    }
+
+    [Fact]
+    public async Task Definition_store_round_trips_the_description_and_clears_it_on_a_blank_re_save()
+    {
+        var definitionId = Guid.NewGuid();
+        var workflow = new WorkflowDefinition(
+            definitionId, "Epic -> SQL", 1, description: "  Nightly Epic pull.\nOwned by the interop team.  ");
+        workflow.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+
+        await using (var context = CreateContext())
+        {
+            await CreateDefinitionStore(context).SaveAsync(workflow, CancellationToken.None);
+        }
+
+        await using (var context = CreateContext())
+        {
+            var reloaded = await CreateDefinitionStore(context).GetAsync(definitionId, CancellationToken.None);
+            // Trimmed, but the interior newline (the whole point of a multi-line field) survives verbatim.
+            reloaded!.Description.Should().Be("Nightly Epic pull.\nOwned by the interop team.");
+        }
+
+        // A save carrying no description (the field cleared in the builder) genuinely clears the stored one
+        // rather than leaving the previous text behind.
+        var cleared = new WorkflowDefinition(definitionId, "Epic -> SQL", 2, description: "   ");
+        cleared.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+
+        await using (var context = CreateContext())
+        {
+            await CreateDefinitionStore(context).SaveAsync(cleared, CancellationToken.None);
+        }
+
+        await using (var context = CreateContext())
+        {
+            var reloaded = await CreateDefinitionStore(context).GetAsync(definitionId, CancellationToken.None);
+            reloaded!.Description.Should().BeNull();
         }
     }
 
@@ -252,6 +289,98 @@ public sealed class WorkflowSqlStoreTests
     }
 
     [Fact]
+    public async Task Validated_run_is_found_by_correlation_id_and_stops_being_found_once_it_executes()
+    {
+        var definitionId = Guid.NewGuid();
+        var correlationId = $"wf-{Guid.NewGuid():N}";
+
+        var validated = new WorkflowRun(
+            Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow, correlationId: correlationId);
+        validated.MarkValidated();
+
+        await using (var context = CreateContext())
+        {
+            await new SqlWorkflowRunStore(context).SaveAsync(validated, CancellationToken.None);
+        }
+
+        // What POST /run does: find the row validate-run created for this attempt and continue it, so one user
+        // action stays one Execution History entry.
+        await using (var assertContext = CreateContext())
+        {
+            var found = await new SqlWorkflowRunStore(assertContext)
+                .FindValidatedAsync(definitionId, correlationId, CancellationToken.None);
+
+            found.Should().NotBeNull();
+            found!.Id.Should().Be(validated.Id);
+        }
+
+        // The orchestrator then replaces that row with the real run under the same id. It must no longer be
+        // continuable — a later click is a new attempt and deserves its own row, not a second execution grafted
+        // onto a finished one.
+        await using (var runContext = CreateContext())
+        {
+            var executed = new WorkflowRun(
+                validated.Id, definitionId, DateTimeOffset.UtcNow, correlationId: correlationId);
+            executed.Succeed(DateTimeOffset.UtcNow);
+            await new SqlWorkflowRunStore(runContext).SaveAsync(executed, CancellationToken.None);
+        }
+
+        await using (var assertContext = CreateContext())
+        {
+            var store = new SqlWorkflowRunStore(assertContext);
+
+            (await store.FindValidatedAsync(definitionId, correlationId, CancellationToken.None))
+                .Should().BeNull("a run that has already executed is not a continuation candidate");
+            (await store.GetAsync(validated.Id, CancellationToken.None))!
+                .Status.Should().Be(WorkflowRunStatus.Succeeded);
+        }
+    }
+
+    [Fact]
+    public async Task Stale_validated_runs_expire_and_fresh_ones_are_left_alone()
+    {
+        var definitionId = Guid.NewGuid();
+
+        // Abandoned: validated, then the user was sent to the EHR to sign in and never came back.
+        var abandoned = new WorkflowRun(
+            Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow.AddHours(-3),
+            correlationId: $"wf-{Guid.NewGuid():N}");
+        abandoned.MarkValidated();
+
+        // Still in flight: someone is part-way through a sign-in right now. Expiring this would strand a
+        // legitimate attempt and force the whole round trip again.
+        var recent = new WorkflowRun(
+            Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow,
+            correlationId: $"wf-{Guid.NewGuid():N}");
+        recent.MarkValidated();
+
+        await using (var context = CreateContext())
+        {
+            var store = new SqlWorkflowRunStore(context);
+            await store.SaveAsync(abandoned, CancellationToken.None);
+            await store.SaveAsync(recent, CancellationToken.None);
+        }
+
+        await using (var sweepContext = CreateContext())
+        {
+            var expired = await new SqlWorkflowRunStore(sweepContext)
+                .ExpireStaleValidatedAsync(DateTimeOffset.UtcNow.AddHours(-1), CancellationToken.None);
+
+            expired.Should().Be(1);
+        }
+
+        await using (var assertContext = CreateContext())
+        {
+            var store = new SqlWorkflowRunStore(assertContext);
+
+            (await store.GetAsync(abandoned.Id, CancellationToken.None))!
+                .Status.Should().Be(WorkflowRunStatus.Expired);
+            (await store.GetAsync(recent.Id, CancellationToken.None))!
+                .Status.Should().Be(WorkflowRunStatus.Validated);
+        }
+    }
+
+    [Fact]
     public async Task Run_store_status_counts_reflect_every_run_and_zero_fill_unrepresented_statuses()
     {
         var definitionId = Guid.NewGuid();
@@ -277,14 +406,18 @@ public sealed class WorkflowSqlStoreTests
         {
             var counts = await new SqlWorkflowRunStore(assertContext).GetStatusCountsAsync(CancellationToken.None);
 
-            counts.Should().HaveCount(7);
+            // Asserted against the enum itself rather than a hardcoded 7: the point of this test is that EVERY
+            // status is zero-filled, so adding a status must not silently narrow what it checks (nor fail it for
+            // the wrong reason).
+            counts.Should().HaveCount(Enum.GetValues<WorkflowRunStatus>().Length);
             counts[WorkflowRunStatus.Succeeded].Should().Be(2);
             counts[WorkflowRunStatus.Failed].Should().Be(1);
             counts[WorkflowRunStatus.Running].Should().Be(1);
-            counts[WorkflowRunStatus.Pending].Should().Be(0);
-            counts[WorkflowRunStatus.Cancelled].Should().Be(0);
-            counts[WorkflowRunStatus.PartialSuccess].Should().Be(0);
-            counts[WorkflowRunStatus.AwaitingBulkExport].Should().Be(0);
+            foreach (var unrepresented in Enum.GetValues<WorkflowRunStatus>()
+                .Except([WorkflowRunStatus.Succeeded, WorkflowRunStatus.Failed, WorkflowRunStatus.Running]))
+            {
+                counts[unrepresented].Should().Be(0, "no run was saved in the {0} state", unrepresented);
+            }
         }
     }
 

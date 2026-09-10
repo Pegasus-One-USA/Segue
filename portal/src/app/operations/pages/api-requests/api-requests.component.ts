@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+﻿import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
@@ -24,7 +24,7 @@ export class ApiRequestsComponent implements OnInit {
   readonly pageIndex = signal(0);
   readonly pageSize = signal(10);
 
-  readonly displayedCols = ['occurredOnUtc', 'method', 'url', 'statusCode', 'durationMs', 'correlationId'];
+  readonly displayedCols = ['occurredOnUtc', 'step', 'method', 'url', 'statusCode', 'durationMs', 'correlationId'];
 
   ngOnInit(): void {
     const fromQuery = this.route.snapshot.queryParamMap.get('correlationId');

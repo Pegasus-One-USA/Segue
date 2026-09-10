@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+﻿import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -229,6 +229,12 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
       Running: 'Running',
       // Shown as plain "Running" — same reasoning as ExecutionHistoryListComponent.statusLabel.
       AwaitingBulkExport: 'Running',
+      // validate-run outcomes. Validated is non-terminal ("checked, waiting to run"); Expired is what the
+      // sweep turns an abandoned one into. Spelled out rather than left to the ?? fallback, which would show
+      // raw PascalCase enum names to the user.
+      Validated: 'Validated',
+      ValidationFailed: 'Validation Failed',
+      Expired: 'Expired',
       Succeeded: 'Succeeded',
       PartialSuccess: 'Partial Success',
       Failed: 'Failed',

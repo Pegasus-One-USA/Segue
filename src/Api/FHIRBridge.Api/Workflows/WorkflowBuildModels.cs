@@ -25,7 +25,9 @@ public sealed record WorkflowBuildRequest(
     IReadOnlyCollection<DestinationBuildSpec>? Destinations = null,
     IReadOnlyCollection<MappingBuildSpec>? Mappings = null,
     WorkflowTriggerRequest? Trigger = null,
-    Guid? WorkflowId = null);
+    Guid? WorkflowId = null,
+    // Optional multi-line free-text notes for this workflow. Null/blank clears whatever was stored.
+    string? Description = null);
 
 /// <summary>
 /// Create a source connection and inject its id into the node identified by <see cref="NodeId"/>. When

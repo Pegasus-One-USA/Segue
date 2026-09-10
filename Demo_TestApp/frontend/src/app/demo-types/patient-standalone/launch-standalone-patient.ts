@@ -1,4 +1,4 @@
-import { Component, NgZone, OnInit, input, output, signal } from '@angular/core';
+﻿import { Component, NgZone, OnInit, input, output, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -173,6 +173,9 @@ export class LaunchStandalonePatientComponent implements OnInit {
 
   readonly isFetchingPatient = signal(false);
   readonly patientError = signal<string | null>(null);
+  /** Shown alongside a failure so a user can quote it to support — the id every log line for this attempt is
+   *  filed under, across validate-run, the MyChart sign-in, and the run itself. */
+  readonly lastCorrelationId = signal<string | null>(null);
   readonly fetchedPatients = signal<FetchedPatient[] | null>(null);
 
   // Detail section (Patient/Observation/Condition) for whichever row was last clicked in fetchedPatients — a
@@ -478,6 +481,33 @@ export class LaunchStandalonePatientComponent implements OnInit {
     this.isFetchingPatient.set(true);
     this.patientError.set(null);
     try {
+      // Before the token check, not after: a parameter problem is worth reporting without first bouncing the user
+      // through a MyChart sign-in for a run that was never going to be accepted. A validate-run that itself fails
+      // to respond is deliberately ignored — a pre-flight must never be the reason a working fetch doesn't happen.
+      try {
+        const validation = await this.launchService.validateRun(
+          activeWorkflowId, this.patientId, this.sessionId ?? undefined, baseUrlOverride,
+          ehrEndpointIdOverride ?? this.selectedHospitalId());
+        // Held for the rest of this attempt and echoed by the service on every later call.
+        this.launchService.attemptCorrelationId = validation.correlationId;
+        this.lastCorrelationId.set(validation.correlationId);
+        if (!validation.isValid) {
+          this.patientError.set(
+            validation.errors.map(error => error.message).join(' ')
+            || 'This workflow cannot be run with the values supplied.');
+          return;
+        }
+      } catch (err) {
+        // A 404 means the configured workflow id does not exist — a definite configuration problem, not a
+        // pre-flight hiccup. See the Provider Standalone counterpart for why letting this through produces a
+        // misleading "check your connection" message.
+        if (err instanceof HttpErrorResponse && err.status === 404) {
+          this.patientError.set('The configured workflow no longer exists in FHIRBridge. Ask an admin to check the workflow id in Settings — if you were signed out, signing in again may restore it.');
+          return;
+        }
+        // Anything else — non-fatal, see above.
+      }
+
       if (!(await this.hasValidToken(activeWorkflowId, baseUrlOverride))) {
         await this.needsReAuthorization(activeWorkflowId, baseUrlOverride, ehrEndpointIdOverride);
         return;

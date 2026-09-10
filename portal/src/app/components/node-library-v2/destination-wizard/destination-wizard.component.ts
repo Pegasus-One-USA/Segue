@@ -2928,49 +2928,20 @@ export class DestinationWizardComponent implements OnInit {
           this.pendingRuleConflicts.set(conflicts);
           return;
         }
-        // Soft checks — currently a missing required parent reference (buildParentReferenceWarnings) and
-        // no active de-identification coverage on this destination — don't block Save the way
-        // validateMappingForSave's errors do; each Save on each resource re-checks this, not just the
-        // one-time Step 1 gate, since a profile can be emptied out or unassigned after Step 1 already
-        // passed (e.g. its rules deleted elsewhere). Shown as a confirm-before-proceed dialog instead
-        // (pendingSaveWarnings) rather than forcing a fix right now.
-        this.buildDeIdentificationSaveWarning().subscribe((deIdWarning) => {
-          const warnings = [
-            ...this.buildParentReferenceWarnings(group),
-            ...(deIdWarning ? [deIdWarning] : []),
-          ];
-          if (warnings.length > 0) {
-            this.pendingSaveWarnings.set(warnings);
-            return;
-          }
-          this.completeSaveGroupMapping(group);
-        });
+        // Soft check — a missing required parent reference (buildParentReferenceWarnings) doesn't block
+        // Save the way validateMappingForSave's errors do; it's shown as a confirm-before-proceed dialog
+        // (pendingSaveWarnings) rather than forcing a fix right now. De-identification coverage is
+        // deliberately NOT warned about here (or anywhere else in this wizard): the policy is configured on
+        // the Transformation Rules screen and surfaced read-only on the Review step, not enforced by a
+        // dialog on every mapping save.
+        const warnings = this.buildParentReferenceWarnings(group);
+        if (warnings.length > 0) {
+          this.pendingSaveWarnings.set(warnings);
+          return;
+        }
+        this.completeSaveGroupMapping(group);
       });
     });
-  }
-
-  /** The de-identification half of saveGroupMapping's soft-warning check — a single synthetic
-   *  PendingParentReferenceWarning (message-only, no fix-it UI) reusing the same dialog/array
-   *  buildParentReferenceWarnings' real warnings render through, rather than a separate dialog. `parent`
-   *  is a sentinel, not a real resource name, so it can't collide with a real warning's @for track key. */
-  private buildDeIdentificationSaveWarning(): Observable<PendingParentReferenceWarning | null> {
-    const profileId = this.selectedDeIdentificationProfileId();
-    const makeWarning = (message: string): PendingParentReferenceWarning => ({
-      resource: '', parent: '__deidentification__', message,
-      sourceFieldPath: null, sourceFieldLabel: null, existingRow: null,
-      destinationColumns: [], selectedDestinationColumn: null,
-    });
-
-    if (!profileId) {
-      return of(makeWarning(
-        'This destination has no de-identification profile selected — PHI will not be redacted or generalized before it\'s written.',
-      ));
-    }
-    return this.profileHasActiveRules(profileId).pipe(
-      map(hasRules => hasRules ? null : makeWarning(
-        `"${this.selectedDeIdentificationProfileName()}" is selected as this destination's de-identification policy, but it currently has no enabled rules — nothing will actually be redacted.`,
-      )),
-    );
   }
 
   /** User chose "Save anyway" on the pendingSaveWarnings dialog, leaving whatever's still unresolved. */
@@ -3260,11 +3231,21 @@ export class DestinationWizardComponent implements OnInit {
           resourcePipelineRouteId,
           sourceSystem,
           sourceField,
+          // A brand-new workflow has no id yet, so a rule authored here is stored unattached until the
+          // workflow's FIRST save — which happens after this mapping is saved. Without this the check can
+          // never see that rule and falls back to the raw source type, making a rule-backed mapping
+          // unsaveable on exactly the pipeline that just authored the rule.
+          includePending: true,
         })
         .pipe(
-          map((rules): [string, string | null] | null =>
-            rules.length === 0 ? null : [`${row.tableName}::${row.targetName}`, rules[0].expectedValueType ?? null],
-          ),
+          map((rules): [string, string | null] | null => {
+            if (rules.length === 0) return null;
+            // The LAST rule that declares an output type is what actually reaches the column — the chain
+            // runs in order, each step feeding the next, so an earlier step's type describes an
+            // intermediate value the column never sees.
+            const declared = [...rules].reverse().find((rule) => rule.expectedValueType != null);
+            return [`${row.tableName}::${row.targetName}`, declared?.expectedValueType ?? null];
+          }),
           // A transient rule-lookup failure shouldn't block Save on its own here either — same tolerance
           // validateRuleConflictsForSave already uses; the server-side check is still the backstop.
           catchError(() => of(null)),
@@ -4720,29 +4701,10 @@ export class DestinationWizardComponent implements OnInit {
   // (used as inlineSecret). This replaces per-family inline buildSqlConnectionString/buildSftpUri/
   // buildConnectionMetadata calls that used to live here — each destination-forms/ component now does that
   // assembly itself (see e.g. SqlFamilyDestinationFormComponent.getMetadata()).
-  /** Set when Step 1 is about to advance (new connection or reused existing one alike) with no active
-   *  de-identification coverage — either no profile picked at all, or a profile that's picked but
-   *  currently has zero enabled rules under it (a profile record with nothing left attached still shows
-   *  up in the dropdown — see loadDeIdentificationProfiles — so "a profile is selected" alone doesn't
-   *  mean anything actually gets redacted). Blocks nothing on its own, just forces an explicit "Continue
-   *  anyway" click instead of silently letting an unprotected destination through. Holds the real
-   *  provisioning work to resume if the user confirms; cleared (discarding it) on "Go back". */
-  readonly pendingDeIdentificationWarning = signal<{ reason: 'none' | 'empty'; resume: () => void } | null>(null);
-
-  confirmProceedWithoutDeIdentification(): void {
-    const pending = this.pendingDeIdentificationWarning();
-    this.pendingDeIdentificationWarning.set(null);
-    pending?.resume();
-  }
-
-  cancelProceedWithoutDeIdentification(): void {
-    this.pendingDeIdentificationWarning.set(null);
-  }
-
   /** Tracks whether the currently-selected profile actually has active rules — drives the Step 4 Review
-   *  card's warning flag the same way pendingDeIdentificationWarning drives Step 1's. Re-checked whenever
-   *  the selection changes; defaults true (no warning) while a check is in flight or none is selected,
-   *  since the "no profile at all" case already has its own, more specific flag in the template. */
+   *  card's read-only de-identification summary. Re-checked whenever the selection changes; defaults true
+   *  (nothing flagged) while a check is in flight or none is selected, since the "no profile at all" case
+   *  is rendered from selectedDeIdentificationProfileId directly. */
   readonly selectedProfileHasRules = signal(true);
 
   /** Whether the given profile currently has at least one enabled rule under it. Client-side filter over
@@ -4759,30 +4721,6 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   private provisionDestinationConnection(
-    metadata: { fields: Record<string, string>; secret?: string | null },
-    onDone: () => void,
-  ): void {
-    // Checked first, ahead of the 'existing'-mode early return below — an unprotected destination is just
-    // as real a gap whether it's being created fresh or reused as-is; selectedDeIdentificationProfileId is
-    // kept in sync with whichever destination is actually selected either way (see selectExisting()).
-    const profileId = this.selectedDeIdentificationProfileId();
-    const resume = () => this._provisionDestinationConnectionAfterDeIdCheck(metadata, onDone);
-
-    if (!profileId) {
-      this.pendingDeIdentificationWarning.set({ reason: 'none', resume });
-      return;
-    }
-
-    this.profileHasActiveRules(profileId).subscribe(hasRules => {
-      if (!hasRules) {
-        this.pendingDeIdentificationWarning.set({ reason: 'empty', resume });
-      } else {
-        resume();
-      }
-    });
-  }
-
-  private _provisionDestinationConnectionAfterDeIdCheck(
     metadata: { fields: Record<string, string>; secret?: string | null },
     onDone: () => void,
   ): void {

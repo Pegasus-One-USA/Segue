@@ -232,6 +232,45 @@ describe('serializeRowsFlat', () => {
     });
   });
 
+  // Regression: mapping the whole payload as JSON onto a HAPI-style `content text NOT NULL` column was
+  // unsaveable — the save gate (CreateMappingProfileRequestValidator) rejects a NOT NULL column whose field
+  // is neither required nor defaulted, and this wizard has no per-row "required" toggle to satisfy it with.
+  describe('isRequired', () => {
+    const sqlTables: DestinationTable[] = [{
+      schemaName: 'public', tableName: 'Patient', fullName: 'public.Patient',
+      columns: [
+        { name: 'content', dataType: 'text', mappingValueType: 'String', isNullable: false, maxLength: null },
+        { name: 'gender', dataType: 'text', mappingValueType: 'String', isNullable: true, maxLength: null },
+      ],
+    }];
+
+    function wholePayloadRow(): MappingRow {
+      return {
+        resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient',
+        targetName: 'content', tableName: 'public.Patient',
+      };
+    }
+
+    it('marks a row targeting a NOT NULL column as required', () => {
+      const flat = serializeRowsFlat([wholePayloadRow()], { Patient: 'public.Patient' }, sqlTables);
+      expect(flat[0].isRequired).toBeTrue();
+    });
+
+    it('omits isRequired for a nullable column', () => {
+      const row: MappingRow = {
+        resource: 'Patient', sources: [{ fhirPath: 'Patient.gender', label: 'Gender' }],
+        mode: 'value', instance: { type: 'first' }, targetName: 'gender', tableName: 'public.Patient',
+      };
+      const flat = serializeRowsFlat([row], { Patient: 'public.Patient' }, sqlTables);
+      expect(flat[0].isRequired).toBeUndefined();
+    });
+
+    it('omits isRequired when the column has no known live schema', () => {
+      const flat = serializeRowsFlat([wholePayloadRow()], { Patient: 'public.Patient' });
+      expect(flat[0].isRequired).toBeUndefined();
+    });
+  });
+
   describe('child tables', () => {
     const targetByResource = { Patient: 'dbo.Patient' };
     const childRelations = {

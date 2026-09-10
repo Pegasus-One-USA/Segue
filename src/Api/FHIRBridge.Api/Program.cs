@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
@@ -163,6 +163,9 @@ builder.Services.AddSwaggerGen(options =>
 });
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, HttpContextCurrentUserService>();
+// Lets InteractiveSourceAuthorizationService re-stamp the correlation id on the /oauth/callback leg, whose
+// workflow + session only become known once the encrypted OAuth state is decrypted (see IRequestCorrelationStamper).
+builder.Services.AddScoped<IRequestCorrelationStamper, HttpContextRequestCorrelationStamper>();
 builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 builder.Services.AddScoped<IAuthorizationHandler, UnifiedAdminAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHandler>();
@@ -371,6 +374,18 @@ app.UseForwardedHeaders();
 // otherwise be findable only by full-text-searching the exception message/path in Seq.
 app.Use(async (context, next) =>
 {
+    // Before anything reads a correlation id, replace Kestrel's per-request TraceIdentifier with the id every
+    // leg of one workflow attempt shares (see WorkflowCorrelationResolver). Without this each leg — validate-run,
+    // token-status, the launch-url mint, /oauth/callback, /run — lands under its own id, so the SmartLaunchLogs
+    // row for an EHR sign-in can never be found alongside the run it authorized. Returns null (leaving
+    // TraceIdentifier alone) when the caller supplied an explicit X-Correlation-Id, or when this request carries
+    // no session id to key on.
+    var derivedCorrelationId = WorkflowCorrelationResolver.Resolve(context);
+    if (derivedCorrelationId is not null)
+    {
+        context.TraceIdentifier = derivedCorrelationId;
+    }
+
     var correlationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? context.TraceIdentifier;
     System.Diagnostics.Activity.Current?.SetTag("correlation_id", correlationId);
     using (Serilog.Context.LogContext.PushProperty("CorrelationId", correlationId))
@@ -545,6 +560,12 @@ if (swaggerEnabled)
 BootstrapDatabase(app);
 ProvisionAppSecrets(app);
 SyncDiscoveredPermissions(app);
+
+// Durable (SQL) counterpart to the Serilog request log below, for the workflow/launch API surface only — see
+// InboundApiRequestLoggingMiddleware for why a refused request needs a row of its own. Placed above
+// UseSerilogRequestLogging so it wraps the same span of pipeline: a request short-circuited by CORS/CSRF/auth,
+// or refused by a public-launch gate, is exactly the one that must not go unrecorded.
+app.UseMiddleware<InboundApiRequestLoggingMiddleware>();
 
 // One structured event per HTTP request (method, path, status, duration) instead of the framework's several
 // per-request lines. Placed before the static-file and auth middleware so it times the whole pipeline, including

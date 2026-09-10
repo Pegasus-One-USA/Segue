@@ -169,10 +169,16 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
                     destinationType.Value,
                     request.ResourceType,
                     field.TargetField,
-                    resourcePipelineRouteId: null,
+                    request.ResourcePipelineRouteId,
                     sourceSystem: null,
-                    sourceField: null,
-                    cancellationToken);
+                    // Must be normalized the same way the UI persists it, or the SourceField equality below the
+                    // resolver matches nothing and every rule keyed to a source path goes unseen here.
+                    RuleSourceFieldFormat.FromJsonPath(request.ResourceType, field.JsonPath),
+                    cancellationToken,
+                    // Workflow-scoped rules the builder wrote before this pipeline was first saved are still
+                    // unattached, and the mapping profile is saved BEFORE the workflow that would attach them —
+                    // so without this the save gate can never see the rule the user just authored.
+                    includePendingWorkflowRules: true);
 
             // A transformation rule chain (e.g. DateMathAge turning a Date into an Integer) can legitimately
             // change the value's shape between the raw JsonPath extraction and what actually reaches the
@@ -209,10 +215,12 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
     /// A field can pass the check above (its declared type matches the column) and still fail at run time,
     /// because a Global/ResourceType/DestinationType-scoped <see cref="Domain.Entities.TransformationRule"/>
     /// applies to it and expects a different type than the column actually is — e.g. a Global NumberCast rule
-    /// hitting a text column. Rules are resolved with resourcePipelineRouteId: null by the caller deliberately:
-    /// a MappingProfile can be created before any ResourcePipelineRoute references it, so no Workflow-scoped
-    /// override can exist yet at this point — this check only ever sees the broader tiers a workflow-level
-    /// override would need to beat.
+    /// hitting a text column.
+    ///
+    /// Only the LAST rule in the chain that declares an output type is compared against the column: the rules
+    /// run in order, each one feeding the next, so the intermediate types are none of the column's business —
+    /// a StringNormalization feeding a NumberCast into an int column is correct, and checking every rule would
+    /// reject it for the String step alone.
     /// </summary>
     private static void ValidateApplicableRules(
         int fieldIndex,
@@ -220,9 +228,11 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
         IReadOnlyList<Domain.Entities.TransformationRule> rules,
         ValidationContext<CreateMappingProfileRequest> context)
     {
+        var lastTypedRule = rules.LastOrDefault(r => r.ExpectedValueType is not null);
         foreach (var rule in rules)
         {
-            if (rule.ExpectedValueType is { } expectedValueType &&
+            if (rule == lastTypedRule &&
+                rule.ExpectedValueType is { } expectedValueType &&
                 !string.Equals(expectedValueType.ToString(), column.MappingValueType, StringComparison.OrdinalIgnoreCase) &&
                 !IsJsonSafeForColumn(expectedValueType, column))
             {

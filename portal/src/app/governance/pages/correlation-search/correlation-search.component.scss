@@ -1,4 +1,4 @@
-.list-page {
+﻿.list-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -241,13 +241,29 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-.mini-table .truncate {
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+// The URL is the point of this table — it is what tells you which endpoint was called and, for an inbound row,
+// which workflow id was used. Ellipsising it hid exactly the part that differs between rows (the trailing path
+// segments), so this wraps instead. `anywhere` rather than `break-word` because a URL has no spaces to break on.
+.mini-table .url-cell {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+// The short columns size to their content and never wrap. Without this, giving the URL the remaining width
+// squeezed them until "4:15:10 PM" broke across two lines — the table was fitting the URL at the expense of
+// every other column instead of the other way round.
+.mini-table .nowrap {
   white-space: nowrap;
-  display: inline-block;
-  vertical-align: bottom;
+  width: 1%;
+}
+
+// The plain-language step is what makes the row scannable, so it gets room before the URL does — but it is short
+// enough that a sensible cap stops it stealing the whole row on a wide screen.
+.mini-table .step-cell {
+  white-space: nowrap;
+  width: 1%;
+  font-weight: 500;
 }
 
 .mono { font-family: monospace; font-size: 12px; }

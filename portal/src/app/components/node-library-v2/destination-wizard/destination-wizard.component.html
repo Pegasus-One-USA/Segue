@@ -1201,36 +1201,6 @@
   }
 
   <!-- ── Confirm before saving despite a non-blocking mapping warning ────────── -->
-  <!-- ── No de-identification profile selected for this destination — never silent; requires an explicit
-       "Continue anyway" before Step 1 advances, whether the connection is new or reused as-is. ── -->
-  @if (pendingDeIdentificationWarning(); as w) {
-    <div class="dw-confirm-backdrop" tabindex="0"
-         (click)="cancelProceedWithoutDeIdentification()"
-         (keydown.escape)="cancelProceedWithoutDeIdentification()">
-      <div class="dw-confirm-dialog">
-        <div class="dw-confirm-icon">⚠</div>
-        <h3 class="dw-confirm-title">
-          @if (w.reason === 'none') {
-            No de-identification policy assigned
-          } @else {
-            Selected policy has no active rules
-          }
-        </h3>
-        <div class="dw-confirm-body">
-          @if (w.reason === 'none') {
-            <p>This destination has no de-identification profile selected — PHI will not be redacted or generalized before it's written. Continue only if this destination is genuinely meant to receive unprotected data.</p>
-          } @else {
-            <p><strong>{{ selectedDeIdentificationProfileName() }}</strong> is selected, but it currently has no enabled rules under it — nothing will actually be redacted, even though a policy appears to be assigned. Add rules to this profile on the Transformation Rules screen, or pick a different one, before continuing.</p>
-          }
-        </div>
-        <div class="dw-confirm-actions">
-          <button type="button" class="btn btn-secondary" (click)="cancelProceedWithoutDeIdentification()">Go back</button>
-          <button type="button" class="btn btn-danger" (click)="confirmProceedWithoutDeIdentification()">Continue anyway</button>
-        </div>
-      </div>
-    </div>
-  }
-
   @if (pendingSaveWarnings(); as warnings) {
     <div class="dw-confirm-backdrop" tabindex="0"
          (click)="onSaveWarningsBackdropClick($event)"

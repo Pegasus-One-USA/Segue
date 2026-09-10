@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
@@ -21,6 +21,7 @@ using FHIRBridge.Runtime.Domain.Workflows;
 using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using FHIRBridge.Runtime.Application.Workflows.Validation;
 
 namespace FHIRBridge.Infrastructure.Sources;
 
@@ -53,6 +54,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly WorkflowGraphExecutionOptions _graphExecutionOptions;
     private readonly ISystemSettingsCache? _settingsCache;
+    private readonly IRequestCorrelationStamper? _correlationStamper;
+    private readonly IWorkflowRunStore? _workflowRunStore;
 
     public InteractiveSourceAuthorizationService(
         IConfigurationRepository configurationRepository,
@@ -71,7 +74,9 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         ILaunchWorkflowResolver? launchWorkflowResolver = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IOptions<WorkflowGraphExecutionOptions>? graphExecutionOptions = null,
-        ISystemSettingsCache? settingsCache = null)
+        ISystemSettingsCache? settingsCache = null,
+        IRequestCorrelationStamper? correlationStamper = null,
+        IWorkflowRunStore? workflowRunStore = null)
     {
         _configurationRepository = configurationRepository;
         _discoveryService = discoveryService;
@@ -90,13 +95,15 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         _workflowDefinitionStore = workflowDefinitionStore;
         _graphExecutionOptions = graphExecutionOptions?.Value ?? new WorkflowGraphExecutionOptions();
         _settingsCache = settingsCache;
+        _correlationStamper = correlationStamper;
+        _workflowRunStore = workflowRunStore;
     }
 
     public string BuildLaunchContextToken(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null) =>
         _launchTokenProtector.ProtectContext(routeId, ehrEndpointId, callerId, sessionId, userIdentity);
 
-    public string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null) =>
-        _launchTokenProtector.ProtectWorkflowContext(workflowId, ehrEndpointId, callerId, sessionId, userIdentity);
+    public string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null, string? correlationId = null) =>
+        _launchTokenProtector.ProtectWorkflowContext(workflowId, ehrEndpointId, callerId, sessionId, userIdentity, correlationId);
 
     public async Task<Uri> StartAsync(
         Guid sourceConnectionId,
@@ -250,7 +257,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri,
-            callerId: context.CallerId, cancellationToken, sessionId: context.SessionId, userIdentity: context.UserIdentity);
+            callerId: context.CallerId, cancellationToken, sessionId: context.SessionId, userIdentity: context.UserIdentity,
+            correlationId: context.CorrelationId);
 
         return authorizationUrl;
     }
@@ -280,14 +288,14 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         {
             var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
             return await StartStandaloneCoreAsync(
-                workflowSource, redirectUri, routeId: null, workflowId, ehrEndpoint, context.CallerId, context.SessionId, cancellationToken, context.UserIdentity);
+                workflowSource, redirectUri, routeId: null, workflowId, ehrEndpoint, context.CallerId, context.SessionId, cancellationToken, context.UserIdentity, context.CorrelationId);
         }
 
         if (context.RouteId is { } contextRouteId)
         {
             var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
             return await StartStandaloneCoreAsync(
-                sourceConnection, redirectUri, routeId, workflowId: null, ehrEndpoint, context.CallerId, context.SessionId, cancellationToken, context.UserIdentity);
+                sourceConnection, redirectUri, routeId, workflowId: null, ehrEndpoint, context.CallerId, context.SessionId, cancellationToken, context.UserIdentity, context.CorrelationId);
         }
 
         throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
@@ -302,7 +310,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         string? callerId,
         string? sessionId,
         CancellationToken cancellationToken,
-        string? userIdentity = null)
+        string? userIdentity = null,
+        string? correlationId = null)
     {
         // A resolved hospital/organization endpoint overrides the connection's own configured base URL — discovery
         // must fetch SMART configuration from that SAME url, or the authorize/token endpoints returned would belong
@@ -337,7 +346,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch: null, routeId, workflowId, requestedRedirectUri: redirectUri,
-            callerId: callerId, cancellationToken, sessionId: sessionId, userIdentity: userIdentity);
+            callerId: callerId, cancellationToken, sessionId: sessionId, userIdentity: userIdentity,
+            correlationId: correlationId);
 
         return authorizationUrl;
     }
@@ -413,7 +423,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         string? callerId,
         CancellationToken cancellationToken,
         string? sessionId = null,
-        string? userIdentity = null)
+        string? userIdentity = null,
+        string? correlationId = null)
     {
         // Prefer a registered redirect URI (must match the EHR registration exactly); fall back to the request-derived one.
         // eCW (Healow) is the exception: always use the request-derived callback (the actual scheme/host this launch
@@ -460,7 +471,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
                 HasLaunchContext: launch is not null,
                 CallerId: callerId,
                 SessionId: sessionId,
-                UserIdentity: userIdentity),
+                UserIdentity: userIdentity,
+                CorrelationId: correlationId),
             cancellationToken);
 
         return new Uri(request.AuthorizationUrl);
@@ -481,6 +493,18 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var pending = await _stateStore.TakeAsync(nonce, cancellationToken)
             ?? throw new InvalidOperationException("The authorization state is unknown or has already been used.");
+
+        // Everything this callback goes on to write — the SmartLaunchLogs row for the sign-in, the outbound token
+        // exchange in ApiRequestLogs, any ErrorLogs capture — resolves its correlation id from the ambient request.
+        // The EHR reached us by redirecting the browser, so no header could be attached and the request is still
+        // under a bare TraceIdentifier; re-stamp now that the decrypted state has told us which workflow and
+        // session this sign-in belongs to, so this leg lands alongside the validate-run/token-status/run legs
+        // rather than islanded under an id nothing else shares.
+        // The attempt-scoped id minted by validate-run, when the calling app used it — that is the id every other
+        // leg of this attempt is already filed under. Falls back to deriving one from workflow + session for a
+        // caller that never called validate-run (the portal, an older integrator), which is strictly better than
+        // this leg landing under a bare TraceIdentifier nothing else shares.
+        StampAttemptCorrelation(pending);
 
         _logger.LogInformation(
             "[Step 5/6] CompleteAsync: sourceConnectionId={SourceConnectionId} sourceName={SourceName} " +
@@ -639,6 +663,12 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             _logger.LogWarning(
                 "[Step 5/6] LogRejectedLaunchAsync: state is invalid or expired — cannot resolve a source connection " +
                 "to attach the EHR-side rejection ({Error}) to.", error);
+            // Still worth a row: an undecryptable state means either a Data Protection key-ring change (which
+            // silently breaks every in-flight launch and is otherwise invisible) or a tampered/replayed callback.
+            // SourceConnectionId is Guid.Empty because there is genuinely nothing to resolve it from.
+            await LogUnresolvableCallbackAsync(
+                $"EHR returned {error}, but the launch state was invalid or expired — no launch could be resolved.",
+                cancellationToken);
             return;
         }
 
@@ -651,8 +681,18 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             _logger.LogWarning(
                 "[Step 5/6] LogRejectedLaunchAsync: state is unknown or already used — cannot resolve a source " +
                 "connection to attach the EHR-side rejection ({Error}) to.", error);
+            // A single-use state presented twice is either a browser replay or a genuine replay attempt; either
+            // way it is security-relevant and previously left no durable trace at all.
+            await LogUnresolvableCallbackAsync(
+                $"EHR returned {error}, but the launch state was unknown or had already been used.",
+                cancellationToken);
             return;
         }
+
+        // Same reasoning as CompleteAsync's own stamp: an EHR-side rejection arrives as a browser redirect with
+        // nothing correlatable on it until the state is decrypted, and this row is the only durable record that
+        // the sign-in was refused — it has to land under the attempt's correlation id to be findable with it.
+        StampAttemptCorrelation(pending);
 
         await _governanceLogger.LogSmartLaunchAsync(
             new SmartLaunchEntry(
@@ -913,9 +953,26 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken)
                 ?? throw new NotFoundException("WorkflowDefinition", workflowId);
 
+            // The ambient correlation id — which CompleteAsync has already re-stamped from this launch's decrypted
+            // workflow + session — rather than the per-workflow constant this used to build. That constant was the
+            // SAME value for every EHR launch of a given workflow ever, so it could neither separate one sign-in
+            // from another nor line up with the SmartLaunchLogs/ApiRequestLogs rows this very callback writes.
+            // Falls back to the old shape only if nothing correlatable is in scope at all.
+            var correlationId = _currentUserService.CurrentUser.CorrelationId
+                ?? $"ehr-launch:workflow:{workflowId:N}";
+
+            // Continue the row validate-run already created for this attempt, if the calling app made that
+            // pre-flight call, so an EHR launch is one Execution History entry rather than a validated row plus a
+            // separate run — matching what POST /run does for the Standalone audiences. Null (the common case:
+            // an EHR launch has no natural pre-flight moment, since the flow starts at the EHR) simply means a
+            // fresh run id, exactly as before.
+            var validatedRun = _workflowRunStore is null
+                ? null
+                : await _workflowRunStore.FindValidatedAsync(workflowId, correlationId, cancellationToken);
+
             var context = new WorkflowExecutionContext(
-                Guid.NewGuid(),
-                $"ehr-launch:workflow:{workflowId:N}",
+                validatedRun?.Id ?? Guid.NewGuid(),
+                correlationId,
                 triggeredBy: $"source:{sourceConnectionId:N}",
                 triggerType: "InteractiveLaunch",
                 callerId: callerId);
@@ -1096,6 +1153,41 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
     // Appended to the SMART Launch Logs reason field (even on success, where there was previously no reason at all)
     // so the Governance portal shows whether this launch used the CallerId-keyed token-cache slot — without a
     // schema change. Never logs the CallerId value itself, only its presence.
+    /// <summary>
+    /// Puts this callback under the correlation id of the attempt that started it. Prefers the explicit,
+    /// attempt-scoped id minted by <c>validate-run</c> and carried through the encrypted launch context; falls back
+    /// to deriving one from the workflow and session for callers that never called validate-run.
+    /// </summary>
+    private void StampAttemptCorrelation(PendingAuthorization pending)
+    {
+        if (!string.IsNullOrWhiteSpace(pending.CorrelationId))
+        {
+            _correlationStamper?.StampExplicit(pending.CorrelationId);
+            return;
+        }
+
+        if (pending.WorkflowId is { } workflowId)
+        {
+            _correlationStamper?.Stamp(workflowId, pending.SessionId);
+        }
+    }
+
+    /// <summary>Records a callback that could not be tied back to any pending launch. Best-effort: this path is
+    /// already an error path, and failing to log it must not replace the caller's real failure with this one.</summary>
+    private async Task LogUnresolvableCallbackAsync(string reason, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _governanceLogger.LogSmartLaunchAsync(
+                new SmartLaunchEntry(Guid.Empty, "(unresolved launch)", "Unknown", Success: false, FailureReason: reason),
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Could not persist the unresolvable-callback record.");
+        }
+    }
+
     private static string DescribeTokenKey(string? callerId) => $"[hasCallerId={!string.IsNullOrWhiteSpace(callerId)}]";
 
     // Compares two issuers ignoring a trailing slash and case (FHIR base URLs are compared case-insensitively).

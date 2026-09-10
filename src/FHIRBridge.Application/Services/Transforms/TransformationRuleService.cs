@@ -230,11 +230,12 @@ public sealed class TransformationRuleService : ITransformationRuleService
         string? sourceSystem,
         string? sourceField,
         CancellationToken cancellationToken = default,
-        bool workflowScopedOnly = false)
+        bool workflowScopedOnly = false,
+        bool includePendingWorkflowRules = false)
     {
         var rules = await _resolver.ResolveAsync(
             destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
-            cancellationToken, workflowScopedOnly);
+            cancellationToken, workflowScopedOnly, includePendingWorkflowRules);
         return rules.Select(ToDto).ToList();
     }
 

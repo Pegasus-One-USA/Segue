@@ -42,7 +42,7 @@ public sealed class CreateMappingProfileRequestValidatorTests
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
-                It.IsAny<bool>()))
+                It.IsAny<bool>(), It.IsAny<bool>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
 
         _sut = new CreateMappingProfileRequestValidator(
@@ -182,6 +182,81 @@ public sealed class CreateMappingProfileRequestValidatorTests
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == "Fields[0].ValueType" && e.ErrorMessage.Contains("expects Integer"));
+    }
+
+    /// <summary>The regression this whole tier exists for: Patient.birthDate (a Date) mapped onto an int
+    /// PatientAge column is valid precisely BECAUSE a DateMathAge rule turns it into an Integer first. The
+    /// V2 builder authors that rule at Workflow scope, which the validator never queried — so it compared the
+    /// raw extraction type against the column and refused to save a correctly-configured mapping.</summary>
+    [Fact]
+    public async Task Workflow_scoped_rule_output_type_supersedes_the_raw_source_type()
+    {
+        StubSchema(new DestinationColumnSchemaDto("PatientAge", "int", "Integer", true, null));
+        StubRule(new TransformationRule(
+            TransformScope.Workflow, TransformNodeType.DateMathAge, "{}",
+            destinationType: DestinationType.SqlServer, resourceType: "Patient", destinationField: "PatientAge",
+            expectedValueType: MappingValueType.Integer));
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("PatientAge", "$.birthDate", MappingValueType.Date, false, null, null),
+        ]);
+
+        (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
+    }
+
+    /// <summary>Rules run in order, each feeding the next, so only the LAST declared output type describes what
+    /// actually reaches the column — checking every step would reject a valid chain for an intermediate type.</summary>
+    [Fact]
+    public async Task Only_the_last_declared_output_type_in_a_chain_is_checked_against_the_column()
+    {
+        StubSchema(new DestinationColumnSchemaDto("PatientAge", "int", "Integer", true, null));
+        _ruleResolver
+            .Setup(r => r.ResolveAsync(
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
+                It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)
+            [
+                new TransformationRule(
+                    TransformScope.Workflow, TransformNodeType.StringNormalization, "{}",
+                    destinationType: DestinationType.SqlServer, resourceType: "Patient",
+                    destinationField: "PatientAge", expectedValueType: MappingValueType.String),
+                new TransformationRule(
+                    TransformScope.Workflow, TransformNodeType.DateMathAge, "{}",
+                    destinationType: DestinationType.SqlServer, resourceType: "Patient",
+                    destinationField: "PatientAge", expectedValueType: MappingValueType.Integer),
+            ]);
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("PatientAge", "$.birthDate", MappingValueType.Date, false, null, null),
+        ]);
+
+        (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
+    }
+
+    /// <summary>Rules the builder wrote before its workflow was first saved are unattached, and the mapping
+    /// profile is saved BEFORE the workflow that would attach them — so the validator has to opt into that
+    /// pending tier or it can never see the rule the user just authored.</summary>
+    [Fact]
+    public async Task Rules_are_resolved_with_the_workflow_id_and_the_pending_tier_included()
+    {
+        StubSchema(new DestinationColumnSchemaDto("PatientAge", "int", "Integer", true, null));
+        var workflowId = Guid.NewGuid();
+
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("PatientAge", "$.birthDate", MappingValueType.Integer, false, null, null),
+        ]) with { ResourcePipelineRouteId = workflowId };
+
+        await _sut.ValidateAsync(request);
+
+        _ruleResolver.Verify(
+            r => r.ResolveAsync(
+                DestinationType.SqlServer, "Patient", "PatientAge", workflowId, null, "Patient.birthDate",
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), true),
+            Times.Once);
     }
 
     // No destination-schema probe (SqlDestinationSchemaService.MapSqlServerType/MapPostgresType/MapMySqlType)
@@ -332,7 +407,7 @@ public sealed class CreateMappingProfileRequestValidatorTests
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
-                It.IsAny<bool>()))
+                It.IsAny<bool>(), It.IsAny<bool>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
     [Fact]

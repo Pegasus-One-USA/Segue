@@ -232,6 +232,11 @@ public sealed class WorkflowConfigurationCleanupServiceTests
             IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowScopedAsync(
+            DestinationType destinationType, string resourceType, string destinationField, string? sourceSystem,
+            string? sourceField, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

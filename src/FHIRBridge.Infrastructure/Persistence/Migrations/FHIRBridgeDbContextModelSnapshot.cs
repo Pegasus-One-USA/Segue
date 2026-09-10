@@ -723,6 +723,13 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasDefaultValue("Outbound");
+
                     b.Property<long>("DurationMs")
                         .HasColumnType("bigint");
 
@@ -753,6 +760,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasIndex("OccurredOnUtc");
 
                     b.HasIndex("StatusCode");
+
+                    b.HasIndex("CorrelationId", "Direction");
 
                     b.ToTable("ApiRequestLogs", (string)null);
                 });
@@ -4900,6 +4909,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("bit");

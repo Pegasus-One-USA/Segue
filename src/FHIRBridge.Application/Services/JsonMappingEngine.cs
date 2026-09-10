@@ -52,7 +52,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                     .Select(m => (
                         Value: ConvertElement(
                             m.Element, field.ValueType, field.Format, field.TargetField, errors,
-                            field.MaxLength, field.Precision, field.Scale),
+                            field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform),
                         m.Indices))
                     .ToList();
 
@@ -71,7 +71,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                 {
                     parent[field.TargetField] = ConvertValue(
                         field.DefaultValue, field.ValueType, field.Format, field.TargetField, errors,
-                        field.MaxLength, field.Precision, field.Scale);
+                        field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform);
                     continue;
                 }
 
@@ -496,11 +496,23 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         List<string> errors,
         int? maxLength = null,
         int? precision = null,
-        int? scale = null)
+        int? scale = null,
+        bool deferTypeToTransform = false)
     {
         if (element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
         {
             return null;
+        }
+
+        // A transformation rule downstream is what produces this column's real type, so ValueType describes the
+        // rule's OUTPUT, not what's in the document here — coercing to it now can only fail (reading a
+        // "1980-05-01" birthDate as the Integer a DateMathAge rule will produce), and the failure would be
+        // recorded as a mapping error. The mismatch fallback further down already hands the raw value onward in
+        // that case; this just skips the pointless attempt and the bogus error it logs. See
+        // MappingFieldDto.DeferTypeToTransform.
+        if (deferTypeToTransform)
+        {
+            return element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString();
         }
 
         var converted = valueType switch
@@ -557,8 +569,16 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         List<string> errors,
         int? maxLength = null,
         int? precision = null,
-        int? scale = null)
+        int? scale = null,
+        bool deferTypeToTransform = false)
     {
+        // See ConvertElement's own comment — a default value feeds the same rule chain the extracted value
+        // would have, so it must not be coerced to the rule's output type either.
+        if (deferTypeToTransform)
+        {
+            return value;
+        }
+
         var converted = valueType switch
         {
             MappingValueType.String => ValidateLength(value, maxLength, targetField, errors),

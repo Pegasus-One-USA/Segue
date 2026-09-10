@@ -113,6 +113,7 @@ export class WorkflowGraphMapperServiceV2 {
     name: string,
     trigger?: WorkflowTriggerRequest | null,
     workflowId?: string | null,
+    description?: string | null,
   ): WorkflowDefinitionRequest {
     const catalog = this.workflowApi.catalog();
     const nodes = this.store.nodes();
@@ -210,6 +211,7 @@ export class WorkflowGraphMapperServiceV2 {
 
     return {
       name,
+      description: description ?? null,
       isEnabled: true,
       nodes: requests,
       edges: emittedEdges,

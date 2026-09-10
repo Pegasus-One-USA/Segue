@@ -1,4 +1,4 @@
-/** Matches the backend's PagedResult<T> (page is 1-based). */
+﻿/** Matches the backend's PagedResult<T> (page is 1-based). */
 export interface PagedResult<T> {
   items: T[];
   totalCount: number;
@@ -93,6 +93,11 @@ export interface ApiRequestLogEntry {
   durationMs: number;
   error: string | null;
   correlationId: string | null;
+  /** "Inbound" (a call made to this API) or "Outbound" (a call FHIRBridge made to an EHR/destination). */
+  direction: string;
+  /** Plain-language description of what this call was doing, derived server-side — e.g. "Acquiring an EHR access
+   *  token" rather than the raw URL. */
+  step: string;
 }
 
 /** Matches the backend's ExportHistoryDto (api/v1/operations/exports). */

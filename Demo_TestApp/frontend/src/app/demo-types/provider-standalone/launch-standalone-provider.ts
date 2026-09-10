@@ -1,4 +1,4 @@
-import { Component, NgZone, OnInit, input, output, signal } from '@angular/core';
+﻿import { Component, NgZone, OnInit, input, output, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
@@ -64,6 +64,23 @@ function getFhirBridgeCsrfToken(): string | null {
  *  only from a failed /run attempt. */
 interface TokenStatusResponse {
   hasValidToken: boolean;
+}
+
+/** Matches WorkflowEndpoints' POST /workflows/{id}/validate-run — the pre-flight every workflow attempt now starts
+ *  with. Checks the parameters this app is about to run with BEFORE any token is touched or any Epic call is made,
+ *  and records the attempt in FHIRBridge's Execution History either way: a refused attempt used to leave no trace
+ *  at all (no run, no outbound call, no exception), which is why "I clicked Fetch and Execution History is empty"
+ *  had no answer.
+ *
+ *  correlationId is returned for display/support purposes only — this app deliberately does NOT echo it back on
+ *  the later calls. FHIRBridge derives the same value itself on every leg (including the ones a browser redirect
+ *  to Epic can't carry a header through) from the workflow id and the sessionId this app already sends for the
+ *  token cache, so there is nothing to thread through the OAuth round trip. */
+interface ValidateRunResponse {
+  isValid: boolean;
+  correlationId: string;
+  workflowRunId: string;
+  errors: { parameter: string; message: string }[];
 }
 
 /** Matches Demo_TestApp/backend's GET /api/epic-session/status. This is HealthApp's own record, not FHIRBridge's —
@@ -265,6 +282,16 @@ const HEALTHAPP_BACKEND_BASE_URL = environment.healthAppBase;
 // follows a fresh sign-in (see ngOnInit) replays the same search the user was trying to run when the token turned
 // out to be invalid — rather than silently dropping what they typed.
 const PENDING_SEARCH_STORAGE_KEY = 'hb_pending_patient_search';
+/** The hospital picked in step 1, remembered for the browser session.
+ *
+ *  Every signal on this component resets on a full page navigation, and this flow has two of them: the OAuth round
+ *  trip out to Epic and back, and simply revisiting the page later. The fetch requires a selection up front, so
+ *  without this a user who has just authorized against a hospital — or who returns with a perfectly valid cached
+ *  token — is told to "select a hospital above" as though they never had. Session-scoped rather than persistent:
+ *  it is a convenience, and a new browser session legitimately starts with no selection. */
+const SELECTED_HOSPITAL_STORAGE_KEY = 'hb_selected_hospital_id';
+/** See LaunchStandaloneProviderComponent.attemptCorrelationId. */
+const ATTEMPT_CORRELATION_STORAGE_KEY = 'hb_attempt_correlation_id';
 
 @Component({
   selector: 'app-launch-standalone-provider',
@@ -377,6 +404,38 @@ export class LaunchStandaloneProviderComponent implements OnInit {
 
   readonly isFetchingPatientList = signal(false);
   readonly patientListError = signal<string | null>(null);
+  /** Shown alongside a failure so a user can quote it to support — it is the id every log line for this attempt
+   *  is filed under, across validate-run, the Epic sign-in, and the run itself. */
+  readonly lastCorrelationId = signal<string | null>(null);
+
+  /** The attempt-scoped correlation id minted by validate-run. Persisted for the browser session so it survives
+   *  the full-page EHR round trip, which resets every signal on this component — the same reason the hospital
+   *  selection is remembered. */
+  private get attemptCorrelationId(): string | null {
+    try {
+      return sessionStorage.getItem(ATTEMPT_CORRELATION_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  private set attemptCorrelationId(value: string | null) {
+    try {
+      if (value) {
+        sessionStorage.setItem(ATTEMPT_CORRELATION_STORAGE_KEY, value);
+      } else {
+        sessionStorage.removeItem(ATTEMPT_CORRELATION_STORAGE_KEY);
+      }
+    } catch {
+      // Storage unavailable — FHIRBridge falls back to deriving an id, so correlation degrades rather than breaks.
+    }
+  }
+
+  /** Headers echoing this attempt's correlation id, so every call lands under the id validate-run minted. */
+  private attemptHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    const correlationId = this.attemptCorrelationId;
+    return correlationId ? { ...extra, 'X-Correlation-Id': correlationId } : extra;
+  }
   readonly patientList = signal<PatientListEntry[] | null>(null);
 
   // Detail section (Patient/Observation/Condition) for whichever row was last clicked in patientList — a second,
@@ -478,6 +537,18 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    // Restore the remembered hospital before anything below can need it — the post-OAuth auto-fetch and an
+    // ordinary revisit both require a selection up front, and both arrive here with every signal reset.
+    // See SELECTED_HOSPITAL_STORAGE_KEY.
+    try {
+      const rememberedHospitalId = sessionStorage.getItem(SELECTED_HOSPITAL_STORAGE_KEY);
+      if (rememberedHospitalId) {
+        this.selectedHospitalId.set(rememberedHospitalId);
+      }
+    } catch {
+      // Storage unavailable — falls through to "no selection", which the fetch already handles.
+    }
+
     // FHIRBridge's OAuth callback redirects back here with one of three markers (see OAuthController.Callback):
     // ?workflowRunId=... when its own no-criteria convenience run got a real run id, ?launchError=... when that run
     // was attempted but threw, or ?signedIn=1 when the convenience run was deliberately skipped altogether (a
@@ -665,8 +736,14 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       this.ecwBaseUrl = ids.ecwProviderStandaloneBaseUrl ?? '';
       this.ecwEhrEndpointId = ids.ecwProviderStandaloneEhrEndpointId ?? '';
     } catch {
-      // Non-fatal — falls back to whatever's in standalone-launch.config.ts (possibly still the placeholder,
-      // which isConfiguredWorkflowId's callers below already guard against).
+      // Non-fatal for the load itself, but NOT silent any more. This call 401s whenever the HealthApp session has
+      // expired, and the fallback below is a build-time constant that can easily name a workflow which no longer
+      // exists — so silently continuing produced a run against a stale id and a string of unexplained 404s that
+      // looked, from the UI, like FHIRBridge being unreachable. Recording it here means the reason is visible in
+      // the console at the moment it happens, rather than inferred later from server-side request logs.
+      console.warn(
+        '[Provider Standalone] Could not load workflow settings (are you still signed in to HealthApp?). '
+        + 'Falling back to the build-time workflow id, which may no longer exist in FHIRBridge.');
     }
   }
 
@@ -706,6 +783,64 @@ export class LaunchStandaloneProviderComponent implements OnInit {
     }
   }
 
+  // Pre-flight for the button below. Runs BEFORE hasValidToken(), so a workflow that could never have succeeded
+  // (misconfigured, missing a required parameter) is refused without sending the user through an Epic sign-in
+  // first — and is recorded as a ValidationFailed row in Execution History rather than vanishing.
+  //
+  // Returns false when the caller should stop. A validate-run that itself fails to respond (network hiccup,
+  // an older FHIRBridge that predates this endpoint) deliberately returns true: this is a pre-flight, and it must
+  // never be the reason a fetch that would otherwise have worked doesn't happen. The run's own error handling
+  // stays the authoritative test either way.
+  private async validateRun(criteria: string | null): Promise<boolean> {
+    try {
+      const result = await firstValueFrom(
+        this.http.post<ValidateRunResponse>(
+          `${this.activeBaseUrl()}/api/v1/workflows/${this.activeListWorkflowId()}/validate-run`,
+          {
+            patientId: this.patientId,
+            patientSearchCriteria: criteria,
+            callerId: this.sessionId,
+            // Only meaningful for Epic, which picks a hospital from FHIRBridge's public directory; eCW launches
+            // against its one configured EhrEndpoint, so there is nothing for the user to have selected.
+            ehrEndpointId: this.vendor() === 'ecw' ? this.ecwEhrEndpointId || null : this.selectedHospitalId(),
+          },
+          { withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
+        ),
+      );
+
+      // Held for the rest of this attempt and echoed on every later call (see attemptHeaders) — this is the id
+      // FHIRBridge minted for THIS attempt, and the only thing tying validate-run, the sign-in and the run
+      // together into one Execution History entry.
+      this.attemptCorrelationId = result.correlationId;
+      this.lastCorrelationId.set(result.correlationId);
+      if (result.isValid) {
+        return true;
+      }
+
+      this.patientListError.set(
+        result.errors.map(error => error.message).join(' ')
+        || 'This workflow cannot be run with the values supplied.',
+      );
+      return false;
+    } catch (err) {
+      // A 404 is not a pre-flight hiccup — it is FHIRBridge stating that this workflow id does not exist, which
+      // is exactly what happens when the settings fetch failed (e.g. the HealthApp session expired) and this
+      // component silently fell back to the build-time id in standalone-launch.config.ts. Reporting that as
+      // "check your connection", which is what letting it through to the run's own catch produces, sends people
+      // looking in entirely the wrong place.
+      if (err instanceof HttpErrorResponse && err.status === 404) {
+        this.patientListError.set(
+          'The configured workflow no longer exists in FHIRBridge. Ask an admin to check the workflow id in Settings — if you were signed out, signing in again may restore it.',
+        );
+        return false;
+      }
+
+      // Anything else (network blip, an older FHIRBridge with no validate-run endpoint) is deliberately ignored:
+      // a pre-flight must never be the reason a fetch that would otherwise have worked doesn't happen.
+      return true;
+    }
+  }
+
   // The single entry point for the button. Checks token-status first (a cheap, no-pipeline lookup — see
   // TokenStatusResponse) so an already-known-invalid token redirects straight to Epic without wasting a /run call;
   // only when that check says a token IS valid (or itself fails to answer, e.g. a network hiccup) does this go on
@@ -738,12 +873,28 @@ export class LaunchStandaloneProviderComponent implements OnInit {
         return;
       }
 
+      // Epic launches against a hospital picked from FHIRBridge's public directory. Checked here rather than
+      // only inside needsReAuthorization(), which is reached exclusively when the token turns out to be invalid —
+      // so with a still-valid token a run could previously start with no hospital ever having been chosen.
+      // Skipped for eCW, which has no directory to pick from (see the html's @else branch).
+      if (this.vendor() === 'epic' && !this.selectedHospitalId()) {
+        this.patientListError.set('Select a hospital above, then click Fetch Patient List again.');
+        return;
+      }
+
+      const criteria = (criteriaOverride ?? this.patientSearchCriteria()).trim();
+
+      // Before the token check, not after: a parameter problem is worth reporting without first bouncing the user
+      // through Epic to sign in for a run that was never going to be accepted.
+      if (!(await this.validateRun(criteria || null))) {
+        return;
+      }
+
       if (!(await this.hasValidToken())) {
         await this.needsReAuthorization();
         return;
       }
 
-      const criteria = (criteriaOverride ?? this.patientSearchCriteria()).trim();
       const result = await firstValueFrom(
         this.http.post<WorkflowRunResponse>(
           `${this.activeBaseUrl()}/api/v1/workflows/${this.activeListWorkflowId()}/run`,
@@ -752,7 +903,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
             patientSearchCriteria: criteria || null,
             callerId: this.sessionId,
           },
-          { withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
+          { withCredentials: true, headers: this.attemptHeaders({ 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' }) },
         ),
       );
 
@@ -886,7 +1037,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       const status = await firstValueFrom(
         this.http.get<TokenStatusResponse>(
           `${this.activeBaseUrl()}/api/v1/workflows/${this.activeListWorkflowId()}/token-status`,
-          { params, withCredentials: true },
+          { params, withCredentials: true, headers: this.attemptHeaders() },
         ),
       );
       return status.hasValidToken;
@@ -968,6 +1119,14 @@ export class LaunchStandaloneProviderComponent implements OnInit {
   chooseHospital(endpoint: EpicEndpoint): void {
     this.selectedHospitalId.set(endpoint.id);
     this.hospitalSelectError.set(null);
+    // Remembered here rather than at redirect time so it survives an ordinary revisit too, not just the OAuth
+    // round trip — see SELECTED_HOSPITAL_STORAGE_KEY.
+    try {
+      sessionStorage.setItem(SELECTED_HOSPITAL_STORAGE_KEY, endpoint.id);
+    } catch {
+      // Storage unavailable (private mode, blocked site data) — the selection simply doesn't survive a
+      // navigation, which is the pre-existing behaviour and no worse than not remembering it at all.
+    }
   }
 
   // Mints a launch context for the pre-selected hospital via FHIRBridge's anonymous public-standalone-url endpoint,
@@ -992,6 +1151,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       } else {
         sessionStorage.removeItem(PENDING_SEARCH_STORAGE_KEY);
       }
+
 
       // callerId tells FHIRBridge's OAuthController.Callback to redirect the browser straight back to this exact
       // page (see ngOnInit, which reads workflowRunId/launchError/signedIn off window.location.search) once the
@@ -1021,7 +1181,9 @@ export class LaunchStandaloneProviderComponent implements OnInit {
       const result = await firstValueFrom(
         this.http.get<PublicStandaloneUrlResponse>(
           `${this.activeBaseUrl()}/api/v1/workflows/${this.activeListWorkflowId()}/public-standalone-url`,
-          { params },
+          // The header is what FHIRBridge bakes into the encrypted launch context, so this attempt's id survives
+          // the redirect out to the EHR and back into /oauth/callback.
+          { params, headers: this.attemptHeaders() },
         ),
       );
       this.sessionId = result.sessionId;
@@ -1071,7 +1233,7 @@ export class LaunchStandaloneProviderComponent implements OnInit {
         this.http.post(
           `${this.activeBaseUrl()}/api/v1/workflows/${this.activeListWorkflowId()}/discard-token`,
           {},
-          { params, withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
+          { params, withCredentials: true, headers: this.attemptHeaders({ 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' }) },
         ),
       );
     } catch {

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Governance;
 using FHIRBridge.SharedKernel.Observability;
@@ -57,17 +57,29 @@ public sealed class ApiRequestLoggingHandler : DelegatingHandler
             var urlWithoutQuery = uri is null ? "" : $"{uri.Scheme}://{uri.Authority}{uri.AbsolutePath}";
             var statusCode = (int?)response?.StatusCode;
 
-            // Best-effort: the log write itself must never fail (or block) the outbound call's own
-            // cancellation/disposal — use a fresh token so a cancelled request still gets logged.
-            await governanceLogger.LogApiRequestAsync(
-                new ApiRequestEntry(
-                    request.Method.Method,
-                    urlWithoutQuery,
-                    statusCode,
-                    stopwatch.ElapsedMilliseconds,
-                    error,
-                    correlationId),
-                CancellationToken.None);
+            // Best-effort, and genuinely so: this runs in a finally, where an exception REPLACES whatever the
+            // outbound call was about to return (or throw). Without this catch a governance-write failure — a
+            // schema drift, a transient DB outage, a full disk — silently converts every successful upstream call
+            // into a failure, taking the whole pipeline down for a reason that has nothing to do with the call
+            // itself. Logging is never worth that. The fresh cancellation token below is for the same reason: a
+            // cancelled request should still get logged.
+            try
+            {
+                await governanceLogger.LogApiRequestAsync(
+                    new ApiRequestEntry(
+                        request.Method.Method,
+                        urlWithoutQuery,
+                        statusCode,
+                        stopwatch.ElapsedMilliseconds,
+                        error,
+                        correlationId),
+                    CancellationToken.None);
+            }
+            catch
+            {
+                // Deliberately swallowed — see above. Nothing is rethrown, and nothing is logged through a second
+                // channel that could fail the same way.
+            }
 
             _apiMetrics.RecordRequest(new ApiRequestMetric(
                 request.Method.Method, urlWithoutQuery, statusCode, stopwatch.ElapsedMilliseconds));

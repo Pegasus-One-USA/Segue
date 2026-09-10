@@ -18,6 +18,8 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Name).HasMaxLength(400).IsRequired();
+        // Optional free-text notes (multi-line) shown next to the name in the builder/list. Never read by the engine.
+        builder.Property(x => x.Description).HasMaxLength(2000);
         builder.Property(x => x.Version).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
         builder.Property(x => x.IsPubliclyLaunchable).IsRequired().HasDefaultValue(false);

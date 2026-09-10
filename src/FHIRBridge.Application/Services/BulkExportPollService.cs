@@ -1,5 +1,6 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.RegularExpressions;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Governance;
@@ -18,6 +19,7 @@ public sealed class BulkExportPollService : IBulkExportPollService
     private readonly ISourceConnectionRuntimeResolver _sourceResolver;
     private readonly IRankedWorkflowOrchestrator _workflowOrchestrator;
     private readonly IGlobalExceptionManager? _exceptionManager;
+    private readonly IAmbientActorContext? _ambientActorContext;
     private readonly ILogger<BulkExportPollService> _logger;
 
     public BulkExportPollService(
@@ -26,7 +28,8 @@ public sealed class BulkExportPollService : IBulkExportPollService
         ISourceConnectionRuntimeResolver sourceResolver,
         IRankedWorkflowOrchestrator workflowOrchestrator,
         ILogger<BulkExportPollService> logger,
-        IGlobalExceptionManager? exceptionManager = null)
+        IGlobalExceptionManager? exceptionManager = null,
+        IAmbientActorContext? ambientActorContext = null)
     {
         _jobRepository = jobRepository;
         _bulkExportClient = bulkExportClient;
@@ -34,6 +37,7 @@ public sealed class BulkExportPollService : IBulkExportPollService
         _workflowOrchestrator = workflowOrchestrator;
         _logger = logger;
         _exceptionManager = exceptionManager;
+        _ambientActorContext = ambientActorContext;
     }
 
     public async Task PollDueJobsAsync(
@@ -48,6 +52,14 @@ public sealed class BulkExportPollService : IBulkExportPollService
             // same isolation principle ScheduleDispatcherWorker applies at the tick level, just at job granularity.
             try
             {
+                // Re-enter the paused run's correlation scope for the duration of this job. Everything the poll
+                // does — the status GET, each NDJSON file download, the cleanup DELETE, and the whole resumed
+                // continuation (Governance → Transform → Output) — is an outbound call logged by
+                // ApiRequestLoggingHandler, which reads the ambient correlation id. Without this the longest and
+                // most failure-prone leg of a bulk export is the one leg that cannot be found alongside the run
+                // it belongs to. Scoped per job, not per tick: one tick polls many jobs, each with its own run.
+                using var correlationScope = _ambientActorContext?.BeginScope("BulkExportPollWorker", job.CorrelationId);
+
                 await PollOneJobAsync(job, defaultPollIntervalSeconds, maxPollAttempts, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

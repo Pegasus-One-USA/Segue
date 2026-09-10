@@ -1,4 +1,5 @@
-using FHIRBridge.Api.Security;
+﻿using FHIRBridge.Api.Security;
+using FHIRBridge.Governance;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
@@ -25,6 +26,7 @@ public sealed class OAuthController : ControllerBase
     private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
     private readonly IEhrEndpointService _ehrEndpointService;
     private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
+    private readonly IGovernanceLogger _governanceLogger;
     private readonly ILogger<OAuthController> _logger;
 
     public OAuthController(
@@ -32,13 +34,53 @@ public sealed class OAuthController : ControllerBase
         IWorkflowDefinitionStore workflowDefinitionStore,
         IEhrEndpointService ehrEndpointService,
         IAllowedCorsOriginsCache allowedCorsOriginsCache,
+        IGovernanceLogger governanceLogger,
         ILogger<OAuthController> logger)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
         _ehrEndpointService = ehrEndpointService;
         _allowedCorsOriginsCache = allowedCorsOriginsCache;
+        _governanceLogger = governanceLogger;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// This attempt's correlation id, as supplied by the calling app echoing back what <c>validate-run</c> minted.
+    /// Null when the caller sent none, in which case the callback falls back to deriving one — see
+    /// <c>InteractiveSourceAuthorizationService.StampAttemptCorrelation</c>.
+    /// </summary>
+    private string? AttemptCorrelationId() =>
+        Request.Headers["X-Correlation-Id"].FirstOrDefault() is { Length: > 0 and <= 200 } supplied ? supplied : null;
+
+    /// <summary>
+    /// Persists a SmartLaunchLogs row for a launch this API refused BEFORE any source connection was resolved —
+    /// an unknown workflow, one not opted into public launch, or an unrecognized EHR endpoint.
+    /// <para>Every one of those returns a bare 404, so without this the four distinct causes are indistinguishable
+    /// from each other (and from a genuine routing miss) anywhere outside Seq — which is precisely the case where
+    /// a caller reports "it just says not found" and Execution History shows nothing at all, because no run was
+    /// ever created. SourceConnectionId is deliberately <see cref="Guid.Empty"/>: the refusal happens upstream of
+    /// resolving one, and inventing a value here would be a worse lie than recording that there wasn't one.</para>
+    /// <para>Best-effort — a governance write must never turn a refusal into a 500.</para>
+    /// </summary>
+    private async Task LogRefusedLaunchAsync(
+        Guid workflowId, string launchType, string reason, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _governanceLogger.LogSmartLaunchAsync(
+                new SmartLaunchEntry(
+                    Guid.Empty,
+                    $"workflow:{workflowId}",
+                    launchType,
+                    Success: false,
+                    FailureReason: reason),
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Could not persist the refused-launch record for workflow {WorkflowId}.", workflowId);
+        }
     }
 
     /// <summary>
@@ -76,6 +118,13 @@ public sealed class OAuthController : ControllerBase
         var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
         if (workflow is null || !workflow.IsPubliclyLaunchable)
         {
+            await LogRefusedLaunchAsync(
+                workflowId,
+                "EhrLaunch",
+                workflow is null
+                    ? "Refused: no workflow with this id exists."
+                    : "Refused: workflow is not opted into public launch (POST /workflows/{id}/enable-public-launch).",
+                cancellationToken);
             return NotFound();
         }
 
@@ -96,7 +145,11 @@ public sealed class OAuthController : ControllerBase
         }
 
         var effectiveUserIdentity = !string.IsNullOrWhiteSpace(userIdentity) && userIdentity.Length <= 200 ? userIdentity : null;
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId: null, callerId, sessionId: null, effectiveUserIdentity);
+        // Same reasoning as the standalone mint: an EHR launch also returns through /oauth/callback as a redirect.
+        // Carrying the id here is what lets an EHR-launch attempt be one Execution History row when the calling app
+        // called validate-run before handing the browser off.
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(
+            workflowId, ehrEndpointId: null, callerId, sessionId: null, effectiveUserIdentity, AttemptCorrelationId());
         return Ok(new { context });
     }
 
@@ -196,6 +249,13 @@ public sealed class OAuthController : ControllerBase
             _logger.LogWarning(
                 "[Step 1/6] public-standalone-url rejected: workflowId={WorkflowId} found={Found} isPubliclyLaunchable={IsPubliclyLaunchable}",
                 workflowId, workflow is not null, workflow?.IsPubliclyLaunchable);
+            await LogRefusedLaunchAsync(
+                workflowId,
+                "WorkflowStandalone",
+                workflow is null
+                    ? "Refused: no workflow with this id exists."
+                    : "Refused: workflow is not opted into public launch (POST /workflows/{id}/enable-public-launch).",
+                cancellationToken);
             return NotFound();
         }
 
@@ -211,6 +271,11 @@ public sealed class OAuthController : ControllerBase
             _logger.LogWarning(
                 "[Step 1/6] public-standalone-url rejected: ehrEndpointId={EhrEndpointId} is not a known endpoint",
                 ehrEndpointId);
+            await LogRefusedLaunchAsync(
+                workflowId,
+                "WorkflowStandalone",
+                $"Refused: ehrEndpointId {ehrEndpointId} is not a known Provider Standalone endpoint.",
+                cancellationToken);
             return NotFound();
         }
 
@@ -237,6 +302,12 @@ public sealed class OAuthController : ControllerBase
             ? sessionId
             : Guid.NewGuid().ToString("N");
 
+        // On a first-ever visit the caller sent no sessionId, so the pipeline-level resolver had nothing to key
+        // on and this request is still under a bare TraceIdentifier. Re-stamp from the id actually minted above,
+        // so this mint shares the correlation id of every later leg (the callback, and the run it authorizes),
+        // all of which key on that same value.
+        WorkflowCorrelationResolver.ApplyDerived(HttpContext, workflowId, effectiveSessionId);
+
         // userIdentity is a stable identifier for the third-party app's own logged-in end user (e.g. its account
         // email) — distinct from sessionId above, which is only an opaque per-browser cache key. When present, it
         // is what CompleteAsync permanently binds to one FHIR patient/practitioner. Never validated as an origin
@@ -244,7 +315,11 @@ public sealed class OAuthController : ControllerBase
         var effectiveUserIdentity = !string.IsNullOrWhiteSpace(userIdentity) && userIdentity.Length <= 200 ? userIdentity : null;
 
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, overrideEndpointId, callerId, effectiveSessionId, effectiveUserIdentity);
+        // Bake this attempt's correlation id into the launch context. The browser leaves for the EHR from here and
+        // comes back into /oauth/callback as a redirect — no header of ours survives either hop, so the encrypted
+        // context is the only channel that reaches the callback (see LaunchContext.CorrelationId).
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(
+            workflowId, overrideEndpointId, callerId, effectiveSessionId, effectiveUserIdentity, AttemptCorrelationId());
         var response = BuildLaunchResponse(applicationType, context, effectiveSessionId);
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url resolved: workflowId={WorkflowId} applicationType={ApplicationType} response={@Response}",

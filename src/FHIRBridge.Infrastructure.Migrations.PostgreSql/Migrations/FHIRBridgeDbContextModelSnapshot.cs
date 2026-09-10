@@ -715,6 +715,13 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("Outbound");
+
                     b.Property<long>("DurationMs")
                         .HasColumnType("bigint");
 
@@ -745,6 +752,8 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.HasIndex("OccurredOnUtc");
 
                     b.HasIndex("StatusCode");
+
+                    b.HasIndex("CorrelationId", "Direction");
 
                     b.ToTable("ApiRequestLogs", (string)null);
                 });
@@ -4866,6 +4875,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("timezone('utc', now())");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");

@@ -277,9 +277,16 @@
             API Requests ({{ r.apiRequests.length }})
           </h3>
           @if (!isSectionCollapsed('sec-apiRequests')) {
-            <table class="mini-table"><tr><th>Time</th><th>Method</th><th>URL</th><th>Status</th><th>Duration</th></tr>
+            <table class="mini-table api-requests-table"><tr><th>Time</th><th>Step</th><th>Method</th><th>URL</th><th>Status</th><th>Duration</th></tr>
               @for (x of r.apiRequests; track x.id) {
-                <tr><td>{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td><td>{{ x.method }}</td><td class="truncate">{{ x.url }}</td><td>{{ x.statusCode ?? '—' }}</td><td>{{ x.durationMs }} ms</td></tr>
+                <tr>
+                  <td class="nowrap">{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td>
+                  <td class="step-cell">{{ x.step }}</td>
+                  <td class="nowrap">{{ x.method }}</td>
+                  <td class="url-cell">{{ x.url }}</td>
+                  <td class="nowrap">{{ x.statusCode ?? '—' }}</td>
+                  <td class="nowrap">{{ x.durationMs }} ms</td>
+                </tr>
               }
             </table>
           }

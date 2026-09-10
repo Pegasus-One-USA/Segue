@@ -1,4 +1,4 @@
-using FHIRBridge.Application;
+﻿using FHIRBridge.Application;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Messaging;
 using FHIRBridge.Infrastructure.Persistence;
@@ -121,6 +121,11 @@ builder.Services.AddHostedService<WebhookIngestionCommandProcessor>();
 // instead of any caller (a route run, a workflow-node run) blocking inline for the job's full duration.
 builder.Services.Configure<BulkExportPollOptions>(builder.Configuration.GetSection("BulkExportPoll"));
 builder.Services.AddHostedService<BulkExportPollWorker>();
+
+// Ages out validate-run attempts that were never executed — see ValidatedRunExpiryWorker for why Validated has
+// to be non-terminal, and therefore why it needs something to close it.
+builder.Services.Configure<ValidatedRunExpiryOptions>(builder.Configuration.GetSection("ValidatedRunExpiry"));
+builder.Services.AddHostedService<ValidatedRunExpiryWorker>();
 
 builder.Services.Configure<EndpointHealthCheckOptions>(builder.Configuration.GetSection("EndpointHealthCheck"));
 builder.Services.AddHostedService<EndpointHealthCheckWorker>();

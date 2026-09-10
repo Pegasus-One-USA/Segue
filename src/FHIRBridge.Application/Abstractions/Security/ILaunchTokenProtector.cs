@@ -1,4 +1,4 @@
-namespace FHIRBridge.Application.Abstractions.Security;
+﻿namespace FHIRBridge.Application.Abstractions.Security;
 
 /// <summary>
 /// Encrypts and decrypts the identifiers carried in the interactive-OAuth URLs so raw route GUIDs are never
@@ -12,14 +12,14 @@ public interface ILaunchTokenProtector
     /// PostLaunchRedirectUri — a caller-supplied sessionId, see <see cref="LaunchContext.SessionId"/>, and a
     /// caller-supplied userIdentity, see <see cref="LaunchContext.UserIdentity"/>) into an opaque, URL-safe token for
     /// the registered launch URL.</summary>
-    string ProtectContext(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null);
+    string ProtectContext(Guid routeId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null, string? correlationId = null);
 
     /// <summary>Encrypts a workflowId (and, optionally, a hospital/organization EhrEndpoint id to launch against, a
     /// caller-supplied callerId — the URL to redirect to on completion instead of the source's static
     /// PostLaunchRedirectUri — a caller-supplied sessionId, see <see cref="LaunchContext.SessionId"/>, and a
     /// caller-supplied userIdentity, see <see cref="LaunchContext.UserIdentity"/>) into an opaque launch token
     /// (launch runs the referenced workflow graph).</summary>
-    string ProtectWorkflowContext(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null);
+    string ProtectWorkflowContext(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null, string? correlationId = null);
 
     /// <summary>Encrypts a (workflowId, targetNodeId) pair into an opaque checkpoint-launch token — hitting it runs
     /// only that node's ancestor closure, not the full workflow graph.</summary>
@@ -50,5 +50,7 @@ public interface ILaunchTokenProtector
 /// for the end user driving this launch (e.g. a third-party app's own logged-in account email) — distinct from
 /// SessionId (an opaque, per-browser token) and CallerId (a redirect URL): this is what a user-to-FHIR-context
 /// binding is permanently keyed on, so it must identify the same real person across every launch, not just one
-/// browser session.</summary>
-public sealed record LaunchContext(Guid? RouteId, Guid? WorkflowId = null, Guid? TargetNodeId = null, Guid? EhrEndpointId = null, string? CallerId = null, string? SessionId = null, string? UserIdentity = null);
+/// browser session. <see cref="CorrelationId"/> optionally carries the attempt-scoped correlation id minted by
+/// <c>validate-run</c>, so the OAuth legs — which are browser redirects and can carry no header — are logged under
+/// the same id as every other call in the same attempt.</summary>
+public sealed record LaunchContext(Guid? RouteId, Guid? WorkflowId = null, Guid? TargetNodeId = null, Guid? EhrEndpointId = null, string? CallerId = null, string? SessionId = null, string? UserIdentity = null, string? CorrelationId = null);

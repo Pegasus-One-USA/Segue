@@ -5,7 +5,13 @@ public sealed class WorkflowDefinition
     private readonly List<WorkflowNode> _nodes = [];
     private readonly List<WorkflowEdge> _edges = [];
 
-    public WorkflowDefinition(Guid id, string name, int version, bool isEnabled = true, bool isPubliclyLaunchable = false)
+    public WorkflowDefinition(
+        Guid id,
+        string name,
+        int version,
+        bool isEnabled = true,
+        bool isPubliclyLaunchable = false,
+        string? description = null)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -22,11 +28,17 @@ public sealed class WorkflowDefinition
         Version = version;
         IsEnabled = isEnabled;
         IsPubliclyLaunchable = isPubliclyLaunchable;
+        Description = NormalizeDescription(description);
     }
 
     public Guid Id { get; }
 
     public string Name { get; }
+
+    /// <summary>Free-text, multi-line notes the admin gave this workflow alongside its name (what it moves, why it
+    /// exists, who owns it). Purely descriptive — nothing in the engine reads it. Null when never filled in;
+    /// whitespace-only input is normalized to null rather than stored as a blank string.</summary>
+    public string? Description { get; private set; }
 
     public int Version { get; }
 
@@ -104,7 +116,7 @@ public sealed class WorkflowDefinition
     /// Used only for in-flight execution — never persisted — so it deliberately does not go through AddNode/AddEdge.</summary>
     public WorkflowDefinition WithNodesAndEdges(IReadOnlyCollection<WorkflowNode> nodes, IReadOnlyCollection<WorkflowEdge> edges)
     {
-        var projected = new WorkflowDefinition(Id, Name, Version, IsEnabled, IsPubliclyLaunchable);
+        var projected = new WorkflowDefinition(Id, Name, Version, IsEnabled, IsPubliclyLaunchable, Description);
         projected._nodes.AddRange(nodes);
         projected._edges.AddRange(edges);
         return projected;
@@ -125,6 +137,9 @@ public sealed class WorkflowDefinition
         return node.AddConfiguration(key, value);
     }
 
+    /// <summary>Replaces the free-text description (null / whitespace clears it).</summary>
+    public void SetDescription(string? description) => Description = NormalizeDescription(description);
+
     public void Activate() => IsEnabled = true;
 
     public void Deactivate() => IsEnabled = false;
@@ -143,4 +158,7 @@ public sealed class WorkflowDefinition
         UpdatedOnUtc = updatedOnUtc;
         UpdatedBy = updatedBy;
     }
+
+    private static string? NormalizeDescription(string? description) =>
+        string.IsNullOrWhiteSpace(description) ? null : description.Trim();
 }

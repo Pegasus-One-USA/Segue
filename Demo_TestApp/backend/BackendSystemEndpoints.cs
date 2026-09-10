@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -108,12 +108,14 @@ public static class BackendSystemEndpoints
         // Practitioner's caller criteria untouched). Each returned Practitioner resource is upserted into the Default
         // Practitioner table, so the view re-reads it through /api/backend-system/practitioners above. Falls back to
         // every referenced id when the request body carries none.
-        app.MapPost("/api/backend-system/practitioners/import", async (ImportPractitionersRequest? request, HttpContext http, SessionStore sessions, HealthAppDbContext db, IHttpClientFactory httpClientFactory, ProviderStandaloneCallerIdStore providerStandaloneCallerIds, CancellationToken cancellationToken) =>
+        app.MapPost("/api/backend-system/practitioners/import", async (ImportPractitionersRequest? request, HttpContext http, SessionStore sessions, HealthAppDbContext db, IHttpClientFactory httpClientFactory, ProviderStandaloneCallerIdStore providerStandaloneCallerIds, ILoggerFactory loggerFactory, CancellationToken cancellationToken) =>
         {
             if (!TryGetSession(http, sessions))
             {
                 return Results.Unauthorized();
             }
+
+            var logger = loggerFactory.CreateLogger("BackendSystemEndpoints");
 
             var ids = (request?.PractitionerIds ?? [])
                 .Select(StripReferencePrefix)
@@ -157,10 +159,55 @@ public static class BackendSystemEndpoints
             });
 
             var client = httpClientFactory.CreateClient("Workflow");
+            string? attemptCorrelationId = null;
+
+            // Pre-flight: validate the parameters before the run touches a token or calls Epic. Also what puts
+            // this attempt into FHIRBridge's Execution History even when it is refused — a refusal previously
+            // produced no run, no outbound call and no exception, so there was nothing to look at afterwards.
+            // Deliberately non-fatal on its own failure (an unreachable or older FHIRBridge that predates this
+            // endpoint): a pre-flight must never be the reason an import that would have worked doesn't run.
+            try
+            {
+                var validateUrl = $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/validate-run";
+                var validateResponse = await client.PostAsync(
+                    validateUrl, new StringContent(requestBody, Encoding.UTF8, "application/json"), cancellationToken);
+
+                if (validateResponse.IsSuccessStatusCode)
+                {
+                    var validation = JsonSerializer.Deserialize<ValidateRunResult>(
+                        await validateResponse.Content.ReadAsStringAsync(cancellationToken), WorkflowJsonOptions);
+
+                    if (validation is { IsValid: false })
+                    {
+                        var reasons = validation.Errors is { Count: > 0 }
+                            ? string.Join(" ", validation.Errors.Select(error => error.Message))
+                            : "This workflow cannot be run with the values supplied.";
+                        return Results.Ok(new { status = "Failed", errorMessage = reasons, correlationId = validation.CorrelationId });
+                    }
+
+                    // Echo the attempt-scoped id validate-run minted onto the run below, so both land on one
+                    // Execution History row and every outbound EHR call the run makes is filed under it too.
+                    attemptCorrelationId = validation?.CorrelationId;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "validate-run pre-flight could not be completed for workflow {WorkflowId}; continuing to the run.", workflowId);
+            }
+
             HttpResponseMessage response;
             try
             {
-                response = await client.PostAsync(runUrl, new StringContent(requestBody, Encoding.UTF8, "application/json"), cancellationToken);
+                using var runRequest = new HttpRequestMessage(HttpMethod.Post, runUrl)
+                {
+                    Content = new StringContent(requestBody, Encoding.UTF8, "application/json"),
+                };
+                if (!string.IsNullOrWhiteSpace(attemptCorrelationId))
+                {
+                    runRequest.Headers.TryAddWithoutValidation("X-Correlation-Id", attemptCorrelationId);
+                }
+
+                response = await client.SendAsync(runRequest, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -660,6 +707,11 @@ record ImportPractitionersRequest(List<string>? PractitionerIds);
 // The subset of FHIRBridge's RankedWorkflowOrchestrator /run response this app reads to pull Practitioner resources
 // out of a successful run (mirrors launch-standalone-provider.ts's WorkflowRunResponse shape).
 record WorkflowRunResult(WorkflowRunInfo? WorkflowRun, Dictionary<string, WorkflowNodeOutput>? OutputsByNodeId);
+
+/// <summary>Matches FHIRBridge's POST /api/v1/workflows/{id}/validate-run response.</summary>
+record ValidateRunResult(bool IsValid, string? CorrelationId, string? WorkflowRunId, List<ValidateRunError>? Errors);
+
+record ValidateRunError(string? Parameter, string? Message);
 record WorkflowRunInfo(string? Status, string? ErrorMessage);
 record WorkflowNodeOutput(string? NodeType, WorkflowNodePayload? Payload);
 record WorkflowNodePayload(List<WorkflowRunResource>? Resources);

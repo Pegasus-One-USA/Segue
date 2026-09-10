@@ -1,4 +1,4 @@
-namespace FHIRBridge.Application.DTOs;
+﻿namespace FHIRBridge.Application.DTOs;
 
 public sealed record AuditLogDto(
     Guid Id,
@@ -122,7 +122,12 @@ public sealed record ApiRequestLogDto(
     int? StatusCode,
     long DurationMs,
     string? Error,
-    string? CorrelationId);
+    string? CorrelationId,
+    /// <summary>"Inbound" (a call made to this API) or "Outbound" (a call this system made to an EHR/destination).</summary>
+    string Direction = "Outbound",
+    /// <summary>Plain-language description of what this call was doing — see <c>ApiRequestStepDescriber</c>.
+    /// Derived at read time from the three fields above, never stored.</summary>
+    string Step = "");
 
 public sealed record ExportHistoryDto(
     Guid Id,
