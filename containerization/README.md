@@ -31,7 +31,9 @@ startup (`Database.Migrate()`), so `postgres` needs no init scripts.
 ```
 docker/            Dockerfiles + fhirbridge-app's entrypoint.sh
 compose/            docker-compose.yml + .env.example — fast local path
-scripts/            build-images.sh / .ps1 — builds & (optionally) pushes the 3 custom images
+scripts/            build-images.sh / .ps1 — builds & (optionally) pushes the custom images
+                    (3 for the Terraform environments; the Bicep path also needs fhirbridge-postgres,
+                    plus fhirbridge-postgres-backup if a client keeps Postgres containerized)
                     manage-custom-domain.sh / .ps1 — Info/Wait/Add/Bind custom domain + managed SSL
                     cleanup-*.sh / .ps1 — tear down each environment below
 terraform/

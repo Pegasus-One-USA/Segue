@@ -51,10 +51,10 @@ param postgresPassword string
 @minLength(32)
 param jwtSigningKey string
 
-@description('Registry the 3 custom images were published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package).')
+@description('Registry every custom image this deployment references was published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package) — fhirbridge-app/-worker/-redis/-postgres always, plus fhirbridge-postgres-backup too if useAzurePostgresql is false.')
 param imageRegistryServer string
 
-@description('Tag the 3 custom images were published under.')
+@description('Tag every custom image this deployment references was published under.')
 param imageTag string = 'latest'
 
 @description('Registry username. Leave blank if the registry allows anonymous/public pull (e.g. a public GHCR package) — no registry credentials are configured in that case.')

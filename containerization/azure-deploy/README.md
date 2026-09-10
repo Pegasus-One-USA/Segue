@@ -9,12 +9,13 @@ a product," the Terraform one for your own CI/CD or repeatable internal environm
 
 ## The one thing that can't be skipped: publish the images first
 
-A one-click experience is only possible if the 3 custom images
-(`fhirbridge-app`, `fhirbridge-worker`, `fhirbridge-redis`) **already exist in a registry the customer's
-Container Apps can reach** before they click deploy — there's no version of "single button" where
-the customer also builds Docker images. That's a normal part of shipping software as a product: you
-(the vendor) build and publish a release once; every customer's one-click deploy just references
-it.
+A one-click experience is only possible if the 4 custom images
+(`fhirbridge-app`, `fhirbridge-worker`, `fhirbridge-redis`, `fhirbridge-postgres` — plus a 5th,
+`fhirbridge-postgres-backup`, only actually pulled if a customer keeps Postgres containerized
+instead of the default managed path) **already exist in a registry the customer's Container Apps
+can reach** before they click deploy — there's no version of "single button" where the customer also
+builds Docker images. That's a normal part of shipping software as a product: you (the vendor)
+build and publish a release once; every customer's one-click deploy just references it.
 
 Use `../terraform/vendor-registry` for this — a persistent ACR in your own subscription, built for
 exactly this purpose (see the containerization guide's "Vendor Registry" section for the full

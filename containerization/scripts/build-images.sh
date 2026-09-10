@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds (and optionally pushes) the 4 custom FHIRBridge container images from the repo root -- so
+# Builds (and optionally pushes) the 5 custom FHIRBridge container images from the repo root -- so
 # one command refreshes everything the Container Apps environment actually deploys.
 # Terraform's azure/aws environments assume this has already been run against their registry.
 # fhirbridge-redis (containerization/docker/redis-tls) is stock redis:7-alpine plus a fixed,
@@ -9,12 +9,16 @@
 # custom entrypoint that keeps PGDATA on local ephemeral disk and treats a mounted Azure Files
 # share purely as a backup target — see that Dockerfile's own comment for why (Postgres's startup
 # permission check can never pass directly on Azure Files/SMB).
+# fhirbridge-postgres-backup (containerization/docker/postgres-backup) is stock postgres:16-alpine
+# plus azcopy and a pg_dump-to-Blob-Storage script — only actually deployed (as a scheduled
+# Container Apps Job) when a client's Bicep/Terraform deployment keeps Postgres containerized
+# instead of using the managed Azure Database for PostgreSQL path; see that Dockerfile's own comment.
 #
 # Usage:
 #   ./build-images.sh                                   # local tags only, no push
 #   ./build-images.sh -t v1.2.0                          # local tags with a specific version
-#   ./build-images.sh -r myregistry.azurecr.io -t v1.2.0 -p   # build+push all 4, ACR
-#   ./build-images.sh -r 123456789012.dkr.ecr.us-east-1.amazonaws.com/fhirbridge -t v1.2.0 -p  # ECR, all 4
+#   ./build-images.sh -r myregistry.azurecr.io -t v1.2.0 -p   # build+push all 5, ACR
+#   ./build-images.sh -r 123456789012.dkr.ecr.us-east-1.amazonaws.com/fhirbridge -t v1.2.0 -p  # ECR, all 5
 #
 # -r REGISTRY   registry/repo prefix images are tagged with (default: none — local tag only)
 # -t TAG        image tag (default: local)
@@ -46,6 +50,7 @@ declare -A IMAGES=(
   [fhirbridge-worker]="containerization/docker/worker/Dockerfile"
   [fhirbridge-redis]="containerization/docker/redis-tls/Dockerfile"
   [fhirbridge-postgres]="containerization/docker/postgres-local/Dockerfile"
+  [fhirbridge-postgres-backup]="containerization/docker/postgres-backup/Dockerfile"
 )
 # fhirbridge-app bakes $TAG into its Angular build (footer version display) -
 # fhirbridge-worker has no UI, so it doesn't take this build-arg.
