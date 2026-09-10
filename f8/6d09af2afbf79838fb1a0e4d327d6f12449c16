@@ -1,0 +1,27 @@
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  s_85e5f4509df794::t_c6f8098d9a3111 47
+  s_85e5f4509df794::t_d35e922c4f637d 21-22
+  s_85e5f4509df794::t_25b3aec8134ed9 65
+src/Api/FHIRBridge.Api/Controllers/V1/Icd10ConfigurationController.cs
+  s_85e5f4509df794::t_f9795989eeb215 33,37,41
+src/Api/FHIRBridge.Api/Controllers/V1/SnomedConfigurationController.cs
+  s_85e5f4509df794::t_6e103abddf6412 27,31,35
+src/Api/FHIRBridge.Api/Controllers/V1/RxNormConfigurationController.cs
+  s_85e5f4509df794::t_0537a9f4e5716d 27,31,35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "f86d09af2afbf79838fb1a0e4d327d6f12449c16",
+  "prompts": {},
+  "sessions": {
+    "s_85e5f4509df794": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ce0dc8-ced5-4aba-a5f7-13b80b101734",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
