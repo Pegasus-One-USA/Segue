@@ -61,7 +61,7 @@ public sealed class AutoFetchMissingReferenceWiringTests
         var sourceNode = AddSourceNode(workflow, sourceConnectionId);
         var destinationNode = AddDestinationNode(workflow);
         workflow.AddEdge(sourceNode.Id, destinationNode.Id);
-        var workflowStore = new InMemoryWorkflowDefinitionStore();
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         await workflowStore.SaveAsync(workflow, CancellationToken.None);
 
         var sourceConfig = new FhirSourceConfiguration(
@@ -100,7 +100,7 @@ public sealed class AutoFetchMissingReferenceWiringTests
     {
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "auto-fetch-wiring-test-no-source", 1);
         var destinationNode = AddDestinationNode(workflow, rank: 0);
-        var workflowStore = new InMemoryWorkflowDefinitionStore();
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         await workflowStore.SaveAsync(workflow, CancellationToken.None);
 
         var (writerFactory, capturedContexts) = BuildWriterFactory();
@@ -123,7 +123,7 @@ public sealed class AutoFetchMissingReferenceWiringTests
         var destinationNode = AddDestinationNode(workflow);
         workflow.AddEdge(sourceOne.Id, destinationNode.Id);
         workflow.AddEdge(sourceTwo.Id, destinationNode.Id);
-        var workflowStore = new InMemoryWorkflowDefinitionStore();
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         await workflowStore.SaveAsync(workflow, CancellationToken.None);
 
         var (writerFactory, capturedContexts) = BuildWriterFactory();
@@ -148,7 +148,7 @@ public sealed class AutoFetchMissingReferenceWiringTests
         var sourceNode = AddSourceNode(workflow, sourceConnectionId);
         var destinationNode = AddDestinationNode(workflow);
         workflow.AddEdge(sourceNode.Id, destinationNode.Id);
-        var workflowStore = new InMemoryWorkflowDefinitionStore();
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         await workflowStore.SaveAsync(workflow, CancellationToken.None);
 
         var (writerFactory, capturedContexts) = BuildWriterFactory();

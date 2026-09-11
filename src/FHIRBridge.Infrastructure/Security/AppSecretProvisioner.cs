@@ -33,8 +33,11 @@ public static class AppSecretProvisioner
             secretProvider, secretWriter, AppSecretReferences.TransformHashingKey, logger, cancellationToken);
         var phiEncryptionKey = await EnsureSecretAsync(
             secretProvider, secretWriter, AppSecretReferences.PhiEncryptionKey, logger, cancellationToken);
+        var installationId = await EnsureSecretAsync(
+            secretProvider, secretWriter, AppSecretReferences.InstallationId, logger, cancellationToken);
 
-        accessor.Initialize(jwtSigningKey, downloadLinkSigningSecret, transformHashingKey, phiEncryptionKey);
+        accessor.Initialize(
+            jwtSigningKey, downloadLinkSigningSecret, transformHashingKey, phiEncryptionKey, installationId);
     }
 
     private static async Task<string> EnsureSecretAsync(

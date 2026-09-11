@@ -134,7 +134,7 @@ public sealed class WorkflowConfigurationCleanupServiceTests
     /// destination type and one tenant-wide Field-scoped rule that must survive.</summary>
     private static async Task<Fixture> FixtureAsync()
     {
-        var repository = new InMemoryConfigurationRepository();
+        var repository = new InMemoryConfigurationRepository(TestHelpers.LicenseTestScopeFactory.Create());
 
         var destination = new DestinationConfiguration(
             "Warehouse", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
@@ -161,7 +161,7 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         previous.AddNode("MappingNode", WorkflowNodeCategory.Transform, rank: 60, configurationJson: mappingNodeJson);
         previous.AddNode("SqlServerDestinationNode", WorkflowNodeCategory.Destination, rank: 100, configurationJson: destinationNodeJson);
 
-        var store = new InMemoryWorkflowDefinitionStore();
+        var store = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         await store.SaveAsync(previous, CancellationToken.None);
 
         return new Fixture(

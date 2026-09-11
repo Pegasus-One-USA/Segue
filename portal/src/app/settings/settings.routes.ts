@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { permissionGuard } from '../auth/guards/permission.guard';
 import { superAdminGuard } from '../auth/guards/super-admin.guard';
+import { roleGuard } from '../auth/guards/role.guard';
 import { unsavedChangesGuard } from '../core/guards/unsaved-changes.guard';
 import { settingsLandingGuard } from './guards/settings-landing.guard';
 
@@ -127,6 +128,35 @@ export const SETTINGS_ROUTES: Routes = [
         loadComponent: () =>
           import('../allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component').then(
             m => m.AllowedCorsOriginListComponent
+          ),
+      },
+      {
+        // Gated on role rather than a permission code, matching the backend LicenseController's own
+        // gate ([Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)], which UnifiedAdminRequirement
+        // accepts for SuperAdmin or Admin token-role claims). superAdminGuard is SuperAdmin-only and
+        // would incorrectly hide this from an Admin the backend actually lets in, so this uses the
+        // generic roleGuard instead, with the same two role strings AuthStore.isAdmin() checks.
+        path: 'license',
+        canActivate: [roleGuard],
+        data: { roles: ['SuperAdmin', 'Admin'] },
+        loadComponent: () =>
+          import('./pages/license-settings/license-settings.component').then(
+            m => m.LicenseSettingsComponent
+          ),
+      },
+      {
+        // ⚠ TEMPORARY / DEV-ONLY — backs the "Dev: Mint a test license" page, linked from the License
+        // settings screen's "Dev: Mint a test license →" button. Same roleGuard/roles as the 'license'
+        // route above (already verified to match the backend's UnifiedAdmin policy) — the actual
+        // security boundary is server-side (DevLicenseMintingController 404s outside Development), not
+        // this route guard. Delete this route alongside license-dev-mint.component.* once minting moves
+        // to its own separate internal tool.
+        path: 'license/mint-dev',
+        canActivate: [roleGuard],
+        data: { roles: ['SuperAdmin', 'Admin'] },
+        loadComponent: () =>
+          import('./pages/license-dev-mint/license-dev-mint.component').then(
+            m => m.LicenseDevMintComponent
           ),
       },
       {

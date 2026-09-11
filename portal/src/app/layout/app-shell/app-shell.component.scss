@@ -27,6 +27,31 @@
   overflow:       hidden;
 }
 
+// ── License gate banner ────────────────────────────────────────────────────────
+// Sits above the topbar rather than inside it — the topbar's height is fixed (56px) and shared with
+// the sidebar toggle/page title/user menu, so a variable-width message + link lives better as its own
+// flex-shrink:0 row than squeezed into that row's layout.
+.license-gate-banner {
+  display:       flex;
+  align-items:   center;
+  gap:           12px;
+  padding:       8px var(--space-10);
+  background:    color-mix(in srgb, var(--color-error) 12%, var(--color-surface));
+  border-bottom: 1px solid var(--color-error);
+  color:         var(--color-error);
+  font-size:     13px;
+  font-weight:   600;
+  flex-shrink:   0;
+
+  a {
+    color:           inherit;
+    text-decoration: underline;
+    font-weight:     700;
+    margin-left:     auto;
+    white-space:     nowrap;
+  }
+}
+
 // ── Topbar ─────────────────────────────────────────────────────────────────────
 // No z-index here — adding one creates a stacking context that traps the user
 // menu panel inside it and lets sticky table headers bleed over the dropdown.
@@ -133,4 +158,57 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+// ── License gate overlay ─────────────────────────────────────────────────────────
+// Covers only .shell-content (the router-outlet area) — sidebar, topbar, and the user menu/sign-out
+// inside it are siblings/ancestors, outside .shell-content's own stacking context, so they stay fully
+// usable. .shell-content--locked freezes the container's own scrolling while the overlay is up so an
+// absolute inset:0 overlay always exactly covers the visible area, rather than scrolling away from it.
+.shell-content--locked {
+  overflow: hidden;
+}
+
+.license-gate-overlay {
+  position:        absolute;
+  inset:           0;
+  z-index:         40;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  background:      color-mix(in srgb, var(--color-bg) 80%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.license-gate-overlay-card {
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  gap:            8px;
+  max-width:      360px;
+  padding:        28px 32px;
+  text-align:     center;
+  background:     var(--color-surface);
+  border:         1px solid var(--color-border);
+  border-radius:  var(--radius-lg);
+  box-shadow:     var(--shadow-md);
+
+  p {
+    margin:      0;
+    color:       var(--color-ink);
+    font-size:   14px;
+    font-weight: 500;
+  }
+
+  a {
+    margin-top:      8px;
+    color:           var(--color-error);
+    font-weight:     700;
+    text-decoration: underline;
+  }
+}
+
+.license-gate-overlay-icon {
+  font-size:    28px;
+  line-height:  1;
 }

@@ -88,6 +88,9 @@ public sealed class UserManagementService : IUserManagementService
             throw new InvalidOperationException("A user with this email already exists.");
         }
 
+        // License user-quota enforcement lives centrally in LicenseEnforcementSaveChangesInterceptor (runs on
+        // every SaveChangesAsync, watching for a newly-Added User row) — not here, so a future quota dimension
+        // never means touching this call site again.
         var user = new User(LocalExternalId(email), email, request.DisplayName, request.TenantId);
         user.UpdateName(request.FirstName, request.LastName);
         user.EnableLocalLogin(_passwordHasher.Hash(request.Password), request.RequirePasswordChange);
@@ -153,6 +156,8 @@ public sealed class UserManagementService : IUserManagementService
             throw new InvalidOperationException("A user with this email already exists.");
         }
 
+        // See CreateLocalUserAsync's matching comment — the quota check happens centrally in
+        // LicenseEnforcementSaveChangesInterceptor, not here.
         var rawToken = GenerateToken();
         var tokenHash = _passwordHasher.Hash(rawToken);
         var expiresOnUtc = DateTime.UtcNow.AddHours(InvitationTokenLifetimeHours);

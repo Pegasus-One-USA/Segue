@@ -17,6 +17,10 @@ public interface IAppSecretAccessor
 
     string PhiEncryptionKey { get; }
 
+    /// <summary>Opaque per-install identifier, generated once on first boot — see
+    /// <see cref="AppSecretReferences.InstallationId"/>.</summary>
+    string InstallationId { get; }
+
     /// <summary>
     /// Updates the cached value for one app secret in THIS process only, after <see cref="ISecretWriter"/> has
     /// already persisted it — see <c>AppSecretsAdminService</c>'s remarks on the cross-process caveat for

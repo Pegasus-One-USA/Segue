@@ -85,6 +85,8 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         await ValidateSourceConnectionRequestAsync(request, excludeId: null, cancellationToken);
+        // License source-connection quota/allow-list enforcement lives centrally in
+        // LicenseEnforcementSaveChangesInterceptor (watches for a newly-Added SourceConnection row).
         var authentication = await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
         var sourceConnection = new SourceConnection(
             request.Name,
@@ -404,6 +406,8 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         await ValidateRequestAsync(_destinationConfigurationValidator, request, cancellationToken);
+        // License destination-type allow-list enforcement lives centrally in
+        // LicenseEnforcementSaveChangesInterceptor (watches for a newly-Added DestinationConfiguration row).
 
         var inlineSecret = await ResolveInlineSecretAsync(request, cancellationToken);
 
@@ -732,6 +736,9 @@ public sealed class ConfigurationService : IConfigurationService
         ConfigureResourceRequest request,
         CancellationToken cancellationToken)
     {
+        // License workflow-quota and resource-type-allow-list enforcement live centrally in
+        // LicenseEnforcementSaveChangesInterceptor (watches for a newly-Added ResourcePipelineRoute row and
+        // resolves its resource type through the mapping profile itself).
         // A route's resource type, source, and destination are all owned by the mapping profile.
         var route = new ResourcePipelineRoute(
             request.WebhookConfigurationId,
@@ -770,6 +777,8 @@ public sealed class ConfigurationService : IConfigurationService
         CreateResourceRouteRequest request,
         CancellationToken cancellationToken)
     {
+        // License workflow-quota and resource-type-allow-list enforcement live centrally in
+        // LicenseEnforcementSaveChangesInterceptor — see ConfigureResourceAsync's matching comment.
         // resourceType path segment is ignored; the route's resource type, source, and destination come from its mapping.
         var route = new ResourcePipelineRoute(
             request.WebhookConfigurationId,

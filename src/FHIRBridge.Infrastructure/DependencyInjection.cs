@@ -21,6 +21,7 @@ using FHIRBridge.Infrastructure.Destinations.Blob;
 using FHIRBridge.Infrastructure.Destinations.Delivery;
 using FHIRBridge.Infrastructure.Governance;
 using FHIRBridge.Infrastructure.Health;
+using FHIRBridge.Infrastructure.Licensing;
 using FHIRBridge.Infrastructure.Messaging;
 using FHIRBridge.Infrastructure.Normalization;
 using FHIRBridge.Infrastructure.Aggregation;
@@ -169,6 +170,22 @@ public static class DependencyInjection
         services.AddScoped<ISystemSettingsService, SystemSettingsService>();
         services.AddSingleton<ITerminologySyncScheduleEvaluator, TerminologySyncScheduleEvaluator>();
 
+        // Signed product license — verification/reporting only in this stage (see ILicenseService's
+        // remarks; nothing here blocks or gates product behavior). Singleton, resolves
+        // ISystemSettingRepository lazily through a scope per lookup, same pattern as
+        // ISystemSettingsCache/ICurrentTenantResolver above — works against either repository registration
+        // (DB or in-memory) since it doesn't touch the repository until Program.cs calls ReloadAsync.
+        services.AddSingleton<Application.Abstractions.Licensing.ILicenseService, LicenseService>();
+
+        // ⚠ TEMPORARY / DEV-ONLY — signs throwaway test license tokens for the portal's temporary
+        // "Dev: Mint a test license" page. Backed by DevLicenseMintingController, which is hard-gated to
+        // IHostEnvironment.IsDevelopment() (returns 404 everywhere else) — see DevLicenseSigningKey's
+        // remarks. Registering this singleton unconditionally is safe: nothing outside that
+        // Development-only controller ever calls it. DELETE this registration alongside
+        // DevLicenseSigningKey/IDevLicenseMintingService/DevLicenseMintingService/DevLicenseMintingController
+        // once license minting moves to its own separate internal tool.
+        services.AddSingleton<IDevLicenseMintingService, DevLicenseMintingService>();
+
         // Resolves a user's effective permission codes per request (DB-backed, short-lived cache) —
         // replaces embedding them as JWT claims, which overflowed the browser's access-token cookie once
         // a role's permission count grew into the hundreds (dynamically-discovered per-vendor/per-
@@ -212,6 +229,12 @@ public static class DependencyInjection
             services.AddSingleton<IComplianceReportService, NullComplianceReportService>();
             services.AddSingleton<IAuditChainVerificationService, NullAuditChainVerificationService>();
             services.AddSingleton<IGovernanceLogArchiveWriter, NullGovernanceLogArchiveWriter>();
+
+            // No database: nothing durable to append the usage ledger to, or to count execution history
+            // against — LicenseUsageSnapshotWorker/LicenseHeartbeatWorker still run every tick in this
+            // profile, they just have no-op/all-zero data to work with.
+            services.AddSingleton<Application.Abstractions.Licensing.IUsageLedgerRepository, NullUsageLedgerRepository>();
+            services.AddSingleton<Application.Abstractions.Licensing.ILicenseUsageExecutionStatsProvider, ZeroLicenseUsageExecutionStatsProvider>();
             services.AddScoped<ISystemHealthService, InMemorySystemHealthService>();
             services.AddScoped<ISchedulerSummaryService, InMemorySchedulerSummaryService>();
             services.AddScoped<IDataLineageService, InMemoryDataLineageService>();
@@ -225,10 +248,17 @@ public static class DependencyInjection
             services.TryAddSingleton<IAmbientActorContext, AmbientActorContext>();
             services.TryAddScoped<ICurrentUserService, SystemCurrentUserService>();
             services.AddScoped<AuditingSaveChangesInterceptor>();
+            // Singleton, not Scoped: it now only holds IServiceScopeFactory + ILogger (both safe as
+            // singletons) and resolves ILicenseQuotaGuard lazily from a fresh scope at save-time instead of
+            // via constructor injection — see the interceptor's own remarks for why constructor-injecting the
+            // guard directly here caused a circular DI resolution against FHIRBridgeDbContext itself.
+            services.AddSingleton<LicenseEnforcementSaveChangesInterceptor>();
             services.AddScoped<IGovernanceLogger, EfGovernanceLogger>();
             services.AddScoped<IGovernanceQueryService, EfGovernanceQueryService>();
             services.AddScoped<IErrorResolutionService, EfErrorResolutionService>();
             services.AddScoped<IAuditChainVerificationService, EfAuditChainVerificationService>();
+            services.AddScoped<Application.Abstractions.Licensing.IUsageLedgerRepository, EfUsageLedgerRepository>();
+            services.AddScoped<Application.Abstractions.Licensing.ILicenseUsageExecutionStatsProvider, EfLicenseUsageExecutionStatsProvider>();
             services.AddScoped<IComplianceReportService, QuestPdfComplianceReportService>();
             services.AddScoped<IGovernanceLogArchiveWriter, EfGovernanceLogArchiveWriter>();
             services.Configure<GovernanceArchiveOptions>(configuration.GetSection("Governance:Archive"));
@@ -252,7 +282,9 @@ public static class DependencyInjection
                         break;
                 }
 
-                options.AddInterceptors(sp.GetRequiredService<AuditingSaveChangesInterceptor>());
+                options.AddInterceptors(
+                    sp.GetRequiredService<AuditingSaveChangesInterceptor>(),
+                    sp.GetRequiredService<LicenseEnforcementSaveChangesInterceptor>());
             });
 
             // Runtime RBAC reference-data bootstrapper (replaces the former migration HasData seed).

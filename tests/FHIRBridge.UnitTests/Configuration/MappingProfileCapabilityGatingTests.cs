@@ -20,7 +20,7 @@ namespace FHIRBridge.UnitTests.Configuration;
 /// </summary>
 public sealed class MappingProfileCapabilityGatingTests
 {
-    private readonly InMemoryConfigurationRepository _repository = new();
+    private readonly InMemoryConfigurationRepository _repository = new(TestHelpers.LicenseTestScopeFactory.Create());
     private readonly InMemorySourceCapabilityRepository _capabilityRepository = new();
     private readonly Mock<ISourceCapabilityDiscoveryService> _discovery = new();
     private readonly ConfigurationService _sut;

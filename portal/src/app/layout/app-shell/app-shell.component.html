@@ -8,6 +8,19 @@
     <!-- ── Main area ─────────────────────────────────────────────────────── -->
     <div class="shell-main">
 
+      <!-- License gate banner — server-side enforcement already blocks non-exempt actions with a 403
+           when the license isn't Active; this just tells the admin why instead of leaving them guessing. -->
+      @if (!licenseActive()) {
+        <div class="license-gate-banner" role="alert">
+          <span>
+            License not active ({{ licenseState() }}). Segue is locked until a valid license is applied.
+          </span>
+          @if (isAdminUser()) {
+            <a routerLink="/settings/license">Go to License Settings</a>
+          }
+        </div>
+      }
+
       <!-- Topbar -->
       <header class="shell-topbar">
 
@@ -31,9 +44,29 @@
       </header>
 
       <!-- Page content (router outlet) -->
-      <main class="shell-content">
+      <main
+        class="shell-content"
+        [class.shell-content--locked]="!licenseActive() && !onLicenseSettingsPage()"
+      >
         <router-outlet />
         <app-dialog-outlet />
+
+        <!-- Blocks interaction with the working area while the license isn't active — sidebar and
+             topbar (user menu / sign-out) are deliberately outside this <main>, so they stay usable.
+             Suppressed on the License Settings page itself, otherwise an admin could never reach the
+             one screen that lets them fix it. -->
+        @if (!licenseActive() && !onLicenseSettingsPage()) {
+          <div class="license-gate-overlay" role="alert">
+            <div class="license-gate-overlay-card">
+              <span class="license-gate-overlay-icon">🔒</span>
+              <p>License not active ({{ licenseState() }}).</p>
+              <p>This area is locked until a valid license is applied.</p>
+              @if (isAdminUser()) {
+                <a routerLink="/settings/license">Go to License Settings</a>
+              }
+            </div>
+          </div>
+        }
       </main>
 
     </div>

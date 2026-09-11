@@ -37,7 +37,7 @@ public sealed class MappingImportServiceTests
         RecordingSchemaProvider Provider, Guid DestinationId, Guid SourceConnectionId) CreateSut(
         IReadOnlyList<string> existingDestinationTables, IFhirElementCatalog? fhirElementCatalog = null)
     {
-        var repository = new InMemoryConfigurationRepository();
+        var repository = new InMemoryConfigurationRepository(TestHelpers.LicenseTestScopeFactory.Create());
         var destination = new DestinationConfiguration(
             "Test SQL Destination", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
         repository.AddDestinationAsync(destination, CancellationToken.None).GetAwaiter().GetResult();
