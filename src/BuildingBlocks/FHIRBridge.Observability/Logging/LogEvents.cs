@@ -39,7 +39,7 @@ public static class LogEvents
     public static readonly EventId SchedulerDisabled = new(2002, nameof(SchedulerDisabled));
 
     /// <summary>SystemSettings could not be read, so every DB-backed setting fell back to its compiled-in default
-    /// for that call — including <c>RuntimeWorker:Enabled=false</c>, which stops the scheduler silently.</summary>
+    /// for that call — any value an operator changed in the portal is ignored while this persists.</summary>
     public static readonly EventId SystemSettingsUnavailable = new(2003, nameof(SystemSettingsUnavailable));
     public static readonly EventId WorkflowScheduleEvaluated = new(2011, nameof(WorkflowScheduleEvaluated));
     public static readonly EventId WorkflowScheduleDue = new(2012, nameof(WorkflowScheduleDue));
