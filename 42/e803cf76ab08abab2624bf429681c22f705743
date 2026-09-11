@@ -1,0 +1,21 @@
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_f407b451007bcf::t_10392e85f4ed79 4340-4342
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_f407b451007bcf::t_10392e85f4ed79 4192-4194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "42e803cf76ab08abab2624bf429681c22f705743",
+  "prompts": {},
+  "sessions": {
+    "s_f407b451007bcf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6e2805db-d97d-4fdb-842b-c27dcd40c2fb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
