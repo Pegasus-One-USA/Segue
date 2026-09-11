@@ -23,6 +23,7 @@
     "bindCustomDomainCertificates": { "value": false },
     "enableFrontDoorWaf": { "value": false },
     "wafPolicyMode": { "value": "Prevention" },
+    "wafRateLimitThreshold": { "value": 300 },
     "storageRedundancy": { "value": "Standard_ZRS" }
   }
 }

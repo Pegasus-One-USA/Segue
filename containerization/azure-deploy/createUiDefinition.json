@@ -294,7 +294,7 @@
             "type": "Microsoft.Common.OptionsGroup",
             "label": "Web Application Firewall",
             "defaultValue": "None",
-            "toolTip": "None (default) — Segue is reached directly with no inspection layer in front of it. Front Door WAF creates an Azure Front Door (Standard tier) profile with a managed-rule WAF policy in front of the app — Front Door is both a WAF and a global load balancer in one resource. Recommended since this app processes PHI; most healthcare security reviews ask about this specifically.",
+            "toolTip": "None (default) — Segue is reached directly with no inspection layer in front of it. Front Door WAF creates an Azure Front Door (Standard tier) profile with a WAF policy in front of the app — Front Door is both a WAF and a global load balancer in one resource. Standard tier can't host Premium-only managed rule sets, so the policy instead enforces a per-client-IP rate limit; recommended since this app processes PHI, most healthcare security reviews ask about this specifically.",
             "constraints": {
               "allowedValues": [
                 {
@@ -314,7 +314,7 @@
             "type": "Microsoft.Common.OptionsGroup",
             "label": "WAF policy mode",
             "defaultValue": "Prevention",
-            "toolTip": "Prevention (default) actually blocks requests the managed rule set flags. Detection only logs/scores them and blocks nothing — a valid choice if you'd rather watch its findings against your own traffic for a while first, but it provides no real protection until switched to Prevention. Only used when Web Application Firewall above is enabled.",
+            "toolTip": "Prevention (default) actually blocks requests the rate-limit rule flags. Detection only logs/scores them and blocks nothing — a valid choice if you'd rather watch its findings against your own traffic for a while first, but it provides no real protection until switched to Prevention. Only used when Web Application Firewall above is enabled.",
             "visible": "[equals(steps('fhirbridgeSettings').wafMode, 'Front Door WAF')]",
             "constraints": {
               "allowedValues": [

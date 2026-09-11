@@ -102,9 +102,12 @@ param seqSize string = 'Small'
 @description('false (default) — fhirbridgeApp is reached directly at its *.azurecontainerapps.io URL, with no inspection layer in front of it. true creates an Azure Front Door (Standard tier) profile with a WAF policy in front of fhirbridgeApp — Front Door is both a global HTTP load balancer and a WAF in one resource, so this single toggle gets both. Standard (not Premium) keeps cost down and is enough to start; the one thing it does not close is that fhirbridgeApp\'s own *.azurecontainerapps.io address stays technically reachable directly, bypassing Front Door, since Standard has no Private Link to hide the origin behind — that address is not published anywhere once a custom domain is set, so real-world exposure is low. See wafPolicyMode below for whether the WAF actually blocks anything, and the Front Door resources further down for the full reasoning, including why this can be created in this SAME deployment unlike the custom-domain flow above.')
 param enableFrontDoorWaf bool = false
 
-@description('Only consulted when enableFrontDoorWaf is true. Prevention (default) actually blocks requests the managed rule set flags. Detection only logs/scores them — the WAF exists but blocks nothing, which is a real, deliberate choice for a cautious rollout (watch its logs for false positives against this app\'s own traffic before switching), not just a lesser default. Prevention is the default here rather than the more common "start in Detection, graduate later" advice specifically because this template ships to many independent client installs with no central place for anyone to watch logs and decide when it\'s safe to flip each one — left in Detection, it would likely just stay a no-op indefinitely. Microsoft\'s Default Rule Set (used below) has a well-established low false-positive rate against ordinary REST API traffic, which is what makes Prevention-by-default reasonable here.')
+@description('Only consulted when enableFrontDoorWaf is true. Prevention (default) actually blocks requests the WAF custom rule flags. Detection only logs/scores them — the WAF exists but blocks nothing, which is a real, deliberate choice for a cautious rollout (watch its logs for false positives against this app\'s own traffic before switching), not just a lesser default. Prevention is the default here rather than the more common "start in Detection, graduate later" advice specifically because this template ships to many independent client installs with no central place for anyone to watch logs and decide when it\'s safe to flip each one — left in Detection, it would likely just stay a no-op indefinitely.')
 @allowed(['Prevention', 'Detection'])
 param wafPolicyMode string = 'Prevention'
+
+@description('Only consulted when enableFrontDoorWaf is true. Requests from a single client IP per minute before the WAF\'s rate-limit custom rule flags it (see frontDoorWafPolicy below) — the baseline protection this template uses in place of Premium-only managed rule sets, which Standard_AzureFrontDoor cannot host. 300/min is generous enough not to trip up a legitimate integration polling the API; tighten it for a smaller, known client base.')
+param wafRateLimitThreshold int = 300
 
 // Granting an RBAC role needs Microsoft.Authorization/roleAssignments/write (Owner or User Access
 // Administrator) on the vault/resource group — a Contributor-only account can create the vault
@@ -1030,26 +1033,34 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
 }
 
 // --- Front Door (Standard) + WAF — only when enableFrontDoorWaf is true. Fronts fhirbridgeApp
-//     with Microsoft's global HTTP load balancer plus a managed-rule WAF policy, closing the gap
-//     where the app's public ingress otherwise has no inspection layer in front of it at all —
-//     relevant since this app processes PHI. Unlike the custom-domain flow above, this can be
-//     created in THIS SAME deployment: Front Door only needs fhirbridgeApp's FQDN as a one-way
-//     origin reference, not the circular self-reference that binding a domain to fhirbridgeApp
-//     itself would be (see the custom-domain comment above for why THAT one genuinely needs a
-//     separate deployment).
+//     with Microsoft's global HTTP load balancer plus a WAF policy, closing the gap where the
+//     app's public ingress otherwise has no inspection layer in front of it at all — relevant
+//     since this app processes PHI. Unlike the custom-domain flow above, this can be created in
+//     THIS SAME deployment: Front Door only needs fhirbridgeApp's FQDN as a one-way origin
+//     reference, not the circular self-reference that binding a domain to fhirbridgeApp itself
+//     would be (see the custom-domain comment above for why THAT one genuinely needs a separate
+//     deployment).
 //
-//     Standard tier, not Premium — cheaper, and enough to start: same WAF managed rules, same
-//     global load-balancing, just without Premium's Private Link origin support. The one thing
-//     Standard doesn't close: fhirbridgeApp's own *.azurecontainerapps.io address stays technically
-//     reachable directly, bypassing Front Door/the WAF, since there's no Private Link to hide it
-//     behind. It isn't published anywhere once a custom domain is set, so real-world exposure is
-//     low — if a client's compliance review needs that gap fully closed, the fix is either
-//     upgrading to Premium + Private Link, or an app-side check that rejects requests missing a
-//     header Front Door injects; neither is done here.
+//     Standard tier, not Premium — cheaper, and enough to start. Two things Premium would add,
+//     both left as accepted gaps here:
+//       - Managed rule sets (Microsoft's Default Rule Set) are a Premium-only feature — the WAF
+//         policy API rejects `managedRules` outright on a Standard_AzureFrontDoor policy. So this
+//         WAF carries a hand-written custom rule (per-client-IP rate limiting, see
+//         frontDoorWafPolicy below) instead of OWASP-style managed rules. That's real but partial
+//         protection, not equivalent to Premium's managed rule sets — a client whose compliance
+//         review requires managed WAF rules needs to upgrade both frontDoorProfile and
+//         frontDoorWafPolicy to Premium_AzureFrontDoor.
+//       - Private Link origin support: fhirbridgeApp's own *.azurecontainerapps.io address stays
+//         technically reachable directly, bypassing Front Door/the WAF, since there's no Private
+//         Link to hide it behind. It isn't published anywhere once a custom domain is set, so
+//         real-world exposure is low — if that gap needs fully closing, the fix is either
+//         upgrading to Premium + Private Link, or an app-side check that rejects requests missing
+//         a header Front Door injects; neither is done here.
 //
-//     WAF policy mode (Prevention/Detection) is wafPolicyMode above, defaulting to Prevention — see
-//     that parameter's own description for why this template doesn't default to the more commonly
-//     advised "start in Detection, graduate later" pattern.
+//     WAF policy mode (Prevention/Detection) is wafPolicyMode above, defaulting to Prevention —
+//     applies to the custom rule below the same way it would to managed rules: Detection logs
+//     matches without blocking. See that parameter's own description for why this template
+//     doesn't default to the more commonly advised "start in Detection, graduate later" pattern.
 
 var wafPolicyName = toLower('${replace(namePrefix, '-', '')}wafpolicy')
 var frontDoorEndpointName = toLower('${namePrefix}-${take(uniqueSuffix, 8)}')
@@ -1066,11 +1077,30 @@ resource frontDoorWafPolicy 'Microsoft.Network/frontdoorWebApplicationFirewallPo
       enabledState: 'Enabled'
       mode: wafPolicyMode
     }
-    managedRules: {
-      managedRuleSets: [
+    // Standard_AzureFrontDoor rejects `managedRules` entirely (BadRequest: "does not support
+    // ManagedRules") — Microsoft's Default Rule Set is Premium-only. This custom rule is the
+    // Standard-tier substitute: it rate-limits per client IP rather than pattern-matching request
+    // content, which is a real but narrower control than a managed rule set. The `IPMatch` against
+    // 0.0.0.0/0 and ::/0 is the standard idiom for "match every request" — matchConditions can't be
+    // empty, and rate limiting has no per-request content to match on anyway.
+    customRules: {
+      rules: [
         {
-          ruleSetType: 'Microsoft_DefaultRuleSet'
-          ruleSetVersion: '2.1'
+          name: 'RateLimitPerClientIp'
+          priority: 100
+          enabledState: 'Enabled'
+          ruleType: 'RateLimitRule'
+          rateLimitDurationInMinutes: 1
+          rateLimitThreshold: wafRateLimitThreshold
+          matchConditions: [
+            {
+              matchVariable: 'RemoteAddr'
+              operator: 'IPMatch'
+              negateCondition: false
+              matchValue: ['0.0.0.0/0', '::/0']
+            }
+          ]
+          action: 'Block'
         }
       ]
     }

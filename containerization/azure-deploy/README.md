@@ -184,11 +184,14 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   Not every Azure region supports it; switch to `Standard_LRS` if a deploy fails with a SKU/region
   error on the storage account. Exposed in the wizard as the "Storage redundancy" choice.
 - **No Web Application Firewall by default.** Set `enableFrontDoorWaf=true` to put an Azure Front
-  Door (Standard tier) profile with a managed-rule WAF policy in front of `fhirbridge-app` — Front
-  Door is both a WAF and a global load balancer in one resource, so this single toggle gets both.
-  Created in this same deployment (unlike custom domains above, Front Door only needs the app's
-  FQDN as a one-way origin reference, not a circular self-reference). `wafPolicyMode` (default
-  `Prevention`) controls whether it actually blocks flagged requests or only logs them
+  Door (Standard tier) profile with a WAF policy in front of `fhirbridge-app` — Front Door is both a
+  WAF and a global load balancer in one resource, so this single toggle gets both. Created in this
+  same deployment (unlike custom domains above, Front Door only needs the app's FQDN as a one-way
+  origin reference, not a circular self-reference). Standard tier can't host Premium-only managed
+  rule sets (the WAF policy API rejects `managedRules` outright on `Standard_AzureFrontDoor`), so the
+  policy instead enforces a per-client-IP rate limit (`wafRateLimitThreshold`, default 300
+  requests/minute) — real but narrower protection than a managed rule set. `wafPolicyMode` (default
+  `Prevention`) controls whether that rule actually blocks flagged requests or only logs them
   (`Detection`) — Prevention is the default here rather than the more commonly advised "start in
   Detection, graduate later," specifically because this template ships to many independent client
   installs with no central place to watch each one's logs and decide when it's safe to flip; left
@@ -197,9 +200,10 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   straight to `fhirbridgeAppUrl` still reaches the app directly, bypassing the WAF entirely, since
   Standard tier has no Private Link to hide that origin address behind. That gap is low-risk in
   practice (the address isn't published anywhere once a custom domain is set) but not fully closed;
-  closing it needs either a Premium-tier Private Link origin or an app-side check rejecting requests
-  missing a header Front Door injects — neither is done by this toggle. Both are exposed in the
-  wizard as the "Web Application Firewall" and "WAF policy mode" choices.
+  closing it needs either a Premium-tier Private Link origin (which would also unlock managed rule
+  sets) or an app-side check rejecting requests missing a header Front Door injects — neither is
+  done by this toggle. `wafPolicyMode` is exposed in the wizard as "WAF policy mode";
+  `wafRateLimitThreshold` is not currently exposed there and falls back to its 300/min default.
 - **No centralized log viewing by default.** Set `enableSeq=true` to add a Seq container
   (`datalust/seq`, public image) with its own external ingress — `Observability:SeqServerUrl` is
   automatically pointed at it on `fhirbridge-app` (both the Api and Gateway processes read this same
