@@ -1,0 +1,47 @@
+portal/src/app/auth/services/permission.service.ts
+  s_37057509f377cf::t_2449eb004a464f 30-39,42-51,54
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_37057509f377cf::t_927eb930d473e3 2334-2337
+  s_37057509f377cf::t_0aa33c4b81d0d4 2195-2202
+  s_37057509f377cf::t_b158362279ddcb 1828-1841
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_37057509f377cf::t_07c9eec1e3a1e8 302-309
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_37057509f377cf::t_751fd9a404c8c9 302-309
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_37057509f377cf::t_d8ccb3f7c7a493 288-292,295-298
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_37057509f377cf::t_b38e27af50dd4b 2373-2376
+  s_37057509f377cf::t_90d2065b563213 1867-1880
+  s_37057509f377cf::t_de48b85deeb61f 2234-2241
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  s_37057509f377cf::t_84d72bd53e841a 69-70,72
+  s_37057509f377cf::t_8f5a3833ef238a 47-50,52
+portal/src/app/data/sources-v2.data.ts
+  s_37057509f377cf::t_bdf4d622136aa1 3-7,9-15,17
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_37057509f377cf::t_53306be5c4da6e 41-44
+portal/src/app/data/sources.data.ts
+  s_37057509f377cf::t_bba99936407dc3 3-7,9-15,17
+portal/src/app/app.routes.ts
+  s_37057509f377cf::t_be841c37dd6ee5 97-102,106
+portal/src/app/user-management/user-management.routes.ts
+  s_37057509f377cf::t_9d5ec712cfa56d 7-8,10-11,17-18,23-25
+  s_37057509f377cf::t_502c96098379b5 47,49-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "708dda8597ac8e24ed737f1c5f95c328c5f0da53",
+  "prompts": {},
+  "sessions": {
+    "s_37057509f377cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df555302-e040-494d-9944-3e0a128c42b8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

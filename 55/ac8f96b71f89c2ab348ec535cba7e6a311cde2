@@ -1,0 +1,32 @@
+src/BuildingBlocks/FHIRBridge.Observability/Logging/LogEvents.cs
+  s_01d1ff5b7ccff6::t_69c41e79041d0d 42
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  s_01d1ff5b7ccff6::t_9f8761522d3caf 33
+src/BuildingBlocks/FHIRBridge.Observability/README.md
+  s_01d1ff5b7ccff6::t_02811c8bef4899 153
+src/FHIRBridge.Infrastructure/Caching/InProcessSystemSettingsCache.cs
+  s_01d1ff5b7ccff6::t_7e736cc01879d2 86-89,94-95
+src/Worker/FHIRBridge.Worker/Worker.cs
+  s_01d1ff5b7ccff6::t_2b0ff2ba69c586 42-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "55ac8f96b71f89c2ab348ec535cba7e6a311cde2",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  },
+  "sessions": {
+    "s_01d1ff5b7ccff6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0dd7ec24-df83-4740-a997-9c92f531213c",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
