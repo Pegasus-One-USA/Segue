@@ -1558,9 +1558,22 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
         mappingFields = await EnrichWithDestinationSchemaAsync(mappingFields, mappingProfile, cancellationToken);
 
+        // One timestamp for the whole run so every row written from it shares the same @now value — mirrors
+        // TransformNodeExecutors' identical Runtime Plane handling of these system-value @tokens.
+        var runTimestampUtc = DateTime.UtcNow;
+
         foreach (var resource in resources)
         {
-            var result = _mappingEngine.Map(resource.RawJson, mappingFields);
+            // Pipeline/runtime values a @token default field can draw from (audit/lineage columns not present
+            // in the source FHIR document) — see JsonMappingEngine.IsSystemToken.
+            var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["@runId"] = pipelineRunId,
+                ["@now"] = runTimestampUtc,
+                ["@resourceType"] = mappingProfile.ResourceType,
+                ["@sourceResourceId"] = resource.ResourceId,
+            };
+            var result = _mappingEngine.Map(resource.RawJson, mappingFields, systemValues);
             if (result.Errors.Count > 0)
             {
                 errors.AddRange(result.Errors.Select(error =>

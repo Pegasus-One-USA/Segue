@@ -25,6 +25,12 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
 {
     private const string UpsertModeSuffix = ";mode=upsert";
 
+    /// <summary>Every @token JsonMappingEngine actually recognizes — mirrors its IsSystemToken handling
+    /// exactly (the "@default" literal-constant branch, plus ConfiguredPipelineService/TransformNodeExecutors'
+    /// systemValues dictionary keys) so a save-time typo is rejected instead of silently mapping to null.</summary>
+    private static readonly string[] KnownSystemTokens =
+        ["@default", "@now", "@runId", "@resourceType", "@sourceResourceId"];
+
     private readonly IDestinationSchemaService _schemaService;
     private readonly IConfigurationRepository _configurationRepository;
     private readonly IEffectiveRuleResolver _ruleResolver;
@@ -50,6 +56,21 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
         {
             field.RuleFor(f => f.TargetField).NotEmpty().MaximumLength(200);
             field.RuleFor(f => f.JsonPath).NotEmpty().MaximumLength(500);
+
+            // A JsonPath starting with '@' is a reserved system/default token (JsonMappingEngine.IsSystemToken),
+            // not a real "$…" source path — catch a typo'd token here rather than it silently resolving to
+            // null on every pipeline run. '@default' additionally requires a literal DefaultValue to write
+            // (see field-mapping-default-value-modal.component.ts) — with none, the column would always be
+            // written null, which the "set default value" feature is never meant to produce.
+            field.RuleFor(f => f.JsonPath)
+                .Must(path => KnownSystemTokens.Contains(path))
+                .WithMessage(f => $"'{f.JsonPath}' is not a recognized @token. Expected one of: {string.Join(", ", KnownSystemTokens)}.")
+                .When(f => f.JsonPath.StartsWith('@'));
+
+            field.RuleFor(f => f.DefaultValue)
+                .NotEmpty()
+                .WithMessage("A field set to the literal default value ('@default') must supply a DefaultValue to write.")
+                .When(f => string.Equals(f.JsonPath, "@default", StringComparison.OrdinalIgnoreCase));
 
             // CorrelateByCode (e.g. picking an identifier[]/coding[] entry by its sibling "system" value, or an
             // Observation.component[] by its LOINC code) is meaningless without both the sibling JsonPath and the
@@ -197,7 +218,13 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
                     $"but this field is mapped as {field.ValueType}.");
             }
 
-            if (!column.IsNullable && !field.IsRequired && string.IsNullOrWhiteSpace(field.DefaultValue))
+            // A pipeline/runtime @token (other than "@default", already covered by DefaultValue below) always
+            // resolves to a real value at run time — see JsonMappingEngine's systemValues dictionary — so it
+            // never risks a NULL write the way an ordinary unmapped/no-default field would.
+            var isNonNullSystemToken = field.JsonPath.StartsWith('@') &&
+                !string.Equals(field.JsonPath, "@default", StringComparison.OrdinalIgnoreCase);
+
+            if (!column.IsNullable && !field.IsRequired && !isNonNullSystemToken && string.IsNullOrWhiteSpace(field.DefaultValue))
             {
                 context.AddFailure(
                     $"Fields[{i}].IsRequired",

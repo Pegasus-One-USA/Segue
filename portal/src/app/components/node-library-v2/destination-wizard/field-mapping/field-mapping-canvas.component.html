@@ -61,6 +61,7 @@
           (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
           (renameColumn)="onRenameFreeColumn(card.resource, card.tableName, $event.oldName, $event.newName)"
           (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
+          (setDefaultValue)="openDefaultValueModal(card.resource, card.tableName, $event)"
         />
       }
 
@@ -313,6 +314,17 @@
       [error]="addColumnError()"
       (submitted)="submitAddColumn($event)"
       (cancelled)="closeAddColumnModal()"
+    />
+  }
+
+  @if (defaultValueTarget(); as t) {
+    <app-field-mapping-default-value-modal
+      [columnName]="t.column"
+      [tableName]="t.tableName"
+      [existing]="existingDefaultValueSubmit(t.resource, t.tableName, t.column)"
+      (submitted)="submitDefaultValue($event)"
+      (removed)="removeDefaultValue()"
+      (cancelled)="closeDefaultValueModal()"
     />
   }
 

@@ -367,6 +367,37 @@
   color: var(--color-muted);
 }
 
+.fm-target-tag--default {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-pill, 999px);
+  padding: 1px 6px;
+}
+
+// Always visible (unlike edit/delete, which only reveal on hover) — a column's default state is a
+// deliberate, persistent choice, so its toggle stays discoverable at rest rather than hiding behind hover.
+.fm-target-col-default {
+  flex-shrink: 0;
+  opacity: 0.35;
+  background: none;
+  border: none;
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 4px;
+  cursor: pointer;
+  border-radius: var(--radius-sm, 6px);
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+
+  &:hover { opacity: 1; background: var(--color-primary-soft); }
+  &:focus-visible { outline: none; opacity: 1; box-shadow: 0 0 0 2px var(--color-primary-mid); }
+}
+
+.fm-target-col-default--active {
+  opacity: 1;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
 .fm-target-key {
   flex: 0 0 auto;
   font-size: 10px;

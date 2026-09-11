@@ -18,6 +18,7 @@ import { FieldMappingAddColumnModalComponent, FmAddColumnSubmit } from './field-
 import { FieldMappingEditColumnModalComponent, FmEditColumnSubmit } from './field-mapping-edit-column-modal.component';
 import { FieldMappingCreateTableModalComponent, FmCreateTableSubmit } from './field-mapping-create-table-modal.component';
 import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payload-modal.component';
+import { FieldMappingDefaultValueModalComponent, FmDefaultValueSubmit } from './field-mapping-default-value-modal.component';
 import { parseSourcePayloadJson, reconstructPayloadJsonFor } from './field-mapping-payload.util';
 import { ChildTableRelation } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
@@ -73,6 +74,7 @@ export interface FmMappingChoice {
     FieldMappingEditColumnModalComponent,
     FieldMappingCreateTableModalComponent,
     FieldMappingLoadPayloadModalComponent,
+    FieldMappingDefaultValueModalComponent,
   ],
   providers: [FieldMappingAnchorService],
   templateUrl: './field-mapping-canvas.component.html',
@@ -1349,6 +1351,59 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     });
     this.toast.success('Column queued', `${submission.columnName} will be added to ${target.tableName} when you click "Add to Pipeline".`);
     this.addColumnTarget.set(null);
+  }
+
+  // ── default value (a column that always writes a fixed value, never a source mapping) ──────────
+  readonly defaultValueTarget = signal<{ resource: string; tableName: string; column: string } | null>(null);
+
+  openDefaultValueModal(resource: string, tableName: string, column: string): void {
+    this.defaultValueTarget.set({ resource, tableName, column });
+  }
+
+  closeDefaultValueModal(): void {
+    this.defaultValueTarget.set(null);
+  }
+
+  /** Pre-fills the modal when re-opening it on a column that's already set to a default. */
+  existingDefaultValueSubmit(resource: string, tableName: string, column: string): FmDefaultValueSubmit | null {
+    const row = this.rowForColumnFn(resource, tableName, column);
+    if (!row || row.mode !== 'default') return null;
+    return {
+      token: row.defaultToken ?? '@default',
+      literalValue: row.defaultValue ?? null,
+      valueType: row.defaultValueType ?? 'String',
+    };
+  }
+
+  /** Wholesale-replaces whatever this column had (a real source mapping, a childJson group, or nothing at
+   *  all) with a pure default row — no `sources`, so there's structurally nothing left for the column to
+   *  also be mapped from. Dragging a new source onto this column later replaces it right back (see
+   *  replaceRow), which is the other half of what keeps the two mutually exclusive. */
+  submitDefaultValue(submission: FmDefaultValueSubmit): void {
+    const target = this.defaultValueTarget();
+    if (!target) return;
+    const { resource, tableName, column } = target;
+    this.replaceRow(resource, tableName, column, {
+      resource,
+      sources: [],
+      mode: 'default',
+      targetName: column,
+      tableName,
+      defaultToken: submission.token,
+      defaultValue: submission.token === '@default' ? submission.literalValue : null,
+      defaultValueType: submission.valueType,
+    });
+    this.toast.success('Default value set', `${column} will always write this value.`);
+    this.defaultValueTarget.set(null);
+  }
+
+  /** "Clear default" in the modal — drops the row entirely, back to unmapped (same effect as the
+   *  column's own 🗑, but reachable from the modal that's already open). */
+  removeDefaultValue(): void {
+    const target = this.defaultValueTarget();
+    if (!target) return;
+    this.removeRow(target.resource, target.tableName, target.column);
+    this.defaultValueTarget.set(null);
   }
 
   // ── edit column (real ALTER TABLE ... ALTER COLUMN, + sp_rename if the name changes) ───────────
