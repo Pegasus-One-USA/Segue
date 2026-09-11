@@ -4189,7 +4189,9 @@ export class DestinationWizardComponent implements OnInit {
         // Leave the selection alone on a failed read. Resetting it to null here would make a transient list
         // fetch failure look like "no policy assigned", and the next save would then persist that null over a
         // policy that is actually set — turning a read blip into real, silent data loss.
-        error: () => {},
+        error: () => {
+          // Intentional no-op: keep the current selection. See the note above.
+        },
       });
     }
     if (this.isFhir()) {
