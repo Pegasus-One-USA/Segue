@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Governance;
+﻿using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
@@ -183,13 +183,85 @@ public sealed class WorkflowGraphLaunchTests
         return new FakeConfigurationRepository([source], [destination], [mapping], [route]);
     }
 
+
+    // ── De-identification profile resolution ─────────────────────────────────────────────────────────────────
+    // Regression: a DAG run never consulted the profile assigned to the destination — the only profile the UI
+    // lets you pick. Nothing writes the node's "profileId" config, so every node fell through to
+    // DefaultProfileId, whose row does not exist while the seeder is disabled; the rule query returned nothing
+    // and resources were written unredacted while the run reported success.
+
+    private static (DeIdentificationNodeExecutor Executor, RecordingDeIdentificationService Scrubber, Guid DestinationId, Guid ProfileId) BuildProfileResolutionSut()
+    {
+        var profileId = Guid.NewGuid();
+        var destination = new DestinationConfiguration(
+            "Warehouse", DestinationType.SqlServer, new SecretReference("kv", "secret"), "Server=.;Database=W");
+        destination.SetDeIdentificationProfile(profileId);
+
+        var repository = new FakeConfigurationRepository([], [destination], [], []);
+        var scrubber = new RecordingDeIdentificationService();
+
+        return (new DeIdentificationNodeExecutor(scrubber, configurationRepository: repository),
+                scrubber, destination.Id, profileId);
+    }
+
+    private static WorkflowNodeOutput[] OnePatientInput() =>
+    [
+        new(Guid.NewGuid(),
+            WorkflowNodeTypes.EpicSource,
+            new ResourceBatch([new ResourceEnvelope("Patient", "p1", "{\"resourceType\":\"Patient\"}")]),
+            WorkflowDataContract.ResourceBatch)
+    ];
+
+    [Fact]
+    public async Task DeIdentification_node_resolves_the_profile_assigned_to_its_destination()
+    {
+        var (executor, scrubber, destinationId, profileId) = BuildProfileResolutionSut();
+        // destinationId is what the portal's chain-node patch stamps onto every chain node; profileId is never stamped.
+        var node = BuildNode(WorkflowNodeTypes.DeIdentification, WorkflowNodeCategory.Compliance, 50,
+            $"{{\"destinationId\":\"{destinationId}\"}}");
+
+        await executor.ExecuteAsync(CreateContext(), node, OnePatientInput(), CancellationToken.None);
+
+        scrubber.LastProfileId.Should().Be(profileId);
+        scrubber.LastProfileId.Should().NotBe(DeIdentificationProfile.DefaultProfileId,
+            "falling back to the unseeded default is what silently disabled redaction");
+    }
+
+    [Fact]
+    public async Task DeIdentification_node_prefers_an_explicit_profileId_over_the_destination()
+    {
+        var (executor, scrubber, destinationId, destinationProfileId) = BuildProfileResolutionSut();
+        var explicitProfileId = Guid.NewGuid();
+        var node = BuildNode(WorkflowNodeTypes.DeIdentification, WorkflowNodeCategory.Compliance, 50,
+            $"{{\"destinationId\":\"{destinationId}\",\"profileId\":\"{explicitProfileId}\"}}");
+
+        await executor.ExecuteAsync(CreateContext(), node, OnePatientInput(), CancellationToken.None);
+
+        scrubber.LastProfileId.Should().Be(explicitProfileId).And.NotBe(destinationProfileId);
+    }
+
+    [Fact]
+    public async Task DeIdentification_node_falls_back_to_the_default_profile_without_a_destination()
+    {
+        var (executor, scrubber, _, _) = BuildProfileResolutionSut();
+        var node = BuildNode(WorkflowNodeTypes.DeIdentification, WorkflowNodeCategory.Compliance, 50, "{}");
+
+        await executor.ExecuteAsync(CreateContext(), node, OnePatientInput(), CancellationToken.None);
+
+        scrubber.LastProfileId.Should().Be(DeIdentificationProfile.DefaultProfileId);
+    }
+
     private sealed class RecordingDeIdentificationService : IDeIdentificationService
     {
         public int CallCount { get; private set; }
 
+        /// <summary>Which profile the executor resolved — the whole point of the precedence tests above.</summary>
+        public Guid? LastProfileId { get; private set; }
+
         public Task<DeIdentificationResult> DeIdentifyAsync(DeIdentificationRequest request, CancellationToken cancellationToken)
         {
             CallCount++;
+            LastProfileId = request.ProfileId;
             return Task.FromResult(new DeIdentificationResult("SCRUBBED", []));
         }
     }

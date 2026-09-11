@@ -127,9 +127,13 @@
             [value]="selectedDeIdentificationProfileId() ?? ''"
             (change)="onProfileSelectChange($any($event.target).value)"
           >
-            <option value="">None</option>
+            <!-- [selected] per option, not just [value] on the <select>: Angular applies the parent's [value]
+                 before the @for below has created any <option>, so the browser silently discards it and falls
+                 back to "None" — which is why the picker read "None" while the label beside it correctly named
+                 the active policy. Binding each option keeps the two in agreement on first render. -->
+            <option value="" [selected]="!selectedDeIdentificationProfileId()">None</option>
             @for (p of deIdentificationProfiles(); track p.id) {
-              <option [value]="p.id">{{ p.name }}</option>
+              <option [value]="p.id" [selected]="p.id === selectedDeIdentificationProfileId()">{{ p.name }}</option>
             }
           </select>
         </label>
@@ -139,7 +143,7 @@
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" aria-hidden="true">
               <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            {{ selectedProfileName() }} is active for this mapping
+            {{ selectedProfileName() }} is active for this destination
           </span>
         }
 
@@ -156,7 +160,7 @@
       @if (!selectedDeIdentificationProfileId()) {
         <div class="fm-deid-empty">
           <strong>No de-identification policy selected</strong>
-          <span>Select an existing policy above, or name and create a new one, to configure de-identification for this mapping.</span>
+          <span>Select an existing policy above, or name and create a new one, to configure de-identification for this destination.</span>
         </div>
       }
     </div>
@@ -202,10 +206,19 @@
             </label>
             <label class="fm-draft-field">
               <span>Source field</span>
-              <select [value]="d.sourceField" (change)="updateDeIdDraftSourceField($any($event.target).value)">
-                <option value="" disabled [selected]="!d.sourceField">Select a field…</option>
-                @for (leaf of leavesFor(d.resource); track leaf.id) {
-                  <option [value]="leaf.field?.jsonPath ?? leaf.id">{{ leaf.label }}</option>
+              <!-- Only the fields this resource actually maps — redacting an unmapped field writes nothing
+                   anywhere, so offering the whole payload tree here was ~178 choices that silently do nothing.
+                   See deIdFieldOptions(). -->
+              @let deIdFields = deIdFieldOptions(d.resource, d.sourceField);
+              <select [value]="d.sourceField" (change)="updateDeIdDraftSourceField($any($event.target).value)"
+                      [disabled]="!deIdFields.length">
+                @if (!deIdFields.length) {
+                  <option value="" selected>No mapped fields for {{ d.resource }}</option>
+                } @else {
+                  <option value="" disabled [selected]="!d.sourceField">Select a field…</option>
+                  @for (field of deIdFields; track field.value) {
+                    <option [value]="field.value" [selected]="field.value === d.sourceField">{{ field.label }}</option>
+                  }
                 }
               </select>
             </label>

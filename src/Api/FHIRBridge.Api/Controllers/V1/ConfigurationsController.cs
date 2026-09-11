@@ -218,6 +218,28 @@ public sealed class ConfigurationsController : ControllerBase
         return Ok(destinationConfiguration);
     }
 
+    /// <summary>
+    /// Sets or clears the destination's de-identification profile on its own, without going through the full
+    /// destination update. The wizard's Map-fields screen changes this long after Step 1 has already provisioned
+    /// the connection, and <see cref="UpdateDestinationConfiguration"/>'s validator demands secret fields the UI
+    /// never re-displays — so a profile-only change gets its own endpoint rather than a fabricated full re-PUT.
+    /// </summary>
+    [HttpPut("destinations/{destinationId:guid}/deidentification-profile")]
+    [StandardPermission(PermissionGroupCode.DestinationConnections, PermissionActionCode.Edit, description: "Set a destination connection's de-identification profile.")]
+    [ProducesResponseType(typeof(DestinationConfigurationDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetDestinationConfigurationDeIdentificationProfile(
+        Guid destinationId,
+        [FromBody] SetDestinationDeIdentificationProfileRequest request,
+        CancellationToken cancellationToken)
+    {
+        var destinationConfiguration = await _configurationService.SetDestinationConfigurationDeIdentificationProfileAsync(
+            destinationId,
+            request.DeIdentificationProfileId,
+            cancellationToken);
+
+        return Ok(destinationConfiguration);
+    }
+
     [HttpPost("destinations/{destinationId:guid}/deactivate")]
     [StandardPermission(PermissionGroupCode.DestinationConnections, PermissionActionCode.Deactivate, description: "Deactivate a destination connection.")]
     [ProducesResponseType(typeof(DestinationConfigurationDto), StatusCodes.Status200OK)]

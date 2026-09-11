@@ -4,9 +4,23 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { TransformConfigFieldSchema, TransformNodeSchema } from '../transformation-rules.service';
 
+/** Whether a schema field applies given the config's current values — false for a field scoped to another
+ *  field's value (see TransformConfigFieldSchema.visibleWhen) when that value isn't currently selected, e.g.
+ *  keepLength while mode is "hash". A field with no visibleWhen always applies. */
+export function isConfigFieldVisible(field: TransformConfigFieldSchema, config: Record<string, string>): boolean {
+  const rule = field.visibleWhen;
+  if (!rule) return true;
+  return rule.values.includes(config[rule.key]);
+}
+
 /** Merges a node type's schema defaults into an existing config object — any key the config doesn't
  *  already have gets the schema's default; keys the config already sets (e.g. loaded from a saved rule)
- *  are left untouched. Call this whenever the node type changes (new step, or switching an existing one). */
+ *  are left untouched. Call this whenever the node type changes (new step, or switching an existing one).
+ *
+ *  Fields that don't apply to the current mode are neither defaulted nor kept: seeding every default
+ *  regardless is what produced configs like "mode = hash, keepLength = 4, token = redcted", where two of the
+ *  three keys do nothing. Because defaults are resolved in schema order, the field a visibleWhen points at
+ *  (e.g. mode) is already settled by the time the fields scoped to it are considered. */
 export function applyNodeDefaults(schema: TransformNodeSchema | undefined, config: Record<string, string>): Record<string, string> {
   if (!schema) return config;
   const merged = { ...config };
@@ -15,7 +29,19 @@ export function applyNodeDefaults(schema: TransformNodeSchema | undefined, confi
       merged[field.key] = field.defaultValue;
     }
   }
-  return merged;
+  return pruneInapplicableConfig(schema, merged);
+}
+
+/** Drops every key whose field doesn't apply to the config's current mode — so switching mode after typing
+ *  a token doesn't silently carry that token into a rule it has no effect on. */
+export function pruneInapplicableConfig(
+  schema: TransformNodeSchema | undefined, config: Record<string, string>): Record<string, string> {
+  if (!schema) return config;
+  const pruned = { ...config };
+  for (const field of schema.fields) {
+    if (!isConfigFieldVisible(field, pruned)) delete pruned[field.key];
+  }
+  return pruned;
 }
 
 const CUSTOM_SENTINEL = '__custom__';
@@ -191,13 +217,19 @@ export class RuleConfigFormComponent {
 
   /** Everything the schema doesn't mark isAdvanced — shown up front, no extra click needed. */
   primaryFields(): TransformConfigFieldSchema[] {
-    return this.ordered((this.schema?.fields ?? []).filter(f => !f.isAdvanced));
+    return this.ordered(this.applicableFields().filter(f => !f.isAdvanced));
   }
 
   /** Fine-tuning/edge-case fields (see TransformConfigFieldSchema.isAdvanced) — tucked behind the
    *  "Advanced Options" toggle so the primary form stays short for the common case. */
   advancedFields(): TransformConfigFieldSchema[] {
-    return this.ordered((this.schema?.fields ?? []).filter(f => f.isAdvanced));
+    return this.ordered(this.applicableFields().filter(f => f.isAdvanced));
+  }
+
+  /** The schema's fields minus those scoped to a mode that isn't selected — e.g. keepLength disappears the
+   *  moment mode switches off "mask", rather than sitting there implying it still does something. */
+  private applicableFields(): TransformConfigFieldSchema[] {
+    return (this.schema?.fields ?? []).filter(f => isConfigFieldVisible(f, this.config));
   }
 
   setValue(key: string, value: string | number | null): void {
@@ -206,6 +238,13 @@ export class RuleConfigFormComponent {
     // un-stringified number goes out as a bare JSON number and the API rejects it (config must bind as
     // Dictionary<string,string>). Coerce everything through this one path instead of trusting the caller.
     this.config[key] = value === null || value === undefined ? '' : String(value);
+
+    // Changing a field others are scoped to (mode) must drop their now-inapplicable values, or a token
+    // typed under "redact" would still be sitting in the config after switching to "hash". Mutated in
+    // place because `config` is an @Input object the parent holds a reference to and saves from.
+    for (const field of this.schema?.fields ?? []) {
+      if (!isConfigFieldVisible(field, this.config)) delete this.config[field.key];
+    }
   }
 
   /** A combo field is in "custom" mode (dropdown shows "Custom…", text box visible) whenever its current
