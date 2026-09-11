@@ -1,4 +1,4 @@
-namespace FHIRBridge.Runtime.Domain.Workflows;
+﻿namespace FHIRBridge.Runtime.Domain.Workflows;
 
 public sealed class WorkflowRun
 {
@@ -70,6 +70,35 @@ public sealed class WorkflowRun
     public IReadOnlyCollection<WorkflowNodeRun> NodeRuns => _nodeRuns;
 
     public void AddNodeRun(WorkflowNodeRun nodeRun) => _nodeRuns.Add(nodeRun);
+
+    /// <summary>The caller's parameters passed validate-run; the run is now waiting to be executed. Non-terminal,
+    /// so deliberately leaves <see cref="CompletedAt"/> unset — <see cref="BeginExecution"/> takes it from here
+    /// when the matching /run call arrives, and an attempt that never proceeds simply stays in this state
+    /// (visibly abandoned, rather than invisible as it was before validate-run existed).</summary>
+    public void MarkValidated()
+    {
+        Status = WorkflowRunStatus.Validated;
+    }
+
+    /// <summary>Ages out a <see cref="WorkflowRunStatus.Validated"/> attempt that was never executed. Terminal,
+    /// so it stops being a continuation candidate. Deliberately records a reason: an expired row is otherwise
+    /// indistinguishable from one that failed silently, and the difference matters when reading the list.</summary>
+    public void Expire(DateTimeOffset expiredAt)
+    {
+        ErrorMessage = "Validated but never executed — the attempt was abandoned before the run started.";
+        CompletedAt = expiredAt;
+        Status = WorkflowRunStatus.Expired;
+    }
+
+    /// <summary>The caller's parameters were refused. Terminal, and reached without executing a single node or
+    /// making a single outbound call — which is exactly why it is not <see cref="Fail"/>.</summary>
+    public void FailValidation(string errorMessage, DateTimeOffset completedAt)
+    {
+        ErrorMessage = errorMessage;
+        CompletedAt = completedAt;
+        Status = WorkflowRunStatus.ValidationFailed;
+    }
+
 
     /// <summary>Pauses the run at a source node that deferred to an async bulk-export job — deliberately does not
     /// set <see cref="CompletedAt"/>, since this is not a terminal state; <see cref="Succeed"/>/<see cref="Fail"/>

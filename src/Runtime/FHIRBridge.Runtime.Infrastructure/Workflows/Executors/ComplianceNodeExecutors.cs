@@ -124,8 +124,9 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
 
     public DeIdentificationNodeExecutor(
         IDeIdentificationService? deIdentificationService = null,
-        IDataSetDeIdentificationService? dataSetDeIdentificationService = null)
-        : base(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch)
+        IDataSetDeIdentificationService? dataSetDeIdentificationService = null,
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
+        : base(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, loggerFactory)
     {
         _deIdentificationService = deIdentificationService;
         _dataSetDeIdentificationService = dataSetDeIdentificationService;
@@ -258,6 +259,12 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                 deIdentified.Add(record with { SourceJson = result.Json });
             }
         }
+
+        Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
+            Logger,
+            FHIRBridge.Observability.Logging.LogEvents.GovernanceApplied,
+            "De-identification applied to {RecordCount} record(s) using profile {DeIdentificationProfileId}.",
+            deIdentified.Count, resolvedProfileId);
 
         return new WorkflowNodeOutput(
             node.Id,

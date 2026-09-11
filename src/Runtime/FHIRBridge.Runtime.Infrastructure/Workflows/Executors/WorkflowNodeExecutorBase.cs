@@ -1,20 +1,36 @@
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Domain.Workflows;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
 
 namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 
 public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
 {
-    protected WorkflowNodeExecutorBase(string nodeType, WorkflowDataContract outputContract)
+    protected WorkflowNodeExecutorBase(
+        string nodeType,
+        WorkflowDataContract outputContract,
+        ILoggerFactory? loggerFactory = null)
     {
         NodeType = nodeType;
         OutputContract = outputContract;
+        // Named for the concrete executor so SourceContext in Seq identifies the stage (DeIdentificationNodeExecutor,
+        // MappingNodeExecutor, ...) without it having to be a property on every message. RankedWorkflowOrchestrator
+        // already wraps each execution in a scope carrying WorkflowRunId/NodeId/NodeType/CorrelationId, so anything
+        // written through this logger inherits the run identity for free. A null factory (every parameterless test
+        // construction) degrades to NullLogger rather than requiring the wiring.
+        Logger = loggerFactory?.CreateLogger(GetType()) ?? NullLogger.Instance;
     }
 
     public string NodeType { get; }
 
     protected WorkflowDataContract OutputContract { get; }
+
+    /// <summary>Stage-specific structured logging for this node. The orchestrator already records node start,
+    /// completion, duration and record count generically — use this only for detail it cannot see from outside
+    /// (how many fields a profile redacted, how many terminology lookups missed, which rules a transform applied).</summary>
+    protected ILogger Logger { get; }
 
     public virtual Task<WorkflowNodeOutput> ExecuteAsync(
         WorkflowExecutionContext context,

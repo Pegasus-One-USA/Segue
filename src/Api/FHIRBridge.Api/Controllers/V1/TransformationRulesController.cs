@@ -86,9 +86,11 @@ public sealed class TransformationRulesController : ControllerBase
         return Ok(rule);
     }
 
-    /// <summary>Binds rules authored before this workflow existed to it — called by the builder right after a
-    /// brand-new workflow's first save. Until then such rules are stored inert (Workflow scope, null route), so
-    /// authoring can happen while the pipeline is still being drawn without any rule leaking into another one.</summary>
+    /// <summary>Binds rules authored before this workflow existed to it — called by the builder right after
+    /// every save, not only a brand-new workflow's first one. Until attached, such rules are stored inert
+    /// (Workflow scope, null route), so authoring can happen while the pipeline is still being drawn without
+    /// any rule leaking into another one — but an inert rule that never gets claimed also never runs, so the
+    /// claim is retried each save rather than assumed to have worked once.</summary>
     [HttpPost("attach-pending/{workflowId:guid}")]
     [StandardPermission(
         PermissionGroupCode.TransformationRules,
@@ -147,11 +149,16 @@ public sealed class TransformationRulesController : ControllerBase
         /// <paramref name="resourcePipelineRouteId"/>, with no fall-through to the tenant-wide tiers. Set by
         /// the V2 builder, whose rules are pipeline-private; omit for V1's original five-tier resolution.</summary>
         [FromQuery] bool workflowScopedOnly,
+        /// <summary>True to also surface rules authored before the workflow was first saved (Workflow scope,
+        /// no route id yet). Set by the builder's save-time type check, which otherwise cannot see a rule the
+        /// user has just attached to a field on a pipeline that has no id yet. Never set by the executors —
+        /// those rows stay inert at run time.</summary>
+        [FromQuery] bool includePending,
         CancellationToken cancellationToken)
     {
         var rules = await _service.GetEffectiveRulesAsync(
             destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
-            cancellationToken, workflowScopedOnly);
+            cancellationToken, workflowScopedOnly, includePending);
         return Ok(rules);
     }
 

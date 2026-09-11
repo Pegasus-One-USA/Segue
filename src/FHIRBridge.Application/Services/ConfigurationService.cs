@@ -13,6 +13,7 @@ using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
 using FluentValidation;
+using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Application.Services;
@@ -99,6 +100,20 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.AddSourceConnectionAsync(sourceConnection, cancellationToken);
 
+        // First-time-setup events are logged at Information so a support question about a brand-new tenant can be
+        // answered from the log alone — what was configured, against which EHR, and how it retrieves. Secrets are
+        // never included: only the reference/endpoint metadata, never a client secret or private key.
+        _logger.LogInformation(
+            LogEvents.SourceConnectionCreated,
+            "Source connection '{SourceName}' ({SourceConnectionId}) created. SourceSystemType={SourceSystemType} " +
+            "ApplicationType={ApplicationType} BaseUrl={BaseUrl} RetrievalMethod={RetrievalMethod} " +
+            "IncrementalSync={IncrementalSync} ResourceTypes=[{ResourceTypes}]",
+            sourceConnection.Name, sourceConnection.Id, sourceConnection.SourceSystemType,
+            sourceConnection.ApplicationType, sourceConnection.BaseUrl,
+            sourceConnection.Retrieval?.RetrievalMethod ?? "none",
+            sourceConnection.Retrieval?.IncrementalSyncEnabled,
+            string.Join(", ", sourceConnection.Retrieval?.ResourceTypes ?? []));
+
         return ConfigurationMapper.ToDto(sourceConnection);
     }
 
@@ -137,6 +152,21 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
 
+        // Logs the resulting state, not a before/after diff: Update() has already replaced the owned value objects
+        // by this point, so the prior values are gone. Comparing two of these events over time is what identifies
+        // the change — which is usually the question when a connection that worked yesterday stops.
+        _logger.LogInformation(
+            LogEvents.SourceConnectionUpdated,
+            "Source connection '{SourceName}' ({SourceConnectionId}) updated. SourceSystemType={SourceSystemType} " +
+            "ApplicationType={ApplicationType} BaseUrl={BaseUrl} TokenEndpoint={TokenEndpoint} ClientId={ClientId} " +
+            "RetrievalMethod={RetrievalMethod} IncrementalSync={IncrementalSync} ResourceTypes=[{ResourceTypes}]",
+            sourceConnection.Name, sourceConnection.Id, sourceConnection.SourceSystemType,
+            sourceConnection.ApplicationType, sourceConnection.BaseUrl,
+            sourceConnection.Authentication.TokenEndpoint, sourceConnection.Authentication.ClientId,
+            sourceConnection.Retrieval?.RetrievalMethod ?? "none",
+            sourceConnection.Retrieval?.IncrementalSyncEnabled,
+            string.Join(", ", sourceConnection.Retrieval?.ResourceTypes ?? []));
+
         return updatedDto;
     }
 
@@ -149,6 +179,13 @@ public sealed class ConfigurationService : IConfigurationService
         sourceConnection.SetEnabled(isEnabled);
 
         await _repository.UpdateSourceConnectionAsync(sourceConnection, cancellationToken);
+
+        // A disabled source makes every route depending on it silently skip (see RouteDependenciesAreEnabled),
+        // with no error anywhere — so the toggle itself is the only record of why runs stopped.
+        _logger.LogInformation(
+            LogEvents.SourceConnectionUpdated,
+            "Source connection '{SourceName}' ({SourceConnectionId}) was {EnabledState}.",
+            sourceConnection.Name, sourceConnection.Id, isEnabled ? "enabled" : "disabled");
 
         return ConfigurationMapper.ToDto(sourceConnection);
     }
@@ -215,6 +252,10 @@ public sealed class ConfigurationService : IConfigurationService
 
     public async Task DeleteSourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
     {
+        _logger.LogInformation(
+            LogEvents.SourceConnectionDeleted,
+            "Source connection {SourceConnectionId} is being deleted.", sourceConnectionId);
+
         var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
 
         await _repository.DeleteSourceConnectionAsync(sourceConnection, cancellationToken);
@@ -429,6 +470,17 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.AddDestinationAsync(destinationConfiguration, cancellationToken);
 
+        // Target is the server/database/container the writer will address; the secret behind SecretReference is
+        // deliberately never logged, only the vault/name pointing at it.
+        _logger.LogInformation(
+            LogEvents.DestinationCreated,
+            "Destination '{DestinationName}' ({DestinationId}) created. DestinationType={DestinationType} " +
+            "Target={DestinationTarget} SecretVault={SecretVaultName} SecretName={SecretName} " +
+            "DeIdentificationProfileId={DeIdentificationProfileId}",
+            destinationConfiguration.Name, destinationConfiguration.Id, destinationConfiguration.DestinationType,
+            destinationConfiguration.Target, secretReference.KeyVaultName, secretReference.SecretName,
+            request.DeIdentificationProfileId);
+
         return ConfigurationMapper.ToDto(destinationConfiguration);
     }
 
@@ -548,6 +600,14 @@ public sealed class ConfigurationService : IConfigurationService
 
         await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);
 
+        // A disabled destination silently stops receiving data while its workflow keeps reporting success, so the
+        // toggle itself needs to be on record.
+        _logger.LogInformation(
+            LogEvents.DestinationUpdated,
+            "Destination '{DestinationName}' ({DestinationId}, {DestinationType}) was {EnabledState}.",
+            destinationConfiguration.Name, destinationConfiguration.Id, destinationConfiguration.DestinationType,
+            isEnabled ? "enabled" : "disabled");
+
         return ConfigurationMapper.ToDto(destinationConfiguration);
     }
 
@@ -557,6 +617,11 @@ public sealed class ConfigurationService : IConfigurationService
         await EnsureDestinationHasNoExecutionHistoryAsync(destinationConfiguration, "deleted", cancellationToken);
 
         await _repository.RemoveDestinationAsync(destinationConfiguration, cancellationToken);
+
+        _logger.LogInformation(
+            LogEvents.DestinationDeleted,
+            "Destination '{DestinationName}' ({DestinationId}, {DestinationType}) was deleted.",
+            destinationConfiguration.Name, destinationConfiguration.Id, destinationConfiguration.DestinationType);
     }
 
     public Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken cancellationToken) =>
@@ -592,6 +657,15 @@ public sealed class ConfigurationService : IConfigurationService
             sourceConfigurationId);
 
         await _repository.AddMappingProfileAsync(mappingProfile, cancellationToken);
+
+        _logger.LogInformation(
+            LogEvents.MappingProfileSaved,
+            "Mapping profile '{MappingProfileName}' ({MappingProfileId}) created for {ResourceType}: " +
+            "SourceConnectionId={SourceConnectionId} DestinationId={DestinationId} " +
+            "DestinationObject={DestinationObject} FieldCount={FieldCount}",
+            mappingProfile.Name, mappingProfile.Id, mappingProfile.ResourceType,
+            mappingProfile.SourceConnectionId, mappingProfile.DestinationId,
+            mappingProfile.DestinationObject, mappingProfile.Fields.Count);
 
         return ConfigurationMapper.ToDto(mappingProfile);
     }
@@ -792,6 +866,16 @@ public sealed class ConfigurationService : IConfigurationService
         await ApplyResourceMappingsAsync(route, request, cancellationToken);
 
         await _repository.AddRouteAsync(route, cancellationToken);
+
+        // TimeZoneId is logged at creation because it is the value the scheduler will evaluate this route's cron
+        // in, and a zone the host cannot resolve degrades silently to UTC at run time (see ScheduleEvaluationService).
+        _logger.LogInformation(
+            LogEvents.RouteSaved,
+            "Pipeline route {RouteId} created for {ResourceType}: MappingProfileId={MappingProfileId} " +
+            "IngestionMode={IngestionMode} Schedule={ScheduleExpression} TimeZoneId={TimeZoneId} " +
+            "IsEnabled={IsEnabled} Priority={Priority}",
+            route.Id, resourceType, route.MappingProfileId, route.IngestionMode,
+            route.ScheduleExpression, route.TimeZoneId, route.IsEnabled, route.Priority);
 
         return ConfigurationMapper.ToDto(route);
     }

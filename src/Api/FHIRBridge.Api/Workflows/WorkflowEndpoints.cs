@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Api.Workflows;
@@ -18,6 +18,7 @@ using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
+using FHIRBridge.Runtime.Application.Workflows.Validation;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FHIRBridge.Governance;
 using FHIRBridge.SharedKernel.Enums;
@@ -300,7 +301,13 @@ public static class WorkflowEndpoints
                     sourceConnectionId,
                     destinationId,
                     spec.DestinationObject,
-                    spec.Fields);
+                    spec.Fields,
+                    // ResourcePipelineRouteId (below) is what lets the validator resolve this workflow's own
+                    // Workflow-scoped transformation rules — without it, it sees only the tenant-wide tiers and
+                    // rejects a rule-backed field for its raw source type. Null on a first build (the workflow
+                    // has no id yet), which the validator covers via the pending tier instead.
+                    SourceConfigurationId: null,
+                    ResourcePipelineRouteId: request.WorkflowId);
                 // Resolve strictly by spec.ExistingId — the id this exact node/resource saved last time (round-
                 // tripped by the canvas). Never by searching for "the" profile matching (resourceType, source,
                 // destination): that triple is shared by any workflow built on the same source connection +
@@ -439,7 +446,8 @@ public static class WorkflowEndpoints
                 request.IsEnabled,
                 request.Nodes.Select(node => nodes[node.Id]).ToArray(),
                 request.Edges,
-                request.Trigger);
+                request.Trigger,
+                Description: request.Description);
 
             // Bump the version off whatever is currently stored (existingDefinition, loaded further up for the
             // node-removal check) so version history is real instead of always 1.
@@ -600,7 +608,8 @@ public static class WorkflowEndpoints
                     workflow.CreatedOnUtc,
                     workflow.CreatedBy,
                     workflow.UpdatedOnUtc,
-                    workflow.UpdatedBy));
+                    workflow.UpdatedBy,
+                    workflow.Description));
             }
 
             // Resolve each summary's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/pre-conversion
@@ -627,7 +636,8 @@ public static class WorkflowEndpoints
             {
                 matching = matching.Where(summary =>
                     summary.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
-                    || (summary.ApplicationType?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+                    || (summary.ApplicationType?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (summary.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
             }
 
             if (statuses is { Length: > 0 })
@@ -1164,7 +1174,11 @@ public static class WorkflowEndpoints
             // Always created disabled, regardless of the source's enabled state: an enabled Schedule/Poll trigger
             // firing immediately — in parallel with the original, against the same source/destination — would
             // double-run and double-write before the user has even reviewed the copy.
-            var definitionRequest = new WorkflowDefinitionRequest(name, IsEnabled: false, nodeRequests, edgeRequests, triggerRequest);
+            // A description the caller didn't supply at all (null) is inherited from the original — the copy
+            // describes the same pipeline; an explicitly empty one is honored as "no description".
+            var definitionRequest = new WorkflowDefinitionRequest(
+                name, IsEnabled: false, nodeRequests, edgeRequests, triggerRequest,
+                Description: request.Description ?? source.Description);
             var copy = BuildWorkflow(Guid.NewGuid(), definitionRequest);
             await store.SaveAsync(copy, cancellationToken);
 
@@ -1197,10 +1211,102 @@ public static class WorkflowEndpoints
         // draft-validate endpoint above.
         }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
 
+        // Pre-flight for a run: checks the caller's parameters, trims them, and records the attempt — BEFORE any
+        // token is touched or any EHR call is made. Always creates an Execution History row, valid or not, which is
+        // the point: a refused attempt previously left no trace anywhere (no run, no outbound call, no exception),
+        // so "I clicked Fetch and Execution History is empty" had no answer.
+        //
+        // The correlation id it returns is DERIVED, not minted (see WorkflowCorrelationId): the caller does not
+        // have to echo it back, because every later leg of the same attempt — token-status, the launch-url mint,
+        // /oauth/callback, /run — recomputes the same value from the workflow id and the session id it already
+        // sends. That keeps the third-party contract at "call this first", with nothing to thread through an
+        // OAuth round trip.
+        //
+        // Anonymous, matching the run/token-status/discard-token endpoints this precedes: an interactive caller
+        // has no FHIRBridge session, and this reveals nothing a caller that already knows the workflow id cannot
+        // learn by simply attempting the run.
+        group.MapPost("/workflows/{workflowId:guid}/validate-run", async (
+            Guid workflowId,
+            WorkflowRunRequest? request,
+            IWorkflowDefinitionStore store,
+            IWorkflowRunValidator runValidator,
+            IWorkflowRunStore runStore,
+            ICurrentUserService currentUserService,
+            HttpContext httpContext,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            // Normalized once, here: the run created below carries these values, so validation and execution can
+            // never disagree about what was actually supplied.
+            var parameters = WorkflowRunParameters.Normalize(
+                request?.PatientId, request?.PatientSearchCriteria, request?.CallerId, request?.EhrEndpointId);
+
+            // Mint a fresh, ATTEMPT-scoped correlation id here — this is the moment an attempt begins, and this id
+            // is what the caller echoes back (as X-Correlation-Id) on every later call in the same attempt, and
+            // what rides inside the encrypted launch context across the EHR redirect that no header survives.
+            //
+            // Deliberately random rather than derived from the workflow and caller session: a derived id is
+            // necessarily constant for the whole browser session, so every attempt against one workflow collapses
+            // onto it — two clicks an hour apart became one execution. Derivation remains only as the fallback for
+            // callers that never call validate-run at all.
+            //
+            // An explicitly supplied id still wins, so a caller that manages its own correlation keeps doing so.
+            var correlationId = request?.CorrelationId
+                ?? httpContext.Request.Headers["X-Correlation-Id"].FirstOrDefault()
+                ?? $"{WorkflowCorrelationId.Prefix}{Guid.NewGuid():N}";
+
+            // Everything this request goes on to write — the run row below, the inbound API request log, any
+            // governance capture — resolves its correlation id from the ambient request, so stamp before any of it.
+            WorkflowCorrelationResolver.ApplyExplicit(httpContext, correlationId);
+
+            var errors = await runValidator.ValidateAsync(workflow, parameters, cancellationToken);
+
+            // Re-validating the SAME attempt updates its existing row rather than opening another — a Standalone
+            // fetch legitimately validates twice: once on the click, once on the auto-retry after the EHR sign-in.
+            // Because the id above is attempt-scoped, an exact match here IS the same attempt; no time heuristic is
+            // needed to tell one click from another (which is what a session-derived id would have required).
+            // Only a Validated row is reused: once a run has executed or been refused, the next click gets its own.
+            var existingRun = await runStore.FindValidatedAsync(workflow.Id, correlationId, cancellationToken);
+
+            var workflowRun = new WorkflowRun(
+                existingRun?.Id ?? Guid.NewGuid(),
+                workflow.Id,
+                existingRun?.StartedAt ?? DateTimeOffset.UtcNow,
+                triggeredBy: currentUserService.CurrentUser.AuditName,
+                triggerType: "ValidateRun",
+                workflowDefinitionVersion: workflow.Version,
+                correlationId: correlationId);
+
+            if (errors.Count == 0)
+            {
+                workflowRun.MarkValidated();
+            }
+            else
+            {
+                workflowRun.FailValidation(
+                    string.Join(" | ", errors.Select(error => $"{error.Parameter}: {error.Message}")),
+                    DateTimeOffset.UtcNow);
+            }
+
+            await runStore.SaveAsync(workflowRun, cancellationToken);
+
+            // 200 with isValid=false, not 400: the request itself was well-formed and was successfully processed
+            // into a durable, addressable outcome the caller can look up. A 4xx here would push callers into
+            // treating a refusal as a transport error and discarding the run id and errors along with it.
+            return Results.Ok(new WorkflowRunValidationResult(
+                errors.Count == 0, correlationId, workflowRun.Id, errors, parameters));
+        }).AllowAnonymous();
+
         group.MapPost("/workflows/{workflowId:guid}/run", async (
             Guid workflowId,
             WorkflowRunRequest? request,
             IWorkflowDefinitionStore store,
+            IWorkflowRunStore runStore,
             IRankedWorkflowOrchestrator orchestrator,
             ICurrentUserService currentUserService,
             IWorkflowRunTracker runTracker,
@@ -1212,6 +1318,13 @@ public static class WorkflowEndpoints
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
+            // callerId is the interactive token-cache session key, and it arrives in the BODY here rather than on
+            // the query string — too late for the pipeline-level resolver to have seen it. Stamp it now, before
+            // the run (and everything it logs) is created, so this run shares the correlation id of the
+            // validate-run/token-status/sign-in legs that preceded it. No-op when the caller supplied an explicit
+            // X-Correlation-Id, or sent no callerId (a portal/scheduler run, which has no interactive session).
+            WorkflowCorrelationResolver.ApplyDerived(httpContext, workflowId, request?.CallerId);
+
             var workflow = await store.GetAsync(workflowId, cancellationToken);
             if (workflow is null)
             {
@@ -1282,13 +1395,25 @@ public static class WorkflowEndpoints
                 await licenseQuotaGuard.EnsureDestinationTypeAllowedAsync(destination.DestinationType, cancellationToken);
             }
 
-            var workflowRunId = Guid.NewGuid();
             // Reuse the ambient correlation id (same header/TraceIdentifier the API's global exception handler and
             // ErrorLogs use) so this run's ErrorLogs, audit trail, and outbound API Requests can all be found via
             // the same id — see the checkpoint endpoint below for the matching pattern.
+            var runCorrelationId =
+                request?.CorrelationId ?? currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N");
+
+            // Continue the row validate-run already created for this attempt, rather than opening a second one, so
+            // one user action is one Execution History entry spanning validation → sign-in → execution. Returns
+            // null for every caller that never called validate-run (the portal's Run button, the scheduler,
+            // webhooks), which therefore keeps creating its own run exactly as before.
+            // Only the id is taken: the orchestrator builds its own WorkflowRun for that id and its up-front
+            // "Running" placeholder is what moves the row out of Validated (SaveAsync replaces a non-terminal row
+            // wholesale). Transitioning it here instead would attach a second tracked instance for the same key
+            // and silently suppress that write on the synchronous path, which shares one DbContext.
+            var validatedRun = await runStore.FindValidatedAsync(workflowId, runCorrelationId, cancellationToken);
+            var workflowRunId = validatedRun?.Id ?? Guid.NewGuid();
             var context = new WorkflowExecutionContext(
                 workflowRunId,
-                request?.CorrelationId ?? currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N"),
+                runCorrelationId,
                 triggeredBy: currentUserService.CurrentUser.AuditName,
                 triggerType: "Manual",
                 targetPatientId: request?.PatientId,
@@ -2691,7 +2816,8 @@ public static class WorkflowEndpoints
 
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request, int version = 1)
     {
-        var workflow = new WorkflowDefinition(workflowId, request.Name, version: 1, request.IsEnabled, request.IsPubliclyLaunchable);
+        var workflow = new WorkflowDefinition(
+            workflowId, request.Name, version: 1, request.IsEnabled, request.IsPubliclyLaunchable, request.Description);
         var nodeIdsByClientId = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var nodeRequest in request.Nodes)

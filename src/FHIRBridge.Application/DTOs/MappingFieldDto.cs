@@ -35,4 +35,12 @@ public sealed record MappingFieldDto(
     string? ParentKeyColumn = null,
     string? ForeignKeyColumn = null,
     string? ReferenceLookupTable = null,
-    string? ReferenceLookupKeyColumn = null);
+    string? ReferenceLookupKeyColumn = null,
+    // True when a transformation rule chain — not this raw-copy step — is what produces the destination's real
+    // type for this column (see TransformNodeExecutors' rule pre-resolution). JsonMappingEngine then extracts
+    // the value WITHOUT coercing it to ValueType and hands it to the rule untouched, because coercion here runs
+    // BEFORE the rules do: reading "$.birthDate" as the Integer a DateMathAge rule is going to produce can only
+    // fail, and that failure is recorded as a mapping error which ConfiguredPipelineService treats as
+    // "skip this whole resource". Never persisted — filled in at run time, by the one execution path that
+    // actually applies rules.
+    bool DeferTypeToTransform = false);

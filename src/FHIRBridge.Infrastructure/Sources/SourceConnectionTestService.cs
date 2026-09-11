@@ -9,6 +9,7 @@ using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
+using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Sources;
@@ -70,14 +71,28 @@ public sealed class SourceConnectionTestService : ISourceConnectionTestService
                 _ => throw new NotSupportedException($"Source connection test is not implemented for {sourceConnection.SourceSystemType}.")
             };
 
+            // The setup-time smoke test. Its outcome previously reached only the HTTP response the portal
+            // rendered, so a support question about "it said it worked yesterday" had nothing to check against.
+            _logger.Log(
+                result.IsSuccessful ? LogLevel.Information : LogLevel.Warning,
+                LogEvents.ConnectionTestCompleted,
+                "Source connection test for '{SourceName}' ({SourceConnectionId}, {SourceSystemType}) " +
+                "returned {TestStatus}: Success={TestSuccess} Message={TestMessage}",
+                sourceConnection.Name, sourceConnectionId, sourceConnection.SourceSystemType,
+                result.Status, result.IsSuccessful, result.Message);
+
             return result;
         }
         catch (Exception exception)
         {
             _logger.LogWarning(
+                LogEvents.ConnectionTestCompleted,
                 exception,
-                "Source connection test failed for source {SourceConnectionId}.",
-                sourceConnectionId);
+                "Source connection test threw for '{SourceName}' ({SourceConnectionId}, {SourceSystemType}): {FailureReason}",
+                sourceConnection.Name,
+                sourceConnectionId,
+                sourceConnection.SourceSystemType,
+                exception.Message);
 
             // Per docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md §6: this previously returned exception.Message
             // raw, unlike every other error path in the app — the exact class of leak SafeErrorText exists to stop.

@@ -1,6 +1,8 @@
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Domain.Enums;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FHIRBridge.Infrastructure.Destinations;
 
@@ -13,13 +15,16 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IReadOnlyDictionary<DestinationType, Type> _registry;
+    private readonly ILoggerFactory _loggerFactory;
 
     public ConfiguredDestinationWriterFactory(
         IServiceProvider serviceProvider,
-        IEnumerable<ConfiguredDestinationWriterRegistration> registrations)
+        IEnumerable<ConfiguredDestinationWriterRegistration> registrations,
+        ILoggerFactory? loggerFactory = null)
     {
         _serviceProvider = serviceProvider;
         _registry = BuildRegistry(registrations);
+        _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
     }
 
     public IConfiguredDestinationWriter Create(DestinationType destinationType)
@@ -30,7 +35,12 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
                 $"Destination type '{destinationType}' is not supported by the configured pipeline yet.");
         }
 
-        return (IConfiguredDestinationWriter)_serviceProvider.GetRequiredService(implementationType);
+        var writer = (IConfiguredDestinationWriter)_serviceProvider.GetRequiredService(implementationType);
+
+        // Wrapping here rather than in each writer is what makes write telemetry uniform across every destination
+        // type, and automatic for any destination registered later. The logger is named for the concrete writer, so
+        // SourceContext in Seq still identifies which implementation ran (several types share one writer).
+        return new LoggingConfiguredDestinationWriter(writer, _loggerFactory.CreateLogger(implementationType));
     }
 
     /// <summary>

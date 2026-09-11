@@ -41,6 +41,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http.Resilience;
+using FHIRBridge.Runtime.Application.Workflows.Validation;
+using FHIRBridge.Infrastructure.Workflows.Validation;
 
 namespace FHIRBridge.Infrastructure;
 
@@ -712,6 +714,13 @@ public static class DependencyInjection
         services.AddScoped<ISourceConnectionTestService, SourceConnectionTestService>();
         services.AddSingleton<ILaunchTokenProtector, DataProtectionLaunchTokenProtector>();
         services.AddScoped<IInteractiveSourceAuthorizationService, InteractiveSourceAuthorizationService>();
+
+        // validate-run rules that need the configuration side (a workflow's application type, the EhrEndpoint
+        // directory) and so cannot live alongside the graph-only rules in Runtime.Application. Appended to the
+        // same IWorkflowRunParameterRule collection — the validator runs every registered rule regardless of
+        // which assembly contributed it.
+        services.AddScoped<IWorkflowRunParameterRule, PatientScopeRequiredRule>();
+        services.AddScoped<IWorkflowRunParameterRule, LaunchEndpointKnownRule>();
         services.AddScoped<IEpicSourceConnectionScopeSyncService, EpicSourceConnectionScopeSyncService>();
         services.AddScoped<ISourceCapabilityDiscoveryService, SourceCapabilityDiscoveryService>();
         services.AddScoped<ISourceEndpointProbeService, SourceEndpointProbeService>();

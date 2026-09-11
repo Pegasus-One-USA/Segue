@@ -5,6 +5,10 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 
+using FHIRBridge.Observability.Logging;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace FHIRBridge.Application.Services;
 
 // SetupService runs before any tenant context exists (anonymous, empty database) — both first-run paths
@@ -28,18 +32,22 @@ public sealed class SetupService : ISetupService
     private readonly IExternalTokenValidator _externalTokenValidator;
     private readonly INotificationSettingsService _notificationSettings;
 
+    private readonly ILogger<SetupService> _logger;
+
     public SetupService(
         IUserAccessRepository repository,
         IUserManagementService userManagement,
         ILocalAuthService localAuth,
         IExternalTokenValidator externalTokenValidator,
-        INotificationSettingsService notificationSettings)
+        INotificationSettingsService notificationSettings,
+        ILogger<SetupService>? logger = null)
     {
         _repository = repository;
         _userManagement = userManagement;
         _localAuth = localAuth;
         _externalTokenValidator = externalTokenValidator;
         _notificationSettings = notificationSettings;
+        _logger = logger ?? NullLogger<SetupService>.Instance;
     }
 
     public async Task<bool> RequiresSetupAsync(CancellationToken cancellationToken)
@@ -92,6 +100,11 @@ public sealed class SetupService : ISetupService
                 TenantId: SeededSecurityIds.DefaultTenantId),
             cancellationToken);
 
+        _logger.LogWarning(
+            LogEvents.SuperAdminSetupCompleted,
+            "First super-admin account provisioned via local setup. This endpoint is reachable only while the " +
+            "users table is empty; a repeat means the table was emptied.");
+
         return await _localAuth.LoginAsync(new LocalLoginRequest(request.Email, request.Password), cancellationToken);
     }
 
@@ -118,6 +131,12 @@ public sealed class SetupService : ISetupService
 
         await _repository.AddUserAsync(user, cancellationToken);
         await _repository.AddUserRoleAsync(user.Id, role.Id, cancellationToken);
+
+        _logger.LogWarning(
+            LogEvents.SuperAdminSetupCompleted,
+            "First super-admin account {UserId} provisioned via SSO setup. This endpoint is reachable only while " +
+            "the users table is empty; a repeat means the table was emptied.",
+            user.Id);
 
         return await _localAuth.IssueSessionAsync(user, cancellationToken);
     }

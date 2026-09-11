@@ -63,6 +63,18 @@ public interface ITransformationRuleRepository
     Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowRulesAsync(
         IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken);
 
+    /// <summary>The same pending (unattached) Workflow-scope rows as <see cref="GetPendingWorkflowRulesAsync"/>,
+    /// but narrowed to ONE destination field the way the live tiers are — so a save-time check can answer "will
+    /// a rule be transforming this column?" for a workflow that has no id yet.
+    ///
+    /// Save-time only. These rows are deliberately inert at run time (an unattached rule belongs to no pipeline,
+    /// so treating a null route as "applies to anything" would fire one builder session's draft rules inside
+    /// every other workflow) — <c>EffectiveRuleResolver</c> reaches this tier only when a caller explicitly
+    /// opts in via its <c>includePendingWorkflowRules</c> flag, which the executors never do.</summary>
+    Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowScopedAsync(
+        DestinationType destinationType, string resourceType, string destinationField, string? sourceSystem,
+        string? sourceField, CancellationToken cancellationToken);
+
     Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
     Task AddAsync(TransformationRule rule, CancellationToken cancellationToken);

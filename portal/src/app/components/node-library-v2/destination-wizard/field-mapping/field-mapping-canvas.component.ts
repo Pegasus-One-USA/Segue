@@ -114,7 +114,8 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  Optional (not every host of this canvas — e.g. the Mapping Profiles dialog — has a resolved
    *  destination type on hand); the popover simply hides its transformation-rule section when absent. */
   readonly rulesDestinationType = input<DestinationType | null>(null);
-  /** Forwarded to the join popover so a rule is authored against THIS workflow — see its own workflowId
+  /** Forwarded to the join popover AND the list panel's Transformations tab, so both resolve rules against
+   *  THIS workflow's own tier — see the join popover's own workflowId
    *  input. Null while the workflow is unsaved. */
   readonly workflowId = input<string | null>(null);
   // ── pass-through to the "De-identification" tab (field-mapping-list) — same shared state

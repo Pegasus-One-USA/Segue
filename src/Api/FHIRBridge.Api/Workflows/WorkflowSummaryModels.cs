@@ -24,7 +24,8 @@ public sealed record WorkflowSummaryDto(
     DateTime? CreatedOnUtc = null,
     string? CreatedBy = null,
     DateTime? ModifiedOnUtc = null,
-    string? ModifiedBy = null);
+    string? ModifiedBy = null,
+    string? Description = null);
 
 /// <summary>One server-side page of the workflow-list screen — <see cref="Items"/> is just this page's rows;
 /// <see cref="TotalCount"/> is the count across every row matching the active search/filters (before paging), for

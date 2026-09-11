@@ -140,6 +140,27 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
             await CaptureLineageAsync(context, node, resource, result, destination, sourceSystem, cancellationToken);
         }
 
+        if (ruleErrors.Count > 0)
+        {
+            // Warning, not Error: a failed rule hop degrades one field, it doesn't fail the run — so nothing
+            // else reports it. FirstRuleError is included because the full list can be long and is already
+            // preserved on the node's lineage metadata.
+            Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(
+                Logger,
+                FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
+                "Transform applied to {RecordCount} resource(s); {TransformedCount} changed, "
+                + "{RuleErrorCount} rule hop(s) failed. FirstRuleError={FirstRuleError}",
+                transformed.Count, transformedCount, ruleErrors.Count, ruleErrors[0]);
+        }
+        else
+        {
+            Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
+                Logger,
+                FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
+                "Transform applied to {RecordCount} resource(s); {TransformedCount} changed.",
+                transformed.Count, transformedCount);
+        }
+
         return new WorkflowNodeOutput(
             node.Id,
             node.NodeType,
@@ -217,8 +238,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         ITransformNodeRegistry? transformNodeRegistry = null,
         ISystemSettingsCache? settingsCache = null,
         IAppSecretAccessor? secretAccessor = null,
-        ILineageCaptureDispatcher? lineageCaptureDispatcher = null)
-        : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch)
+        ILineageCaptureDispatcher? lineageCaptureDispatcher = null,
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
+        : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, loggerFactory)
     {
         _mappingEngine = mappingEngine;
         _mappingMaterializer = mappingMaterializer;
@@ -439,6 +461,10 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 await PreWarmCodeableConceptLookupsAsync(
                     group, fields, sourceFieldByTarget, resourceType, destinationType.Value, sourceSystem,
                     resourcePipelineRouteId, ruleCache, cancellationToken);
+
+                fields = await MarkTransformTypedFieldsAsync(
+                    fields, sourceFieldByTarget, resourceType, destinationType.Value, sourceSystem,
+                    resourcePipelineRouteId, ruleCache, cancellationToken);
             }
 
             foreach (var resource in group)
@@ -536,6 +562,19 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             }
         }
 
+        // The record count entering the destination stage. Comparing this against the source stage's
+        // ResourceTypeExtracted counts is how a silent drop in mapping is found — previously only possible by
+        // decoding node metadata after the fact.
+        Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
+            Logger,
+            FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
+            "Mapping produced {RecordCount} destination record(s) across {ResourceTypeCount} resource type(s): [{ResourceTypeCounts}]",
+            records.Count,
+            records.Select(record => record.ResourceType).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+            string.Join(", ", records
+                .GroupBy(record => record.ResourceType, StringComparer.OrdinalIgnoreCase)
+                .Select(group => $"{group.Key}={group.Count()}")));
+
         return new WorkflowNodeOutput(
             node.Id,
             node.NodeType,
@@ -556,6 +595,64 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.Distinct().ToArray() : null
             });
     }
+
+    /// <summary>
+    /// Flags every field whose rule chain declares its own output type, so <c>JsonMappingEngine</c> extracts
+    /// that field's value WITHOUT coercing it to <c>MappingField.ValueType</c>.
+    ///
+    /// The mapping row's ValueType describes what reaches the COLUMN, which for a rule-backed field is the
+    /// rule's output (an int age), not what sits in the source document (a birthDate string) — but extraction
+    /// runs before the rules do, so coercing there attempts a conversion that cannot succeed and logs a
+    /// mapping error for a field that is in fact mapped correctly. Reads through the same per-execution
+    /// <paramref name="ruleCache"/> the real transform pass uses, so this costs no extra resolution.
+    ///
+    /// Deliberately keyed off the rule as resolved RIGHT NOW rather than anything stored on the mapping
+    /// profile: rules live in their own table with their own lifecycle, so a rule added, disabled, reordered or
+    /// deleted after the mapping was last saved takes effect on the very next run instead of leaving the
+    /// profile's stamped ValueType to silently mis-describe the field.
+    /// </summary>
+    private async Task<IReadOnlyCollection<MappingFieldDto>> MarkTransformTypedFieldsAsync(
+        IReadOnlyCollection<MappingFieldDto> fields,
+        IReadOnlyDictionary<string, string> sourceFieldByTarget,
+        string resourceType,
+        DestinationType destinationType,
+        string? sourceSystem,
+        Guid? resourcePipelineRouteId,
+        Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
+        CancellationToken cancellationToken)
+    {
+        if (_ruleResolver is null)
+        {
+            return fields;
+        }
+
+        var typedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var targetField in fields.Select(f => f.TargetField).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            sourceFieldByTarget.TryGetValue(targetField, out var sourceField);
+            var cacheKey = $"{resourceType}|{targetField}|{sourceField}";
+            if (!ruleCache.TryGetValue(cacheKey, out var rules))
+            {
+                rules = await _ruleResolver.ResolveAsync(
+                    destinationType, resourceType, targetField, resourcePipelineRouteId, sourceSystem,
+                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
+                    workflowScopedOnly: resourcePipelineRouteId is not null);
+                ruleCache[cacheKey] = rules;
+            }
+
+            if (rules.Any(rule => rule.ExpectedValueType is not null))
+            {
+                typedTargets.Add(targetField);
+            }
+        }
+
+        return typedTargets.Count == 0
+            ? fields
+            : fields
+                .Select(f => typedTargets.Contains(f.TargetField) ? f with { DeferTypeToTransform = true } : f)
+                .ToList();
+    }
+
 
     /// <summary>
     /// Resolves every field in this resource-type group that has a <see cref="TransformNodeType.CodeableConceptBuilder"/>
@@ -596,7 +693,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             {
                 rules = await _ruleResolver.ResolveAsync(
                     destinationType, resourceType, targetField, resourcePipelineRouteId, sourceSystem,
-                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken,
+                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
                     workflowScopedOnly: resourcePipelineRouteId is not null);
                 ruleCache[cacheKey] = rules;
             }
@@ -751,37 +848,6 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         return (sourceConnection?.SourceSystemType.ToString(), sourceConnection?.Name);
     }
 
-    private static readonly System.Text.RegularExpressions.Regex ArrayIndexAnnotation = new(@"\[[^\]]*\]", System.Text.RegularExpressions.RegexOptions.Compiled);
-
-    /// <summary>
-    /// Converts a mapping field's internal JsonPath format (e.g. "$.birthDate", or "$.code.coding[*].code" for
-    /// a repeating element, from MappingFieldDto.JsonPath) into the "ResourceType.field" format the portal's
-    /// rule-authoring UI saves <c>TransformationRule.SourceField</c> as (see
-    /// field-mapping-join-popover.component.ts's saveRule/loadRuleFor, both built from
-    /// MappingRow.sources[].fhirPath) — <see cref="EfTransformationRuleRepository.GetFieldScopedAsync"/>'s match
-    /// on SourceField is an exact string comparison, so both sides of it must agree on one convention. The UI's
-    /// is the one actually persisted, so this side has to match it, not the other way around.
-    ///
-    /// Two normalizations, both confirmed against real saved rows: strip the leading "$." (the UI's fhirPath has
-    /// none), and strip every "[...]" index/wildcard annotation (the UI's fhirPath never carries these either,
-    /// e.g. "Condition.code.coding.code" — not "code.coding[*].code" — regardless of which repeating instance
-    /// the field mapping itself resolves at runtime). Without the second normalization specifically, a
-    /// Field-scope rule on ANY array-nested source field — codings, identifiers, telecoms, names, essentially
-    /// most of FHIR — could never resolve, silently falling through to "no rule → pass the value through
-    /// unchanged" for every record (reproduced: Condition.code.coding[*].code vs the saved
-    /// "Condition.code.coding.code").
-    /// </summary>
-    private static string? ToRuleAuthoringSourceFieldFormat(string resourceType, string? jsonPath)
-    {
-        if (string.IsNullOrEmpty(jsonPath))
-        {
-            return null;
-        }
-
-        var bare = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath.TrimStart('$', '.');
-        bare = ArrayIndexAnnotation.Replace(bare, string.Empty);
-        return $"{resourceType}.{bare}";
-    }
 
     /// <summary>
     /// Runs every already-mapped value in <paramref name="row"/> through whichever transform-rule chain
@@ -860,7 +926,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             {
                 rules = await _ruleResolver.ResolveAsync(
                     destinationType.Value, resourceType, destinationField, resourcePipelineRouteId, sourceSystem,
-                    ToRuleAuthoringSourceFieldFormat(resourceType, sourceField), cancellationToken,
+                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
                     // A node carrying a workflow id was authored by the V2 builder, whose rules are
                     // pipeline-private — so it must not inherit another workflow's. A V1 graph never carries
                     // one, which leaves its five-tier resolution exactly as it was.
@@ -1139,6 +1205,12 @@ public sealed class TerminologyNodeExecutor : PassThroughNodeExecutor
                 cancellationToken));
         }
 
+        Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
+            Logger,
+            FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
+            "Terminology normalization applied to {RecordCount} record(s) across {FieldCount} configured field(s).",
+            records.Count, fields.Count);
+
         return new WorkflowNodeOutput(node.Id, node.NodeType, new MappedRecordBatch(records), WorkflowDataContract.MappedRecordBatch);
     }
 }
@@ -1190,8 +1262,9 @@ public abstract class PassThroughNodeExecutor : WorkflowNodeExecutorBase
     protected PassThroughNodeExecutor(
         string nodeType,
         WorkflowDataContract outputContract,
-        IResourceNormalizationService? normalizationService = null)
-        : base(nodeType, outputContract)
+        IResourceNormalizationService? normalizationService = null,
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
+        : base(nodeType, outputContract, loggerFactory)
     {
         _normalizationService = normalizationService;
     }

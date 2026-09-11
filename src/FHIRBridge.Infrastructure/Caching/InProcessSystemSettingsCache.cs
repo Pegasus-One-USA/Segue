@@ -2,6 +2,9 @@ using System.Data.Common;
 using System.Globalization;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Observability.Logging;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Infrastructure.Caching;
@@ -13,11 +16,15 @@ namespace FHIRBridge.Infrastructure.Caching;
 public sealed class InProcessSystemSettingsCache : ISystemSettingsCache
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<InProcessSystemSettingsCache> _logger;
     private volatile IReadOnlyDictionary<string, string>? _cached;
 
-    public InProcessSystemSettingsCache(IServiceScopeFactory scopeFactory)
+    public InProcessSystemSettingsCache(
+        IServiceScopeFactory scopeFactory,
+        ILogger<InProcessSystemSettingsCache>? logger = null)
     {
         _scopeFactory = scopeFactory;
+        _logger = logger ?? NullLogger<InProcessSystemSettingsCache>.Instance;
     }
 
     public async Task<string> GetStringAsync(string key, string defaultValue, CancellationToken cancellationToken)
@@ -70,11 +77,24 @@ public sealed class InProcessSystemSettingsCache : ISystemSettingsCache
         {
             settings = await repository.GetAllAsync(cancellationToken);
         }
-        catch (DbException)
+        catch (DbException exception)
         {
             // The SystemSettings table doesn't exist yet — e.g. this read happens during startup, before
             // dbContext.Database.Migrate() has run. Don't cache the miss: once migrated, the next call
             // succeeds and every caller falls back to its own compiled-in/appsettings default meanwhile.
+            //
+            // Logged because the consequence is invisible otherwise: every DB-backed setting silently reverts to
+            // its compiled-in default for this call, so any value an operator changed in the portal is ignored
+            // while this persists. Expected exactly once during a first-run migration; anything beyond that is a
+            // real database problem.
+            _logger.LogWarning(
+                LogEvents.SystemSettingsUnavailable,
+                exception,
+                "SystemSettings could not be read ({FailureReason}); every DB-backed setting is falling back to its "
+                + "compiled-in default for this call, so portal-configured values are ignored. This is expected "
+                + "only before the first migration has run.",
+                exception.Message);
+
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 

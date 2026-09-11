@@ -1,4 +1,4 @@
-using FHIRBridge.SharedKernel.Enums;
+﻿using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Application.Abstractions.Sources;
 
@@ -85,7 +85,7 @@ public interface IInteractiveSourceAuthorizationService
     /// optionally carries a stable identifier for the end user driving this launch — see
     /// <see cref="FHIRBridge.Application.Abstractions.Security.LaunchContext.UserIdentity"/> — used to enforce a
     /// permanent user-to-FHIR-context binding on callback.</summary>
-    string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null);
+    string BuildWorkflowLaunchContextToken(Guid workflowId, Guid? ehrEndpointId = null, string? callerId = null, string? sessionId = null, string? userIdentity = null, string? correlationId = null);
 
     /// <summary>
     /// Starts a standalone / patient interactive sign-in directly from an encrypted launch-context token — no EHR

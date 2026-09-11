@@ -5,6 +5,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using FHIRBridge.Application.Governance;
 
 namespace FHIRBridge.Infrastructure.Governance;
 
@@ -336,10 +337,19 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .Skip(NormalizeSkip(skip))
             .Take(normalizedTake)
             .Select(x => new ApiRequestLogDto(
-                x.Id, x.OccurredOnUtc, x.Method, x.Url, x.StatusCode, x.DurationMs, x.Error, x.CorrelationId))
+                // Every argument spelled out: an EF expression tree cannot use a record's optional parameters.
+                x.Id, x.OccurredOnUtc, x.Method, x.Url, x.StatusCode, x.DurationMs, x.Error, x.CorrelationId,
+                x.Direction, ""))
             .ToListAsync(cancellationToken);
 
-        return ToPaged(items, totalCount, skip, normalizedTake);
+        // Described after materialization, not inside the projection: this is C# string matching that EF cannot
+        // translate to SQL. Cheap enough at page size to be irrelevant, and it keeps the wording out of the
+        // database entirely (see ApiRequestStepDescriber).
+        var described = items
+            .Select(item => item with { Step = ApiRequestStepDescriber.Describe(item.Method, item.Url, item.Direction) })
+            .ToList();
+
+        return ToPaged(described, totalCount, skip, normalizedTake);
     }
 
     public async Task<PagedResult<ExportHistoryDto>> GetExportHistoryAsync(

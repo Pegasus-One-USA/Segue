@@ -10,33 +10,56 @@ public static class ScheduleExpressionMatcher
     /// </summary>
     private const int MaxCatchUpMinutes = 1440;
 
-    private static readonly ConcurrentDictionary<string, TimeZoneInfo> TimeZoneCache = new();
+    private static readonly ConcurrentDictionary<string, TimeZoneResolution> TimeZoneCache = new();
+
+    private static TimeZoneInfo ResolveTimeZone(string? timeZoneId) => DescribeTimeZone(timeZoneId).Zone;
 
     /// <summary>
-    /// Resolves an IANA/Windows time zone id to a <see cref="TimeZoneInfo"/>, caching lookups since
-    /// <see cref="TimeZoneInfo.FindSystemTimeZoneById"/> is called on every dispatcher tick. Falls back to UTC
-    /// (and never throws) for a null/blank/unrecognized id, so a bad value can't silently break scheduling.
+    /// How a schedule's configured time zone id actually resolved <em>on this host</em>. A host missing the tzdata /
+    /// ICU entry for an id silently falls back to UTC (see <see cref="DescribeTimeZone"/>), which shifts every run by
+    /// the zone's offset with no other visible symptom — a schedule set to 19:50 Asia/Calcutta fires at 19:50 UTC
+    /// instead of 14:20 UTC. <see cref="Resolved"/> is what makes that distinguishable from a schedule that asked for
+    /// UTC in the first place, so callers can log it.
     /// </summary>
-    private static TimeZoneInfo ResolveTimeZone(string? timeZoneId)
+    /// <param name="RequestedId">The id as configured on the route/trigger ("UTC" when none was set).</param>
+    /// <param name="Zone">The zone actually used to evaluate the cron — <see cref="TimeZoneInfo.Utc"/> on a failure.</param>
+    /// <param name="Resolved">False only when <paramref name="RequestedId"/> was a non-UTC id this host could not resolve.</param>
+    public readonly record struct TimeZoneResolution(string RequestedId, TimeZoneInfo Zone, bool Resolved)
+    {
+        /// <summary>The id of the zone actually used — differs from <see cref="RequestedId"/> on a fallback.</summary>
+        public string ResolvedId => Zone.Id;
+
+        /// <summary>The zone's standard-time offset, e.g. <c>05:30:00</c> for Asia/Calcutta. The quickest way to eyeball
+        /// a fallback in a log: a non-UTC id reporting <c>00:00:00</c> did not resolve.</summary>
+        public TimeSpan BaseUtcOffset => Zone.BaseUtcOffset;
+    }
+
+    /// <summary>
+    /// Resolves an IANA/Windows time zone id, reporting whether it actually resolved. Falls back to UTC (and never
+    /// throws) for a null/blank/unrecognized id, so a bad value can't break scheduling — but unlike a bare
+    /// <see cref="TimeZoneInfo"/> the result says so, which is what lets the scheduler log the fallback instead of
+    /// applying it invisibly. Cached, since it is called on every dispatcher tick.
+    /// </summary>
+    public static TimeZoneResolution DescribeTimeZone(string? timeZoneId)
     {
         if (string.IsNullOrWhiteSpace(timeZoneId) || timeZoneId == "UTC")
         {
-            return TimeZoneInfo.Utc;
+            return new TimeZoneResolution("UTC", TimeZoneInfo.Utc, Resolved: true);
         }
 
         return TimeZoneCache.GetOrAdd(timeZoneId, static id =>
         {
             try
             {
-                return TimeZoneInfo.FindSystemTimeZoneById(id);
+                return new TimeZoneResolution(id, TimeZoneInfo.FindSystemTimeZoneById(id), Resolved: true);
             }
             catch (TimeZoneNotFoundException)
             {
-                return TimeZoneInfo.Utc;
+                return new TimeZoneResolution(id, TimeZoneInfo.Utc, Resolved: false);
             }
             catch (InvalidTimeZoneException)
             {
-                return TimeZoneInfo.Utc;
+                return new TimeZoneResolution(id, TimeZoneInfo.Utc, Resolved: false);
             }
         });
     }

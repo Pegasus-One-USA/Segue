@@ -15,11 +15,11 @@ namespace FHIRBridge.Runtime.Infrastructure.Applications;
 /// </summary>
 public sealed class BackendServicesApplicationStrategy : SourceApplicationStrategyBase
 {
-    private readonly EpicAccessTokenProvider _jwtAssertion;
+    private readonly SmartBackendServicesTokenProvider _jwtAssertion;
     private readonly OAuth2ClientCredentialsTokenProvider _clientSecret;
 
     public BackendServicesApplicationStrategy(
-        EpicAccessTokenProvider jwtAssertion,
+        SmartBackendServicesTokenProvider jwtAssertion,
         OAuth2ClientCredentialsTokenProvider clientSecret)
     {
         _jwtAssertion = jwtAssertion;

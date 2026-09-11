@@ -149,6 +149,12 @@ export class FieldMappingListComponent {
    *  switching tabs by hand still works normally. */
   readonly initialListTab = input<'mappings' | 'transformations' | 'deidentification'>('mappings');
 
+  /** The workflow being edited — the same input the join popover takes, and for the same reason: V2 authors
+   *  its rules at Workflow scope, a tier EffectiveRuleResolver only queries when it is given a route id.
+   *  Without it this tab resolved the tenant-wide tiers alone and showed "no rule" for every field, while
+   *  opening that field's connector (which does pass it) showed the rule right there. */
+  readonly workflowId = input<string | null>(null);
+
   /** ruleByRowKey (see rowKey) for every 'value'-mode row currently visible — refetched whenever the
    *  visible rows or destination type change. Same getEffectiveRules lookup the join popover uses per
    *  connector, just batched here across the whole resource so this tab doesn't need to open each
@@ -179,6 +185,12 @@ export class FieldMappingListComponent {
             resourceType: row.resource,
             destinationField: row.targetName,
             sourceField: row.sources[0]?.fhirPath ?? null,
+            // These three must stay identical to the join popover's own loadRuleFor lookup: this tab and that
+            // popover answer the same question about the same field, so any divergence shows up directly as
+            // "the tab says there's no rule, the connector says there is".
+            resourcePipelineRouteId: this.workflowId() ?? undefined,
+            workflowScopedOnly: true,
+            includePending: true,
           })
           .subscribe({
             next: rules => this.ruleByRowKey.update(m => new Map(m).set(key, rules[0] ?? null)),

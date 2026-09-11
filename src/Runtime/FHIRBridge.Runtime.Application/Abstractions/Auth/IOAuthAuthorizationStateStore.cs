@@ -1,4 +1,4 @@
-using FHIRBridge.Runtime.Domain.Enums;
+﻿using FHIRBridge.Runtime.Domain.Enums;
 
 namespace FHIRBridge.Runtime.Application.Abstractions.Auth;
 
@@ -48,6 +48,10 @@ public sealed record PendingAuthorization(
     // on instead of SourceConnectionId (see SmartAuthorizationCodeTokenProvider.BuildStoreKey), so every pipeline
     // sharing this same real patient's session reuses the one token their authorization already covers.
     string? SessionId = null,
+    // The attempt-scoped correlation id minted by validate-run, captured at launch-url mint time and carried here
+    // through the encrypted launch-context token. The callback is a redirect from the EHR and can carry no header
+    // of ours, so without this the whole OAuth leg would be logged under an id nothing else in the attempt shares.
+    string? CorrelationId = null,
     // A stable identifier for the end user driving this launch (e.g. a third-party app's own logged-in account
     // email) — distinct from SessionId (an opaque per-browser token) and CallerId (a redirect URL). When present,
     // CompleteAsync enforces that this identity is permanently bound to the one FHIR patient/practitioner its first

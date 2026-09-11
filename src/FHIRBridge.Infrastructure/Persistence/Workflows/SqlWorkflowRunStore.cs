@@ -1,4 +1,4 @@
-using FHIRBridge.Runtime.Application.Workflows.Storage;
+﻿using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
 
@@ -81,6 +81,54 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
             .FirstOrDefaultAsync(run => run.Id == workflowRunId, cancellationToken);
     }
 
+    public async Task<int> ExpireStaleValidatedAsync(DateTimeOffset olderThanUtc, CancellationToken cancellationToken)
+    {
+        // Tracked (unlike the reads around it): Expire() is a domain mutation on each aggregate, and going through
+        // it keeps the terminal-state rule in one place rather than duplicating it as a bulk ExecuteUpdate that
+        // sets the column directly. The batch is small by nature — these are only ever attempts nobody completed.
+        var stale = await _dbContext.WorkflowRuns
+            .Where(run => run.Status == WorkflowRunStatus.Validated && run.StartedAt < olderThanUtc)
+            .ToListAsync(cancellationToken);
+
+        if (stale.Count == 0)
+        {
+            return 0;
+        }
+
+        var expiredAt = DateTimeOffset.UtcNow;
+        foreach (var run in stale)
+        {
+            run.Expire(expiredAt);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return stale.Count;
+    }
+
+    public async Task<WorkflowRun?> FindValidatedAsync(
+        Guid workflowDefinitionId,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(correlationId))
+        {
+            return null;
+        }
+
+        // AsNoTracking is load-bearing, not an optimization: the caller only needs this run's id, and the
+        // orchestrator then builds its OWN WorkflowRun instance for that same id. If this one were tracked, the
+        // orchestrator's SaveAsync would take the "already tracked — just flush" branch above and never persist
+        // the real run, leaving the row stuck exactly as validate-run left it.
+        return await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Include(run => run.NodeRuns)
+            .Where(run => run.WorkflowDefinitionId == workflowDefinitionId
+                && run.CorrelationId == correlationId
+                && run.Status == WorkflowRunStatus.Validated)
+            .OrderByDescending(run => run.StartedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyCollection<WorkflowRun>> ListByDefinitionAsync(
         Guid workflowDefinitionId,
         CancellationToken cancellationToken)
@@ -120,5 +168,7 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
     /// <summary>Pending/Running/AwaitingBulkExport are all still in-flight — a placeholder row in any of these is
     /// safe to replace wholesale. Only Succeeded/Failed/Cancelled/PartialSuccess are actually finished.</summary>
     private static bool IsTerminal(WorkflowRunStatus status) => status is
-        WorkflowRunStatus.Succeeded or WorkflowRunStatus.Failed or WorkflowRunStatus.Cancelled or WorkflowRunStatus.PartialSuccess;
+        WorkflowRunStatus.Succeeded or WorkflowRunStatus.Failed or WorkflowRunStatus.Cancelled
+        or WorkflowRunStatus.PartialSuccess or WorkflowRunStatus.ValidationFailed or WorkflowRunStatus.Expired;
+    // Validated is deliberately NOT terminal: it is the placeholder /run replaces when it continues the attempt.
 }

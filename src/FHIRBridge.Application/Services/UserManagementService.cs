@@ -8,6 +8,7 @@ using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Governance;
+using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -98,6 +99,11 @@ public sealed class UserManagementService : IUserManagementService
 
         await _repository.AddUserAsync(user, cancellationToken);
         await SetUserRolesAsync(user.Id, request.RoleNames, cancellationToken);
+
+        _logger.LogInformation(
+            LogEvents.UserCreated,
+            "Local user {UserId} created by {ActorUserId} with roles [{RoleNames}].",
+            user.Id, _currentUserService.CurrentUser.ExternalUserId, string.Join(", ", request.RoleNames ?? []));
 
         return await ToManagementDtoAsync(user, cancellationToken);
     }
@@ -374,6 +380,14 @@ public sealed class UserManagementService : IUserManagementService
         user.SetEnabled(request.IsEnabled);
         await _repository.UpdateUserAsync(user, cancellationToken);
 
+        // A disabled account silently stops being able to log in; without this the only trace is the
+        // resulting LoginFailed events, which read as the user's problem rather than an admin action.
+        _logger.LogInformation(
+            LogEvents.UserUpdated,
+            "User {UserId} was {EnabledState} by {ActorUserId} (previously {PreviousEnabledState}).",
+            user.Id, request.IsEnabled ? "enabled" : "disabled",
+            _currentUserService.CurrentUser.ExternalUserId, wasEnabled ? "enabled" : "disabled");
+
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
     }
 
@@ -421,6 +435,11 @@ public sealed class UserManagementService : IUserManagementService
         }
 
         await _repository.DeleteUserAsync(user, cancellationToken);
+
+        _logger.LogWarning(
+            LogEvents.UserUpdated,
+            "User {UserId} was deleted by {ActorUserId}.",
+            user.Id, _currentUserService.CurrentUser.ExternalUserId);
     }
 
     public async Task<IReadOnlyList<RoleDto>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken)
@@ -460,6 +479,12 @@ public sealed class UserManagementService : IUserManagementService
         }
 
         await _repository.AddUserRoleAsync(userId, role.Id, cancellationToken);
+
+        // Privilege grants are the events a security review asks for first.
+        _logger.LogInformation(
+            LogEvents.UserRoleChanged,
+            "Role '{RoleName}' ({RoleId}) was assigned to user {UserId} by {ActorUserId}.",
+            role.Name, role.Id, userId, _currentUserService.CurrentUser.ExternalUserId);
 
         return await ToDetailDtoAsync(user, invitationToken: null, cancellationToken);
     }

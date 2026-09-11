@@ -81,6 +81,20 @@
         </button>
       }
     </div>
+
+    <div class="dock__description">
+      <label class="dock__description-label" for="dock-description-input">Description <span>(optional)</span></label>
+      <textarea
+        id="dock-description-input"
+        class="builder-input dock__description-input"
+        rows="3"
+        maxlength="2000"
+        placeholder="What does this workflow move, and why? Notes here are saved with the workflow."
+        [value]="workflowDescription()"
+        (input)="onWorkflowDescriptionInput($any($event.target).value)"
+      ></textarea>
+      <span class="dock__description-count">{{ workflowDescription().length }}/2000</span>
+    </div>
   </div>
 </header>
 

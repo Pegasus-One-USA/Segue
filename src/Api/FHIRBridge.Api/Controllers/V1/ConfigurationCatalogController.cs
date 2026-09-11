@@ -44,8 +44,12 @@ public sealed class ConfigurationCatalogController : ControllerBase
         _authorizationService = authorizationService;
     }
 
+    // Gated on sourceconnections.view (the permission the RBAC Settings matrix actually exposes for this list),
+    // matching its siblings below — destinations/paged (DestinationConnections.View), mapping-profiles/paged
+    // (MappingProfiles.View), ehr-endpoints/paged (EhrEndpoints.View). Was UnifiedAdmin-only, which made
+    // sourceconnections.view meaningless: a non-admin role granted it still got 403 here.
     [HttpGet("source-connections")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.View, description: "View the list of source connections.")]
     [ProducesResponseType(typeof(IReadOnlyList<SourceConnectionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListSourceConnections(CancellationToken cancellationToken)
     {
@@ -62,8 +66,10 @@ public sealed class ConfigurationCatalogController : ControllerBase
         }).ToArray());
     }
 
+    // sourceconnections.view — see the ListSourceConnections remark above; the Source Connections settings
+    // page loads this paged endpoint, so it must accept the same view permission its list sibling now does.
     [HttpGet("source-connections/paged")]
-    [Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)]
+    [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.View, description: "View the paged list of source connections.")]
     [ProducesResponseType(typeof(PagedResult<SourceConnectionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListSourceConnectionsPaged(
         [FromQuery] string? search,

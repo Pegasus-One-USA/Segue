@@ -75,12 +75,13 @@ public sealed class MappingImportService : IMappingImportService
 
         var liveSchema = await _destinationSchemaService.GetSchemaAsync(importRequest.DestinationId, cancellationToken);
         var knownTables = new HashSet<string>(liveSchema.Tables.Select(t => t.TableName), StringComparer.OrdinalIgnoreCase);
+        var notNullColumns = BuildNotNullColumnIndex(liveSchema);
 
         var results = new List<ResourceImportResultDto>();
         foreach (var (mapping, rawJson) in items)
         {
             results.Add(await ImportResourceMappingAsync(
-                importRequest, destination, mapping, rawJson, knownTables, cancellationToken));
+                importRequest, destination, mapping, rawJson, knownTables, notNullColumns, cancellationToken));
         }
 
         return new MappingImportResultDto(results);
@@ -92,6 +93,7 @@ public sealed class MappingImportService : IMappingImportService
         ResourceMappingDto mapping,
         string rawJson,
         HashSet<string> knownTables,
+        IReadOnlySet<string> notNullColumns,
         CancellationToken cancellationToken)
     {
         var warnings = new List<string>();
@@ -164,7 +166,7 @@ public sealed class MappingImportService : IMappingImportService
                 {
                     fields.Add(await BuildFieldAsync(
                         schemaTransaction, mapping, table, column, destinationObject, tablesToCreate, columnsToAdd,
-                        warnings, relationLookupCache, cancellationToken));
+                        notNullColumns, warnings, relationLookupCache, cancellationToken));
                 }
             }
 
@@ -279,6 +281,7 @@ public sealed class MappingImportService : IMappingImportService
         string destinationObject,
         IReadOnlyList<TableDefinitionDto> tablesToCreate,
         IReadOnlyList<ColumnToAddDto> columnsToAdd,
+        IReadOnlySet<string> notNullColumns,
         List<string> warnings,
         Dictionary<string, TableRelationDto?> relationLookupCache,
         CancellationToken cancellationToken)
@@ -296,7 +299,12 @@ public sealed class MappingImportService : IMappingImportService
             TargetField: column.Column,
             JsonPath: jsonPath,
             ValueType: valueType,
-            IsRequired: false,
+            // A column the destination declares NOT NULL is required by definition — nothing else can supply
+            // its value once a mapping owns it. Matters because CreateMappingProfileRequestValidator gates the
+            // OTHER path that writes the same profiles (the workflow save) on exactly this, so leaving it
+            // hardcoded false here made the two paths disagree about the same field. Tables/columns this import
+            // is about to create are always created nullable, so they're correctly absent from this index.
+            IsRequired: notNullColumns.Contains(NotNullColumnKey(table.Name, column.Column)),
             DefaultValue: null,
             Format: format,
             ResourceType: mapping.ResourceType,
@@ -393,6 +401,16 @@ public sealed class MappingImportService : IMappingImportService
     {
         var strippedPath = StripResourceTypePrefix(rawPath, resourceType);
 
+        // A wholeNodeAsJson column whose sourceNode is the resource's own ROOT node (the whole payload, e.g.
+        // "Patient") strips to nothing meaningful — the tree's root node id is just the resourceType itself.
+        // Only "$" means "the whole document" to JsonMappingEngine.ResolveAll; falling through below would
+        // build "$.Patient", which resolves to nothing and writes NULL into the target column on every record.
+        if (string.IsNullOrWhiteSpace(strippedPath)
+            || string.Equals(strippedPath, resourceType, StringComparison.OrdinalIgnoreCase))
+        {
+            return "$";
+        }
+
         // Prefer the FHIR element catalog's own pre-computed JsonPath when this exact fhirPath is a known,
         // real element: it already knows precisely which ancestor segment(s) are genuinely repeating arrays
         // versus merely a non-repeating object on the way to one (e.g. Condition.code.coding.code — only
@@ -433,6 +451,29 @@ public sealed class MappingImportService : IMappingImportService
 
         return "$." + string.Join('.', pathSegments);
     }
+
+    /// <summary>
+    /// "table.column" keys for every live column the destination declares NOT NULL, indexed under both the
+    /// qualified ("public.Patient") and bare ("Patient") table name since a mapping payload can name either.
+    /// Auto-generated columns are excluded: the database supplies their value, so a mapping can't be required
+    /// to (and BuildFieldAsync's caller never maps one anyway).
+    /// </summary>
+    private static IReadOnlySet<string> BuildNotNullColumnIndex(DestinationSchemaDto schema)
+    {
+        var index = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var table in schema.Tables)
+        {
+            foreach (var column in table.Columns.Where(c => !c.IsNullable && !c.IsAutoGenerated))
+            {
+                index.Add(NotNullColumnKey(table.FullName, column.Name));
+                index.Add(NotNullColumnKey(table.TableName, column.Name));
+            }
+        }
+
+        return index;
+    }
+
+    private static string NotNullColumnKey(string tableName, string columnName) => $"{tableName}.{columnName}";
 
     private static string StripResourceTypePrefix(string path, string resourceType)
     {

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+﻿import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
@@ -93,6 +93,14 @@ export interface PatientDetail {
   gender: string | null;
   observations: ObservationDetail[];
   conditions: ConditionDetail[];
+}
+
+/** Matches WorkflowEndpoints' POST /workflows/{id}/validate-run — see the service method below. */
+export interface ValidateRunResponse {
+  isValid: boolean;
+  correlationId: string;
+  workflowRunId: string;
+  errors: { parameter: string; message: string }[];
 }
 
 /** Matches Demo_TestApp/backend's GET /api/epic-session/status — HealthApp's own record, not FHIRBridge's. See
@@ -266,6 +274,9 @@ export function extractDownloadUrl(result: WorkflowRunResponse): string | null {
   return (destinationOutput?.metadata?.downloadUrl as string | undefined) ?? null;
 }
 
+/** See PatientStandaloneLaunchService.attemptCorrelationId. */
+const ATTEMPT_CORRELATION_STORAGE_KEY = 'hb_patient_attempt_correlation_id';
+
 @Injectable()
 export class PatientStandaloneLaunchService {
   // Resolved once by loadConfig() before any other method here is called (see
@@ -314,10 +325,59 @@ export class PatientStandaloneLaunchService {
     const status = await firstValueFrom(
       this.http.get<TokenStatusResponse>(
         `${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/token-status`,
-        { params, withCredentials: true },
+        { params, withCredentials: true, headers: this.attemptHeaders() },
       ),
     );
     return status.hasValidToken;
+  }
+
+  /**
+   * Pre-flight for a run: checks the parameters BEFORE any token is touched or any EHR call is made, and records
+   * the attempt in FHIRBridge's Execution History either way — a refused attempt previously left no trace at all.
+   *
+   * The returned correlationId is for display/support only; this app does not echo it back. FHIRBridge derives
+   * the same value on every later leg from the workflow id and the sessionId already sent for the token cache,
+   * including the legs a browser redirect to MyChart cannot carry a header through.
+   */
+  /** The attempt-scoped correlation id minted by validate-run. Persisted for the browser session so it survives
+   *  the full-page MyChart round trip, which resets this component's state entirely. */
+  get attemptCorrelationId(): string | null {
+    try {
+      return sessionStorage.getItem(ATTEMPT_CORRELATION_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  set attemptCorrelationId(value: string | null) {
+    try {
+      if (value) {
+        sessionStorage.setItem(ATTEMPT_CORRELATION_STORAGE_KEY, value);
+      } else {
+        sessionStorage.removeItem(ATTEMPT_CORRELATION_STORAGE_KEY);
+      }
+    } catch {
+      // Storage unavailable — FHIRBridge falls back to deriving an id, so correlation degrades rather than breaks.
+    }
+  }
+
+  /** Headers echoing this attempt's correlation id onto every call that belongs to it. */
+  private attemptHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    const correlationId = this.attemptCorrelationId;
+    return correlationId ? { ...extra, 'X-Correlation-Id': correlationId } : extra;
+  }
+
+  async validateRun(
+    workflowId: string, patientId: string | null, callerId?: string, baseUrlOverride?: string,
+    ehrEndpointId?: string | null,
+  ): Promise<ValidateRunResponse> {
+    return firstValueFrom(
+      this.http.post<ValidateRunResponse>(
+        `${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/validate-run`,
+        { patientId, patientSearchCriteria: null, callerId: callerId ?? null, ehrEndpointId: ehrEndpointId ?? null },
+        { withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
+      ),
+    );
   }
 
   // Same callerId requirement as hasValidToken above — without it, this workflow's own token-cache lookup at run
@@ -332,7 +392,7 @@ export class PatientStandaloneLaunchService {
           patientSearchCriteria: null,
           callerId: callerId ?? null,
         },
-        { withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
+        { withCredentials: true, headers: this.attemptHeaders({ 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' }) },
       ),
     );
   }
@@ -362,7 +422,9 @@ export class PatientStandaloneLaunchService {
     return firstValueFrom(
       this.http.get<PublicPatientStandaloneUrlResponse>(
         `${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/public-patient-standalone-url`,
-        { params },
+        // The header is what FHIRBridge bakes into the encrypted launch context, so this attempt's id survives the
+        // redirect out to MyChart and back into /oauth/callback.
+        { params, headers: this.attemptHeaders() },
       ),
     );
   }
@@ -380,7 +442,7 @@ export class PatientStandaloneLaunchService {
       this.http.post(
         `${baseUrlOverride ?? this.baseUrl}/api/v1/workflows/${workflowId}/discard-token`,
         {},
-        { params, withCredentials: true, headers: { 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' } },
+        { params, withCredentials: true, headers: this.attemptHeaders({ 'X-CSRF-Token': getFhirBridgeCsrfToken() ?? '' }) },
       ),
     );
   }

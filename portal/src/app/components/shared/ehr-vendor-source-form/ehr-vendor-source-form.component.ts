@@ -1864,6 +1864,20 @@ export class EhrVendorSourceFormComponent
       }
     });
 
+    // "Public Client + PKCE" is meaningless for Backend System — client_credentials has no authorization code for
+    // PKCE to protect, and no user/redirect — so the <select> only offers it for interactive audiences. This coerces
+    // a stale 'public' value that predates that option being hidden (only reachable back when it was selectable, or
+    // restored from such a saved connection) to the vendor's real backend default, so the control never sits on a
+    // value with no matching option. The audience.valueChanges handler already resets authMethod on every switch;
+    // this covers the initial-load / clone paths that don't go through it.
+    effect(() => {
+      if (this.audience() === 'backend-system' && this.authMethod() === 'public') {
+        this.form.controls.authMethod.setValue(
+          defaultAuthMethodFor(this.vendor(), 'backend-system'),
+        );
+      }
+    });
+
     // Practice ID is required for athenahealth (every FHIR request needs ah-practice) and inapplicable to every
     // other vendor — toggle the validator here rather than in the template so Save's own validity check
     // (missingRequiredFields/form.valid) agrees with what showPracticeId() renders.
@@ -2217,6 +2231,14 @@ export class EhrVendorSourceFormComponent
     // carries no such field — see fieldsFromEntityDto()) — form default ('manual') is exactly right in both
     // cases, since a key restored with no known provenance can't safely be assumed Generated/Imported.
     setIfPresent('keySource', 'Signing key source');
+    // Client Auth Placement (client_secret_post vs client_secret_basic). Only meaningful for Client Secret auth,
+    // but load-bearing there — the backend token providers (OAuth2ClientCredentialsTokenProvider for Backend System,
+    // SmartAuthorizationCodeTokenProvider for interactive confidential clients) pick Basic-header vs form-body from
+    // it, and Okta-fronted authorization servers (Athena client ids like "0oa…") reject client_secret_post. save()
+    // writes it as 'Auth placement' but it was never restored here, so every reopen showed the 'post' default and
+    // every re-save silently overwrote a real 'basic' with 'post' — exactly the reset SmartAuthorizationCodeToken-
+    // Provider documents and hard-codes a Basic workaround for on eCW.
+    setIfPresent('authPlacement', 'Auth placement');
     this.keyLoadedFromExistingConnection.set(
       !!(
         fields['JWT kid'] &&
@@ -2348,6 +2370,10 @@ export class EhrVendorSourceFormComponent
     if (auth?.jwksUrl) fields['JWKS URL'] = auth.jwksUrl;
     if (auth?.discoveredScopes?.length)
       fields['Discovered scopes'] = auth.discoveredScopes.join(' ');
+    // Same 'Auth placement' key restoreExtendedFieldsFromEditingNode reads — without emitting it here, editing a
+    // saved Source Connection in entity mode (Settings › Source Connections) reverted placement to the 'post'
+    // default on reopen/re-save, the same data-loss bug as canvas mode.
+    if (auth?.authPlacement) fields['Auth placement'] = auth.authPlacement;
     if (dto.interactive?.launchDisplayMode)
       fields['Launch display mode'] = dto.interactive.launchDisplayMode;
 

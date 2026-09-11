@@ -23,6 +23,19 @@ public interface IEffectiveRuleResolver
     /// workflow id was stamped onto its nodes) keep resolving exactly as they always have — their rules live in
     /// those broader tiers and would otherwise stop firing.
     /// </param>
+    /// <param name="includePendingWorkflowRules">
+    /// True to also consider PENDING Workflow-scope rules — rows authored before their workflow existed, which
+    /// carry no <c>ResourcePipelineRouteId</c> and are therefore inert at run time. Consulted after this
+    /// workflow's own attached rules and before the tenant-wide tiers.
+    ///
+    /// Save-time callers only (mapping-profile validation, and the builder UI asking "what will transform this
+    /// column?"). A brand-new pipeline is drawn and its rules written before it has an id, so without this a
+    /// rule the user can plainly see attached to a field is invisible to the very check that decides whether
+    /// the mapping may be saved — a deadlock, since the rule cannot be attached until the workflow saves.
+    ///
+    /// Never set by the executors: at run time an unattached rule belongs to no pipeline, and treating a null
+    /// route as "applies to anything" would fire one builder session's draft rules inside every other workflow.
+    /// </param>
     Task<IReadOnlyList<TransformationRule>> ResolveAsync(
         DestinationType destinationType,
         string resourceType,
@@ -31,7 +44,8 @@ public interface IEffectiveRuleResolver
         string? sourceSystem,
         string? sourceField,
         CancellationToken cancellationToken,
-        bool workflowScopedOnly = false);
+        bool workflowScopedOnly = false,
+        bool includePendingWorkflowRules = false);
 }
 
 public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
@@ -51,7 +65,8 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
         string? sourceSystem,
         string? sourceField,
         CancellationToken cancellationToken,
-        bool workflowScopedOnly = false)
+        bool workflowScopedOnly = false,
+        bool includePendingWorkflowRules = false)
     {
         if (resourcePipelineRouteId is not null)
         {
@@ -67,10 +82,25 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
             }
 
             // This pipeline's rules are the only ones that may apply to it, so "no rule here" means no rule —
-            // not "look for someone else's".
-            if (workflowScopedOnly)
+            // not "look for someone else's". Pending rows are still checked first: a workflow saved between
+            // authoring a rule and saving its mapping has an id, but its draft rules are not attached yet.
+            if (workflowScopedOnly && !includePendingWorkflowRules)
             {
                 return [];
+            }
+        }
+
+        if (includePendingWorkflowRules)
+        {
+            var pendingRules = PreferSourceFieldSpecific(
+                PreferSourceSpecific(
+                    Enabled(await _repository.GetPendingWorkflowScopedAsync(
+                        destinationType, resourceType, destinationField, sourceSystem, sourceField, cancellationToken)),
+                    sourceSystem),
+                sourceField);
+            if (pendingRules.Count > 0)
+            {
+                return OrderOnly(pendingRules);
             }
         }
 

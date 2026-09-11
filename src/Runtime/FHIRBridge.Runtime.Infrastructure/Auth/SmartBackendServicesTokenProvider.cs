@@ -7,13 +7,22 @@ using FHIRBridge.SharedKernel.Exceptions;
 
 namespace FHIRBridge.Runtime.Infrastructure.Auth;
 
-public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGrantedScopeProvider
+/// <summary>
+/// The SMART Backend Services (<c>client_credentials</c> + RS384 <c>private_key_jwt</c>) grant, shared by EVERY
+/// vendor whose app is registered with a private key — Epic, Cerner, athenahealth, eClinicalWorks and generic
+/// FHIR all reach it through <see cref="CompositeFhirAccessTokenProvider"/> or
+/// <c>BackendServicesApplicationStrategy</c>. Named for the grant rather than for Epic precisely because of that:
+/// vendor-specific text in its failures comes from the source's own
+/// <see cref="FhirSourceConfiguration.SourceType"/> (see <see cref="RuntimeSourceTypeNames"/>), so an athenahealth
+/// token rejection is reported as athenahealth's, not as Epic's.
+/// </summary>
+public sealed class SmartBackendServicesTokenProvider : IFhirAccessTokenProvider, IFhirGrantedScopeProvider
 {
     private readonly HttpClient _httpClient;
     private readonly IBackendServicesJwtFactory _jwtFactory;
     private readonly IFhirAccessTokenCache _tokenCache;
 
-    public EpicAccessTokenProvider(
+    public SmartBackendServicesTokenProvider(
         HttpClient httpClient,
         IBackendServicesJwtFactory jwtFactory,
         IFhirAccessTokenCache? tokenCache = null)
@@ -72,11 +81,11 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGra
             if (!response.IsSuccessStatusCode)
             {
                 // The status is carried as a NUMBER on the exception, not just as text inside its message, so the
-                // diagnosis rule can tell an Epic outage (5xx) from a genuine credentials rejection (400/401)
+                // diagnosis rule can tell a vendor outage (5xx) from a genuine credentials rejection (400/401)
                 // instead of substring-searching for "invalid_client" and defaulting everything else to
                 // "check your client ID" — see TokenEndpointException's remarks.
                 throw TokenEndpointException.FromResponse(
-                    "Epic",
+                    RuntimeSourceTypeNames.DisplayName(source.SourceType),
                     (int)response.StatusCode,
                     response.ReasonPhrase,
                     await response.Content.ReadAsStringAsync(cancellationToken));
@@ -85,7 +94,8 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGra
             tokenResponse = await response.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken);
             if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
             {
-                throw TokenEndpointException.EmptyResponse("Epic", "an empty access token.");
+                throw TokenEndpointException.EmptyResponse(
+                    RuntimeSourceTypeNames.DisplayName(source.SourceType), "an empty access token.");
             }
 
             var expiresIn = tokenResponse.ExpiresIn <= 0 ? 300 : tokenResponse.ExpiresIn;
@@ -102,9 +112,9 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGra
     }
 
     /// <summary>
-    /// Returns Epic's actual granted <c>scope</c> response for this connection's client-credentials session, minting
-    /// a token first if none is cached yet (cheap and non-interactive — unlike the interactive flows, there is no
-    /// user to wait on). Null if Epic's token endpoint didn't echo a <c>scope</c> at all (some backend-services
+    /// Returns the vendor's actual granted <c>scope</c> response for this connection's client-credentials session,
+    /// minting a token first if none is cached yet (cheap and non-interactive — unlike the interactive flows, there
+    /// is no user to wait on). Null if the token endpoint didn't echo a <c>scope</c> at all (some backend-services
     /// registrations don't), in which case a caller should fall back to <see cref="FhirSourceConfiguration.Scopes"/>.
     /// </summary>
     public async Task<string?> GetGrantedScopeAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
@@ -122,8 +132,8 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGra
     /// The space-joined <c>scope</c> for this source, falling back to the vendor's system wildcard when no scopes
     /// were resolved at all (SourceConnectionRuntimeResolver normally regenerates them, so this is the
     /// nothing-configured path). The wildcard is vendor-specific: SMART has no literal <c>*.*</c> access level, and
-    /// eClinicalWorks publishes <c>system/*.r</c> ONLY — it advertises no <c>system/*.read</c> at all, so the Epic
-    /// spelling would be rejected outright with <c>invalid_grant</c>. athenahealth has no usable wildcard at all
+    /// eClinicalWorks publishes <c>system/*.r</c> ONLY — it advertises no <c>system/*.read</c> at all, so the
+    /// default spelling would be rejected outright with <c>invalid_grant</c>. athenahealth has no usable wildcard at all
     /// and gets empty, which the caller turns into an omitted <c>scope</c> field. Every other vendor keeps
     /// <c>system/*.read</c>, unchanged.
     /// </summary>
@@ -156,7 +166,9 @@ public sealed class EpicAccessTokenProvider : IFhirAccessTokenProvider, IFhirGra
             string.IsNullOrWhiteSpace(source.ClientId) ||
             string.IsNullOrWhiteSpace(source.PrivateKeyPem))
         {
-            throw new InvalidOperationException("Epic SMART Backend Services token endpoint, client id, and private key are required.");
+            throw new InvalidOperationException(
+                $"{RuntimeSourceTypeNames.DisplayName(source.SourceType)} SMART Backend Services token endpoint, " +
+                "client id, and private key are required.");
         }
     }
 

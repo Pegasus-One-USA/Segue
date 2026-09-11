@@ -37,7 +37,7 @@
       <input
         type="search"
         class="search-input"
-        placeholder="Search by name or application type..."
+        placeholder="Search by name, description or application type..."
         [value]="searchQuery()"
         (input)="onSearch($any($event.target).value)"
       />
@@ -248,6 +248,9 @@
                 <div class="cell-name">
                   <div class="name-block">
                     <span class="cell-primary">{{ w.name }}</span>
+                    @if (w.description) {
+                      <span class="cell-desc" [title]="w.description">{{ w.description }}</span>
+                    }
                     <span class="cell-meta">{{ w.action === 'Launch' ? 'Interactive launch' : 'Backend / on-demand' }}</span>
                   </div>
                 </div>

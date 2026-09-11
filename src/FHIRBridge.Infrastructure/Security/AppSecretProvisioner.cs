@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Exceptions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -21,29 +22,44 @@ public static class AppSecretProvisioner
         using var scope = rootServiceProvider.CreateScope();
         var secretProvider = scope.ServiceProvider.GetRequiredService<ISecretProvider>();
         var secretWriter = scope.ServiceProvider.GetRequiredService<ISecretWriter>();
+        var metadataProvider = scope.ServiceProvider.GetRequiredService<IAppSecretMetadataProvider>();
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
         var accessor = rootServiceProvider.GetRequiredService<AppSecretAccessor>();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger("FHIRBridge.Infrastructure.Security.AppSecretProvisioner");
 
+        var allowRegeneration = configuration.GetValue(AllowRegenerationKey, false);
+
         var jwtSigningKey = await EnsureSecretAsync(
-            secretProvider, secretWriter, AppSecretReferences.JwtSigningKey, logger, cancellationToken);
+            secretProvider, secretWriter, metadataProvider, AppSecretReferences.JwtSigningKey, allowRegeneration, logger, cancellationToken);
         var downloadLinkSigningSecret = await EnsureSecretAsync(
-            secretProvider, secretWriter, AppSecretReferences.DownloadLinkSigningSecret, logger, cancellationToken);
+            secretProvider, secretWriter, metadataProvider, AppSecretReferences.DownloadLinkSigningSecret, allowRegeneration, logger, cancellationToken);
         var transformHashingKey = await EnsureSecretAsync(
-            secretProvider, secretWriter, AppSecretReferences.TransformHashingKey, logger, cancellationToken);
+            secretProvider, secretWriter, metadataProvider, AppSecretReferences.TransformHashingKey, allowRegeneration, logger, cancellationToken);
         var phiEncryptionKey = await EnsureSecretAsync(
-            secretProvider, secretWriter, AppSecretReferences.PhiEncryptionKey, logger, cancellationToken);
+            secretProvider, secretWriter, metadataProvider, AppSecretReferences.PhiEncryptionKey, allowRegeneration, logger, cancellationToken);
         var installationId = await EnsureSecretAsync(
-            secretProvider, secretWriter, AppSecretReferences.InstallationId, logger, cancellationToken);
+            secretProvider, secretWriter, metadataProvider, AppSecretReferences.InstallationId, allowRegeneration, logger, cancellationToken);
 
         accessor.Initialize(
             jwtSigningKey, downloadLinkSigningSecret, transformHashingKey, phiEncryptionKey, installationId);
     }
 
+    /// <summary>
+    /// Escape hatch for the one legitimate case where regenerating over an unreadable secret is what the operator
+    /// wants: the Data Protection key ring is genuinely gone (e.g. a container volume was lost) and they accept
+    /// that previously encrypted execution-history payloads are unrecoverable. Off by default so the far more
+    /// common case — a key ring that is merely resolving to the wrong place — fails loudly instead of destroying
+    /// data. See <see cref="DataProtectionKeyRingPathResolver"/>.
+    /// </summary>
+    private const string AllowRegenerationKey = "DataProtection:AllowAppSecretRegeneration";
+
     private static async Task<string> EnsureSecretAsync(
         ISecretProvider secretProvider,
         ISecretWriter secretWriter,
+        IAppSecretMetadataProvider metadataProvider,
         SecretReference reference,
+        bool allowRegeneration,
         ILogger logger,
         CancellationToken cancellationToken)
     {
@@ -58,14 +74,50 @@ public static class AppSecretProvisioner
         }
         catch (SecretNotConfiguredException)
         {
-            // No value in the DB-provisioned store, Key Vault, or config fallback — first boot on this install.
+            // "Not configured" covers two very different situations that the provider cannot distinguish, because
+            // an undecryptable row is reported as absent (see DbSecretStore.TryGetSecretAsync). Metadata reads the
+            // row's existence WITHOUT decrypting it, which separates them:
+            //   • no row at all  -> genuine first boot on this install; generate and persist.
+            //   • row present    -> it exists but this process cannot decrypt it, i.e. the Data Protection key ring
+            //                       is not the one that wrote it. Overwriting here is what silently orphans every
+            //                       already-encrypted execution-history payload, so refuse and fail the boot.
+            var metadata = await metadataProvider.GetMetadataAsync(reference, cancellationToken);
+            if (metadata.Provisioned && !allowRegeneration)
+            {
+                throw new InvalidOperationException(
+                    $"App secret '{reference.SecretName}' (vault '{reference.KeyVaultName}') exists but could not be " +
+                    "decrypted, which means this process resolved a different Data Protection key ring than the one " +
+                    "that wrote it. Startup has been stopped deliberately: regenerating it would permanently orphan " +
+                    "every execution-history payload already encrypted with the current key, and would invalidate " +
+                    "issued tokens and download links. Fix the key ring instead — confirm DataProtection:KeyRingPath " +
+                    "is set to the same persistent location for BOTH the Api and Worker hosts (in a container " +
+                    "deployment, that the keys volume is mounted), and that the account this process runs as can read " +
+                    $"it. If the key ring is genuinely unrecoverable and losing that data is acceptable, set " +
+                    $"{AllowRegenerationKey}=true for a single boot to regenerate.");
+            }
+
             var generated = AppSecretValueGenerator.Generate();
             await secretWriter.WriteSecretAsync(reference, generated, cancellationToken);
-            logger.LogWarning(
-                "Generated a new app secret '{SecretName}' in vault '{KeyVaultName}' — none was found (first boot, " +
-                "or a prior value was deleted). Any tokens/links signed with a previous value are now invalid.",
-                reference.SecretName,
-                reference.KeyVaultName);
+
+            if (metadata.Provisioned)
+            {
+                logger.LogWarning(
+                    "Regenerated app secret '{SecretName}' in vault '{KeyVaultName}' over an existing but " +
+                    "undecryptable value because {AllowRegenerationKey} is enabled. Data encrypted with the previous " +
+                    "value — including recorded execution-history payloads — is now permanently unreadable.",
+                    reference.SecretName,
+                    reference.KeyVaultName,
+                    AllowRegenerationKey);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Generated app secret '{SecretName}' in vault '{KeyVaultName}' — no value was provisioned yet " +
+                    "(first boot on this install).",
+                    reference.SecretName,
+                    reference.KeyVaultName);
+            }
+
             return generated;
         }
     }

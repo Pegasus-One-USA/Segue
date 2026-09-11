@@ -4,6 +4,10 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Governance;
 
+using FHIRBridge.Observability.Logging;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace FHIRBridge.Application.Services;
 
 public sealed class SsoAuthService : ISsoAuthService
@@ -17,13 +21,17 @@ public sealed class SsoAuthService : ISsoAuthService
         IExternalTokenValidator tokenValidator,
         IUserAccessRepository repository,
         ILocalAuthService localAuth,
-        IGovernanceLogger governanceLogger)
+        IGovernanceLogger governanceLogger,
+        ILogger<SsoAuthService>? logger = null)
     {
         _tokenValidator = tokenValidator;
         _repository = repository;
         _localAuth = localAuth;
         _governanceLogger = governanceLogger;
+        _logger = logger ?? NullLogger<SsoAuthService>.Instance;
     }
+
+    private readonly ILogger<SsoAuthService> _logger;
 
     public async Task<LocalLoginResponse> LoginAsync(SsoLoginRequest request, CancellationToken cancellationToken)
     {
@@ -41,6 +49,14 @@ public sealed class SsoAuthService : ISsoAuthService
             await _governanceLogger.LogAuthenticationAsync(
                 new AuthenticationEntry(authenticationType, Success: false, FailureReason: exception.Message),
                 cancellationToken);
+
+            // No user identity to attach yet -- the token itself was rejected. Misconfigured issuer/audience/
+            // signing keys all surface here, and they look identical to the end user ("login failed").
+            _logger.LogWarning(
+                LogEvents.LoginFailed,
+                "SSO token validation failed for {AuthenticationType}: {LoginFailureReason}",
+                authenticationType, exception.Message);
+
             throw;
         }
 
@@ -65,6 +81,15 @@ public sealed class SsoAuthService : ISsoAuthService
                 new AuthenticationEntry(
                     authenticationType, Success: false, identity.Email, "No enabled account is linked to this identity."),
                 cancellationToken);
+
+            // The identity is genuine; it just has nowhere to land. Distinct from a rejected token above, and the
+            // distinction is the whole answer to "SSO works for my colleague but not me". Subject is the IdP's
+            // opaque user id, not an address -- the address is on the governance entry above.
+            _logger.LogWarning(
+                LogEvents.LoginFailed,
+                "SSO login failed for {AuthenticationType} subject {ExternalSubject}: {LoginFailureReason}",
+                authenticationType, identity.Subject,
+                user is null ? "no account is linked to this external identity" : "the linked account is disabled");
 
             // 401 — no enabled account matches this external identity.
             throw new UnauthorizedAccessException("No enabled Segue account is linked to this identity.");

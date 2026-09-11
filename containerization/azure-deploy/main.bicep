@@ -487,8 +487,20 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ConnectionStrings__Redis', value: '${redisName}:${redisPort},password=${redisPassword}' }
             { name: 'RuntimeWorker__Enabled', value: 'true' }
             { name: 'Messaging__Provider', value: 'InMemory' }
+            // MUST match fhirbridgeApp's path and share. Data Protection encrypts the ProvisionedSecrets rows
+            // holding the PHI field-encryption key, JWT signing key, download-link secret and transform hashing
+            // key; a worker on its own (container-local, ephemeral) ring treats the app's rows as unreadable and
+            // regenerates them, which permanently orphans recorded execution-history payloads, logs users out,
+            // and leaves the worker unable to read destination connection strings the Api wizard wrote.
+            { name: 'DataProtection__KeyRingPath', value: '/app/keys' }
+          ]
+          volumeMounts: [
+            { volumeName: 'keys-data', mountPath: '/app/keys' }
           ]
         }
+      ]
+      volumes: [
+        { name: 'keys-data', storageType: 'AzureFile', storageName: keysDataStorage.name }
       ]
       // fhirbridgeApp is a head start, not a guarantee: both it and worker auto-migrate
       // FHIRBridgeDb on boot and can race on the initial CREATE DATABASE on a fresh database.

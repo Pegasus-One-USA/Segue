@@ -152,6 +152,24 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
                 (destinationTypes.Count == 0 || destinationTypes.Contains(x.DestinationType!.Value)))
             .ToListAsync(cancellationToken);
 
+    // Same shape as GetWorkflowScopedAsync above, minus the route-id equality (there is no route yet) plus a
+    // DestinationType equality the attached tier gets for free by belonging to a workflow. Save-time only —
+    // see the interface's own comment for why these rows stay invisible to the executors.
+    public async Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowScopedAsync(
+        DestinationType destinationType, string resourceType, string destinationField, string? sourceSystem,
+        string? sourceField, CancellationToken cancellationToken) =>
+        await _db.TransformationRules
+            .Where(x =>
+                x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
+                x.Scope == TransformScope.Workflow &&
+                x.ResourcePipelineRouteId == null &&
+                x.DestinationType == destinationType &&
+                x.ResourceType == resourceType &&
+                x.DestinationField == destinationField &&
+                (x.SourceSystem == null || x.SourceSystem == sourceSystem) &&
+                (x.SourceField == null || x.SourceField == sourceField))
+            .ToListAsync(cancellationToken);
+
     public Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         _db.TransformationRules.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 

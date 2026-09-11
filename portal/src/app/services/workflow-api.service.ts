@@ -48,6 +48,8 @@ export interface WorkflowEdgeRequest {
 
 export interface WorkflowDefinitionRequest {
   name: string;
+  /** Optional multi-line free-text notes shown next to the name. Null/blank clears whatever was stored. */
+  description?: string | null;
   isEnabled: boolean;
   nodes: WorkflowNodeRequest[];
   edges: WorkflowEdgeRequest[];
@@ -79,6 +81,7 @@ export interface WorkflowEdgeDto {
 export interface WorkflowDefinitionDto {
   id: string;
   name: string;
+  description?: string | null;
   version: number;
   isEnabled: boolean;
   isActive?: boolean;
@@ -268,6 +271,7 @@ export interface MappingBuildSpec {
 
 export interface WorkflowBuildRequest {
   name: string;
+  description?: string | null;
   isEnabled: boolean;
   nodes: WorkflowNodeRequest[];
   edges: WorkflowEdgeRequest[];
@@ -297,6 +301,8 @@ export type WorkflowAction = 'Launch' | 'Run';
 export interface WorkflowSummary {
   workflowId: string;
   name: string;
+  /** Free-text notes captured in the builder; null/absent when never filled in. */
+  description?: string | null;
   status: 'Enabled' | 'Disabled';
   nodes: number;
   edges: number;
@@ -480,7 +486,10 @@ export class WorkflowApiService {
   }
 
   /** Duplicates a workflow (exact node/edge/config copy, new ids) under a new name. Always created disabled. */
-  copy(workflowId: string, name: string): Observable<WorkflowDefinitionDto> {
-    return this.http.post<WorkflowDefinitionDto>(WORKFLOW_ENDPOINTS.copy(workflowId), { name });
+  copy(workflowId: string, name: string, description?: string | null): Observable<WorkflowDefinitionDto> {
+    // description omitted (undefined) → the server keeps the original's description on the copy.
+    return this.http.post<WorkflowDefinitionDto>(
+      WORKFLOW_ENDPOINTS.copy(workflowId),
+      description === undefined ? { name } : { name, description });
   }
 }

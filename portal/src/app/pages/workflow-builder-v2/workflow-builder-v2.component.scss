@@ -235,6 +235,46 @@
   transform: scaleX(1);
 }
 
+// ── Optional multi-line description (WorkflowDefinition.Description) ─────────
+// Always visible alongside the name — never gated behind a toggle.
+// flex-basis 100% makes this wrap onto its own full-width line inside the wrapping .dock row.
+.dock__description {
+  position:    relative;
+  flex:        1 1 100%;
+  display:     flex;
+  flex-direction: column;
+  gap:         var(--space-2);
+}
+
+.dock__description-label {
+  color:          var(--color-muted);
+  font-size:      11.5px;
+  font-weight:    700;
+  letter-spacing: .02em;
+
+  span {
+    font-weight: 500;
+    color:       var(--color-muted-2);
+  }
+}
+
+.dock__description-input.builder-input {
+  width:      100%;
+  height:     auto;
+  min-height: calc(var(--space-9) * 2);
+  padding:    var(--space-4) var(--space-6);
+  font-size:  13px;
+  font-family: inherit;
+  line-height: 1.5;
+  resize:     vertical;
+}
+
+.dock__description-count {
+  align-self: flex-end;
+  color:      var(--color-muted-2);
+  font-size:  11px;
+}
+
 // ── Divider between the name field and the trigger/status cluster ──────────────
 .dock__divider {
   align-self: stretch;

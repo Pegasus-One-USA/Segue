@@ -1,4 +1,4 @@
-using FHIRBridge.Application;
+﻿using FHIRBridge.Application;
 using FHIRBridge.Infrastructure;
 using FHIRBridge.Infrastructure.Messaging;
 using FHIRBridge.Infrastructure.Persistence;
@@ -40,18 +40,19 @@ builder.Logging.AddSerilog(serilogLogger, dispose: true);
 // DbSecretStore (app-provisioned secrets, e.g. destination connection strings written by the Api's wizard) encrypts
 // at rest via Data Protection — a real runtime dependency of the shared configuration/secret-resolution graph. The
 // Worker MUST resolve the SAME key ring as the Api or it can't decrypt what the Api wrote (and vice versa), so this
-// mirrors FHIRBridge.Api/Program.cs exactly: same application name + same KeyRingPath (a shared path in prod, or the
-// same stable machine-local default when unset). Never an ephemeral ring.
+// mirrors FHIRBridge.Api/Program.cs exactly: same application name + the same KeyRingPath, resolved through the
+// shared DataProtectionKeyRingPathResolver (a configured shared path in prod, otherwise the same stable
+// machine-wide default) so the two hosts cannot drift onto separate rings. Never an ephemeral ring.
 var workerDataProtection = builder.Services.AddDataProtection()
     .SetApplicationName(builder.Configuration["DataProtection:ApplicationName"] ?? "FHIRBridge");
 
-var workerKeyRingPath = builder.Configuration["DataProtection:KeyRingPath"];
-if (string.IsNullOrWhiteSpace(workerKeyRingPath))
+var workerKeyRingResolution = DataProtectionKeyRingPathResolver.Resolve(
+    builder.Configuration["DataProtection:KeyRingPath"]);
+var workerKeyRingPath = workerKeyRingResolution.Path;
+
+if (workerKeyRingResolution.Warning is not null)
 {
-    workerKeyRingPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "FHIRBridge",
-        "dataprotection-keys");
+    Console.Error.WriteLine($"[WARN] {workerKeyRingResolution.Warning}");
 }
 
 Directory.CreateDirectory(workerKeyRingPath);
@@ -120,6 +121,11 @@ builder.Services.AddHostedService<WebhookIngestionCommandProcessor>();
 // instead of any caller (a route run, a workflow-node run) blocking inline for the job's full duration.
 builder.Services.Configure<BulkExportPollOptions>(builder.Configuration.GetSection("BulkExportPoll"));
 builder.Services.AddHostedService<BulkExportPollWorker>();
+
+// Ages out validate-run attempts that were never executed — see ValidatedRunExpiryWorker for why Validated has
+// to be non-terminal, and therefore why it needs something to close it.
+builder.Services.Configure<ValidatedRunExpiryOptions>(builder.Configuration.GetSection("ValidatedRunExpiry"));
+builder.Services.AddHostedService<ValidatedRunExpiryWorker>();
 
 builder.Services.Configure<EndpointHealthCheckOptions>(builder.Configuration.GetSection("EndpointHealthCheck"));
 builder.Services.AddHostedService<EndpointHealthCheckWorker>();

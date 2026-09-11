@@ -4,10 +4,11 @@ using FHIRBridge.SharedKernel.Exceptions;
 namespace FHIRBridge.Infrastructure.Governance;
 
 /// <summary>
-/// Diagnoses SMART/OAuth2 token-exchange failures from any source connector — Epic (<c>EpicAccessTokenProvider</c>),
-/// Healow/generic SMART (<c>SmartAuthorizationCodeTokenProvider</c>), MEDITECH Greenfield
-/// (<c>MeditechGreenfieldTokenProvider</c>) and generic OAuth2 Backend Services
-/// (<c>OAuth2ClientCredentialsTokenProvider</c>).
+/// Diagnoses SMART/OAuth2 token-exchange failures from any source connector, for every vendor — SMART Backend
+/// Services (<c>SmartBackendServicesTokenProvider</c>), interactive SMART
+/// (<c>SmartAuthorizationCodeTokenProvider</c>), MEDITECH Greenfield (<c>MeditechGreenfieldTokenProvider</c>) and
+/// generic OAuth2 Backend Services (<c>OAuth2ClientCredentialsTokenProvider</c>). Each of those names the failing
+/// vendor from the source's own type, so the diagnosis it produces here is vendor-accurate.
 /// <para>
 /// Preferred path: the connectors throw <see cref="TokenEndpointException"/>, which carries the HTTP status as a
 /// NUMBER plus a categorized <see cref="TokenEndpointFailureKind"/>. That is what lets an upstream outage (5xx) be
@@ -47,7 +48,7 @@ public sealed class TokenEndpointFailureDiagnosisRule : IFailureDiagnosisRule
         // Every kind stays SelfFix, including an outage. DiagnosisAction.SelfFix explicitly covers "unreachable
         // endpoint" (see its own remarks) and means "the customer is the one who acts" — retry, or chase the
         // vendor. ContactSupport means "needs the FHIRBridge team", so routing a vendor outage there would raise
-        // a support ticket against us every time Epic has a maintenance window. The distinction the operator
+        // a support ticket against us every time a vendor has a maintenance window. The distinction the operator
         // needs is in the wording, not the badge.
         return new Diagnosis(exception.UserMessage, DiagnosisAction.SelfFix);
     }

@@ -28,7 +28,12 @@ public interface ITransformationRuleService
 
     /// <summary>Binds rules authored before their workflow existed to that workflow, once it has been saved.
     /// A builder session with no workflow id yet stores its rules at Workflow scope with a null route, which is
-    /// inert; this is what makes them live. Returns how many were attached.</summary>
+    /// inert; this is what makes them live. Returns how many were attached.
+    ///
+    /// Idempotent and safe to call on every save, which is what the builder now does: a rule left unattached
+    /// (its attach call failed, or it was written before the id had propagated) is invisible to the executor's
+    /// workflow-scoped resolution and so silently never transforms anything, with the wizard still showing it
+    /// as configured. Rules already belonging to a workflow are skipped, never re-pointed.</summary>
     Task<int> AttachPendingRulesToWorkflowAsync(
         Guid workflowId,
         IReadOnlyCollection<DestinationType> destinationTypes,
@@ -46,6 +51,9 @@ public interface ITransformationRuleService
     /// <param name="workflowScopedOnly">See <see cref="IEffectiveRuleResolver.ResolveAsync"/>'s own parameter —
     /// true resolves at <see cref="TransformScope.Workflow"/> scope only, for a caller whose rules are authored
     /// per pipeline and must not inherit another workflow's.</param>
+    /// <param name="includePendingWorkflowRules">See <see cref="IEffectiveRuleResolver.ResolveAsync"/>'s own
+    /// parameter — true also surfaces rules authored before the workflow was first saved, so the builder can
+    /// see a rule it has just attached to a field on a pipeline that has no id yet.</param>
     Task<List<TransformationRuleDto>> GetEffectiveRulesAsync(
         DestinationType destinationType,
         string resourceType,
@@ -54,7 +62,8 @@ public interface ITransformationRuleService
         string? sourceSystem,
         string? sourceField,
         CancellationToken cancellationToken = default,
-        bool workflowScopedOnly = false);
+        bool workflowScopedOnly = false,
+        bool includePendingWorkflowRules = false);
 
     /// <summary>The config schema for every node type — what keys it reads, what control to render, and its
     /// default — so the UI never has to hand-maintain a duplicate copy of this metadata.</summary>

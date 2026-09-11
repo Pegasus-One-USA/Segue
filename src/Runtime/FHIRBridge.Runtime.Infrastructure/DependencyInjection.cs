@@ -48,7 +48,7 @@ public static class DependencyInjection
         // Short-lived state of in-flight interactive OAuth sign-ins, between the authorize redirect and the callback.
         services.AddSingleton<IOAuthAuthorizationStateStore, DistributedOAuthAuthorizationStateStore>();
 
-        services.AddHttpClient<EpicAccessTokenProvider>().AddMutualTls();
+        services.AddHttpClient<SmartBackendServicesTokenProvider>().AddMutualTls();
         services.AddHttpClient<OAuth2ClientCredentialsTokenProvider>().AddMutualTls();
         // Interactive SMART (authorization-code + PKCE): the vendor-neutral provider backs the application-type axis
         // (EHR launch / standalone / patient); Healow + Epic interactive pin the provider name for their audit trails.
@@ -57,6 +57,9 @@ public static class DependencyInjection
         services.AddHttpClient<EpicInteractiveTokenProvider>().AddMutualTls();
         services.AddHttpClient<MeditechGreenfieldTokenProvider>().AddMutualTls();
         services.AddHttpClient<EpicFhirSourceClient>().AddMutualTls();
+        // Shares Epic's EpicFhirClientOptions and every base behaviour — it differs only in naming itself "FHIR"
+        // rather than "Epic FHIR" in logs and errors (see GenericFhirSourceClient).
+        services.AddHttpClient<GenericFhirSourceClient>().AddMutualTls();
         // Shares Epic's EpicFhirClientOptions (retry/timeout/throttle knobs) — no athenahealth-specific values are
         // called out in the integration spec, so the same IOptions<EpicFhirClientOptions> singleton applies here too.
         services.AddHttpClient<AthenahealthFhirSourceClient>().AddMutualTls();

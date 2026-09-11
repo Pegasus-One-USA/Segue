@@ -100,6 +100,10 @@ export class FieldMappingJoinPopoverComponent {
         // Only THIS workflow's rule may show here. Without this the popover opened in "update" mode over a
         // rule some other pipeline had authored against the same column.
         workflowScopedOnly: true,
+        // A rule authored before the workflow's first save is stored unattached, so on an unsaved pipeline
+        // this lookup found nothing and the popover reopened in "create" mode over a rule that already
+        // exists — writing another row for the same column on every visit.
+        includePending: true,
       })
       .subscribe({
         next: rules => {

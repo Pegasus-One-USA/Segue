@@ -22,12 +22,20 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
     private static readonly WorkflowNodeCatalogItem[] Items =
     [
         Source(WorkflowNodeTypes.EpicSource),
-        // GATED (SQL/CSV phase): only Epic + Sample sources are exposed in the palette. Re-enable the other vendors
-        // (they reuse the Epic search client) once the generic Source hierarchy + ApplicationType axis land.
+        // Every vendor listed here gets its OWN NodeType on a newly saved workflow, so a run's node history and
+        // audit rows name the EHR the data actually came from instead of reading "EpicSourceNode" for all of them.
+        // A vendor may only be listed once BOTH exist: an IFhirSourceClient in FhirSourceClientFactory.
+        // DefaultRegistrations, and its executor in WorkflowInfrastructureServiceCollectionExtensions — this list
+        // is what WorkflowGraphValidator accepts at run time, so listing a vendor with no registered client would
+        // turn a rejected save into a failed run.
+        Source(WorkflowNodeTypes.AthenahealthSource),
+        Source(WorkflowNodeTypes.EClinicalWorksSource),
+        // STILL GATED: executors exist, but no IFhirSourceClient is registered for these three, so a node saved
+        // under their NodeType would throw at client selection. They keep falling back to EpicSourceNode (see
+        // RouteToWorkflowGraphProjection.MapSourceNodeType and the portal's transformIdForNode) until each gets a
+        // client — a thin FhirSourceConnectorBase subclass, as GenericFhirSourceClient shows — registered here.
         // Source(WorkflowNodeTypes.CernerSource),
-        // Source(WorkflowNodeTypes.AthenahealthSource),
         // Source(WorkflowNodeTypes.AllscriptsSource),
-        // Source(WorkflowNodeTypes.EClinicalWorksSource),
         // Source(WorkflowNodeTypes.MeditechSource),
         Source(WorkflowNodeTypes.GenericFhirSource),
         // Source(WorkflowNodeTypes.Hl7v2MllpSource),
@@ -234,6 +242,12 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         => nodeType switch
         {
             WorkflowNodeTypes.EpicSource => "epic",
+            // These two must stay identical to the SOURCES catalog ids in the portal's sources.data.ts: the canvas
+            // resolves a node's NodeType by matching its vendor id against this transformId (see
+            // workflow-graph-mapper.service.ts's catalogForTransform), so a mismatch silently sends the node back
+            // to the EpicSourceNode fallback.
+            WorkflowNodeTypes.AthenahealthSource => "athena",
+            WorkflowNodeTypes.EClinicalWorksSource => "healow",
             WorkflowNodeTypes.SampleSource => "sample",
             WorkflowNodeTypes.SqlServerDestination => "dest-sqlserver",
             WorkflowNodeTypes.CsvDestination => "dest-csv",
@@ -257,6 +271,10 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         => nodeType switch
         {
             WorkflowNodeTypes.EpicSource => "Epic",
+            WorkflowNodeTypes.AthenahealthSource => "athenahealth",
+            // eClinicalWorks, not "Healow": Healow is the vendor's patient-app brand, and the portal already shows
+            // this vendor as eCW everywhere a user can see it (see source-system-display-names.data.ts).
+            WorkflowNodeTypes.EClinicalWorksSource => "eClinicalWorks",
             WorkflowNodeTypes.SampleSource => "Sample FHIR",
             WorkflowNodeTypes.SqlServerDestination => "SQL Server",
             WorkflowNodeTypes.CsvDestination => "CSV",
@@ -280,6 +298,8 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         => nodeType switch
         {
             WorkflowNodeTypes.EpicSource => "Read FHIR R4 data from Epic.",
+            WorkflowNodeTypes.AthenahealthSource => "Read FHIR R4 data from athenahealth.",
+            WorkflowNodeTypes.EClinicalWorksSource => "Read FHIR R4 data from eClinicalWorks.",
             WorkflowNodeTypes.SampleSource => "Use bundled sample FHIR resources.",
             WorkflowNodeTypes.SqlServerDestination => "Write mapped records to Microsoft SQL Server.",
             WorkflowNodeTypes.CsvDestination => "Emit mapped records as CSV files.",

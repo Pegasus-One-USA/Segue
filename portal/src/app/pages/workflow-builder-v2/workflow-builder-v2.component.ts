@@ -98,6 +98,9 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   protected readonly nameTouched = signal(false);
   protected readonly nameInvalid = computed(() => this.nameTouched() && !this.workflowName().trim());
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
+  // Optional multi-line notes saved alongside the name (WorkflowDefinition.Description). Purely descriptive —
+  // never validated or required, and capped to the column's 2000 chars by the textarea's own maxlength.
+  protected readonly workflowDescription = signal('');
   protected readonly workflowIdInput = signal('');
   protected readonly workflowBusy = signal(false);
   protected readonly workflowStatus = signal('Catalog loading...');
@@ -256,6 +259,10 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     this.nameTouched.set(true);
   }
 
+  onWorkflowDescriptionInput(value: string): void {
+    this.workflowDescription.set(value);
+  }
+
   clearWorkflowName(): void {
     this.workflowName.set('');
     this.nameInput()?.nativeElement.focus();
@@ -302,7 +309,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
     let request: WorkflowBuildRequest;
     try {
-      request = this.buildAssembler.assemble(name, this.buildTrigger());
+      request = this.buildAssembler.assemble(name, this.buildTrigger(), this.workflowDescription().trim() || null);
     } catch (err) {
       // buildAssembler throws for configuration gaps it can catch up front (e.g. Upsert write mode with no
       // id-mapped key column) — surfaced here rather than round-tripping to the backend for the same rejection.
@@ -477,7 +484,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     }
 
     const definitionRequest = this.graphMapper.toRequest(
-      workflowName, this.buildTrigger(), this.currentWorkflowId());
+      workflowName, this.buildTrigger(), this.currentWorkflowId(), this.workflowDescription().trim() || null);
     this.workflowApi.save(definitionRequest, workflowId).subscribe({
       next: () => {
         this.workflowBusy.set(false);
@@ -503,6 +510,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         this.graphMapper.loadDefinition(workflow);
         this.currentWorkflowId.set(workflow.id);
         this.workflowName.set(workflow.name);
+        this.workflowDescription.set(workflow.description ?? '');
         this.workflowStatus.set(`Loaded ${workflow.name}.`);
         this.workflowBusy.set(false);
       },
@@ -898,11 +906,25 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
    * Binds rules authored before this workflow existed to it, once it does.
    *
    * A pipeline is normally drawn and configured in one sitting, so rules get written while the workflow still
-   * has no id — they are stored inert (Workflow scope, no workflow attached) and claimed here. Only runs on a
-   * workflow's FIRST save: after that every rule is authored against a real id and there is nothing pending.
+   * has no id — they are stored inert (Workflow scope, no workflow attached) and claimed here.
+   *
+   * Runs on EVERY save, not just the first. "After the first save every rule is authored against a real id"
+   * turned out not to hold: a rule written while the id hadn't propagated, or one whose attach call failed
+   * (see the quiet-failure note below), stayed unattached forever — and an unattached rule is invisible to
+   * the executor's workflow-scoped resolution, so it never transforms anything. That failed silently in the
+   * worst possible way: the rule is listed in the wizard and on the Transformations tab, the workflow saves
+   * clean, and the column is simply written untransformed. Re-running the claim each save is what makes the
+   * "retried on the next save" promise below actually true.
+   *
+   * The cost of re-running it: a claim takes every pending rule for the destination types this workflow
+   * writes to, so a SECOND builder session that is mid-flight against the same destination type — its own
+   * workflow still unsaved, its rules still pending — can have those rules claimed by this save. That window
+   * always existed on first save; this widens it to every save. It is the lesser problem: the other session's
+   * rules are recoverable (re-point or re-author them), whereas a permanently inert rule is a silent data
+   * defect nobody can see.
    *
    * Failure is deliberately quiet. The workflow itself saved fine, and the rules are still on disk — a toast
-   * about an internal attach step would only be alarming, and the next save retries it anyway.
+   * about an internal attach step would only be alarming, and the next save now genuinely retries it.
    */
   private attachPendingRules(workflowId: string): void {
     const destinationTypes = this.store.nodes()
@@ -925,7 +947,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       return;
     }
 
-    const request = this.graphMapper.toRequest(name, this.buildTrigger(), this.currentWorkflowId());
+    const request = this.graphMapper.toRequest(
+      name, this.buildTrigger(), this.currentWorkflowId(), this.workflowDescription().trim() || null);
     this.workflowBusy.set(true);
     this.workflowStatus.set('Validating workflow...');
     this.workflowApi.validate(request).subscribe({
@@ -939,13 +962,13 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         this.workflowStatus.set('Saving workflow...');
         this.workflowApi.save(request, workflowId).subscribe({
           next: saved => {
-            // Captured BEFORE currentWorkflowId is overwritten — "was this the first save" is the whole
-            // condition for attaching pending rules.
-            const wasUnsaved = !this.currentWorkflowId();
             this.currentWorkflowId.set(saved.id);
             this.workflowIdInput.set(saved.id);
             this.workflowName.set(saved.name);
-            if (wasUnsaved) this.attachPendingRules(saved.id);
+            this.workflowDescription.set(saved.description ?? '');
+            // Every save, not only the first — see attachPendingRules' own doc comment for why "there is
+            // nothing left pending after the first save" was not a safe assumption.
+            this.attachPendingRules(saved.id);
 
             if (!activate) {
               this.workflowStatus.set(`Saved ${saved.name}.`);
@@ -1061,6 +1084,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     // whatever earlier interaction/failed-save-attempt set it, and nameInvalid() only checks
     // nameTouched() && !workflowName().trim(), which is now true again on a field nobody has touched yet.
     this.nameTouched.set(false);
+    this.workflowDescription.set('');
     this.workflowIdInput.set('');
     this.triggerType.set('Manual');
     this.cronExpression.set('0 0 * * *');

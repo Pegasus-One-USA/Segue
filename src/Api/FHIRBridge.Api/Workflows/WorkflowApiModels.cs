@@ -1,4 +1,4 @@
-using FHIRBridge.Runtime.Domain.Workflows;
+﻿using FHIRBridge.Runtime.Domain.Workflows;
 
 namespace FHIRBridge.Api.Workflows;
 
@@ -8,7 +8,9 @@ public sealed record WorkflowDefinitionRequest(
     IReadOnlyCollection<WorkflowNodeRequest> Nodes,
     IReadOnlyCollection<WorkflowEdgeRequest> Edges,
     WorkflowTriggerRequest? Trigger = null,
-    bool IsPubliclyLaunchable = true);
+    bool IsPubliclyLaunchable = true,
+    // Optional multi-line free-text notes for this workflow. Null/blank clears whatever was stored.
+    string? Description = null);
 
 /// <summary>Optional workflow-level scheduling metadata (Backend-Systems workflows). Omit / Manual = run on demand.</summary>
 public sealed record WorkflowTriggerRequest(
@@ -52,6 +54,10 @@ public sealed record WorkflowRunRequest(
     // SourceConnection needing its own separate MyChart consent — see FhirSourceConfiguration.CallerId. Omit for
     // every other ApplicationType, or when this run should keep using the pre-existing per-SourceConnection session.
     string? CallerId = null,
+    // The hospital/organization a Standalone caller has picked from the public endpoint directory. Only read by
+    // validate-run (so a bad or missing selection is caught before a sign-in round trip); the run itself launches
+    // against whatever endpoint the token was already authorized for.
+    Guid? EhrEndpointId = null,
     // When true, the run is dispatched to a background task and the endpoint returns 202 Accepted with the
     // run id immediately instead of blocking until the whole DAG finishes — see IWorkflowRunTracker. Poll
     // GET /workflow-runs/{runId}/status (or the existing /workflow-runs/{runId} once terminal) for progress.
@@ -60,4 +66,6 @@ public sealed record WorkflowRunRequest(
 
 public sealed record WorkflowRunStatusResponse(Guid WorkflowRunId, string Status, string? CorrelationId = null);
 
-public sealed record CopyWorkflowRequest(string Name);
+/// <summary>Duplicate a workflow under a new name. <paramref name="Description"/> omitted (null) keeps the
+/// original's description on the copy; pass an empty string to deliberately copy it with no description.</summary>
+public sealed record CopyWorkflowRequest(string Name, string? Description = null);

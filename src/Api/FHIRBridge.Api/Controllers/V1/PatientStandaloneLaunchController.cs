@@ -1,8 +1,9 @@
-using FHIRBridge.Api.Security;
+﻿using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -31,17 +32,40 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
     private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
     private readonly IEhrEndpointService _ehrEndpointService;
     private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
+    private readonly IGovernanceLogger _governanceLogger;
+    private readonly ILogger<PatientStandaloneLaunchController> _logger;
 
     public PatientStandaloneLaunchController(
         IInteractiveSourceAuthorizationService authorizationService,
         IWorkflowDefinitionStore workflowDefinitionStore,
         IEhrEndpointService ehrEndpointService,
-        IAllowedCorsOriginsCache allowedCorsOriginsCache)
+        IAllowedCorsOriginsCache allowedCorsOriginsCache,
+        IGovernanceLogger governanceLogger,
+        ILogger<PatientStandaloneLaunchController> logger)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
         _ehrEndpointService = ehrEndpointService;
         _allowedCorsOriginsCache = allowedCorsOriginsCache;
+        _governanceLogger = governanceLogger;
+        _logger = logger;
+    }
+
+    /// <summary>Patient Standalone counterpart of <c>OAuthController.LogRefusedLaunchAsync</c> — see its remarks
+    /// for why a pre-launch refusal needs a durable row of its own rather than only a 404.</summary>
+    private async Task LogRefusedLaunchAsync(Guid workflowId, string reason, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _governanceLogger.LogSmartLaunchAsync(
+                new SmartLaunchEntry(
+                    Guid.Empty, $"workflow:{workflowId}", "PatientStandalone", Success: false, FailureReason: reason),
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Could not persist the refused-launch record for workflow {WorkflowId}.", workflowId);
+        }
     }
 
     [HttpGet("workflows/{workflowId:guid}/public-patient-standalone-url")]
@@ -55,17 +79,33 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
         var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
         if (workflow is null || !workflow.IsPubliclyLaunchable)
         {
+            await LogRefusedLaunchAsync(
+                workflowId,
+                workflow is null
+                    ? "Refused: no workflow with this id exists."
+                    : "Refused: workflow is not opted into public launch (POST /workflows/{id}/enable-public-launch).",
+                cancellationToken);
             return NotFound();
         }
 
         if (!await _ehrEndpointService.IsKnownEndpointAsync(ehrEndpointId, EhrEndpointType.MyChart, cancellationToken))
         {
+            await LogRefusedLaunchAsync(
+                workflowId,
+                $"Refused: ehrEndpointId {ehrEndpointId} is not a known MyChart endpoint.",
+                cancellationToken);
             return NotFound();
         }
 
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
         if (applicationType is not ApplicationType.Patient)
         {
+            // The three refusals above and this one are all a bare 404 to the caller; only the reason recorded
+            // here distinguishes "wrong application type" from "not opted in", which are fixed very differently.
+            await LogRefusedLaunchAsync(
+                workflowId,
+                $"Refused: source ApplicationType is {applicationType}, but the Patient Standalone launch requires Patient.",
+                cancellationToken);
             return NotFound();
         }
 
@@ -89,13 +129,24 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
             ? sessionId
             : Guid.NewGuid().ToString("N");
 
+        // See OAuthController.GetPublicWorkflowStandaloneUrl's matching call: on a first-ever visit no sessionId
+        // was supplied, so the pipeline-level resolver had nothing to key on — re-stamp from the id minted above
+        // so this mint shares a correlation id with the callback and the run it authorizes.
+        WorkflowCorrelationResolver.ApplyDerived(HttpContext, workflowId, effectiveSessionId);
+
         // userIdentity is a stable identifier for HealthApp's own logged-in account (e.g. patient@healthapp.local)
         // — distinct from sessionId above, which is only an opaque per-browser cache key. When present, it is what
         // CompleteAsync permanently binds to one FHIR patient. Never validated as an origin (unlike callerId): it
         // is not a URL and never drives a redirect.
         var effectiveUserIdentity = !string.IsNullOrWhiteSpace(userIdentity) && userIdentity.Length <= 200 ? userIdentity : null;
 
-        var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId, effectiveSessionId, effectiveUserIdentity);
+        // See OAuthController's matching call: the encrypted launch context is the only channel that carries this
+        // attempt's correlation id across the MyChart redirect into /oauth/callback.
+        var correlationId = Request.Headers["X-Correlation-Id"].FirstOrDefault() is { Length: > 0 and <= 200 } supplied
+            ? supplied
+            : null;
+        var context = _authorizationService.BuildWorkflowLaunchContextToken(
+            workflowId, ehrEndpointId, callerId, effectiveSessionId, effectiveUserIdentity, correlationId);
         return Ok(BuildLaunchResponse(context, effectiveSessionId));
     }
 

@@ -1,4 +1,4 @@
-<div class="list-page">
+﻿<div class="list-page">
   <div class="page-header">
     <h1>API Requests</h1>
     <p class="page-sub">Every outbound call to a source/destination/terminology endpoint — method, URL, status, and duration. Click a failed status to see why it failed.</p>
@@ -38,6 +38,13 @@
         <ng-container matColumnDef="occurredOnUtc">
           <th mat-header-cell *matHeaderCellDef>Timestamp</th>
           <td mat-cell *matCellDef="let r">{{ r.occurredOnUtc | date:'MMM d, h:mm:ss a' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="step">
+          <th mat-header-cell *matHeaderCellDef>Step</th>
+          <!-- What the call was doing, in plain terms — derived server-side (ApiRequestStepDescriber) so this
+               screen and Correlation Search always word it identically. -->
+          <td mat-cell *matCellDef="let r" class="step-cell">{{ r.step }}</td>
         </ng-container>
 
         <ng-container matColumnDef="method">

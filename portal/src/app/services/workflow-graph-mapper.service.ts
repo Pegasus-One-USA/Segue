@@ -18,8 +18,22 @@ import {
 const CATEGORY_SOURCE: WorkflowNodeCategory = 0;
 const CATEGORY_TRANSFORM: WorkflowNodeCategory = 10;
 
+// Vendor ids whose own source NodeType arrived WITH per-vendor source nodes, so a backend older than that
+// change has no catalog entry for them. nodeToRequest downgrades these to the shared Epic source node when the
+// running API's catalog doesn't list them, so a portal deployed ahead of its API can't save a workflow that
+// WorkflowGraphValidator then rejects at RUN time.
+const CATALOG_GUARDED_VENDOR_TRANSFORM_IDS = new Set(['athena', 'healow']);
+
+// Vendor ids (SOURCES, sources.data.ts) that have a source NodeType of their own in the backend catalog.
+// Anything outside this set — Cerner, Allscripts, Meditech, HL7 v2 — must still save as 'epic':
+// WorkflowGraphValidator rejects at RUN time any NodeType missing from DefaultWorkflowNodeCatalog.Items, and
+// those vendors are gated out of it until each has a registered IFhirSourceClient. Keep in step with that file.
+const VENDOR_SOURCE_TRANSFORM_IDS = new Set(['epic', 'athena', 'healow', 'generic-fhir', 'sample']);
+
 const FALLBACK_NODE_TYPES: Record<string, string> = {
   epic: 'EpicSourceNode',
+  athena: 'AthenahealthSourceNode',
+  healow: 'EClinicalWorksSourceNode',
   sample: 'SampleSourceNode',
   'generic-fhir': 'GenericFhirSourceNode',
   'fhir-validation': 'UsCoreValidationNode',
@@ -168,7 +182,7 @@ export class WorkflowGraphMapperService {
   }
 
   private nodeToRequest(node: CanvasNode, catalog: WorkflowCatalogItem[]): WorkflowNodeRequest {
-    const transformId = this.transformIdForNode(node);
+    const transformId = this.catalogSupportedTransformId(this.transformIdForNode(node), node, catalog);
     const item = this.catalogForTransform(transformId, catalog);
     const fallbackRank = node.kind === 'transform'
       ? TRANSFORMS.find(transform => transform.id === node.transformId)?.rank ?? 60
@@ -231,13 +245,12 @@ export class WorkflowGraphMapperService {
     const name = config['__name'] ?? node.displayName ?? item?.displayName ?? transformId;
 
     if (this.isSourceCategory(node.category)) {
-      // transformId is near-useless for display here: every EHR vendor except Sample/GenericFhir saves
-      // under the shared 'EpicSourceNode' NodeType/'epic' transformId (see transformIdForNode's own
-      // comment — no dedicated backend NodeType exists yet for Cerner/Athenahealth/Allscripts/Healow/
-      // Meditech), so matching SOURCES by transformId alone would mislabel every one of them as Epic.
-      // __vendorId (see nodeToRequest) is the reliable source once a node has been saved after this was
-      // added; guessVendorId's name-match is the best-effort fallback for a workflow saved before that,
-      // like the one that's actually motivating this fix.
+      // transformId is still not enough on its own for display: a vendor with no NodeType of its own
+      // (Cerner/Allscripts/Meditech — see VENDOR_SOURCE_TRANSFORM_IDS) saves under the shared
+      // 'EpicSourceNode'/'epic' transformId, as does every node saved before per-vendor node types existed,
+      // so matching SOURCES by transformId alone would mislabel those as Epic. __vendorId (see nodeToRequest)
+      // is the reliable source for a node saved since it was added; guessVendorId's name-match is the
+      // best-effort fallback for anything older.
       const vendorId = config['__vendorId'] ?? this.guessVendorId(name) ?? transformId;
       const source = SOURCES.find(candidate => candidate.id === vendorId);
       return {
@@ -268,6 +281,20 @@ export class WorkflowGraphMapperService {
     } satisfies TransformNode;
   }
 
+  /** Downgrades a vendor source node to the shared 'epic' node type when the running API's catalog has no entry
+   *  for that vendor (see CATALOG_GUARDED_VENDOR_TRANSFORM_IDS). An empty catalog means "not loaded yet / the
+   *  request failed", which is NOT the same as "this vendor is unsupported", so it is left alone — the existing
+   *  FALLBACK_NODE_TYPES path already covers that case. */
+  private catalogSupportedTransformId(
+    transformId: string,
+    node: CanvasNode,
+    catalog: WorkflowCatalogItem[],
+  ): string {
+    if (node.kind || catalog.length === 0) return transformId;
+    if (!CATALOG_GUARDED_VENDOR_TRANSFORM_IDS.has(transformId)) return transformId;
+    return catalog.some(item => item.transformId === transformId) ? transformId : 'epic';
+  }
+
   private catalogForTransform(transformId: string, catalog: WorkflowCatalogItem[]): WorkflowCatalogItem | undefined {
     return catalog.find(item => item.transformId === transformId)
       ?? catalog.find(item => item.nodeType === FALLBACK_NODE_TYPES[transformId]);
@@ -277,16 +304,15 @@ export class WorkflowGraphMapperService {
     if (node.kind === 'transform') return node.transformId;
     if (node.kind === 'merge') return 'merge';
     const connector = node.fields['Connector'] ?? node.connectorLabel ?? node.fields['__name'] ?? '';
+    // The vendor the canvas/wizard actually recorded on this node comes first, so a saved node carries its own
+    // vendor NodeType (AthenahealthSourceNode, EClinicalWorksSourceNode, ...) instead of every EHR sharing
+    // EpicSourceNode — which is what made a run's node history read as Epic for an athenahealth or eCW pipeline.
+    // guessVendorId covers a node that predates __vendorId; the two name tests below stay as the last resort for
+    // ids a name match can't produce ('generic-fhir' never appears hyphenated in a display name).
+    const vendorId = node.vendorId ?? this.guessVendorId(connector);
+    if (vendorId && VENDOR_SOURCE_TRANSFORM_IDS.has(vendorId)) return vendorId;
     if (/sample/i.test(connector)) return 'sample';
     if (/generic.?fhir/i.test(connector)) return 'generic-fhir';
-    // Healow (eClinicalWorks) deliberately stays on the 'epic' fallback here, same as Athenahealth — the backend's
-    // workflow node catalog (DefaultWorkflowNodeCatalog.cs) still gates EClinicalWorksSourceNode out of its Items
-    // list ("GATED (SQL/CSV phase)"), and WorkflowGraphValidator rejects any node whose NodeType isn't in that
-    // catalog at RUN time (confirmed live: "Node 'EClinicalWorksSourceNode' is not in the workflow node catalog").
-    // The auth/token side doesn't care about NodeType at all (see SmartAuthorizationCodeTokenProvider and
-    // SourceConnections.SourceSystemType, set correctly by buildSource() below regardless of this), so labeling the
-    // node 'epic' here only costs a cosmetic mislabel on canvas reload — swapping it to a real 'healow' NodeType
-    // breaks the actual pipeline run until the catalog gate lifts.
     return 'epic';
   }
 

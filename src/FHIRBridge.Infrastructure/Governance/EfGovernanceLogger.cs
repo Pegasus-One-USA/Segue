@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Governance;
@@ -208,7 +208,8 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.StatusCode,
             entry.DurationMs,
             Truncate(entry.Error, 1000),
-            entry.CorrelationId ?? current.CorrelationId));
+            entry.CorrelationId ?? current.CorrelationId,
+            entry.Direction));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

@@ -96,10 +96,11 @@ export class WorkflowBuildAssemblerServiceV2 {
   assemble(
     name: string,
     trigger?: WorkflowTriggerRequest | null,
+    description?: string | null,
   ): WorkflowBuildRequest {
     this.lastUnmappedResources.length = 0;
 
-    const graph = this.mapper.toRequest(name, trigger);
+    const graph = this.mapper.toRequest(name, trigger, null, description);
     const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
 
     const sourceNodeIds = new Set(
@@ -293,12 +294,11 @@ export class WorkflowBuildAssemblerServiceV2 {
     // ...), but its own sourceSystemType so the backend's Healow-specific authorize-request handling actually
     // applies (v1-only .read resource scopes, mandatory practice_code derived from the FHIR base URL's last path
     // segment, no offline_access — see SmartAuthorizationCodeTokenProvider.BuildAuthorizationRequest). The canvas
-    // node itself still resolves to NodeType "EpicSourceNode" (see workflow-graph-mapper.service.ts's
-    // transformIdForNode — the backend's workflow node catalog gates EClinicalWorksSourceNode out until the
-    // generic Source hierarchy lands), so this connection's actual pipeline RUN executes via
-    // EpicSourceNodeExecutor — which still picks EClinicalWorksFhirSourceClient at the HTTP-client-selection step
-    // based on this SourceSystemType (see SourceNodeExecutors.cs's TrustResolverSourceType), just not via a
-    // dedicated Healow executor class. Healow now supports Patient (standalone), Provider EHR launch, AND Backend
+    // node now resolves to NodeType "EClinicalWorksSourceNode" (see workflow-graph-mapper.service.ts's
+    // transformIdForNode), so the run executes via EClinicalWorksSourceNodeExecutor and the run's node history
+    // names eCW rather than Epic. A workflow saved BEFORE that still carries "EpicSourceNode" and keeps running
+    // correctly: EpicSourceNodeExecutor picks EClinicalWorksFhirSourceClient at the HTTP-client-selection step
+    // from this SourceSystemType (see SourceNodeExecutors.cs's TrustResolverSourceType). Healow now supports Patient (standalone), Provider EHR launch, AND Backend
     // System (see VENDOR_DISABLED_AUDIENCES) — the authentication block below handles all three (public / jwt /
     // secret), mirroring the Epic branch, so Backend System's private_key_jwt key material is persisted, not dropped.
     if (/healow/i.test(connector)) {
@@ -1281,6 +1281,12 @@ export class WorkflowBuildAssemblerServiceV2 {
     let p = path.trim();
     if (p.startsWith(`${resourceType}.`)) p = p.slice(resourceType.length + 1);
     if (p.startsWith('$')) return p;
+    // The resource's own ROOT node ("Patient", with nothing after it) is what a whole-node-as-JSON mapping
+    // of the entire payload carries — field-mapping-model's serializeRowsFlat writes the group's node id as
+    // the row's path, and for the root that id is just the resourceType. Only "$" means "the whole document"
+    // to JsonMappingEngine.ResolveAll; the "$.{p}" fallback below would produce "$.Patient", which resolves
+    // to nothing and writes NULL into the target column on every record.
+    if (!p || p === resourceType) return '$';
     return `$.${p}`;
   }
 

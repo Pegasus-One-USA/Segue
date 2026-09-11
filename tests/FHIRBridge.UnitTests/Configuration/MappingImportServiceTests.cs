@@ -35,7 +35,9 @@ public sealed class MappingImportServiceTests
 
     private static (IMappingImportService Service, InMemoryConfigurationRepository Repository,
         RecordingSchemaProvider Provider, Guid DestinationId, Guid SourceConnectionId) CreateSut(
-        IReadOnlyList<string> existingDestinationTables, IFhirElementCatalog? fhirElementCatalog = null)
+        IReadOnlyList<string> existingDestinationTables,
+        IFhirElementCatalog? fhirElementCatalog = null,
+        IReadOnlyDictionary<string, IReadOnlyList<DestinationColumnSchemaDto>>? existingColumnsByTable = null)
     {
         var repository = new InMemoryConfigurationRepository(TestHelpers.LicenseTestScopeFactory.Create());
         var destination = new DestinationConfiguration(
@@ -47,7 +49,11 @@ public sealed class MappingImportServiceTests
             .Setup(x => x.GetSchemaAsync(destination.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DestinationSchemaDto(
                 destination.Id,
-                existingDestinationTables.Select(t => new DestinationTableSchemaDto("dbo", t, $"dbo.{t}", [])).ToList()));
+                existingDestinationTables.Select(t => new DestinationTableSchemaDto(
+                    "dbo", t, $"dbo.{t}",
+                    existingColumnsByTable is not null && existingColumnsByTable.TryGetValue(t, out var columns)
+                        ? columns
+                        : [])).ToList()));
 
         var provider = new RecordingSchemaProvider();
         var factory = new Mock<IMappingSchemaProviderFactory>();
@@ -150,6 +156,72 @@ public sealed class MappingImportServiceTests
         relationField.JsonPath.Should().Be("$.contact[*].relationship[*]");
         relationField.Format.Should().Be("wholeNodeAsJson");
         relationField.ArrayPolicy.Should().Be(ArrayPolicy.SeparateDestination);
+    }
+
+    /// <summary>
+    /// Mapping the WHOLE fetched payload as JSON into one column (a wholeNodeAsJson row whose sourceNode is
+    /// the resource's own root node, which the wizard names after the resourceType itself): the stored JsonPath
+    /// must be "$" — the only path <c>JsonMappingEngine.ResolveAll</c> reads as "the whole document" — and the
+    /// field must come out required when the destination declares that column NOT NULL, matching the gate
+    /// <see cref="Application.Validation.CreateMappingProfileRequestValidator"/> applies to the other path that
+    /// writes these same profiles (the workflow save).
+    /// </summary>
+    [Fact]
+    public async Task Import_maps_the_whole_payload_root_to_the_document_path_and_marks_a_NOT_NULL_column_required()
+    {
+        var (service, repository, _, destinationId, sourceConnectionId) = CreateSut(
+            existingDestinationTables: ["Patient"],
+            existingColumnsByTable: new Dictionary<string, IReadOnlyList<DestinationColumnSchemaDto>>
+            {
+                ["Patient"] =
+                [
+                    new DestinationColumnSchemaDto("content", "text", "String", IsNullable: false, MaxLength: null),
+                    new DestinationColumnSchemaDto("gender", "text", "String", IsNullable: true, MaxLength: null),
+                ],
+            });
+
+        var body = $$"""
+            {
+              "source": "Athena",
+              "destination": "postgres",
+              "sourceConnectionId": "{{sourceConnectionId}}",
+              "destinationId": "{{destinationId}}",
+              "mappings": [
+                {
+                  "resourceType": "Patient",
+                  "rank": 0,
+                  "generatedAt": "2026-09-10T00:00:00Z",
+                  "schemaChanges": { "tablesToCreate": [], "columnsToAdd": [], "summary": null },
+                  "processingOrder": [ { "step": 1, "table": "Patient", "level": 1, "dependsOn": null, "note": null } ],
+                  "tables": [
+                    {
+                      "name": "Patient",
+                      "isNew": false,
+                      "relation": null,
+                      "columns": [
+                        { "column": "content", "mode": "wholeNodeAsJson", "sourceNode": "Patient", "instance": null },
+                        { "column": "gender", "mode": "directField", "sources": ["Patient.gender"], "instance": null }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        var result = await service.ImportAsync(Parse(body), CancellationToken.None);
+
+        result.Profiles.Should().HaveCount(1);
+        result.Profiles[0].Warnings.Should().BeEmpty();
+
+        var profile = (await repository.GetMappingProfilesAsync(CancellationToken.None)).Single();
+        var contentField = profile.Fields.Single(f => f.TargetField == "content");
+        contentField.JsonPath.Should().Be("$", "only the bare $ path resolves to the whole source document");
+        contentField.Format.Should().Be("wholeNodeAsJson");
+        contentField.IsRequired.Should().BeTrue("the destination declares 'content' NOT NULL");
+
+        // A nullable column keeps the old default, so nothing else about an ordinary mapping changes.
+        profile.Fields.Single(f => f.TargetField == "gender").IsRequired.Should().BeFalse();
     }
 
     [Fact]

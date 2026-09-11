@@ -33,7 +33,81 @@ public sealed class EffectiveRuleResolverTests
         repository
             .Setup(x => x.GetGlobalScopedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
+        repository
+            .Setup(x => x.GetPendingWorkflowScopedAsync(It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         return repository;
+    }
+
+    /// <summary>A Workflow-scope rule authored before its workflow existed carries no ResourcePipelineRouteId,
+    /// so no tier query matches it — which is correct at run time (it belongs to no pipeline) and wrong at save
+    /// time, where the mapping profile is written BEFORE the workflow that would attach it. Opting in is the
+    /// only way to see it; not opting in must keep it invisible.</summary>
+    private static Mock<ITransformationRuleRepository> WithPendingRule(out TransformationRule pendingRule)
+    {
+        var repository = CreateRepositoryMock();
+        pendingRule = new TransformationRule(
+            TransformScope.Workflow, TransformNodeType.DateMathAge, "{}", resourceType: ResourceType,
+            destinationField: DestinationField, destinationType: DestinationType.SqlServer,
+            expectedValueType: MappingValueType.Integer);
+        var rule = pendingRule;
+        repository
+            .Setup(x => x.GetPendingWorkflowScopedAsync(
+                DestinationType.SqlServer, ResourceType, DestinationField, It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+        return repository;
+    }
+
+    [Fact]
+    public async Task Pending_workflow_rule_is_invisible_unless_the_caller_opts_in()
+    {
+        var repository = WithPendingRule(out _);
+
+        var resolver = new EffectiveRuleResolver(repository.Object);
+        var result = await resolver.ResolveAsync(
+            DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, CancellationToken.None);
+
+        result.Should().BeEmpty();
+        repository.Verify(
+            x => x.GetPendingWorkflowScopedAsync(
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Pending_workflow_rule_resolves_for_an_unsaved_workflow_when_opted_in()
+    {
+        var repository = WithPendingRule(out var pendingRule);
+
+        var resolver = new EffectiveRuleResolver(repository.Object);
+        var result = await resolver.ResolveAsync(
+            DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, CancellationToken.None,
+            workflowScopedOnly: true, includePendingWorkflowRules: true);
+
+        result.Should().ContainSingle().Which.Should().Be(pendingRule);
+    }
+
+    [Fact]
+    public async Task Attached_workflow_rule_beats_a_pending_one()
+    {
+        var repository = WithPendingRule(out _);
+        var attachedRule = new TransformationRule(
+            TransformScope.Workflow, TransformNodeType.NumberCast, "{}", resourceType: ResourceType,
+            destinationField: DestinationField, resourcePipelineRouteId: WorkflowId);
+        repository
+            .Setup(x => x.GetWorkflowScopedAsync(
+                WorkflowId, ResourceType, DestinationField, It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[attachedRule]);
+
+        var resolver = new EffectiveRuleResolver(repository.Object);
+        var result = await resolver.ResolveAsync(
+            DestinationType.SqlServer, ResourceType, DestinationField, WorkflowId, null, null, CancellationToken.None,
+            workflowScopedOnly: true, includePendingWorkflowRules: true);
+
+        result.Should().ContainSingle().Which.Should().Be(attachedRule);
     }
 
     [Fact]
