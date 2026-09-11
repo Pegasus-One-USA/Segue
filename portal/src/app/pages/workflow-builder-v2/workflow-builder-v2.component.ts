@@ -91,6 +91,19 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   // ── other modals ───────────────────────────────────────────────────────────
   protected readonly payloadOpen  = signal(false);
   protected readonly confirmReset = signal(false);
+
+  // ── new-workflow modal ─────────────────────────────────────────────────────
+  // A workflow is created BEFORE the canvas is built, not after, so its id exists from the very first
+  // action the builder takes. Transformation rules are persisted the moment they are authored (see
+  // TransformationRulesService.save) — without an id to own them they were written with a null
+  // ResourcePipelineRouteId, which the resolver treats as "belongs to whoever asks", so one workflow's
+  // draft rules surfaced in every other workflow. Creating first means every rule carries the right
+  // workflow id at write time and nothing has to be attached afterwards.
+  protected readonly newWorkflowOpen = signal(false);
+  protected readonly newWorkflowName = signal('');
+  protected readonly newWorkflowDescription = signal('');
+  protected readonly newWorkflowBusy = signal(false);
+  protected readonly newWorkflowNameInvalid = computed(() => !this.newWorkflowName().trim());
   protected readonly currentWorkflowId = signal<string | null>(null);
   protected readonly workflowName = signal('');
   // True once the name field has been blurred or a save was attempted while empty — gates the invalid
@@ -222,6 +235,10 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     // than inheriting whatever was left over from whatever was on the canvas before.
     if (!editId) {
       this.resetCanvasAndWorkflowState();
+      // Name/description are collected up front and the workflow is created immediately, so the builder
+      // always operates on a workflow that exists. Only for a genuinely new workflow — an ?id= deep link
+      // already has everything this modal would ask for.
+      this.newWorkflowOpen.set(true);
     }
 
     this.workflowApi.loadCatalog().subscribe({
@@ -234,6 +251,60 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       },
       error: () => this.workflowStatus.set('Catalog could not be loaded. Save is disabled.'),
     });
+  }
+
+  // ── new-workflow modal ─────────────────────────────────────────────────────
+  onNewWorkflowNameInput(value: string): void { this.newWorkflowName.set(value); }
+  onNewWorkflowDescriptionInput(value: string): void { this.newWorkflowDescription.set(value); }
+
+  /** Creates the workflow up front so the canvas always has a real id to hang configuration off.
+   *  POST /workflows is the low-level create (no source/destination provisioning — there is nothing to
+   *  provision yet), which mints the id and returns the persisted definition. The workflow lists as
+   *  "Draft" until a destination is added, so a named-but-empty workflow is visibly unfinished rather
+   *  than looking like a broken runnable one. */
+  createNewWorkflow(): void {
+    if (this.newWorkflowNameInvalid() || this.newWorkflowBusy()) { return; }
+    if (!this.permissions.hasPermission('workflow.create')) {
+      this.toast.error('Not allowed', 'You do not have permission to create workflows.');
+      return;
+    }
+
+    this.newWorkflowBusy.set(true);
+    const name = this.newWorkflowName().trim();
+    const description = this.newWorkflowDescription().trim() || null;
+
+    // save() with no workflow id POSTs /workflows — the low-level create that mints the id. An empty
+    // graph is valid: nothing requires a workflow to have nodes, and the nodes arrive as they are added.
+    this.workflowApi.save({ name, isEnabled: true, nodes: [], edges: [], description }).subscribe({
+      next: created => {
+        this.newWorkflowBusy.set(false);
+        this.newWorkflowOpen.set(false);
+        // Adopt the server's id and switch into edit mode: from here every save is a PUT against this
+        // workflow, and every rule authored on the canvas is written with this id.
+        this.currentWorkflowId.set(created.id);
+        this.workflowIdInput.set(created.id);
+        this.workflowName.set(created.name);
+        this.workflowDescription.set(created.description ?? '');
+        this.isEditingExistingWorkflow.set(true);
+        this.workflowStatus.set(`Created ${created.name}. Add a source to continue.`);
+        this.toast.success('Workflow created', `"${created.name}" is ready — add a source to continue.`);
+        // Keep the URL in step with the workflow now on the canvas, so a refresh reloads it rather than
+        // starting over and orphaning what was just created.
+        this.router.navigate([], { relativeTo: this.route, queryParams: { id: created.id }, replaceUrl: true });
+      },
+      error: err => {
+        this.newWorkflowBusy.set(false);
+        const msg = err?.error?.error_description ?? err?.error?.error ?? 'Could not create the workflow.';
+        this.toast.error('Create failed', typeof msg === 'string' ? msg : 'Could not create the workflow.');
+      },
+    });
+  }
+
+  /** Leaves the builder rather than dropping the user onto a canvas with no workflow behind it — every
+   *  later action (adding a source, authoring a rule) assumes an id exists. */
+  cancelNewWorkflow(): void {
+    this.newWorkflowOpen.set(false);
+    this.router.navigate(['/workflows']);
   }
 
   // ── topbar ─────────────────────────────────────────────────────────────────

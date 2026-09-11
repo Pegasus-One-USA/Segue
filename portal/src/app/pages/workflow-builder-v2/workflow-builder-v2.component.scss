@@ -484,6 +484,60 @@
 }
 
 // ── Reset confirmation dialog ──────────────────────────────────────────────────
+/* ── New-workflow modal ────────────────────────────────────────────────────────────────────────────
+   Reuses .reset-backdrop/.reset-dialog for the frame so the two modals sit identically on screen; only
+   the form fields are new. The dialog itself centres its children, which is right for a confirm but
+   wrong for labelled inputs — :has() re-aligns just this one to the left and widens it for the text. */
+.reset-dialog:has(.nw-input) {
+  width: 440px;
+  align-items: stretch;
+  text-align: left;
+}
+
+.nw-label {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #5b6472);
+}
+
+.nw-optional {
+  font-weight: 400;
+  color: var(--color-text-tertiary, #8b95a3);
+}
+
+.nw-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-primary, #1c2430);
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #d6dbe3);
+  border-radius: var(--radius-input, 8px);
+  transition: border-color var(--transition-base, 0.12s) ease, box-shadow var(--transition-base, 0.12s) ease;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary, #4f6bed);
+    box-shadow: 0 0 0 3px rgba(79, 107, 237, 0.15);
+  }
+
+  &::placeholder { color: var(--color-text-tertiary, #98a2b3); }
+}
+
+.nw-textarea {
+  resize: vertical;
+  min-height: 64px;
+  line-height: 1.45;
+}
+
+.reset-dialog:has(.nw-input) .reset-actions {
+  margin-top: 18px;
+  justify-content: flex-end;
+}
+
 .reset-backdrop {
   position: absolute;
   inset: 0;

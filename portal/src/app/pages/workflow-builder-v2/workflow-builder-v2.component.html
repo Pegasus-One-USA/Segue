@@ -130,6 +130,43 @@
   (closed)="payloadOpen.set(false)"
 />
 
+<!-- ── New workflow: name + description, captured before the canvas is usable ──────────────────────
+     The workflow is created here rather than on Save so it has a real id from the outset. Transformation
+     rules are written the moment they are authored, and an id-less rule was stored as "belongs to no
+     workflow" — which the resolver read as "belongs to every workflow". No backdrop-dismiss and no escape
+     key: leaving without a workflow would drop the user on a canvas nothing can be attached to, so the
+     only ways out are Create and Cancel (which returns to the list). ── -->
+@if (newWorkflowOpen()) {
+  <div class="reset-backdrop">
+    <div class="reset-dialog">
+      <h3 class="reset-title">New workflow</h3>
+      <p class="reset-body">Name this workflow to get started. You can change both later.</p>
+
+      <label class="nw-label" for="nw-name">Name</label>
+      <input id="nw-name" class="nw-input" type="text" autocomplete="off"
+             placeholder="e.g. Epic to SQL Server — Patient"
+             [value]="newWorkflowName()"
+             (input)="onNewWorkflowNameInput($any($event.target).value)"
+             (keydown.enter)="createNewWorkflow()" />
+
+      <label class="nw-label" for="nw-description">Description <span class="nw-optional">(optional)</span></label>
+      <textarea id="nw-description" class="nw-input nw-textarea" rows="3"
+                placeholder="What this workflow moves, and why it exists."
+                [value]="newWorkflowDescription()"
+                (input)="onNewWorkflowDescriptionInput($any($event.target).value)"></textarea>
+
+      <div class="reset-actions">
+        <button type="button" class="btn btn-secondary" (click)="cancelNewWorkflow()">Cancel</button>
+        <button type="button" class="btn btn-primary"
+                [disabled]="newWorkflowNameInvalid() || newWorkflowBusy()"
+                (click)="createNewWorkflow()">
+          {{ newWorkflowBusy() ? 'Creating…' : 'Create' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
 @if (confirmReset()) {
   <div class="reset-backdrop" tabindex="0"
        (click)="onResetBackdropClick($event)"

@@ -583,7 +583,11 @@ public static class WorkflowEndpoints
                 summaries.Add(new WorkflowSummaryDto(
                     workflow.Id,
                     workflow.Name,
-                    workflow.IsEnabled ? "Enabled" : "Disabled",
+                    // Draft outranks Enabled/Disabled: a workflow created from the New Workflow modal exists
+                    // (so its id can own transformation rules from the first one) but cannot run until it has
+                    // somewhere to write. Derived from hasDestination rather than stored, so nothing has to be
+                    // migrated and a workflow leaves Draft the moment a destination is added.
+                    !hasDestination ? "Draft" : workflow.IsEnabled ? "Enabled" : "Disabled",
                     workflow.Nodes.Count,
                     workflow.Edges.Count,
                     lastRun?.Status.ToString(),
