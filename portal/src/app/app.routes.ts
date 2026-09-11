@@ -94,11 +94,16 @@ export const routes: Routes = [
           ),
       },
 
-      // User Management (permission-gated; SuperAdmin / GlobalAdmin fall through)
+      // User Management (permission-gated; SuperAdmin / GlobalAdmin fall through). The parent admits
+      // anyone who can reach at least ONE child — User Management screens (user.view) OR Role
+      // management (role.view) — because Roles lives under this path but is deliberately independent
+      // of user.view. Each user-DATA child (user-list / tenants / user-detail) re-guards user.view on
+      // its own, and the roles children guard role.view, so a role.view-only user passes here but can
+      // only reach the Roles routes, never the user screens (see user-management.routes.ts).
       {
         path: 'user-management',
         canActivate: [permissionGuard],
-        data: { permissions: ['user.view'] },
+        data: { permissions: ['user.view', 'role.view'] },
         loadChildren: () =>
           import('./user-management/user-management.routes').then(
             m => m.USER_MANAGEMENT_ROUTES
