@@ -150,7 +150,7 @@ EventId.Id = 2034                      -- failures being handed back for retry o
 -- Why didn't my route fire?
 EventId.Id = 2011 and RouteId = '<guid>'     -- per-route due evaluation (needs ScheduleDispatcher:HeartbeatLoggingEnabled)
 EventId.Id = 2022                            -- time zone the host could not resolve (route OR workflow)
-EventId.Id = 2003                            -- SystemSettings unreadable → RuntimeWorker:Enabled fell back to false
+EventId.Id = 2003                            -- SystemSettings unreadable → portal-configured settings ignored
 EventId.Id = 2002                            -- scheduler explicitly disabled
 
 -- First-time setup / audit trail
