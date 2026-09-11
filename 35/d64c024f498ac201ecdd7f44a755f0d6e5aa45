@@ -1,0 +1,21 @@
+docs/reference/segue-epic-to-chartchat-medplum-workflow-plan.md
+  s_73f3fbbed23ffd::t_20b3919091aef4 1-79
+docs/reference/chartchat-ccdemo-documentation.md
+  s_73f3fbbed23ffd::t_92de6dd14d806d 1-451
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "35d64c024f498ac201ecdd7f44a755f0d6e5aa45",
+  "prompts": {},
+  "sessions": {
+    "s_73f3fbbed23ffd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "496f7c07-3621-47e0-9bc6-7c6b5214943d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

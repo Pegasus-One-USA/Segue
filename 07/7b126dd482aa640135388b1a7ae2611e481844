@@ -1,0 +1,19 @@
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_5efbfd58cf2e78::t_c685d353e9a24f 147-158,167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "077b126dd482aa640135388b1a7ae2611e481844",
+  "prompts": {},
+  "sessions": {
+    "s_5efbfd58cf2e78": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c581937a-5297-4992-bb3c-c53308893595",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
