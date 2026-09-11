@@ -111,7 +111,7 @@ export class LicenseDevMintComponent implements OnInit {
   protected toggleSourceType(value: string): void {
     this.selectedSourceTypes.update((current) => {
       const next = new Set(current);
-      next.has(value) ? next.delete(value) : next.add(value);
+      if (next.has(value)) { next.delete(value); } else { next.add(value); }
       return next;
     });
   }
@@ -123,7 +123,7 @@ export class LicenseDevMintComponent implements OnInit {
   protected toggleResourceType(value: string): void {
     this.selectedResourceTypes.update((current) => {
       const next = new Set(current);
-      next.has(value) ? next.delete(value) : next.add(value);
+      if (next.has(value)) { next.delete(value); } else { next.add(value); }
       return next;
     });
   }
@@ -135,7 +135,7 @@ export class LicenseDevMintComponent implements OnInit {
   protected toggleDestinationType(value: string): void {
     this.selectedDestinationTypes.update((current) => {
       const next = new Set(current);
-      next.has(value) ? next.delete(value) : next.add(value);
+      if (next.has(value)) { next.delete(value); } else { next.add(value); }
       return next;
     });
   }
@@ -176,7 +176,7 @@ export class LicenseDevMintComponent implements OnInit {
   protected toggleHospital(id: string): void {
     this.selectedHospitalIds.update((current) => {
       const next = new Set(current);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
       return next;
     });
   }

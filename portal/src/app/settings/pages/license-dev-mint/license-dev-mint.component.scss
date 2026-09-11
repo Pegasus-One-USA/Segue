@@ -39,7 +39,7 @@
 }
 .form-field { display: flex; flex-direction: column; gap: 6px; }
 .form-field--full { grid-column: 1 / -1; }
-.form-field label {
+.form-field label, .form-field .field-label {
   font-size: 12px; font-weight: 600; color: var(--color-muted);
   text-transform: uppercase; letter-spacing: 0.05em;
 }
