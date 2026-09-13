@@ -3318,7 +3318,7 @@ export class EhrVendorSourceFormComponent
     this.grantedScopes.set([]);
     this.grantedScopesError.set(null);
 
-    this.discovery.discover(url, envKey, this.selectedExistingId()).subscribe({
+    this.discovery.discover(url, envKey).subscribe({
       next: (result) => {
         const dv: FullDiscoveredValues = {
           fhirBaseUrl: url,
@@ -3609,7 +3609,7 @@ export class EhrVendorSourceFormComponent
     this.testStatus.set('running');
     // Real reachability test: probe the source's public SMART/metadata endpoints via the backend. Both probes are
     // best-effort server-side, so this only fails on network/URL errors, not a missing smart-configuration document.
-    this.discovery.discover(baseUrl, undefined, this.selectedExistingId()).subscribe({
+    this.discovery.discover(baseUrl).subscribe({
       next: (result) => {
         this.testStatus.set('ok');
         this.toast.show(
