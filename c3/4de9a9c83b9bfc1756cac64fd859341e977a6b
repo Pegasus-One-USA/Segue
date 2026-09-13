@@ -1,0 +1,112 @@
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_cf3967cb308c19::t_dbb1959469dd35 709,1826-1829,3769-3771,3773,4333-4340,4949-4991,5114-5126
+  s_cf3967cb308c19::t_3db75ca802e614 710-720
+portal/src/app/services/applicability-v2.service.ts
+  s_cf3967cb308c19::t_aa5ce6ce7fea0d 124-132
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_cf3967cb308c19::t_88e03bf462958a 147-155
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_cf3967cb308c19::t_8a5ffb857d4b3c 8,231-234,239-243
+  s_cf3967cb308c19::t_04d4aec3ddf34b 16-23,295-331
+  s_cf3967cb308c19::t_e9aa61026c7022 236-238
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_cf3967cb308c19::t_04d4aec3ddf34b 209-221
+  s_cf3967cb308c19::t_d6fc9062766680 130-134,136
+  s_cf3967cb308c19::t_dbb1959469dd35 146,163
+src/FHIRBridge.Application/DTOs/DestinationConfigurationDto.cs
+  s_cf3967cb308c19::t_dbb1959469dd35 21-27
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_cf3967cb308c19::t_196d99d764625f 88-103
+  s_cf3967cb308c19::t_5e6aa69cda045b 208-212,220-233,236-242
+src/FHIRBridge.Application/Services/IConfigurationService.cs
+  s_cf3967cb308c19::t_dbb1959469dd35 45-54
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_cf3967cb308c19::t_90a6005ea6bbef 220,226,229-232,241-247
+  s_cf3967cb308c19::t_ddb8afde89e89b 7-15,18-23,32-44,227-228
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_cf3967cb308c19::t_dbb1959469dd35 1742-1745,3624-3626,3628,4185-4192,4801-4843,4966-4977
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineReferenceIdTests.cs
+  s_cf3967cb308c19::t_1c7a6d8afa1efe 46-47,64-66,85,104
+  s_cf3967cb308c19::t_df7f52ac7e3426 1-45,48-63,67-80,82-84,86-103,105-106
+  s_cf3967cb308c19::t_17c6852c8db04e 81
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_cf3967cb308c19::t_88e03bf462958a 143-151
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_cf3967cb308c19::t_90a6005ea6bbef 220,226,229-232,241-247
+  s_cf3967cb308c19::t_ddb8afde89e89b 7-15,18-23,32-44,227-228
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_cf3967cb308c19::t_d6fc9062766680 130-134,136
+  s_cf3967cb308c19::t_c0e7d3b6ce7171 209-221
+  s_cf3967cb308c19::t_dbb1959469dd35 146,163
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_cf3967cb308c19::t_cc53d126633b56 210-216,285-291,455-461,514-520
+portal/src/app/destination-connections/services/destination-configuration.service.ts
+  s_cf3967cb308c19::t_dbb1959469dd35 60-68
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  s_cf3967cb308c19::t_dbb1959469dd35 221-242
+portal/src/app/core/api-endpoints.ts
+  s_cf3967cb308c19::t_dbb1959469dd35 139-140
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_cf3967cb308c19::t_889ca91b256873 1,186-253,258-260,264
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_cf3967cb308c19::t_dbb1959469dd35 610-632
+tests/FHIRBridge.UnitTests/Governance/SafeHarborDeIdentificationServiceTests.cs
+  s_cf3967cb308c19::t_6b820d2a645252 151
+  s_cf3967cb308c19::t_b946b1723f71c6 173-200
+  s_cf3967cb308c19::t_5a0acba68bf9c7 368-397
+  s_cf3967cb308c19::t_d1991a7f71eaed 1,104-150,152-172,201-212
+  s_cf3967cb308c19::t_0409b891b761cf 213-318,320-333,335-340,398-411
+  s_cf3967cb308c19::t_f553005e060624 6
+  s_cf3967cb308c19::t_fdcdd6d7b5f29e 319,334
+  s_cf3967cb308c19::t_9ae799e5e9e875 341-367
+  s_cf3967cb308c19::t_d05493b77925d9 36-42
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/ComplianceNodeExecutors.cs
+  s_cf3967cb308c19::t_f917db51c1f141 1,8,257,273-275
+  s_cf3967cb308c19::t_f5a5ca9b6417b5 2
+  s_cf3967cb308c19::t_38780d505ff642 250-256,258-263
+  s_cf3967cb308c19::t_36c0ebe2e99fdf 192
+  s_cf3967cb308c19::t_d9e00869c5267b 126,131-132,137-176
+portal/src/app/destination-connections/services/destination-configuration.service.spec.ts
+  s_cf3967cb308c19::t_dbb1959469dd35 1-65
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_cf3967cb308c19::t_e517612d92f31f 100-110
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_cf3967cb308c19::t_f54a3de9261c95 240-244
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_cf3967cb308c19::t_219b325b5ca040 54-55,69,736,745
+  s_cf3967cb308c19::t_0e4da9d01108e9 254-258
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_cf3967cb308c19::t_8357cc15624294 16-23
+  s_cf3967cb308c19::t_8a5ffb857d4b3c 8,253-256,261-265
+  s_cf3967cb308c19::t_317815287b1bef 317-353
+  s_cf3967cb308c19::t_e9aa61026c7022 258-260
+src/FHIRBridge.Infrastructure/Governance/SafeHarborDeIdentificationService.cs
+  s_cf3967cb308c19::t_a4619db7a1f8e3 24-27
+  s_cf3967cb308c19::t_4ec94643a32ecc 71,287,464
+  s_cf3967cb308c19::t_db948bc26645ea 423,425-427,429-433,435-439,443-463
+  s_cf3967cb308c19::t_26e45eedbd463e 486-498,504-514
+  s_cf3967cb308c19::t_2e4a17c1cc34f5 91-95,99-286
+  s_cf3967cb308c19::t_3b6a6f0a35ddab 288-336
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_cf3967cb308c19::t_c22a79a517ada6 1,30-32,38-43,293-299
+tests/FHIRBridge.UnitTests/Infrastructure/SqlDestinationSchemaServiceProbeMergeTests.cs
+  s_cf3967cb308c19::t_17e94d69c7205d 1,134-215
+portal/src/app/services/applicability-v2.service.spec.ts
+  s_cf3967cb308c19::t_5ce1c42e2e7dd8 1-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c34de9a9c83b9bfc1756cac64fd859341e977a6b",
+  "prompts": {},
+  "sessions": {
+    "s_cf3967cb308c19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66d990c3-0cfc-4e6d-af22-3febae2af8ba",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-GrowthZone <faisal.khan@growthzone.com>"
+    }
+  }
+}
