@@ -153,6 +153,16 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   // screen — see RoleManagementService.UpdateRoleAsync's matching server-side check.
   readonly isPermissionsLocked = computed(() => this.role()?.name === SUPER_ADMIN_ROLE_NAME);
 
+  // RBAC redesign Step 6: true for ANY role — built-in or custom — with Full System Access (see
+  // Role.isFullAccess), not just SuperAdmin. Such a role already automatically holds every current
+  // and future permission through CachedUserPermissionsProvider's live union (Step 2), so the
+  // granular matrix below has nothing meaningful left to show or edit — see the template, which
+  // replaces it with a read-only banner instead. This is purely a display concern: save() never sets
+  // isFullAccess (see UpdateRoleRequest.isFullAccess), so this screen can never grant or revoke it —
+  // that only ever happens through role-dialog.component.ts's toggle, itself gated by the caller's
+  // own Full System Access, never by role name.
+  readonly isFullAccessRole = computed(() => !!this.role()?.isFullAccess);
+
   private readonly allPermissionsFlat = computed<Permission[]>(() =>
     this.catalog().flatMap(cat => cat.groups.flatMap(g => g.permissions))
   );
@@ -180,12 +190,21 @@ export class RolePermissionsComponent implements OnChanges, HasUnsavedChanges {
   // *displays* what's currently reachable. A non-node row (role, user, workflow, settings, ...) has
   // no vendor prefix to check, so isNodePermissionPrefixVisible always keeps it — this only ever
   // narrows the Workflow Nodes table.
+  // Azure SQL and SFTP are still Phase 2+ in the Workflow Builder canvas (PhaseConfigService) — not
+  // yet addable as a real node — but their permissions can still be pre-provisioned on a role ahead
+  // of that, on this screen specifically. Handled here (not in isNodePermissionPrefixVisible itself)
+  // so the Assign Roles dialog's own preview — the shared gate's other consumer — keeps matching the
+  // canvas exactly, per its own fix in 32f94008; only Role & Permissions shows these two rows early.
+  private static readonly PRE_PROVISIONABLE_AHEAD_OF_CANVAS: ReadonlySet<string> = new Set(['azuresql', 'sftp']);
+
   private readonly visibleMatrixSections = computed<MatrixSection[]>(() =>
     MATRIX_SECTIONS.map(section => ({
       ...section,
       rows: section.rows.filter(row => {
         const prefix = row.actions?.[0]?.code.split('.')[0];
-        return !prefix || isNodePermissionPrefixVisible(prefix, this.phaseCfg);
+        if (!prefix) return true;
+        if (RolePermissionsComponent.PRE_PROVISIONABLE_AHEAD_OF_CANVAS.has(prefix)) return true;
+        return isNodePermissionPrefixVisible(prefix, this.phaseCfg);
       }),
     }))
   );

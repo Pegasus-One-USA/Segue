@@ -9,4 +9,7 @@ public sealed record RoleDto(
     DateTime? CreatedOnUtc = null,
     string? CreatedBy = null,
     DateTime? ModifiedOnUtc = null,
-    string? ModifiedBy = null);
+    string? ModifiedBy = null,
+    // RBAC redesign Step 4: current value of Role.IsFullAccess — read-only here (this DTO is a response
+    // shape; grant/revoke goes through CreateRoleRequest/UpdateRoleRequest, see their own comments).
+    bool IsFullAccess = false);

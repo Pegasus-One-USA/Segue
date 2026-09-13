@@ -187,6 +187,16 @@
 
     mat-icon { color: var(--color-error); }
   }
+
+  // RBAC redesign Step 6: distinct from the warning-toned SuperAdmin-lock notice above — this one
+  // applies to ANY Full System Access role (built-in or custom) and is informational, not a warning.
+  &.full-access-notice {
+    background: var(--color-info-soft);
+    border-color: var(--color-info);
+    color: var(--color-info-strong);
+
+    mat-icon { color: var(--color-info); }
+  }
 }
 
 // ─── Permissions ───────────────────────────────────────────────────────────────

@@ -221,8 +221,27 @@ public sealed class RbacBootstrapper : IRbacBootstrapper
                 continue;
             }
 
-            _dbContext.Roles.Add(
-                new Role(seed.Id, seed.Name, seed.Description, isSystem: true, isDefault: false));
+            var role = new Role(seed.Id, seed.Name, seed.Description, isSystem: true, isDefault: false);
+
+            // RBAC Fix 1 (Step 7 audit, high-severity): on a brand-new database, this is the ONLY place
+            // the seeded SuperAdmin role row is ever created — migrations run before this bootstrapper, so
+            // the AddRoleIsFullAccess migration's own raw-SQL backfill (UPDATE ... WHERE Id IN (...)) finds
+            // an empty Roles table and updates zero rows here. Without this, a fresh install would leave
+            // SuperAdmin's own IsFullAccess at the constructor's default of false forever, and since
+            // RoleManagementService.CallerHasFullAccessAsync checks IsFullAccess only (no role-name
+            // fallback), nobody — not even SuperAdmin — could ever grant/revoke Full System Access on any
+            // role through the intended API/UI path. Scoped by id to SuperAdmin specifically (never a
+            // blanket "every seeded role" call): RbacSeedData.Roles happens to contain only SuperAdmin
+            // today, but this check keeps the intent explicit and correct even if that ever changes.
+            // Deliberately does NOT touch any already-existing role (guarded by the roleIdSet check above,
+            // unchanged) — an upgraded database's pre-existing SuperAdmin row (already correctly backfilled
+            // by the migration) is never re-visited or re-written by this loop at all.
+            if (seed.Id == SeededSecurityIds.SuperAdminRoleId)
+            {
+                role.SetFullAccess(true);
+            }
+
+            _dbContext.Roles.Add(role);
             roleIdSet.Add(seed.Id);
         }
 

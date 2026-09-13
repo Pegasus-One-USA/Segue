@@ -450,7 +450,8 @@ public sealed class UserManagementService : IUserManagementService
                 role.Name,
                 role.Description,
                 permissions.Select(p => new PermissionDto(p.Id, p.Name, p.DisplayName, p.Description, p.GroupId, p.IsVisible)).ToArray(),
-                role.IsSystem));
+                role.IsSystem,
+                IsFullAccess: role.IsFullAccess));
         }
 
         return dtos;
@@ -601,7 +602,8 @@ public sealed class UserManagementService : IUserManagementService
                 role.Name,
                 role.Description,
                 permissions.Select(p => new PermissionDto(p.Id, p.Name, p.DisplayName, p.Description, p.GroupId, p.IsVisible)).ToArray(),
-                role.IsSystem));
+                role.IsSystem,
+                IsFullAccess: role.IsFullAccess));
         }
 
         var allocations = await _repository.GetUserPermissionAllocationsAsync(user.Id, cancellationToken);

@@ -181,8 +181,11 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
         id: 'destination-connections', label: 'Destination Connections',
         actions: [
           { label: 'View', code: 'destinationconnections.view' },
+          { label: 'Create', code: 'destinationconnections.create' },
+          { label: 'Edit', code: 'destinationconnections.edit' },
           { label: 'Deactivate', code: 'destinationconnections.deactivate' },
           { label: 'Delete', code: 'destinationconnections.delete' },
+          { label: 'Test', code: 'destinationconnections.test' },
         ],
       },
       {

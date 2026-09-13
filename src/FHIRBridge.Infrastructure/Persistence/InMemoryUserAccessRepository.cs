@@ -11,11 +11,24 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     private readonly ConcurrentDictionary<Guid, Role> _roles = new(
         new[]
         {
-            new Role(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator.", isSystem: true),
+            CreateSuperAdminRole(),
             new Role(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users.", isSystem: true),
             new Role(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs workflow configurations, and reviews data and audit output.", isSystem: true),
             new Role(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs.", isSystem: true)
         }.ToDictionary(role => role.Id));
+
+    // RBAC Fix 10 (Step 7 audit): mirrors RbacBootstrapper's own fresh-install seeding, which marks only
+    // SuperAdmin Full Access (RbacSeedData.Roles today contains only SuperAdmin — Admin/Operations/Audit
+    // are no longer auto-seeded by the real bootstrapper at all, so this in-memory repository, used as an
+    // IUserAccessRepository stand-in, must not grant any of them Full Access either). Uses the same
+    // Role.SetFullAccess(true) domain API RbacBootstrapper itself calls, never a constructor shortcut or
+    // a changed default.
+    private static Role CreateSuperAdminRole()
+    {
+        var role = new Role(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator.", isSystem: true);
+        role.SetFullAccess(true);
+        return role;
+    }
 
     private readonly ConcurrentDictionary<Guid, PermissionCategory> _permissionCategories = new(
         RbacSeedData.Categories

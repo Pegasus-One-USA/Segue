@@ -1,7 +1,8 @@
-import { Component, inject, computed } from '@angular/core';
+import { Component, inject, computed, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthStore } from '../../auth/store/auth.store';
+import { IRoleService } from '../../user-management/services/i-role.service';
 
 interface SettingsTab {
   label: string;
@@ -9,8 +10,9 @@ interface SettingsTab {
   icon: string;
   /** Omit for tabs every authenticated user with settings access may see. */
   permissions?: string[];
-  /** Hidden unless the user has the SuperAdmin role — stricter than `permissions`, which a
-   *  regular Admin also satisfies via isAdmin(). Takes precedence over `permissions`. */
+  /** Hidden unless the user is SuperAdmin or holds a role with Full System Access — stricter than
+   *  `permissions`, which a regular Admin also satisfies via isAdmin(). Takes precedence over
+   *  `permissions`. */
   superAdminOnly?: boolean;
 }
 
@@ -47,13 +49,35 @@ const SETTINGS_TABS: SettingsTab[] = [
   styleUrl: './settings-shell.component.scss',
 })
 export class SettingsShellComponent {
-  private readonly store = inject(AuthStore);
+  private readonly store   = inject(AuthStore);
+  private readonly roleSvc = inject(IRoleService);
+
+  // RBAC Fix 5: whether the current caller holds Full System Access via any of their own roles —
+  // resolved the same way role-dialog.component.ts's callerHasFullAccess / super-admin.guard.ts /
+  // settings-landing.guard.ts do: the real per-role IsFullAccess flag from IRoleService.getRoles(),
+  // cross-referenced by name against the roles this session's own claims say it holds — never a
+  // hardcoded role name for this capability. Starts false (fails closed) until the async check
+  // resolves or if it ever errors, exactly like a caller who simply isn't SuperAdmin today; the
+  // superAdminOnly tab stays hidden either way, never shown speculatively.
+  private readonly callerHasFullAccess = signal(false);
+
+  constructor() {
+    // A literal SuperAdmin claim already satisfies the OR below on its own — skip the extra API call
+    // entirely for that common case, exactly as super-admin.guard.ts/settings-landing.guard.ts do.
+    if (this.store.hasRole('SuperAdmin')) return;
+
+    const heldRoleNames = new Set(this.store.roles().map(r => r.displayName));
+    this.roleSvc.getRoles().subscribe({
+      next: allRoles => this.callerHasFullAccess.set(allRoles.some(r => heldRoleNames.has(r.name) && r.isFullAccess)),
+      error: () => this.callerHasFullAccess.set(false),
+    });
+  }
 
   // Same visibility rule as the sidebar (sidebar.component.ts) — kept in sync deliberately so a
   // tab only appears here if the user could also reach it from the sidebar's old direct links.
   readonly tabs = computed<SettingsTab[]>(() =>
     SETTINGS_TABS.filter(tab => {
-      if (tab.superAdminOnly) return this.store.hasRole('SuperAdmin');
+      if (tab.superAdminOnly) return this.store.hasRole('SuperAdmin') || this.callerHasFullAccess();
       if (!tab.permissions?.length) return true;
       if (this.store.isAdmin()) return true;
       return tab.permissions.some(p => this.store.hasPermission(p));

@@ -1,7 +1,8 @@
-import { Component, inject, computed } from '@angular/core';
+import { Component, inject, computed, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthStore } from '../../../auth/store/auth.store';
+import { IRoleService } from '../../../user-management/services/i-role.service';
 
 interface SystemSettingsSection {
   label: string;
@@ -9,8 +10,9 @@ interface SystemSettingsSection {
   icon: string;
   /** Omit for sections every viewer who reached this shell may see. */
   permissions?: string[];
-  /** Hidden unless the user has the SuperAdmin role — General/Security have no permission of their
-   *  own (AllowedCorsOriginsController-style backend policies gate them by role, not permission). */
+  /** Hidden unless the user is SuperAdmin or holds a role with Full System Access — General/Security
+   *  have no permission of their own (AllowedCorsOriginsController-style backend policies gate them by
+   *  role/IsFullAccess, not permission). */
   superAdminOnly?: boolean;
 }
 
@@ -44,13 +46,35 @@ const SYSTEM_SETTINGS_SECTIONS: SystemSettingsSection[] = [
   styleUrl: './system-settings-shell.component.scss',
 })
 export class SystemSettingsShellComponent {
-  private readonly store = inject(AuthStore);
+  private readonly store   = inject(AuthStore);
+  private readonly roleSvc = inject(IRoleService);
+
+  // RBAC Fix 6: whether the current caller holds Full System Access via any of their own roles —
+  // resolved the same way settings-shell.component.ts's callerHasFullAccess (Fix 5) / role-dialog's /
+  // both guards' do: the real per-role IsFullAccess flag from IRoleService.getRoles(), cross-referenced
+  // by name against the roles this session's own claims say it holds — never a hardcoded role name for
+  // this capability. Starts false (fails closed) until the async check resolves or if it ever errors,
+  // exactly like a caller who simply isn't SuperAdmin today; General/Security/SSO Configurations stay
+  // hidden either way, never shown speculatively.
+  private readonly callerHasFullAccess = signal(false);
+
+  constructor() {
+    // A literal SuperAdmin claim already satisfies the OR below on its own — skip the extra API call
+    // entirely for that common case, exactly as the other Full-Access sites do.
+    if (this.store.hasRole('SuperAdmin')) return;
+
+    const heldRoleNames = new Set(this.store.roles().map(r => r.displayName));
+    this.roleSvc.getRoles().subscribe({
+      next: allRoles => this.callerHasFullAccess.set(allRoles.some(r => heldRoleNames.has(r.name) && r.isFullAccess)),
+      error: () => this.callerHasFullAccess.set(false),
+    });
+  }
 
   // Same visibility rule as settings-shell.component.ts's own tab list — kept in sync deliberately
   // so a section only appears here if the user could also reach it via this shell's own route guard.
   readonly sections = computed<SystemSettingsSection[]>(() =>
     SYSTEM_SETTINGS_SECTIONS.filter(section => {
-      if (section.superAdminOnly) return this.store.hasRole('SuperAdmin');
+      if (section.superAdminOnly) return this.store.hasRole('SuperAdmin') || this.callerHasFullAccess();
       if (!section.permissions?.length) return true;
       if (this.store.isAdmin()) return true;
       return section.permissions.some(p => this.store.hasPermission(p));

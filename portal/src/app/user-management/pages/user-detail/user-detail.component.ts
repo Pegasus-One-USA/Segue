@@ -3,6 +3,7 @@ import {
   Component, OnInit, OnDestroy, signal, computed, inject, Input, ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 
@@ -130,11 +131,24 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
     return !!email && email.toLowerCase() === this.user()?.email?.toLowerCase();
   });
 
+  // RBAC Fix 7: whether the current caller holds Full System Access via any of their own roles —
+  // resolved the same way settings-shell.component.ts's/system-settings-shell.component.ts's
+  // callerHasFullAccess (Fix 5/6) / role-dialog.component.ts / both guards do: the real per-role
+  // IsFullAccess flag from IRoleService.getRoles(), cross-referenced by name against the roles this
+  // session's own claims say it holds — never a hardcoded role name for this capability. Starts false
+  // (fails closed) until the async check resolves in ngOnInit, or if it ever errors. Resolved once per
+  // component instance, and skipped entirely for a literal SuperAdmin claim (see ngOnInit below).
+  private readonly callerHasFullAccess = signal(false);
+
   // Bypassing a user's second factor entirely is too sensitive to delegate to the general "edit
   // user" permission Admins also hold — the backend enforces this too (SuperAdminOnly policy on
-  // POST /users/{id}/mfa/disable); this just keeps the button from being shown to someone who'd
-  // get a 403 anyway.
-  protected readonly isSuperAdmin = computed(() => this.authService.hasRole('SuperAdmin'));
+  // POST /users/{id}/mfa/disable, which ALSO accepts any role with Full System Access — see
+  // UnifiedAdminAuthorizationHandler's matching fallback in SuperAdminOnlyAuthorizationHandler);
+  // this just keeps the button from being shown to someone who'd get a 403 anyway. Name kept as
+  // `isSuperAdmin` (used verbatim by user-detail.component.html) even though it now also covers a
+  // custom Full System Access role, to avoid any template change for this fix.
+  protected readonly isSuperAdmin = computed(() =>
+    this.authService.hasRole('SuperAdmin') || this.callerHasFullAccess());
 
   // ─── Computed: this user's true effective permission ids ─────────────────
   // Mirrors the backend's LocalAuthService.GetPermissionCodesAsync merge: role-derived permissions,
@@ -181,12 +195,31 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
   ngOnInit(): void {
+    // GET /permissions/catalog is UnifiedAdmin-only server-side (PermissionsController) — a 403 here
+    // just means this viewer isn't an admin/Full-Access role, which is the routine case for most people
+    // opening a user's detail page, not a real failure. The Roles & Permissions tab already degrades
+    // gracefully with an empty catalog (0 of 0), so only toast for a genuine, unexpected error.
     this.roleService.getPermissionCatalog()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: catalog => this.catalog.set(catalog),
-        error: () => this.toast.error('Failed to load the permission catalog.'),
+        error: (err: HttpErrorResponse) => {
+          if (err.status !== 403) this.toast.error('Failed to load the permission catalog.');
+        },
       });
+
+    // RBAC Fix 7 — see callerHasFullAccess's own doc comment above. A literal SuperAdmin claim already
+    // satisfies isSuperAdmin's OR on its own, so skip this extra API call entirely for that common case,
+    // exactly as the other Full-Access sites (Fix 3-6) do.
+    if (!this.authService.hasRole('SuperAdmin')) {
+      const heldRoleNames = new Set(this.authService.roles().map(r => r.displayName));
+      this.roleService.getRoles()
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: allRoles => this.callerHasFullAccess.set(allRoles.some(r => heldRoleNames.has(r.name) && r.isFullAccess)),
+          error: () => this.callerHasFullAccess.set(false),
+        });
+    }
 
     if (this.id) {
       this.loadUser(this.id);
