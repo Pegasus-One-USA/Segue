@@ -1,4 +1,11 @@
 // user-management/pages/user-detail/tri-state-toggle.component.scss
+// Same box size/radius/border-width and the same solid-fill-when-set look as the plain per-action
+// mat-checkboxes in this grid (see _permission-checkbox.scss) — this control just has a third state
+// (Deny) a checkbox can't represent, not a different visual language: Grant fills solid teal with a
+// white check exactly like a checked checkbox; Deny fills solid red with a white cross (there's no
+// separate "deny" token in the app's palette, so --color-error is the natural semantic fit — deny is
+// as strong an assertion as an error); Inherit stays the plain unfilled/bordered look, matching an
+// unchecked checkbox.
 :host {
   display: inline-flex;
 }
@@ -7,13 +14,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   padding: 0;
-  border: 1.5px solid var(--color-border);
-  border-radius: 4px;
+  border: 1.75px solid var(--color-border-input);
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-muted);
+  transition: background-color var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
   cursor: pointer;
 
   mat-icon {
@@ -23,7 +31,11 @@
   }
 
   &:hover:not(:disabled) {
-    border-color: var(--color-muted);
+    border-color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 3px var(--color-primary-mid);
   }
 
   &:disabled {
@@ -31,24 +43,44 @@
   }
 
   &--disabled {
-    opacity: 0.6;
-  }
-
-  &--deny {
-    background: var(--color-error-soft);
-    border-color: var(--color-error);
-    color: var(--color-error-strong);
+    border-color: var(--color-border);
+    background: var(--color-side);
+    color: var(--color-muted);
   }
 
   &--inherit {
     background: var(--color-surface);
-    border-color: var(--color-border);
+    border-color: var(--color-border-input);
     color: var(--color-muted);
   }
 
   &--grant {
-    background: var(--color-success-soft);
-    border-color: var(--color-success);
-    color: var(--color-success-strong);
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-on-primary);
+
+    &:hover:not(:disabled) {
+      background: var(--color-primary-dark);
+      border-color: var(--color-primary-dark);
+    }
+  }
+
+  &--deny {
+    background: var(--color-error);
+    border-color: var(--color-error);
+    color: var(--color-on-primary);
+
+    &:hover:not(:disabled) {
+      border-color: var(--color-error);
+    }
+  }
+
+  // Disabled wins over grant/deny's own fill — same rule the shared checkbox partial follows, so a
+  // locked row's Grant/Deny state reads as genuinely inert rather than still-vivid-but-unclickable.
+  &--grant.tri-toggle--disabled,
+  &--deny.tri-toggle--disabled {
+    background: var(--color-muted-2);
+    border-color: var(--color-muted-2);
+    color: var(--color-on-primary);
   }
 }

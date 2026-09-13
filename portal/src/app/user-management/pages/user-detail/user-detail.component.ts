@@ -37,6 +37,9 @@ import { ToastService } from '../../../services/toast.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
+import { PhaseConfigService } from '../../../services/phase-config.service';
+import { isNodePermissionPrefixVisible } from '../../../data/node-permission-visibility.util';
+import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_PREFIXES } from '../../../data/terminology-feature.config';
 
 // A permission within the effective-permissions preview — same shape as `Permission` plus
 // whether the user's roles actually grant it. Mirrors AssignRolesDialogComponent's preview.
@@ -93,6 +96,7 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
   private readonly actionGuard = inject(PermissionActionGuard);
+  private readonly phaseCfg    = inject(PhaseConfigService);
 
   // ─── Permission gating ──────────────────────────────────────────────────────
   // Mirrors user-list.component.ts's canX() pattern exactly — this page reaches the exact same
@@ -168,21 +172,36 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   });
 
   // ─── Computed: full catalog, each permission marked allowed/denied for this user ─
+  // Drops any group for a source/destination node the Workflow Builder itself doesn't let anyone
+  // add yet (phase-gated — see PhaseConfigService/node-permission-visibility.util.ts), the same
+  // filter role-permissions.component.ts's own Workflow Nodes table and the Assign Roles dialog's
+  // preview already apply — without it, Effective Permissions disagreed with both of those and
+  // with what the workflow canvas actually offers (e.g. still listing Cerner/Sftp as a full group).
+  // Also drops the four Terminology Codes groups while TERMINOLOGY_FEATURE_ENABLED is false (see
+  // data/terminology-feature.config.ts) — same reasoning, just keyed off that flag instead of the
+  // phase catalog. A group with no permissions at all can't have a resource to check, so it's
+  // dropped too — never shown as an empty, always-"0 allowed" card.
   catalogWithStatus = computed<StatusCategory[]>(() => {
     const allowedIds = this.effectivePermissionIds();
     return this.catalog().map(cat => ({
       id:          cat.id,
       displayName: cat.displayName,
-      groups: cat.groups.map(g => ({
-        id:          g.id,
-        displayName: g.displayName,
-        permissions: g.permissions.map(p => ({ ...p, allowed: allowedIds.has(p.id) })),
-      })),
+      groups: cat.groups
+        .filter(g => g.permissions.length > 0
+          && (TERMINOLOGY_FEATURE_ENABLED || !TERMINOLOGY_PERMISSION_PREFIXES.has(g.permissions[0].resource))
+          && isNodePermissionPrefixVisible(g.permissions[0].resource, this.phaseCfg))
+        .map(g => ({
+          id:          g.id,
+          displayName: g.displayName,
+          permissions: g.permissions.map(p => ({ ...p, allowed: allowedIds.has(p.id) })),
+        })),
     }));
   });
 
+  // Counted from catalogWithStatus (not the raw catalog) so the total is scoped to the same
+  // phase-visible groups above — otherwise "N allowed" + "denied" wouldn't add back up to this.
   totalPermissionsCount = computed(() =>
-    this.catalog().reduce((sum, cat) => sum + cat.groups.reduce((s, g) => s + g.permissions.length, 0), 0)
+    this.catalogWithStatus().reduce((sum, cat) => sum + cat.groups.reduce((s, g) => s + g.permissions.length, 0), 0)
   );
   // Counted from catalogWithStatus (catalog permissions only) rather than user().permissions.length
   // directly — a role can carry permissions the catalog excludes (deactivated/hidden ones), which
