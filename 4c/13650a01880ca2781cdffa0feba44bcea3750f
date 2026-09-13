@@ -1,0 +1,84 @@
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_01cdc638c2acfa::t_855ad817c09e14 212
+  s_01cdc638c2acfa::t_afd7fe33e940ed 27,201-205
+portal/scripts/token-baseline.json
+  s_01cdc638c2acfa::t_b8e5415241e2f8 3
+portal/src/app/_permission-checkbox.scss
+  s_01cdc638c2acfa::t_db489f9b8b59f9 1-113
+portal/src/app/app.component.ts
+  s_01cdc638c2acfa::t_93e9724fed66d8 18-31,43-44
+portal/src/app/auth/services/session.service.ts
+  s_01cdc638c2acfa::t_c9a18c309a6557 3,7,10,28,119-133
+portal/src/app/components/shared/global-loader/global-loader.component.html
+  s_01cdc638c2acfa::t_b38a686380ed2b 2-5
+portal/src/app/components/shared/global-loader/global-loader.component.scss
+  s_01cdc638c2acfa::t_4be7bbf59a0ee3 1-23
+portal/src/app/core/services/unsaved-changes-prompt.service.ts
+  s_01cdc638c2acfa::t_f0a23862337766 7,18,22-32
+portal/src/app/dashboard/layout/sidebar/sidebar.component.html
+  s_01cdc638c2acfa::t_9284b7f050b09c 74-76
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_01cdc638c2acfa::t_b1b5beb9ec6daa 6,66-68,73
+portal/src/app/data/terminology-feature.config.ts
+  s_01cdc638c2acfa::t_4b4d03e21792c9 1-36
+portal/src/app/data/transforms-v2.data.ts
+  s_01cdc638c2acfa::t_bfaa2e4be2ad3d 31-33
+portal/src/app/data/transforms.data.ts
+  s_01cdc638c2acfa::t_c8712572f11c5c 32-34
+portal/src/app/services/wizard.service.ts
+  s_01cdc638c2acfa::t_173ac9f0b56001 256,314,325-367
+portal/src/app/settings/guards/feature-flag.guard.ts
+  s_01cdc638c2acfa::t_c8214e6c45ea2c 1-18
+portal/src/app/settings/settings.routes.ts
+  s_01cdc638c2acfa::t_51cdb4abe7bf19 6-7,11-14,18-22,181-185,187,267-270,273
+portal/src/app/user-management/dialogs/assign-roles-dialog/assign-roles-dialog.component.ts
+  s_01cdc638c2acfa::t_d9643ca246a815 28,120-122,128
+portal/src/app/user-management/pages/role-permissions/permission-matrix.config.ts
+  s_01cdc638c2acfa::t_47bbfe75d8d501 150-153,166-172
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.scss
+  s_01cdc638c2acfa::t_ed62f73da7d3e1 2,299-305,487-488
+portal/src/app/user-management/pages/user-detail/tri-state-toggle.component.scss
+  s_01cdc638c2acfa::t_99237d923e0fa4 2-8,17-18,20-21,24,34-38,46-48,53,58-84
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_01cdc638c2acfa::t_cece9360d2b4f0 40-42,99,175-183,189-197,201-202,204
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.scss
+  s_01cdc638c2acfa::t_0506b0da323f63 2,265-267
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.ts
+  s_01cdc638c2acfa::t_53a27f22484e84 46-48,111,149-156,159-164
+portal/src/styles.scss
+  s_01cdc638c2acfa::t_835fa1b8353eec 297-304,1109-1120
+src/Api/FHIRBridge.Api/Controllers/V1/Icd10ConfigurationController.cs
+  s_01cdc638c2acfa::t_3053c36adbff19 33,37,41
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_01cdc638c2acfa::t_ee31ed613fdc98 912-931,941-942
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_01cdc638c2acfa::t_13199bb1929e78 902-921,931-932
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_01cdc638c2acfa::t_bbeb431602aaa4 6,38-40,43
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  s_01cdc638c2acfa::t_da70f6489916dd 6,27-36,76-78,81
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  s_01cdc638c2acfa::t_75f00c7d51d02a 21-22
+src/Api/FHIRBridge.Api/Controllers/V1/RxNormConfigurationController.cs
+  s_01cdc638c2acfa::t_41636681d12725 27,31,35
+src/Api/FHIRBridge.Api/Controllers/V1/SnomedConfigurationController.cs
+  s_01cdc638c2acfa::t_1ae8a96b37294e 27,31,35
+src/FHIRBridge.Application/Rbac/PermissionGroupCode.cs
+  s_01cdc638c2acfa::t_0e193d7c038dde 73-78,168-182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4c13650a01880ca2781cdffa0feba44bcea3750f",
+  "prompts": {},
+  "sessions": {
+    "s_01cdc638c2acfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05d0a862-c14d-4220-9ff8-579c3faf088c",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
