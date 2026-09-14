@@ -303,3 +303,23 @@
   padding-top: 4px;
   border-top: 1px solid var(--color-border-subtle, var(--color-border-input));
 }
+
+// ── Inline layout (see the `inline` input) ───────────────────────────────────────────────────────────
+// The default grid gives every field an equal 1fr track, which stretches a two-field schema across the
+// whole panel and drops each control onto its own row. Inline sizes them to their content and lets them
+// flow, so they sit on the same line as the host form's own fields. Wrapping is kept, so a narrow panel
+// still degrades to stacked rows rather than overflowing.
+.rule-config-form--inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+
+  .config-control {
+    flex: 0 1 auto;
+
+    // The grid lines inputs up by stretching each cell and pushing labels to the top; in a flex row the
+    // controls are end-aligned instead, so that spacer must not apply.
+    label { min-height: 0; margin-bottom: 0; }
+  }
+}

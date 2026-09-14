@@ -1,4 +1,4 @@
-import { Component, HostBinding, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, ElementRef, HostBinding, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { MappingRow, MappingInstanceSelection, isReferenceCandidate } from './field-mapping-model';
 import { FmTreeNode, flattenLeaves } from './field-mapping-tree.util';
 import { nearestArrayGroupId } from './field-mapping-summary.model';
@@ -160,6 +160,19 @@ export class FieldMappingListComponent {
   readonly ruleByRowKey = signal<Map<string, TransformationRule | null>>(new Map());
 
   constructor() {
+
+    // Bring the rule editor into view when "+ Add rule" or "Edit…" opens it. The form renders below the
+    // rules table, so on a policy with more than a couple of rules it opened off-screen and the click
+    // appeared to do nothing. Depends on BOTH signals deliberately: deIdDraftForm() is still undefined on
+    // the click that opens the form (the @if hasn't rendered yet) and this re-runs once it resolves, while
+    // deIdDraftRequested re-triggers the scroll when the form is already open and a second rule is edited.
+    effect(() => {
+      this.deIdDraftRequested();
+      const form = this.deIdDraftForm();
+      if (form) {
+        form.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
     effect(() => {
       const destinationType = this.rulesDestinationType();
       this.ruleRefreshTrigger(); // dependency only — see its own doc comment
@@ -266,8 +279,33 @@ export class FieldMappingListComponent {
   // hardcodes it too), since redaction/masking/generalization is the only thing a PreMapping rule is for
   // in practice. ────────────────────────────────────────────────────────────────────────────────────────
   readonly deIdRules = signal<TransformationRule[] | undefined>(undefined); // undefined = loading
+
+  /**
+   * The profile's rules scoped to the resource(s) this screen is editing — the same scoping visibleRows
+   * already applies to mappings. The profile is destination-wide, so its rule list spans every resource;
+   * showing all of them on "Map fields — Observation" mixed Patient's and Encounter's rules into
+   * Observation's, with no indication they belonged elsewhere.
+   *
+   * A Global-scope rule has no resourceType and applies to every resource, so it stays visible: it really
+   * does affect this one, and hiding it would understate what redaction is in force here.
+   *
+   * undefined is preserved (rather than collapsing to []) so the table can still tell "loading" apart
+   * from "loaded, nothing for this resource".
+   */
+  readonly visibleDeIdRules = computed<TransformationRule[] | undefined>(() => {
+    const rules = this.deIdRules();
+    if (!rules) return rules;
+    const scope = new Set(this.resources());
+    return rules.filter(rule =>
+      rule.scope === 'Global' || (!!rule.resourceType && scope.has(rule.resourceType)));
+  });
   readonly deIdSchema = signal<TransformNodeSchema | undefined>(undefined);
   readonly deIdDraft = signal<NewDeIdRuleDraft | null>(null);
+
+  private readonly deIdDraftForm = viewChild<ElementRef<HTMLElement>>('deIdDraftForm');
+  /** Bumped by every "+ Add rule" / "Edit…" click so the scroll below fires again even when the draft
+   *  form is already open (editing a second rule) — the element reference alone wouldn't change then. */
+  private readonly deIdDraftRequested = signal(0);
   readonly deIdEditingId = signal<string | null>(null);
   readonly deIdSaving = signal(false);
 
@@ -284,6 +322,7 @@ export class FieldMappingListComponent {
   }
 
   startDeIdDraft(): void {
+    this.deIdDraftRequested.update(n => n + 1);
     this.deIdEditingId.set(null);
     this.deIdDraft.set({
       resource: this.resources()[0] ?? '',
@@ -334,6 +373,7 @@ export class FieldMappingListComponent {
    *  Re-saving it from here always writes it back as ResourceType, matching this form's "no scope choice"
    *  simplification — editing a Global rule here narrows it to this resource going forward. */
   editDeIdRule(rule: TransformationRule): void {
+    this.deIdDraftRequested.update(n => n + 1);
     this.deIdEditingId.set(rule.id);
     this.deIdDraft.set({
       resource: rule.resourceType ?? this.resources()[0] ?? '',

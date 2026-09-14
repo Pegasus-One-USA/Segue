@@ -2709,6 +2709,10 @@ export class DestinationWizardComponent implements OnInit {
       // has no field mappings at all — there is no profile to pick, and offering one implied a step that
       // does not apply to it.
       !this.isWholeResourceFhirDestination() &&
+      // Same reasoning for the De-identification screen: it configures redaction rules on a profile, not
+      // field mappings, so a mapping-profile picker sitting beside each data group offered an action that
+      // has nothing to do with what that screen does.
+      this.configTab() !== 'deidentification' &&
       !!this.sourceConnectionId() &&
       !!(this.selectedExistingId() ?? this.resolvedDestinationId()) &&
       !!this.sourceVendor(),

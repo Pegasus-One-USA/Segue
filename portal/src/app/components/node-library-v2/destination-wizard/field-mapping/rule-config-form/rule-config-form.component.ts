@@ -61,12 +61,12 @@ interface KeyValueRow {
   standalone: true,
   imports: [CommonModule, FormsModule, MatIconModule],
   template: `
-    <div class="rule-config-form">
-      @for (field of primaryFields(); track field.key) {
+    <div class="rule-config-form" [class.rule-config-form--inline]="inline">
+      @for (field of (inline ? allFields() : primaryFields()); track field.key) {
         <ng-container *ngTemplateOutlet="fieldControl; context: { $implicit: field }" />
       }
 
-      @if (advancedFields().length > 0) {
+      @if (!inline && advancedFields().length > 0) {
         <button type="button" class="advanced-toggle" (click)="toggleAdvanced()" [attr.aria-expanded]="advancedOpen">
           <mat-icon>{{ advancedOpen ? 'expand_less' : 'chevron_right' }}</mat-icon>
           Advanced Options ({{ advancedFields().length }})
@@ -180,6 +180,11 @@ interface KeyValueRow {
 export class RuleConfigFormComponent {
   @Input() schema: TransformNodeSchema | undefined;
   @Input() config: Record<string, string> = {};
+  /** Renders every applicable field as one wrapping row with no "Advanced Options" collapse, for a host
+   *  form that wants its controls on a single line. Only sensible for a short schema — the de-identification
+   *  rule's mode plus whichever single field that mode uses. Left false everywhere else, where the default
+   *  grid-plus-collapse keeps a long schema readable. */
+  @Input() inline = false;
   // Lets a pre-mapping (de-identification) HashingMasking rule offer its wider strategy vocabulary
   // (remove/generalizeDateToYear/generalizeZip3, matching SafeHarborDeIdentificationService) without
   // changing the shared post-mapping schema's own hash/mask/redact options. Keyed by config field key
@@ -224,6 +229,13 @@ export class RuleConfigFormComponent {
    *  "Advanced Options" toggle so the primary form stays short for the common case. */
   advancedFields(): TransformConfigFieldSchema[] {
     return this.ordered(this.applicableFields().filter(f => f.isAdvanced));
+  }
+
+  /** Every applicable field, advanced or not — inline mode has no collapse to hide any of them behind.
+   *  With visibleWhen now scoping mode-specific fields, "advanced" no longer means "usually irrelevant"
+   *  for this schema: whatever is left is exactly what the chosen mode uses. */
+  allFields(): TransformConfigFieldSchema[] {
+    return this.ordered(this.applicableFields());
   }
 
   /** The schema's fields minus those scoped to a mode that isn't selected — e.g. keepLength disappears the
