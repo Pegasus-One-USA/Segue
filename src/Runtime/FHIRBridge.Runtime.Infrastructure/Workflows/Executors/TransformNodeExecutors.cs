@@ -785,14 +785,19 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     }
 
     /// <summary>
-    /// Resolves one resource type's fields + destination object, preferring (in order): <c>mappingProfileIds</c>
-    /// — a JSON object of <c>{resourceType: mappingProfileId}</c> the build endpoint stamps onto this exact node
-    /// (see WorkflowEndpoints.cs's Mappings step) — the id THIS node itself saved, so resolving by it can never
-    /// pick up a different workflow's profile; the legacy single <c>mappingProfileId</c> (one resource per node,
-    /// pre-dating multi-resource destinations) — only for the node's OWN configured resource type, since it can
-    /// only ever refer to one specific profile; and finally the node's own inline "fields"/"destinationObject"
-    /// config (no repository composed, or a hand-authored node) — again only for its own configured resource
-    /// type. Deliberately does NOT fall back to searching MappingProfile by the natural key (resourceType,
+    /// Resolves one resource type's fields + destination object.
+    ///
+    /// <para><b>Self-contained first</b> (plan §3.3): a node carrying its own inline mapping for this resource
+    /// type is authoritative and is used without touching the repository. That is the whole point of the
+    /// self-contained model — what ran is what the node says, so a run is reproducible and editing a shared
+    /// master cannot silently change this workflow.</para>
+    ///
+    /// <para><b>Then by id</b>, for nodes not yet migrated: <c>mappingProfileIds</c> — a JSON object of
+    /// <c>{resourceType: mappingProfileId}</c> the build endpoint stamps onto this exact node — then the legacy
+    /// single <c>mappingProfileId</c> for the node's own configured resource type. Both are ids THIS node saved,
+    /// so neither can pick up a different workflow's profile.</para>
+    ///
+    /// Deliberately does NOT fall back to searching MappingProfile by the natural key (resourceType,
     /// sourceConnectionId, destinationId): that triple is shared by any workflow built on the same source
     /// connection + destination + resource type, so a search-based fallback would silently resolve to (and,
     /// once profiles diverge, keep flapping onto) a DIFFERENT workflow's profile — the exact "Invalid column
@@ -807,6 +812,19 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         string configuredDestinationObject,
         CancellationToken cancellationToken)
     {
+        // Inline mapping for this exact resource type wins outright — no lookup, nothing to go stale.
+        if (TryReadInlineResourceMapping(node, resourceType) is { } inline)
+        {
+            return (inline.Fields, inline.DestinationObject ?? configuredDestinationObject);
+        }
+
+        // The node's own single-resource config counts as inline too, when it names this resource type.
+        if (configuredFields.Count > 0
+            && string.Equals(resourceType, configuredResourceType, StringComparison.OrdinalIgnoreCase))
+        {
+            return (configuredFields, configuredDestinationObject);
+        }
+
         if (_configurationRepository is not null && ReadProfileIds(node).TryGetValue(resourceType, out var profileId))
         {
             var profile = await _configurationRepository.GetMappingProfileAsync(profileId, cancellationToken);
@@ -824,6 +842,42 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         }
 
         return (null, configuredDestinationObject);
+    }
+
+    /// <summary>
+    /// This node's own inline mapping for one resource type, from the self-contained <c>mappings</c> block
+    /// (plan §3.3): <c>{"mappings": {"Patient": {"destinationObject": "dbo.Patient", "fields": [ … ]}}}</c>.
+    /// Null when the node carries no such block, or none for this resource type — the caller then falls back to
+    /// the id-based lookups for nodes that have not been migrated yet.
+    /// </summary>
+    private static (IReadOnlyCollection<MappingFieldDto> Fields, string? DestinationObject)? TryReadInlineResourceMapping(
+        WorkflowNode node,
+        string resourceType)
+    {
+        var mappings = ReadConfiguration<Dictionary<string, InlineResourceMapping>>(node, "mappings");
+        if (mappings is null || mappings.Count == 0)
+        {
+            return null;
+        }
+
+        // Resource types are case-insensitive everywhere else in the engine; the JSON dictionary is not.
+        var match = mappings.FirstOrDefault(entry =>
+            string.Equals(entry.Key, resourceType, StringComparison.OrdinalIgnoreCase));
+
+        if (match.Value?.Fields is not { Count: > 0 } fields)
+        {
+            return null;
+        }
+
+        return (fields.Where(field => field.IsEnabled).ToArray(), match.Value.DestinationObject);
+    }
+
+    /// <summary>One resource type's self-contained mapping, as stored on the node.</summary>
+    private sealed class InlineResourceMapping
+    {
+        public string? DestinationObject { get; set; }
+
+        public List<MappingFieldDto>? Fields { get; set; }
     }
 
     private async Task<(DestinationType? Type, string? Name)> ResolveDestinationTypeAsync(Guid destinationId, CancellationToken cancellationToken)
