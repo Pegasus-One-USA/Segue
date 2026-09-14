@@ -2851,6 +2851,47 @@ public static class WorkflowEndpoints
         return root[WorkflowNodeConfigurationEnvelope.ConfigProperty] as JsonObject ?? root;
     }
 
+    /// <summary>Node types whose executors resolve workflow-scoped transformation rules, and so must know which
+    /// workflow they belong to.</summary>
+    private static readonly HashSet<string> RuleResolvingNodeTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        WorkflowNodeTypes.Mapping,
+        WorkflowNodeTypes.FhirResourceTransform,
+        WorkflowNodeTypes.DeIdentification,
+    };
+
+    /// <summary>
+    /// Stamps the workflow's own id onto every rule-resolving node, under the key those executors read
+    /// (<c>resourcePipelineRouteId</c>).
+    ///
+    /// Done HERE rather than in the client because the client does not reliably know the id: on a first save
+    /// the workflow has none yet, so WorkflowGraphMapperServiceV2's own stamping loop skips the key entirely and
+    /// the node is persisted without it. The executor then cannot tell which workflow it is running for, every
+    /// workflow-scoped rule misses, and the resource is written untransformed — silently, with the run still
+    /// reporting success. That is how a DateMathAge rule went missing and a raw birthDate reached an int column.
+    ///
+    /// The server always knows the id, so stamping at the persistence choke point fixes first save and re-save
+    /// alike. An id the client already set is left alone.
+    /// </summary>
+    private static string StampWorkflowId(string? configurationJson, string nodeType, Guid workflowId)
+    {
+        if (!RuleResolvingNodeTypes.Contains(nodeType))
+        {
+            return configurationJson ?? "{}";
+        }
+
+        // Written to the ROOT, not through the envelope resolver: this is a mutation, and the executors read
+        // the key from whichever shape the node is in (see WorkflowNodeConfigurationEnvelope).
+        var config = TryParseConfiguration(configurationJson) ?? new JsonObject();
+        if (config["resourcePipelineRouteId"]?.ToString() is { Length: > 0 })
+        {
+            return configurationJson ?? "{}";
+        }
+
+        config["resourcePipelineRouteId"] = workflowId.ToString();
+        return config.ToJsonString();
+    }
+
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request, int version = 1)
     {
         var workflow = new WorkflowDefinition(
@@ -2865,7 +2906,7 @@ public static class WorkflowEndpoints
                 nodeRequest.Rank,
                 nodeRequest.SubRank,
                 nodeRequest.DisplayName,
-                nodeRequest.ConfigurationJson ?? "{}",
+                StampWorkflowId(nodeRequest.ConfigurationJson, nodeRequest.NodeType, workflowId),
                 nodeRequest.PositionX,
                 nodeRequest.PositionY,
                 nodeRequest.IsEnabled,

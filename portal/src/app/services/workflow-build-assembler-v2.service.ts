@@ -97,10 +97,18 @@ export class WorkflowBuildAssemblerServiceV2 {
     name: string,
     trigger?: WorkflowTriggerRequest | null,
     description?: string | null,
+    /** The workflow's own id, so the mapper can stamp it onto every rule-resolving node. Previously hardcoded
+     *  to null here, which meant a workflow saved through THIS path (the create-on-save build endpoint — the
+     *  normal Save) persisted its chain nodes with no resourcePipelineRouteId. Its executors then could not
+     *  tell which workflow they were running for, so every workflow-scoped transformation rule missed and the
+     *  resource was written untransformed, silently, with the run still reporting success — that is how a raw
+     *  birthDate reached an int column with a DateMathAge rule configured against it. The server now stamps
+     *  this too (WorkflowEndpoints.StampWorkflowId), so the two are belt and braces. */
+    workflowId?: string | null,
   ): WorkflowBuildRequest {
     this.lastUnmappedResources.length = 0;
 
-    const graph = this.mapper.toRequest(name, trigger, null, description);
+    const graph = this.mapper.toRequest(name, trigger, workflowId ?? null, description);
     const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
 
     const sourceNodeIds = new Set(

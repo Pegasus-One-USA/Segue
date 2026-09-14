@@ -337,7 +337,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
     let request: WorkflowBuildRequest;
     try {
-      request = this.buildAssembler.assemble(name, this.buildTrigger(), this.workflowDescription().trim() || null);
+      request = this.buildAssembler.assemble(
+        name, this.buildTrigger(), this.workflowDescription().trim() || null, this.currentWorkflowId());
     } catch (err) {
       // buildAssembler throws for configuration gaps it can catch up front (e.g. Upsert write mode with no
       // id-mapped key column) — surfaced here rather than round-tripping to the backend for the same rejection.
