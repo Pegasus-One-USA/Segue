@@ -576,9 +576,19 @@ public static class WorkflowEndpoints
 
                 var isLaunch = applicationType is ApplicationType.EhrLaunch or ApplicationType.Standalone or ApplicationType.Patient;
 
-                var hasDestination = workflow.Nodes.Any(node =>
+                // A destination node that is present but not yet wired to a destination record does not count:
+                // the workflow still has nowhere to write, so it is not Ready. WorkflowDefinition.HasDestination
+                // asks the weaker "is a Destination node present" question for callers that only have the graph;
+                // here the configured ids are available, so the stronger check is used for both this flag and
+                // the status below. Once nodes carry their destination config inline (plan §3.2) the two
+                // questions converge and this can read straight off the node.
+                var hasConfiguredDestination = workflow.Nodes.Any(node =>
                     node.Category == WorkflowNodeCategory.Destination
                     && TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out _));
+
+                var status = !workflow.IsEnabled ? nameof(WorkflowLifecycleStatus.Disabled)
+                    : hasConfiguredDestination ? nameof(WorkflowLifecycleStatus.Ready)
+                    : nameof(WorkflowLifecycleStatus.Draft);
 
                 var runs = await runStore.ListByDefinitionAsync(workflow.Id, cancellationToken);
                 var lastRun = runs.OrderByDescending(run => run.StartedAt).FirstOrDefault();
@@ -591,7 +601,7 @@ public static class WorkflowEndpoints
                 summaries.Add(new WorkflowSummaryDto(
                     workflow.Id,
                     workflow.Name,
-                    workflow.IsEnabled ? "Enabled" : "Disabled",
+                    status,
                     workflow.Nodes.Count,
                     workflow.Edges.Count,
                     lastRun?.Status.ToString(),
@@ -603,7 +613,7 @@ public static class WorkflowEndpoints
                     resolvedSourceId,
                     sourceSystemType,
                     applicationType?.ToString(),
-                    hasDestination,
+                    hasConfiguredDestination,
                     workflow.IsPubliclyLaunchable,
                     workflow.CreatedOnUtc,
                     workflow.CreatedBy,

@@ -823,6 +823,17 @@ a {
   }
 }
 
+/* Workflow lifecycle "Draft" — incomplete (no destination wired up), so it cannot run yet. Warning tone
+   rather than error: a draft is a normal stage of authoring, not a fault. */
+.badge-draft {
+  background: var(--color-warning-soft);
+  color:      var(--color-warning-strong);
+
+  &::before {
+    background: var(--color-warning);
+  }
+}
+
 .badge-running {
   background: var(--color-info-soft);
   color:      var(--color-info-strong);

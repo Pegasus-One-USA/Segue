@@ -10,6 +10,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import {
   WorkflowApiService,
   WorkflowSummary,
+  WorkflowLifecycleStatus,
   WorkflowRunStatus,
   DestinationData,
 } from '../../services/workflow-api.service';
@@ -337,10 +338,50 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.builderVersion.set(value === 'v2' ? 'v2' : 'v1');
   }
 
-  /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
+  // ── New workflow (name + description first) ──────────────────────────────
+  //
+  // The workflow is created BEFORE the canvas opens, so it always has a real id. That is what removes the
+  // "authored before the workflow existed" class of bug at its root: node config, mapping and transform rules
+  // no longer have to be parked somewhere without an owner and reconciled on a later save.
+  readonly showNewWorkflow = signal(false);
+  readonly newWorkflowName = signal('');
+  readonly newWorkflowDescription = signal('');
+  readonly creatingWorkflow = signal(false);
+
+  /** Opens the name/description modal. The canvas is only reached once the workflow is actually created. */
   onNewWorkflow(): void {
     if (!this.canCreate()) return;
-    this.router.navigate([this.builderVersion() === 'v2' ? '/workflow-builder-v2' : '/workflow-builder']);
+    this.newWorkflowName.set('');
+    this.newWorkflowDescription.set('');
+    this.showNewWorkflow.set(true);
+  }
+
+  cancelNewWorkflow(): void {
+    if (this.creatingWorkflow()) return;
+    this.showNewWorkflow.set(false);
+  }
+
+  /** Creates an empty workflow (no nodes, no edges) and opens the builder on it. It starts life as Draft —
+   *  it has no destination yet — and is created enabled, so adding a destination is all it takes to be Ready. */
+  confirmNewWorkflow(): void {
+    const name = this.newWorkflowName().trim();
+    if (!name || this.creatingWorkflow()) return;
+
+    const description = this.newWorkflowDescription().trim();
+    this.creatingWorkflow.set(true);
+    this.api
+      .save({ name, description: description || null, isEnabled: true, nodes: [], edges: [] })
+      .subscribe({
+        next: created => {
+          this.creatingWorkflow.set(false);
+          this.showNewWorkflow.set(false);
+          this.openBuilder(created.id, true);
+        },
+        error: err => {
+          this.creatingWorkflow.set(false);
+          this.toast.error(this.messageOf(err, 'Could not create the workflow.'));
+        },
+      });
   }
 
   /** Launch rows are unaffected (still their own thing — see below). Every Run row now always dispatches in the
@@ -515,9 +556,14 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     call.subscribe({
       next: () => {
         this.rowBusyId.set(null);
+        // Re-enabling does not simply restore "Enabled" — Draft/Ready is derived from the graph, so a
+        // workflow with no destination wired up goes back to Draft, exactly as the server would report it
+        // on the next reload. Getting this wrong would show a stale "Ready" until the list refreshed.
         this.summaries.update(rows =>
           rows.map(w =>
-            w.workflowId === row.workflowId ? { ...w, status: enabling ? 'Enabled' : 'Disabled' } : w,
+            w.workflowId === row.workflowId
+              ? { ...w, status: enabling ? (w.hasDestination ? 'Ready' : 'Draft') : 'Disabled' }
+              : w,
           ),
         );
         this.toast.success(enabling ? 'Enabled' : 'Disabled', `"${row.name}" is now ${enabling ? 'enabled' : 'disabled'}.`);
@@ -660,6 +706,15 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       () => this.toast.success('Copied', `${label} copied to clipboard.`),
       () => this.toast.error('Could not copy to the clipboard.'),
     );
+  }
+
+  /** Tooltip for the lifecycle badge — "Draft" on its own does not say why the workflow cannot run. */
+  statusHint(status: WorkflowLifecycleStatus): string {
+    return {
+      Draft: 'No destination configured yet, so this workflow cannot run. Add one to make it Ready.',
+      Ready: 'Source and destination are configured — this workflow will run.',
+      Disabled: 'Deliberately paused. Enable it from the row menu to make it runnable again.',
+    }[status];
   }
 
   /** Deliberately mirrors ExecutionHistoryListComponent's statusClass so the same run never renders as two

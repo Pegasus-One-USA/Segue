@@ -188,8 +188,8 @@
                       [disabled]="rowBusyId() === w.workflowId"
                       (click)="onToggleEnabled(w)"
                     >
-                      <mat-icon>{{ w.status === 'Enabled' ? 'pause' : 'play_arrow' }}</mat-icon>
-                      {{ w.status === 'Enabled' ? 'Disable' : 'Enable' }}
+                      <mat-icon>{{ w.status === 'Disabled' ? 'play_arrow' : 'pause' }}</mat-icon>
+                      {{ w.status === 'Disabled' ? 'Enable' : 'Disable' }}
                     </button>
                   }
 
@@ -264,7 +264,13 @@
               </td>
               <td><span class="cell-muted">{{ audienceLabel(w.applicationType) }}</span></td>
               <td>
-                <span class="badge" [class.badge-active]="w.status === 'Enabled'" [class.badge-inactive]="w.status !== 'Enabled'">
+                <span
+                  class="badge"
+                  [class.badge-active]="w.status === 'Ready'"
+                  [class.badge-draft]="w.status === 'Draft'"
+                  [class.badge-inactive]="w.status === 'Disabled'"
+                  [title]="statusHint(w.status)"
+                >
                   {{ w.status }}
                 </span>
               </td>
@@ -399,6 +405,62 @@
           <button class="btn-secondary" type="button" (click)="cancelDelete()">Cancel</button>
           <button class="btn-danger" type="button" [disabled]="rowBusyId() === w.workflowId" (click)="confirmDeleteWorkflow()">
             Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── New workflow modal (name + description) ──────────────────────────────────
+     Creates the workflow up front so the builder always opens on a real id — node config, mappings and
+     transform rules then always have an owner to belong to. ── -->
+@if (showNewWorkflow()) {
+  <div class="modal-overlay" (click)="cancelNewWorkflow()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <h3>New workflow</h3>
+        <button class="modal-close" type="button" (click)="cancelNewWorkflow()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-sub">
+          Name it first — the builder opens on a saved workflow, so nothing you configure can be lost before
+          it has somewhere to live. It stays a <strong>Draft</strong> until you add a destination.
+        </p>
+
+        <label class="field-label" for="new-workflow-name">Name</label>
+        <input
+          id="new-workflow-name"
+          class="text-input"
+          type="text"
+          autocomplete="off"
+          [ngModel]="newWorkflowName()"
+          (ngModelChange)="newWorkflowName.set($event)"
+          placeholder="e.g. Epic Prod → Analytics SQL"
+          (keydown.enter)="confirmNewWorkflow()"
+        />
+
+        <label class="field-label" for="new-workflow-description">Description <span class="cell-muted">(optional)</span></label>
+        <textarea
+          id="new-workflow-description"
+          class="text-input"
+          rows="3"
+          [ngModel]="newWorkflowDescription()"
+          (ngModelChange)="newWorkflowDescription.set($event)"
+          placeholder="What this workflow moves, and why it exists."
+        ></textarea>
+
+        <div class="modal-actions">
+          <button class="btn-secondary" type="button" [disabled]="creatingWorkflow()" (click)="cancelNewWorkflow()">
+            Cancel
+          </button>
+          <button
+            class="btn-primary"
+            type="button"
+            [disabled]="creatingWorkflow() || !newWorkflowName().trim()"
+            (click)="confirmNewWorkflow()"
+          >
+            {{ creatingWorkflow() ? 'Creating…' : 'Create & open builder' }}
           </button>
         </div>
       </div>

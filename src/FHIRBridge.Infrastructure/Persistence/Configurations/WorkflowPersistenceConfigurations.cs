@@ -27,6 +27,12 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
         // Computed convenience alias over IsEnabled — not a stored column.
         builder.Ignore(x => x.IsActive);
 
+        // Draft/Ready is a fact about the graph (does it have a Destination node), so it is derived on read
+        // rather than stored — a stored copy would keep claiming "Ready" after the last destination node was
+        // deleted. Disabled is the only part of LifecycleStatus backed by a real column (IsEnabled).
+        builder.Ignore(x => x.HasDestination);
+        builder.Ignore(x => x.LifecycleStatus);
+
         builder.Property(x => x.LastTriggeredOnUtc);
 
         // Required with a DB-level default so this is never null even for a row inserted outside the normal

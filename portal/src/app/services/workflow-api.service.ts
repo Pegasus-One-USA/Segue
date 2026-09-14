@@ -298,12 +298,18 @@ export interface WorkflowBuildResult {
 // ── Workflow-list screen (GET /workflows/summary) ──────────────────────────────
 export type WorkflowAction = 'Launch' | 'Run';
 
+/** Mirrors the backend's WorkflowLifecycleStatus. */
+export type WorkflowLifecycleStatus = 'Draft' | 'Ready' | 'Disabled';
+
 export interface WorkflowSummary {
   workflowId: string;
   name: string;
   /** Free-text notes captured in the builder; null/absent when never filled in. */
   description?: string | null;
-  status: 'Enabled' | 'Disabled';
+  /** Draft = no destination wired up yet, so it cannot run; Ready = it will run; Disabled = complete but
+   *  deliberately paused. Draft/Ready are derived from the graph server-side (never stored), Disabled is the
+   *  stored IsEnabled flag. Replaces the former 'Enabled' value, which no longer exists. */
+  status: WorkflowLifecycleStatus;
   nodes: number;
   edges: number;
   lastRun: string | null;           // WorkflowRunStatus name (Running | Succeeded | Failed) or null

@@ -76,6 +76,19 @@ public sealed class WorkflowDefinition
 
     public IReadOnlyCollection<WorkflowEdge> Edges => _edges;
 
+    /// <summary>True once the graph has somewhere to write. Derived from the nodes rather than stored, so it
+    /// can never disagree with the graph it describes.</summary>
+    public bool HasDestination =>
+        _nodes.Any(node => node.Category == WorkflowNodeCategory.Destination);
+
+    /// <summary>Draft / Ready / Disabled — see <see cref="WorkflowLifecycleStatus"/>. Disabled is checked
+    /// first: an admin pausing a workflow is a statement about this workflow specifically, and stays visible
+    /// whether or not the graph happens to be complete.</summary>
+    public WorkflowLifecycleStatus LifecycleStatus =>
+        !IsEnabled ? WorkflowLifecycleStatus.Disabled
+        : HasDestination ? WorkflowLifecycleStatus.Ready
+        : WorkflowLifecycleStatus.Draft;
+
     /// <summary>Sets (or clears) the scheduling trigger. Manual/null means the workflow only runs on demand.</summary>
     public void SetTrigger(WorkflowTrigger? trigger) => Trigger = trigger;
 

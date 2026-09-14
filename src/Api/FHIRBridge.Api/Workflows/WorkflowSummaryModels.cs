@@ -1,14 +1,17 @@
 namespace FHIRBridge.Api.Workflows;
 
 /// <summary>
-/// One row of the workflow-list screen: the graph's shape (node/edge counts), its enabled state, the most recent run,
-/// and — derived from the source node's referenced connection's <c>ApplicationType</c> — whether the workflow is
+/// One row of the workflow-list screen: the graph's shape (node/edge counts), its lifecycle status, the most recent
+/// run, and — derived from the source node's referenced connection's <c>ApplicationType</c> — whether the workflow is
 /// <c>Launch</c>ed (interactive SMART: EHR launch / standalone / patient) or <c>Run</c> (backend / non-interactive),
 /// with the endpoint the UI should call for that action.
 /// </summary>
 public sealed record WorkflowSummaryDto(
     Guid WorkflowId,
     string Name,
+    /// <summary><c>Draft</c> (no destination wired up yet — not runnable), <c>Ready</c>, or <c>Disabled</c>
+    /// (deliberately paused). See <see cref="FHIRBridge.Runtime.Domain.Workflows.WorkflowLifecycleStatus"/>.
+    /// Replaces the former Enabled/Disabled pair, so <c>Enabled</c> is no longer a value this can take.</summary>
     string Status,
     int Nodes,
     int Edges,
