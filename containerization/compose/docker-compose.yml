@@ -62,7 +62,6 @@ services:
       dockerfile: containerization/docker/fhirbridge-app/Dockerfile
       args:
         PORTAL_CONFIG: "${PORTAL_BUILD_CONFIG:-production}"
-        APP_VERSION: "${IMAGE_TAG:-local}"
     image: fhirbridge-app:${IMAGE_TAG:-local}
     container_name: fhirbridge-ctr-app
     labels:
@@ -104,7 +103,6 @@ services:
       dockerfile: containerization/docker/demo-app/Dockerfile
       args:
         DEMO_CONFIG: "${DEMO_BUILD_CONFIG:-production}"
-        APP_VERSION: "${IMAGE_TAG:-local}"
     image: demo-app:${IMAGE_TAG:-local}
     container_name: fhirbridge-ctr-demo-app
     labels:
@@ -150,14 +148,6 @@ services:
       ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
       RuntimeWorker__Enabled: "true"
       Messaging__Provider: "InMemory"
-      # MUST match fhirbridge-app's path and volume. Data Protection encrypts the ProvisionedSecrets rows
-      # holding the PHI field-encryption key, JWT signing key, download-link secret and transform hashing key;
-      # a worker on its own (container-local, ephemeral) ring treats the app's rows as unreadable and
-      # regenerates them, which permanently orphans recorded execution-history payloads, logs users out, and
-      # leaves the worker unable to read destination connection strings the Api wizard wrote.
-      DataProtection__KeyRingPath: "/app/keys"
-    volumes:
-      - fhirbridge-dataprotection-keys:/app/keys
     restart: unless-stopped
 
 volumes:

@@ -1,0 +1,10 @@
+# Shell scripts run inside Linux containers (postgres-local, redis-tls, worker, fhirbridge-app
+# entrypoints; containerization/scripts/*.sh) - CRLF line endings break their shebang line
+# (`#!/usr/bin/env bash` becomes `#!/usr/bin/env bash\r` once checked out with CRLF, which fails at
+# container startup with `env: can't execute 'bash ': No such file or directory`, exit code 127).
+# This is silent until it happens: the repo had no .gitattributes at all before this, so whether a
+# given clone got LF or CRLF depended entirely on that machine's own `core.autocrlf` setting -
+# confirmed live when an image built on such a machine crash-looped with exactly that error, despite
+# every script being LF in other working copies (including this one). Force LF unconditionally,
+# regardless of the checking-out machine's own git config, so this can't recur.
+*.sh text eol=lf

@@ -3,17 +3,27 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "namePrefix": { "value": "fhirbridge" },
-    "sqlSaPassword": { "value": "Ch4ngeMe!Str0ng" },
+    "useAzurePostgresql": { "value": true },
+    "postgresPassword": { "value": "Ch4ngeMe!Str0ng" },
     "jwtSigningKey": { "value": "replace-with-a-long-random-string-at-least-32-chars" },
     "imageRegistryServer": { "value": "myregistry.azurecr.io" },
     "imageTag": { "value": "v1" },
     "imageRegistryUsername": { "value": "" },
     "imageRegistryPassword": { "value": "" },
-    "sqlPort": { "value": 1433 },
+    "postgresPort": { "value": 5432 },
     "redisPort": { "value": 6379 },
+    "useAzureCacheForRedis": { "value": false },
     "redisPassword": { "value": "replace-with-a-strong-redis-password" },
+    "redisTrustedCertificateThumbprint": { "value": "replace-with-the-thumbprint-generate-cert-ps1-sh-printed" },
+    "azureCacheForRedisTier": { "value": "Balanced_B0" },
+    "enableTenantSecretsKeyVault": { "value": false },
+    "enableSeq": { "value": false },
+    "seqAdminPassword": { "value": "" },
     "fhirbridgeAppCustomDomain": { "value": "" },
-    "demoAppCustomDomain": { "value": "" },
-    "bindCustomDomainCertificates": { "value": false }
+    "bindCustomDomainCertificates": { "value": false },
+    "enableFrontDoorWaf": { "value": false },
+    "wafPolicyMode": { "value": "Prevention" },
+    "wafRateLimitThreshold": { "value": 300 },
+    "storageRedundancy": { "value": "Standard_ZRS" }
   }
 }

@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Walkthrough (Plain English) — FHIRBridge Containerization</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --docker: #1D63ED;
+    --docker-bg: #E0EAFE;
+    --azure: #0078D4;
+    --azure-bg: #DEEFFC;
+    --aws: #EC7211;
+    --aws-bg: #FFF1E0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1000px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 21px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 52px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2.section-divider {
+    margin-top: 68px;
+    padding: 20px 24px;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 24px;
+  }
+  h2.section-divider.docker-divider { background: linear-gradient(135deg, var(--docker) 0%, #1039A6 100%); }
+  h2.section-divider.azure-divider { background: linear-gradient(135deg, var(--azure) 0%, #003E73 100%); }
+  h2.section-divider.aws-divider { background: linear-gradient(135deg, var(--aws) 0%, #A85300 100%); }
+  h2.section-divider .os-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px;
+    flex-shrink: 0;
+  }
+  h3 {
+    font-size: 16.5px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 34px 0 6px;
+  }
+  h3 code.file-title {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14.5px;
+    background: #F1F5F9;
+    padding: 3px 8px;
+    border-radius: 6px;
+    color: #0F172A;
+  }
+  h4 { font-size: 14px; font-weight: 700; margin: 24px 0 6px; color: var(--ink); }
+  p { margin: 0 0 14px; color: #334155; }
+  p.file-summary { font-size: 14px; color: #475569; margin-bottom: 18px; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 12px 16px;
+    border-radius: 8px 8px 0 0;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.55;
+    margin: 18px 0 0;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+  .explain {
+    background: var(--new-bg);
+    border: 1px solid #A7E8CE;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    padding: 12px 16px;
+    margin: 0 0 20px;
+    font-size: 13.5px;
+    color: #14532D;
+  }
+  .explain::before {
+    content: "In plain English:";
+    display: block;
+    font-weight: 800;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--new);
+    margin-bottom: 4px;
+  }
+  .explain p { color: #14532D; margin: 0 0 8px; }
+  .explain p:last-child { margin-bottom: 0; }
+  .explain code { background: #fff; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13px; break-inside: avoid; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+  nav.toc li.toc-section-head { font-weight: 800; margin-top: 8px; list-style: none; margin-left: -22px; }
+  nav.toc li.toc-section-head a { color: var(--primary); }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.docker { border-left-color: var(--docker); background: var(--docker-bg); }
+  .callout.azure { border-left-color: var(--azure); background: var(--azure-bg); }
+  .callout.aws { border-left-color: var(--aws); background: var(--aws-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  table.glossary {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.glossary th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.glossary td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.glossary tr:last-child td { border-bottom: none; }
+  table.glossary td.term { font-weight: 700; white-space: nowrap; color: #0F172A; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-docker { color: var(--docker); background: var(--docker-bg); }
+  .pill-azure  { color: var(--azure);  background: var(--azure-bg); }
+  .pill-aws    { color: #9A4A0A;       background: var(--aws-bg); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Code Walkthrough, Plain English</h1>
+    <p class="subtitle">FHIRBridge Containerization — every file, section by section, explained the way you'd explain it to a manager who doesn't write code. Pairs with the technical guide (<code style="background:rgba(255,255,255,0.15);color:#fff;">Containerization-Multi-Cloud-Guide.html</code>) — this one skips the jargon.</p>
+    <div class="meta">
+      <div><strong>Audience</strong> Non-technical / management</div>
+      <div><strong>Covers</strong> Every file under containerization/, plus the one Gateway code fix</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#howto">How to read this document</a></li>
+      <li><a href="#glossary">Glossary — words you'll see a lot</a></li>
+      <li class="toc-section-head"><a href="#docker-section">&#9654; Docker &amp; Local Files</a></li>
+      <li><a href="#w-dockerignore">.dockerignore</a></li>
+      <li><a href="#w-dockerfile-app">fhirbridge-app/Dockerfile</a></li>
+      <li><a href="#w-entrypoint">fhirbridge-app/entrypoint.sh</a></li>
+      <li><a href="#w-dockerfile-demo">demo-app/Dockerfile</a></li>
+      <li><a href="#w-dockerfile-worker">worker/Dockerfile</a></li>
+      <li><a href="#w-compose">docker-compose.yml</a></li>
+      <li><a href="#w-env-example">.env.example</a></li>
+      <li><a href="#w-build-images">build-images.sh</a></li>
+      <li><a href="#w-tf-local">Terraform files (local)</a></li>
+      <li><a href="#w-cleanup-local">cleanup-local.sh</a></li>
+      <li class="toc-section-head"><a href="#azure-section">&#9654; Azure Files</a></li>
+      <li><a href="#w-azure-variables">azure/variables.tf</a></li>
+      <li><a href="#w-azure-main">azure/main.tf</a></li>
+      <li><a href="#w-cleanup-azure">cleanup-azure.sh</a></li>
+      <li><a href="#w-bicep">azure-deploy/main.bicep</a></li>
+      <li><a href="#w-createui">createUiDefinition.json</a></li>
+      <li><a href="#w-cleanup-bicep">azure-deploy/cleanup.sh</a></li>
+      <li class="toc-section-head"><a href="#aws-section">&#9654; AWS Files</a></li>
+      <li><a href="#w-aws-variables">aws/variables.tf</a></li>
+      <li><a href="#w-aws-main">aws/main.tf</a></li>
+      <li><a href="#w-aws-storage">aws/storage.tf</a></li>
+      <li><a href="#w-aws-discovery">aws/discovery.tf</a></li>
+      <li><a href="#w-aws-alb">aws/alb.tf</a></li>
+      <li><a href="#w-aws-tasks">aws/tasks.tf</a></li>
+      <li><a href="#w-aws-services">aws/services.tf</a></li>
+      <li><a href="#w-cleanup-aws">cleanup-aws.sh</a></li>
+      <li class="toc-section-head"><a href="#vendor-registry-section">&#9654; Vendor Registry Files</a></li>
+      <li><a href="#w-vendor-main">vendor-registry/main.tf</a></li>
+      <li><a href="#w-vendor-workflow">How publishing &amp; installing a version works</a></li>
+      <li><a href="#w-cleanup-vendor">cleanup-vendor-registry.sh</a></li>
+      <li class="toc-section-head"><a href="#gateway-fix">&#9654; The One Code Fix</a></li>
+      <li><a href="#w-gateway">Gateway Program.cs</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="howto">How to Read This Document</h2>
+  <p>
+    Every file is shown in small chunks. Under each chunk of real code, there's a green box labeled
+    <strong>"In plain English"</strong> that explains what that chunk does and why — no assumption
+    that you can read code. If you only read the green boxes and skip the code itself, you'll still
+    get the full picture. The code is there so you (or anyone else) can point at an exact line if a
+    question ever comes up later.
+  </p>
+  <p>
+    One repeated idea worth knowing up front: several files create <strong>5 near-identical blocks</strong>
+    (one per container: the database, the cache, the main app, the demo app, the background worker).
+    Rather than explain the same pattern 5 times, the first one is explained fully and the rest just
+    call out what's <em>different</em> about them (how much computer power they get, what port they
+    use, etc.).
+  </p>
+
+  <h2 id="glossary">Glossary — Words You'll See a Lot</h2>
+  <table class="glossary">
+    <tr><th>Word</th><th>What it means, in plain terms</th></tr>
+    <tr><td class="term">Container</td><td>A sealed, self-contained package that holds one piece of software plus everything it needs to run (its own mini operating system files, settings, etc.). Because everything it needs travels with it, it runs identically on a laptop, a test server, or in Azure/AWS — no "works on my machine" surprises.</td></tr>
+    <tr><td class="term">Image</td><td>The blueprint a container is built from — like a recipe. You build an image once, then can start as many running containers from it as you like.</td></tr>
+    <tr><td class="term">Dockerfile</td><td>A step-by-step recipe (a text file) describing how to build one image: "start from this base, copy these files in, run this build command," etc.</td></tr>
+    <tr><td class="term">Docker Compose</td><td>A tool that reads one file (<code>docker-compose.yml</code>) listing several containers and starts them all together, already able to talk to each other. Used here for running the whole product on a single computer.</td></tr>
+    <tr><td class="term">Terraform / Bicep</td><td>Tools that let you write down, as a checklist-style text file, exactly what cloud resources you want (servers, databases, storage, networking). Running the tool then builds all of it automatically and consistently — instead of a person clicking through dozens of web console screens by hand, which is slow and error-prone.</td></tr>
+    <tr><td class="term">Environment variable</td><td>A labeled setting attached to a container when it starts, like a sticky note that says "use this database address" or "run in production mode." The software inside reads these to configure itself.</td></tr>
+    <tr><td class="term">Secret</td><td>A setting that's sensitive — a password or signing key — handled with extra care (kept out of plain logs, not typed directly into shared files).</td></tr>
+    <tr><td class="term">Port</td><td>A "door number" a piece of software listens on. If a container's software listens on port 80, other things reach it by knocking on port 80.</td></tr>
+    <tr><td class="term">Tag / Label</td><td>A little sticky note attached to a cloud resource (or container) recording things like "this belongs to Project X." Used later to find everything a deployment created, to report on its cost, or to clean it all up.</td></tr>
+    <tr><td class="term">Registry</td><td>A storage locker for images — you upload ("push") a built image there once, and any computer with access can download ("pull") and run it later.</td></tr>
+    <tr><td class="term">Replica</td><td>A running copy of a container. "1 replica always on" means there's always exactly one copy running, 24/7, even with zero visitors.</td></tr>
+    <tr><td class="term">Key Vault</td><td>Microsoft Azure's dedicated, purpose-built secure locker specifically for passwords and other secrets — the recommended place to keep them in Azure, with a record kept of who accessed what and fine control over who's allowed to. Once a password is written in, everything else reads it from there — including if someone deliberately changes it later, that change sticks.</td></tr>
+    <tr><td class="term">NAT Gateway</td><td>A one-way mail-forwarding service for containers that don't have their own public internet address. It lets them send requests out to the internet (e.g. to download a software update) and receive the reply, but nobody on the outside internet can use it to reach in and contact the container directly.</td></tr>
+    <tr><td class="term">TLS / HTTPS / Certificate</td><td>The padlock-icon, encrypted version of a web address (<code>https://</code> instead of <code>http://</code>). It requires a "certificate" — a bit like a notarized ID card for a website — issued either by a recognized outside authority (trusted automatically by browsers) or generated by the deployment itself ("self-signed," which works and still encrypts everything, but shows visitors a "not trusted" warning until it's swapped for a purchased one).</td></tr>
+    <tr><td class="term">Version tag (image tag)</td><td>A different meaning of "tag" than the resource sticky-note above — this one labels a specific build of an image inside a Registry, like <code>v1.2.0</code>. A Registry can hold many version tags of the same image side by side; picking which one to install is just picking which tag to use. Re-using an existing tag for a new build overwrites what that tag points to — a fresh version needs a new tag.</td></tr>
+  </table>
+
+  <!-- ================= DOCKER SECTION ================= -->
+  <h2 id="docker-section" class="section-divider docker-divider"><span class="os-icon">&#128051;</span>Docker &amp; Local Files</h2>
+  <p class="file-summary">
+    These files describe how to build the 5 containers and run them together on one computer (yours,
+    or a test server), for $0 in cloud costs.
+  </p>
+
+  <h3 id="w-dockerignore"><code class="file-title">.dockerignore</code></h3>
+  <p class="file-summary">A short "don't copy these" exclude-list used whenever an image is being built.</p>
+  <pre><code>**/bin/
+**/obj/
+**/node_modules/
+**/.angular/
+**/dist/
+.git/
+tests/
+docs/</code></pre>
+  <div class="explain">
+    <p>When building an image, the computer normally has to gather up all the files it might need
+    and hand them to the builder. Without this list, that would include every already-compiled
+    leftover file, every downloaded code library, the entire git history, and the test suite —
+    gigabytes of stuff that isn't actually needed to run the product. This file just says "skip all
+    of that," which makes every build faster and the resulting image smaller.</p>
+  </div>
+
+  <h3 id="w-dockerfile-app"><code class="file-title">docker/fhirbridge-app/Dockerfile</code></h3>
+  <p class="file-summary">The recipe for the main product image — it bundles the customer-facing website
+  and the main API into one package.</p>
+  <pre><code>FROM node:20-alpine AS portal-build
+ARG PORTAL_CONFIG=production
+WORKDIR /src/portal
+COPY portal/package.json portal/package-lock.json portal/.npmrc ./
+RUN npm ci
+COPY portal/ ./
+RUN npm run build -- --configuration=${PORTAL_CONFIG}</code></pre>
+  <div class="explain">
+    <p>This first stage builds the customer-facing website (the Angular "portal"). It's like hiring
+    a printer: give it the raw source files, and it hands back a finished, ready-to-serve website.
+    <code>node:20-alpine</code> is just "a small, temporary workshop with the right tools already
+    installed" — it gets thrown away afterward, only the finished website is kept.</p>
+  </div>
+  <pre><code>FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build
+WORKDIR /src
+COPY src/ ./src/
+RUN dotnet publish src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj \
+      -c Release --no-self-contained -o /app/publish/api \
+    &amp;&amp; dotnet publish src/Gateway/FHIRBridge.Gateway/FHIRBridge.Gateway.csproj \
+      -c Release --no-self-contained -o /app/publish/gateway</code></pre>
+  <div class="explain">
+    <p>A second, separate workshop — this one compiles the actual application code (written in C#)
+    into two ready-to-run programs: the <strong>Api</strong> (the brains — handles data, rules,
+    security) and the <strong>Gateway</strong> (the front door — the only piece the outside world is
+    allowed to talk to directly). Building two things here instead of one is intentional and
+    mirrors how the product already runs on the company's Windows server today.</p>
+  </div>
+  <pre><code>FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+WORKDIR /app
+COPY --from=dotnet-build /app/publish/api ./api
+COPY --from=dotnet-build /app/publish/gateway ./gateway
+COPY --from=portal-build /src/portal/dist/fhirbridge-ui/browser ./portal
+COPY containerization/docker/fhirbridge-app/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+EXPOSE 80
+ENTRYPOINT ["./entrypoint.sh"]</code></pre>
+  <div class="explain">
+    <p>This is the final, real image — the one that actually gets shipped and run. It gathers up
+    the finished website, the finished Api, and the finished Gateway from the two workshops above
+    into one lightweight package, along with a small startup script (explained next). <code>EXPOSE
+    80</code> means "this container answers on door number 80" — that's the only door anyone outside
+    the container is meant to knock on; the Api itself is deliberately never reachable from outside,
+    for security, exactly like on the company's existing server today.</p>
+  </div>
+
+  <h3 id="w-entrypoint"><code class="file-title">docker/fhirbridge-app/entrypoint.sh</code></h3>
+  <p class="file-summary">The startup checklist this container runs every time it boots — it starts
+  both the Api and the Gateway and keeps an eye on them.</p>
+  <pre><code>env ASPNETCORE_URLS=http://127.0.0.1:5000 \
+    ASPNETCORE_CONTENTROOT=/app/api \
+    dotnet /app/api/FHIRBridge.Api.dll &amp;
+API_PID=$!</code></pre>
+  <div class="explain">
+    <p>Starts the Api program running in the background, and tells it two things: (1) only listen
+    for requests from <em>inside this same container</em> (<code>127.0.0.1</code> is "myself only" —
+    nothing outside can reach it directly, which is a deliberate security choice), and (2) where its
+    own settings files live. The <code>&amp;</code> at the end means "start it and keep going," not
+    "wait for it to finish" — both programs need to run at the same time.</p>
+  </div>
+  <pre><code>env ASPNETCORE_URLS=http://+:80 \
+    ASPNETCORE_CONTENTROOT=/app/gateway \
+    StaticFiles__RootPath=/app/portal \
+    dotnet /app/gateway/FHIRBridge.Gateway.dll &amp;
+GATEWAY_PID=$!</code></pre>
+  <div class="explain">
+    <p>Starts the Gateway — the public front door — telling it to answer on door 80 for
+    <em>anyone</em>, where its own settings live, and where to find the finished website files it
+    needs to serve to visitors.</p>
+  </div>
+  <pre><code>terminate() {
+  kill -TERM "$API_PID" "$GATEWAY_PID" 2>/dev/null || true
+}
+trap terminate TERM INT
+
+wait -n "$API_PID" "$GATEWAY_PID"
+EXIT_CODE=$?
+terminate
+exit $EXIT_CODE</code></pre>
+  <div class="explain">
+    <p>Housekeeping so the container behaves well: if the container is asked to stop, both the Api
+    and Gateway are shut down cleanly together (rather than one being abandoned). And if
+    <em>either</em> one crashes unexpectedly on its own, the whole container is treated as failed and
+    exits — so whatever's supervising it (Docker, Azure, AWS) notices and restarts it, instead of
+    silently running in a half-broken state.</p>
+  </div>
+
+  <h3 id="w-dockerfile-demo"><code class="file-title">docker/demo-app/Dockerfile</code></h3>
+  <p class="file-summary">Same recipe idea as above, for the separate "Demo App" product — but
+  simpler, because the Demo App is a single program that serves its own website itself (no separate
+  front door needed).</p>
+  <pre><code>FROM node:20-alpine AS frontend-build
+...
+RUN npm run build -- --configuration=${DEMO_CONFIG}
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build
+...
+RUN dotnet publish backend/HealthAppBackend.csproj -c Release --no-self-contained -o /app/publish
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+...
+ENV ASPNETCORE_URLS=http://+:5500
+ENV DEMOAPP_PORTAL_PATH=/app/portal
+EXPOSE 5500
+ENTRYPOINT ["dotnet", "HealthAppBackend.dll"]</code></pre>
+  <div class="explain">
+    <p>Same two-workshop idea (build the website, build the program), but only one program comes out
+    the other end, so there's no separate startup script needed — the container just runs that one
+    program directly, listening on door 5500 for everyone.</p>
+  </div>
+
+  <h3 id="w-dockerfile-worker"><code class="file-title">docker/worker/Dockerfile</code></h3>
+  <p class="file-summary">The recipe for the background Worker — the piece that runs scheduled jobs
+  behind the scenes. It has no website and answers no door at all.</p>
+  <pre><code>FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build
+...
+RUN dotnet publish src/Worker/FHIRBridge.Worker/FHIRBridge.Worker.csproj -c Release --no-self-contained -o /app/publish
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+...
+ENTRYPOINT ["dotnet", "FHIRBridge.Worker.dll"]</code></pre>
+  <div class="explain">
+    <p>The simplest of the three: build the one program, then run it. Nobody ever visits this
+    container directly — it just quietly does its scheduled work in the background. (A note on the
+    base image choice here is in the "bugs found" write-up in the technical guide — the first
+    attempt used a slightly smaller starting point that turned out to be missing something this
+    program needed, and was corrected after testing caught it.)</p>
+  </div>
+
+  <h3 id="w-compose"><code class="file-title">compose/docker-compose.yml</code></h3>
+  <p class="file-summary">The master "start everything together" instruction sheet for running the
+  whole product on one computer.</p>
+  <pre><code>services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fhirbridge-ctr-sqlserver
+    labels:
+      com.fhirbridge.project: "FHIRBridge"
+      ...
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Express"
+      MSSQL_SA_PASSWORD: "${SQL_SA_PASSWORD}"
+    ports:
+      - "${SQL_HOST_PORT:-1434}:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: [...checks the database actually responds...]</code></pre>
+  <div class="explain">
+    <p>This block says: "start a database container using Microsoft's ready-made SQL Server image,
+    the free Express edition." <code>labels</code> are the sticky notes mentioned in the glossary.
+    <code>MSSQL_SA_PASSWORD</code> is the database's master password, pulled from a settings file
+    rather than typed in here directly. <code>volumes</code> means "save the actual data to a safe
+    spot on disk that survives even if the container itself is deleted and recreated." The
+    <code>healthcheck</code> is a recurring "are you actually working yet?" ping — other containers
+    wait for a "yes" here before they try to use the database.</p>
+  </div>
+  <pre><code>  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ...
+  fhirbridge-app:
+    build:
+      context: ../../
+      dockerfile: containerization/docker/fhirbridge-app/Dockerfile
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True;..."
+      ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
+      Authentication__SigningKey: "${JWT_SIGNING_KEY}"
+      Portal__AllowedOrigins__0: "http://localhost:${DEMO_HOST_PORT:-5500}"
+    ports:
+      - "${APP_HOST_PORT:-8080}:80"
+    restart: unless-stopped</code></pre>
+  <div class="explain">
+    <p><code>redis</code> is a small, fast memory cache — think of it as short-term sticky-note
+    storage the app uses to avoid repeating slow work. As part of a recent HIPAA-compliance pass,
+    it now also requires a password to connect (<code>--requirepass</code>) — previously anyone who
+    could reach it on the network at all could read whatever was cached, with nothing else stopping
+    them. Requiring a password too is "defense in depth": a second lock on the door, not just relying
+    on the network layout to keep people out. The main app (<code>fhirbridge-app</code>) is told to
+    wait until both the database and the cache report healthy before it starts, and is handed the
+    exact address/password to find each at, a security signing key, and which other website is
+    allowed to call it. The database connection also now explicitly turns encryption on
+    (<code>Encrypt=True</code>) — the data flowing between the app and the database is scrambled in
+    transit, not just carried over a connection that merely tolerates an unverified certificate.
+    <code>ports: "8080:80"</code> means "on this computer, reach it at address 8080, even though
+    inside the container it's answering on 80." <code>restart: unless-stopped</code> means "if this
+    crashes, start it back up automatically" — important because of a known, harmless startup
+    timing issue explained further in the technical guide.</p>
+  </div>
+  <pre><code>  demo-app:
+    ...
+  worker:
+    ...
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      fhirbridge-app: { condition: service_started }
+
+volumes:
+  sqlserver-data:
+  redis-data:
+  fhirbridge-dataprotection-keys:</code></pre>
+  <div class="explain">
+    <p>The Demo App and the Worker follow the same pattern as the main app above — their own
+    settings, their own "wait until the database is ready" rule. The Worker additionally waits for
+    the main app to have at least <em>started</em> first (not full proof against every timing
+    issue, just reduces the odds of a rare startup collision — see the technical guide for the full
+    story). The bottom <code>volumes</code> section is just naming the 3 "safe storage spots on
+    disk" referenced earlier, so data survives container restarts.</p>
+  </div>
+
+  <h3 id="w-env-example"><code class="file-title">compose/.env.example</code></h3>
+  <p class="file-summary">A fill-in-the-blanks template for passwords and settings.</p>
+  <pre><code>SQL_SA_PASSWORD=Ch4ngeMe!Str0ng
+REDIS_PASSWORD=Ch4ngeMe!Str0ng
+JWT_SIGNING_KEY=replace-with-a-long-random-string-at-least-32-chars
+APP_HOST_PORT=8080
+DEMO_HOST_PORT=5500</code></pre>
+  <div class="explain">
+    <p>Before running anything, you copy this file to a real <code>.env</code> file and fill in
+    actual passwords. <code>REDIS_PASSWORD</code> is new — the cache now requires one, same as the
+    database always has. This example file is safe to store in the company's shared code repository
+    (it has no real secrets in it); the real, filled-in <code>.env</code> file is deliberately kept
+    out of the shared repository so real passwords never end up there.</p>
+  </div>
+
+  <h3 id="w-build-images"><code class="file-title">scripts/build-images.sh</code> (and its Windows twin, <code>.ps1</code>)</h3>
+  <p class="file-summary">A one-command way to build all 3 custom images and, optionally, upload
+  them somewhere.</p>
+  <pre><code>while getopts "r:t:p" opt; do
+  case "$opt" in
+    r) REGISTRY="$OPTARG" ;;
+    t) TAG="$OPTARG" ;;
+    p) PUSH="true" ;;
+  esac
+done</code></pre>
+  <div class="explain">
+    <p>Reads the options someone typed after the command name — which storage locker
+    (<code>registry</code>) to upload to, what version label (<code>tag</code>) to stamp on the
+    images, and whether to actually upload (<code>push</code>) or just build them locally.</p>
+  </div>
+  <pre><code>for name in "${!IMAGES[@]}"; do
+  docker build -f "${REPO_ROOT}/${dockerfile}" -t "${full_tag}" "${REPO_ROOT}"
+  if [[ "$PUSH" == "true" ]]; then
+    docker push "${full_tag}"
+  fi
+done</code></pre>
+  <div class="explain">
+    <p>Loops through the 3 recipes (main app, demo app, worker) one at a time: build each into an
+    image, and if uploading was requested, upload it. This is the single command a developer runs
+    before every release — it replaces doing the same 3 builds by hand.</p>
+  </div>
+
+  <h3 id="w-tf-local">Terraform files — <code class="file-title">terraform/environments/local/</code></h3>
+  <p class="file-summary">A second, alternative way to start the same 5 containers — using
+  Terraform instead of the compose file above, for anyone who wants one consistent tool across
+  local, Azure, and AWS.</p>
+  <pre><code>locals {
+  common_labels = {
+    "com.fhirbridge.project"     = "FHIRBridge"
+    "com.fhirbridge.component"   = "containerization"
+    "com.fhirbridge.environment" = "local"
+    "com.fhirbridge.managed-by"  = "Terraform"
+  }
+}</code></pre>
+  <div class="explain">
+    <p>Defines the 4 sticky-note labels once, so they don't have to be retyped on every single
+    container further down — the file just says "stick these same labels on everything."</p>
+  </div>
+  <pre><code>resource "docker_container" "sqlserver" {
+  name  = "fhirbridge-ctr-sqlserver"
+  image = docker_image.sqlserver.image_id
+  env = [
+    "ACCEPT_EULA=Y",
+    "MSSQL_PID=Express",
+    "MSSQL_SA_PASSWORD=${var.sql_sa_password}",
+  ]
+  ports { internal = 1433, external = var.sql_host_port }
+  volumes { volume_name = docker_volume.sqlserver_data.name, container_path = "/var/opt/mssql" }
+  healthcheck { ... }
+  dynamic "labels" { for_each = local.common_labels, content { label = labels.key, value = labels.value } }
+  restart = "unless-stopped"
+}</code></pre>
+  <div class="explain">
+    <p>This is Terraform's version of the exact same database container described in the compose
+    file above — same password setting, same saved-data location, same health check, same restart
+    behavior, plus the 4 sticky-note labels attached automatically. The other 4 containers (cache,
+    main app, demo app, worker) each get their own nearly-identical block later in the file, with
+    just their own settings swapped in — same idea repeated, not worth re-explaining line by line.</p>
+  </div>
+
+  <h3 id="w-cleanup-local"><code class="file-title">scripts/cleanup-local.sh</code></h3>
+  <p class="file-summary">The "we're done testing, remove everything" button for the local setup.</p>
+  <pre><code>read -r -p "This removes every FHIRBridge local container ... continue? [y/N] " reply
+[[ "$reply" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
+
+docker compose down -v</code></pre>
+  <div class="explain">
+    <p>Asks "are you sure?" before doing anything destructive (unless told to skip the prompt), then
+    removes all 5 containers, their network, and their saved data. Since everything here runs on
+    your own computer for free, there's no billing urgency to run this — it's mainly just tidying
+    up disk space.</p>
+  </div>
+
+  <!-- ================= AZURE SECTION ================= -->
+  <h2 id="azure-section" class="section-divider azure-divider"><span class="os-icon">&#9729;</span>Azure Files</h2>
+  <p class="file-summary">
+    These files describe the same 5-container setup, but built inside Microsoft Azure instead of on
+    a local computer — which means it's reachable from the internet, and it costs money while it
+    runs (see the Resource &amp; Cost Inventory in the technical guide for exact figures).
+  </p>
+
+  <h3 id="w-azure-variables"><code class="file-title">azure/variables.tf</code></h3>
+  <p class="file-summary">The list of "fill-in-the-blanks" settings this Azure setup needs before it
+  can run.</p>
+  <pre><code>variable "name_prefix"         { default = "fhirbridge" }
+variable "resource_group_name" { default = "rg-tusharpuri" }
+variable "image_tag"           { default = "latest" }
+variable "sql_sa_password"     { sensitive = true }
+variable "jwt_signing_key"     { sensitive = true }
+variable "redis_password"      { sensitive = true }
+variable "sql_port"            { default = 1433 }
+variable "redis_port"          { default = 6379 }</code></pre>
+  <div class="explain">
+    <p>A short checklist of things someone must provide (or accept the sensible defaults for)
+    before this Azure setup can be built: what to name things, which existing "folder" (Resource
+    Group, explained below) to build everything inside, which version of the software to deploy,
+    and the passwords. Marking something <code>sensitive</code> tells Terraform to hide it from its
+    own logs and screen output, the same way a password field on a website shows dots instead of
+    letters. A few fill-in-the-blanks changed recently: this now points at an <em>existing</em>
+    resource group (<code>resource_group_name</code>) instead of naming a brand-new one to create —
+    more on why below — the cache now needs its own password too (<code>redis_password</code>), and
+    a customer can now choose their own "door numbers" for the database and cache
+    (<code>sql_port</code>, <code>redis_port</code>) instead of being stuck with the defaults shown
+    here. Note the door numbers only apply to the database and cache — the two public-facing apps in
+    Azure still always answer on the standard web address with no door number needed at all, for
+    reasons explained further down.</p>
+  </div>
+
+  <h3 id="w-azure-main"><code class="file-title">azure/main.tf</code></h3>
+  <p class="file-summary">The main blueprint — every Azure resource this deployment creates.</p>
+  <pre><code>locals {
+  common_tags = {
+    Project     = "FHIRBridge"
+    Component   = "containerization"
+    Environment = var.name_prefix
+    ManagedBy   = "Terraform"
+  }
+}
+
+data "azurerm_resource_group" "main" {
+  name = var.resource_group_name
+}</code></pre>
+  <div class="explain">
+    <p>A "Resource Group" is Azure's name for a folder that holds all the related pieces of one
+    deployment together, so they can be viewed, managed, and later deleted as one unit. This block
+    is a recent change: it used to <em>create</em> a brand-new folder for this deployment; now it
+    just looks up one that's expected to already exist (named <code>rg-tusharpuri</code> by
+    default) and builds everything <em>inside</em> it instead. The practical difference: tearing
+    this deployment back down (further down this document) will remove everything it built, but
+    will leave the folder itself standing, since this setup no longer owns it — useful when the
+    folder is meant to be shared with other things, or managed by someone else's process.</p>
+  </div>
+  <pre><code>resource "azurerm_container_registry" "acr" {
+  name                = local.acr_name
+  sku                 = "Basic"
+  admin_enabled       = true
+  tags                = local.common_tags
+}</code></pre>
+  <div class="explain">
+    <p>Creates the storage locker (registry) inside Azure where the 3 built images get uploaded to.
+    This has to exist and already have images in it <em>before</em> the containers further down can
+    be created — a bit like needing the warehouse built before you can stock shelves in it.</p>
+  </div>
+
+  <pre><code>resource "azurerm_key_vault" "main" {
+  name                       = local.key_vault_name
+  sku_name                   = "standard"
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  enable_rbac_authorization  = true
+  soft_delete_retention_days = 7
+  tags                       = local.common_tags
+}
+
+resource "azurerm_role_assignment" "terraform_kv_secrets_officer" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}</code></pre>
+  <div class="explain">
+    <p>This is new, added as part of a recent pass to bring the setup in line with HIPAA (the US
+    law governing protection of patient health data). It creates a <strong>Key Vault</strong> —
+    Azure's own dedicated, purpose-built locker for passwords and secrets, rather than passing them
+    around as plain settings. It's the recommended way to handle secrets in Azure, and it comes
+    with a record of who accessed what and fine-grained control over who's allowed to. The second
+    block is a one-time permission grant: it lets whoever/whatever runs this setup script (identified
+    by <code>data.azurerm_client_config.current</code> — effectively "the identity currently signed
+    in") write the 3 passwords into the new vault during the very first deploy. It does not hand the
+    containers themselves any special access — see below for how they actually get the password.</p>
+  </div>
+  <pre><code>resource "azurerm_key_vault_secret" "sql_sa_password" {
+  name         = "sql-sa-password"
+  value        = var.sql_sa_password
+  key_vault_id = azurerm_key_vault.main.id
+}
+
+resource "azurerm_key_vault_secret" "jwt_signing_key" { name = "jwt-signing-key", ... }
+resource "azurerm_key_vault_secret" "redis_password"  { name = "redis-password",  ... }</code></pre>
+  <div class="explain">
+    <p>The very first time this setup is deployed, the 3 passwords (the database password, the
+    app's own security signing key, and the new cache password) get written into the vault from the
+    settings file. From that point on, every container reads its password <em>from the vault</em>,
+    not from the original settings file. That matters in practice: someone can later change or
+    rotate a password directly in the vault — through the Azure Portal, or a single command — and
+    it sticks. A later re-run of this same setup script won't quietly overwrite that change back to
+    the old value, the way it would if the password just lived in a settings file.</p>
+  </div>
+
+  <pre><code>resource "azurerm_log_analytics_workspace" "main" { ... }
+
+resource "azurerm_container_app_environment" "main" {
+  name                       = "${var.name_prefix}-env"
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+  tags                       = local.common_tags
+}</code></pre>
+  <div class="explain">
+    <p>A "Log Analytics Workspace" is where all the containers' activity logs get collected and
+    stored, so problems can be investigated later. The "Container App Environment" is the shared
+    neighborhood all 5 containers live in — it's what lets them find and talk to each other by
+    name, and it's wired up to send its logs to that workspace.</p>
+  </div>
+  <pre><code>resource "azurerm_storage_account" "main" { ... }
+resource "azurerm_storage_share" "sql_data"   { name = "sql-data",   quota = 50 }
+resource "azurerm_storage_share" "redis_data" { name = "redis-data", quota = 10 }</code></pre>
+  <div class="explain">
+    <p>Sets up a proper Azure hard-drive-in-the-cloud, split into two labeled folders — one for the
+    database's data, one for the cache's data — so that data survives even if the database
+    container itself is ever restarted or replaced. The numbers (50, 10) are just size ceilings, not
+    guaranteed usage — you're billed for what's actually stored, not the ceiling.</p>
+  </div>
+  <pre><code>resource "azurerm_container_app" "sqlserver" {
+  name                         = local.sqlserver_name
+  revision_mode                = "Single"
+  tags                         = local.common_tags
+
+  template {
+    min_replicas = 1
+    max_replicas = 1
+
+    container {
+      name   = "sqlserver"
+      image  = "mcr.microsoft.com/mssql/server:2022-latest"
+      cpu    = 1.0
+      memory = "2Gi"
+      env {
+        name        = "MSSQL_SA_PASSWORD"
+        secret_name = "sql-sa-password"
+      }
+      volume_mounts { name = "sql-data", path = "/var/opt/mssql" }
+    }
+  }
+
+  secret {
+    name  = "sql-sa-password"
+    value = azurerm_key_vault_secret.sql_sa_password.value
+  }
+
+  ingress {
+    external_enabled = false
+    target_port      = var.sql_port
+    transport        = "tcp"
+  }
+}</code></pre>
+  <div class="explain">
+    <p>This is the actual database container in Azure. <code>min_replicas = 1, max_replicas = 1</code>
+    means "always exactly one copy running, never zero, never more than one" — running the database
+    twice at once on the same shared disk would corrupt it, and letting it turn off entirely isn't
+    acceptable either, so it's pinned at exactly one. <code>cpu = 1.0, memory = "2Gi"</code> is how
+    much computer power it's given (1 processor core's worth, 2 gigabytes of memory) — this directly
+    drives its share of the Azure bill. <code>ingress: external_enabled = false</code> means "the
+    public internet can never reach this directly" — only the other containers inside the same
+    neighborhood can. The password no longer sits directly in this file as a plain value: the
+    <code>secret</code> block's value is now a lookup of what's currently sitting in the Key Vault
+    entry created above, rather than the raw settings-file value — everything downstream (this
+    container, the Azure Portal, etc.) still just sees a plain secret named <code>sql-sa-password</code>,
+    but where that value actually comes from has changed. And <code>target_port = var.sql_port</code>
+    means the customer can now choose their own door number for the database instead of always being
+    stuck with 1433.</p>
+  </div>
+  <pre><code>resource "azurerm_container_app" "redis" {
+  ...
+  template { container { cpu = 0.5, memory = "1Gi", command = ["redis-server", "--port", tostring(var.redis_port), "--requirepass", azurerm_key_vault_secret.redis_password.value] } }
+  ingress { external_enabled = false, target_port = var.redis_port, transport = "tcp" }
+}
+
+resource "azurerm_container_app" "fhirbridge_app" {
+  ...
+  template {
+    min_replicas = 1
+    max_replicas = 3
+    container { cpu = 0.5, memory = "1Gi", ... }
+  }
+  ingress { external_enabled = true, target_port = 80 }
+}
+
+resource "azurerm_container_app" "demo_app" { ... max_replicas = 3 ... external_enabled = true, target_port = 5500 ... }
+
+resource "azurerm_container_app" "worker" { ... max_replicas = 1 ... (no ingress block at all) }</code></pre>
+  <div class="explain">
+    <p>The remaining 4 containers follow the exact same pattern as the database block above, just
+    with their own settings: the cache gets less power and stays private just like the database, now
+    also requires its own password (read from the vault the same way as the database's), and can
+    have its own custom door number via <code>var.redis_port</code>; the main app and demo app are
+    allowed to <em>scale up to 3 copies</em> automatically if lots of people are using them at once,
+    and are the only two allowed to be reached from the public internet. Those last two keep their
+    fixed doors (80 and 5500) rather than a customizable one — that's a real limitation of Azure's
+    Container Apps product, not an oversight: public-facing apps in Azure are always served on the
+    standard web address (like any ordinary <code>https://</code> address, no door number needed),
+    so there's nothing to make configurable there. The worker is private and fixed at exactly one
+    copy, with no "door" configured at all since nobody ever visits it directly.</p>
+  </div>
+
+  <h4>Giving the main app and demo app their own real domain name (optional) <span class="pill pill-new">new</span></h4>
+  <p>By default both public apps get one of those auto-generated
+  <code>something.azurecontainerapps.io</code> addresses — fine for testing, not something you'd
+  put on a business card. Two new settings, <code>fhirbridge_app_custom_domain</code> and
+  <code>demo_app_custom_domain</code>, let you point a real domain (like <code>app.yourcompany.com</code>)
+  at either app instead, with a free, auto-renewing HTTPS certificate — Azure handles the certificate
+  itself, nothing to buy or manually renew.</p>
+  <div class="explain">
+    <p>There's a catch that isn't a limitation of this template, but of how the internet's domain
+    system works: Azure can't hand out a certificate for your domain until you prove you actually
+    own it, and that proof requires two steps done in order. <strong>Step one:</strong> deploy once
+    with these two settings left blank (the default) — Azure still generates a private verification
+    code for each app, printed out as <code>fhirbridge_app_domain_verification</code> /
+    <code>demo_app_domain_verification</code>. <strong>Step two:</strong> go to wherever you manage
+    your domain's DNS (GoDaddy, Cloudflare, whoever you registered it through) and add two records:
+    one pointing your domain at the app's existing azurecontainerapps.io address, and one that's
+    just that verification code, proving you control the domain. Wait a bit for that to take effect
+    across the internet. <strong>Step three:</strong> fill in the domain setting and deploy again —
+    now Azure can verify the code is really there, issues the certificate, and switches the app over
+    to answering on your real domain too. Leave the settings blank and none of this happens — both
+    apps work exactly as they always have.</p>
+  </div>
+
+  <h3 id="w-cleanup-azure"><code class="file-title">scripts/cleanup-azure.sh</code></h3>
+  <pre><code>terraform destroy</code></pre>
+  <div class="explain">
+    <p>One command that removes every single thing this Azure deployment created — asks for
+    confirmation first unless told to skip it. This is the important one to actually run once
+    testing is done, since (unlike the local setup) everything here keeps costing money on the
+    Azure bill for as long as it exists.</p>
+  </div>
+
+  <h3 id="w-bicep"><code class="file-title">azure-deploy/main.bicep</code></h3>
+  <p class="file-summary">A second way to build the exact same Azure setup — written in Microsoft's
+  own template language instead of Terraform, so a customer can deploy it themselves with one
+  command or one button click in their own Azure account, without needing to learn Terraform at
+  all.</p>
+  <pre><code>@description('SQL Server SA password. Must satisfy SQL Server\'s complexity policy.')
+@secure()
+param sqlSaPassword string
+
+@description('Redis cache password.')
+@secure()
+param redisPassword string
+
+@description('Registry the 3 custom images were published to.')
+param imageRegistryServer string
+
+@description('Door number for SQL Server.')
+param sqlPort int = 1433
+
+@description('Door number for Redis.')
+param redisPort int = 6379</code></pre>
+  <div class="explain">
+    <p>Same idea as the Terraform variables file — a checklist of things the customer fills in
+    before deploying: the passwords, and where to find the pre-built images. That last part
+    matters: for a true "one click" experience, the images have to already be built and uploaded
+    <em>somewhere reachable</em> before the customer ever clicks deploy — this file can't build them
+    itself, someone has to have published them first. Two things were added recently, matching the
+    same HIPAA-compliance pass covered in the Terraform version above: the cache now needs its own
+    password (<code>redisPassword</code>), and a customer can pick their own door numbers for the
+    database and cache (<code>sqlPort</code>, <code>redisPort</code>) instead of always getting
+    1433/6379.</p>
+  </div>
+  <pre><code>var commonTags = {
+  Project: 'FHIRBridge'
+  Component: 'containerization'
+  Environment: namePrefix
+  ManagedBy: 'Bicep'
+}</code></pre>
+  <div class="explain">
+    <p>The same sticky-note labels as the Terraform version, just written in this template
+    language's own style.</p>
+  </div>
+  <pre><code>resource sqlserverApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: sqlServerName
+  tags: commonTags
+  properties: {
+    configuration: {
+      secrets: [ { name: 'sql-sa-password', value: sqlSaPassword } ]
+      ingress: { external: false, targetPort: sqlPort, transport: 'tcp' }
+    }
+    template: {
+      containers: [ { name: 'sqlserver', image: 'mcr.microsoft.com/mssql/server:2022-latest', resources: { cpu: json('1.0'), memory: '2Gi' }, ... } ]
+      scale: { minReplicas: 1, maxReplicas: 1 }
+    }
+  }
+}</code></pre>
+  <div class="explain">
+    <p>Word-for-word the same database container as the Azure Terraform version above — same
+    power allowance, same "always exactly one copy," same "never reachable from outside," and now
+    the same customizable door number (<code>targetPort: sqlPort</code>) instead of a fixed 1433.
+    The rest of the file repeats the same pattern for the cache (which now also picks up the new
+    <code>redisPassword</code> and <code>redisPort</code> settings), main app, and demo app and
+    worker, matching the Terraform version resource for resource — it's the same building plan, just
+    written in a different template language so Azure's own "click deploy" screens can read it
+    directly.</p>
+  </div>
+
+  <h3 id="w-createui"><code class="file-title">azure-deploy/createUiDefinition.json</code></h3>
+  <p class="file-summary">The nicer-looking fill-in form a customer sees in their own Azure account
+  when deploying, instead of a bare list of text boxes.</p>
+  <pre><code>{
+  "name": "sqlSaPassword",
+  "type": "Microsoft.Common.PasswordBox",
+  "label": { "password": "SQL Server SA password", "confirmPassword": "Confirm password" },
+  "constraints": { "required": true, "regex": "...", "validationMessage": "At least 8 characters, including upper case, lower case, and a digit." }
+}</code></pre>
+  <div class="explain">
+    <p>Describes one input box on the customer's deployment screen: a proper masked password field
+    with a "confirm password" box next to it (like signing up for any website), plus a plain-English
+    error message if the password they type doesn't meet the requirements. The full file describes
+    every input box the customer sees across five steps: "FHIRBridge Settings" (SQL SA password,
+    API signing key, and Redis password, all three the same style of masked field); "Container
+    Sizes" (a Small/Medium/Large/XLarge dropdown per container, each defaulting to today's setting —
+    Container Apps only accepts specific CPU/memory pairs, so this is a dropdown, never a free-typed
+    number); "Version" (which release tag to install); "Custom Domains" (optional — a real domain
+    for the main app and/or demo app instead of the auto-generated address, same two-step DNS
+    process described above for the Terraform version); and finally "What Gets Created," a plain
+    read-only summary listing everything about to be deployed, so there's no surprise before hitting
+    the final Create button. There's no registry login/password box at all: registry access is a
+    fixed, pre-baked read-only credential (see the Vendor Registry section further down), not
+    something the customer supplies.</p>
+  </div>
+  <div class="callout">
+    <strong>Found the hard way: don't paste a password copied from a chat window or a document
+    straight into one of these three fields.</strong> A stray leading space came along for the ride
+    once, and it broke the deployment in a very confusing way — SQL Server stored the password
+    <em>with</em> the space (it takes environment variables literally), but the .NET app trimmed
+    the space back out when it read its own connection string, so the two sides ended up
+    disagreeing about what the password actually was. Type these three passwords directly, or paste
+    into a plain text box first and check there's nothing extra at the start or end before pasting
+    into the wizard. Also skip <code>$</code>, backticks, and quote characters in these passwords —
+    one was seen getting silently mangled into something else entirely on the way in. Plain letters
+    and digits, made long, are both safer and plenty strong.
+  </div>
+
+  <h3 id="w-cleanup-bicep"><code class="file-title">azure-deploy/cleanup.sh</code></h3>
+  <pre><code>az resource delete --ids $manifestIds   # precise, from main.bicep's own resourceManifest output
+# only if that manifest can't be found:
+az group delete --name "$RESOURCE_GROUP" --yes --no-wait   # blocked entirely if any disk snapshot exists in the group</code></pre>
+  <div class="explain">
+    <p>Because this deployment method doesn't keep the kind of tracking file Terraform does,
+    <code>main.bicep</code> tracks its own resources instead — a <code>resourceManifest</code>
+    output listing every single resource ID it created, which Azure keeps in the deployment's own
+    history for free. Cleanup reads that list first and deletes exactly those resources, which is
+    precise even if the resource group is shared with other, unrelated things. It only falls back
+    to deleting the entire named folder (Resource Group) if that list can't be found — an older
+    deployment, for instance — and even then it refuses outright if the group contains any disk
+    snapshot, since a snapshot is how a backup gets protected and this script must never be the
+    thing that deletes one. There's also a tag-based fallback mode for that same "no manifest"
+    case, which is what actually ran the one time this was needed in practice.</p>
+  </div>
+
+  <!-- ================= AWS SECTION ================= -->
+  <h2 id="aws-section" class="section-divider aws-divider"><span class="os-icon">&#9729;</span>AWS Files</h2>
+  <p class="file-summary">
+    The same 5-container product, built inside Amazon Web Services instead. AWS doesn't have one
+    single "put everything in one neighborhood" service the way Azure does, so this setup is spread
+    across more files — networking, storage, and the containers themselves are each their own
+    piece.
+  </p>
+
+  <h3 id="w-aws-variables"><code class="file-title">aws/variables.tf</code></h3>
+  <pre><code>variable "aws_region" { default = "us-east-1" }
+variable "vpc_cidr"   { default = "10.90.0.0/16" }</code></pre>
+  <div class="explain">
+    <p>Same idea as Azure's settings checklist, plus one AWS-specific item: <code>vpc_cidr</code> is
+    the address range for this deployment's own private slice of network — think of it as choosing
+    a block of house numbers on a street that's reserved exclusively for this project.</p>
+  </div>
+
+  <h3 id="w-aws-main"><code class="file-title">aws/main.tf</code></h3>
+  <p class="file-summary">Networking, the image storage lockers, and the shared plumbing everything
+  else depends on.</p>
+  <pre><code>provider "aws" {
+  region = var.aws_region
+  default_tags {
+    tags = {
+      Project     = "FHIRBridge"
+      Component   = "containerization"
+      Environment = var.name_prefix
+      ManagedBy   = "Terraform"
+    }
+  }
+}</code></pre>
+  <div class="explain">
+    <p>This one line does something the Azure version needed dozens of repeated lines for: it tells
+    AWS "stick these same sticky-note labels on absolutely everything below, automatically." Nothing
+    can accidentally end up unlabeled.</p>
+  </div>
+  <pre><code>resource "aws_vpc" "main" { cidr_block = var.vpc_cidr }
+resource "aws_internet_gateway" "main" { vpc_id = aws_vpc.main.id }
+resource "aws_subnet" "public" { count = 2, ... }</code></pre>
+  <div class="explain">
+    <p>Builds this deployment's own private network inside AWS (a "VPC"), a door to the public
+    internet for it (the "Internet Gateway"), and splits it into two smaller sections ("subnets") in
+    two different physical AWS data centers — so if one data center has a problem, the setup isn't
+    entirely dependent on it. All of this is free; AWS doesn't charge for the networking plumbing
+    itself.</p>
+  </div>
+  <pre><code>resource "aws_subnet" "private" { count = 2, ... }
+
+resource "aws_eip" "nat" { domain = "vpc" }
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+}
+
+resource "aws_route_table" "private" {
+  route { cidr_block = "0.0.0.0/0", nat_gateway_id = aws_nat_gateway.main.id }
+}</code></pre>
+  <div class="explain">
+    <p>This block is new, added as part of a recent HIPAA-compliance pass. Previously, all 5
+    containers sat in the "public" subnets above, each with its own public internet address —
+    mainly so they could reach the internet to download their own software updates and images. That
+    meant the actual running program containers were directly reachable from the internet, which is
+    more exposure than necessary. Now, two new <strong>private</strong> subnets are added instead,
+    and the 5 containers live there — no public address at all, reachable only through the public
+    "front door" (the load balancer, covered below) or from each other, never directly from the
+    internet.</p>
+    <p>Private containers still occasionally need to reach <em>out</em> to the internet (again,
+    mainly to download their own images), so a <strong>NAT Gateway</strong> is added — think of it
+    as a one-way mail-forwarding service: private containers can send a request out and get the
+    reply back, but nobody on the outside can use it to reach in and contact them directly. One
+    honest trade-off worth flagging: only <em>one</em> NAT Gateway was added here, not one per data
+    center zone. That's cheaper to run, but it does mean if that one gateway has a problem, outbound
+    internet access for all 5 containers would be affected until it recovers. That's a deliberate,
+    disclosed cost/simplicity choice, not an oversight.</p>
+  </div>
+  <pre><code>resource "tls_private_key" "alb" { algorithm = "RSA", rsa_bits = 2048 }
+
+resource "tls_self_signed_cert" "alb" {
+  private_key_pem = tls_private_key.alb.private_key_pem
+  subject { common_name = "${var.name_prefix}.local" }
+  validity_period_hours = 8760
+  allowed_uses = ["key_encipherment", "digital_signature", "server_auth"]
+}
+
+resource "aws_acm_certificate" "alb" {
+  private_key      = tls_private_key.alb.private_key_pem
+  certificate_body = tls_self_signed_cert.alb.cert_pem
+}</code></pre>
+  <div class="explain">
+    <p>Also new, and also part of the same HIPAA pass: this generates a "certificate" — required to
+    turn on the padlock-icon, encrypted (<code>https://</code>) version of the website address,
+    covered in the load balancer section below. Because there's no real, purchased company domain
+    name attached to this deployment yet, the certificate here is <strong>self-signed</strong> — the
+    deployment generates its own, rather than buying one from a recognized outside certificate
+    authority. It still fully encrypts the connection, but browsers will show a "not trusted"
+    warning until it's swapped out for a real, purchased certificate — a small, contained future
+    swap once there's a real domain name to attach one to, not a redesign of anything here.</p>
+  </div>
+  <pre><code>resource "aws_ecr_repository" "fhirbridge_app" { name = "${var.name_prefix}/fhirbridge-app" }
+resource "aws_ecr_repository" "demo_app"       { name = "${var.name_prefix}/demo-app" }
+resource "aws_ecr_repository" "worker"         { name = "${var.name_prefix}/fhirbridge-worker" }</code></pre>
+  <div class="explain">
+    <p>3 storage lockers (AWS's version of a registry), one per custom image, waiting to receive
+    the built images from the build script covered earlier.</p>
+  </div>
+  <pre><code>resource "aws_secretsmanager_secret" "sql_sa_password" { ... }
+resource "aws_secretsmanager_secret_version" "sql_sa_password" { secret_string = var.sql_sa_password }
+# ...and the same again for jwt_signing_key and (new in this pass) redis_password</code></pre>
+  <div class="explain">
+    <p>Stores the database password in AWS's dedicated, extra-secure vault for sensitive values
+    (rather than as a plain setting), and the same again for the security signing key — plus, new in
+    this HIPAA-compliance pass, a third entry for the cache's new password (covered below). This is a
+    small, ongoing cost (a flat monthly fee per stored secret, so three now instead of two).</p>
+  </div>
+  <pre><code>resource "aws_iam_role" "ecs_task_execution" { ... }
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_managed" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}</code></pre>
+  <div class="explain">
+    <p>Creates a limited-permission "staff badge" that the containers use to do only the specific
+    things they're allowed to: download their own images and write their own logs, and (via one more
+    permission added right after this) read the two stored passwords above. It deliberately can't do
+    anything beyond that.</p>
+  </div>
+
+  <h3 id="w-aws-storage"><code class="file-title">aws/storage.tf</code></h3>
+  <pre><code>resource "aws_efs_file_system" "main" { creation_token = "${var.name_prefix}-data" }
+resource "aws_efs_access_point" "sql_data"   { root_directory { path = "/sql-data" } }
+resource "aws_efs_access_point" "redis_data" { root_directory { path = "/redis-data" } }</code></pre>
+  <div class="explain">
+    <p>AWS's equivalent of the Azure Files hard drive from before — one shared network drive, split
+    into two separate, isolated folders, one for the database's data and one for the cache's data,
+    so both survive even if their containers are restarted.</p>
+  </div>
+
+  <h3 id="w-aws-discovery"><code class="file-title">aws/discovery.tf</code></h3>
+  <pre><code>resource "aws_service_discovery_private_dns_namespace" "main" { name = "${var.name_prefix}.internal" }
+resource "aws_service_discovery_service" "sqlserver" { name = "sqlserver" }
+resource "aws_service_discovery_service" "redis"     { name = "redis" }</code></pre>
+  <div class="explain">
+    <p>Sets up a private "phone book" so the main app, demo app, and worker can find the database
+    and cache by a simple name (like <code>sqlserver.fhirbridge.internal</code>) instead of needing
+    to know their exact, ever-changing network address. This is the AWS equivalent of what Docker
+    Compose gives you automatically for free on a local computer — AWS needs it set up explicitly.</p>
+  </div>
+
+  <h3 id="w-aws-alb"><code class="file-title">aws/alb.tf</code></h3>
+  <pre><code>resource "aws_lb" "main" { internal = false, load_balancer_type = "application" }
+
+resource "aws_lb_listener" "fhirbridge_app" {
+  port            = var.fhirbridge_app_port
+  protocol        = "HTTPS"
+  ssl_policy      = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn = aws_acm_certificate.alb.arn
+  default_action { forward -> fhirbridge_app }
+}
+
+resource "aws_lb_listener" "demo_app" {
+  port            = var.demo_app_port
+  protocol        = "HTTPS"
+  certificate_arn = aws_acm_certificate.alb.arn
+  default_action { forward -> demo_app }
+}</code></pre>
+  <div class="explain">
+    <p>Creates the single public "receptionist" address for this whole deployment — the one address
+    the outside world actually visits. It listens on two doors (defaulting to 80 for the main app,
+    5500 for the demo app, and now customizable via <code>fhirbridge_app_port</code> /
+    <code>demo_app_port</code> if a customer wants different ones) and forwards each visitor to the
+    right container behind the scenes.</p>
+    <p>The other change here is part of the same HIPAA-compliance pass: both listeners now speak
+    <strong>HTTPS</strong> (<code>protocol = "HTTPS"</code>), the encrypted, padlock-icon version of
+    the address, using the self-signed certificate generated in <code>main.tf</code> above —
+    previously this was plain, unencrypted <code>http://</code>. This "receptionist" (the Load
+    Balancer) runs continuously and has its own flat hourly charge — it's one of the bigger fixed
+    costs in the AWS setup.</p>
+  </div>
+
+  <h3 id="w-aws-tasks"><code class="file-title">aws/tasks.tf</code></h3>
+  <p class="file-summary">The exact recipe for each of the 5 containers — what image to run, how
+  much power to give it, what settings to hand it.</p>
+  <pre><code>resource "aws_ecs_task_definition" "sqlserver" {
+  cpu    = "1024"
+  memory = "4096"
+  container_definitions = jsonencode([{
+    name  = "sqlserver"
+    image = "mcr.microsoft.com/mssql/server:2022-latest"
+    environment = [ { name = "ACCEPT_EULA", value = "Y" }, { name = "MSSQL_PID", value = "Express" } ]
+    portMappings = [ { containerPort = var.sql_port, hostPort = var.sql_port } ]
+    secrets = [ { name = "MSSQL_SA_PASSWORD", valueFrom = aws_secretsmanager_secret.sql_sa_password.arn } ]
+    mountPoints = [ { sourceVolume = "sql-data", containerPath = "/var/opt/mssql" } ]
+  }])
+}</code></pre>
+  <div class="explain">
+    <p>The database's recipe card: how much computer power it gets (<code>cpu</code>/
+    <code>memory</code> — these numbers are AWS's units, roughly 1 processor core and 4 gigabytes
+    of memory here), which image to run, its startup settings, and — importantly — the password is
+    pulled directly from the secure vault described earlier rather than being written in plain text
+    anywhere in this file. The door number it answers on is now a fill-in-the-blank setting too
+    (<code>var.sql_port</code>, still defaulting to 1433) instead of being hardcoded, so a customer
+    can pick their own.</p>
+  </div>
+  <pre><code>resource "aws_ecs_task_definition" "redis" {
+  cpu    = "256"
+  memory = "512"
+  container_definitions = jsonencode([{
+    name    = "redis"
+    image   = "redis:7-alpine"
+    command = ["sh", "-c", "redis-server --port ${var.redis_port} --requirepass \"$REDIS_PASSWORD\""]
+    portMappings = [ { containerPort = var.redis_port } ]
+    secrets = [ { name = "REDIS_PASSWORD", valueFrom = aws_secretsmanager_secret.redis_password.arn } ]
+  }])
+}
+
+resource "aws_ecs_task_definition" "fhirbridge_app" { cpu = "512",  memory = "1024" ... }
+resource "aws_ecs_task_definition" "demo_app"       { cpu = "256",  memory = "512"  ... }
+resource "aws_ecs_task_definition" "worker"         { cpu = "256",  memory = "512"  ... }</code></pre>
+  <div class="explain">
+    <p>Same recipe-card idea repeated for the other 4 containers, each sized appropriately for what
+    it needs to do — the database gets the most power since it does the heaviest lifting, the
+    smaller supporting pieces get less. The cache's recipe card picked up two changes as part of the
+    HIPAA-compliance pass: it now requires a password to connect (pulled from AWS's own secure
+    vault, the same pattern as the database's password), and its door number is customizable via
+    <code>var.redis_port</code> as well. The main app, demo app, and worker recipe cards are also
+    updated behind the scenes to connect to both the database and the cache with the new password
+    and encryption settings — same idea as everywhere else in this document, not repeated here for
+    each one.</p>
+  </div>
+
+  <h3 id="w-aws-services"><code class="file-title">aws/services.tf</code></h3>
+  <p class="file-summary">Tells AWS to actually keep each recipe running, continuously.</p>
+  <pre><code>resource "aws_ecs_service" "sqlserver" {
+  desired_count = 1
+  network_configuration {
+    subnets          = aws_subnet.private[*].id
+    assign_public_ip = false
+  }
+  service_registries { registry_arn = aws_service_discovery_service.sqlserver.arn }
+}
+
+resource "aws_ecs_service" "fhirbridge_app" {
+  desired_count = 1
+  network_configuration {
+    subnets          = aws_subnet.private[*].id
+    assign_public_ip = false
+  }
+  load_balancer { target_group_arn = ..., container_name = "fhirbridge-app", container_port = 80 }
+}</code></pre>
+  <div class="explain">
+    <p><code>desired_count = 1</code> is the instruction "always keep exactly one copy of this
+    running — if it ever crashes, start a new one automatically." The database gets registered in
+    the private phone book from earlier (so other containers can find it by name); the main app
+    instead gets plugged into the public receptionist (the Load Balancer) so visitors from the
+    internet can actually reach it.</p>
+    <p>The <code>network_configuration</code> block on every one of the 5 containers is new, and is
+    where the "no direct public address" change from the HIPAA-compliance pass actually takes
+    effect: <code>subnets = aws_subnet.private[*].id</code> places every container in the private
+    subnets added in <code>main.tf</code>, and <code>assign_public_ip = false</code> means none of
+    them get their own address on the open internet anymore. Previously all 5 had public addresses
+    (mainly so they could fetch their own images); now only the Load Balancer's front door is public,
+    and the containers reach the internet when they need to via the NAT Gateway instead. This is the
+    AWS equivalent of Azure's <code>min_replicas</code> setting, and is the single biggest ongoing
+    cost driver in the whole AWS setup — 5 containers, running continuously, every one of them
+    billed by the second.</p>
+  </div>
+
+  <h3 id="w-cleanup-aws"><code class="file-title">scripts/cleanup-aws.sh</code></h3>
+  <pre><code>terraform destroy</code></pre>
+  <div class="explain">
+    <p>Same idea as the Azure cleanup script — one command that removes every single thing this
+    AWS deployment created (network, storage lockers, containers, the receptionist, the vault, all
+    of it), asking for confirmation first. Important to actually run once testing is done, since the
+    receptionist and the 5 containers bill continuously until this is run.</p>
+  </div>
+
+  <!-- ================= VENDOR REGISTRY SECTION ================= -->
+  <h2 id="vendor-registry-section" class="section-divider azure-divider"><span class="os-icon">&#128230;</span>Vendor Registry Files</h2>
+  <p class="file-summary">
+    A permanent storage locker (Registry) that the company itself owns, kept completely separate
+    from the temporary test setups above — this is where a finished, ready-to-ship version of the
+    product actually lives, and it's built to answer one specific worry: "how do we hand a customer
+    a working copy of our software without ever handing them our actual source code?"
+  </p>
+
+  <h3 id="w-vendor-main"><code class="file-title">vendor-registry/main.tf</code></h3>
+  <pre><code>resource "azurerm_container_registry" "vendor" {
+  sku                    = "Basic"
+  admin_enabled          = false
+  anonymous_pull_enabled = false
+}</code></pre>
+  <div class="explain">
+    <p>Creates the company's own storage locker for finished products. The last two lines are the
+    "who's allowed in" rules, spelled out on purpose rather than left to chance: no shared master
+    key exists for this locker at all (<code>admin_enabled = false</code> — everyone who's allowed
+    in has to prove who they personally are first, and that access can be taken away from one
+    person without affecting anyone else), and nobody can just walk up and take something without
+    any identification whatsoever (<code>anonymous_pull_enabled = false</code>).</p>
+  </div>
+
+  <h3 id="w-vendor-workflow">How publishing a new version, and installing it, actually works</h3>
+  <div class="explain">
+    <p><strong>Step 1 — building a new version, on the company's own computer.</strong> The exact
+    same build script used for local testing gets pointed at this new locker instead. Building
+    happens on a real, physical company computer — the original recipe (the source code) never
+    goes anywhere. Only the finished, sealed product (the image) gets carried over and placed in the
+    locker, labeled with a version number like <code>v1.2.0</code>.</p>
+    <p>This was a deliberate choice over Azure's own "build it for me in the cloud" option, which
+    would mean uploading the entire source code to a cloud computer to build it there — even one
+    inside the company's own account. Building on the company's own machine first means that upload
+    simply never has to happen at all.</p>
+    <p><strong>Step 2 — giving a customer that exact version.</strong> Rather than the customer's
+    own setup building anything, or even connecting to the company's locker directly, one command
+    (<code>az acr import</code>) makes a straight copy of that one sealed, finished product from the
+    company's locker into the customer's own locker — like photocopying a finished, printed book
+    rather than handing someone the original manuscript. Nothing about the source code is involved
+    in that copy, because the source code was never part of what got carried over in the first
+    place — only the compiled product was, all the way back in Step 1.</p>
+    <p><strong>Step 3 — telling the customer's setup which version to use.</strong> A single setting
+    (<code>image_tag</code>) in the customer's own configuration says which version number to run —
+    changing which version a customer is on later is just changing this one setting and re-running
+    their setup, not rebuilding anything.</p>
+  </div>
+
+  <h3 id="w-cleanup-vendor"><code class="file-title">scripts/cleanup-vendor-registry.sh</code></h3>
+  <pre><code>terraform destroy</code></pre>
+  <div class="explain">
+    <p>Same idea as the other cleanup scripts, but rarely actually needed — this locker is meant to
+    stay around permanently, holding the real version history, unlike the temporary test setups
+    that get built and torn down repeatedly.</p>
+  </div>
+
+  <!-- ================= GATEWAY FIX SECTION ================= -->
+  <h2 id="gateway-fix" class="section-divider" style="background: linear-gradient(135deg, #64748B 0%, #1E293B 100%);"><span class="os-icon">&#128295;</span>The One Code Fix</h2>
+  <p class="file-summary">
+    Everything above is new. Exactly one existing file in the actual product code needed a small
+    change, found by actually running the container and clicking around in it rather than just
+    reading the code.
+  </p>
+
+  <h3 id="w-gateway"><code class="file-title">src/Gateway/FHIRBridge.Gateway/Program.cs</code></h3>
+  <pre><code>// before
+context =&gt; !context.Request.Path.StartsWithSegments("/api")
+
+// after
+context =&gt; !context.Request.Path.StartsWithSegments("/api")
+    &amp;&amp; !context.Request.Path.StartsWithSegments("/swagger")</code></pre>
+  <div class="explain">
+    <p>The "front door" program (the Gateway) has one job for any web address that isn't part of the
+    main app's data API: just show the website. But it had a narrow blind spot — it only knew to
+    make an exception for addresses starting with <code>/api</code> (which correctly get sent to the
+    Api program instead of the website), and forgot to make the same exception for
+    <code>/swagger</code> (a built-in technical documentation page for developers). The practical
+    effect: visiting that documentation page showed the regular website instead, by mistake. The fix
+    is exactly two added words — "and also make an exception for <code>/swagger</code>" — so that
+    page now correctly shows the real documentation instead.</p>
+  </div>
+  <div class="callout">
+    <strong>Why this is the only code change</strong>
+    Every other file in this whole containerization effort is brand new — packaging instructions,
+    cloud blueprints, and helper scripts sitting <em>alongside</em> the existing product. This one
+    two-word fix is the only place an actual, pre-existing behavior of the product itself needed
+    correcting, and it was found by genuinely testing the finished container rather than assumed
+    to be fine from reading the code.
+  </div>
+
+  <footer>
+    Companion to <code>Containerization-Multi-Cloud-Guide.html</code> in this same folder, which
+    covers the same files at full technical depth — file paths, exact resource names, deploy
+    commands, and the complete cost/resource inventory per environment.
+  </footer>
+
+</div>
+</body>
+</html>

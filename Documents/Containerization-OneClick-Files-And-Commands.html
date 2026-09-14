@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>One-Click Deployment — Files &amp; Command Reference — FHIRBridge Containerization</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --docker: #1D63ED;
+    --docker-bg: #E0EAFE;
+    --azure: #0078D4;
+    --azure-bg: #DEEFFC;
+    --aws: #EC7211;
+    --aws-bg: #FFF1E0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1000px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 21px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 52px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2.section-divider {
+    margin-top: 68px;
+    padding: 20px 24px;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 24px;
+  }
+  h2.section-divider.docker-divider { background: linear-gradient(135deg, var(--docker) 0%, #1039A6 100%); }
+  h2.section-divider.azure-divider { background: linear-gradient(135deg, var(--azure) 0%, #003E73 100%); }
+  h2.section-divider .os-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px;
+    flex-shrink: 0;
+  }
+  h3 { font-size: 16.5px; font-weight: 700; color: var(--ink); margin: 34px 0 10px; }
+  h4 { font-size: 13.5px; font-weight: 700; margin: 20px 0 6px; color: var(--ink); }
+  p { margin: 0 0 14px; color: #334155; }
+  p.file-summary { font-size: 14px; color: #475569; margin-bottom: 18px; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 14px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.6;
+    margin: 8px 0 16px;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13px; break-inside: avoid; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+  nav.toc li.toc-section-head { font-weight: 800; margin-top: 8px; list-style: none; margin-left: -22px; }
+  nav.toc li.toc-section-head a { color: var(--primary); }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 16px 0 20px;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.bad { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 24px;
+    font-size: 13px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; color: var(--primary-dark); }
+
+  .cmd-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 0 0 18px;
+  }
+  .cmd-block h4 { margin: 0 0 8px; }
+  .cmd-block pre { margin: 0 0 10px; }
+  .cmd-block p { margin: 0; font-size: 13.5px; color: #475569; }
+  .cmd-block p:not(:last-child) { margin-bottom: 8px; }
+
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.02em; white-space: nowrap; }
+  .pill-azure { color: var(--azure); background: var(--azure-bg); }
+  .pill-warn { color: var(--modified); background: var(--modified-bg); }
+
+  footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); text-align: center; }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>One-Click Deployment — Files &amp; Command Reference</h1>
+    <p class="subtitle">Every file involved in building and deploying FHIRBridge's Azure "Deploy to Azure" one-click install, and every command run while standing one up, diagnosing a stuck deployment, and tearing it down — with what each one actually does and why it was needed.</p>
+    <div class="meta">
+      <div><strong>Scope</strong> The Bicep-based one-click path (<code>containerization/azure-deploy</code>) and its supporting vendor registry, build, and cleanup tooling</div>
+      <div><strong>Source</strong> Distilled from a live debugging session that stood up, broke, and fixed the <code>oneclick-*</code> deployment in <code>rg-tusharpuri</code></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li class="toc-section-head"><a href="#files-section">&#9654; Files</a></li>
+      <li><a href="#f-docker">Docker image definitions</a></li>
+      <li><a href="#f-build">Build &amp; push script</a></li>
+      <li><a href="#f-vendor">Vendor registry</a></li>
+      <li><a href="#f-oneclick">One-click deployment (Bicep)</a></li>
+      <li><a href="#f-alt">Alternatives (same topology)</a></li>
+      <li><a href="#f-cleanup">Cleanup</a></li>
+      <li><a href="#f-backup">Local backup (outside the repo)</a></li>
+      <li class="toc-section-head"><a href="#commands-section">&#9654; Commands</a></li>
+      <li><a href="#c-registry">Vendor registry setup &amp; verification</a></li>
+      <li><a href="#c-build">Build, push, and verify images</a></li>
+      <li><a href="#c-token">Scoped ACR pull token</a></li>
+      <li><a href="#c-compile">Compile the Bicep template</a></li>
+      <li><a href="#c-host">Host the deploy files publicly</a></li>
+      <li><a href="#c-link">Build the Deploy-to-Azure link</a></li>
+      <li><a href="#c-diagnose">Diagnosing a stuck deployment</a></li>
+      <li><a href="#c-secrets">Inspecting secrets &amp; connection strings</a></li>
+      <li><a href="#c-wipe">Fixing the stale SQL password (volume wipe)</a></li>
+      <li><a href="#c-restart">Restarting containers</a></li>
+      <li><a href="#c-external">Testing SQL from outside (and reverting)</a></li>
+      <li><a href="#c-cleanup-cmd">Cleanup</a></li>
+      <li><a href="#c-backup-cmd">VM backup (unrelated pre-existing resource)</a></li>
+      <li class="toc-section-head"><a href="#gotchas-section">&#9654; Gotchas Found This Session</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="files-section" class="section-divider docker-divider"><span class="os-icon">&#128193;</span>Files</h2>
+
+  <h3 id="f-docker">Docker image definitions <span class="pill pill-azure">builds the 3 custom images</span></h3>
+  <table class="file-table">
+    <tr><th>Path</th><th>What it does</th></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\docker\fhirbridge-app\Dockerfile</td><td>Multi-stage build: compiles the Angular portal, publishes <code>FHIRBridge.Api</code> and <code>FHIRBridge.Gateway</code>, and copies all three into one final image.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\docker\fhirbridge-app\entrypoint.sh</td><td>Starts Api (loopback-only, :5000) and Gateway (public, :80) as two sibling processes in that image; kills both and exits the container if either dies, so the orchestrator restarts it.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\docker\demo-app\Dockerfile</td><td>Builds the demo frontend and publishes <code>HealthAppBackend</code>, which self-hosts that frontend as a single process.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\docker\worker\Dockerfile</td><td>Publishes <code>FHIRBridge.Worker</code> — background scheduler/pipeline processor, no HTTP listener.</td></tr>
+  </table>
+  <p><code>sqlserver</code> and <code>redis</code> use official public images directly (<code>mcr.microsoft.com/mssql/server</code>, <code>redis</code>) — no Dockerfile for either.</p>
+
+  <h3 id="f-build">Build &amp; push script</h3>
+  <table class="file-table">
+    <tr><th>Path</th><th>What it does</th></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\scripts\build-images.ps1</td><td>Builds all 3 custom images locally from the repo root, tags them <code>&lt;registry&gt;/&lt;name&gt;:&lt;tag&gt;</code>, and pushes when <code>-Registry</code> is given. Docker builds locally — source never leaves the machine, only the compiled image gets pushed.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\scripts\build-images.sh</td><td>Bash equivalent of the above.</td></tr>
+  </table>
+
+  <h3 id="f-vendor">Vendor registry</h3>
+  <table class="file-table">
+    <tr><th>Path</th><th>What it does</th></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\terraform\vendor-registry\main.tf</td><td>Creates the persistent, protected ACR (<code>admin_enabled = false</code>, <code>anonymous_pull_enabled = false</code>) that published releases live in — <code>seguebuilds</code> for this project. Separate from any per-deployment environment so it survives every teardown.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\terraform\vendor-registry\variables.tf</td><td>Inputs: <code>name_prefix</code>, <code>resource_group_name</code> (defaults to <code>rg-tusharpuri</code>).</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\terraform\vendor-registry\outputs.tf</td><td>Exposes <code>acr_name</code> and <code>acr_login_server</code> for the build/push and token-creation commands.</td></tr>
+  </table>
+
+  <h3 id="f-oneclick">One-click deployment (Bicep) <span class="pill pill-azure">what created oneclick-*</span></h3>
+  <table class="file-table">
+    <tr><th>Path</th><th>What it does</th></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\azure-deploy\main.bicep</td><td>Defines all 5 Container Apps (<code>sqlserverApp</code>, <code>redisApp</code>, <code>fhirbridgeApp</code>, <code>demoApp</code>, <code>workerApp</code>), their secrets/env vars/volumes/ingress, plus the <code>resourceManifest</code> output cleanup relies on.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\azure-deploy\main.json</td><td>Compiled ARM JSON from <code>main.bicep</code> (via <code>az bicep build</code>) — this is the file the Deploy-to-Azure button actually submits to the customer's Portal.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\azure-deploy\createUiDefinition.json</td><td>The Portal wizard form: name prefix, SQL SA password, JWT signing key, Redis password, and version tag. Registry access is a fixed, pre-baked read-only ACR token in this file's <code>outputs</code> — not a customer-facing field.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\azure-deploy\main.parameters.example.json</td><td>Example parameters file for the CLI-only deploy path (no wizard).</td></tr>
+  </table>
+
+  <h3 id="f-alt">Alternatives (same 5-container topology, not what created oneclick-*)</h3>
+  <table class="file-table">
+    <tr><th>Path</th><th>What it does</th></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\compose\docker-compose.yml</td><td>Local Docker Compose version of the same 5 containers.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\terraform\environments\azure\main.tf</td><td>Terraform version of the same Azure deployment — used for repeatable/CI environments instead of a one-click customer install.</td></tr>
+  </table>
+
+  <h3 id="f-cleanup">Cleanup</h3>
+  <table class="file-table">
+    <tr><th>Path</th><th>What it does</th></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\azure-deploy\cleanup.ps1</td><td>Tears down a Bicep deployment: manifest-first (precise, from <code>main.bicep</code>'s own output), tag-based fallback (<code>-EnvironmentTag</code>), or whole-resource-group fallback — the last of which now refuses outright if the group contains any disk snapshot.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\FHIRBridge\containerization\azure-deploy\cleanup.sh</td><td>Bash equivalent of the above.</td></tr>
+  </table>
+
+  <h3 id="f-backup">Local backup (outside the repo — unrelated pre-existing VM sharing the same resource group)</h3>
+  <table class="file-table">
+    <tr><th>Path</th><th>What it does</th></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\azure-backups\backup-vm-resources.ps1</td><td>One-time backup of <code>vm-fhirbridge-dev</code> and its networking stack: an ARM config export (settings) plus an OS disk snapshot (actual content) — protects it from accidental deletion by anything else running in the same shared resource group.</td></tr>
+    <tr><td class="file-path">D:\Project\FHIRBridge\azure-backups\vm-fhirbridge-dev-config-backup-20260730.json</td><td>The ARM config export produced by the script above.</td></tr>
+  </table>
+
+  <h2 id="commands-section" class="section-divider azure-divider"><span class="os-icon">&#9889;</span>Commands</h2>
+
+  <h3 id="c-registry">Setting up the two one-time resources: the vendor registry &amp; the hosting storage account</h3>
+  <p class="file-summary">These two resources only need to exist once, ever — they're not part of any customer's <code>oneclick-*</code> deployment. The registry (<code>seguebuilds</code>) is where you publish versioned release images; the storage account (<code>fhirbridgedeployfiles</code>) is where <code>main.json</code>/<code>createUiDefinition.json</code> live at a public HTTPS URL so the Deploy-to-Azure button can fetch them. Run the registry commands from <code>containerization/terraform/vendor-registry</code>.</p>
+  <div class="cmd-block">
+    <h4>1. Create (or confirm) the vendor registry — <code>seguebuilds</code></h4>
+    <pre><code>terraform init
+terraform apply</code></pre>
+    <p>Creates the persistent, protected ACR if it doesn't exist yet. A rerun against an already-existing registry shows "0 to add, 0 to change" — that's the confirmation it's already live, not an error.</p>
+  </div>
+  <div class="cmd-block">
+    <h4>2. Read its name and login server</h4>
+    <pre><code>terraform output -raw acr_name
+terraform output -raw acr_login_server</code></pre>
+    <p><code>acr_name</code> is the short name (<code>seguebuilds</code>); <code>acr_login_server</code> is the full <code>seguebuilds.azurecr.io</code>. The login server is what must be used everywhere else (Docker, <code>createUiDefinition.json</code>'s registry fields) — passing the short name to <code>docker</code> makes it silently default to Docker Hub instead of this registry.</p>
+  </div>
+  <div class="cmd-block">
+    <h4>3. Confirm both are genuinely reachable before relying on them</h4>
+    <pre><code>az account show --query "{name:name, id:id}" -o table
+az acr show --name seguebuilds --query "{name:name, loginServer:loginServer}" -o table</code></pre>
+    <p>Confirms you're on the intended subscription and the registry actually exists before trying to build/push against it.</p>
+  </div>
+  <div class="cmd-block">
+    <h4>4. Create the hosting storage account — <code>fhirbridgedeployfiles</code></h4>
+    <pre><code>az storage account create --name fhirbridgedeployfiles --resource-group rg-tusharpuri --location eastus --sku Standard_LRS --allow-blob-public-access true
+az storage container create --account-name fhirbridgedeployfiles --name deploy --public-access blob --auth-mode key</code></pre>
+    <p>A plain Standard storage account with public blob read access enabled — this is the only thing that has to be public in this whole setup, and only these two specific files ever get uploaded to it (see the next section). This is a one-time setup too; only the two blob uploads need repeating whenever <code>main.bicep</code> or <code>createUiDefinition.json</code> changes.</p>
+  </div>
+
+  <h3 id="c-build">Build, push, and verify images</h3>
+  <div class="cmd-block">
+    <pre><code>az acr login --name &lt;acr_name&gt;
+.\build-images.ps1 -Registry &lt;acr_login_server&gt; -Tag v1.0.0 -Push</code></pre>
+    <p>Authenticates Docker against the ACR, then builds and pushes all 3 custom images tagged <code>v1.0.0</code>. Requires Docker Desktop running locally.</p>
+  </div>
+  <div class="cmd-block">
+    <pre><code>az acr repository show-tags --name &lt;acr_name&gt; --repository fhirbridge-app -o table
+az acr repository show-tags --name &lt;acr_name&gt; --repository demo-app -o table
+az acr repository show-tags --name &lt;acr_name&gt; --repository fhirbridge-worker -o table</code></pre>
+    <p>Confirms each image actually landed in the registry with the expected tag before relying on it in a deployment.</p>
+  </div>
+
+  <h3 id="c-token">Scoped ACR pull token</h3>
+  <div class="cmd-block">
+    <pre><code>az acr token create --registry &lt;acr_name&gt; --name one-click-pull --scope-map _repositories_pull</code></pre>
+    <p>Creates a read-only, revocable credential (pull-only, nothing else) that gets embedded in <code>createUiDefinition.json</code> so a customer's one-click deploy can pull images without ever seeing a real registry admin credential. Revoke independently at any time with <code>az acr token delete --registry &lt;acr_name&gt; --name one-click-pull</code>.</p>
+  </div>
+
+  <h3 id="c-compile">Compile the Bicep template</h3>
+  <div class="cmd-block">
+    <pre><code>az bicep build --file main.bicep --outfile main.json</code></pre>
+    <p>Recompiles <code>main.json</code> from <code>main.bicep</code> — the Portal's custom-deployment blade only fetches compiled ARM JSON, never <code>.bicep</code> source directly. Re-run this any time <code>main.bicep</code> changes, before re-hosting or re-clicking the Deploy-to-Azure link.</p>
+  </div>
+
+  <h3 id="c-host">Upload (or re-upload) the deploy files to <code>fhirbridgedeployfiles</code></h3>
+  <div class="cmd-block">
+    <pre><code>az storage blob upload --account-name fhirbridgedeployfiles --container-name deploy --name main.json --file main.json --auth-mode key --overwrite
+az storage blob upload --account-name fhirbridgedeployfiles --container-name deploy --name createUiDefinition.json --file createUiDefinition.json --auth-mode key --overwrite</code></pre>
+    <p>Run these two every time <code>main.bicep</code> (recompiled to <code>main.json</code>) or <code>createUiDefinition.json</code> changes — the Deploy-to-Azure link doesn't change, but it always fetches whatever is currently sitting at these blob URLs, so a stale upload here means the wizard runs against an outdated template. <code>--auth-mode key</code> is used instead of <code>--auth-mode login</code> throughout because a management-plane Contributor role doesn't include the data-plane Storage Blob roles the latter needs.</p>
+  </div>
+
+  <h3 id="c-link">Build the Dynamic Deployment URL (the actual Deploy-to-Azure link)</h3>
+  <div class="cmd-block">
+    <pre><code>$MainJsonUrl = az storage blob url --account-name fhirbridgedeployfiles --container-name deploy --name main.json -o tsv
+$UiDefUrl = az storage blob url --account-name fhirbridgedeployfiles --container-name deploy --name createUiDefinition.json -o tsv
+$DeployUrl = "https://portal.azure.com/#create/Microsoft.Template/uri/$([System.Uri]::EscapeDataString($MainJsonUrl))/createUIDefinitionUri/$([System.Uri]::EscapeDataString($UiDefUrl))"
+Write-Host $DeployUrl</code></pre>
+    <p>The first two lines read each blob's actual public URL back from Azure (rather than hand-constructing it) so it's always exactly correct. The third line assembles the real clickable link: <code>portal.azure.com/#create/Microsoft.Template/uri/&lt;url-encoded main.json URL&gt;/createUIDefinitionUri/&lt;url-encoded createUiDefinition.json URL&gt;</code> — both pieces have to be URL-encoded since they're themselves full URLs being embedded inside another URL's query-like path.</p>
+    <p>This link carries no information about whose Azure account it deploys into — the signed-in user's own subscription/resource group choice inside the wizard decides that. It also doesn't change when passwords change (those are typed live into the wizard fields, never baked into the URL), so the same <code>$DeployUrl</code> can be reused across every redeploy attempt — only re-run this block if the storage account or blob names themselves change.</p>
+  </div>
+
+  <h3 id="c-diagnose">Diagnosing a stuck deployment</h3>
+  <div class="cmd-block">
+    <pre><code>az containerapp revision list --name oneclick-app --resource-group $Rg -o table
+az containerapp replica list --name oneclick-app --resource-group $Rg -o table
+az containerapp logs show --name oneclick-app --resource-group $Rg --type console --tail 100</code></pre>
+    <p>Checks whether the app is crash-looping (restart count via replicas) and pulls the actual console output — this is where <code>FHIRBridge.Api</code>'s own startup exception (the SQL login failure) first showed up.</p>
+  </div>
+
+  <h3 id="c-secrets">Finding the SQL password on both sides, to compare</h3>
+  <p class="file-summary">The whole password-mismatch saga came down to one question asked repeatedly at different layers: what password does the <strong>app</strong> think it's sending, versus what password does <strong>SQL Server</strong> actually have? These four steps check progressively deeper — configured value → live container env var → an actual login attempt — because each earlier layer can look clean while a later one is still wrong (e.g. the configured secret can be perfectly clean while the file share underneath SQL Server is still running on an older, different password).</p>
+  <div class="cmd-block">
+    <h4>1. What the Container Apps config says each secret is</h4>
+    <pre><code>az containerapp secret list --name oneclick-sqlserver --resource-group $Rg --show-values -o table
+az containerapp secret list --name oneclick-app --resource-group $Rg --show-values -o table</code></pre>
+    <p>Prints the actual configured secret values (not just names) on each app — used to confirm both sides genuinely had the same <code>sql-sa-password</code> value, ruling out a Bicep wiring bug. This only proves what's <em>configured</em>, not what SQL Server is actually enforcing right now (see step 3).</p>
+  </div>
+  <div class="cmd-block">
+    <h4>2. What the app's own connection string literally contains</h4>
+    <pre><code>$appConfig = az containerapp show --name oneclick-app --resource-group $Rg -o json | ConvertFrom-Json
+$appConfig.properties.template.containers[0].env | Where-Object { $_.name -eq 'ConnectionStrings__FHIRBridgeDb' } | Select-Object -ExpandProperty value</code></pre>
+    <p>Extracts the exact literal connection string <code>FHIRBridge.Api</code> is configured to use, without the bracket-heavy <code>--query</code> JMESPath syntax that breaks under PowerShell + the az CLI's Windows batch wrapper (see Gotchas). Filtering in PowerShell after pulling plain JSON avoided that entirely. This is a plain, non-secret env value (not a <code>secretRef</code>), so it's fully visible this way.</p>
+  </div>
+  <div class="cmd-block">
+    <h4>3. What SQL Server's own live container process actually has, right now</h4>
+    <pre><code>az containerapp exec --name oneclick-sqlserver --resource-group $Rg --command "/bin/bash"
+# once connected (prompt changes to mssql@...:/$):
+printenv MSSQL_SA_PASSWORD | wc -c
+printenv MSSQL_SA_PASSWORD | cat -A</code></pre>
+    <p>This is the most authoritative check — it reads the environment variable directly inside the running SQL Server container, rather than trusting Azure's own reported config, which only tells you what was <em>configured</em>, not necessarily what's still <em>enforced</em> if the container's data volume was never actually reinitialized (see the volume-wipe gotcha). <code>wc -c</code> gives a byte count you can compare against the expected password length plus one (<code>printenv</code> always appends a trailing newline). <code>cat -A</code> shows the string with every character made visible, including a stray space that would otherwise be invisible in a terminal.</p>
+  </div>
+  <div class="cmd-block">
+    <h4>4. The actual, unambiguous test: try logging in from inside the container</h4>
+    <pre><code>az containerapp exec --name oneclick-sqlserver --resource-group $Rg --command "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Fhir2026SecureSqlBridge91 -C -Q SELECT@@VERSION"</code></pre>
+    <p>Rather than comparing strings and hoping they match, this attempts a real login with a specific candidate password and reports exactly what SQL Server itself decides — success (prints the version string) or a genuine <code>Login failed for user 'sa'</code>. Avoid quoted arguments with spaces here (e.g. <code>-Q "SELECT 1"</code>) — <code>az containerapp exec</code>'s own command-string parsing mangles nested quotes; a query with no internal space like <code>SELECT@@VERSION</code> sidesteps that entirely, as does a password with no special characters (no quotes needed).</p>
+  </div>
+  <div class="cmd-block">
+    <h4>Quick length check, either side</h4>
+    <pre><code>$sqlSecret.value.Length</code></pre>
+    <p>Compares a secret's actual character count against the expected password length — caught a stray leading space in seconds that would otherwise have looked like an unexplained, persistent auth failure.</p>
+  </div>
+
+  <h3 id="c-wipe">Fixing the stale SQL password (volume wipe)</h3>
+  <div class="cmd-block">
+    <pre><code>az storage account keys list --account-name &lt;name&gt; --resource-group $Rg --query "[0].value" -o tsv</code></pre>
+    <p>Fetches an explicit account key — <code>az storage share delete</code>/<code>create</code> don't accept <code>--auth-mode key</code> in this az CLI version, only an explicit <code>--account-key</code> or connection string.</p>
+  </div>
+  <div class="cmd-block">
+    <pre><code>az storage file list --account-name &lt;name&gt; --share-name sql-data --account-key &lt;key&gt; -o table
+az storage share delete --account-name &lt;name&gt; --name sql-data --account-key &lt;key&gt;
+az storage share create --account-name &lt;name&gt; --name sql-data --account-key &lt;key&gt;</code></pre>
+    <p>Lists the share's contents to confirm it's actually pre-initialized (<code>.system/</code>, <code>data/</code>, <code>log/</code>, <code>secrets/</code> — SQL Server's own data directories from an earlier deploy attempt), then wipes it. SQL Server only applies <code>MSSQL_SA_PASSWORD</code> the very first time it initializes an empty data directory — deleting and recreating the share is what forces a genuine reinitialization with the current password.</p>
+  </div>
+
+  <h3 id="c-restart">Restarting containers</h3>
+  <div class="cmd-block">
+    <pre><code>az containerapp revision restart --name oneclick-sqlserver --resource-group $Rg --revision (az containerapp revision list --name oneclick-sqlserver --resource-group $Rg --query "[0].name" -o tsv)
+az containerapp revision restart --name oneclick-app --resource-group $Rg --revision (az containerapp revision list --name oneclick-app --resource-group $Rg --query "[0].name" -o tsv)</code></pre>
+    <p>Forces SQL Server to restart against the now-empty share (reinitializing with the current password), then restarts the app so it retries the connection immediately instead of waiting for its own crash-loop backoff.</p>
+  </div>
+
+  <h3 id="c-external">Testing SQL from outside (and reverting)</h3>
+  <div class="cmd-block">
+    <pre><code>az containerapp ingress enable --name oneclick-sqlserver --resource-group $Rg --type external --target-port 1433 --transport tcp --exposed-port 1433
+az containerapp ingress show --name oneclick-sqlserver --resource-group $Rg -o json</code></pre>
+    <p>Temporarily exposes SQL Server publicly so it can be reached from a local SSMS/<code>sqlcmd</code> client — <code>main.bicep</code> keeps it internal-only by design, so this is a deliberate, temporary exception for testing.</p>
+  </div>
+  <div class="cmd-block">
+    <pre><code>az containerapp ingress enable --name oneclick-sqlserver --resource-group $Rg --type internal --target-port 1433 --transport tcp</code></pre>
+    <p>Reverts back to the original, secure internal-only state. Must be run right after testing — leaving SQL Server externally reachable, even password-protected, is real exposure. (<code>az containerapp ingress disable</code> is a different, wrong command here — it would remove ingress entirely, breaking the app's and worker's own internal connections to SQL Server too.)</p>
+  </div>
+  <div class="cmd-block">
+    <pre><code>az containerapp exec --name oneclick-sqlserver --resource-group $Rg --command "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '&lt;password&gt;' -C -Q 'SELECT 1'"</code></pre>
+    <p>Opens a shell inside the running SQL container and attempts a login directly with <code>sqlcmd</code> — a safer way to test the password against the real running instance without exposing anything externally. (This exact command is also what surfaced the <code>$$</code> → PID-substitution mangling described in the Gotchas section, since <code>az containerapp exec</code>'s own command-string handling passes through a shell.)</p>
+  </div>
+
+  <h3 id="c-cleanup-cmd">Cleanup</h3>
+  <div class="cmd-block">
+    <pre><code>.\cleanup.ps1 -EnvironmentTag oneclick -WhatIf
+.\cleanup.ps1 -EnvironmentTag oneclick</code></pre>
+    <p>Previews (deletes nothing), then actually deletes every resource tagged <code>Environment=oneclick, ManagedBy=Bicep</code> — the tag-based path was used here instead of the manifest path because this deployment went through the Portal wizard, which doesn't name its deployment record <code>main</code> by default. Automatically excludes the unrelated VM stack and its disk snapshot (both untagged).</p>
+  </div>
+
+  <h3 id="c-backup-cmd">VM backup (unrelated pre-existing resource sharing the same resource group)</h3>
+  <div class="cmd-block">
+    <pre><code>az vm show -g rg-tusharpuri -n vm-fhirbridge-dev --query id -o tsv
+az vm show -g rg-tusharpuri -n vm-fhirbridge-dev --query storageProfile.osDisk.managedDisk.id -o tsv</code></pre>
+    <p>Resolves the VM's own resource ID and its OS disk's resource ID directly through the dedicated <code>az vm show</code> command — not the generic <code>az resource show --resource-type Microsoft.Compute/virtualMachines</code>, which hit a <code>NoRegisteredProviderFound</code> error from picking an API version not yet available for that provider/region.</p>
+  </div>
+  <div class="cmd-block">
+    <pre><code>az group export --resource-group rg-tusharpuri --resource-ids $ids</code></pre>
+    <p>Exports the ARM configuration (settings, not data) for the VM and its networking stack (NSG, public IP, VNet, NIC) — redeployable later with <code>az deployment group create --template-file &lt;export&gt;.json</code> if any of those resources gets deleted by mistake.</p>
+  </div>
+  <div class="cmd-block">
+    <pre><code>az disk show --ids &lt;os-disk-id&gt; --query location -o tsv
+az snapshot create --resource-group rg-tusharpuri --name &lt;snapshot-name&gt; --location &lt;disk-location&gt; --source &lt;os-disk-id&gt;</code></pre>
+    <p>Snapshots the actual disk content (OS, installed software, files). The explicit <code>--location</code> matters: <code>az snapshot create</code> defaults to the <em>resource group's</em> region, not the disk's — here the group is <code>eastus</code> but the disk is <code>westus</code>, so omitting it caused a "Resource ... is not found" error even though the disk genuinely existed.</p>
+  </div>
+  <div class="cmd-block">
+    <pre><code>az snapshot show --resource-group rg-tusharpuri --name &lt;snapshot-name&gt; --query provisioningState -o tsv</code></pre>
+    <p>Confirms the snapshot actually completed (<code>Succeeded</code>) — worth checking explicitly, since a failed native command doesn't stop a PowerShell script under default settings (see Gotchas).</p>
+  </div>
+
+  <h2 id="gotchas-section" class="section-divider docker-divider"><span class="os-icon">&#9888;</span>Gotchas Found This Session</h2>
+
+  <div class="callout bad">
+    <strong>SQL Server's <code>sa</code> password only applies on first initialization</strong>
+    Changing <code>MSSQL_SA_PASSWORD</code> and redeploying doesn't change the password if the mounted Azure File share already has data from an earlier attempt — SQL Server silently keeps the original. Fix: delete and recreate the file share, then restart the container.
+  </div>
+  <div class="callout warn">
+    <strong><code>$</code>, backticks, and quotes in passwords are risky</strong>
+    A password containing <code>$$</code> was directly observed being corrupted into a PID substitution when passed through a shell-processed path. Stick to letters and digits for SQL/JWT/Redis secrets — length and case-mixing are enough for strength without this risk.
+  </div>
+  <div class="callout warn">
+    <strong>Copy-pasting a password from a chat window or table can introduce a stray space</strong>
+    ADO.NET trims it when parsing a connection string; a raw container environment variable does not — the two sides end up with different actual passwords. Check <code>(secretValue).Length</code> against the expected character count to catch this instantly.
+  </div>
+  <div class="callout">
+    <strong>PowerShell + az CLI's Windows batch wrapper mishandles JMESPath brackets</strong>
+    <code>--query "[?starts_with(name,'x')]"</code> can throw a cmd.exe-style parse error ("] was unexpected at this time"). Fetch a plain list with <code>--query "[].name"</code> and filter with PowerShell's own <code>Where-Object</code> instead.
+  </div>
+  <div class="callout">
+    <strong><code>az storage share delete</code>/<code>create</code> don't accept <code>--auth-mode key</code></strong>
+    Unlike many other <code>az storage</code> subcommands, these two need an explicit <code>--account-key</code> or connection string.
+  </div>
+  <div class="callout">
+    <strong>Generic <code>az resource show --resource-type Microsoft.Compute/virtualMachines</code> can pick a bad API version</strong>
+    Hit <code>NoRegisteredProviderFound</code> for an API version not yet available in that region. The dedicated <code>az vm show</code> command resolves its own correct version and doesn't have this problem.
+  </div>
+  <div class="callout">
+    <strong><code>az snapshot create</code> defaults to the resource group's region, not the source disk's</strong>
+    If they differ (as they did here — group in <code>eastus</code>, disk in <code>westus</code>), it looks for the disk in the wrong region and fails with a misleading "not found." Pass <code>--location</code> explicitly, matching the disk.
+  </div>
+  <div class="callout">
+    <strong>PowerShell doesn't treat a native command's non-zero exit code as terminating</strong>
+    Even with <code>$ErrorActionPreference = "Stop"</code>, a failed <code>az</code>/<code>terraform</code> call won't stop the script or trigger a <code>catch</code> — check <code>$LASTEXITCODE</code> explicitly after anything that must succeed before continuing.
+  </div>
+
+</div>
+
+<footer>
+  FHIRBridge Containerization — internal reference, generated from a live troubleshooting session.
+</footer>
+
+</body>
+</html>
