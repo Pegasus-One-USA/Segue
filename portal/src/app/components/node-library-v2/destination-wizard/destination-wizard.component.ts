@@ -759,6 +759,8 @@ export class DestinationWizardComponent implements OnInit {
         return 'DataLakeWebhook';
       case 'fabric':
         return 'DataFabricAzure';
+      case 'apiendpoint':
+        return 'ApiEndpoint';
       case 'medplum':
         return 'Medplum';
       case 'azurefhir':
@@ -1874,6 +1876,7 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly AZUREFHIR_TYPES: DestinationTypeV2[] = ['AzureFhirService'];
   private static readonly DATALAKE_TYPES: DestinationTypeV2[] = ['DataLakeWebhook'];
   private static readonly FABRIC_TYPES: DestinationTypeV2[] = ['DataFabricAzure'];
+  private static readonly APIENDPOINT_TYPES: DestinationTypeV2[] = ['ApiEndpoint'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -1905,6 +1908,9 @@ export class DestinationWizardComponent implements OnInit {
   readonly isDataLake = computed(() => this.destType() === 'datalake');
   /** Microsoft Fabric (OneLake Files) — same file-shaped mapping as isBlob(). */
   readonly isFabric = computed(() => this.destType() === 'fabric');
+  /** General-purpose outbound REST API — same file-shaped mapping (typed target fields, no live schema) as
+   *  isDataLake()/isBlob(). */
+  readonly isApiEndpoint = computed(() => this.destType() === 'apiendpoint');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
 
@@ -1940,7 +1946,9 @@ export class DestinationWizardComponent implements OnInit {
                       ? 'Data Lake Webhook'
                       : this.destType() === 'fabric'
                         ? 'Microsoft Fabric (OneLake)'
-                        : 'CSV',
+                        : this.destType() === 'apiendpoint'
+                          ? 'API Endpoint'
+                          : 'CSV',
   );
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -2603,6 +2611,7 @@ export class DestinationWizardComponent implements OnInit {
     if (this.isBlob()) return 'BlobStorage';
     if (this.isDataLake()) return 'DataLakeWebhook';
     if (this.isFabric()) return 'DataFabricAzure';
+    if (this.isApiEndpoint()) return 'ApiEndpoint';
     if (!this.isSql()) return 'Csv';
     return this.isMySql()
       ? 'MySql'
@@ -3698,7 +3707,9 @@ export class DestinationWizardComponent implements OnInit {
                         ? DestinationWizardComponent.DATALAKE_TYPES
                         : this.isFabric()
                           ? DestinationWizardComponent.FABRIC_TYPES
-                          : DestinationWizardComponent.CSV_TYPES;
+                          : this.isApiEndpoint()
+                            ? DestinationWizardComponent.APIENDPOINT_TYPES
+                            : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter((item) =>
             wantedTypes.includes(item.destinationType),
           );
@@ -4273,7 +4284,7 @@ export class DestinationWizardComponent implements OnInit {
       targets[r] =
         type === 'csv'
           ? def.csvFile
-          : type === 'blob' || type === 'datalake' || type === 'fabric'
+          : type === 'blob' || type === 'datalake' || type === 'fabric' || type === 'apiendpoint'
             ? def.csvFile.replace(/\.csv$/i, '')
             : this._qualifyDefaultTable(def.sqlTable, type);
     }
@@ -4737,6 +4748,7 @@ export class DestinationWizardComponent implements OnInit {
     const isBlob = this.isBlob();
     const isDataLake = this.isDataLake();
     const isFabric = this.isFabric();
+    const isApiEndpoint = this.isApiEndpoint();
     const name =
       metadata.fields['dest_name'] ||
       (isSql
@@ -4755,7 +4767,9 @@ export class DestinationWizardComponent implements OnInit {
                     ? 'Data Lake Webhook Destination'
                     : isFabric
                       ? 'Microsoft Fabric Destination'
-                      : 'File Destination');
+                      : isApiEndpoint
+                        ? 'API Endpoint Destination'
+                        : 'File Destination');
     const secretName = newSecretName(name);
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
@@ -4877,6 +4891,22 @@ export class DestinationWizardComponent implements OnInit {
                   target: metadata.fields['dest_fabricWorkspace'] || null,
                   // Managed identity resolves no Key Vault secret at all; the form's getMetadata()
                   // already returns '' for it (see FabricDestinationSettings.RequiresSecret).
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
+              : isApiEndpoint
+              ? {
+                  name,
+                  destinationType: 'ApiEndpoint',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  // The endpoint URL doubles as the destination's target — ApiEndpointSettings.Parse reads
+                  // Target as the fallback for dest_apiEndpointUrl, same convention as the Data Lake
+                  // Webhook branch above.
+                  target: metadata.fields['dest_apiEndpointUrl'] || null,
+                  // ApiEndpointDestinationFormComponent.getMetadata() already folds the "auth mode none
+                  // needs no credential" rule into metadata.secret — no extra check needed here.
                   inlineSecret: metadata.secret ?? '',
                   connectionMetadataJson: JSON.stringify(metadata.fields),
                   deIdentificationProfileId,
@@ -5068,7 +5098,9 @@ export class DestinationWizardComponent implements OnInit {
                             ? 'dest-datalake-webhook'
                             : type === 'fabric'
                               ? 'dest-fabric'
-                              : 'dest-csv',
+                              : type === 'apiendpoint'
+                                ? 'dest-apiendpoint'
+                                : 'dest-csv',
         status: 'enabled',
         config,
       });

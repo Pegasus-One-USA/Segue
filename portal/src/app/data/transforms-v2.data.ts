@@ -40,6 +40,7 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-pdf',         rank: 1, category: 'File',         destinationType: 'Pdf',            name: 'PDF Report',         sub: 'Render a PDF report.',              permissionPrefix: 'sourceconnections' },
   { id: 'dest-sftp',        rank: 1, category: 'Delivery',     destinationType: 'Sftp',           name: 'SFTP',               sub: 'Deliver files over SFTP.',          permissionPrefix: 'sftp' },
   { id: 'dest-restapi',     rank: 1, category: 'Delivery',     destinationType: 'RestApi',        name: 'REST API',           sub: 'POST to an outbound REST endpoint.', permissionPrefix: 'sourceconnections' },
+  { id: 'dest-apiendpoint', rank: 1, category: 'Delivery',     destinationType: 'ApiEndpoint',     name: 'API Endpoint',       sub: 'Fully configurable outbound API — auth, batching, retry.', permissionPrefix: 'sourceconnections' },
   { id: 'dest-inmemory',    rank: 1, category: 'Delivery',     destinationType: 'InMemory',       name: 'In-memory (test)',   sub: 'Sink for testing — discards output.', permissionPrefix: 'sourceconnections' },
 
   { id: 'field-mapping',    rank: 2, name: 'Mapping',           sub: 'Map FHIR paths to destination fields — SQL-family destinations only.' },

@@ -74,7 +74,8 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
         new(DestinationType.Medplum, typeof(MappedMedplumDestinationWriter)),
         new(DestinationType.AzureFhirService, typeof(MappedFhirRepositoryDestinationWriter)),
         new(DestinationType.DataLakeWebhook, typeof(MappedDataLakeWebhookDestinationWriter)),
-        new(DestinationType.DataFabricAzure, typeof(MappedDataFabricDestinationWriter))
+        new(DestinationType.DataFabricAzure, typeof(MappedDataFabricDestinationWriter)),
+        new(DestinationType.ApiEndpoint, typeof(MappedApiEndpointDestinationWriter))
     ];
 
     private static IReadOnlyDictionary<DestinationType, Type> BuildRegistry(

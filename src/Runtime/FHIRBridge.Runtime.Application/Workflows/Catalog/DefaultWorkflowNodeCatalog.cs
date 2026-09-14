@@ -83,6 +83,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.BlobDestination),
         Destination(WorkflowNodeTypes.DataLakeWebhookDestination),
         Destination(WorkflowNodeTypes.DataFabricAzureDestination),
+        Destination(WorkflowNodeTypes.ApiEndpointDestination),
         // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FhirRepository +
         // AzureFhirService + Blob destinations are exposed in the palette. The writers below remain registered in
         // ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.
@@ -260,6 +261,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.BlobDestination => "dest-blob",
             WorkflowNodeTypes.DataLakeWebhookDestination => "dest-datalake-webhook",
             WorkflowNodeTypes.DataFabricAzureDestination => "dest-fabric",
+            WorkflowNodeTypes.ApiEndpointDestination => "dest-apiendpoint",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
             WorkflowNodeTypes.HedisMeasureReport => "hedis",
             WorkflowNodeTypes.AnomalyDetection => "anomaly",
@@ -287,6 +289,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.BlobDestination => "Azure Blob Storage",
             WorkflowNodeTypes.DataLakeWebhookDestination => "Data Lake Webhook",
             WorkflowNodeTypes.DataFabricAzureDestination => "Microsoft Fabric (OneLake)",
+            WorkflowNodeTypes.ApiEndpointDestination => "API Endpoint",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
             WorkflowNodeTypes.AnomalyDetection => "Anomaly Detection",
@@ -314,6 +317,8 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
                 "Push mapped records to a data-lake ingestion endpoint over HTTPS (batched NDJSON, signed, retried).",
             WorkflowNodeTypes.DataFabricAzureDestination =>
                 "Land mapped records as files in a Microsoft Fabric Lakehouse (OneLake Files; NDJSON, Parquet or CSV).",
+            WorkflowNodeTypes.ApiEndpointDestination =>
+                "Send mapped records to an arbitrary outbound REST API — configurable method, auth, batching and retry.",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",
             WorkflowNodeTypes.HedisMeasureReport => "Compute HEDIS quality measures.",
             WorkflowNodeTypes.AnomalyDetection => "Flag statistical anomalies.",

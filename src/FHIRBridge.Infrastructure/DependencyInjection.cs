@@ -463,6 +463,12 @@ public static class DependencyInjection
         services.AddScoped<Destinations.Webhook.IDataLakeWebhookSender, Destinations.Webhook.DataLakeWebhookSender>();
         services.AddScoped<MappedDataLakeWebhookDestinationWriter>();
 
+        // API Endpoint: general-purpose, fully configurable outbound REST API — same writer/sender split as
+        // Data Lake Webhook, with the widest auth surface of any destination writer (see ApiEndpointAuthMode).
+        services.AddHttpClient(nameof(Destinations.ApiEndpoint.ApiEndpointSender));
+        services.AddScoped<Destinations.ApiEndpoint.IApiEndpointSender, Destinations.ApiEndpoint.ApiEndpointSender>();
+        services.AddScoped<MappedApiEndpointDestinationWriter>();
+
         // Microsoft Fabric / OneLake: reuses the singleton BlobContainerClientCache registered above (OneLake
         // speaks the blob protocol), with its own Entra-only credential dispatch.
         services.AddScoped<Destinations.Fabric.IOneLakeClientFactory, Destinations.Fabric.OneLakeClientFactory>();

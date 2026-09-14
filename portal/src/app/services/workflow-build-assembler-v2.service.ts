@@ -622,8 +622,11 @@ export class WorkflowBuildAssemblerServiceV2 {
     const isFabric =
       node.nodeType.includes('DataFabric') ||
       (fields['__transformId'] ?? '') === 'dest-fabric';
+    const isApiEndpoint =
+      node.nodeType.includes('ApiEndpoint') ||
+      (fields['__transformId'] ?? '') === 'dest-apiendpoint';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : isDataLake ? 'Data Lake Webhook Destination' : isFabric ? 'Microsoft Fabric Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : isDataLake ? 'Data Lake Webhook Destination' : isFabric ? 'Microsoft Fabric Destination' : isApiEndpoint ? 'API Endpoint Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -811,6 +814,28 @@ export class WorkflowBuildAssemblerServiceV2 {
       };
     }
 
+    if (isApiEndpoint) {
+      return {
+        name,
+        destinationType: 'ApiEndpoint',
+        keyVaultName,
+        secretName,
+        // The endpoint URL doubles as the target — ApiEndpointSettings.Parse reads Target as the fallback
+        // for dest_apiEndpointUrl.
+        target: fields['dest_apiEndpointUrl'] || null,
+        // Auth mode 'none' resolves no credential at all (see ApiEndpointSettings.RequiresSecret) — same
+        // "don't overwrite an already-provisioned secret unless the user typed a new one" guard the other
+        // HTTP destinations above use.
+        inlineSecret:
+          fields['dest_apiAuthMode'] === 'none'
+            ? ''
+            : hasExistingSecret && !fields['dest_apiSecret']
+              ? null
+              : fields['dest_apiSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'apiendpoint'),
+      };
+    }
+
     const isSftp = fields['dest_deliveryMode'] === 'sftp';
     return {
       name,
@@ -837,10 +862,39 @@ export class WorkflowBuildAssemblerServiceV2 {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric',
+    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'apiendpoint',
   ): string {
     const keys =
-      kind === 'datalake'
+      kind === 'apiendpoint'
+        ? [
+            'dest_name',
+            'dest_apiEndpointUrl',
+            'dest_apiHttpMethod',
+            'dest_apiAuthMode',
+            'dest_apiAuthHeaderName',
+            'dest_apiKeyQueryParamName',
+            'dest_apiSignatureHeaderName',
+            'dest_apiTimestampHeaderName',
+            'dest_apiTokenEndpoint',
+            'dest_apiClientId',
+            'dest_apiScope',
+            'dest_apiPayloadShape',
+            'dest_apiContentType',
+            'dest_apiCompression',
+            'dest_apiRequireHttps',
+            'dest_apiBatchSize',
+            'dest_apiMaxRequestBytes',
+            'dest_apiTimeoutSeconds',
+            'dest_apiRetryCount',
+            'dest_apiRetryBackoffSeconds',
+            'dest_apiExpectedStatusCodes',
+            'dest_apiHeadersJson',
+            'dest_apiQueryParamsJson',
+            'dest_apiBodyTemplateJson',
+            'dest_apiIncludeSourceJson',
+            'dest_apiOnFailure',
+          ]
+        : kind === 'datalake'
         ? [
             'dest_name',
             'dest_dlwEndpointUrl',

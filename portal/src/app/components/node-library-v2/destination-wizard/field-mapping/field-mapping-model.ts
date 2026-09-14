@@ -30,7 +30,9 @@ export type MappingDestType =
   // they deliberately stay OUT of SQL_FAMILY_TYPES below, which makes isSqlFamilyDestType/
   // qualifyTableName/splitTableName/reconcileTargetsForDestTypeSwitch all no-op for them exactly as
   // they already do for 'csv' and 'blob'.
-  | 'datalake' | 'fabric';
+  | 'datalake' | 'fabric'
+  // Same "no live schema, no table qualification" category as datalake/fabric above.
+  | 'apiendpoint';
 
 /** Outcome of the live destination-schema read that populates the SQL table list. Distinguishes the three
  *  states an empty table list can mean, which an empty array alone cannot: never attempted ('idle'), in

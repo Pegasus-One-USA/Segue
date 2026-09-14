@@ -45,5 +45,17 @@ public enum DestinationType
     /// into a Lakehouse <c>Tables/</c> path is rejected on purpose: a registered Fabric table requires the Delta
     /// transaction log, which this writer does not produce. See <c>FabricDestinationSettings</c>.
     /// </summary>
-    DataFabricAzure = 25
+    DataFabricAzure = 25,
+
+    /// <summary>
+    /// General-purpose, fully configurable outbound REST API — the "bring your own endpoint" destination. Unlike
+    /// <see cref="RestApi"/> (one record per request, no auth beyond a raw secret, no batching, no retry), this
+    /// type exposes every option a real integration needs: HTTP method, seven auth modes (none/basic/bearer/API
+    /// key header or query/HMAC-SHA256/OAuth2 client credentials/client certificate mTLS), custom headers and
+    /// query parameters, batching with byte and count caps, gzip, retry with backoff, and a configurable
+    /// success/failure contract. Also distinct from <see cref="DataLakeWebhook"/>, which is purpose-built for
+    /// data-lake ingestion front doors (Fabric/Databricks/HEC) and always PHI-carrying/https-only; this type is
+    /// the general destination for an arbitrary customer- or partner-owned HTTP API. See <c>ApiEndpointSettings</c>.
+    /// </summary>
+    ApiEndpoint = 26
 }

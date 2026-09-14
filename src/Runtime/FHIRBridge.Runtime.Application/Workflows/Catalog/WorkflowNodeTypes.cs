@@ -67,6 +67,11 @@ public static class WorkflowNodeTypes
 
     /// <summary>Microsoft Fabric — mapped records landed as files in a Lakehouse's Files area over OneLake.</summary>
     public const string DataFabricAzureDestination = "DataFabricAzureDestinationNode";
+
+    /// <summary>General-purpose, fully configurable outbound REST API — the "bring your own endpoint" destination.
+    /// Widest auth surface of any destination node (see <c>ApiEndpointAuthMode</c>); unlike
+    /// <see cref="RestApiDestination"/> it supports batching, retry and every auth mode a real integration needs.</summary>
+    public const string ApiEndpointDestination = "ApiEndpointDestinationNode";
     /// <summary>Phase 2 example: a Destination-category node whose input is a previous destination's write result,
     /// not fresh mapped records — demonstrates chaining a destination into another node via a bespoke catalog rank
     /// tier (71, above Destination's 70) rather than relaxing the graph validator. See

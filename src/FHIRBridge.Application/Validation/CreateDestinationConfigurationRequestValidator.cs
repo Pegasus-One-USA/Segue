@@ -81,6 +81,91 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         {
             ValidateDataFabricMetadata(request, context, metadata);
         }
+        else if (request.DestinationType == DestinationType.ApiEndpoint)
+        {
+            ValidateApiEndpointMetadata(request, context, metadata);
+        }
+    }
+
+    private static readonly string[] SupportedApiEndpointAuthModes =
+        ["none", "bearer", "apiKeyHeader", "apiKeyQuery", "basic", "hmacSha256", "oauth2ClientCredentials", "clientCertificate"];
+
+    private static readonly string[] SupportedApiEndpointHttpMethods = ["POST", "PUT", "PATCH", "DELETE"];
+
+    private static readonly string[] SupportedApiEndpointPayloadShapes =
+        ["jsonArray", "ndjson", "envelope", "recordPerRequest"];
+
+    /// <summary>
+    /// Server-side mirror of the API Endpoint wizard form. Endpoint URL is always required (unlike Data Lake
+    /// Webhook, there is no "secret carries the URL" mode here), and https is only enforced when the caller opts
+    /// into <c>dest_apiRequireHttps</c> — this destination is not assumed to always carry PHI the way Data Lake
+    /// Webhook is, so plain http is allowed by default for an internal/test endpoint.
+    /// </summary>
+    private static void ValidateApiEndpointMetadata(
+        CreateDestinationConfigurationRequest request,
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        var endpointUrl = FirstNonBlank(metadata.GetValueOrDefault("dest_apiEndpointUrl"), request.Target);
+        if (string.IsNullOrWhiteSpace(endpointUrl))
+        {
+            context.AddFailure("dest_apiEndpointUrl", "Endpoint URL is required.");
+        }
+        else
+        {
+            var requireHttps = string.Equals(
+                metadata.GetValueOrDefault("dest_apiRequireHttps"), "true", StringComparison.OrdinalIgnoreCase);
+            if (requireHttps && !IsHttpsOrLoopback(endpointUrl))
+            {
+                context.AddFailure(
+                    "dest_apiEndpointUrl",
+                    "Endpoint URL must use https — 'Require HTTPS' is enabled for this destination (loopback "
+                        + "is permitted in development).");
+            }
+            else if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out _))
+            {
+                context.AddFailure("dest_apiEndpointUrl", "Endpoint URL must be an absolute URI.");
+            }
+        }
+
+        RequireOneOf(context, metadata, "dest_apiAuthMode", SupportedApiEndpointAuthModes, "auth mode");
+        RequireOneOf(context, metadata, "dest_apiHttpMethod", SupportedApiEndpointHttpMethods, "HTTP method");
+        RequireOneOf(context, metadata, "dest_apiPayloadShape", SupportedApiEndpointPayloadShapes, "payload shape");
+
+        var authMode = metadata.GetValueOrDefault("dest_apiAuthMode", "none");
+
+        if (string.Equals(authMode, "apiKeyHeader", StringComparison.OrdinalIgnoreCase))
+        {
+            RequireField(context, metadata, "dest_apiAuthHeaderName", "Header name is required for API key (header) auth.");
+        }
+
+        if (string.Equals(authMode, "oauth2ClientCredentials", StringComparison.OrdinalIgnoreCase))
+        {
+            RequireField(context, metadata, "dest_apiTokenEndpoint", "Token endpoint is required.");
+            RequireField(context, metadata, "dest_apiClientId", "Client ID is required.");
+        }
+
+        RequireOptionalIntInRange(
+            context, metadata, "dest_apiBatchSize", 1, 50000, "Batch size must be between 1 and 50000.");
+        RequireOptionalIntInRange(
+            context, metadata, "dest_apiMaxRequestBytes", 1024, 100663296,
+            "Max request size must be between 1 KB and 96 MB.");
+        RequireOptionalIntInRange(
+            context, metadata, "dest_apiTimeoutSeconds", 1, 600, "Timeout must be between 1 and 600 seconds.");
+        RequireOptionalIntInRange(
+            context, metadata, "dest_apiRetryCount", 0, 10, "Retry count must be between 0 and 10.");
+
+        if (metadata.TryGetValue("dest_apiBodyTemplateJson", out var bodyTemplate) && !string.IsNullOrWhiteSpace(bodyTemplate))
+        {
+            try
+            {
+                JsonDocument.Parse(bodyTemplate);
+            }
+            catch (JsonException)
+            {
+                context.AddFailure("dest_apiBodyTemplateJson", "Request Body Template must be valid JSON.");
+            }
+        }
     }
 
     private static readonly string[] SupportedDataLakeWebhookAuthModes =

@@ -40,7 +40,7 @@ export interface DestinationConnectionDialogData {
  *  (transforms.data.ts). When a type is phase-enabled for real, add it here to match. */
 const CREATE_TYPES: DestinationType[] = [
   'SqlServer', 'PostgreSql', 'MySql', 'Mongo', 'BlobStorage', 'Csv', 'FhirRepository', 'Medplum', 'AzureFhirService',
-  'DataLakeWebhook',
+  'DataLakeWebhook', 'ApiEndpoint',
   // 'DataFabricAzure' — hidden alongside its phase-config entry (see phase-config.service.ts). Note this
   // list is gated by permission only, NOT by isTransformEnabled, so removing it from the phase config
   // alone would still leave the New Connection card visible here.
@@ -74,7 +74,7 @@ function permissionPrefixFor(type: DestinationType): string {
 // dest_dlwEndpointUrl / dest_fabricWorkspace are the Target for the two lake destinations — both writers
 // read Target as the fallback for their own metadata key (see DataLakeWebhookSettings.Parse and
 // FabricDestinationSettings.Parse), so a row created here works on either resolution path.
-const TARGET_FIELD_KEYS = ['dest_baseUrl', 'dest_medplumBaseUrl', 'dest_blobContainer', 'dest_collection', 'dest_filePattern', 'dest_dlwEndpointUrl', 'dest_fabricWorkspace'];
+const TARGET_FIELD_KEYS = ['dest_baseUrl', 'dest_medplumBaseUrl', 'dest_blobContainer', 'dest_collection', 'dest_filePattern', 'dest_dlwEndpointUrl', 'dest_fabricWorkspace', 'dest_apiEndpointUrl'];
 function resolveTarget(fields: Record<string, string>): string | null {
   for (const key of TARGET_FIELD_KEYS) {
     if (fields[key]) return fields[key];

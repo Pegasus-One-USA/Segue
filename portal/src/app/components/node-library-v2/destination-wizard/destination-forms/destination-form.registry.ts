@@ -26,6 +26,7 @@ import { ProtobufDestinationFormComponent } from './protobuf-destination-form.co
 import { DatabricksDestinationFormComponent } from './databricks-destination-form.component';
 import { DataLakeWebhookDestinationFormComponent } from './data-lake-webhook-destination-form.component';
 import { DataFabricDestinationFormComponent } from './data-fabric-destination-form.component';
+import { ApiEndpointDestinationFormComponent } from './api-endpoint-destination-form.component';
 
 /**
  * Single source of truth mapping every DestinationType to the standalone component that configures it —
@@ -61,4 +62,5 @@ export const DESTINATION_FORM_REGISTRY: DestinationFormRegistry<DestinationType>
   Databricks: DatabricksDestinationFormComponent,
   DataLakeWebhook: DataLakeWebhookDestinationFormComponent,
   DataFabricAzure: DataFabricDestinationFormComponent,
+  ApiEndpoint: ApiEndpointDestinationFormComponent,
 };
