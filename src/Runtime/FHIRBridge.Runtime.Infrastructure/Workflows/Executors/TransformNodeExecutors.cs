@@ -71,16 +71,27 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
     private readonly IConfigurationRepository? _configurationRepository;
     private readonly ILineageCaptureDispatcher? _lineageCaptureDispatcher;
 
+    /// <summary>Needed to run a node's OWN rules: the inline path builds a transform service around an
+    /// <see cref="InlineFhirResourceRuleResolver"/> rather than the repository-backed one, so it needs the same
+    /// node registry (and optional secret accessor) that service is normally composed with. Null simply means
+    /// the inline path is unavailable and the node resolves by route id as before.</summary>
+    private readonly ITransformNodeRegistry? _transformNodeRegistry;
+    private readonly IAppSecretAccessor? _secretAccessor;
+
     public FhirResourceTransformNodeExecutor(
         IFhirResourceTransformService? transformService = null,
         IConfigurationRepository? configurationRepository = null,
         ILineageCaptureDispatcher? lineageCaptureDispatcher = null,
-        IResourceNormalizationService? normalizationService = null)
+        IResourceNormalizationService? normalizationService = null,
+        ITransformNodeRegistry? transformNodeRegistry = null,
+        IAppSecretAccessor? secretAccessor = null)
         : base(WorkflowNodeTypes.FhirResourceTransform, WorkflowDataContract.NormalizedResourceBatch, normalizationService)
     {
         _transformService = transformService;
         _configurationRepository = configurationRepository;
         _lineageCaptureDispatcher = lineageCaptureDispatcher;
+        _transformNodeRegistry = transformNodeRegistry;
+        _secretAccessor = secretAccessor;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -92,6 +103,15 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
         if (_transformService is null || _configurationRepository is null)
         {
             return await base.ExecuteAsync(context, node, inputs, cancellationToken);
+        }
+
+        // Self-contained first (plan §3.4): rules the node carries itself need no destination, no route id and
+        // no repository — which is exactly why they cannot be orphaned, cross-wired between workflows, or left
+        // inert by a null ResourcePipelineRouteId.
+        var inlineRules = _transformNodeRegistry is null ? null : TryReadInlineRules(node);
+        if (inlineRules is { Count: > 0 })
+        {
+            return await ExecuteWithInlineRulesAsync(context, node, inputs, inlineRules, cancellationToken);
         }
 
         // The destination decides which rules apply (its DestinationType is a resolver tier), so a node with no
@@ -173,6 +193,144 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
                 ["transformed"] = transformedCount,
                 ["ruleErrors"] = ruleErrors
             });
+    }
+
+    /// <summary>
+    /// Runs the node's OWN rules — no destination lookup, no source-connection lookup, no route id, no
+    /// repository. Everything this needs is on the node, which is the whole point of the self-contained model:
+    /// the rules cannot be orphaned by a null route id, cannot be swept up by another workflow's save, and
+    /// cannot be changed by an edit to a shared master record.
+    /// </summary>
+    private async Task<WorkflowNodeOutput> ExecuteWithInlineRulesAsync(
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        IReadOnlyCollection<WorkflowNodeOutput> inputs,
+        IReadOnlyList<TransformationRule> inlineRules,
+        CancellationToken cancellationToken)
+    {
+        var resolver = new InlineFhirResourceRuleResolver(inlineRules);
+        var transformService = new FhirResourceTransformService(resolver, _transformNodeRegistry!, _secretAccessor);
+
+        var transformed = new List<ResourceEnvelope>();
+        var transformedCount = 0;
+        var ruleErrors = new List<string>();
+
+        foreach (var resource in ReadResourceEnvelopes(inputs))
+        {
+            var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+
+            // DestinationType is required by the service signature but is never consulted by the inline
+            // resolver — these rules already belong to exactly one node, so there is nothing to filter by.
+            var result = await transformService.TransformAsync(
+                sourceJson, resource.ResourceType, resource.ResourceId, DestinationType.SqlServer,
+                resourcePipelineRouteId: null, sourceSystem: null, cancellationToken);
+
+            if (!ReferenceEquals(result.Json, sourceJson))
+            {
+                transformedCount++;
+            }
+
+            foreach (var hop in result.Hops.Where(hop => !hop.Success))
+            {
+                ruleErrors.Add($"{resource.ResourceType}/{resource.ResourceId} {hop.SourceField} [{hop.NodeType}]: {hop.Error}");
+            }
+
+            transformed.Add(resource with { Payload = result.Json });
+        }
+
+        Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
+            Logger,
+            FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
+            "Transform applied to {RecordCount} resource(s) from {RuleCount} inline rule(s); "
+            + "{TransformedCount} changed, {RuleErrorCount} rule hop(s) failed.",
+            transformed.Count, inlineRules.Count, transformedCount, ruleErrors.Count);
+
+        return new WorkflowNodeOutput(
+            node.Id,
+            node.NodeType,
+            new NormalizedResourceBatch(transformed),
+            OutputContract,
+            new Dictionary<string, object?>
+            {
+                ["executor"] = GetType().Name,
+                ["count"] = transformed.Count,
+                ["transformed"] = transformedCount,
+                ["ruleErrors"] = ruleErrors,
+                ["inlineRules"] = inlineRules.Count,
+            });
+    }
+
+    /// <summary>
+    /// This node's own transformation rules, from the self-contained <c>rules</c> array (plan §3.4). Null when
+    /// the node carries none — the caller then falls back to resolving them out of the shared table by route id,
+    /// which is how every node behaves until it has been migrated.
+    /// </summary>
+    private static IReadOnlyList<TransformationRule>? TryReadInlineRules(WorkflowNode node)
+    {
+        var specs = ReadConfiguration<List<InlineRuleSpec>>(node, "rules");
+        if (specs is null || specs.Count == 0)
+        {
+            return null;
+        }
+
+        var rules = new List<TransformationRule>(specs.Count);
+        foreach (var spec in specs)
+        {
+            if (string.IsNullOrWhiteSpace(spec.SourceField) || !Enum.TryParse<TransformNodeType>(spec.NodeType, true, out var nodeType))
+            {
+                // A rule with no source field has nothing to read, and an unknown node type has nothing to run
+                // it — skipping beats throwing, which would fail the whole run over one malformed entry.
+                continue;
+            }
+
+            rules.Add(new TransformationRule(
+                TransformScope.ResourceType,
+                nodeType,
+                spec.Config?.ToString() ?? "{}",
+                resourceType: spec.ResourceType,
+                destinationField: spec.DestinationField,
+                sourceField: spec.SourceField,
+                order: spec.Order,
+                onNull: Enum.TryParse<NullPolicy>(spec.OnNull, true, out var onNull) ? onNull : NullPolicy.Skip,
+                errorPolicy: Enum.TryParse<TransformErrorPolicy>(spec.ErrorPolicy, true, out var errorPolicy)
+                    ? errorPolicy
+                    : TransformErrorPolicy.NullOut,
+                onNullDefaultValue: spec.OnNullDefaultValue,
+                arrayMode: Enum.TryParse<TransformArrayMode>(spec.ArrayMode, true, out var arrayMode)
+                    ? arrayMode
+                    : TransformArrayMode.Whole,
+                fhirWriteBackJsonPath: spec.FhirWriteBackJsonPath,
+                executionPhase: TransformExecutionPhase.FhirResource));
+        }
+
+        return rules.Count > 0 ? rules : null;
+    }
+
+    /// <summary>One transformation rule as stored on the node. Mirrors the authoring shape in plan §3.4.</summary>
+    private sealed class InlineRuleSpec
+    {
+        public string? ResourceType { get; set; }
+
+        public string? SourceField { get; set; }
+
+        public string? DestinationField { get; set; }
+
+        public string? NodeType { get; set; }
+
+        public int Order { get; set; }
+
+        public string? OnNull { get; set; }
+
+        public string? ErrorPolicy { get; set; }
+
+        public string? OnNullDefaultValue { get; set; }
+
+        public string? ArrayMode { get; set; }
+
+        public string? FhirWriteBackJsonPath { get; set; }
+
+        /// <summary>The node's own settings, kept as raw JSON — its shape is decided by NodeType.</summary>
+        public System.Text.Json.JsonElement? Config { get; set; }
     }
 
     /// <summary>Fire-and-continue, matching MappingNodeExecutor: a lineage publish failure must never fail the
