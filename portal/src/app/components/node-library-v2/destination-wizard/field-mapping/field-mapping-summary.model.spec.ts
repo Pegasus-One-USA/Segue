@@ -101,6 +101,24 @@ describe('buildMappingSummaryDocument', () => {
     expect(col.sources).toBeUndefined();
   });
 
+  it('emits mode "default" with defaultToken/defaultValue/defaultValueType, never sources', () => {
+    const rows: MappingRow[] = [{
+      resource: 'Patient', sources: [], mode: 'default',
+      defaultToken: '@default', defaultValue: 'Patient', defaultValueType: 'String',
+      targetName: 'ClientType', tableName: 'dbo.Patient',
+    }];
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType: 'sql', destLabel: 'SQL Server',
+      mappingRows: rows, sqlTables: [], childTableRelationsByTable: {}, availableFields, sourceConnectionId: null, destinationId: null,
+    });
+    const col = doc.mappings[0].tables[0].columns[0];
+    expect(col.mode).toBe('default');
+    expect(col.defaultToken).toBe('@default');
+    expect(col.defaultValue).toBe('Patient');
+    expect(col.defaultValueType).toBe('String');
+    expect(col.sources).toBeUndefined();
+  });
+
   it('marks a table userCreated as isNew, with the FK column flagged and its parent referenced', () => {
     const relation: ChildTableRelation = { parentTable: 'dbo.Patient', parentColumn: 'Id', foreignKeyColumnName: 'PatientId' };
     const sqlTables: DestinationTable[] = [{
@@ -283,6 +301,31 @@ describe('applyMappingSummaryDocument (round-trip)', () => {
     });
     expect(rebuilt.mappings[0].tables.map(t => t.name).sort()).toEqual(doc.mappings[0].tables.map(t => t.name).sort());
     expect(rebuilt.mappings[0].schemaChanges.tablesToCreate.map(t => t.name)).toEqual(doc.mappings[0].schemaChanges.tablesToCreate.map(t => t.name));
+  });
+
+  it('round-trips a default-value column intact — the exact bug this shape was added to fix', () => {
+    // Before mode "default" existed, this fell through to the plain directField branch with sources: [],
+    // which reloaded as an empty mode: 'value' row — indistinguishable from a genuinely broken mapping, and
+    // the reason "Edit doesn't show the saved default" and "raw resource JSON written to the column" both
+    // happened: see field-mapping-model.ts's toJsonPath('') -> "$" fallback.
+    const rows: MappingRow[] = [{
+      resource: 'Patient', sources: [], mode: 'default',
+      defaultToken: '@default', defaultValue: 'Patient', defaultValueType: 'String',
+      targetName: 'ClientType', tableName: 'dbo.Patient',
+    }];
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType: 'sql', destLabel: 'SQL Server',
+      mappingRows: rows, sqlTables: [], childTableRelationsByTable: {}, availableFields, sourceConnectionId: null, destinationId: null,
+    });
+
+    const applied = applyMappingSummaryDocument(doc, 'sql');
+
+    const restored = applied.mappingRows.find(r => r.targetName === 'ClientType');
+    expect(restored?.mode).toBe('default');
+    expect(restored?.sources).toEqual([]);
+    expect(restored?.defaultToken).toBe('@default');
+    expect(restored?.defaultValue).toBe('Patient');
+    expect(restored?.defaultValueType).toBe('String');
   });
 
   it('self-heals a document saved BEFORE the cross-resource-relation guard existed — loading it must not restore the bad relation even transiently', () => {

@@ -1354,25 +1354,29 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   }
 
   // ── default value (a column that always writes a fixed value, never a source mapping) ──────────
-  readonly defaultValueTarget = signal<{ resource: string; tableName: string; column: string } | null>(null);
+  /** `existing` is captured ONCE, right here at open time — not recomputed reactively from a template
+   *  method call (which would hand the modal a freshly-allocated object every change-detection tick, no
+   *  two of which are ===, even though logically unchanged). That mattered twice over: a resync-on-every-
+   *  input-change effect inside the modal would fight every keystroke the user types into the literal
+   *  field, undoing it back to the saved value; and, without a resync at all (the modal's own token/
+   *  literalValue/valueType signals only ever read `existing()` in their field initializers), an `existing`
+   *  input that hadn't settled to the real row's value by the time those initializers ran left the modal
+   *  permanently blank on open — the exact "Edit doesn't reload the value" bug this fixes. Snapshotting
+   *  once up front sidesteps needing to reason about Angular's exact input-vs-constructor timing at all. */
+  readonly defaultValueTarget = signal<{
+    resource: string; tableName: string; column: string; existing: FmDefaultValueSubmit | null;
+  } | null>(null);
 
   openDefaultValueModal(resource: string, tableName: string, column: string): void {
-    this.defaultValueTarget.set({ resource, tableName, column });
+    const row = this.rowForColumnFn(resource, tableName, column);
+    const existing: FmDefaultValueSubmit | null = row?.mode === 'default'
+      ? { token: row.defaultToken ?? '@default', literalValue: row.defaultValue ?? null, valueType: row.defaultValueType ?? 'String' }
+      : null;
+    this.defaultValueTarget.set({ resource, tableName, column, existing });
   }
 
   closeDefaultValueModal(): void {
     this.defaultValueTarget.set(null);
-  }
-
-  /** Pre-fills the modal when re-opening it on a column that's already set to a default. */
-  existingDefaultValueSubmit(resource: string, tableName: string, column: string): FmDefaultValueSubmit | null {
-    const row = this.rowForColumnFn(resource, tableName, column);
-    if (!row || row.mode !== 'default') return null;
-    return {
-      token: row.defaultToken ?? '@default',
-      literalValue: row.defaultValue ?? null,
-      valueType: row.defaultValueType ?? 'String',
-    };
   }
 
   /** Wholesale-replaces whatever this column had (a real source mapping, a childJson group, or nothing at
@@ -2026,6 +2030,12 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   onTargetFieldClick(resource: string, tableName: string, e: { column: string; anchor: HTMLElement }): void {
     const row = this.rowForColumnFn(resource, tableName, e.column);
     if (!row) return;
+    // A 'default' row has no source to configure in the join popover (see openMappingDirectly's own
+    // sources[0]-driven view) — its own edit surface is the default-value modal, not the picker.
+    if (row.mode === 'default') {
+      this.openDefaultValueModal(resource, tableName, e.column);
+      return;
+    }
     if (row.mode === 'value' && row.sources.length > 1) {
       this.openFieldPicker(
         row.sources.map(s => this.toMappingChoice(row, s.fhirPath)),
@@ -2038,6 +2048,11 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   }
 
   onEditRow(e: { resource: string; tableName: string; targetName: string; invoker: HTMLElement }): void {
+    const row = this.rowForColumnFn(e.resource, e.tableName, e.targetName);
+    if (row?.mode === 'default') {
+      this.openDefaultValueModal(e.resource, e.tableName, e.targetName);
+      return;
+    }
     this.popoverKey.set({ resource: e.resource, tableName: e.tableName, targetName: e.targetName });
   }
 

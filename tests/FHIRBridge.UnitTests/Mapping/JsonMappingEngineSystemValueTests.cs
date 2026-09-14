@@ -60,4 +60,62 @@ public sealed class JsonMappingEngineSystemValueTests
         result.Values.Should().ContainKey("PipelineRunId");
         result.Values["PipelineRunId"].Should().BeNull();
     }
+
+    [Fact]
+    public void At_default_token_writes_the_literal_DefaultValue_ignoring_the_source_document()
+    {
+        var field = new MappingFieldDto("ClientType", "@default", MappingValueType.String, IsRequired: false, DefaultValue: "Patient", Format: null);
+
+        var result = Sut.Map(PatientJson, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Values["ClientType"].Should().Be("Patient");
+    }
+
+    [Fact]
+    public void At_default_token_with_no_DefaultValue_configured_records_an_error_and_writes_null()
+    {
+        // A save-time guarantee (CreateMappingProfileRequestValidator) requires DefaultValue whenever the
+        // token is "@default" — this covers a profile saved before that rule existed reaching the engine
+        // with none, which must fail loudly (never fall back to resolving the token against the document,
+        // which is what silently wrote the whole raw resource JSON into the column before this guard existed).
+        var field = new MappingFieldDto("ClientType", "@default", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: null);
+
+        var result = Sut.Map(PatientJson, [field]);
+
+        result.Errors.Should().ContainSingle();
+        result.Values["ClientType"].Should().BeNull();
+    }
+
+    [Fact]
+    public void At_destinationObject_token_prefers_the_FIELD_own_DestinationObject_over_the_profile_level_value()
+    {
+        // A field routed to a child/extra table (e.g. Patient.name fanned out onto dbo.PatientName) must
+        // report ITS OWN table for "@destinationObject", not the mapping profile's primary table the
+        // run-level systemValues dictionary carries.
+        var childField = new MappingFieldDto(
+            "TableName", "@destinationObject", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: null,
+            DestinationObject: "dbo.PatientName");
+        var rootField = new MappingFieldDto(
+            "TableName", "@destinationObject", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: null);
+        var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["@destinationObject"] = "dbo.Patient",
+        };
+
+        Sut.Map(PatientJson, [childField], systemValues).Values["TableName"].Should().Be("dbo.PatientName");
+        Sut.Map(PatientJson, [rootField], systemValues).Values["TableName"].Should().Be("dbo.Patient");
+    }
+
+    [Fact]
+    public void At_newGuid_token_resolves_from_systemValues_like_any_other_system_token()
+    {
+        var freshGuid = Guid.NewGuid();
+        var field = Field("SurrogateId", "@newGuid");
+        var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["@newGuid"] = freshGuid };
+
+        var result = Sut.Map(PatientJson, [field], systemValues);
+
+        result.Values["SurrogateId"].Should().Be(freshGuid);
+    }
 }

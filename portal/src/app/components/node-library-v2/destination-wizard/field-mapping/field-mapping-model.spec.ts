@@ -330,6 +330,47 @@ describe('serializeRowsFlat', () => {
       expect(flat[0].arrayPolicy).toBe('RepeatParent');
     });
   });
+
+  describe('mode: default', () => {
+    it('a literal ("@default") row emits the token as jsonPath and the literal as defaultValue', () => {
+      const rows: MappingRow[] = [{
+        resource: 'Patient', sources: [], mode: 'default',
+        defaultToken: '@default', defaultValue: 'Patient', defaultValueType: 'String',
+        targetName: 'ClientType', tableName: 'dbo.Patient',
+      }];
+      const flat = serializeRowsFlat(rows, { Patient: 'dbo.Patient' });
+      expect(flat[0].jsonPath).toBe('@default');
+      expect(flat[0].defaultValue).toBe('Patient');
+      expect(flat[0].valueType).toBe('String');
+    });
+
+    it('a runtime-token ("@now") row emits the token as jsonPath with no defaultValue', () => {
+      const rows: MappingRow[] = [{
+        resource: 'Patient', sources: [], mode: 'default',
+        defaultToken: '@now', defaultValue: null, defaultValueType: 'DateTime',
+        targetName: 'WrittenOnUtc', tableName: 'dbo.Patient',
+      }];
+      const flat = serializeRowsFlat(rows, { Patient: 'dbo.Patient' });
+      expect(flat[0].jsonPath).toBe('@now');
+      expect(flat[0].defaultValue).toBeUndefined();
+      expect(flat[0].valueType).toBe('DateTime');
+    });
+
+    // Regression guard for the bug this shape exists to prevent: a 'default' row with no jsonPath override
+    // used to fall through to the 'value' branch with an empty sources[] — path/jsonPath both ended up
+    // empty, which workflow-build-assembler.service.ts's toJsonPath('') resolves to "$" (the WHOLE source
+    // document), silently writing the raw resource JSON into the column on every pipeline run.
+    it('never falls through to the plain directField shape (path/jsonPath must never be empty)', () => {
+      const rows: MappingRow[] = [{
+        resource: 'Patient', sources: [], mode: 'default',
+        defaultToken: '@runId', defaultValue: null, defaultValueType: 'String',
+        targetName: 'PipelineRunId', tableName: 'dbo.Patient',
+      }];
+      const flat = serializeRowsFlat(rows, { Patient: 'dbo.Patient' });
+      expect(flat[0].path).toBeTruthy();
+      expect(flat[0].jsonPath).toBeTruthy();
+    });
+  });
 });
 
 describe('resolveArrayPolicy', () => {
@@ -391,6 +432,11 @@ describe('resolveArrayPolicy', () => {
     expect(resolveArrayPolicy(row({ instance: undefined })))
       .toEqual({ arrayPolicy: 'FirstItem', approximated: false });
   });
+
+  it('default mode -> Scalar, not approximated, regardless of instance', () => {
+    expect(resolveArrayPolicy(row({ mode: 'default', sources: [], defaultToken: '@default', defaultValue: 'Patient' })))
+      .toEqual({ arrayPolicy: 'Scalar', approximated: false });
+  });
 });
 
 describe('isApproximated', () => {
@@ -406,6 +452,15 @@ describe('isApproximated', () => {
 });
 
 describe('effectiveMappingValueType', () => {
+  it('default row -> its own declared defaultValueType, not derived from any source field', () => {
+    const row: MappingRow = {
+      resource: 'Patient', sources: [], mode: 'default',
+      defaultToken: '@now', defaultValue: null, defaultValueType: 'DateTime',
+      targetName: 'WrittenOnUtc', tableName: 'dbo.Patient',
+    };
+    expect(effectiveMappingValueType(row)).toBe('DateTime');
+  });
+
   it('childJson row -> "Json", regardless of sources (matches serializeRowsFlat\'s StoreJson -> Json)', () => {
     const row: MappingRow = { resource: 'Practitioner', sources: [], mode: 'childJson', childNodeId: 'name', targetName: 'name', tableName: 'public.Practitioner' };
     expect(effectiveMappingValueType(row)).toBe('Json');

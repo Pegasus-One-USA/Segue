@@ -1,5 +1,5 @@
 import { Component, HostBinding, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
-import { MappingRow, MappingInstanceSelection, isReferenceCandidate } from './field-mapping-model';
+import { MappingRow, MappingInstanceSelection, isReferenceCandidate, DEFAULT_VALUE_PRESETS } from './field-mapping-model';
 import { FmTreeNode, flattenLeaves } from './field-mapping-tree.util';
 import { nearestArrayGroupId } from './field-mapping-summary.model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
@@ -414,13 +414,27 @@ export class FieldMappingListComponent {
 
   rowKey(row: MappingRow): string { return `${row.resource}::${row.tableName}::${row.targetName}`; }
 
+  /** Human-readable label for a 'default' row's own token (e.g. "Literal value", "Current date/time
+   *  (UTC)") — falls back to the raw token itself if it's somehow not one of the known presets, so a
+   *  row never renders as a blank string. */
+  private defaultTokenLabel(row: MappingRow): string {
+    const token = row.defaultToken ?? '@default';
+    return DEFAULT_VALUE_PRESETS.find(p => p.token === token)?.label ?? token;
+  }
+
   sourceSummary(row: MappingRow): string {
+    if (row.mode === 'default') {
+      return row.defaultToken === '@default'
+        ? `Default: "${row.defaultValue ?? ''}"`
+        : `Default: ${this.defaultTokenLabel(row)}`;
+    }
     return row.mode === 'childJson'
       ? `${row.childNodeId} (whole node → JSON)`
       : row.sources.map(s => s.fhirPath).join(row.sources.length > 1 ? ` + ` : '');
   }
 
   modeLabel(row: MappingRow): string {
+    if (row.mode === 'default') return 'Default value';
     if (row.mode === 'childJson') return 'Whole node → JSON';
     return row.sources.length > 1 ? `Joined ×${row.sources.length}` : 'Direct';
   }

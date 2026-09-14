@@ -11,7 +11,7 @@
 
 import { DestinationTable, DestinationColumn } from '../../../../services/destination-schema.service';
 import type { ResourceFieldDef } from '../destination-wizard.component';
-import { MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType, qualifyTableName } from './field-mapping-model';
+import { MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType, DefaultValueToken, qualifyTableName } from './field-mapping-model';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { dependencyRankFor } from '../resource-dependency.config';
 
@@ -76,13 +76,22 @@ export interface MappingSummaryInstance {
 
 export interface MappingSummaryColumn {
   column: string;
-  mode: 'directField' | 'joinedFields' | 'wholeNodeAsJson';
+  mode: 'directField' | 'joinedFields' | 'wholeNodeAsJson' | 'default';
   /** directField / joinedFields only. */
   sources?: string[];
   /** wholeNodeAsJson only. */
   sourceNode?: string;
   /** joinedFields only. */
   delimiter?: string;
+  /** default only — which @token this column always resolves to (see field-mapping-model.ts's
+   *  DefaultValueToken). */
+  defaultToken?: DefaultValueToken;
+  /** default only, and only meaningful when defaultToken === '@default' — the literal text written for
+   *  every record. */
+  defaultValue?: string | null;
+  /** default only — the MappingValueType this column writes, since there's no source field to read one
+   *  from. */
+  defaultValueType?: string;
   instance: MappingSummaryInstance | null;
   /** Set when this column is a FHIR reference that must be resolved against another mapped resource's
    *  own table + id column at write time — see MappingRow.referencesResource for how this is derived. */
@@ -224,6 +233,13 @@ function toSummaryColumn(
 
   if (row.mode === 'childJson') {
     return { column: row.targetName, mode: 'wholeNodeAsJson', sourceNode: row.childNodeId ?? '', instance, ...referenceLookup, ...upsertKey };
+  }
+  if (row.mode === 'default') {
+    return {
+      column: row.targetName, mode: 'default',
+      defaultToken: row.defaultToken ?? '@default', defaultValue: row.defaultValue ?? null, defaultValueType: row.defaultValueType,
+      instance, ...referenceLookup, ...upsertKey,
+    };
   }
   const sources = row.sources.map(s => s.fhirPath);
   if (sources.length > 1) {
@@ -621,6 +637,15 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
         if (col.mode === 'wholeNodeAsJson') {
           mappingRows.push({
             resource, sources: [], mode: 'childJson', childNodeId: col.sourceNode ?? '',
+            instance, targetName: col.column, tableName: fullName,
+            ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
+          });
+          continue;
+        }
+        if (col.mode === 'default') {
+          mappingRows.push({
+            resource, sources: [], mode: 'default',
+            defaultToken: col.defaultToken ?? '@default', defaultValue: col.defaultValue ?? null, defaultValueType: col.defaultValueType,
             instance, targetName: col.column, tableName: fullName,
             ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
           });

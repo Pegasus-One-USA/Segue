@@ -321,7 +321,7 @@
     <app-field-mapping-default-value-modal
       [columnName]="t.column"
       [tableName]="t.tableName"
-      [existing]="existingDefaultValueSubmit(t.resource, t.tableName, t.column)"
+      [existing]="t.existing"
       (submitted)="submitDefaultValue($event)"
       (removed)="removeDefaultValue()"
       (cancelled)="closeDefaultValueModal()"

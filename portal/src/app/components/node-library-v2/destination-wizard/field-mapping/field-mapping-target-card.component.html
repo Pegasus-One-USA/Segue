@@ -143,7 +143,7 @@
             <span class="fm-target-key fm-target-key--fk" [title]="key.references ? 'Foreign key → ' + key.references : 'Foreign key'">FK</span>
           }
         }
-        @if (rowForColumn()(col) && destType() !== 'csv') {
+        @if (rowForColumn()(col) && destType() !== 'csv' && rowForColumn()(col)?.mode !== 'default') {
           <button
             type="button"
             class="fm-target-key-toggle"

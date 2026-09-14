@@ -55,7 +55,21 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             if (IsSystemToken(field.JsonPath))
             {
                 object? systemValue = null;
-                systemValues?.TryGetValue(field.JsonPath, out systemValue);
+                // "@destinationObject" is special-cased to this FIELD's own DestinationObject when it has one
+                // — a field on a child/extra table (ArrayPolicy.SeparateDestination, e.g. a Patient.name array
+                // fanned out onto dbo.PatientName) must report ITS OWN table, not the profile's primary table
+                // the run-level systemValues dictionary carries. Only the primary-table fields (the common
+                // case, where DestinationObject is unset) fall back to the profile-level value.
+                if (string.Equals(field.JsonPath, "@destinationObject", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(field.DestinationObject))
+                {
+                    systemValue = field.DestinationObject;
+                }
+                else
+                {
+                    systemValues?.TryGetValue(field.JsonPath, out systemValue);
+                }
+
                 if (systemValue is null && field.IsRequired)
                 {
                     errors.Add($"Required system field '{field.TargetField}' had no value for token '{field.JsonPath}'.");

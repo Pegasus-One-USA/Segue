@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, ViewChild, input, output, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnInit, ViewChild, input, output, signal } from '@angular/core';
 import { DEFAULT_VALUE_PRESETS, DefaultValueToken } from './field-mapping-model';
 
 export interface FmDefaultValueSubmit {
@@ -26,7 +26,7 @@ const VALUE_TYPES: readonly string[] = ['String', 'Integer', 'Decimal', 'Boolean
   templateUrl: './field-mapping-default-value-modal.component.html',
   styleUrl: './field-mapping-default-value-modal.component.scss',
 })
-export class FieldMappingDefaultValueModalComponent implements AfterViewInit {
+export class FieldMappingDefaultValueModalComponent implements OnInit, AfterViewInit {
   @ViewChild('literalInput') private readonly literalInput?: ElementRef<HTMLInputElement>;
 
   readonly columnName = input.required<string>();
@@ -44,9 +44,22 @@ export class FieldMappingDefaultValueModalComponent implements AfterViewInit {
   readonly presets = DEFAULT_VALUE_PRESETS;
   readonly valueTypes = VALUE_TYPES;
 
-  readonly token = signal<DefaultValueToken>(this.existing()?.token ?? '@default');
-  readonly literalValue = signal(this.existing()?.literalValue ?? '');
-  readonly valueType = signal(this.existing()?.valueType ?? 'String');
+  // Seeded with plain defaults here (NOT from `existing()`) — a field initializer runs as part of the
+  // constructor, and relying on an input signal's value being already-settled at that exact point is a
+  // sharp edge not worth depending on. ngOnInit below is unambiguously guaranteed to run after Angular
+  // has applied this component's first round of input bindings, so that's where `existing()` is actually
+  // read — the fix for the modal not showing a column's previously-saved default on Edit.
+  readonly token = signal<DefaultValueToken>('@default');
+  readonly literalValue = signal('');
+  readonly valueType = signal('String');
+
+  ngOnInit(): void {
+    const e = this.existing();
+    if (!e) return;
+    this.token.set(e.token);
+    this.literalValue.set(e.literalValue ?? '');
+    this.valueType.set(e.valueType);
+  }
 
   onTokenChange(value: string): void {
     const t = value as DefaultValueToken;

@@ -148,7 +148,9 @@ export interface MappingInstanceSelection {
  *  a token picked here means the identical thing at pipeline-run time. '@default' means "always write the
  *  literal defaultValue text below"; the rest are pipeline/runtime values (JsonMappingEngine's
  *  systemValues) with no literal to type in. */
-export type DefaultValueToken = '@default' | '@now' | '@runId' | '@resourceType' | '@sourceResourceId';
+export type DefaultValueToken =
+  | '@default' | '@now' | '@runId' | '@resourceType' | '@sourceResourceId' | '@newGuid'
+  | '@mappingProfileName' | '@mappingProfileId' | '@destinationObject' | '@sourceConnectionId' | '@triggeredBy';
 
 export interface DefaultValuePreset {
   token: DefaultValueToken;
@@ -165,6 +167,21 @@ export const DEFAULT_VALUE_PRESETS: readonly DefaultValuePreset[] = [
   { token: '@runId', label: 'Pipeline run ID', description: "This execution's own run id.", valueType: 'String' },
   { token: '@resourceType', label: 'FHIR resource type', description: 'The resource type being mapped (e.g. "Patient").', valueType: 'String' },
   { token: '@sourceResourceId', label: 'Source resource ID', description: "The source FHIR resource's own id.", valueType: 'String' },
+  // A fresh value per RECORD, not per run (unlike every other token above) — see JsonMappingEngine/
+  // ConfiguredPipelineService, which regenerate it inside the per-resource loop. A row fanned out into
+  // multiple destination rows via RepeatParent shares one value across all of them (same limitation @now/
+  // @runId already have), since the token resolves once per source resource, not per fanned-out row.
+  { token: '@newGuid', label: 'New GUID', description: 'A fresh random GUID generated for each record — useful as a surrogate key when no natural id exists.', valueType: 'String' },
+  { token: '@mappingProfileName', label: 'Mapping profile name', description: 'The name of the mapping profile that wrote this row.', valueType: 'String' },
+  { token: '@mappingProfileId', label: 'Mapping profile ID', description: 'The GUID of the mapping profile that wrote this row.', valueType: 'String' },
+  { token: '@destinationObject', label: 'Destination table/object', description: 'The table or file this profile writes to (e.g. "dbo.Patient").', valueType: 'String' },
+  { token: '@sourceConnectionId', label: 'Source connection ID', description: 'The GUID of the source connection this data came from.', valueType: 'String' },
+  // Only populated by the Configured Pipeline (ConfiguredPipelineService) — the Runtime Plane's transform
+  // executor has no trigger identity to report, so this resolves to null there (like any absent token).
+  // TriggeredBy is itself nullable at run time (some scheduled/system runs carry none) — see
+  // CreateMappingProfileRequestValidator's NOT NULL check, which does NOT exempt this token the way it does
+  // every other one above.
+  { token: '@triggeredBy', label: 'Triggered by', description: 'Who or what started this run — a user, "scheduled", or "webhook". May be empty for some automated runs.', valueType: 'String' },
 ];
 
 export interface MappingRow {

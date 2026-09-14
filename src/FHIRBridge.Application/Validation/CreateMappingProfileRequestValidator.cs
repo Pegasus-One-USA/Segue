@@ -29,7 +29,10 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
     /// exactly (the "@default" literal-constant branch, plus ConfiguredPipelineService/TransformNodeExecutors'
     /// systemValues dictionary keys) so a save-time typo is rejected instead of silently mapping to null.</summary>
     private static readonly string[] KnownSystemTokens =
-        ["@default", "@now", "@runId", "@resourceType", "@sourceResourceId"];
+        [
+            "@default", "@now", "@runId", "@resourceType", "@sourceResourceId", "@newGuid",
+            "@mappingProfileName", "@mappingProfileId", "@destinationObject", "@sourceConnectionId", "@triggeredBy",
+        ];
 
     private readonly IDestinationSchemaService _schemaService;
     private readonly IConfigurationRepository _configurationRepository;
@@ -94,12 +97,31 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
                 "This destination is set to upsert, but no field is mapped as the upsert key. " +
                 "Map a field from the resource's id and mark it as the upsert key.");
 
+        // No @token is a sound upsert key: a run-constant one (@mappingProfileId, @destinationObject, …)
+        // collides across every row, and a per-record one (@newGuid, @now, …) never matches its own previous
+        // write — either way "upsert" degenerates into silently duplicating rows every run. Scoped to upsert
+        // mode specifically (like the rule above) rather than a blanket ban on IsUpsertKey + "@" together:
+        // serializeRowsFlat's own PK auto-detection stamps isUpsertKey=true on whichever row targets the
+        // table's real primary key REGARDLESS of write mode, so "@newGuid" as a surrogate PK on an
+        // Insert-only destination — a legitimate combination, see its own preset description — would
+        // otherwise be rejected purely because of that auto-detection, not any actual upsert conflict.
+        RuleFor(x => x.Fields)
+            .Must(HaveNoDefaultUpsertKeyField)
+            .When(x => x.DestinationObject.Contains(UpsertModeSuffix, StringComparison.OrdinalIgnoreCase))
+            .WithMessage(x =>
+                $"'{x.Fields.First(f => f.IsUpsertKey && f.JsonPath.StartsWith('@')).TargetField}' is set to a " +
+                "default value and can't also be the upsert key on an upsert-mode destination — every run " +
+                "would either collide or never match on it. Map a real source field as the key instead.");
+
         RuleFor(x => x)
             .CustomAsync(ValidateAgainstDestinationSchemaAsync);
     }
 
     private static bool HaveAnUpsertKeyField(IReadOnlyList<MappingFieldDto> fields) =>
         fields.Any(f => f.IsUpsertKey);
+
+    private static bool HaveNoDefaultUpsertKeyField(IReadOnlyList<MappingFieldDto> fields) =>
+        !fields.Any(f => f.IsUpsertKey && f.JsonPath.StartsWith('@'));
 
     /// <summary>
     /// Cross-checks each mapped field against the destination's live column metadata. Silently skips when the
@@ -220,9 +242,13 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
 
             // A pipeline/runtime @token (other than "@default", already covered by DefaultValue below) always
             // resolves to a real value at run time — see JsonMappingEngine's systemValues dictionary — so it
-            // never risks a NULL write the way an ordinary unmapped/no-default field would.
+            // never risks a NULL write the way an ordinary unmapped/no-default field would. "@triggeredBy" is
+            // the one exception: ConfiguredPipelineService's TriggeredBy is itself nullable (e.g. some
+            // scheduled/system-initiated runs carry none), so a NOT NULL column mapped to it can genuinely see
+            // a null write — leave that combination subject to the normal required-or-default check below.
             var isNonNullSystemToken = field.JsonPath.StartsWith('@') &&
-                !string.Equals(field.JsonPath, "@default", StringComparison.OrdinalIgnoreCase);
+                !string.Equals(field.JsonPath, "@default", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(field.JsonPath, "@triggeredBy", StringComparison.OrdinalIgnoreCase);
 
             if (!column.IsNullable && !field.IsRequired && !isNonNullSystemToken && string.IsNullOrWhiteSpace(field.DefaultValue))
             {

@@ -423,6 +423,54 @@ public sealed class MappingImportServiceTests
         profiles.Single().DestinationObject.Should().Be("PatientV2");
     }
 
+    private static string DefaultValueColumnFixture(Guid sourceConnectionId, Guid destinationId) => $$"""
+        {
+          "source": "EPIC", "destination": "SQL",
+          "sourceConnectionId": "{{sourceConnectionId}}", "destinationId": "{{destinationId}}",
+          "mappings": [
+            {
+              "resourceType": "Patient", "rank": 0, "generatedAt": "2026-09-14T10:00:00.000Z",
+              "schemaChanges": { "tablesToCreate": [], "columnsToAdd": [], "summary": null },
+              "processingOrder": [
+                { "step": 1, "table": "Patient", "level": 1, "dependsOn": null, "note": null }
+              ],
+              "destination": "SQL",
+              "tables": [
+                { "name": "Patient", "isNew": false, "relation": null, "columns": [
+                  { "column": "Id", "mode": "directField", "sources": ["Patient.id"], "instance": null },
+                  { "column": "ClientType", "mode": "default", "defaultToken": "@default", "defaultValue": "Patient", "defaultValueType": "String", "instance": null },
+                  { "column": "WrittenOnUtc", "mode": "default", "defaultToken": "@now", "defaultValueType": "DateTime", "instance": null }
+                ] }
+              ]
+            }
+          ]
+        }
+        """;
+
+    [Fact]
+    public async Task Default_value_columns_persist_the_at_token_as_JsonPath_and_the_literal_as_DefaultValue()
+    {
+        var (service, repository, _, destinationId, sourceConnectionId) = CreateSut(existingDestinationTables: ["Patient"]);
+
+        var body = DefaultValueColumnFixture(sourceConnectionId, destinationId);
+        var result = await service.ImportAsync(Parse(body), CancellationToken.None);
+
+        result.Profiles.Single().Warnings.Should().BeEmpty();
+
+        var profiles = await repository.GetMappingProfilesAsync(CancellationToken.None);
+        var fields = profiles.Single().Fields;
+
+        var literal = fields.Single(f => f.TargetField == "ClientType");
+        literal.JsonPath.Should().Be("@default");
+        literal.DefaultValue.Should().Be("Patient");
+
+        var token = fields.Single(f => f.TargetField == "WrittenOnUtc");
+        token.JsonPath.Should().Be("@now");
+        // Only the literal "@default" case carries a DefaultValue — a runtime token's value comes from
+        // JsonMappingEngine's systemValues dictionary at pipeline-run time, never from this column.
+        token.DefaultValue.Should().BeNull();
+    }
+
     [Fact]
     public async Task Import_throws_when_mappings_is_missing()
     {
