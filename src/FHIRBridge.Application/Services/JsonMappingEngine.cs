@@ -147,7 +147,17 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                 }
 
                 case ArrayPolicy.StoreJson:
-                    parent[field.TargetField] = JsonSerializer.Serialize(values);
+                    // A ValueType=Json field's values are ALREADY raw JSON text (ConvertElement returns
+                    // element.GetRawText()), so JsonSerializer.Serialize(values) would double-encode them — the
+                    // whole node would land in the column as an escaped string ("[{\"..\":..}]") instead of clean
+                    // JSON. Emit clean JSON directly: a single node as-is (e.g. "$" → the raw resource object),
+                    // multiple occurrences wrapped once into a real JSON array with no re-escaping. Non-JSON value
+                    // types (arrays of strings/numbers) still go through Serialize, which is correct for them.
+                    parent[field.TargetField] = field.ValueType == MappingValueType.Json
+                        ? (values.Count == 1
+                            ? values[0]
+                            : "[" + string.Join(",", values.Select(v => v?.ToString() ?? "null")) + "]")
+                        : JsonSerializer.Serialize(values);
                     break;
 
                 case ArrayPolicy.RejectIfMultiple:
