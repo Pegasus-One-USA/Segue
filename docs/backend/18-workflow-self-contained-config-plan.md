@@ -1,6 +1,29 @@
 # 18 — Self-Contained Workflow Configuration Plan
 
-Status: proposed (no code changes yet)
+Status: **phases 1–4 implemented** on `feature/workflow-self-contained-config`. Phases 5–9 are not started —
+they are the destructive ones, and §10 gates them on the dry-run output being reviewed first.
+
+| Phase | State | Commit |
+|---|---|---|
+| 1 · Status model + new-workflow modal | Done | `570cd52d` |
+| 2 · Node config envelope (dual-read) | Done | `28795d03` |
+| 3 · Config migration + dry-run | Done, **not run** | `45eb8cc2` |
+| 4 · V1→V2 graph conversion + dry-run | Done, **not run** | `73ebfcb4` |
+| 5–9 | Not started — see §10.1 | — |
+
+Everything so far is additive and reversible: dual-read means old and new node shapes both work, and neither
+migration has been applied to any data.
+
+### Next step — run the dry-runs
+
+Both are admin-gated and write nothing:
+
+```
+GET /api/v1/workflows/configuration-migration/dry-run
+GET /api/v1/workflows/configuration-migration/graph-version/dry-run
+```
+
+Read both reports before anything else. The second one's `isSafeToRetireV1` is the precondition for phase 8.
 
 ## 1. Problem
 
@@ -400,7 +423,23 @@ later.
 | 9 | Drop `ResourcePipelineRouteId` + `WorkflowNodeConfigurations`; remove `NormalizationNode` | 6, 8 |
 | — | *Deferred:* single Save consolidation (§9) | after 8 |
 
-Two ordering constraints, each a way to break production if ignored:
+### 10.1 Why phases 5–9 stopped here
+
+Phases 1–4 are additive: dual-read keeps both node shapes working, and the two migrations have been written
+and tested but **not applied to any data**.
+
+Phases 5–9 are the one-way ones — executors dropping the legacy read path, deleting V1, and dropping
+`ResourcePipelineRouteId`, `WorkflowNodeConfigurations` and `NormalizationNode`. §7 and §8.4 both say those
+proceed only once the dry-run reports have been read, and that review is not something the implementation can
+do for itself: a blocked node means a real decision about real data (re-point it, recreate it, or accept
+losing it), and phase 8's safety argument rests entirely on phase 4's `isSafeToRetireV1` actually coming back
+clean.
+
+Running the dry-runs is the gate. After that, phases 5–9 are mostly deletion and go quickly.
+
+### 10.2 Ordering constraints
+
+Two, each a way to break production if ignored:
 
 - **Phase 2 dual-read is what makes this safe.** Old and new node shapes coexist until the migration is
   verified — no flag day.
