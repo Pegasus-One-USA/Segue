@@ -1,0 +1,21 @@
+portal/scripts/token-baseline.json
+  s_012a949fbb852d::t_35e0cb374c4167 2-3
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.scss
+  s_012a949fbb852d::t_7a89d88a54ddc6 1,22,26-27,37,79,96,129-130,153,238-239,278,293,340,376,396,420,476,486-487,490,501,506,515-517,523,527,591,593,597,601
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f25fbff0171bf7370fce0966c7c5da64f076a12c",
+  "prompts": {},
+  "sessions": {
+    "s_012a949fbb852d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1899cc87-d26f-4d5f-84d4-4774d4e1a2cb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
