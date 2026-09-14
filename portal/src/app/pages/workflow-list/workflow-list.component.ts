@@ -375,7 +375,12 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         next: created => {
           this.creatingWorkflow.set(false);
           this.showNewWorkflow.set(false);
-          this.openBuilder(created.id, true);
+          // new=1 tells the builder this workflow has an id but an EMPTY graph, so it resets the canvas
+          // instead of taking the edit path — see its ngOnInit. Without it the builder treats the id as
+          // an existing workflow to load, and the stale canvas state breaks the `+` picker.
+          this.router.navigate(['/workflow-builder-v2'], {
+            queryParams: { id: created.id, new: '1' },
+          });
         },
         error: err => {
           this.creatingWorkflow.set(false);

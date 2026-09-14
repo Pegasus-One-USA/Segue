@@ -215,22 +215,50 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     // Deep-link from the Workflow List "Edit" action: ?id=<workflowId> loads that graph onto the canvas after the
     // catalog resolves (the mapper needs node metadata), so Save issues a PUT update of the same workflow.
     const editId = this.route.snapshot.queryParamMap.get('id');
-    this.isEditingExistingWorkflow.set(!!editId);
+
+    // ?new=1 means the Workflow List just CREATED this workflow (name + description only) and handed us its
+    // id — so it has an id like an edit, but an empty graph like a new canvas. Without this distinction the
+    // id alone made it take the edit path: the canvas was never reset, and loading an empty graph left the
+    // store holding whatever the previous session left behind, so the `+` picker resolved its chain steps
+    // against stale nodes (no Transformation / De-identification offered, Mapping falling through to
+    // "nothing to configure", an added node not rendering).
+    const isFreshlyCreated = this.route.snapshot.queryParamMap.get('new') === '1';
+    this.isEditingExistingWorkflow.set(!!editId && !isFreshlyCreated);
 
     // The PipelineStoreV2 is a root singleton, so its canvas state outlives this component (e.g. an abandoned,
     // unsaved edit/creation left nodes on it). A fresh "New Workflow" navigation must always start blank rather
     // than inheriting whatever was left over from whatever was on the canvas before.
-    if (!editId) {
+    if (!editId || isFreshlyCreated) {
       this.resetCanvasAndWorkflowState();
     }
 
     this.workflowApi.loadCatalog().subscribe({
       next: items => {
         this.workflowStatus.set(`Catalog loaded (${items.length} nodes).`);
-        if (editId) {
-          this.workflowIdInput.set(editId);
-          this.onLoadWorkflow();
+        if (!editId) {
+          return;
         }
+
+        this.workflowIdInput.set(editId);
+
+        if (isFreshlyCreated) {
+          // The graph is empty by construction, so there is no canvas to load — but the name and
+          // description the create modal captured live on the server and were just cleared by the reset
+          // above, so fetch them back. Adopting the id here is what makes Save update this workflow
+          // instead of creating a second one.
+          this.currentWorkflowId.set(editId);
+          this.workflowApi.load(editId).subscribe({
+            next: workflow => {
+              this.workflowName.set(workflow.name);
+              this.workflowDescription.set(workflow.description ?? '');
+              this.workflowStatus.set(`${workflow.name} — add a source to begin.`);
+            },
+            error: () => this.workflowStatus.set('Workflow load failed.'),
+          });
+          return;
+        }
+
+        this.onLoadWorkflow();
       },
       error: () => this.workflowStatus.set('Catalog could not be loaded. Save is disabled.'),
     });
