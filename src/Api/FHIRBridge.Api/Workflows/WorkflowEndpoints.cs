@@ -2574,6 +2574,12 @@ public static class WorkflowEndpoints
         return newReference;
     }
 
+    /// <summary>
+    /// Mutates a node's configuration and re-serializes it. Uses <see cref="TryParseConfiguration"/> (the ROOT),
+    /// never <see cref="TryParseConfigurationSettings"/>: whatever this is handed becomes the ENTIRE node
+    /// configuration, so resolving an envelope here would save the inner <c>config</c> object as the whole thing
+    /// and drop the envelope and every sibling key with it.
+    /// </summary>
     private static WorkflowNodeRequest WithConfiguration(WorkflowNodeRequest node, Action<JsonObject> mutate)
     {
         var config = TryParseConfiguration(node.ConfigurationJson) ?? new JsonObject();
@@ -2582,7 +2588,7 @@ public static class WorkflowEndpoints
     }
 
     private static string? ReadConfigString(WorkflowNodeRequest node, string key) =>
-        TryParseConfiguration(node.ConfigurationJson)?[key]?.ToString();
+        TryParseConfigurationSettings(node.ConfigurationJson)?[key]?.ToString();
 
     private static bool TryResolveEntityId(
         string nodeId,
@@ -2598,7 +2604,7 @@ public static class WorkflowEndpoints
 
         // Picker flow: the referenced node already carries the entity id in its configuration.
         if (nodes.TryGetValue(nodeId, out var node)
-            && TryParseConfiguration(node.ConfigurationJson) is { } config
+            && TryParseConfigurationSettings(node.ConfigurationJson) is { } config
             && config[configurationKey]?.ToString() is { } raw
             && Guid.TryParse(raw, out entityId))
         {
@@ -2721,13 +2727,13 @@ public static class WorkflowEndpoints
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)
     {
         value = Guid.Empty;
-        return TryParseConfiguration(configurationJson) is { } config
+        return TryParseConfigurationSettings(configurationJson) is { } config
             && config[key]?.ToString() is { } raw
             && Guid.TryParse(raw, out value);
     }
 
     private static string? GetConfigurationString(string? configurationJson, string key)
-        => TryParseConfiguration(configurationJson) is { } config ? config[key]?.ToString() : null;
+        => TryParseConfigurationSettings(configurationJson) is { } config ? config[key]?.ToString() : null;
 
     // Used by the node-removal permission check above: every node whose config carries `key` (sourceConnectionId
     // or destinationId) as a valid Guid, across a set of nodes' raw ConfigurationJson strings. A mapping/merge
@@ -2765,7 +2771,7 @@ public static class WorkflowEndpoints
                 continue;
             }
 
-            if (TryParseConfiguration(node.ConfigurationJson)?["mappingProfileIds"] is JsonObject idsByResource)
+            if (TryParseConfigurationSettings(node.ConfigurationJson)?["mappingProfileIds"] is JsonObject idsByResource)
             {
                 foreach (var entry in idsByResource)
                 {
@@ -2784,7 +2790,7 @@ public static class WorkflowEndpoints
     // the "Kept for backward compatibility" comment in BuildWorkflow) — collect ids from whichever are present.
     private static IEnumerable<Guid> GetMappingProfileIdsFromConfiguration(string? configurationJson)
     {
-        var config = TryParseConfiguration(configurationJson);
+        var config = TryParseConfigurationSettings(configurationJson);
         if (config is null)
         {
             yield break;
@@ -2816,22 +2822,33 @@ public static class WorkflowEndpoints
 
         try
         {
-            if (JsonNode.Parse(configurationJson) is not JsonObject root)
-            {
-                return null;
-            }
-
-            // Dual-read (plan §3): an enveloped node keeps its settings under "config", with "ref" alongside
-            // carrying copied-from provenance the engine never reads. Resolving here means every caller of this
-            // helper — id lookups, usage reports, the node-removal permission check — reads both shapes without
-            // knowing which one it was handed. Only an object counts as an envelope: a legacy node whose field
-            // bag happens to hold a string called "config" must still be read flat.
-            return root[WorkflowNodeConfigurationEnvelope.ConfigProperty] is JsonObject settings ? settings : root;
+            return JsonNode.Parse(configurationJson) as JsonObject;
         }
         catch (System.Text.Json.JsonException)
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// A node's settings for READING: the <c>config</c> object when the node is enveloped (plan §3), otherwise
+    /// the root itself.
+    ///
+    /// Deliberately separate from <see cref="TryParseConfiguration"/>, which returns the ROOT and is what
+    /// mutation paths must use. <see cref="WithConfiguration"/> re-serializes whatever it is handed as the whole
+    /// node configuration, so resolving the envelope there would save the inner object as the entire config and
+    /// silently drop the envelope and every sibling key with it.
+    /// </summary>
+    private static JsonObject? TryParseConfigurationSettings(string? configurationJson)
+    {
+        if (TryParseConfiguration(configurationJson) is not { } root)
+        {
+            return null;
+        }
+
+        // Only an object counts as an envelope: a wizard field bag is Record<string,string>, so a legacy node
+        // can carry a STRING called "config" and must still be read flat.
+        return root[WorkflowNodeConfigurationEnvelope.ConfigProperty] as JsonObject ?? root;
     }
 
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request, int version = 1)
