@@ -1,8 +1,9 @@
-using FHIRBridge.Application.Abstractions.Governance;
+﻿using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Governance;
+using System.Text.Json.Nodes;
 using FluentAssertions;
 using Moq;
 
@@ -32,6 +33,13 @@ public sealed class SafeHarborDeIdentificationServiceTests
     private static SafeHarborDeIdentificationService BuildSut()
     {
         var repository = new Mock<ITransformationRuleRepository>();
+        // De-identification also asks for the rules of whatever type a reference points at (Patient and
+        // Practitioner here), so it can keep those references in step with a redacted id. Default every type
+        // to "no rules"; the specific setups below then override the ones this fixture cares about. Moq takes
+        // the last matching setup, so this catch-all has to come first.
+        repository
+            .Setup(x => x.GetPreMappingRulesAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
         repository
             .Setup(x => x.GetPreMappingRulesAsync(ProfileId, "Provenance", It.IsAny<CancellationToken>()))
             .ReturnsAsync(ProvenanceRules);
@@ -91,5 +99,313 @@ public sealed class SafeHarborDeIdentificationServiceTests
         result.Json.Should().Contain("Jane Doe");
         result.Json.Should().Contain("Dr. Jane Smith");
         result.Hops.Should().BeEmpty();
+    }
+}
+
+/// <summary>
+/// A rule's SourceField is authored in three different conventions depending on which screen wrote it, and the
+/// engine walks plain property-name segments. Before ParseSourceFieldPath normalized them, a "$." or
+/// "ResourceType." prefix matched no property, the rule hit the `beforeValue is null` guard and was skipped —
+/// silently. The UI showed an active masking rule while unredacted PHI was written to the destination, which is
+/// the exact failure these cover: the de-identification tab's field picker emits the payload tree's jsonPath.
+/// </summary>
+public sealed class SafeHarborSourceFieldPathFormatTests
+{
+    private static readonly Guid ProfileId = Guid.NewGuid();
+
+    private const string PatientJson = """
+    {
+      "resourceType": "Patient",
+      "id": "e63wRTbPfr1p8UW81d8Seiw3",
+      "address": [ { "line": [ "123 Main St" ], "postalCode": "90210" } ]
+    }
+    """;
+
+    private static SafeHarborDeIdentificationService BuildSut(params TransformationRule[] rules)
+    {
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository
+            .Setup(x => x.GetPreMappingRulesAsync(ProfileId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(rules);
+
+        return new SafeHarborDeIdentificationService(repository.Object);
+    }
+
+    private static TransformationRule MaskRule(string sourceField) =>
+        new(TransformScope.ResourceType, TransformNodeType.HashingMasking, """{"mode":"mask","keepLength":4}""",
+            resourceType: "Patient", sourceField: sourceField,
+            executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId);
+
+    [Theory]
+    [InlineData("$.id")]          // de-identification tab's field picker (payload tree jsonPath)
+    [InlineData("id")]            // seeded Safe Harbor defaults
+    [InlineData("Patient.id")]    // transformation-rule screens' "ResourceType.field" convention
+    public async Task Mask_applies_for_every_source_field_convention(string sourceField)
+    {
+        var sut = BuildSut(MaskRule(sourceField));
+
+        var result = await sut.DeIdentifyAsync(
+            new DeIdentificationRequest("Patient", "p1", PatientJson, [], ProfileId), CancellationToken.None);
+
+        result.Json.Should().NotContain("e63wRTbPfr1p8UW81d8Seiw3");
+        result.Json.Should().Contain("********************eiw3", "keepLength=4 keeps only the last four characters");
+        result.Hops.Should().ContainSingle().Which.SourceField.Should().Be(sourceField);
+    }
+
+    [Theory]
+    [InlineData("$.address.line")]
+    [InlineData("address[*].line")]
+    [InlineData("address[0].line")]
+    public async Task Nested_and_indexed_paths_resolve_to_the_same_field(string sourceField)
+    {
+        var sut = BuildSut(
+            new TransformationRule(TransformScope.ResourceType, TransformNodeType.HashingMasking,
+                """{"mode":"remove"}""", resourceType: "Patient", sourceField: sourceField,
+                executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId));
+
+        var result = await sut.DeIdentifyAsync(
+            new DeIdentificationRequest("Patient", "p1", PatientJson, [], ProfileId), CancellationToken.None);
+
+        result.Json.Should().NotContain("123 Main St");
+        result.Json.Should().Contain("90210", "only the rule's own field is touched");
+    }
+
+    /// <summary>
+    /// The rule-config form persists every field as a string (config[key] = String(value)), so a keepLength of 4
+    /// arrives as "4", not 4. JsonElement.TryGetInt32 THROWS on a non-number rather than returning false, and the
+    /// reader caught only JsonException — so a masking rule authored in the UI took down the whole
+    /// de-identification node and failed the run. Both encodings must work, and nothing here may throw.
+    /// </summary>
+    [Theory]
+    [InlineData("\"4\"", "********************eiw3")]  // as the UI writes it
+    [InlineData("4", "********************eiw3")]      // as a JSON number
+    [InlineData("\"not-a-number\"", "********************eiw3")] // unparseable -> documented default of 4
+    [InlineData("null", "********************eiw3")]   // wrong type entirely -> default, never a crash
+    public async Task Mask_reads_keepLength_whether_it_is_a_string_or_a_number(string keepLengthJson, string expected)
+    {
+        var rule = new TransformationRule(
+            TransformScope.ResourceType, TransformNodeType.HashingMasking,
+            $$"""{"mode":"mask","keepLength":{{keepLengthJson}}}""",
+            resourceType: "Patient", sourceField: "$.id",
+            executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId);
+
+        var sut = BuildSut(rule);
+
+        var act = async () => await sut.DeIdentifyAsync(
+            new DeIdentificationRequest("Patient", "p1", PatientJson, [], ProfileId), CancellationToken.None);
+
+        var result = await act.Should().NotThrowAsync();
+        result.Subject.Json.Should().Contain(expected);
+    }
+
+    [Fact]
+    public void ParseSourceFieldPath_strips_prefixes_and_indexers()
+    {
+        SafeHarborDeIdentificationService.ParseSourceFieldPath("$.address[*].line", "Patient")
+            .Should().Equal("address", "line");
+        SafeHarborDeIdentificationService.ParseSourceFieldPath("Patient.id", "Patient")
+            .Should().Equal("id");
+        // Only the leading resource-type prefix goes: a legitimately-named inner property must survive.
+        SafeHarborDeIdentificationService.ParseSourceFieldPath("contact.Patient", "Patient")
+            .Should().Equal("contact", "Patient");
+    }
+}
+
+/// <summary>
+/// Redacting an id has to carry through to every reference pointing at it, or the redaction silently breaks the
+/// resource graph: Patient.id becomes "****eiw3" while Observation.subject.reference still says
+/// "Patient/&lt;original&gt;" — a SQL join that no longer matches (no error, just orphaned rows) or a dangling
+/// reference on a FHIR server. These pin the property that makes it work: the parent's new id and the child's
+/// rewritten reference are produced by the same pure function, so they agree without any crosswalk.
+/// </summary>
+public sealed class SafeHarborReferenceRewriteTests
+{
+    private static readonly Guid ProfileId = Guid.NewGuid();
+    private const string PatientId = "e63wRTbPfr1p8UW81d8Seiw3";
+
+    private static TransformationRule IdRule(string resourceType, string configJson) =>
+        new(TransformScope.ResourceType, TransformNodeType.HashingMasking, configJson,
+            resourceType: resourceType, sourceField: "$.id",
+            executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId);
+
+    private static SafeHarborDeIdentificationService BuildSut(params (string ResourceType, TransformationRule[] Rules)[] rulesByType)
+    {
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository
+            .Setup(x => x.GetPreMappingRulesAsync(ProfileId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid _, string resourceType, CancellationToken _) =>
+                rulesByType.FirstOrDefault(entry => entry.ResourceType == resourceType).Rules ?? []);
+
+        return new SafeHarborDeIdentificationService(repository.Object);
+    }
+
+    private static string PatientJson => $$"""{"resourceType":"Patient","id":"{{PatientId}}"}""";
+
+    private static string ObservationJson => $$"""
+        {
+          "resourceType": "Observation",
+          "id": "obs-1",
+          "subject": { "reference": "Patient/{{PatientId}}", "display": "Jane Doe" },
+          "performer": [ { "reference": "Practitioner/prac-9" } ]
+        }
+        """;
+
+    private static async Task<string> RunAsync(SafeHarborDeIdentificationService sut, string resourceType, string json)
+    {
+        var result = await sut.DeIdentifyAsync(
+            new DeIdentificationRequest(resourceType, "x", json, [], ProfileId), CancellationToken.None);
+        return result.Json;
+    }
+
+    [Theory]
+    [InlineData("""{"mode":"mask","keepLength":"4"}""")]
+    [InlineData("""{"mode":"hash"}""")]
+    public async Task Child_reference_lands_on_the_same_value_as_the_parents_new_id(string configJson)
+    {
+        var sut = BuildSut(("Patient", [IdRule("Patient", configJson)]));
+
+        var patient = JsonNode.Parse(await RunAsync(sut, "Patient", PatientJson))!;
+        var observation = JsonNode.Parse(await RunAsync(sut, "Observation", ObservationJson))!;
+
+        var newPatientId = patient["id"]!.GetValue<string>();
+        newPatientId.Should().NotBe(PatientId, "the parent id must actually have been redacted");
+
+        observation["subject"]!["reference"]!.GetValue<string>()
+            .Should().Be($"Patient/{newPatientId}", "the child must resolve to the parent's redacted id");
+    }
+
+    [Fact]
+    public async Task References_to_types_with_no_id_rule_are_left_alone()
+    {
+        var sut = BuildSut(("Patient", [IdRule("Patient", """{"mode":"hash"}""")]));
+
+        var observation = JsonNode.Parse(await RunAsync(sut, "Observation", ObservationJson))!;
+
+        observation["performer"]![0]!["reference"]!.GetValue<string>().Should().Be("Practitioner/prac-9");
+    }
+
+    [Fact]
+    public async Task Remove_leaves_references_untouched_because_there_is_no_replacement_id()
+    {
+        var sut = BuildSut(("Patient", [IdRule("Patient", """{"mode":"remove"}""")]));
+
+        var observation = JsonNode.Parse(await RunAsync(sut, "Observation", ObservationJson))!;
+
+        observation["subject"]!["reference"]!.GetValue<string>().Should().Be($"Patient/{PatientId}");
+    }
+
+    [Fact]
+    public async Task Rewrite_is_reported_as_a_lineage_hop()
+    {
+        var sut = BuildSut(("Patient", [IdRule("Patient", """{"mode":"hash"}""")]));
+
+        var result = await sut.DeIdentifyAsync(
+            new DeIdentificationRequest("Observation", "obs-1", ObservationJson, [], ProfileId), CancellationToken.None);
+
+        var hop = result.Hops.Should().ContainSingle(h => h.SourceField == "subject.reference").Subject;
+        hop.Strategy.Should().Be("Hash:Reference");
+        hop.BeforeValueJson.Should().Contain(PatientId);
+        hop.AfterValueJson.Should().NotContain(PatientId);
+    }
+
+    [Theory]
+    // relative, absolute, and version-specific forms all keep their shape around the rewritten id
+    [InlineData("Patient/" + PatientId, "Patient/")]
+    [InlineData("http://ehr.example.org/fhir/Patient/" + PatientId, "http://ehr.example.org/fhir/Patient/")]
+    [InlineData("Patient/" + PatientId + "/_history/2", "Patient/")]
+    public async Task Reference_forms_are_preserved_around_the_rewritten_id(string reference, string expectedPrefix)
+    {
+        var sut = BuildSut(("Patient", [IdRule("Patient", """{"mode":"hash"}""")]));
+        var json = $$$"""{"resourceType":"Observation","subject":{"reference":"{{{reference}}}"}}""";
+
+        var rewritten = JsonNode.Parse(await RunAsync(sut, "Observation", json))!["subject"]!["reference"]!.GetValue<string>();
+
+        rewritten.Should().StartWith(expectedPrefix).And.NotContain(PatientId);
+        if (reference.Contains("_history")) rewritten.Should().EndWith("/_history/2");
+    }
+
+    [Theory]
+    [InlineData("#contained-obs")]   // contained reference - no resource type to resolve
+    [InlineData("urn:uuid:2f6b6f6d-1a2b-4c3d-9e8f-7a6b5c4d3e2f")]
+    [InlineData("Patient")]          // malformed: no id segment
+    public async Task Unresolvable_reference_forms_are_left_untouched(string reference)
+    {
+        var sut = BuildSut(("Patient", [IdRule("Patient", """{"mode":"hash"}""")]));
+        var json = $$$"""{"resourceType":"Observation","subject":{"reference":"{{{reference}}}"}}""";
+
+        var rewritten = JsonNode.Parse(await RunAsync(sut, "Observation", json))!["subject"]!["reference"]!.GetValue<string>();
+
+        rewritten.Should().Be(reference);
+    }
+
+    /// <summary>
+    /// The end-to-end property the fix exists for. MappedSqlServerDestinationWriter resolves a FK by running
+    /// <c>WHERE [PatientId] = @referenceId</c>, where referenceId is JsonMappingEngine.ExtractReferenceId's
+    /// "everything after the last slash" applied to the child's subject.reference, and [PatientId] holds the
+    /// Patient row's own redacted $.id. Those two have to be byte-identical or the write fails outright with
+    /// "no row in [dbo].[Patient] has [PatientId] = …". Mapping runs after de-identification, so both sides
+    /// here are the post-redaction values the writer will actually see.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"mode":"mask","keepLength":"4"}""")]
+    [InlineData("""{"mode":"hash"}""")]
+    [InlineData("""{"mode":"redact","token":"REDACTED-ID"}""")]
+    public async Task Sql_foreign_key_lookup_resolves_after_redaction(string configJson)
+    {
+        var sut = BuildSut(("Patient", [IdRule("Patient", configJson)]));
+
+        var patientKeyColumnValue = JsonNode.Parse(await RunAsync(sut, "Patient", PatientJson))!["id"]!.GetValue<string>();
+        var childReference = JsonNode.Parse(await RunAsync(sut, "Observation", ObservationJson))!
+            ["subject"]!["reference"]!.GetValue<string>();
+
+        // Mirrors JsonMappingEngine.ExtractReferenceId.
+        var referenceId = childReference[(childReference.LastIndexOf('/') + 1)..];
+
+        referenceId.Should().Be(patientKeyColumnValue,
+            "the FK lookup compares exactly these two values, so a mismatch orphans every child row");
+    }
+
+    /// <summary>Epic ids carry dots and hyphens ("eGmO0h.1.UQQrExl4bfM7OQ3"), and an Encounter's Patient
+    /// pointer sits at subject.reference alongside other references that must be left alone.</summary>
+    [Fact]
+    public async Task Epic_shaped_encounter_rewrites_only_the_patient_reference()
+    {
+        var sut = BuildSut(("Patient", [IdRule("Patient", """{"mode":"mask","keepLength":"4"}""")]));
+        var encounter = $$"""
+            {
+              "resourceType": "Encounter",
+              "id": "eGmO0h.1.UQQrExl4bfM7OQ3",
+              "status": "finished",
+              "subject": { "reference": "Patient/{{PatientId}}", "display": "Jane Doe" },
+              "participant": [ { "individual": { "reference": "Practitioner/eM5CWtq-hxA3" } } ],
+              "location": [ { "location": { "reference": "Location/eLoc.1.2" } } ]
+            }
+            """;
+
+        var result = JsonNode.Parse(await RunAsync(sut, "Encounter", encounter))!;
+
+        var subjectReference = result["subject"]!["reference"]!.GetValue<string>();
+        subjectReference.Should().StartWith("Patient/").And.NotContain(PatientId);
+        // What JsonMappingEngine.ExtractReferenceId will hand the FK lookup — must be non-empty, or the
+        // writer skips resolution and the NOT NULL FK column fails with "Cannot insert the value NULL".
+        subjectReference[(subjectReference.LastIndexOf('/') + 1)..].Should().NotBeEmpty();
+
+        result["id"]!.GetValue<string>().Should().Be("eGmO0h.1.UQQrExl4bfM7OQ3", "Encounter has no id rule");
+        result["participant"]![0]!["individual"]!["reference"]!.GetValue<string>().Should().Be("Practitioner/eM5CWtq-hxA3");
+        result["location"]![0]!["location"]!["reference"]!.GetValue<string>().Should().Be("Location/eLoc.1.2");
+    }
+
+    [Fact]
+    public void TryParseReference_splits_each_supported_form()
+    {
+        SafeHarborDeIdentificationService.TryParseReference(
+            "http://host/fhir/Patient/123/_history/4", out var prefix, out var type, out var id, out var suffix)
+            .Should().BeTrue();
+        prefix.Should().Be("http://host/fhir/");
+        type.Should().Be("Patient");
+        id.Should().Be("123");
+        suffix.Should().Be("/_history/4");
+
+        SafeHarborDeIdentificationService.TryParseReference("#x", out _, out _, out _, out _).Should().BeFalse();
     }
 }

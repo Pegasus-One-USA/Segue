@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using FHIRBridge.Api.Controllers.V1;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Persistence;
@@ -10,6 +10,7 @@ using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Persistence;
+using FHIRBridge.Api.IntegrationTests.TestHelpers;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -128,7 +129,7 @@ public sealed class SourceDiscoveryProbeAuthorizationTests
     /// repository plus the connection's own (auto-assigned) id.</summary>
     private static async Task<(IConfigurationRepository Repository, Guid ConnectionId)> RepositoryWithEpicConnectionAsync()
     {
-        var repository = new InMemoryConfigurationRepository();
+        var repository = new InMemoryConfigurationRepository(LicenseTestScopeFactory.Create());
         var connection = new SourceConnection("Segue Epic Backend", SourceSystemType.Epic, "https://fhir.example.com/epic", Auth);
         await repository.AddSourceConnectionAsync(connection, CancellationToken.None);
         return (repository, connection.Id);
@@ -191,7 +192,7 @@ public sealed class SourceDiscoveryProbeAuthorizationTests
     [Fact]
     public async Task New_connection_flow__no_SourceConnectionId__generic_permission_still_works()
     {
-        var repository = new InMemoryConfigurationRepository();
+        var repository = new InMemoryConfigurationRepository(LicenseTestScopeFactory.Create());
         var authorizationService = BuildRealAuthorizationService(Guid.NewGuid(), "sourceconnections.edit");
         var controller = BuildController(authorizationService, repository);
 
@@ -208,7 +209,7 @@ public sealed class SourceDiscoveryProbeAuthorizationTests
         // vendor from, only the generic SourceDiscoveryAccess check applies — epic.create alone (no
         // generic sourceconnections.create/edit) must NOT be sufficient here, unlike the
         // existing-connection case above.
-        var repository = new InMemoryConfigurationRepository();
+        var repository = new InMemoryConfigurationRepository(LicenseTestScopeFactory.Create());
         var authorizationService = BuildRealAuthorizationService(Guid.NewGuid(), "epic.create");
         var controller = BuildController(authorizationService, repository);
 
@@ -221,7 +222,7 @@ public sealed class SourceDiscoveryProbeAuthorizationTests
     [Fact]
     public async Task SourceConnectionId_that_does_not_resolve__falls_back_to_denied_rather_than_erroring()
     {
-        var repository = new InMemoryConfigurationRepository(); // empty — the id below resolves to nothing
+        var repository = new InMemoryConfigurationRepository(LicenseTestScopeFactory.Create()); // empty — the id below resolves to nothing
         var authorizationService = BuildRealAuthorizationService(Guid.NewGuid(), "epic.create");
         var controller = BuildController(authorizationService, repository);
 
