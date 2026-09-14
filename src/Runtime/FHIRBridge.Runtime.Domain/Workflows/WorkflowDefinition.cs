@@ -125,6 +125,51 @@ public sealed class WorkflowDefinition
         return node;
     }
 
+    /// <summary>
+    /// Adds a node under an id the caller already holds, instead of minting a new one.
+    ///
+    /// Only for rebuilding an EXISTING graph in place — the configuration migration (see
+    /// docs/backend/18-workflow-self-contained-config-plan.md §7) rewrites every node's ConfigurationJson, and
+    /// nodes are immutable, so the graph has to be reconstructed. Node ids must survive that: edges reference
+    /// them, and so do WorkflowNodeRuns, FieldLineageEntries and issued checkpoint urls. Use <see cref="AddNode"/>
+    /// for anything genuinely new.
+    /// </summary>
+    public WorkflowNode AddNodeWithId(
+        Guid nodeId,
+        string nodeType,
+        WorkflowNodeCategory category,
+        int rank,
+        int subRank = 0,
+        string? displayName = null,
+        string configurationJson = "{}",
+        double positionX = 0,
+        double positionY = 0,
+        bool isEnabled = true,
+        bool checkpointUrlEnabled = false)
+    {
+        if (nodeId == Guid.Empty)
+        {
+            throw new ArgumentException("Node id is required when rebuilding an existing graph.", nameof(nodeId));
+        }
+
+        var node = new WorkflowNode(
+            nodeId,
+            Id,
+            nodeType,
+            category,
+            rank,
+            subRank,
+            displayName ?? nodeType,
+            configurationJson,
+            positionX,
+            positionY,
+            isEnabled,
+            checkpointUrlEnabled);
+
+        _nodes.Add(node);
+        return node;
+    }
+
     /// <summary>Projects this definition onto a restricted node/edge subset (e.g. a checkpoint's ancestor closure).
     /// Used only for in-flight execution — never persisted — so it deliberately does not go through AddNode/AddEdge.</summary>
     public WorkflowDefinition WithNodesAndEdges(IReadOnlyCollection<WorkflowNode> nodes, IReadOnlyCollection<WorkflowEdge> edges)
