@@ -1,7 +1,6 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using FHIRBridge.Api.Controllers.V1;
 using FHIRBridge.Api.Security;
-using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
@@ -11,6 +10,7 @@ using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Persistence;
+using FHIRBridge.Api.IntegrationTests.TestHelpers;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -125,43 +125,11 @@ public sealed class SourceDiscoveryProbeAuthorizationTests
         return controller;
     }
 
-    /// <summary>InMemoryConfigurationRepository resolves the real license quota guard through a fresh
-    /// IServiceScopeFactory scope at its Add/Save choke points (see LicenseEnforcementSaveChangesInterceptor's
-    /// remarks for why the EF-backed store's central interceptor can't cover this no-DB dev/test fallback) —
-    /// an always-passes fake, correct for every test here since none of them exercise license enforcement
-    /// itself. Mirrors FHIRBridge.UnitTests.TestHelpers.LicenseTestScopeFactory, duplicated rather than shared
-    /// since the two test projects don't reference each other.</summary>
-    private static IServiceScopeFactory NoOpLicenseScopeFactory()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<ILicenseQuotaGuard, NoOpLicenseQuotaGuard>();
-        return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
-    }
-
-    private sealed class NoOpLicenseQuotaGuard : ILicenseQuotaGuard
-    {
-        public Task EnsureUserQuotaAvailableAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task EnsureSourceConnectionQuotaAvailableAsync(
-            SourceSystemType vendorType, string baseUrl, CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task EnsureSourceConnectionStillAllowedAsync(
-            SourceSystemType vendorType, string baseUrl, CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task EnsureWorkflowQuotaAvailableAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task EnsureResourceTypeAllowedAsync(string resourceType, CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task EnsureDestinationTypeAllowedAsync(DestinationType destinationType, CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task EnsureCanStartNewRunAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    }
-
     /// <summary>A real InMemoryConfigurationRepository seeded with one Epic connection — returns the
     /// repository plus the connection's own (auto-assigned) id.</summary>
     private static async Task<(IConfigurationRepository Repository, Guid ConnectionId)> RepositoryWithEpicConnectionAsync()
     {
-        var repository = new InMemoryConfigurationRepository(NoOpLicenseScopeFactory());
+        var repository = new InMemoryConfigurationRepository(LicenseTestScopeFactory.Create());
         var connection = new SourceConnection("Segue Epic Backend", SourceSystemType.Epic, "https://fhir.example.com/epic", Auth);
         await repository.AddSourceConnectionAsync(connection, CancellationToken.None);
         return (repository, connection.Id);
@@ -224,7 +192,7 @@ public sealed class SourceDiscoveryProbeAuthorizationTests
     [Fact]
     public async Task New_connection_flow__no_SourceConnectionId__generic_permission_still_works()
     {
-        var repository = new InMemoryConfigurationRepository(NoOpLicenseScopeFactory());
+        var repository = new InMemoryConfigurationRepository(LicenseTestScopeFactory.Create());
         var authorizationService = BuildRealAuthorizationService(Guid.NewGuid(), "sourceconnections.edit");
         var controller = BuildController(authorizationService, repository);
 
@@ -241,7 +209,7 @@ public sealed class SourceDiscoveryProbeAuthorizationTests
         // vendor from, only the generic SourceDiscoveryAccess check applies — epic.create alone (no
         // generic sourceconnections.create/edit) must NOT be sufficient here, unlike the
         // existing-connection case above.
-        var repository = new InMemoryConfigurationRepository(NoOpLicenseScopeFactory());
+        var repository = new InMemoryConfigurationRepository(LicenseTestScopeFactory.Create());
         var authorizationService = BuildRealAuthorizationService(Guid.NewGuid(), "epic.create");
         var controller = BuildController(authorizationService, repository);
 
@@ -254,7 +222,7 @@ public sealed class SourceDiscoveryProbeAuthorizationTests
     [Fact]
     public async Task SourceConnectionId_that_does_not_resolve__falls_back_to_denied_rather_than_erroring()
     {
-        var repository = new InMemoryConfigurationRepository(NoOpLicenseScopeFactory()); // empty — the id below resolves to nothing
+        var repository = new InMemoryConfigurationRepository(LicenseTestScopeFactory.Create()); // empty — the id below resolves to nothing
         var authorizationService = BuildRealAuthorizationService(Guid.NewGuid(), "epic.create");
         var controller = BuildController(authorizationService, repository);
 

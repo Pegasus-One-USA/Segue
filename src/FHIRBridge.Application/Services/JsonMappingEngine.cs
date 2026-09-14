@@ -121,6 +121,22 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             }
 
             var values = resolved.Select(r => r.Value).ToList();
+
+            // A FHIR reference resolves to "Encounter/abc", but a destination column wants the id alone — the
+            // type prefix is redundant (the column already says which resource it points at) and it breaks any
+            // join against that resource's own id column, which stores the bare value. Normalized here, at the
+            // single point every value passes through, so it applies to every ArrayPolicy rather than only the
+            // scalar case. Fields with a ReferenceLookup (the "Resolves to" control) were already getting this
+            // via ExtractReferenceId below and are unaffected: that call is idempotent on a bare id. This is
+            // what plain reference mappings — the ones WITHOUT "Resolves to" — were missing, which is why
+            // Observation.EncounterId stored "Encounter/anon-…" while Encounter.PatientId stored the bare id.
+            if (IsFhirReferencePath(field.JsonPath))
+            {
+                values = values
+                    .Select(value => value is string reference ? ExtractReferenceId(reference) : value)
+                    .ToList();
+            }
+
             rawArrayValues[field.TargetField] = values;
 
             // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
@@ -167,7 +183,17 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                 }
 
                 case ArrayPolicy.StoreJson:
-                    parent[field.TargetField] = JsonSerializer.Serialize(values);
+                    // A ValueType=Json field's values are ALREADY raw JSON text (ConvertElement returns
+                    // element.GetRawText()), so JsonSerializer.Serialize(values) would double-encode them — the
+                    // whole node would land in the column as an escaped string ("[{\"..\":..}]") instead of clean
+                    // JSON. Emit clean JSON directly: a single node as-is (e.g. "$" → the raw resource object),
+                    // multiple occurrences wrapped once into a real JSON array with no re-escaping. Non-JSON value
+                    // types (arrays of strings/numbers) still go through Serialize, which is correct for them.
+                    parent[field.TargetField] = field.ValueType == MappingValueType.Json
+                        ? (values.Count == 1
+                            ? values[0]
+                            : "[" + string.Join(",", values.Select(v => v?.ToString() ?? "null")) + "]")
+                        : JsonSerializer.Serialize(values);
                     break;
 
                 case ArrayPolicy.RejectIfMultiple:
@@ -225,7 +251,11 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
     /// <summary>Extracts the resource-local id from a FHIR reference string — "Patient/xyz" or an absolute URL
     /// ending "…/Patient/xyz" both yield "xyz"; a bare id with no "/" is returned as-is. Null/blank input (no
     /// reference present on this resource) yields null — nothing to resolve, so the target column is left
-    /// unpopulated rather than guessing.</summary>
+    /// unpopulated rather than guessing.
+    ///
+    /// A version-specific reference ("Patient/xyz/_history/2") yields "xyz", not "2": the id is the segment
+    /// BEFORE "_history", and taking the last segment outright returned the version number — a value that
+    /// matches no row and, for a plain (non-FK) mapping, would have been stored as the id itself.</summary>
     private static string? ExtractReferenceId(string? rawReference)
     {
         if (string.IsNullOrWhiteSpace(rawReference))
@@ -233,9 +263,28 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             return null;
         }
 
-        var slashIndex = rawReference.LastIndexOf('/');
-        return slashIndex >= 0 ? rawReference[(slashIndex + 1)..] : rawReference;
+        var reference = rawReference.Trim();
+
+        // "#contained" and "urn:uuid:…" carry no Type/id pair — the whole string IS the identifier.
+        if (reference[0] == '#' || reference.StartsWith("urn:", StringComparison.OrdinalIgnoreCase))
+        {
+            return reference;
+        }
+
+        var segments = reference.Split('/');
+        var historyIndex = Array.FindIndex(
+            segments, segment => segment.Equals("_history", StringComparison.OrdinalIgnoreCase));
+        var idIndex = historyIndex > 0 ? historyIndex - 1 : segments.Length - 1;
+
+        return segments[idIndex].Length > 0 ? segments[idIndex] : reference;
     }
+
+    /// <summary>
+    /// True when this field reads a FHIR <c>Reference.reference</c> element, whose value is always a
+    /// "Type/id" pointer (or an absolute URL ending in one) rather than a plain scalar.
+    /// </summary>
+    private static bool IsFhirReferencePath(string? jsonPath)
+        => jsonPath is not null && jsonPath.TrimEnd().EndsWith(".reference", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Selects the value among <paramref name="indices"/>/<paramref name="values"/> (same order, one per array item)

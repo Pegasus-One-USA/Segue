@@ -1,9 +1,11 @@
-using FHIRBridge.Application.Abstractions.Governance;
+﻿using FHIRBridge.Application.Abstractions.Governance;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Payloads;
 using FHIRBridge.Runtime.Domain.Workflows;
+using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 
@@ -121,15 +123,57 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
 {
     private readonly IDeIdentificationService? _deIdentificationService;
     private readonly IDataSetDeIdentificationService? _dataSetDeIdentificationService;
+    private readonly IConfigurationRepository? _configurationRepository;
 
     public DeIdentificationNodeExecutor(
         IDeIdentificationService? deIdentificationService = null,
         IDataSetDeIdentificationService? dataSetDeIdentificationService = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        IConfigurationRepository? configurationRepository = null)
         : base(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, loggerFactory)
     {
         _deIdentificationService = deIdentificationService;
         _dataSetDeIdentificationService = dataSetDeIdentificationService;
+        _configurationRepository = configurationRepository;
+    }
+
+    /// <summary>
+    /// Which <c>DeIdentificationProfile</c> this node's rules come from, most specific first:
+    /// <list type="number">
+    /// <item>the node's own <c>profileId</c> config, when something has set it;</item>
+    /// <item><b>the profile assigned to this node's destination</b> — the chain-node patch stamps
+    /// <c>destinationId</c> onto every chain node, so the De-identification node can resolve the same
+    /// <c>DestinationConfiguration.DeIdentificationProfileId</c> the portal's picker writes and the route plane's
+    /// <c>DestinationSensitivityGovernanceRule</c> reads;</item>
+    /// <item>the seeded default profile, as before.</item>
+    /// </list>
+    ///
+    /// Step 2 is the one that makes the feature work at all on this plane. Without it the destination-assigned
+    /// profile — the only thing the UI actually lets you choose — was never consulted by a DAG run: nothing
+    /// writes <c>profileId</c>, so every node fell through to <c>DefaultProfileId</c>, whose row does not exist
+    /// while the seeder is disabled. The rule query then returned nothing and every resource passed through
+    /// unredacted while the run reported success. Resolving from the destination here (rather than only stamping
+    /// the id at save time in the portal) also repairs graphs that were already saved, with no re-save needed.
+    /// </summary>
+    private async Task<Guid> ResolveProfileIdAsync(WorkflowNode node, CancellationToken cancellationToken)
+    {
+        if (Guid.TryParse(ReadStringConfiguration(node, "profileId"), out var explicitProfileId) && explicitProfileId != Guid.Empty)
+        {
+            return explicitProfileId;
+        }
+
+        if (_configurationRepository is not null
+            && Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var destinationId)
+            && destinationId != Guid.Empty)
+        {
+            var destination = await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+            if (destination?.DeIdentificationProfileId is { } destinationProfileId && destinationProfileId != Guid.Empty)
+            {
+                return destinationProfileId;
+            }
+        }
+
+        return FHIRBridge.Domain.Entities.DeIdentificationProfile.DefaultProfileId;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -145,14 +189,7 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
         // DeIdentifiedBatch output contract. Defaults to true so existing behaviour is unchanged. The route→graph
         // projection sets it false so a launch mirrors the route path (which de-identifies only when governance asks).
         var deIdentifyEnabled = ReadBoolConfiguration(node, "deIdentify") ?? true;
-        // Which DeIdentificationProfile this node's rules come from — unlike the route/governance path, a
-        // canvas node has no destination to resolve a profile from. There's no config UI for this yet, so an
-        // unset value falls back to the seeded default profile (FHIRBridge.Domain.Entities.DeIdentificationProfile.
-        // DefaultProfileId) rather than silently skipping redaction — this node always redacted unconditionally
-        // before profiles existed, and PHI passing through unredacted by default would be a real regression.
-        var resolvedProfileId = Guid.TryParse(ReadStringConfiguration(node, "profileId"), out var profileId) && profileId != Guid.Empty
-            ? profileId
-            : FHIRBridge.Domain.Entities.DeIdentificationProfile.DefaultProfileId;
+        var resolvedProfileId = await ResolveProfileIdAsync(node, cancellationToken);
 
         if (!deIdentifyEnabled || (_deIdentificationService is null && _dataSetDeIdentificationService is null))
         {
@@ -210,6 +247,20 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                 deIdentifiedResources.Add(resource with { Payload = sourceJson });
             }
 
+            // De-identification was asked for and nothing at all was redacted. Almost always a misconfiguration
+            // — a profile with no PreMapping rules, or rules whose resourceType doesn't match what this run
+            // carried — and until now it looked exactly like success: unredacted PHI at the destination, a green
+            // run, and no way to tell from the outside. Surfaced in metadata as well as the log so Execution
+            // History can show it rather than requiring someone to diff the written rows against the source.
+            if (redactionsByResourceId.Count == 0 && deIdentifiedResources.Count > 0)
+            {
+                Logger.LogWarning(
+                    "De-identification node {NodeId} applied no redactions to {ResourceCount} resource(s) using profile "
+                    + "{ProfileId}. The resources were written through unredacted — check that the profile has "
+                    + "PreMapping rules and that their resourceType matches the data in this run.",
+                    node.Id, deIdentifiedResources.Count, resolvedProfileId);
+            }
+
             return new WorkflowNodeOutput(
                 node.Id,
                 node.NodeType,
@@ -219,6 +270,9 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                 {
                     ["executor"] = GetType().Name,
                     ["count"] = deIdentifiedResources.Count,
+                    // Lets Execution History show "de-identification ran but changed nothing" without anyone
+                    // having to diff written rows against the source.
+                    ["redactedResourceCount"] = redactionsByResourceId.Count,
                     [WorkflowNodeOutputMetadataKeys.PreMappingRedactions] = redactionsByResourceId,
                 });
         }

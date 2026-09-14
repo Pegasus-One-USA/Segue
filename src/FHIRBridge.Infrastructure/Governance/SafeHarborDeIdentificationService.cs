@@ -21,6 +21,10 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
     private readonly ITransformationRuleRepository _ruleRepository;
     private readonly ILogger<SafeHarborDeIdentificationService> _logger;
 
+    /// <summary>Per-resource-type "does this profile redact the id?" lookups, memoized for this scoped
+    /// instance — see <see cref="GetIdRedactionAsync"/>.</summary>
+    private readonly Dictionary<(Guid ProfileId, string ResourceType), IdRedaction?> _idRedactionCache = new();
+
     public SafeHarborDeIdentificationService(
         ITransformationRuleRepository ruleRepository,
         ILogger<SafeHarborDeIdentificationService>? logger = null)
@@ -64,7 +68,7 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
             // Captured before mutating so the hop's "before" value reflects what this field actually held prior
             // to this rule — TryReadValueAt returns null both for "path doesn't exist" and "value was itself
             // null," which is fine here: either way there is nothing meaningful to redact or report as changed.
-            var pathSegments = rule.SourceField.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var pathSegments = ParseSourceFieldPath(rule.SourceField, request.ResourceType);
             var beforeValue = TryReadValueAt(resource, pathSegments, 0);
             if (beforeValue is null)
             {
@@ -84,7 +88,250 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
                 null));
         }
 
+        // Keep every reference pointing at a redacted resource in step with that resource's new id (e.g. an
+        // Observation's subject.reference following Patient.id). Runs after this resource's own rules so a
+        // self-reference sees the final value.
+        hops.AddRange(await RewriteReferencesAsync(resource, profileId, string.Empty, cancellationToken));
+
         return new DeIdentificationResult(resource.ToJsonString(), hops);
+    }
+
+    /// <summary>
+    /// Rewrites every FHIR reference in the resource that points at a resource type whose <c>id</c> this profile
+    /// redacts, applying the same rule to the id inside the reference.
+    ///
+    /// Without this, redacting an id silently breaks the graph: <c>Patient.id</c> becomes <c>****eiw3</c> while
+    /// every child still carries <c>subject.reference = "Patient/&lt;original&gt;"</c>. On SQL that is a join that
+    /// no longer matches — no error, just orphaned rows; on a FHIR server it is a dangling reference the write
+    /// either rejects or stores broken.
+    ///
+    /// It works without any batch state or original→redacted crosswalk because the strategies are pure
+    /// functions of the input: hashing or masking "abc" yields the same result wherever it is encountered. That
+    /// matters beyond convenience — a reference to a resource that is NOT in the current batch (or was written
+    /// by an earlier run) still lands on exactly the same value, so links stay intact across runs rather than
+    /// only within one.
+    ///
+    /// <see cref="DeIdentificationStrategy.Remove"/> is deliberately skipped: it produces no replacement value,
+    /// so there is nothing to point a reference at. Note also that
+    /// <see cref="DeIdentificationStrategy.Redact"/> maps every id to one constant token, which keeps references
+    /// resolvable but collapses all resources of that type onto a single identity — correct per the configured
+    /// rule, and a reason to prefer Hash when linkage is meant to survive.
+    /// </summary>
+    private async Task<List<DeIdentificationFieldHop>> RewriteReferencesAsync(
+        JsonNode? node,
+        Guid profileId,
+        string path,
+        CancellationToken cancellationToken)
+    {
+        var hops = new List<DeIdentificationFieldHop>();
+
+        switch (node)
+        {
+            case JsonArray array:
+                for (var i = 0; i < array.Count; i++)
+                {
+                    hops.AddRange(await RewriteReferencesAsync(array[i], profileId, path, cancellationToken));
+                }
+
+                break;
+
+            case JsonObject obj:
+                foreach (var property in obj.ToList())
+                {
+                    var childPath = path.Length == 0 ? property.Key : $"{path}.{property.Key}";
+
+                    // Reference.reference is the only place a "Type/id" pointer lives in FHIR R4, so keying off
+                    // the property name avoids needing a resource schema here.
+                    if (property.Key == "reference"
+                        && property.Value is JsonValue value
+                        && value.TryGetValue<string>(out var reference))
+                    {
+                        var hop = await TryRewriteReferenceAsync(obj, childPath, reference, profileId, cancellationToken);
+                        if (hop is not null)
+                        {
+                            hops.Add(hop);
+                        }
+
+                        continue;
+                    }
+
+                    hops.AddRange(await RewriteReferencesAsync(property.Value, profileId, childPath, cancellationToken));
+                }
+
+                break;
+        }
+
+        return hops;
+    }
+
+    private async Task<DeIdentificationFieldHop?> TryRewriteReferenceAsync(
+        JsonObject parent,
+        string path,
+        string reference,
+        Guid profileId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryParseReference(reference, out var prefix, out var resourceType, out var id, out var suffix))
+        {
+            return null;
+        }
+
+        var redaction = await GetIdRedactionAsync(profileId, resourceType, cancellationToken);
+        if (redaction is not { } rule || rule.Strategy == DeIdentificationStrategy.Remove)
+        {
+            return null;
+        }
+
+        var rewritten = prefix + resourceType + "/" + TransformScalar(id, rule.Strategy, rule.ConfigJson) + suffix;
+        if (string.Equals(rewritten, reference, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        parent["reference"] = rewritten;
+
+        return new DeIdentificationFieldHop(
+            path,
+            rule.Strategy + ":Reference",
+            rule.ConfigJson,
+            JsonSerializer.Serialize(reference),
+            JsonSerializer.Serialize(rewritten),
+            true,
+            null);
+    }
+
+    /// <summary>
+    /// The rule this profile applies to <paramref name="resourceType"/>'s own <c>id</c>, or null when it redacts
+    /// no id for that type. Memoized for the lifetime of this scoped instance: a batch commonly holds hundreds of
+    /// resources pointing at a handful of types, and rules cannot change mid-run.
+    /// </summary>
+    private async Task<IdRedaction?> GetIdRedactionAsync(Guid profileId, string resourceType, CancellationToken cancellationToken)
+    {
+        var key = (profileId, resourceType);
+        if (_idRedactionCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        IdRedaction? resolved = null;
+        var rules = await _ruleRepository.GetPreMappingRulesAsync(profileId, resourceType, cancellationToken);
+        foreach (var rule in rules)
+        {
+            if (string.IsNullOrWhiteSpace(rule.SourceField) || !TryReadStrategy(rule.ConfigJson, out var strategy))
+            {
+                continue;
+            }
+
+            var segments = ParseSourceFieldPath(rule.SourceField, resourceType);
+            if (segments is ["id"])
+            {
+                resolved = new IdRedaction(strategy, rule.ConfigJson);
+                break;
+            }
+        }
+
+        _idRedactionCache[key] = resolved;
+        return resolved;
+    }
+
+    /// <summary>
+    /// Splits a FHIR reference into the pieces needed to rebuild it with a redacted id. Handles the relative
+    /// form ("Patient/123"), the absolute form ("http://host/fhir/Patient/123" — <paramref name="prefix"/> keeps
+    /// everything before the type), and a trailing version ("Patient/123/_history/2" — kept in
+    /// <paramref name="suffix"/>). Returns false for the forms that carry no resource type and so cannot be
+    /// rewritten: contained references ("#obs-1") and urn identifiers ("urn:uuid:…", "urn:oid:…").
+    /// </summary>
+    internal static bool TryParseReference(
+        string reference, out string prefix, out string resourceType, out string id, out string suffix)
+    {
+        prefix = resourceType = id = suffix = string.Empty;
+
+        var trimmed = reference.Trim();
+        if (trimmed.Length == 0
+            || trimmed[0] == '#'
+            || trimmed.StartsWith("urn:", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var segments = trimmed.Split('/');
+
+        // "…/Type/id" normally, or "…/Type/id/_history/v" for a version-specific reference.
+        var historyIndex = Array.FindIndex(segments, s => s.Equals("_history", StringComparison.OrdinalIgnoreCase));
+        var idIndex = historyIndex > 0 ? historyIndex - 1 : segments.Length - 1;
+        var typeIndex = idIndex - 1;
+        if (typeIndex < 0 || idIndex >= segments.Length)
+        {
+            return false;
+        }
+
+        var candidateType = segments[typeIndex];
+        if (!IsResourceTypeName(candidateType) || segments[idIndex].Length == 0)
+        {
+            return false;
+        }
+
+        prefix = typeIndex == 0 ? string.Empty : string.Join('/', segments[..typeIndex]) + "/";
+        resourceType = candidateType;
+        id = segments[idIndex];
+        suffix = idIndex + 1 >= segments.Length ? string.Empty : "/" + string.Join('/', segments[(idIndex + 1)..]);
+        return true;
+    }
+
+    /// <summary>A FHIR resource type name is PascalCase ASCII letters — enough to tell "Patient" in
+    /// "Patient/123" from a stray path segment in an absolute URL.</summary>
+    private static bool IsResourceTypeName(string value)
+        => value.Length > 0 && char.IsAsciiLetterUpper(value[0]) && value.All(char.IsAsciiLetter);
+
+    private readonly record struct IdRedaction(DeIdentificationStrategy Strategy, string ConfigJson);
+
+    /// <summary>
+    /// Splits a rule's <c>SourceField</c> into the plain property-name segments <see cref="ApplyPath"/> walks,
+    /// tolerating the three conventions rules are actually authored in. The seeded defaults use a bare dotted
+    /// path ("address.line"); the de-identification tab's field picker writes JsonPath ("$.id", from the payload
+    /// tree's <c>jsonPath</c>); and the transformation-rule screens use the "ResourceType.field" convention
+    /// ("Patient.id" — the same prefix <c>StripResourceTypePrefix</c> removes for FhirResource-phase rules).
+    ///
+    /// Normalizing here rather than at the point of authoring is deliberate: it repairs rules already stored in
+    /// the database, and it fails safe. A "$" or "Patient" segment matches no property on a FHIR resource, so
+    /// before this the whole rule was skipped by the <c>beforeValue is null</c> guard below — no redaction, no
+    /// lineage hop, no warning. PHI reached the destination unredacted while the UI showed an active rule.
+    ///
+    /// Array indexes ("address[0].line") and JsonPath wildcards ("address[*].line") are reduced to the bare
+    /// property name, which is what the traversal already does anyway: it fans out across every element of an
+    /// array it meets, so redaction applies to all of them rather than one.
+    /// </summary>
+    internal static string[] ParseSourceFieldPath(string sourceField, string resourceType)
+    {
+        var path = sourceField.Trim();
+
+        if (path.StartsWith("$.", StringComparison.Ordinal))
+        {
+            path = path[2..];
+        }
+        else if (path.StartsWith("$", StringComparison.Ordinal))
+        {
+            path = path[1..];
+        }
+
+        var resourcePrefix = resourceType + ".";
+        if (path.StartsWith(resourcePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            path = path[resourcePrefix.Length..];
+        }
+
+        return path
+            .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(StripIndexer)
+            .Where(segment => segment.Length > 0)
+            .ToArray();
+    }
+
+    /// <summary>Reduces "address[0]" / "address[*]" to "address" — see <see cref="ParseSourceFieldPath"/>.</summary>
+    private static string StripIndexer(string segment)
+    {
+        var bracket = segment.IndexOf('[', StringComparison.Ordinal);
+        return bracket < 0 ? segment : segment[..bracket].TrimEnd();
     }
 
     /// <summary>Best-effort read of the same path <see cref="ApplyPath"/> would mutate — used only to capture a
@@ -173,50 +420,47 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
             return;
         }
 
-        switch (strategy)
+        if (strategy == DeIdentificationStrategy.Remove)
         {
-            case DeIdentificationStrategy.Remove:
-                parent.Remove(property);
-                break;
+            parent.Remove(property);
+            return;
+        }
 
-            case DeIdentificationStrategy.Redact:
-                parent[property] = ReadConfigString(configJson, "token") ?? "[REDACTED]";
-                break;
+        if (strategy == DeIdentificationStrategy.Redact)
+        {
+            parent[property] = TransformScalar(string.Empty, strategy, configJson);
+            return;
+        }
 
-            case DeIdentificationStrategy.Hash:
-                if (current is JsonValue hashValue && hashValue.TryGetValue<string>(out var raw))
-                {
-                    parent[property] = Hash(raw);
-                }
-
-                break;
-
-            case DeIdentificationStrategy.Mask:
-                if (current is JsonValue maskValue && maskValue.TryGetValue<string>(out var maskRaw))
-                {
-                    var keepLength = ReadConfigInt(configJson, "keepLength", 4);
-                    parent[property] = Mask(maskRaw, keepLength);
-                }
-
-                break;
-
-            case DeIdentificationStrategy.GeneralizeDateToYear:
-                if (current is JsonValue dateValue && dateValue.TryGetValue<string>(out var date) && date.Length >= 4)
-                {
-                    parent[property] = date[..4];
-                }
-
-                break;
-
-            case DeIdentificationStrategy.GeneralizeZip3:
-                if (current is JsonValue zipValue && zipValue.TryGetValue<string>(out var zip) && zip.Length >= 3)
-                {
-                    parent[property] = zip[..3] + "00";
-                }
-
-                break;
+        // Every remaining strategy rewrites a string in place; a non-string (number, bool, object, array) has
+        // no meaningful masked/hashed form, so it is left exactly as it was.
+        if (current is JsonValue value && value.TryGetValue<string>(out var raw))
+        {
+            parent[property] = TransformScalar(raw, strategy, configJson);
         }
     }
+
+    /// <summary>
+    /// The value a strategy produces for one scalar — the single definition of what "hash"/"mask"/"generalize"
+    /// mean, shared by <see cref="ApplyStrategy"/> (redacting a field in place) and
+    /// <see cref="RewriteReferencesAsync"/> (redacting the id inside a reference that points at a redacted
+    /// resource). Sharing it is what makes a child's reference land on the same value as the parent's own id —
+    /// two separate implementations would drift and silently break the link they exist to preserve.
+    ///
+    /// Returns the input unchanged when a strategy's precondition isn't met (a date shorter than 4 characters,
+    /// a ZIP shorter than 3), matching the original in-place behaviour of leaving such values alone.
+    /// <see cref="DeIdentificationStrategy.Remove"/> is not handled here: it deletes rather than replaces, so it
+    /// has no scalar form and callers must special-case it.
+    /// </summary>
+    private static string TransformScalar(string raw, DeIdentificationStrategy strategy, string configJson) => strategy switch
+    {
+        DeIdentificationStrategy.Redact => ReadConfigString(configJson, "token") ?? "[REDACTED]",
+        DeIdentificationStrategy.Hash => Hash(raw),
+        DeIdentificationStrategy.Mask => Mask(raw, ReadConfigInt(configJson, "keepLength", 4)),
+        DeIdentificationStrategy.GeneralizeDateToYear => raw.Length >= 4 ? raw[..4] : raw,
+        DeIdentificationStrategy.GeneralizeZip3 => raw.Length >= 3 ? raw[..3] + "00" : raw,
+        _ => raw,
+    };
 
     private static string Hash(string value)
         => "anon-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..16].ToLowerInvariant();
@@ -239,14 +483,35 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         }
     }
 
+    /// <summary>
+    /// Reads a numeric rule-config value, accepting it as either a JSON number or a JSON string.
+    ///
+    /// The string case is the normal one, not an edge case: the rule-config form stores every field as a string
+    /// (<c>config[key] = String(value)</c>), so a <c>keepLength</c> of 4 is persisted as <c>"4"</c>, and the
+    /// PostMapping side has always read these through <c>TransformConfigExtensions.GetInt</c>, which is a plain
+    /// <c>int.TryParse</c> over strings.
+    ///
+    /// The ValueKind guard is load-bearing, not defensive tidying: <see cref="JsonElement.TryGetInt32"/> THROWS
+    /// <see cref="InvalidOperationException"/> when the element isn't a number — it returns false only for a
+    /// number that doesn't fit — and the catch below covers <see cref="JsonException"/> only. So a masking rule
+    /// authored in the UI crashed the whole de-identification node, failing the entire workflow run.
+    /// </summary>
     private static int ReadConfigInt(string configJson, string property, int fallback)
     {
         try
         {
             using var document = JsonDocument.Parse(configJson);
-            return document.RootElement.TryGetProperty(property, out var value) && value.TryGetInt32(out var parsed)
-                ? parsed
-                : fallback;
+            if (!document.RootElement.TryGetProperty(property, out var value))
+            {
+                return fallback;
+            }
+
+            return value.ValueKind switch
+            {
+                JsonValueKind.Number => value.TryGetInt32(out var parsed) ? parsed : fallback,
+                JsonValueKind.String => int.TryParse(value.GetString(), out var parsedText) ? parsedText : fallback,
+                _ => fallback,
+            };
         }
         catch (JsonException)
         {

@@ -611,6 +611,29 @@ public sealed class ConfigurationService : IConfigurationService
         return ConfigurationMapper.ToDto(destinationConfiguration);
     }
 
+    public async Task<DestinationConfigurationDto> SetDestinationConfigurationDeIdentificationProfileAsync(
+        Guid destinationId,
+        Guid? deIdentificationProfileId,
+        CancellationToken cancellationToken)
+    {
+        var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
+        destinationConfiguration.SetDeIdentificationProfile(deIdentificationProfileId);
+
+        await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);
+
+        // Same rationale as the enable/disable toggle above: changing which redactions apply to a destination
+        // silently changes what PHI leaves the platform, so the change itself needs to be on record.
+        _logger.LogInformation(
+            LogEvents.DestinationUpdated,
+            "Destination '{DestinationName}' ({DestinationId}, {DestinationType}) de-identification profile was {ProfileState}.",
+            destinationConfiguration.Name,
+            destinationConfiguration.Id,
+            destinationConfiguration.DestinationType,
+            deIdentificationProfileId is { } profileId ? $"set to {profileId}" : "cleared");
+
+        return ConfigurationMapper.ToDto(destinationConfiguration);
+    }
+
     public async Task DeleteDestinationConfigurationAsync(Guid destinationId, CancellationToken cancellationToken)
     {
         var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);

@@ -1,6 +1,7 @@
-using FHIRBridge.Application.Security;
+﻿using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure.Persistence;
+using FHIRBridge.UnitTests.TestHelpers;
 using FluentAssertions;
 
 namespace FHIRBridge.UnitTests.Security;
@@ -13,8 +14,10 @@ namespace FHIRBridge.UnitTests.Security;
 /// constructor default or a blanket "every seeded role" grant). RbacSeedData.Roles today contains only
 /// SuperAdmin, so Admin/Operations/Audit are no longer auto-seeded by the real bootstrapper at all -- this
 /// in-memory stand-in (used wherever tests substitute IUserAccessRepository) must not grant any of them
-/// Full Access either. Exercised directly against the concrete class -- it has no constructor
-/// dependencies -- never a mock, since the seeding under test lives in its own field initializers.
+/// Full Access either. Exercised directly against the concrete class -- never a mock, since the seeding
+/// under test lives in its own field initializers. Its one constructor dependency is the license scope
+/// factory every in-memory store now takes (see LicenseTestScopeFactory); this repository only stores it,
+/// so the always-passes fake is never actually exercised by these tests.
 /// </summary>
 public sealed class InMemoryUserAccessRepositoryFullAccessTests
 {
@@ -22,7 +25,7 @@ public sealed class InMemoryUserAccessRepositoryFullAccessTests
     [Fact]
     public async Task Seeded_SuperAdmin_has_IsFullAccess_true()
     {
-        var repository = new InMemoryUserAccessRepository(TestHelpers.LicenseTestScopeFactory.Create());
+        var repository = new InMemoryUserAccessRepository(LicenseTestScopeFactory.Create());
 
         var superAdmin = await repository.GetRoleByIdAsync(SeededSecurityIds.SuperAdminRoleId, CancellationToken.None);
 
@@ -41,7 +44,7 @@ public sealed class InMemoryUserAccessRepositoryFullAccessTests
     [Fact]
     public async Task Seeded_Admin_has_IsFullAccess_false_matching_the_real_bootstrappers_current_behavior()
     {
-        var repository = new InMemoryUserAccessRepository(TestHelpers.LicenseTestScopeFactory.Create());
+        var repository = new InMemoryUserAccessRepository(LicenseTestScopeFactory.Create());
 
         var admin = await repository.GetRoleByIdAsync(SeededSecurityIds.AdminRoleId, CancellationToken.None);
 
@@ -55,7 +58,7 @@ public sealed class InMemoryUserAccessRepositoryFullAccessTests
     [Fact]
     public async Task Seeded_Operations_remains_IsFullAccess_false()
     {
-        var repository = new InMemoryUserAccessRepository(TestHelpers.LicenseTestScopeFactory.Create());
+        var repository = new InMemoryUserAccessRepository(LicenseTestScopeFactory.Create());
 
         var operations = await repository.GetRoleByIdAsync(SeededSecurityIds.OperationsRoleId, CancellationToken.None);
 
@@ -67,7 +70,7 @@ public sealed class InMemoryUserAccessRepositoryFullAccessTests
     [Fact]
     public async Task Seeded_Audit_remains_IsFullAccess_false()
     {
-        var repository = new InMemoryUserAccessRepository(TestHelpers.LicenseTestScopeFactory.Create());
+        var repository = new InMemoryUserAccessRepository(LicenseTestScopeFactory.Create());
 
         var audit = await repository.GetRoleByIdAsync(SeededSecurityIds.AuditRoleId, CancellationToken.None);
 
@@ -79,7 +82,7 @@ public sealed class InMemoryUserAccessRepositoryFullAccessTests
     [Fact]
     public async Task A_normal_custom_role_remains_IsFullAccess_false()
     {
-        var repository = new InMemoryUserAccessRepository(TestHelpers.LicenseTestScopeFactory.Create());
+        var repository = new InMemoryUserAccessRepository(LicenseTestScopeFactory.Create());
         var customRole = new Role(Guid.NewGuid(), "Epic Integration Manager", "A scoped custom role.", isSystem: false);
 
         await repository.AddRoleAsync(customRole, CancellationToken.None);
@@ -93,7 +96,7 @@ public sealed class InMemoryUserAccessRepositoryFullAccessTests
     [Fact]
     public async Task GetRolesAsync_reflects_exactly_one_Full_Access_built_in_role()
     {
-        var repository = new InMemoryUserAccessRepository(TestHelpers.LicenseTestScopeFactory.Create());
+        var repository = new InMemoryUserAccessRepository(LicenseTestScopeFactory.Create());
 
         var roles = await repository.GetRolesAsync(CancellationToken.None);
 
