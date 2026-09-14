@@ -1,0 +1,32 @@
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  s_01cdc638c2acfa::t_7ed775b26a1563 51-55,57-59
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.html
+  s_01cdc638c2acfa::t_6bc524d230a5bf 168-171
+  s_01cdc638c2acfa::t_f6e594d8a3a0cf 167,172-174
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_01cdc638c2acfa::t_7728fd2d6714bc 93-96,98-100
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_01cdc638c2acfa::t_2e82f38bf5dc8b 152-155
+  s_01cdc638c2acfa::t_5662991563e0e6 151,156-158
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_01cdc638c2acfa::t_55bdd770a72f05 135,140-142
+  s_01cdc638c2acfa::t_97ee3b3851f94d 136-139
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.ts
+  s_01cdc638c2acfa::t_584c1b21ce920b 63-67,69-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c8d0a7caf51a05f3fa301aa4b19ae3f2fd24f912",
+  "prompts": {},
+  "sessions": {
+    "s_01cdc638c2acfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05d0a862-c14d-4220-9ff8-579c3faf088c",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
