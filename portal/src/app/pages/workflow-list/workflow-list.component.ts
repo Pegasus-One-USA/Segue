@@ -322,22 +322,6 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.searchDebounceHandle = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS);
   }
 
-  /** Which builder the New action opens — V2 (the Source → Mapping → Transformation →
-   *  De-identification → Destination canvas under pages/workflow-builder-v2) by default, V1 for the
-   *  original canvas. */
-  readonly builderVersion = signal<'v1' | 'v2'>('v2');
-
-  /** Whether the user actually picked a version, as opposed to this just holding its default. Edit reads
-   *  the same signal as an override (see onEdit), so without this the new V2 default would force EVERY
-   *  existing workflow into V2 — including V1-authored ones, whose V1-only steps (normalize, terminology,
-   *  patient matching) V2's catalog has no entry for and cannot render. */
-  private builderVersionTouched = false;
-
-  onBuilderVersionChange(value: string): void {
-    this.builderVersionTouched = true;
-    this.builderVersion.set(value === 'v2' ? 'v2' : 'v1');
-  }
-
   // ── New workflow (name + description first) ──────────────────────────────
   //
   // The workflow is created BEFORE the canvas opens, so it always has a real id. That is what removes the
@@ -496,60 +480,17 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /**
    * Open the workflow in the Pipeline Builder for full graph editing (Save there issues a PUT update).
    *
-   * A workflow authored in V2 MUST reopen in V2: the two builders read the same graph differently. V2's
-   * canvas order is Source → Mapping → Transformation → De-identification → Destination, while the
-   * persisted edges are in execution order (see WorkflowGraphMapperServiceV2.toAuthoringOrder, which
-   * reverses that on load). V1 has no such step, so it draws V2's execution-order edges against
-   * authoring-order node positions — every edge crosses backwards, and V2-only steps render as raw ids
-   * because V1's catalog has no entry for them.
-   *
-   * The builder is therefore detected from the graph itself rather than left to the toolbar selector:
-   * the presence of a V2-only chain step decides it. Detection needs the node list, which
-   * /workflows/summary doesn't carry, so this fetches the definition first; a failed fetch just falls
-   * back to the selected version rather than blocking navigation.
+   * Now a straight navigation. It used to fetch the definition first purely to decide WHICH builder to
+   * open, by looking for a V2-only chain step — a guess that could not tell a V2 workflow containing no
+   * such step (a bare Source → Destination) from a V1 one, and so silently opened it in a builder that
+   * could not configure Field Mapping. With V1 retired (plan §8) there is nothing to detect.
    */
   onEdit(row: WorkflowSummary): void {
-    // The toolbar selector doubles as a manual override, for workflows saved before __builderVersion
-    // existed — those can't be detected and would otherwise always open in V1. Only counts once the user
-    // has actually picked a version: the default is V2 now, and treating that as an override would send
-    // every V1 workflow to a builder that cannot draw it.
-    const forcedV2 = this.builderVersionTouched && this.builderVersion() === 'v2';
-    this.api.load(row.workflowId).subscribe({
-      next: definition => this.openBuilder(row.workflowId, forcedV2 || this.isV2Definition(definition)),
-      error: () => this.openBuilder(row.workflowId, forcedV2),
-    });
+    this.openBuilder(row.workflowId);
   }
 
-  private openBuilder(workflowId: string, useV2: boolean): void {
-    this.router.navigate([useV2 ? '/workflow-builder-v2' : '/workflow-builder'], {
-      queryParams: { id: workflowId },
-    });
-  }
-
-  /**
-   * Whether this graph was authored in V2. Prefers the explicit `__builderVersion` stamp
-   * (WorkflowGraphMapperServiceV2.nodeToRequest); falls back to spotting a V2-only chain step for
-   * workflows saved before that stamp existed. The fallback can't identify a V2 workflow that contains
-   * no such step — a bare Source → Destination looks identical either way — which is what the toolbar
-   * override above is for.
-   */
-  private isV2Definition(definition: { nodes: { configurationJson?: string | null }[] }): boolean {
-    return definition.nodes.some(node => {
-      const config = this.configOf(node);
-      if (config['__builderVersion'] === 'v2') return true;
-      const transformId = config['__transformId'];
-      return transformId === 'transformation' || transformId === 'deidentification';
-    });
-  }
-
-  private configOf(node: { configurationJson?: string | null }): Record<string, unknown> {
-    if (!node.configurationJson) return {};
-    try {
-      const parsed = JSON.parse(node.configurationJson) as unknown;
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      return {};
-    }
+  private openBuilder(workflowId: string): void {
+    this.router.navigate(['/workflow-builder-v2'], { queryParams: { id: workflowId } });
   }
 
   /** Enable/disable toggle via the activate/deactivate endpoints. */

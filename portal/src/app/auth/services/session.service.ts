@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { Session } from '../models/auth-state.model';
 import { AuthStore } from '../store/auth.store';
 import { TokenService } from './token.service';
-import { MappingSnapshotService } from '../../components/node-library/destination-wizard/field-mapping/mapping-snapshot.service';
+import { MappingSnapshotService } from '../../components/node-library-v2/destination-wizard/field-mapping/mapping-snapshot.service';
 
 const IDLE_MS = 30 * 60 * 1000; // 30-minute idle timeout
 

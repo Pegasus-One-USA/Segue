@@ -11,15 +11,11 @@
         <span class="ico-refresh" [class.spin]="loading()">&#8635;</span>
         Refresh
       </button>
+      <!-- The V1/V2 selector is gone with V1's builder (plan §8): there is only one builder now, so a
+           version to choose between no longer exists. It was also a live footgun — a workflow with no
+           V2-only chain step is indistinguishable from a V1 graph, so Edit could route to a builder that
+           could not configure Field Mapping. -->
       @if (canCreate()) {
-        <select
-          class="builder-version-select"
-          aria-label="Builder version for New"
-          [value]="builderVersion()"
-          (change)="onBuilderVersionChange($any($event.target).value)">
-          <option value="v1">V1</option>
-          <option value="v2">V2</option>
-        </select>
         <button class="btn-cta" type="button" (click)="onNewWorkflow()">
           New
         </button>
