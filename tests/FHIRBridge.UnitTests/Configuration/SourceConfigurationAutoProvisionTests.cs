@@ -21,7 +21,7 @@ namespace FHIRBridge.UnitTests.Configuration;
 /// </summary>
 public sealed class SourceConfigurationAutoProvisionTests
 {
-    private readonly InMemoryConfigurationRepository _repository = new();
+    private readonly InMemoryConfigurationRepository _repository = new(TestHelpers.LicenseTestScopeFactory.Create());
     private readonly ConfigurationService _sut;
 
     public SourceConfigurationAutoProvisionTests()

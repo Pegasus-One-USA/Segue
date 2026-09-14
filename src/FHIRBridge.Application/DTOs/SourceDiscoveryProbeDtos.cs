@@ -1,7 +1,13 @@
 namespace FHIRBridge.Application.DTOs;
 
-/// <summary>Request to probe a FHIR endpoint by base URL (source-connection wizard, pre-create).</summary>
-public sealed record SourceDiscoveryProbeRequest(string BaseUrl);
+/// <summary>
+/// Request to probe a FHIR endpoint by base URL (source-connection wizard, pre-create).
+/// <paramref name="SourceConnectionId"/> is optional — set when the wizard's "Existing Connection" picker
+/// selected an already-saved connection, so the backend can resolve that connection's own vendor and
+/// authorize the probe against it (see SourceDiscoveryController.Probe); null for a genuinely new
+/// connection, where no vendor can be resolved yet and the prior, generic-only authorization applies.
+/// </summary>
+public sealed record SourceDiscoveryProbeRequest(string BaseUrl, Guid? SourceConnectionId = null);
 
 /// <summary>
 /// Combined result of a pre-create endpoint probe: the SMART discovery document (OAuth endpoints + scopes) and the

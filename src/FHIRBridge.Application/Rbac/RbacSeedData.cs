@@ -151,6 +151,24 @@ public static class RbacSeedData
             PermissionGroupCode.SourceConnections,
             PermissionActionCode.Execute),
 
+        // Destination Connections module permissions. View/Deactivate/Delete already exist, auto-discovered
+        // from ConfigurationCatalogController's/ConfigurationsController's own [StandardPermission] attributes
+        // (see those controllers) — unchanged here. Create/Edit/Test are declared by hand instead, the same
+        // way SourceConnections.Test above is: so the Role Permissions screen can grant a Destination
+        // Connections row with the same six actions Source Connections already exposes, matching that row's
+        // shape one-for-one. Like SourceConnections.Test, none of these three back a real authorization check
+        // yet — creating/editing a destination stays gated purely on that destination's own vendor-specific
+        // permission (ConfigurationsController.AddDestinationConfiguration/UpdateDestinationConfiguration,
+        // via SourceSystemPermissionGroups.GroupFor), exactly as before this was added. Deliberately NOT
+        // worded as SourceConnections.Edit's "...for a type with no dedicated permission group of its own"
+        // above — that fallback-group role is hard-wired to the SourceConnections group for every vendorless
+        // source AND destination type alike (GroupFor's one fallback constant), so a same-named
+        // DestinationConnections.Edit would not actually fill that role; these three are net-new, standalone
+        // permissions, not a second fallback path.
+        new("Create a new destination connection.", PermissionGroupCode.DestinationConnections, PermissionActionCode.Create),
+        new("Edit a destination connection.", PermissionGroupCode.DestinationConnections, PermissionActionCode.Edit),
+        new("Test destination connectivity.", PermissionGroupCode.DestinationConnections, PermissionActionCode.Test),
+
         // User module permissions.
         new("Invite a new user to the organization.", PermissionGroupCode.User, PermissionActionCode.Invite),
         new("View the list of users.", PermissionGroupCode.User, PermissionActionCode.View),

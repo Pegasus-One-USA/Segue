@@ -38,8 +38,11 @@ public static class AppSecretProvisioner
             secretProvider, secretWriter, metadataProvider, AppSecretReferences.TransformHashingKey, allowRegeneration, logger, cancellationToken);
         var phiEncryptionKey = await EnsureSecretAsync(
             secretProvider, secretWriter, metadataProvider, AppSecretReferences.PhiEncryptionKey, allowRegeneration, logger, cancellationToken);
+        var installationId = await EnsureSecretAsync(
+            secretProvider, secretWriter, metadataProvider, AppSecretReferences.InstallationId, allowRegeneration, logger, cancellationToken);
 
-        accessor.Initialize(jwtSigningKey, downloadLinkSigningSecret, transformHashingKey, phiEncryptionKey);
+        accessor.Initialize(
+            jwtSigningKey, downloadLinkSigningSecret, transformHashingKey, phiEncryptionKey, installationId);
     }
 
     /// <summary>

@@ -27,5 +27,9 @@ public sealed record FirstRunEmailSettingsRequest(
     string FromAddress,
     string FromName);
 
-/// <summary>Reports whether the deployment still needs its first SuperAdmin created.</summary>
-public sealed record SetupStatusDto(bool RequiresSetup);
+/// <summary>
+/// Reports whether the deployment still needs its first SuperAdmin created, plus the current license
+/// gate state — anonymous and polled at portal boot (and again after login/license-apply) so the portal
+/// can show its "license not active" header banner without needing an authenticated, admin-only call.
+/// </summary>
+public sealed record SetupStatusDto(bool RequiresSetup, bool LicenseActive, string LicenseState);

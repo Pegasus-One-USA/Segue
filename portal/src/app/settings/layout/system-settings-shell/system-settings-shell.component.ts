@@ -1,7 +1,9 @@
-import { Component, inject, computed } from '@angular/core';
+import { Component, inject, computed, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthStore } from '../../../auth/store/auth.store';
+import { FullAccessResolverService } from '../../../auth/services/full-access-resolver.service';
+import { TERMINOLOGY_FEATURE_ENABLED } from '../../../data/terminology-feature.config';
 
 interface SystemSettingsSection {
   label: string;
@@ -9,8 +11,9 @@ interface SystemSettingsSection {
   icon: string;
   /** Omit for sections every viewer who reached this shell may see. */
   permissions?: string[];
-  /** Hidden unless the user has the SuperAdmin role — General/Security have no permission of their
-   *  own (AllowedCorsOriginsController-style backend policies gate them by role, not permission). */
+  /** Hidden unless the user is SuperAdmin or holds a role with Full System Access — General/Security
+   *  have no permission of their own (AllowedCorsOriginsController-style backend policies gate them by
+   *  role/IsFullAccess, not permission). */
   superAdminOnly?: boolean;
 }
 
@@ -21,16 +24,16 @@ const SYSTEM_SETTINGS_SECTIONS: SystemSettingsSection[] = [
   { label: 'Email', route: 'email', icon: 'mail', permissions: ['configuration.view', 'configuration.write'] },
   { label: 'General', route: 'general', icon: 'tune', superAdminOnly: true },
   { label: 'Security', route: 'security', icon: 'security', superAdminOnly: true },
-  // 'Terminology Codes' tab hidden from navigation — its settings now live under the "Terminology
-  // Settings" group on the General tab instead. The route (settings.routes.ts) and its backend
-  // controllers are untouched, so this is reversible by restoring this entry; nothing behind it was
-  // changed or disabled.
-  // {
-  //   label: 'Terminology Codes', route: 'terminology', icon: 'biotech',
-  //   permissions: [
-  //     'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
-  //   ],
-  // },
+  // Restored — was previously hidden from navigation while still fully reachable via its route guard
+  // (settings.routes.ts), leaving a role that holds only these terminology permissions with no visible
+  // way to reach or leave Terminology at all once Email/General/Security/SSO were also hidden for it.
+  // Same permission list the route guard already checks — a role needs at least one to see the tab.
+  {
+    label: 'Terminology Codes', route: 'terminology', icon: 'biotech',
+    permissions: [
+      'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
+    ],
+  },
   // SuperAdmin-role-only, matching settings.routes.ts's own sso-configurations child guard and the
   // backend's SsoConfigurationsController policy.
   { label: 'SSO Configurations', route: 'sso-configurations', icon: 'admin_panel_settings', superAdminOnly: true },
@@ -44,13 +47,35 @@ const SYSTEM_SETTINGS_SECTIONS: SystemSettingsSection[] = [
   styleUrl: './system-settings-shell.component.scss',
 })
 export class SystemSettingsShellComponent {
-  private readonly store = inject(AuthStore);
+  private readonly store         = inject(AuthStore);
+  private readonly fullAccessSvc = inject(FullAccessResolverService);
+
+  // RBAC Fix 6: whether the current caller holds Full System Access via any of their own roles —
+  // resolved via the shared FullAccessResolverService (see that file for why it matches by role
+  // NAME, never displayName or id), cross-referenced against the roles this session's own claims say
+  // it holds. Starts false (fails closed) until the async check resolves or if it ever errors,
+  // exactly like a caller who simply isn't SuperAdmin today; General/Security/SSO Configurations stay
+  // hidden either way, never shown speculatively.
+  private readonly callerHasFullAccess = signal(false);
+
+  constructor() {
+    // A literal SuperAdmin claim already satisfies the OR below on its own — skip the extra API call
+    // entirely for that common case, exactly as the other Full-Access sites do.
+    if (this.store.hasRole('SuperAdmin')) return;
+
+    const heldRoleNames = new Set(this.store.roles().map(r => r.name));
+    this.fullAccessSvc.resolve(heldRoleNames).subscribe(hasFullAccess => this.callerHasFullAccess.set(hasFullAccess));
+  }
 
   // Same visibility rule as settings-shell.component.ts's own tab list — kept in sync deliberately
   // so a section only appears here if the user could also reach it via this shell's own route guard.
+  // Terminology Codes additionally requires the feature flag — see data/terminology-feature.config.ts
+  // — since its route is unreachable (featureFlagGuard in settings.routes.ts) while disabled, and this
+  // tab would otherwise still show for a role holding terminology permissions.
   readonly sections = computed<SystemSettingsSection[]>(() =>
     SYSTEM_SETTINGS_SECTIONS.filter(section => {
-      if (section.superAdminOnly) return this.store.hasRole('SuperAdmin');
+      if (section.route === 'terminology' && !TERMINOLOGY_FEATURE_ENABLED) return false;
+      if (section.superAdminOnly) return this.store.hasRole('SuperAdmin') || this.callerHasFullAccess();
       if (!section.permissions?.length) return true;
       if (this.store.isAdmin()) return true;
       return section.permissions.some(p => this.store.hasPermission(p));

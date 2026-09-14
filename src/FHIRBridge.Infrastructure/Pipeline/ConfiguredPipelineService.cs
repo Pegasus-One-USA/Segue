@@ -1,6 +1,7 @@
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Governance;
+using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Normalization;
 using FHIRBridge.Application.Abstractions.Persistence;
@@ -57,6 +58,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     private readonly IDestinationSchemaService? _destinationSchemaService;
     private readonly IGlobalExceptionManager? _exceptionManager;
     private readonly IPipelineRunTracker _pipelineRunTracker;
+    private readonly ILicenseQuotaGuard _licenseQuotaGuard;
 
     public ConfiguredPipelineService(
         IConfigurationRepository configurationRepository,
@@ -70,6 +72,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         IExecutionResourceHistoryRecorder resourceHistoryRecorder,
         ILogger<ConfiguredPipelineService> logger,
         IPipelineRunTracker pipelineRunTracker,
+        ILicenseQuotaGuard licenseQuotaGuard,
         IResourceNormalizationService? normalizationService = null,
         IMappedRecordNormalizationService? mappedRecordNormalizationService = null,
         IGovernancePolicyService? governancePolicyService = null,
@@ -112,6 +115,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         _destinationSchemaService = destinationSchemaService;
         _exceptionManager = exceptionManager;
         _pipelineRunTracker = pipelineRunTracker;
+        _licenseQuotaGuard = licenseQuotaGuard;
     }
 
     // Persists a route/extraction failure into the shared ErrorLog store (via GlobalExceptionManager) so it
@@ -177,6 +181,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         StartConfiguredPipelineRunRequest request,
         CancellationToken cancellationToken)
     {
+        // Gated here, at the very start, before any work begins — a truly expired license or an exhausted
+        // monthly processed-records cap blocks a NEW run from starting; a run already in flight is never
+        // interrupted by this check (it is never called anywhere else in this method).
+        await _licenseQuotaGuard.EnsureCanStartNewRunAsync(cancellationToken);
+
         var startedOnUtc = DateTime.UtcNow;
         var pipelineRunId = Guid.NewGuid();
         var errors = new List<string>();
@@ -218,6 +227,41 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var runStartedAtUtc = new DateTimeOffset(startedOnUtc, TimeSpan.Zero);
 
         var routesByResourceType = ResolveRoutesByResourceType(config, request.ResourceTypes);
+
+        // License allow-list re-check for every distinct source connection / destination this run will
+        // actually touch — independent of, and in addition to, the create-time check in
+        // LicenseEnforcementSaveChangesInterceptor (which only ever sees a SourceConnection/
+        // DestinationConfiguration row once, when it's first added). This is what catches a hospital/vendor/
+        // destination type later dropped from the license on renewal, or a connection's BaseUrl edited after
+        // creation. Checked once here, before any extraction begins — never mid-run, same as
+        // EnsureCanStartNewRunAsync above.
+        var routeSourceConnectionIds = new HashSet<Guid>();
+        var routeDestinationIds = new HashSet<Guid>();
+        foreach (var (_, routesForType) in routesByResourceType)
+        {
+            foreach (var routeItem in FilterEnabledRoutes(routesForType, config, request, scheduledAtUtc))
+            {
+                routeSourceConnectionIds.Add(routeItem.MappingProfile.SourceConnectionId);
+                routeDestinationIds.Add(routeItem.MappingProfile.DestinationId);
+            }
+        }
+
+        foreach (var sourceConnectionId in routeSourceConnectionIds)
+        {
+            if (config.SourceConnectionsById.TryGetValue(sourceConnectionId, out var sourceConnectionToCheck))
+            {
+                await _licenseQuotaGuard.EnsureSourceConnectionStillAllowedAsync(
+                    sourceConnectionToCheck.SourceSystemType, sourceConnectionToCheck.BaseUrl, cancellationToken);
+            }
+        }
+
+        foreach (var destinationId in routeDestinationIds)
+        {
+            if (config.DestinationsById.TryGetValue(destinationId, out var destinationToCheck))
+            {
+                await _licenseQuotaGuard.EnsureDestinationTypeAllowedAsync(destinationToCheck.DestinationType, cancellationToken);
+            }
+        }
 
         // Patient-compartment resource types (Observation, Condition, ServiceRequest, …) need a resolved patient id
         // to scope their search — normally supplied by an interactive SMART launch context, but Backend Services
@@ -535,6 +579,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         WebhookIngestionRequest request,
         CancellationToken cancellationToken)
     {
+        // Same run-trigger gate as StartAsync above — checked once, before any work begins.
+        await _licenseQuotaGuard.EnsureCanStartNewRunAsync(cancellationToken);
+
         var startedOnUtc = DateTime.UtcNow;
         var pipelineRunId = Guid.NewGuid();
         var errors = new List<string>();
@@ -564,12 +611,44 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             throw new InvalidOperationException("Webhook source connection is disabled.");
         }
 
+        // License allow-list re-check — same rationale as StartAsync's matching block: independent of the
+        // create-time check, catches a hospital/vendor/destination type dropped from the license since this
+        // connection/route was created. The webhook's own source is fixed; destinations vary per route, so
+        // they're resolved from every resource-type group in this payload, checked once, before any route
+        // actually executes.
+        await _licenseQuotaGuard.EnsureSourceConnectionStillAllowedAsync(
+            webhookSourceConnection.SourceSystemType, webhookSourceConnection.BaseUrl, cancellationToken);
+
         var resourcesByType = FhirResourceParser.ParsePayload(request.ResourceJson)
             .GroupBy(resource => SupportedFhirResourceTypes.Normalize(resource.ResourceType))
             .ToList();
         var extractedCount = resourcesByType.Sum(group => group.Count());
         var processedResourceTypes = new List<string>();
         const string triggerType = "Webhook";
+
+        var webhookDestinationIds = new HashSet<Guid>();
+        foreach (var resourcesForTypeForLicenseCheck in resourcesByType)
+        {
+            var resourceTypeForLicenseCheck = resourcesForTypeForLicenseCheck.Key;
+            foreach (var route in ExpandRouteMappingWorkItems(config)
+                .Where(route => string.Equals(route.MappingProfile.ResourceType, resourceTypeForLicenseCheck, StringComparison.OrdinalIgnoreCase))
+                .Where(route => route.Route.IsEnabled)
+                .Where(route => route.IsEnabled)
+                .Where(route => RouteDependenciesAreEnabled(config, route))
+                .Where(route => route.Route.WebhookConfigurationId == webhookConfigurationId)
+                .Where(route => IsWebhookMode(route.Route.IngestionMode)))
+            {
+                webhookDestinationIds.Add(route.MappingProfile.DestinationId);
+            }
+        }
+
+        foreach (var webhookDestinationId in webhookDestinationIds)
+        {
+            if (config.DestinationsById.TryGetValue(webhookDestinationId, out var webhookDestination))
+            {
+                await _licenseQuotaGuard.EnsureDestinationTypeAllowedAsync(webhookDestination.DestinationType, cancellationToken);
+            }
+        }
 
         foreach (var resourcesForType in resourcesByType)
         {

@@ -1,0 +1,205 @@
+<div class="dash-content">
+  <div class="page-header">
+    <h1 class="page-title">Dev: Mint a Test License</h1>
+    <p class="page-sub">Generate a signed license token for local testing.</p>
+  </div>
+
+  <!-- ⚠ TEMPORARY / DEV-ONLY page — see license-dev-mint.component.ts's file-level comment. -->
+  <section class="dev-banner" role="alert">
+    <span class="dev-banner-icon" aria-hidden="true">⚠</span>
+    <div>
+      <p class="dev-banner-title">Temporary developer tool</p>
+      <p class="dev-banner-body">
+        This page will move to a separate internal portal before release. Do not rely on this for
+        anything customer-facing. The signing endpoint behind it only responds when the API is running
+        in the Development environment — it 404s everywhere else.
+      </p>
+    </div>
+  </section>
+
+  <section class="settings-card">
+    <h2 class="card-title">License Details</h2>
+    <p class="card-sub">Fields mirror <code>tools/FHIRBridge.LicenseMinter</code>. Leave a limit blank for unlimited.</p>
+
+    <form [formGroup]="form" (ngSubmit)="generate()">
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="dm-customer-id">Customer Id <span class="req">*</span></label>
+          <input id="dm-customer-id" type="text" formControlName="customerId" placeholder="cust-mercy-health" />
+          @if (form.controls.customerId.touched && form.controls.customerId.invalid) {
+            <p class="field-error">Customer Id is required.</p>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="dm-customer-name">Customer Name</label>
+          <input id="dm-customer-name" type="text" formControlName="customerName" placeholder="Defaults to Customer Id" />
+        </div>
+
+        <div class="form-field">
+          <label for="dm-edition">Edition</label>
+          <input id="dm-edition" type="text" formControlName="edition" placeholder="standard" />
+        </div>
+
+        <div class="form-field">
+          <label for="dm-expires">Expires <span class="req">*</span></label>
+          <input id="dm-expires" type="date" formControlName="expiresUtc" />
+          @if (form.controls.expiresUtc.touched && form.controls.expiresUtc.invalid) {
+            <p class="field-error">An expiry date is required.</p>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="dm-max-users">Max Users</label>
+          <input id="dm-max-users" type="number" min="-1" formControlName="maxUsers" placeholder="Blank or -1 = unlimited" />
+        </div>
+
+        <div class="form-field">
+          <label for="dm-max-workflows">Max Workflows</label>
+          <input id="dm-max-workflows" type="number" min="-1" formControlName="maxWorkflows" placeholder="Blank or -1 = unlimited" />
+        </div>
+
+        <div class="form-field">
+          <label for="dm-max-source-connections">Max Source Connections</label>
+          <input id="dm-max-source-connections" type="number" min="-1" formControlName="maxSourceConnections" placeholder="Blank or -1 = unlimited" />
+        </div>
+
+        <div class="form-field">
+          <label for="dm-max-records">Max Processed Records / Month</label>
+          <input id="dm-max-records" type="number" min="-1" formControlName="maxProcessedRecordsPerMonth" placeholder="Blank or -1 = unlimited" />
+        </div>
+
+        <div class="form-field">
+          <label for="dm-max-successful-executions">Max Successful Workflow Executions / Month</label>
+          <input id="dm-max-successful-executions" type="number" min="-1" formControlName="maxSuccessfulWorkflowExecutionsPerMonth" placeholder="Blank or -1 = unlimited" />
+        </div>
+
+        <div class="form-field form-field--full">
+          <label for="dm-features">Features</label>
+          <input id="dm-features" type="text" formControlName="features" placeholder="hl7-mllp, deid, runtime-plane" />
+          <p class="field-hint">Comma-separated feature keys. Leave blank for none.</p>
+        </div>
+
+        <div class="form-field form-field--full">
+          <span id="dm-source-types-label" class="field-label">Allowed Source Types</span>
+          <div class="checkbox-grid" role="group" aria-labelledby="dm-source-types-label">
+            @for (opt of sourceTypeOptions; track opt.value) {
+              <label class="checkbox-item">
+                <input
+                  type="checkbox"
+                  [checked]="selectedSourceTypes().has(opt.value)"
+                  (change)="toggleSourceType(opt.value)"
+                />
+                <span>{{ opt.label }}</span>
+              </label>
+            }
+          </div>
+          <p class="field-hint">Leave every box unchecked to allow all source types.</p>
+        </div>
+
+        <div class="form-field form-field--full">
+          <span id="dm-resource-types-label" class="field-label">Allowed Resource Types</span>
+          <div class="checkbox-grid" role="group" aria-labelledby="dm-resource-types-label">
+            @for (opt of resourceTypeOptions; track opt) {
+              <label class="checkbox-item">
+                <input
+                  type="checkbox"
+                  [checked]="selectedResourceTypes().has(opt)"
+                  (change)="toggleResourceType(opt)"
+                />
+                <span>{{ opt }}</span>
+              </label>
+            }
+          </div>
+          <p class="field-hint">Leave every box unchecked to allow all FHIR resource types.</p>
+        </div>
+
+        <div class="form-field form-field--full">
+          <span id="dm-destination-types-label" class="field-label">Allowed Destination Types</span>
+          <div class="checkbox-grid" role="group" aria-labelledby="dm-destination-types-label">
+            @for (opt of destinationTypeOptions; track opt) {
+              <label class="checkbox-item">
+                <input
+                  type="checkbox"
+                  [checked]="selectedDestinationTypes().has(opt)"
+                  (change)="toggleDestinationType(opt)"
+                />
+                <span>{{ opt }}</span>
+              </label>
+            }
+          </div>
+          <p class="field-hint">Leave every box unchecked to allow all destination types.</p>
+        </div>
+
+        <div class="form-field form-field--full">
+          <label id="dm-hospitals-label" for="dm-hospital-search">Allowed Hospitals</label>
+          <input
+            id="dm-hospital-search"
+            type="text"
+            placeholder="Search the EHR endpoint directory by name, vendor, or URL…"
+            [value]="hospitalSearch()"
+            (input)="hospitalSearch.set($any($event.target).value)"
+          />
+
+          <div class="hospital-picker" role="group" aria-labelledby="dm-hospitals-label">
+            @if (hospitalsLoading()) {
+              <p class="field-hint hospital-picker-status">Loading the EHR endpoint directory…</p>
+            } @else if (hospitalsError()) {
+              <p class="field-error hospital-picker-status">{{ hospitalsError() }}</p>
+            } @else if (filteredHospitals().length === 0) {
+              <p class="field-hint hospital-picker-status">
+                {{ hospitals().length === 0 ? 'No known hospitals in the EHR endpoint directory yet.' : 'No hospitals match your search.' }}
+              </p>
+            } @else {
+              @for (h of filteredHospitals(); track h.id) {
+                <label class="hospital-item">
+                  <input
+                    type="checkbox"
+                    [checked]="selectedHospitalIds().has(h.id)"
+                    (change)="toggleHospital(h.id)"
+                  />
+                  <span class="hospital-item-body">
+                    <span class="hospital-item-name">{{ h.name }}</span>
+                    <span class="hospital-item-meta">{{ h.vendor }} · {{ h.fhirBaseUrl }}</span>
+                  </span>
+                </label>
+              }
+            }
+          </div>
+          <p class="field-hint">
+            {{ selectedHospitalIds().size }} selected. Leave none selected to allow any hospital.
+          </p>
+        </div>
+      </div>
+
+      @if (mintError()) {
+        <p class="field-error">{{ mintError() }}</p>
+      }
+
+      <div class="form-actions">
+        <button type="submit" class="btn-primary" [disabled]="minting()">
+          {{ minting() ? 'Generating…' : 'Generate License' }}
+        </button>
+      </div>
+    </form>
+  </section>
+
+  @if (mintedToken(); as token) {
+    <section class="settings-card">
+      <h2 class="card-title">Generated Token</h2>
+      <p class="card-sub">Copy it for manual use, or apply it directly to this environment now.</p>
+
+      <div class="form-field form-field--full">
+        <label for="dm-token">License Token</label>
+        <textarea id="dm-token" rows="6" readonly [value]="token" (click)="$any($event.target).select()"></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn-outline" (click)="copyToken()">Copy Token</button>
+        <button type="button" class="btn-primary" [disabled]="applying()" (click)="applyNow()">
+          {{ applying() ? 'Applying…' : 'Apply This License Now' }}
+        </button>
+      </div>
+    </section>
+  }
+</div>

@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
+using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Infrastructure.Persistence;
 
@@ -17,6 +19,17 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
     private readonly ConcurrentDictionary<Guid, MappingProfile> _mappingProfiles = new();
     private readonly ConcurrentDictionary<Guid, ResourcePipelineRoute> _routes = new();
     private readonly ConcurrentDictionary<Guid, WebhookConfiguration> _webhooks = new();
+
+    // This store bypasses EF entirely (it's the no-DB dev/test fallback), so LicenseEnforcementSaveChangesInterceptor
+    // never runs against it — the equivalent enforcement lives at each Add choke point below instead. Resolved
+    // through a fresh scope (this repository is a singleton; ILicenseQuotaGuard is scoped) — same
+    // captive-dependency-avoidance pattern as InMemoryUserAccessRepository.
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public InMemoryConfigurationRepository(IServiceScopeFactory scopeFactory)
+    {
+        _scopeFactory = scopeFactory;
+    }
 
     // No-op: this repository is only used for local/dev runs with no connection string (see class remarks) and
     // writes straight into the in-memory dictionaries with no staging to roll back. Real transactional
@@ -92,10 +105,15 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         return Task.FromResult(e);
     }
 
-    public Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct)
+    public async Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct)
     {
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ILicenseQuotaGuard>()
+                .EnsureSourceConnectionQuotaAvailableAsync(e.SourceSystemType, e.BaseUrl, ct);
+        }
+
         _sources[e.Id] = e;
-        return Task.CompletedTask;
     }
 
     public Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct)
@@ -198,10 +216,15 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         return Task.FromResult(e);
     }
 
-    public Task AddDestinationAsync(DestinationConfiguration e, CancellationToken ct)
+    public async Task AddDestinationAsync(DestinationConfiguration e, CancellationToken ct)
     {
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ILicenseQuotaGuard>()
+                .EnsureDestinationTypeAllowedAsync(e.DestinationType, ct);
+        }
+
         _destinations[e.Id] = e;
-        return Task.CompletedTask;
     }
 
     public Task UpdateDestinationAsync(DestinationConfiguration e, CancellationToken ct)
@@ -329,10 +352,22 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
         return Task.FromResult(e);
     }
 
-    public Task AddRouteAsync(ResourcePipelineRoute e, CancellationToken ct)
+    public async Task AddRouteAsync(ResourcePipelineRoute e, CancellationToken ct)
     {
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var licenseQuotaGuard = scope.ServiceProvider.GetRequiredService<ILicenseQuotaGuard>();
+            await licenseQuotaGuard.EnsureWorkflowQuotaAvailableAsync(ct);
+
+            // The route's resource type is owned by its mapping profile (single source of truth), already
+            // present in this same in-memory store by the time a route referencing it is created.
+            if (_mappingProfiles.TryGetValue(e.MappingProfileId, out var mappingProfile))
+            {
+                await licenseQuotaGuard.EnsureResourceTypeAllowedAsync(mappingProfile.ResourceType, ct);
+            }
+        }
+
         _routes[e.Id] = e;
-        return Task.CompletedTask;
     }
 
     public Task UpdateRouteAsync(ResourcePipelineRoute e, CancellationToken ct)
