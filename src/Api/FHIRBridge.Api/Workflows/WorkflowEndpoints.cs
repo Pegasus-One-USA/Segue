@@ -295,115 +295,19 @@ public static class WorkflowEndpoints
                     return ValidationBadRequest(columnError);
                 }
 
-                var mappingRequest = new CreateMappingProfileRequest(
-                    spec.Name,
-                    spec.ResourceType,
-                    sourceConnectionId,
-                    destinationId,
-                    spec.DestinationObject,
-                    spec.Fields,
-                    // ResourcePipelineRouteId (below) is what lets the validator resolve this workflow's own
-                    // Workflow-scoped transformation rules — without it, it sees only the tenant-wide tiers and
-                    // rejects a rule-backed field for its raw source type. Null on a first build (the workflow
-                    // has no id yet), which the validator covers via the pending tier instead.
-                    SourceConfigurationId: null,
-                    ResourcePipelineRouteId: request.WorkflowId);
-                // Resolve strictly by spec.ExistingId — the id this exact node/resource saved last time (round-
-                // tripped by the canvas). Never by searching for "the" profile matching (resourceType, source,
-                // destination): that triple is shared by any workflow built on the same source connection +
-                // destination + resource type, so a search-based fallback would silently find and attach to a
-                // DIFFERENT workflow's profile — and then either overwrite it (data loss for that other
-                // workflow) or, once that workflow next builds, get its own mapping silently rewritten out from
-                // under it (the "Invalid column name" incident this replaces). A found profile whose MappingJson
-                // is set was authored by the richer Mapping Config Import wizard (proper JsonPath/[*] derivation,
-                // DDL, etc.) and must never be overwritten by this endpoint's cruder, best-effort field list —
-                // reused as-is. No id at all means a genuinely first-ever save for this node/resource: always
-                // create a new profile rather than adopting one that happens to match the triple.
-                var existingMapping = spec.ExistingId is { } existingMappingId
-                    ? await configurationRepository.GetMappingProfileAsync(existingMappingId, cancellationToken) is { } found
-                        ? ConfigurationMapper.ToDto(found)
-                        : null
-                    : null;
-                var mapping = existingMapping switch
-                {
-                    { MappingJson.Length: > 0 } => existingMapping,
-                    not null => await configurationService.UpdateMappingProfileAsync(existingMapping.Id, mappingRequest, cancellationToken),
-                    null => await configurationService.AddMappingProfileAsync(mappingRequest, cancellationToken),
-                };
-                mappingIds[spec.NodeId] = mapping.Id;
+                // A mapping now lives on its node and nowhere else (plan §2.d): the node's own config already
+                // carries every field, so an ordinary save writes NO MappingProfile. This loop is kept purely
+                // for the column validation above, which is the only thing that catches a mapped column the
+                // customer's table does not actually have before a run fails on it.
+                //
+                // Creating a profile here is what produced duplicate masters on every save — two named
+                // "Patient" seconds apart — and left two sources of truth for one mapping, free to diverge. A
+                // node holding 12 fields while its profile held 13 silently dropped the BirthDateAge column a
+                // transformation rule targeted, so the rule had nothing to attach to.
+                //
+                // Masters are created only by an explicit "Mark as Master" in the wizard.
+                continue;
 
-                if (!profileIdsByNode.TryGetValue(spec.NodeId, out var idsForNode))
-                {
-                    // Seed from whatever this destination's mapping node already had persisted BEFORE this
-                    // save — a later save that only touches some of a destination's already-mapped resource
-                    // types (e.g. the wizard adds Encounter without restoring Patient's rows into this
-                    // request.Mappings — CSV/Email destinations have no live-schema probe to catch a failed
-                    // restore the way SQL destinations do) must not silently drop the untouched resource
-                    // types from mappingProfileIds: that field is exactly what MappingNodeExecutor/
-                    // DestinationNodeExecutor read at run time to decide which resource types to process, so
-                    // losing an entry here means that resource's output vanishes from every future run, not
-                    // just an unsaved profile row (the "add Encounter, Patient stops appearing in the CSV/
-                    // email zip" regression this fixes). Matched via destinationId rather than node.Id since
-                    // a node's own row id is regenerated every save (see WorkflowDefinition.AddNode / the
-                    // "removed node" comment above) and can't be relied on to identify the same logical node
-                    // across saves.
-                    idsForNode = SeedExistingMappingProfileIds(existingDefinition, destinationId);
-                    profileIdsByNode[spec.NodeId] = idsForNode;
-                }
-                idsForNode[spec.ResourceType] = mapping.Id.ToString();
-
-                nodes[spec.NodeId] = WithConfiguration(node, config =>
-                {
-                    // Kept for backward compatibility with anything still reading the single legacy field (reflects
-                    // whichever resource was processed last when there's more than one — MappingNodeExecutor prefers
-                    // mappingProfileIds below whenever it's present, so this is display/compat-only in that case).
-                    config["mappingProfileId"] = mapping.Id.ToString();
-                    config["mappingProfileIds"] = JsonSerializer.SerializeToNode(idsForNode, WebJsonOptions);
-                    // sourceConnectionId/destinationId let MappingNodeExecutor re-resolve the correct profile by
-                    // natural key at run time (same lookup as above) instead of only trusting a stamped id, which
-                    // can go stale if a later save mints a different profile for this same combination.
-                    config["sourceConnectionId"] = sourceConnectionId.ToString();
-                    config["destinationId"] = destinationId.ToString();
-                });
-
-                // The destination executor rebuilds its write-time mapping (target table + the columns it auto-creates)
-                // from its OWN node config rather than resolving the mapping by id, so mirror every spec's target and
-                // fields onto the destination node under resourceMappings, keyed by resource type — the same
-                // accumulate-don't-overwrite treatment as profileIdsByNode above, and for the same reason: a
-                // destination fed by more than one resource spec (Patient + Condition + Observation sharing one SQL
-                // Server destination, say) must let DestinationNodeExecutor route each resource type's records to its
-                // own table/columns instead of forcing every resource type through whichever one saved first (that
-                // used to silently misroute every resource but the first into the wrong table, failing with
-                // "Invalid column name"). The single legacy resourceType/destinationObject/fields trio is still
-                // mirrored from the first spec only, kept only for any older consumer still reading that single shape.
-                if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode))
-                {
-                    if (!resourceMappingsByNode.TryGetValue(spec.DestinationNodeId, out var resourceMappingsForNode))
-                    {
-                        resourceMappingsForNode = new Dictionary<string, DestinationResourceMappingConfig>(StringComparer.OrdinalIgnoreCase);
-                        resourceMappingsByNode[spec.DestinationNodeId] = resourceMappingsForNode;
-                    }
-                    resourceMappingsForNode[spec.ResourceType] = new DestinationResourceMappingConfig(spec.DestinationObject, spec.Fields);
-
-                    var mirrorLegacyShape = ReadConfigString(destinationNode, "resourceType") is null;
-                    nodes[spec.DestinationNodeId] = WithConfiguration(destinationNode, config =>
-                    {
-                        if (mirrorLegacyShape)
-                        {
-                            config["resourceType"] = spec.ResourceType;
-                            config["destinationObject"] = spec.DestinationObject;
-                            config["fields"] = JsonSerializer.SerializeToNode(spec.Fields, WebJsonOptions);
-                        }
-
-                        config["resourceMappings"] = JsonSerializer.SerializeToNode(resourceMappingsForNode, WebJsonOptions);
-                        // sourceConnectionId lets DestinationNodeExecutor re-resolve each resource type's real
-                        // MappingProfile by the SAME natural key (ResourceType, SourceConnectionId, DestinationId)
-                        // the mapping node above uses — without it, a destination with more than one MappingProfile
-                        // sharing its DestinationId (a stale one left behind by an earlier save, say) has no way to
-                        // pick the one this workflow's own source connection actually produced.
-                        config["sourceConnectionId"] = sourceConnectionId.ToString();
-                    });
-                }
             }
 
             // 3b. Stamp destinationId onto any mapping node the mappings loop above didn't touch. A whole-resource
