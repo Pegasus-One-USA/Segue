@@ -82,6 +82,7 @@ public static class DependencyInjection
         services.AddScoped<ITransformationRuleService, TransformationRuleService>();
         services.AddScoped<IWorkflowConfigurationCleanupService, WorkflowConfigurationCleanupService>();
         services.AddScoped<IWorkflowConfigurationMigrationService, WorkflowConfigurationMigrationService>();
+        services.AddScoped<IWorkflowGraphVersionMigrationService, WorkflowGraphVersionMigrationService>();
         services.AddScoped<IEhrEndpointService, EhrEndpointService>();
         services.AddScoped<IAllowedCorsOriginsService, AllowedCorsOriginsService>();
         services.AddSingleton<IScopeGeneratorService, ScopeGeneratorService>();
