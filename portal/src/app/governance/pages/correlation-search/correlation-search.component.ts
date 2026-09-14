@@ -222,6 +222,9 @@ export class CorrelationSearchComponent implements OnInit {
     this.errorMessage.set(null);
     this.result.set(null);
     this.expandedIndex.set(null);
+    // Clear collapse state too, so section-collapse from a previous correlation id doesn't carry into
+    // the next search. viewMode is left as-is — it's a display preference, not per-result state.
+    this.collapsedSections.set(new Set());
   }
 
   search(): void {

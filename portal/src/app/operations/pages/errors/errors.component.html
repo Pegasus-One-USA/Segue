@@ -34,13 +34,14 @@
   <div class="filter-card filter-card--compact-search">
     <div class="filter-row">
       <div class="search-wrap">
-        <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
           <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
         </svg>
         <input
           type="search"
           class="search-input"
+          aria-label="Error reference ID"
           placeholder="Error Reference ID (e.g. ERR-20260721-000123)…"
           [value]="errorReferenceId()"
           (input)="errorReferenceId.set($any($event.target).value)"

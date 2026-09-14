@@ -5,6 +5,9 @@
   flex-direction: column;
   gap: 16px;
   padding: 24px;
+  // Run full-bleed (like the other Logs & Compliance tabs) rather than the shared partial's 1400px
+  // centered width, so switching tabs never jumps the content width.
+  max-width: none;
 }
 
 .page-header h1 {
@@ -20,7 +23,7 @@
 }
 
 // Filter bar chrome comes from the shared _list-page partial above (standard filter design shared with
-// Workflows / Source Connections / Execution History). Search button uses the global .btn.btn-primary.
+// Workflows / Source Connections / Execution History). Search button uses .btn-search from that partial.
 
 .error-message {
   color: var(--color-error-strong);

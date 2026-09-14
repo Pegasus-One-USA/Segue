@@ -68,8 +68,14 @@
 }
 
 .btn {
-  padding: 8px 16px;
-  border-radius: 6px;
+  // height 40px matches the date pickers in the same flex-end .field-row (they were aligned before this
+  // screen moved to the standard 40px inputs — keep them level).
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-base);
   border: none;
   background: var(--color-primary);
   color: var(--color-on-primary);
