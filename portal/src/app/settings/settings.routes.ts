@@ -1,24 +1,26 @@
 import { Routes } from '@angular/router';
 import { permissionGuard } from '../auth/guards/permission.guard';
 import { superAdminGuard } from '../auth/guards/super-admin.guard';
+import { roleGuard } from '../auth/guards/role.guard';
 import { unsavedChangesGuard } from '../core/guards/unsaved-changes.guard';
 import { settingsLandingGuard } from './guards/settings-landing.guard';
+import { featureFlagGuard } from './guards/feature-flag.guard';
+import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_CODES } from '../data/terminology-feature.config';
 
 // Terminology Codes: each of the four import systems has its own independent View/Write pair
 // (loinc.*/snomedct.*/rxnorm.*/icd10.*, split off from a shared "TerminologyCodes" group, itself
-// originally split off from Email's configuration.view/write) — kept as one list here since every
-// gate that needs "can this role reach ANY terminology system" (the shell route, its own landing
-// redirect) uses the exact same OR across all eight codes.
-const TERMINOLOGY_PERMISSIONS = [
-  'loinc.view', 'loinc.write',
-  'snomedct.view', 'snomedct.write',
-  'rxnorm.view', 'rxnorm.write',
-  'icd10.view', 'icd10.write',
-];
+// originally split off from Email's configuration.view/write) — kept as one list (data/terminology-
+// feature.config.ts) since every gate that needs "can this role reach ANY terminology system" (the
+// shell route, its own landing redirect) uses the exact same OR across all eight codes.
+const TERMINOLOGY_PERMISSIONS = TERMINOLOGY_PERMISSION_CODES;
 
 // Email + Terminology Codes together — every permission that can unlock some part of the
 // System Settings shell without the SuperAdmin role (General/Security stay role-only; see below).
-const SYSTEM_SETTINGS_PERMISSIONS = ['configuration.view', 'configuration.write', ...TERMINOLOGY_PERMISSIONS];
+// Terminology's codes only count toward this OR while the feature itself is enabled — otherwise a
+// role holding only e.g. loinc.view would still see this shell's parent tab, then find every child
+// inside it hidden (Email needs configuration.*, General/Security need SuperAdmin, and Terminology
+// is force-disabled below), landing on an empty shell instead of being routed to something real.
+const SYSTEM_SETTINGS_PERMISSIONS = ['configuration.view', 'configuration.write', ...(TERMINOLOGY_FEATURE_ENABLED ? TERMINOLOGY_PERMISSIONS : [])];
 
 // Every child below keeps the exact guard/permission it had as a standalone top-level route
 // before consolidation under this shell — see docs/backend/12-provider-standalone-ehr-launch-fixes.md.
@@ -130,6 +132,35 @@ export const SETTINGS_ROUTES: Routes = [
           ),
       },
       {
+        // Gated on role rather than a permission code, matching the backend LicenseController's own
+        // gate ([Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)], which UnifiedAdminRequirement
+        // accepts for SuperAdmin or Admin token-role claims). superAdminGuard is SuperAdmin-only and
+        // would incorrectly hide this from an Admin the backend actually lets in, so this uses the
+        // generic roleGuard instead, with the same two role strings AuthStore.isAdmin() checks.
+        path: 'license',
+        canActivate: [roleGuard],
+        data: { roles: ['SuperAdmin', 'Admin'] },
+        loadComponent: () =>
+          import('./pages/license-settings/license-settings.component').then(
+            m => m.LicenseSettingsComponent
+          ),
+      },
+      {
+        // ⚠ TEMPORARY / DEV-ONLY — backs the "Dev: Mint a test license" page, linked from the License
+        // settings screen's "Dev: Mint a test license →" button. Same roleGuard/roles as the 'license'
+        // route above (already verified to match the backend's UnifiedAdmin policy) — the actual
+        // security boundary is server-side (DevLicenseMintingController 404s outside Development), not
+        // this route guard. Delete this route alongside license-dev-mint.component.* once minting moves
+        // to its own separate internal tool.
+        path: 'license/mint-dev',
+        canActivate: [roleGuard],
+        data: { roles: ['SuperAdmin', 'Admin'] },
+        loadComponent: () =>
+          import('./pages/license-dev-mint/license-dev-mint.component').then(
+            m => m.LicenseDevMintComponent
+          ),
+      },
+      {
         // Merges the formerly-standalone Email Settings, System Settings, and System Security tabs into
         // one screen with a section per former tab. General/Security remain SuperAdmin-role-only (they
         // have no permission of their own — AllowedCorsOriginsController/SystemSettingController/
@@ -177,8 +208,13 @@ export const SETTINGS_ROUTES: Routes = [
             // system is independently permission-controlled, so this parent gate is an OR across all
             // eight loinc/snomedct/rxnorm/icd10 view/write codes; each leaf route below is then gated
             // on its OWN specific system's codes only.
+            // featureFlagGuard runs first: while TERMINOLOGY_FEATURE_ENABLED is false, this route (and
+            // therefore every child under it — Angular never matches descendants of a blocked segment)
+            // is unreachable for anyone, permissions notwithstanding, and a direct/bookmarked URL into
+            // it redirects to the System Settings shell instead of rendering. See
+            // data/terminology-feature.config.ts to re-enable.
             path: 'terminology',
-            canActivate: [permissionGuard],
+            canActivate: [featureFlagGuard(TERMINOLOGY_FEATURE_ENABLED, '/settings/system-settings'), permissionGuard],
             data: { permissions: TERMINOLOGY_PERMISSIONS },
             loadComponent: () =>
               import('./layout/terminology-configurations-shell/terminology-configurations-shell.component').then(
@@ -258,9 +294,13 @@ export const SETTINGS_ROUTES: Routes = [
             pathMatch: 'full',
             // Empty children only to satisfy route-config validation; the guard always
             // redirects (UrlTree) so nothing renders here. See NG04014 note above.
+            // 'terminology' is only offered as a landing candidate while the feature is enabled —
+            // otherwise a role holding just loinc.view etc. would land here only to be immediately
+            // bounced back by featureFlagGuard above, right back into this same guard: an infinite
+            // redirect loop between the two.
             canActivate: [settingsLandingGuard('/settings/system-settings', [
               { path: 'email', permissions: ['configuration.view', 'configuration.write'] },
-              { path: 'terminology', permissions: TERMINOLOGY_PERMISSIONS },
+              ...(TERMINOLOGY_FEATURE_ENABLED ? [{ path: 'terminology', permissions: TERMINOLOGY_PERMISSIONS }] : []),
               { path: 'general', superAdminOnly: true },
               { path: 'security', superAdminOnly: true },
               { path: 'sso-configurations', superAdminOnly: true },

@@ -1,7 +1,9 @@
 using FHIRBridge.Application.Abstractions.Governance;
+using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Normalization;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Licensing;
 using FHIRBridge.Application.Services.Mapping;
 using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Application.Services.Transforms.Nodes;
@@ -93,6 +95,8 @@ public static class DependencyInjection
         services.AddScoped<IPipelineRunMetricsService, PipelineRunMetricsService>();
         services.AddScoped<IBulkExportPollService, BulkExportPollService>();
         services.AddScoped<IMappingImportService, MappingImportService>();
+        services.AddScoped<ILicenseUsageCountsProvider, LicenseUsageCountsProvider>();
+        services.AddScoped<ILicenseQuotaGuard, LicenseQuotaGuard>();
 
         return services;
     }

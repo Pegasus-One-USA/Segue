@@ -1,21 +1,43 @@
 using System.Collections.Concurrent;
+using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Infrastructure.Persistence;
 
 public sealed class InMemoryUserAccessRepository : IUserAccessRepository
 {
+    // This store bypasses EF entirely (see class remarks on InMemoryConfigurationRepository, which this store
+    // mirrors), so LicenseEnforcementSaveChangesInterceptor never runs against it — the no-DB dev/test profile
+    // needs its own equivalent enforcement at this one Add choke point. Resolved through a fresh scope (this
+    // repository is a singleton; ILicenseQuotaGuard is scoped) rather than taken as a direct constructor
+    // dependency, the same captive-dependency-avoidance pattern used elsewhere in this codebase for a singleton
+    // needing a scoped collaborator (e.g. ISystemSettingsCache/ICurrentTenantResolver).
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<Guid, User> _users = new();
     private readonly ConcurrentDictionary<Guid, Role> _roles = new(
         new[]
         {
-            new Role(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator.", isSystem: true),
+            CreateSuperAdminRole(),
             new Role(SeededSecurityIds.AdminRoleId, UnifiedRoles.Admin, "Administers configuration and users.", isSystem: true),
             new Role(SeededSecurityIds.OperationsRoleId, UnifiedRoles.Operations, "Builds and runs workflow configurations, and reviews data and audit output.", isSystem: true),
             new Role(SeededSecurityIds.AuditRoleId, UnifiedRoles.Audit, "Read-only access to configuration and audit logs.", isSystem: true)
         }.ToDictionary(role => role.Id));
+
+    // RBAC Fix 10 (Step 7 audit): mirrors RbacBootstrapper's own fresh-install seeding, which marks only
+    // SuperAdmin Full Access (RbacSeedData.Roles today contains only SuperAdmin — Admin/Operations/Audit
+    // are no longer auto-seeded by the real bootstrapper at all, so this in-memory repository, used as an
+    // IUserAccessRepository stand-in, must not grant any of them Full Access either). Uses the same
+    // Role.SetFullAccess(true) domain API RbacBootstrapper itself calls, never a constructor shortcut or
+    // a changed default.
+    private static Role CreateSuperAdminRole()
+    {
+        var role = new Role(SeededSecurityIds.SuperAdminRoleId, UnifiedRoles.SuperAdmin, "Full platform administrator.", isSystem: true);
+        role.SetFullAccess(true);
+        return role;
+    }
 
     private readonly ConcurrentDictionary<Guid, PermissionCategory> _permissionCategories = new(
         RbacSeedData.Categories
@@ -36,8 +58,10 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     private readonly ConcurrentDictionary<string, PermissionAllocation> _userPermissionAllocations = new();
     private readonly ConcurrentDictionary<string, UserRole> _userRoles = new();
 
-    public InMemoryUserAccessRepository()
+    public InMemoryUserAccessRepository(IServiceScopeFactory scopeFactory)
     {
+        _scopeFactory = scopeFactory;
+
         foreach (var (roleId, permissionIds) in RbacSeedData.RolePermissions)
         {
             foreach (var permissionId in permissionIds)
@@ -106,7 +130,6 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     public Task AddUserAsync(User user, CancellationToken cancellationToken)
     {
         _users[user.Id] = user;
-
         return Task.CompletedTask;
     }
 

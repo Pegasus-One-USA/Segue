@@ -3,6 +3,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthStore } from '../../../auth/store/auth.store';
 import { BrandingService } from '../../../services/branding.service';
 import { PermissionService } from '../../../auth/services/permission.service';
+import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_CODES } from '../../../data/terminology-feature.config';
 
 interface NavItem {
   type: 'item';
@@ -38,6 +39,10 @@ const NAV_ENTRIES: NavEntry[] = [
   // page, just sees those specific widgets come back empty rather than erroring (see
   // dashboard.component.ts/pipeline-run.service.ts's permission-aware error handling).
   { type: 'item', label: 'Dashboard',        route: '/dashboard' },
+  // Role management is independent of User Management: /user-management/roles is reachable with
+  // role.view alone (the parent /user-management route admits user.view OR role.view, and each
+  // user-DATA child re-guards user.view on its own — see app.routes.ts / user-management.routes.ts).
+  // So the link matches route reachability with a plain role.view OR-list.
   { type: 'item', label: 'Role',             route: '/user-management/roles', permissions: ['role.view'] },
   { type: 'item', label: 'User Management',  route: '/user-management',          exact: true, permissions: ['user.view'] },
   // Module access: workflow.view OR any workflow-node permission (epic.*, sqlserver.*, ...) — a role
@@ -58,11 +63,14 @@ const NAV_ENTRIES: NavEntry[] = [
   // gated again inside the shells themselves, so this entry doesn't need `superAdminOnly` of its own.
   {
     type: 'item', label: 'Settings', route: '/settings',
+    // Terminology's codes only count toward this OR while the feature is enabled — see
+    // data/terminology-feature.config.ts — otherwise a terminology-only role would see this sidebar
+    // entry but find every tab inside Settings hidden.
     permissions: [
       'configuration.view', 'configuration.write',
       'sourceconnections.view', 'destinationconnections.view', 'mappingprofiles.view', 'transformationrules.view',
       'ehrendpoints.view',
-      'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
+      ...(TERMINOLOGY_FEATURE_ENABLED ? TERMINOLOGY_PERMISSION_CODES : []),
     ],
   },
 

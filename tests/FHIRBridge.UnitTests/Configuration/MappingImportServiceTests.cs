@@ -39,7 +39,7 @@ public sealed class MappingImportServiceTests
         IFhirElementCatalog? fhirElementCatalog = null,
         IReadOnlyDictionary<string, IReadOnlyList<DestinationColumnSchemaDto>>? existingColumnsByTable = null)
     {
-        var repository = new InMemoryConfigurationRepository();
+        var repository = new InMemoryConfigurationRepository(TestHelpers.LicenseTestScopeFactory.Create());
         var destination = new DestinationConfiguration(
             "Test SQL Destination", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
         repository.AddDestinationAsync(destination, CancellationToken.None).GetAwaiter().GetResult();

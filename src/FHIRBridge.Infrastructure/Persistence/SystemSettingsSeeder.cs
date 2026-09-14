@@ -30,7 +30,7 @@ public sealed class SystemSettingsSeeder : ISystemSettingsSeeder
                 _configuration.GetValue("GeneratedFileDownload:PublicBaseUrl", "http://localhost:5000"),
                 "Base URL used to build generated-file download links returned to callers."),
 
-            ("RuntimeWorker:Enabled", Bool("RuntimeWorker:Enabled", false), "Master on/off for the scheduled Phase 1 runtime worker."),
+            ("RuntimeWorker:Enabled", Bool("RuntimeWorker:Enabled", true), "Master on/off for the scheduled Phase 1 runtime worker."),
             ("RuntimeWorker:IntervalSeconds", Int("RuntimeWorker:IntervalSeconds", 300), "Runtime worker poll interval, in seconds."),
             ("ScheduleDispatcher:Enabled", Bool("ScheduleDispatcher:Enabled", true), "Master on/off for the queue-based schedule dispatcher."),
             ("ScheduleDispatcher:IntervalSeconds", Int("ScheduleDispatcher:IntervalSeconds", 60), "Schedule dispatcher poll interval, in seconds."),

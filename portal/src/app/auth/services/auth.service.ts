@@ -10,6 +10,7 @@ import { PermissionService } from './permission.service';
 import { AccountSecurityService } from './account-security.service';
 import { EmailNotificationService } from './email-notification.service';
 import { BrandingService } from '../../services/branding.service';
+import { AppInitService } from '../../onboarding/services/app-init.service';
 import { User, UserRole, MessageResponse } from '../models/user.model';
 import {
   LoginRequest, LoginResponse, LoginResult,
@@ -32,6 +33,7 @@ export class AuthService {
   private readonly emailSvc   = inject(EmailNotificationService);
   private readonly permission = inject(PermissionService);
   private readonly branding   = inject(BrandingService);
+  private readonly appInit    = inject(AppInitService);
 
   // ─── Expose store signals directly ────────────────────────────────────────
   readonly currentUser     = this.store.currentUser;
@@ -69,6 +71,7 @@ export class AuthService {
           this.store.setUser(res.user);
           this.session.start(res.user.id, req.rememberMe ?? false);
           this.resolveBrandingForNewSession();
+          this.appInit.refreshLicenseGate();
           this.router.navigate(['/dashboard']);
         },
         error: (err) => {
@@ -104,6 +107,7 @@ export class AuthService {
           this.store.setUser(res.user);
           this.session.start(res.user.id, rememberMe);
           this.resolveBrandingForNewSession();
+          this.appInit.refreshLicenseGate();
           this.store.setLoading(false);
           this.router.navigate(['/dashboard']);
         },
@@ -136,6 +140,7 @@ export class AuthService {
           this.store.setUser(res.user);
           this.session.start(res.user.id, false);
           this.resolveBrandingForNewSession();
+          this.appInit.refreshLicenseGate();
           this.router.navigate(['/dashboard']);
         },
         error: (err) => {

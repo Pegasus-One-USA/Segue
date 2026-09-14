@@ -1,5 +1,6 @@
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Entities.Governance;
+using FHIRBridge.Domain.Entities.Licensing;
 using FHIRBridge.Domain.Entities.Terminology;
 using FHIRBridge.Infrastructure.Messaging;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -15,6 +16,19 @@ public sealed class FHIRBridgeDbContext : DbContext
     {
     }
 
+    /// <summary>
+    /// Set by <see cref="Workflows.SqlWorkflowDefinitionStore"/> immediately before the create-path
+    /// <c>SaveChangesAsync</c> call it always issues for a genuinely NEW <see cref="WorkflowDefinition"/> (that
+    /// store's save is always a delete-then-re-add across two separate <c>SaveChangesAsync</c> calls — see its
+    /// own remarks — so a same-id EDIT reaches <c>SaveChangesAsync</c> looking identical to a create: one
+    /// Added <see cref="WorkflowDefinition"/> entry, no corresponding Deleted entry in the same batch, because
+    /// the old row was already removed by the prior save). <see cref="LicenseEnforcementSaveChangesInterceptor"/>
+    /// reads this flag to tell the two apart without needing its own opinion about that store's implementation,
+    /// and resets it to <c>false</c> immediately after use so it never leaks into an unrelated later save on
+    /// the same scoped context instance.
+    /// </summary>
+    internal bool NextWorkflowDefinitionAddIsGenuineCreate { get; set; }
+
     public DbSet<SourceConnection> SourceConnections => Set<SourceConnection>();
     public DbSet<SourceConfiguration> SourceConfigurations => Set<SourceConfiguration>();
     public DbSet<WebhookConfiguration> WebhookConfigurations => Set<WebhookConfiguration>();
@@ -26,6 +40,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<ResourcePipelineRoute> ResourcePipelineRoutes => Set<ResourcePipelineRoute>();
     public DbSet<SourceCapabilityProfile> SourceCapabilityProfiles => Set<SourceCapabilityProfile>();
     public DbSet<ConfiguredPipelineRunRecord> ConfiguredPipelineRuns => Set<ConfiguredPipelineRunRecord>();
+    public DbSet<UsageLedgerEntry> UsageLedgerEntries => Set<UsageLedgerEntry>();
     public DbSet<BulkExportJob> BulkExportJobs => Set<BulkExportJob>();
     public DbSet<PipelineRunRouteExecution> PipelineRunRouteExecutions => Set<PipelineRunRouteExecution>();
     public DbSet<PipelineRunResourceRecord> PipelineRunResourceRecords => Set<PipelineRunResourceRecord>();

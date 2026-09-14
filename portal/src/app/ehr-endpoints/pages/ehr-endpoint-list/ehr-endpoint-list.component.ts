@@ -18,6 +18,7 @@ import { sourceSystemDisplayName } from '../../../data/source-system-display-nam
 import { ConfirmDialogComponent } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
+import { PermissionService } from '../../../auth/services/permission.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { DialogService } from '../../../core/services/dialog.service';
 
@@ -44,7 +45,14 @@ export class EhrEndpointListComponent implements OnInit {
   private readonly dialog      = inject(DialogService);
   private readonly toast       = inject(ToastService);
   private readonly actionGuard = inject(PermissionActionGuard);
+  private readonly permissions = inject(PermissionService);
   private readonly destroyRef  = inject(DestroyRef);
+
+  /** Whether the row's 3-dot menu has anything in it at all — a view-only role (e.g. Audit) with
+   *  neither ehrendpoints.edit nor ehrendpoints.delete should never see an empty kebab menu. */
+  hasRowMenu(): boolean {
+    return this.permissions.hasPermission('ehrendpoints.edit') || this.permissions.hasPermission('ehrendpoints.delete');
+  }
 
   readonly searchQuery  = signal('');
   /** The "Source" dropdown — filters on the row's Vendor. */

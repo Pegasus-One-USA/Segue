@@ -25,6 +25,7 @@ import { PermissionActionGuard } from '../../../auth/services/permission-action-
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 import { PhaseConfigService } from '../../../services/phase-config.service';
 import { isNodePermissionPrefixVisible } from '../../../data/node-permission-visibility.util';
+import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_PREFIXES } from '../../../data/terminology-feature.config';
 
 function backendErrorMessage(err: unknown, fallback: string): string {
   const body = (err as { error?: { error?: string } } | null)?.error;
@@ -116,12 +117,15 @@ export class AssignRolesDialogComponent implements OnInit {
   // `resource` (Permission.resource is "derived from name, matches the owning PermissionGroup" — see
   // user.model.ts), never hand-maintained here; a non-node group (Role, User, Workflow, Settings, ...)
   // always keeps its permissions, since isNodePermissionPrefixVisible only ever recognizes a real
-  // source/destination prefix.
+  // source/destination prefix. Also drops the four Terminology Codes groups while
+  // TERMINOLOGY_FEATURE_ENABLED is false (see data/terminology-feature.config.ts) — same reasoning,
+  // just keyed off that flag instead of the phase catalog.
   private readonly visibleCatalog = computed<PermissionCategory[]>(() =>
     this.catalog().map(cat => ({
       ...cat,
       groups: cat.groups.filter(g => {
         const prefix = g.permissions[0]?.resource;
+        if (prefix && TERMINOLOGY_PERMISSION_PREFIXES.has(prefix) && !TERMINOLOGY_FEATURE_ENABLED) return false;
         return !prefix || isNodePermissionPrefixVisible(prefix, this.phaseCfg);
       }),
     }))

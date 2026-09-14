@@ -172,6 +172,9 @@ builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHan
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, WorkflowModuleAccessAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, MappingCatalogAccessAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionCatalogAccessAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, SourceDiscoveryAccessAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, GenericConnectionPermissionAuthorizationHandler>();
 // Custom pipeline/API metrics + (when configured) OTLP/Azure Monitor export — was built but never actually called
 // from either host, so IPipelineMetrics/IApiMetrics silently no-op'd (optional dependency) and OTel never exported
 // anything. Always registers the in-process singletons the API Analytics/System Health screens read regardless
@@ -262,10 +265,44 @@ builder.Services.AddAuthorization(options =>
         policy.AddRequirements(new MappingCatalogAccessRequirement());
     });
 
+    // UnifiedAdmin OR "sourceconnections.create"/".edit" (see SourceDiscoveryAccessAuthorizationHandler) —
+    // pre-create source endpoint discovery is part of the source-connection wizard, not a separate
+    // admin-only capability.
+    options.AddPolicy(AuthorizationPolicies.SourceDiscoveryAccess, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new SourceDiscoveryAccessRequirement());
+    });
+
+    // UnifiedAdmin OR "role.view" (see PermissionCatalogAccessAuthorizationHandler) — the permission
+    // catalog is read-only reference metadata needed to render the Role Permissions screen's read-only
+    // grid, reachable with role.view alone. GetAll on the same controller keeps its own UnifiedAdmin-only
+    // policy directly, unaffected by this one.
+    options.AddPolicy(AuthorizationPolicies.PermissionCatalogAccess, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new PermissionCatalogAccessRequirement());
+    });
+
     // Permission-based policies — one per permission code declared in RbacSeedData.Permissions
-    // or referenced via [StandardPermission] on a controller (see PermissionCatalog).
+    // or referenced via [StandardPermission] on a controller (see PermissionCatalog). A
+    // sourceconnections.*/destinationconnections.* code gets the OR-vendor-permission composite
+    // (GenericConnectionPermissionRequirement) instead of a plain single-code check — see that
+    // type's own doc comment. Every other code is unaffected.
     foreach (var code in PermissionCatalog.AllPermissionCodes(typeof(Program).Assembly))
     {
+        if (GenericConnectionPermissionRequirement.TryParse(code, out var genericGroup, out var genericAction))
+        {
+            options.AddPolicy(
+                AuthorizationPolicies.HasPermission(code),
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(new GenericConnectionPermissionRequirement(genericGroup, genericAction));
+                });
+            continue;
+        }
+
         options.AddPolicy(
             AuthorizationPolicies.HasPermission(code),
             policy =>
@@ -559,6 +596,7 @@ if (swaggerEnabled)
 
 BootstrapDatabase(app);
 ProvisionAppSecrets(app);
+LoadLicense(app);
 SyncDiscoveredPermissions(app);
 
 // Durable (SQL) counterpart to the Serilog request log below, for the workflow/launch API surface only — see
@@ -677,6 +715,53 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseAuthentication();
+
+// License gate: once the license isn't Active (no token applied yet, expired, or invalid), every
+// /api/v1 action is blocked — including anonymous ones — except the handful of endpoints needed to
+// register the first admin, log in/out, see why (GET /auth/me, the setup-status check the portal
+// polls at boot), and actually fix it (the License screen, plus its dev-only minting helper). Without
+// that carve-out an inactive license would be permanently unrecoverable through the app itself. This
+// is the enforcement stage ILicenseService/LicenseStatus's own doc comments said was still to come —
+// everything before this was verification/reporting only.
+var licenseGateAllowedPrefixes = new[]
+{
+    "/api/v1/auth/setup-status",
+    "/api/v1/auth/setup-superadmin",
+    "/api/v1/auth/internal/login",
+    "/api/v1/auth/sso/login",
+    "/api/v1/auth/saml",
+    "/api/v1/auth/magic-link",
+    "/api/v1/auth/mfa",
+    "/api/v1/auth/refresh",
+    "/api/v1/auth/logout",
+    "/api/v1/auth/me",
+    "/api/v1/auth/internal/change-password",
+    "/api/v1/auth/internal/forgot-password",
+    "/api/v1/auth/internal/reset-password",
+    "/api/v1/config",
+    "/api/v1/license",
+    "/api/v1/dev/license-mint",
+};
+var licenseGateService = app.Services.GetRequiredService<FHIRBridge.Application.Abstractions.Licensing.ILicenseService>();
+
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/v1") &&
+        licenseGateService.Current.State != FHIRBridge.Application.Abstractions.Licensing.LicenseState.Active &&
+        !licenseGateAllowedPrefixes.Any(allowed => context.Request.Path.StartsWithSegments(allowed)))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = "license_not_active",
+            message = "Segue is locked: no active license is applied. An administrator must apply a valid license before this action is available.",
+            licenseState = licenseGateService.Current.State.ToString(),
+        });
+        return;
+    }
+
+    await next();
+});
 
 // Each entry blocks every /api/v1 route except its own allowlist while its claim is "true" — e.g.
 // must change password, or must finish MFA enrollment. One shared check so a third gate is just
@@ -844,11 +929,24 @@ static void ProvisionAppSecrets(WebApplication app)
     AppSecretProvisioner.ProvisionAsync(app.Services, CancellationToken.None).GetAwaiter().GetResult();
 }
 
+// Resolves and verifies the signed product license (see ILicenseService's remarks) so ILicenseService.Current
+// is populated before the app starts serving traffic instead of staying LicenseStatus.Unlicensed until the
+// first caller happens to trigger a reload. Verification/reporting only — nothing here blocks startup or
+// requests on the resolved LicenseStatus. Must run after ProvisionAppSecrets/BootstrapDatabase, since one of
+// its token sources is a SystemSetting row.
+static void LoadLicense(WebApplication app)
+{
+    var licenseService = app.Services.GetRequiredService<FHIRBridge.Application.Abstractions.Licensing.ILicenseService>();
+    licenseService.ReloadAsync(CancellationToken.None).GetAwaiter().GetResult();
+}
+
 // Reflection discovers every [StandardPermission] code in use (see PermissionCatalog), but only
 // registering an in-memory authorization policy for it isn't enough to let anyone through — the
 // code also has to exist as a Permission row before any role can be granted it. This closes that
 // gap automatically at startup instead of requiring a manual PermissionConfiguration + migration
-// edit for every new permission-gated feature.
+// edit for every new permission-gated feature. The actual synchronization logic lives in
+// FHIRBridge.Api.Rbac.DiscoveredPermissionSynchronizer (RBAC redesign Step 5) — pulled out of this file
+// so it's directly unit-testable without a WebApplicationFactory host.
 static void SyncDiscoveredPermissions(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
@@ -858,140 +956,7 @@ static void SyncDiscoveredPermissions(WebApplication app)
         return;
     }
 
-    SyncDiscoveredPermissionsAsync(repository, app.Logger).GetAwaiter().GetResult();
-}
-
-static async Task SyncDiscoveredPermissionsAsync(
-    IUserAccessRepository repository,
-    Microsoft.Extensions.Logging.ILogger logger)
-{
-    // Every permission referenced by a [StandardPermission] attribute. PermissionCatalog already
-    // deduplicates these by code and combines descriptions/instances, so each entry here is unique
-    // by Id — no further grouping needed.
-    var discoveredPermissions = PermissionCatalog.DiscoveredPermissions(typeof(Program).Assembly);
-    var discoveredPermissionsById = discoveredPermissions.ToDictionary(p => p.Id);
-
-    var existingPermissions = await repository.GetPermissionsAsync(CancellationToken.None);
-    var existingPermissionsById = existingPermissions.ToDictionary(p => p.Id);
-
-    // Permissions declared in RbacSeedData are owned by RbacBootstrapper and must never be
-    // deactivated by this method.
-    var seedDeclaredPermissionIds = new HashSet<Guid>(RbacSeedData.Permissions.Select(p => p.Id));
-
-    // Every role that exists at the moment a brand-new dynamically-discovered permission is first created
-    // (built-in AND custom, e.g. an admin-created role) — see the grant loop in step 2/3 below for why this
-    // keeps the rollout of a new source/destination-type permission non-breaking.
-    var allRoles = await repository.GetRolesAsync(CancellationToken.None);
-
-    // 1. Deactivate a non-seeded permission that's active but no longer discovered in code.
-    foreach (var existingPermission in existingPermissions)
-    {
-        if (!existingPermission.IsActive)
-        {
-            continue;
-        }
-
-        if (seedDeclaredPermissionIds.Contains(existingPermission.Id))
-        {
-            continue;
-        }
-
-        if (!discoveredPermissionsById.ContainsKey(existingPermission.Id))
-        {
-            existingPermission.Deactivate();
-            await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
-        }
-    }
-
-    // 2 & 3. Update an existing permission's fields, or create a new one.
-    foreach (var discoveredPermission in discoveredPermissions)
-    {
-        var displayName = PermissionTaxonomy.BuildPermissionDisplayName(
-            discoveredPermission.Group,
-            discoveredPermission.Action);
-
-        var description = string.IsNullOrWhiteSpace(discoveredPermission.Description)
-            ? $"Auto-registered permission for '{discoveredPermission.Code}'."
-            : discoveredPermission.Description;
-
-        if (existingPermissionsById.TryGetValue(discoveredPermission.Id, out var existingPermission))
-        {
-            // Keep every mutable field synchronized with what's currently discovered from source code.
-            var changed = false;
-
-            if (existingPermission.Name != discoveredPermission.Code)
-            {
-                existingPermission.UpdateName(discoveredPermission.Code);
-                changed = true;
-            }
-
-            if (existingPermission.DisplayName != displayName)
-            {
-                existingPermission.UpdateDisplayName(displayName);
-                changed = true;
-            }
-
-            if (!string.Equals(existingPermission.Description, description, StringComparison.Ordinal))
-            {
-                existingPermission.UpdateDescription(description);
-                changed = true;
-            }
-
-            if (existingPermission.Instances != discoveredPermission.Instances)
-            {
-                existingPermission.UpdateInstances(discoveredPermission.Instances);
-                changed = true;
-            }
-
-            if (!existingPermission.IsActive)
-            {
-                existingPermission.Activate();
-                changed = true;
-            }
-
-            if (changed)
-            {
-                await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
-            }
-
-            continue;
-        }
-
-        // New permission.
-        var groupId = RbacSeedData.GroupIdsByCode[discoveredPermission.Group];
-
-        var newPermission = new Permission(
-            discoveredPermission.Id,
-            discoveredPermission.Code,
-            displayName,
-            description,
-            groupId,
-            isSystem: false,
-            instances: discoveredPermission.Instances);
-
-        await repository.AddPermissionAsync(newPermission, CancellationToken.None);
-
-        if (string.IsNullOrWhiteSpace(discoveredPermission.Description))
-        {
-            logger.LogWarning(
-                "Auto-registered new permission '{PermissionCode}' discovered via [StandardPermission] with no description; add one to the attribute.",
-                discoveredPermission.Code);
-        }
-
-        // Non-breaking rollout: grant a genuinely brand-new permission (e.g. a newly added source or
-        // destination vendor's Edit permission) to every role that already exists right now — not just
-        // SuperAdmin — so nothing loses access to a source/destination it could already use before this
-        // permission existed. This only ever runs inside the "new permission" branch above (the `continue`
-        // a few lines up handles the "already exists" case), and a Permission row is only ever created
-        // once in its lifetime (removed permissions are deactivated, never deleted — see step 1 above) —
-        // so this grant loop can only ever fire once per permission. A role that has this permission
-        // unchecked later via the Role Permissions screen is therefore never silently re-granted it on a
-        // subsequent restart.
-        foreach (var role in allRoles)
-        {
-            await repository.AddRolePermissionAsync(role.Id, newPermission.Id, CancellationToken.None);
-        }
-    }
+    FHIRBridge.Api.Rbac.DiscoveredPermissionSynchronizer.SyncAsync(repository, app.Logger).GetAwaiter().GetResult();
 }
 
 // Returns the HTTP status, a candidate client message, whether that message is TRUSTED (author-written and safe
@@ -1011,6 +976,16 @@ static (int status, string message, bool trusted, IReadOnlyDictionary<string, st
         return (StatusCodes.Status404NotFound, nfe.UserMessage, true, null, null);
     if (ex is FHIRBridge.SharedKernel.Exceptions.BulkExportConcurrencyLimitExceededException concurrencyLimitException)
         return (StatusCodes.Status429TooManyRequests, concurrencyLimitException.UserMessage, true, null, null);
+
+    // Real license enforcement (quota caps and allow-list/expiry restrictions) — a commercial boundary, not a
+    // security boundary, but still a deliberate denial rather than a generic bad request. 403 (not 429/400):
+    // there is nothing to retry-after and nothing wrong with the request shape, the license simply doesn't
+    // permit this action right now.
+    if (ex is FHIRBridge.SharedKernel.Exceptions.LicenseQuotaExceededException licenseQuotaExceeded)
+        return (StatusCodes.Status403Forbidden, licenseQuotaExceeded.UserMessage, true, null, null);
+    if (ex is FHIRBridge.SharedKernel.Exceptions.LicenseRestrictionViolationException licenseRestrictionViolation)
+        return (StatusCodes.Status403Forbidden, licenseRestrictionViolation.UserMessage, true, null, null);
+
     if (ex is FHIRBridgeException fbe)
         return (StatusCodes.Status400BadRequest, fbe.UserMessage, true, null, null);
 

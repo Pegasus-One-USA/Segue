@@ -36,6 +36,11 @@ export function buildUserFromJwt(payload: Record<string, unknown>): User {
     permissions,
     color: '#64748b',
     isSystemRole: true,
+    // These synthetic Role stand-ins are built purely from a role-name string (JWT/profile claim) —
+    // there is no real backend RoleDto here to read Role.IsFullAccess from, so this always reads
+    // false. Never used to gate the Full System Access toggle itself (see role-dialog.component.ts,
+    // which reads the real RoleDto list via IRoleService.getRoles() instead).
+    isFullAccess: false,
     createdAt: new Date(0).toISOString(),
   }));
 
@@ -101,6 +106,11 @@ export function buildUserFromProfile(profile: AuthProfileDto): User {
     permissions,
     color: '#64748b',
     isSystemRole: true,
+    // These synthetic Role stand-ins are built purely from a role-name string (JWT/profile claim) —
+    // there is no real backend RoleDto here to read Role.IsFullAccess from, so this always reads
+    // false. Never used to gate the Full System Access toggle itself (see role-dialog.component.ts,
+    // which reads the real RoleDto list via IRoleService.getRoles() instead).
+    isFullAccess: false,
     createdAt: new Date(0).toISOString(),
   }));
 

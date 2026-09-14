@@ -39,7 +39,11 @@ public sealed class Worker : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            var enabled = await _settingsCache.GetBoolAsync("RuntimeWorker:Enabled", defaultValue: false, stoppingToken);
+            // Defaults to true, matching the seeded SystemSettings value and ScheduleDispatcherOptions.Enabled.
+            // This is the fallback used only when SystemSettings can't be read at all (see
+            // InProcessSystemSettingsCache) — a false default there made a settings-read failure indistinguishable
+            // from a deliberate opt-out, silently stopping every scheduled workflow.
+            var enabled = await _settingsCache.GetBoolAsync("RuntimeWorker:Enabled", defaultValue: true, stoppingToken);
             if (!enabled)
             {
                 _logger.LogInformation(

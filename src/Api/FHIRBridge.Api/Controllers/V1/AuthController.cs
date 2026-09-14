@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using FHIRBridge.Application.Abstractions.Caching;
+using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
@@ -27,6 +28,7 @@ public sealed class AuthController : ControllerBase
     private readonly ILocalAuthService _localAuthService;
     private readonly ISsoAuthService _ssoAuthService;
     private readonly ISetupService _setupService;
+    private readonly ILicenseService _licenseService;
     private readonly IConfiguration _configuration;
     private readonly ISamlConfigurationProvider _samlConfigurationProvider;
     private readonly SamlAuthenticationOptions _samlOptions;
@@ -49,6 +51,7 @@ public sealed class AuthController : ControllerBase
         ILocalAuthService localAuthService,
         ISsoAuthService ssoAuthService,
         ISetupService setupService,
+        ILicenseService licenseService,
         IConfiguration configuration,
         ISamlConfigurationProvider samlConfigurationProvider,
         IOptions<SamlAuthenticationOptions> samlOptions,
@@ -60,6 +63,7 @@ public sealed class AuthController : ControllerBase
         _localAuthService = localAuthService;
         _ssoAuthService = ssoAuthService;
         _setupService = setupService;
+        _licenseService = licenseService;
         _configuration = configuration;
         _samlConfigurationProvider = samlConfigurationProvider;
         _logger = logger;
@@ -75,8 +79,9 @@ public sealed class AuthController : ControllerBase
     public async Task<IActionResult> GetSetupStatus(CancellationToken cancellationToken)
     {
         var requiresSetup = await _setupService.RequiresSetupAsync(cancellationToken);
+        var licenseState = _licenseService.Current.State;
 
-        return Ok(new SetupStatusDto(requiresSetup));
+        return Ok(new SetupStatusDto(requiresSetup, licenseState == LicenseState.Active, licenseState.ToString()));
     }
 
     /// <summary>

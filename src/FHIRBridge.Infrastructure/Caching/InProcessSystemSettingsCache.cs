@@ -83,16 +83,16 @@ public sealed class InProcessSystemSettingsCache : ISystemSettingsCache
             // dbContext.Database.Migrate() has run. Don't cache the miss: once migrated, the next call
             // succeeds and every caller falls back to its own compiled-in/appsettings default meanwhile.
             //
-            // Logged because the consequence is invisible otherwise and easily misread: every DB-backed setting
-            // silently reverts to its compiled-in default, and RuntimeWorker:Enabled defaults to FALSE — so the
-            // scheduler appears to be configured yet never runs. Expected exactly once during a first-run
-            // migration; anything beyond that is a real database problem.
+            // Logged because the consequence is invisible otherwise: every DB-backed setting silently reverts to
+            // its compiled-in default for this call, so any value an operator changed in the portal is ignored
+            // while this persists. Expected exactly once during a first-run migration; anything beyond that is a
+            // real database problem.
             _logger.LogWarning(
                 LogEvents.SystemSettingsUnavailable,
                 exception,
                 "SystemSettings could not be read ({FailureReason}); every DB-backed setting is falling back to its "
-                + "compiled-in default for this call, including RuntimeWorker:Enabled=false. This is expected only "
-                + "before the first migration has run.",
+                + "compiled-in default for this call, so portal-configured values are ignored. This is expected "
+                + "only before the first migration has run.",
                 exception.Message);
 
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
