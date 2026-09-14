@@ -1,0 +1,23 @@
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_01cdc638c2acfa::t_f6ae1560baa65e 902-911,921-922
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_01cdc638c2acfa::t_ba65045e0584cc 3321,3612
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_01cdc638c2acfa::t_f93183b226791b 912-921,931-932
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2ab6d1a7331570c724388e94e1637db0b9395e49",
+  "prompts": {},
+  "sessions": {
+    "s_01cdc638c2acfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05d0a862-c14d-4220-9ff8-579c3faf088c",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

@@ -1,0 +1,247 @@
+src/FHIRBridge.Domain/Entities/Role.cs
+  s_01cdc638c2acfa::t_d755707e9b237b 24,40,51-53,78
+  s_01cdc638c2acfa::t_254866bb70a4e0 41-50,64-66,74-77
+  s_01cdc638c2acfa::t_26d35aed7e6f14 67-73
+src/FHIRBridge.Application/DTOs/CreateRoleRequest.cs
+  s_01cdc638c2acfa::t_4753121dd02bed 6-12
+portal/src/app/components/node-library-v2/node-library-dialog.component.ts
+  s_01cdc638c2acfa::t_23ac3277a76652 530-537
+  s_01cdc638c2acfa::t_35f7aa85fe582a 489-496,502-503
+src/FHIRBridge.Application/Services/RoleManagementService.cs
+  s_01cdc638c2acfa::t_5026c93d0df366 182-190,202-211,218-260
+  s_01cdc638c2acfa::t_0cfd2d7fcd3588 127-138,140-144,261-262
+  s_01cdc638c2acfa::t_d0263e1cefc61b 337-338
+portal/src/app/auth/models/user.model.ts
+  s_01cdc638c2acfa::t_5972c84fab4a29 178-180
+  s_01cdc638c2acfa::t_2412642ba86159 54-58
+portal/src/app/auth/mock/mock-db.ts
+  s_01cdc638c2acfa::t_c691dd35676d5a 45,51,57,63,69,75,81,87
+portal/src/app/settings/guards/settings-landing.guard.ts
+  s_01cdc638c2acfa::t_ce002dfe0fc867 33-35,37-44,46-48,50-63,66-75,77-83,85-88
+  s_01cdc638c2acfa::t_43cb429ee5b9ed 3-4,6,76,84
+src/Api/FHIRBridge.Api/Security/SourceDiscoveryAccessRequirement.cs
+  s_01cdc638c2acfa::t_3b59de58b28cf5 1-19
+src/Api/FHIRBridge.Api/Controllers/V1/SourceDiscoveryController.cs
+  s_01cdc638c2acfa::t_0ddb70122ea8d9 54-55,87
+  s_01cdc638c2acfa::t_297e191a6e0b7d 1-2,17,23-24,28-30,34-35,41,51-53
+  s_01cdc638c2acfa::t_958cd43808ea38 88-134,141-143,146
+tests/FHIRBridge.UnitTests/Security/InMemoryUserAccessRepositoryFullAccessTests.cs
+  s_01cdc638c2acfa::t_05de2a7dc39072 1-102
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260911164737_AddRoleIsFullAccess.Designer.cs
+  s_01cdc638c2acfa::t_ebdb4446ab4430 1-6002
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260911164737_AddRoleIsFullAccess.cs
+  s_01cdc638c2acfa::t_ebdb4446ab4430 1-18,30-40
+  s_01cdc638c2acfa::t_efb0626318f68e 19,21-22,27-29
+  s_01cdc638c2acfa::t_9748dba527625c 20,23-26
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_01cdc638c2acfa::t_0a15f25c4bb670 154-171
+src/FHIRBridge.Application/DTOs/UpdateRoleRequest.cs
+  s_01cdc638c2acfa::t_7efade4777f2ac 6-16
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260913193906_AddRoleNameSoftDeleteFilter.cs
+  s_01cdc638c2acfa::t_4a5715054b7095 17-22,28
+  s_01cdc638c2acfa::t_ee92a726015a6c 1-16,23-27,29-45
+src/Api/FHIRBridge.Api/Security/SuperAdminOnlyAuthorizationHandler.cs
+  s_01cdc638c2acfa::t_abb41be172e9b3 1-2,10-21,27,30-32,37-49,52-56
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260913192002_AddRoleNameSoftDeleteFilter.Designer.cs
+  s_01cdc638c2acfa::t_7ae6fdfe74526a 1-6037
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_01cdc638c2acfa::t_ad79b969117460 605-606
+  s_01cdc638c2acfa::t_20c06d382cadcd 453-454
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_01cdc638c2acfa::t_1b7d9a2bc5c39d 417-424,430-431
+  s_01cdc638c2acfa::t_c4597747d30835 458-465
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260913192002_AddRoleNameSoftDeleteFilter.cs
+  s_01cdc638c2acfa::t_7ae6fdfe74526a 1-39
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_01cdc638c2acfa::t_1e1130861b8fc6 127
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.ts
+  s_01cdc638c2acfa::t_dfd114afe30733 35
+  s_01cdc638c2acfa::t_99dcb24a9453bb 87-99
+  s_01cdc638c2acfa::t_176f46186f822c 126-127,134-139,141-142
+  s_01cdc638c2acfa::t_0b39f83174ba26 11,14,102
+  s_01cdc638c2acfa::t_73d6da6f9ec548 49,59-68,78-83,86,100-101
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.spec.ts
+  s_01cdc638c2acfa::t_c8ff0a5aaf65ae 1-99
+src/FHIRBridge.Infrastructure/Persistence/Configurations/RoleConfiguration.cs
+  s_01cdc638c2acfa::t_1eea175161e713 26-30
+  s_01cdc638c2acfa::t_19932911cd4613 33-37,39-40
+  s_01cdc638c2acfa::t_9f603af5a735d1 31-32
+src/Api/FHIRBridge.Api/Security/PermissionCatalogAccessRequirement.cs
+  s_01cdc638c2acfa::t_b03f175f2e3611 1-15
+tests/FHIRBridge.UnitTests/Security/RoleManagementServiceFullAccessTests.cs
+  s_01cdc638c2acfa::t_b470204f0b965f 1-3,5-274
+  s_01cdc638c2acfa::t_5a4b0bc87d6ab3 4
+src/Api/FHIRBridge.Api/Rbac/DiscoveredPermissionSynchronizer.cs
+  s_01cdc638c2acfa::t_fdb84f400bf67b 1
+  s_01cdc638c2acfa::t_03760b327fc644 25-34,39
+  s_01cdc638c2acfa::t_cdf84f1a94288c 3-24,35-38,40-174
+  s_01cdc638c2acfa::t_efd77ab446d26d 2
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.html
+  s_01cdc638c2acfa::t_817d31d7f3fea3 52
+  s_01cdc638c2acfa::t_f23d0933eded4b 202,207
+  s_01cdc638c2acfa::t_bedfd3a7ddf8c5 60-66,82
+  s_01cdc638c2acfa::t_48364776ea15c6 220
+portal/src/app/user-management/pages/role-permissions/permission-matrix.config.ts
+  s_01cdc638c2acfa::t_07c5712a43c592 184-185,188
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_01cdc638c2acfa::t_c81e9ebed6f4b3 2355-2359
+  s_01cdc638c2acfa::t_7ae6fdfe74526a 2383-2384
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260913193906_AddRoleNameSoftDeleteFilter.Designer.cs
+  s_01cdc638c2acfa::t_ee92a726015a6c 1-6003
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_01cdc638c2acfa::t_f1559a5f2e7ff6 980
+  s_01cdc638c2acfa::t_4aee37962f96b4 2715-2742,2745,2765-2771
+  s_01cdc638c2acfa::t_dad3913173e896 2743-2744,2772-2781
+  s_01cdc638c2acfa::t_6de84f04b72d69 972
+  s_01cdc638c2acfa::t_6f88e45f57c7ce 602
+  s_01cdc638c2acfa::t_9151fd57c9a1c8 2746-2764
+  s_01cdc638c2acfa::t_73e9ac6fd04053 557
+  s_01cdc638c2acfa::t_0fba34003a1409 944-946,950-963,965-971,973-979,981-990,992-993
+  s_01cdc638c2acfa::t_a0f5395d7957b0 577
+  s_01cdc638c2acfa::t_2031c0c04bd95a 579
+  s_01cdc638c2acfa::t_9b8ce38c43387e 964
+  s_01cdc638c2acfa::t_4a3418c4ed0131 14
+  s_01cdc638c2acfa::t_8996d320523ea5 530-531,546-556,562,598
+  s_01cdc638c2acfa::t_3c7a94ca8d1ba6 578,580,591-597,599-601,603-612
+tests/FHIRBridge.UnitTests/Security/DiscoveredPermissionSynchronizerTests.cs
+  s_01cdc638c2acfa::t_f08c486b870cf4 1-187
+src/Api/FHIRBridge.Api/Security/UnifiedAdminAuthorizationHandler.cs
+  s_01cdc638c2acfa::t_0f9fe579894996 1-2,10-21,27,30-32,37-49,52-56
+portal/src/app/auth/guards/super-admin.guard.ts
+  s_01cdc638c2acfa::t_12881aa002ce0f 3,5,10-24,26-28,32-41
+src/FHIRBridge.Infrastructure/Persistence/InMemoryUserAccessRepository.cs
+  s_01cdc638c2acfa::t_3041a35a8aac9f 14,20-32
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.scss
+  s_01cdc638c2acfa::t_13e6599412869e 190-199
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.spec.ts
+  s_01cdc638c2acfa::t_0769236ba97763 58-84
+  s_01cdc638c2acfa::t_dc1e75c5e390e5 143-162
+  s_01cdc638c2acfa::t_881c8c4b053a8b 1,3-57,85-142,163
+  s_01cdc638c2acfa::t_7cb0b9322930e3 2
+tests/FHIRBridge.UnitTests/FHIRBridge.UnitTests.csproj
+  s_01cdc638c2acfa::t_53d6d1f0dbb430 31-35
+portal/src/app/mapping-profiles/pages/mapping-profile-list/mapping-profile-list.component.html
+  s_01cdc638c2acfa::t_904cb419cb6b9e 159
+tests/FHIRBridge.UnitTests/Security/RbacBootstrapperFullAccessTests.cs
+  s_01cdc638c2acfa::t_f4a45ce979e8da 1,10
+  s_01cdc638c2acfa::t_843ad2a6e35da7 2-9,11-34,42-43,45-185
+  s_01cdc638c2acfa::t_b4162ec677a791 35-41,44
+src/Api/FHIRBridge.Api/Security/GenericConnectionPermissionAuthorizationHandler.cs
+  s_01cdc638c2acfa::t_ae34ed6ef98056 1-80
+src/FHIRBridge.Infrastructure/Rbac/RbacBootstrapper.cs
+  s_01cdc638c2acfa::t_8bf421915ba93e 224-244
+portal/src/app/services/epic-discovery.service.ts
+  s_01cdc638c2acfa::t_867d03f7d881f7 82-87,89-93
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260911164619_AddRoleIsFullAccess.Designer.cs
+  s_01cdc638c2acfa::t_c81e9ebed6f4b3 1-6036
+src/FHIRBridge.Infrastructure/Security/CachedUserPermissionsProvider.cs
+  s_01cdc638c2acfa::t_f06d67e17aeeda 60-83
+src/Api/FHIRBridge.Api/Program.cs
+  s_01cdc638c2acfa::t_7c34bbe401a1d5 268-276
+  s_01cdc638c2acfa::t_b55ce47d587100 175
+  s_01cdc638c2acfa::t_145763e7e69616 888-890,900
+  s_01cdc638c2acfa::t_d7a61e6810bf95 277-286
+  s_01cdc638c2acfa::t_3bf01953f433ab 288-291,294-305
+  s_01cdc638c2acfa::t_db9e03e8fc0c65 177
+  s_01cdc638c2acfa::t_9a1d7cbb14d2bd 176
+tests/FHIRBridge.UnitTests/Users/UserManagementServiceRoleDtoTests.cs
+  s_01cdc638c2acfa::t_e5f2c3029b87a0 1-160
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_01cdc638c2acfa::t_fc0f50eca1d7af 3612
+  s_01cdc638c2acfa::t_10a5c39d687f1c 3321
+portal/src/app/auth/services/jwt-user.mapper.ts
+  s_01cdc638c2acfa::t_cb68a0f212878d 39-43,109-113
+portal/src/app/user-management/pages/role-permissions/permission-matrix-dependencies.ts
+  s_01cdc638c2acfa::t_c6a831e686bf17 49-55,71-72,74-88,90
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  s_01cdc638c2acfa::t_5e6f6d8864a0c6 21,56
+  s_01cdc638c2acfa::t_88ae33c91f9e01 48,51-55
+src/FHIRBridge.Application/DTOs/RoleDto.cs
+  s_01cdc638c2acfa::t_5bfbd6ead0ab76 12-15
+portal/src/app/auth/models/auth-request.model.ts
+  s_01cdc638c2acfa::t_ca7d564e4db6cc 118-121,128-134
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_01cdc638c2acfa::t_d3f317784ab1be 146,160
+src/Api/FHIRBridge.Api/Security/GenericConnectionPermissionRequirement.cs
+  s_01cdc638c2acfa::t_11baf1eb128ddd 1-65
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260911164619_AddRoleIsFullAccess.cs
+  s_01cdc638c2acfa::t_df2b2b30381fb1 19,21-22,27-29
+  s_01cdc638c2acfa::t_513c537b0227de 20,23-26
+  s_01cdc638c2acfa::t_c81e9ebed6f4b3 1-18,30-40
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_01cdc638c2acfa::t_bb1a0717cb5045 1,5,54
+  s_01cdc638c2acfa::t_a49164ac29dc08 13-15
+  s_01cdc638c2acfa::t_6a9dc272c24388 52-53,55-74,80
+src/Api/FHIRBridge.Api/Security/PermissionCatalogAccessAuthorizationHandler.cs
+  s_01cdc638c2acfa::t_c4856c57c80f2e 1-56
+src/Api/FHIRBridge.Api/Controllers/V1/PermissionsController.cs
+  s_01cdc638c2acfa::t_1bec38d58e61eb 10,22,35-40,42
+portal/src/app/user-management/pages/user-detail/user-detail.component.ts
+  s_01cdc638c2acfa::t_01643ad8655343 134-142,145-151
+  s_01cdc638c2acfa::t_14a69b211056c9 198-201,206-208
+  s_01cdc638c2acfa::t_cfb64456becc74 6
+  s_01cdc638c2acfa::t_a70f41215fc2af 211-223
+src/Api/FHIRBridge.Api/Security/SourceDiscoveryAccessAuthorizationHandler.cs
+  s_01cdc638c2acfa::t_a4fb608efa306c 1,3-58
+  s_01cdc638c2acfa::t_55898ea031f20b 2
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.html
+  s_01cdc638c2acfa::t_1576e62b8066ee 64-83
+portal/src/app/auth/guards/super-admin.guard.spec.ts
+  s_01cdc638c2acfa::t_189960dee17a4a 1-153
+src/FHIRBridge.Application/DTOs/SourceDiscoveryProbeDtos.cs
+  s_01cdc638c2acfa::t_82ad3e55414070 3-10
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_01cdc638c2acfa::t_d6b4231fdbcb2e 2336-2340
+  s_01cdc638c2acfa::t_ee92a726015a6c 2363-2364
+tests/FHIRBridge.Api.IntegrationTests/Security/SourceDiscoveryProbeAuthorizationTests.cs
+  s_01cdc638c2acfa::t_6b5b5ede9a7c1e 1-82,84-233
+  s_01cdc638c2acfa::t_c800c4cc83deee 83
+portal/src/app/user-management/dialogs/role-dialog/role-dialog.component.scss
+  s_01cdc638c2acfa::t_b042f446daef3b 121-147
+src/FHIRBridge.Application/Security/AuthorizationPolicies.cs
+  s_01cdc638c2acfa::t_2f0ce02da696ad 32-40
+  s_01cdc638c2acfa::t_6ccd6c53ce5387 41-49
+portal/src/app/auth/services/api-user.service.ts
+  s_01cdc638c2acfa::t_b6311bf0cacbdd 60
+portal/src/app/settings/layout/settings-shell.component.spec.ts
+  s_01cdc638c2acfa::t_5511c8e697ee84 1-152
+portal/src/app/user-management/pages/user-detail/user-detail.component.spec.ts
+  s_01cdc638c2acfa::t_6da0078dbdbbc7 106,118,129,141,153,164,178,186,200
+  s_01cdc638c2acfa::t_77534eb445cc07 1-8,10-105,107-117,119-128,130-140,142-152,154-163,165-177,179-185,187-199,201-209
+  s_01cdc638c2acfa::t_dbe7988111b5e0 9
+portal/src/app/auth/testing/auth-test-helpers.ts
+  s_01cdc638c2acfa::t_da3846e7e8ead1 1,3-6,21
+portal/src/app/settings/guards/settings-landing.guard.spec.ts
+  s_01cdc638c2acfa::t_22138bc69f0221 4
+  s_01cdc638c2acfa::t_52f16f9ce2a789 1-3,5-47,49-51,53-56,58-161
+  s_01cdc638c2acfa::t_d65a5fb773de5f 48,52,57
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  s_01cdc638c2acfa::t_e2db1cd6a63b05 1,5,51
+  s_01cdc638c2acfa::t_1b6ff5cb14f739 49-50,52-71,77
+  s_01cdc638c2acfa::t_052dd98624fe29 13-15
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.spec.ts
+  s_01cdc638c2acfa::t_90554e37c6d0d1 1-176
+tests/FHIRBridge.UnitTests/Security/FullAccessAuthorizationHandlerTests.cs
+  s_01cdc638c2acfa::t_beb5067716431c 1-241
+tests/FHIRBridge.Api.IntegrationTests/Tests/GenericConnectionPermissionTests.cs
+  s_01cdc638c2acfa::t_9dcc9dabd55aa3 1-158
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_01cdc638c2acfa::t_327593abe71cee 156-165
+  s_01cdc638c2acfa::t_2f387714f79557 193-199,205-207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bd42aadb37b56c9654015462322ec127074e97bc",
+  "prompts": {},
+  "sessions": {
+    "s_01cdc638c2acfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05d0a862-c14d-4220-9ff8-579c3faf088c",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}
