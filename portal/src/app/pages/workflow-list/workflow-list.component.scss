@@ -80,6 +80,17 @@
     pointer-events: none;
   }
 
+  // Shown only while a search-triggered reload is in flight (searching()) — a local, non-blocking stand-in
+  // for the app-wide global loader, which this request deliberately skips (see reload()'s `silent` param).
+  .search-spinner {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--color-muted);
+  }
+
   .search-input {
     width: 100%;
     height: 40px;
