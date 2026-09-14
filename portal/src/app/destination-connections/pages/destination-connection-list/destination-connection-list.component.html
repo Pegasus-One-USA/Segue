@@ -132,6 +132,14 @@
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                  <!-- Placeholder only — view details for a destination connection is not implemented yet.
+                       Disabled, no click handler; same visibility/View pattern (including the .view
+                       permission gate) as source-connection-list's own View menu item, just not wired to
+                       anything yet. -->
+                  <button mat-menu-item disabled *appHideWithoutPermission="'destinationconnections.view'">
+                    <mat-icon>visibility</mat-icon>
+                    View (Coming Soon)
+                  </button>
                   @if (canOpenEntity(d)) {
                     <button
                       mat-menu-item
