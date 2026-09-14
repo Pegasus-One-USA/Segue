@@ -24,7 +24,8 @@ public sealed class GeneratedFileDownloadLinkServiceTests : IDisposable
             jwtSigningKey: "unused",
             downloadLinkSigningSecret: signingSecret,
             transformHashingKey: "unused",
-            phiEncryptionKey: Convert.ToBase64String(new byte[32]));
+            phiEncryptionKey: Convert.ToBase64String(new byte[32]),
+            installationId: "unused");
 
         var settingsCache = new Mock<ISystemSettingsCache>();
         settingsCache

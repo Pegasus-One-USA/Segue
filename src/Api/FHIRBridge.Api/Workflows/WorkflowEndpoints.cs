@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
@@ -63,6 +64,9 @@ public static class WorkflowEndpoints
             IWorkflowDefinitionStore store,
             CancellationToken cancellationToken) =>
         {
+            // License workflow-quota enforcement lives centrally in LicenseEnforcementSaveChangesInterceptor,
+            // which distinguishes this genuine create from an edit at the actual persistence choke point
+            // (SqlWorkflowDefinitionStore.SaveAsync) rather than here.
             var workflow = BuildWorkflow(Guid.NewGuid(), request);
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Created($"/api/v1/workflows/{workflow.Id}", workflow);
@@ -96,6 +100,10 @@ public static class WorkflowEndpoints
             {
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             }
+
+            // License workflow-quota enforcement (create vs. edit — an edit never changes row count) lives
+            // centrally in LicenseEnforcementSaveChangesInterceptor, resolved at the actual persistence choke
+            // point (SqlWorkflowDefinitionStore.SaveAsync) rather than here.
 
             // Fail fast, before provisioning anything: every "child of" declaration on a mapping spec must
             // resolve to a real reference field, mapped, targeting a sibling resource on the same destination.
@@ -1010,6 +1018,10 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
+            // A copy always mints a brand-new workflow id (see BuildWorkflow(Guid.NewGuid(), ...) below) — same
+            // as every other create path, the workflow quota is enforced centrally by
+            // LicenseEnforcementSaveChangesInterceptor, not here.
+
             // Same all-or-nothing rationale as /workflows/build: several entities get created below before the
             // workflow definition itself is saved, and a failure partway through (a validation rejection on the
             // cloned mapping profile, say) must not leave an orphaned SourceConnection/DestinationConfiguration
@@ -1302,6 +1314,7 @@ public static class WorkflowEndpoints
             ILoggerFactory loggerFactory,
             IConfigurationRepository configurationRepository,
             IAuthorizationService authorizationService,
+            ILicenseQuotaGuard licenseQuotaGuard,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
@@ -1318,11 +1331,25 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
+            // This is the Runtime plane's real run-trigger point (IRankedWorkflowOrchestrator.ExecuteAsync below,
+            // both the sync and fire-and-forget-async branches) — checked once here, before either branch starts,
+            // never mid-run. Blocks a truly expired license or an exhausted monthly processed-records cap; never
+            // interrupts a run already in flight.
+            await licenseQuotaGuard.EnsureCanStartNewRunAsync(cancellationToken);
+
             // Workflow-module gate (workflow.run, on the route below) is necessary but not sufficient —
             // independently, in addition, every distinct source vendor / destination type this specific
             // workflow's graph actually uses must have its own Execute permission too (originally seeded,
             // for Epic/Athenahealth/Cerner, specifically for "trigger a pipeline run against" this vendor —
             // see RbacSeedData — now enforced for real, and extended to every other node the same way).
+            //
+            // Same loops also re-validate each source/destination against the LICENSE's own allow-lists
+            // (independent of the RBAC permission check above) — this is what catches a hospital/vendor/
+            // destination type being dropped from the license on renewal, or a connection's BaseUrl edited
+            // after creation, since LicenseEnforcementSaveChangesInterceptor only ever sees the row at its
+            // own creation time, never again after that. Throws (LicenseRestrictionViolationException),
+            // caught by the global exception handler and mapped to 403, exactly like EnsureCanStartNewRunAsync
+            // above.
             foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
             {
                 if (!TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceConnectionId))
@@ -1331,12 +1358,19 @@ public static class WorkflowEndpoints
                 }
 
                 var source = await configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
-                if (source is not null
-                    && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                if (source is null)
+                {
+                    continue;
+                }
+
+                if (!await ControllerAuthorizationExtensions.HasPermissionAsync(
                         authorizationService, httpContext.User, source.SourceSystemType, PermissionActionCode.Execute))
                 {
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
                 }
+
+                await licenseQuotaGuard.EnsureSourceConnectionStillAllowedAsync(
+                    source.SourceSystemType, source.BaseUrl, cancellationToken);
             }
 
             foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Destination))
@@ -1347,12 +1381,18 @@ public static class WorkflowEndpoints
                 }
 
                 var destination = await configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
-                if (destination is not null
-                    && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                if (destination is null)
+                {
+                    continue;
+                }
+
+                if (!await ControllerAuthorizationExtensions.HasPermissionAsync(
                         authorizationService, httpContext.User, destination.DestinationType, PermissionActionCode.Execute))
                 {
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
                 }
+
+                await licenseQuotaGuard.EnsureDestinationTypeAllowedAsync(destination.DestinationType, cancellationToken);
             }
 
             // Reuse the ambient correlation id (same header/TraceIdentifier the API's global exception handler and
@@ -1608,6 +1648,8 @@ public static class WorkflowEndpoints
             IWorkflowDefinitionStore store,
             IRankedWorkflowOrchestrator orchestrator,
             ICurrentUserService currentUserService,
+            ILicenseQuotaGuard licenseQuotaGuard,
+            IConfigurationRepository configurationRepository,
             CancellationToken cancellationToken) =>
         {
             var launchContext = tokenProtector.UnprotectContext(token);
@@ -1621,6 +1663,43 @@ public static class WorkflowEndpoints
             if (workflow is null || node is null || !node.CheckpointUrlEnabled)
             {
                 return Results.NotFound(new { error = "checkpoint_unavailable", error_description = "This checkpoint no longer exists or has been disabled." });
+            }
+
+            // Same Runtime-plane run-trigger gate as /workflows/{workflowId}/run above — this anonymous URL
+            // starts a brand-new run (a fresh workflowRunId below) just as much as that endpoint does.
+            await licenseQuotaGuard.EnsureCanStartNewRunAsync(cancellationToken);
+
+            // Same source/destination license allow-list re-check as /workflows/{workflowId}/run above (see
+            // its matching comment for why this can't just rely on create-time enforcement). Checked against
+            // every source/destination node in the workflow, same as that endpoint, not narrowed to this
+            // checkpoint's ancestor closure — simpler, and never under-checks.
+            foreach (var sourceNode in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
+            {
+                if (!TryGetConfigurationGuid(sourceNode.ConfigurationJson, "sourceConnectionId", out var sourceConnectionId))
+                {
+                    continue;
+                }
+
+                var source = await configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+                if (source is not null)
+                {
+                    await licenseQuotaGuard.EnsureSourceConnectionStillAllowedAsync(
+                        source.SourceSystemType, source.BaseUrl, cancellationToken);
+                }
+            }
+
+            foreach (var destinationNode in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Destination))
+            {
+                if (!TryGetConfigurationGuid(destinationNode.ConfigurationJson, "destinationId", out var destinationId))
+                {
+                    continue;
+                }
+
+                var destination = await configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+                if (destination is not null)
+                {
+                    await licenseQuotaGuard.EnsureDestinationTypeAllowedAsync(destination.DestinationType, cancellationToken);
+                }
             }
 
             // See the /run endpoint's matching comment: reuse the ambient correlation id so this run's ErrorLogs

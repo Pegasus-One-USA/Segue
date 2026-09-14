@@ -23,7 +23,7 @@ namespace FHIRBridge.UnitTests.Configuration;
 /// </summary>
 public sealed class ConfigurationServiceMappingProfileLookupTests
 {
-    private readonly InMemoryConfigurationRepository _repository = new();
+    private readonly InMemoryConfigurationRepository _repository = new(TestHelpers.LicenseTestScopeFactory.Create());
     private readonly ConfigurationService _sut;
 
     public ConfigurationServiceMappingProfileLookupTests()

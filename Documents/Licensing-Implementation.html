@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product Licensing — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+    --project-bg: #FCE7F3;
+    --project: #BE185D;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-project  { color: var(--project);  background: var(--project-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 90px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.project { border-left-color: var(--project); background: var(--project-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Product Licensing</h1>
+    <p class="subtitle">Signed license tokens, quota/allow-list enforcement, a global "must be active" gate, and a standalone license-minting server — implementation summary and file-by-file change log</p>
+    <div class="meta">
+      <div><strong>Branch</strong> feature/licensing</div>
+      <div><strong>Scope</strong> Backend (.NET 9) + Frontend (Angular 20) + a new standalone .NET project</div>
+      <div><strong>Status</strong> Implemented, tested, verified</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#features">What was built</a></li>
+      <li><a href="#new-project">New standalone project — FHIRBridge.LicenseServer</a></li>
+      <li><a href="#how-generated">How a license is generated</a></li>
+      <li><a href="#how-checked">How a license is checked &amp; enforced</a></li>
+      <li><a href="#claim-shape">The license token's claim shape</a></li>
+      <li><a href="#domain">Main repo — Domain</a></li>
+      <li><a href="#sharedkernel">Main repo — SharedKernel (exceptions)</a></li>
+      <li><a href="#application">Main repo — Application layer</a></li>
+      <li><a href="#infrastructure">Main repo — Infrastructure / persistence</a></li>
+      <li><a href="#runtime">Main repo — Runtime plane</a></li>
+      <li><a href="#api">Main repo — API layer</a></li>
+      <li><a href="#worker">Main repo — Worker host</a></li>
+      <li><a href="#tools">Main repo — Minting tool</a></li>
+      <li><a href="#tests">Main repo — Tests</a></li>
+      <li><a href="#portal">Portal (Angular)</a></li>
+      <li><a href="#license-server-files">FHIRBridge.LicenseServer — full file listing</a></li>
+      <li><a href="#verification">Verification</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    FHIRBridge is sold as on-prem/client-tenant software with no ongoing access to a client's environment
+    after deployment. This work adds a complete commercial licensing system on top of that reality: a
+    signed license token that names a customer's limits (users, workflows, source connections, hospitals,
+    resource/destination types, monthly processed records, monthly successful executions), a central
+    enforcement point that actually blocks a customer from exceeding those limits, a re-check at the moment
+    a pipeline/workflow actually runs (not just when it was configured), a global "the whole app is locked
+    until a valid license is applied" gate with a header banner and a full-screen overlay, and a separate,
+    isolated, standalone project a PegasusOne admin uses to mint real customer licenses without ever
+    touching the main product's codebase or database.
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">~60</div><div class="label">new files, main repo</div></div>
+    <div class="card"><div class="num">~40</div><div class="label">modified files, main repo</div></div>
+    <div class="card"><div class="num">1</div><div class="label">new standalone project (30 files)</div></div>
+    <div class="card"><div class="num">2 × 2</div><div class="label">EF migrations (SQL Server + PostgreSQL, both repos)</div></div>
+    <div class="card"><div class="num">85 / 0</div><div class="label">licensing unit tests passing / failing</div></div>
+    <div class="card"><div class="num">ES256</div><div class="label">signing algorithm (JWS)</div></div>
+  </div>
+
+  <h2 id="features"><span class="num">2.</span>What was built</h2>
+  <ul class="feature-list">
+    <li><strong>Signed license tokens (ES256 JWS).</strong> A compact, tamper-evident token carries the customer's name, edition, issue/expiry dates, and every quota/restriction dimension as claims. Verified with a hardcoded public key — no network call needed to check a license, so it works fully offline/air-gapped.</li>
+    <li><strong>Central quota enforcement.</strong> One place (<code>LicenseQuotaGuard</code> + <code>LicenseEnforcementSaveChangesInterceptor</code>) enforces every dimension: max users, max workflows, max source connections, allowed source/destination/resource types, allowed hospitals, max processed records/month, max successful executions/month.</li>
+    <li><strong>Execution-time re-validation.</strong> Allow-list checks (source type, hospital, destination type) are re-checked at the moment a pipeline/workflow run actually triggers — not just when the connection/route was first created — so a license renewed with narrower terms, or a connection whose URL was edited after creation, is still caught.</li>
+    <li><strong>Global "license must be active" gate.</strong> Once any user exists, every API action except first-run registration, login/logout, and the License screen itself is blocked with a 403 while the license isn't <code>Active</code> — with a persistent header banner and a full-screen overlay on the working area (sidebar and user menu stay usable) telling the admin why.</li>
+    <li><strong>Fail-open by design.</strong> No license present, an unlimited dimension, a null/empty allow-list, or the guard's own internal error all pass the check — this is a commercial boundary, not a security boundary, and an internal bug must never lock a paying customer out of their own console.</li>
+    <li><strong>Tamper-evident usage ledger &amp; heartbeat.</strong> A hash-chained <code>UsageLedgerEntry</code> table snapshots usage daily; a Worker heartbeat posts it to a PegasusOne-hosted endpoint when reachable, and simply logs a warning and retries next tick when it isn't — a permanently offline install can never be crashed or blocked by this.</li>
+    <li><strong>A standalone license-minting server.</strong> A brand-new, git-independent ASP.NET Core project (<code>FHIRBridge.LicenseServer</code>) that mints and records real customer licenses and receives their usage check-ins — deliberately isolated from the main product for security.</li>
+  </ul>
+
+  <h2 id="new-project"><span class="num">3.</span>New standalone project — FHIRBridge.LicenseServer</h2>
+  <div class="callout project">
+    <strong>Separate repository, separate process, zero code sharing.</strong>
+    <span><code>D:\Project\FHIRBridge\FHIRBridge-LicenseServer</code> is its own git repository with no project or package reference into the main FHIRBridge repo. It duplicates only the small pieces of claim-shape logic it needs (mirrored, not shared) so that a compromise of one codebase can never directly touch the other. Runs as its own ASP.NET Core Razor Pages app, its own PostgreSQL database, on its own port (5220 in local dev).</span>
+  </div>
+  <p>What it does:</p>
+  <ul class="feature-list">
+    <li><strong>Mints signed licenses.</strong> An internal admin (username/password login, no self-registration) fills in a form — customer, edition, expiry, every quota dimension, allowed source/resource/destination types (checkboxes, narrowed to only what the product actually supports today), allowed hospitals — and it signs an ES256 JWS token with the same claim shape and dev key the main repo verifies against.</li>
+    <li><strong>Records every issued license.</strong> Each mint is persisted to <code>IssuedLicenses</code> (customer, limits, summaries, the raw token, the exact claims JSON that was signed) for an audit trail of what was ever issued.</li>
+    <li><strong>Receives usage check-ins.</strong> A <code>CheckInEndpoints</code>/<code>CheckInContracts</code> ingest surface accepts the periodic heartbeat batches the main product's <code>LicenseHeartbeatWorker</code> sends, recording per-installation usage over time.</li>
+    <li><strong>Self-migrating.</strong> Applies its own EF Core migrations against its own PostgreSQL database on startup — no manual DB setup step for a fresh install of this tool itself.</li>
+  </ul>
+
+  <h2 id="how-generated"><span class="num">4.</span>How a license is generated</h2>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>An admin fills in the Create License form</strong><span>On <code>FHIRBridge.LicenseServer</code> (production) or the portal's temporary "Dev: Mint a test license" page (development only) — customer id/name, edition, expiry date, and every quota/allow-list field. Blank numeric fields default to <code>-1</code> ("unlimited"); blank allow-lists mean "everything allowed".</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>The fields are serialized into JWT claims</strong><span><code>LicenseTokenMinter.BuildClaimsJson</code> (LicenseServer) / the equivalent in <code>tools/FHIRBridge.LicenseMinter</code> (main repo's offline CLI) builds a JSON payload: <code>iss</code> (always <code>"pegasusone"</code>), <code>sub</code> (customer id), <code>nbf</code>/<code>exp</code> as Unix seconds, and one claim per quota/restriction dimension.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>The claims are signed with ES256 (ECDSA P-256)</strong><span><code>JsonWebTokenHandler().CreateToken(claimsJson, credentials)</code> using an <code>ECDsaSecurityKey</code> loaded from the signing private key — producing a compact, three-part JWS string (header.payload.signature).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>The issued license is recorded</strong><span>The token, the exact claims JSON, and per-field summaries are saved to <code>IssuedLicenses</code> in the LicenseServer's own database — a permanent record of what was ever issued to that customer.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>The token is handed to the customer / applied</strong><span>The raw token string is copied and either sent to the customer to paste into their own install's License screen, or (in dev) applied directly via <code>POST /api/v1/license</code>.</span></div>
+    </div>
+  </div>
+
+  <h2 id="how-checked"><span class="num">5.</span>How a license is checked &amp; enforced</h2>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Signature &amp; issuer verification</strong><span><code>SignedLicenseValidator.Validate</code> imports the ES256 public key (hardcoded, same on every install — see <code>LicensePublicKey</code>) and verifies the token's signature and <code>iss</code> claim. A malformed, tampered, or wrong-issuer token comes back <code>Invalid</code> — this method never throws, so a bad token can never crash the app.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Claims are parsed into a LicenseStatus</strong><span>Every quota/allow-list claim is read (absent or <code>-1</code> both mean "unlimited"); <code>nbf</code>/<code>exp</code> decide whether the result is <code>Active</code> or <code>Expired</code>. <code>ILicenseService.Current</code> holds this in memory, refreshed at startup and whenever a new token is applied — a cheap in-memory read on every request, no re-parsing per call.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Global gate — is the license Active at all?</strong><span>A middleware in <code>Program.cs</code>, placed right after authentication, blocks every <code>/api/v1/*</code> request (anonymous or authenticated) with a 403 unless the license state is <code>Active</code> — except a short allow-list (first-run registration, login/logout/refresh/me, the License screen itself, and its dev-only minting helper) so a locked install always has a way back in.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>Create-time quota &amp; allow-list checks</strong><span><code>LicenseEnforcementSaveChangesInterceptor</code> — an EF Core <code>SaveChangesInterceptor</code>, the same pattern the existing audit-hash-chain interceptor uses — watches every <code>SaveChangesAsync</code> call for a newly-<code>Added</code> <code>User</code>/<code>SourceConnection</code>/<code>ResourcePipelineRoute</code>/<code>WorkflowDefinition</code>/<code>DestinationConfiguration</code> row and calls the matching <code>ILicenseQuotaGuard</code> method before the save completes. One central place — a new quota dimension never means touching six different service call sites again.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>Execution-time re-validation</strong><span>Allow-list checks don't only run once at creation. <code>EnsureSourceConnectionStillAllowedAsync</code>/<code>EnsureDestinationTypeAllowedAsync</code> are re-checked at the moment a run actually triggers — in both the Configured Pipeline plane (<code>ConfiguredPipelineService.StartAsync</code>/<code>StartWebhookAsync</code>) and the Runtime plane (<code>WorkflowEndpoints</code>'s <code>/run</code> and <code>/checkpoint/{token}</code>) — for every distinct source/destination that specific run will touch, before any extraction begins.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">6</div>
+      <div class="step-body"><strong>Run-trigger caps (expiry, monthly quotas)</strong><span><code>EnsureCanStartNewRunAsync</code> checks expiry plus the two monthly caps (processed records, successful executions) at the very start of every run-trigger method, in both planes — never mid-run. The monthly counts are read from execution history with a short (45s) cache, so a burst of run requests doesn't hammer the database.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">7</div>
+      <div class="step-body"><strong>Fail-open on any internal error</strong><span>Every one of the checks above catches its own dependency failures, logs a warning, and lets the action through — a bug in the licensing code itself must never be the reason a paying customer's pipeline stops running.</span></div>
+    </div>
+  </div>
+
+  <h2 id="claim-shape"><span class="num">6.</span>The license token's claim shape</h2>
+  <p class="section-intro">Identical on both sides — the main repo's <code>SignedLicenseValidator</code>/<code>tools/FHIRBridge.LicenseMinter</code> and the standalone LicenseServer's <code>LicenseTokenMinter</code> build/read the exact same claim names, deliberately kept in sync by hand since neither project references the other.</p>
+  <table class="file-table">
+    <tr><th>Claim</th><th>Meaning</th></tr>
+    <tr><td class="file-path">iss / sub</td><td class="why">Always <code>"pegasusone"</code> / the customer id.</td></tr>
+    <tr><td class="file-path">customerName / edition</td><td class="why">Display-only fields.</td></tr>
+    <tr><td class="file-path">nbf / exp</td><td class="why">Issued-on / expires-on, Unix seconds. <code>nbf</code> doubles as the issued timestamp (no separate <code>iat</code>).</td></tr>
+    <tr><td class="file-path">maxUsers / maxWorkflows / maxSourceConnections</td><td class="why">Row-count caps. <code>-1</code> = unlimited.</td></tr>
+    <tr><td class="file-path">maxProcessedRecordsPerMonth</td><td class="why">Cap on resources processed within the current calendar month.</td></tr>
+    <tr><td class="file-path">maxSuccessfulWorkflowExecutionsPerMonth</td><td class="why">Cap on successful runs (both pipeline planes combined) within the current calendar month.</td></tr>
+    <tr><td class="file-path">allowedSourceTypes / allowedDestinationTypes / allowedResourceTypes</td><td class="why">String arrays of enum member names. Absent/empty = everything allowed.</td></tr>
+    <tr><td class="file-path">allowedHospitals</td><td class="why">Array of <code>{ vendor, baseUrl, displayName }</code> — specific hospital endpoints this license permits connecting to.</td></tr>
+    <tr><td class="file-path">features</td><td class="why">Free-form feature-flag strings, checked via <code>ILicenseService.HasFeature</code>.</td></tr>
+  </table>
+
+  <h2 id="domain"><span class="num">7.</span>Main repo — Domain</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">src/FHIRBridge.Domain/Entities/Licensing/UsageLedgerEntry.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Hash-chained, append-only ledger row (mirrors <code>AuditLog</code>'s exact shape) — a daily snapshot of live usage counts plus a <code>PreviousHash</code>/<code>EntryHash</code> chain, so a customer with full DB admin on their own install can't quietly edit historical usage without breaking the chain.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/FHIRBridge.Domain/Entities/Licensing/ClockRollbackDetector.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Detects an OS clock wound backward mid-process by comparing wall-clock delta against <code>Environment.TickCount64</code> delta between consecutive ledger rows from the same boot — catches the one tamper vector a hash chain alone can't (nothing gets edited after the fact, the clock itself lied).</td>
+    </tr>
+  </table>
+
+  <h2 id="sharedkernel"><span class="num">8.</span>Main repo — SharedKernel (exceptions)</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="file-path">src/BuildingBlocks/FHIRBridge.SharedKernel/Exceptions/LicenseQuotaExceededException.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Thrown when a row-count cap (users/workflows/source connections/monthly quotas) is exceeded. Mapped to HTTP 403 in <code>Program.cs</code>.</td>
+    </tr>
+    <tr>
+      <td class="file-path">src/BuildingBlocks/FHIRBridge.SharedKernel/Exceptions/LicenseRestrictionViolationException.cs</td>
+      <td class="status"><span class="pill pill-new">New</span></td>
+      <td class="why">Thrown when an allow-list (source/destination/resource type, hospital) is violated. Also mapped to 403.</td>
+    </tr>
+  </table>
+
+  <h2 id="application"><span class="num">9.</span>Main repo — Application layer</h2>
+  <h3>New</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">Abstractions/Licensing/ILicenseService.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Resolves/verifies/reports the current license. <code>Current</code>, <code>CurrentRawToken</code>, <code>HasFeature</code>, <code>ApplyAsync</code>, <code>ReloadAsync</code>.</td></tr>
+    <tr><td class="file-path">Abstractions/Licensing/LicenseStatus.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>LicenseState</code> enum, <code>AllowedHospital</code>/<code>LicenseLimits</code>/<code>LicenseStatus</code> records — the parsed, verified snapshot every other licensing type builds on.</td></tr>
+    <tr><td class="file-path">Abstractions/Licensing/LicenseFeatures.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Named constants for the free-form <code>features</code> claim strings.</td></tr>
+    <tr><td class="file-path">Abstractions/Licensing/ILicenseQuotaGuard.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">The core enforcement contract — one explicit method per quota/restriction dimension (<code>EnsureUserQuotaAvailableAsync</code>, <code>EnsureSourceConnectionQuotaAvailableAsync</code>, <code>EnsureSourceConnectionStillAllowedAsync</code>, <code>EnsureWorkflowQuotaAvailableAsync</code>, <code>EnsureResourceTypeAllowedAsync</code>, <code>EnsureDestinationTypeAllowedAsync</code>, <code>EnsureCanStartNewRunAsync</code>), deliberately not a switch/registry — these dimensions are fixed by the license schema, not vendor-extensible.</td></tr>
+    <tr><td class="file-path">Abstractions/Licensing/ILicenseUsageCountsProvider.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>LicenseUsageCounts</code> (users/source connections/tenants/workflows) — live row counts the guard compares against limits.</td></tr>
+    <tr><td class="file-path">Abstractions/Licensing/ILicenseUsageExecutionStatsProvider.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>LicenseUsageExecutionStats</code> — current-month processed-records/successful-executions counts, plus two all-time cumulative counts (informational only).</td></tr>
+    <tr><td class="file-path">Abstractions/Licensing/IUsageLedgerRepository.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Append/read contract for the hash-chained usage ledger (tail lookup, append, catch-up range for the heartbeat).</td></tr>
+    <tr><td class="file-path">DTOs/LicenseStatusDto.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Wire shape for <code>GET/POST api/v1/license</code> — <code>LicenseLimitsDto</code>, <code>LicenseUsageDto</code> (now including <code>SuccessfulExecutionsThisMonth</code>), <code>LicenseStatusDto</code>.</td></tr>
+    <tr><td class="file-path">Mappings/LicenseStatusMapper.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Maps the internal <code>LicenseStatus</code> + live usage/execution stats to the controller-facing DTO.</td></tr>
+    <tr><td class="file-path">Services/Licensing/LicenseQuotaGuard.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">The enforcement engine — implements every <code>ILicenseQuotaGuard</code> method: no license ⇒ no-op, unlimited ⇒ no-op, at/over limit ⇒ throw, any internal error ⇒ logged warning + pass (fail-open).</td></tr>
+    <tr><td class="file-path">Services/Licensing/LicenseUsageCountsProvider.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Composes the user/source-connection/route/workflow repositories into one <code>LicenseUsageCounts</code> snapshot.</td></tr>
+  </table>
+  <h3>Modified</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">DependencyInjection.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Registers <code>ILicenseUsageCountsProvider</code>/<code>ILicenseQuotaGuard</code> as scoped, alongside the rest of the Application-layer service registrations.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Application.csproj</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Package reference needed for JWT/JWS handling used by the licensing abstractions.</td></tr>
+    <tr><td class="file-path">DTOs/CreateFirstSuperAdminRequest.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>SetupStatusDto</code> extended with <code>LicenseActive</code>/<code>LicenseState</code> — the anonymous, boot-time-polled setup-status endpoint now also reports the license gate's state, so the portal can show its header banner even before/without an admin-only license call.</td></tr>
+    <tr><td class="file-path">Services/ConfigurationService.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Comments only, pointing to the interceptor — no behavior change. Enforcement for source-connection/destination/route creation lives centrally, not at these call sites.</td></tr>
+    <tr><td class="file-path">Services/UserManagementService.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Comments only, same rationale, for user creation/invitation.</td></tr>
+    <tr><td class="file-path">Abstractions/Security/AppSecretReferences.cs, IAppSecretAccessor.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Added an <code>InstallationId</code> secret reference — a stable, opaque per-install identifier the heartbeat worker sends so the LicenseServer can tell installs apart without any customer-identifying data.</td></tr>
+  </table>
+
+  <h2 id="infrastructure"><span class="num">10.</span>Main repo — Infrastructure / persistence</h2>
+  <h3>New</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">Licensing/LicensePublicKey.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">The ES256 public key (base64 SubjectPublicKeyInfo) every install verifies license tokens against — currently the shared dev key, identical to the standalone LicenseServer's dev signing key by design.</td></tr>
+    <tr><td class="file-path">Licensing/SignedLicenseValidator.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Verifies signature/issuer and parses every claim into a <code>LicenseStatus</code> — see §5/§6 above. Never throws.</td></tr>
+    <tr><td class="file-path">Licensing/LicenseService.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Singleton <code>ILicenseService</code> — resolves the token from (in order) a <code>SystemSetting</code> row, an env var, or a file path env var; reloads on demand; persists a newly-applied token.</td></tr>
+    <tr><td class="file-path">Licensing/DevLicenseSigningKey.cs, DevLicenseMintingService.cs, IDevLicenseMintingService.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">⚠ Temporary/dev-only — signs throwaway test tokens for the portal's dev-mint page. The private key here is a hardcoded dev constant, never used for a real customer license.</td></tr>
+    <tr><td class="file-path">Licensing/EfLicenseUsageExecutionStatsProvider.cs, ZeroLicenseUsageExecutionStatsProvider.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Real (EF query over run-history tables) and no-DB-profile (always-zero) implementations of the monthly execution-stats provider.</td></tr>
+    <tr><td class="file-path">Licensing/EfUsageLedgerRepository.cs, NullUsageLedgerRepository.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Real and no-DB-profile implementations of the usage-ledger repository.</td></tr>
+    <tr><td class="file-path">Persistence/LicenseEnforcementSaveChangesInterceptor.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">The central create-time enforcement point — see §5, step 4. Takes only <code>IServiceScopeFactory</code> + <code>ILogger</code> (not <code>ILicenseQuotaGuard</code> directly) and resolves the guard from a fresh scope at save time, to avoid a circular DI resolution against <code>FHIRBridgeDbContext</code> itself (the guard's own dependency chain resolves back to that context).</td></tr>
+    <tr><td class="file-path">Persistence/Configurations/Licensing/UsageLedgerEntryConfiguration.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">EF configuration for the ledger table — unique index on sequence number, index on timestamp, mirrors <code>AuditLogConfiguration</code>.</td></tr>
+    <tr><td class="file-path">Persistence/Migrations/20260910082537_AddUsageLedgerEntries.cs (+.Designer.cs)</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">SQL Server migration adding the <code>UsageLedgerEntries</code> table.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260910082638_AddUsageLedgerEntries.cs (+.Designer.cs)</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">The same migration, generated for the PostgreSQL provider.</td></tr>
+  </table>
+  <h3>Modified</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">DependencyInjection.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Registers <code>ILicenseService</code>, <code>IDevLicenseMintingService</code>, the interceptor as <code>AddSingleton</code> (not <code>AddScoped</code> — see the interceptor's own remarks), and both real/no-DB implementations of the ledger repository and execution-stats provider. Adds the interceptor to <code>AddDbContext</code>'s <code>options.AddInterceptors(...)</code> call.</td></tr>
+    <tr><td class="file-path">Persistence/FHIRBridgeDbContext.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Adds the <code>UsageLedgerEntries</code> DbSet and a <code>NextWorkflowDefinitionAddIsGenuineCreate</code> flag the interceptor and <code>SqlWorkflowDefinitionStore</code> use together to distinguish a genuine new workflow from the second half of a same-id edit's delete-then-re-add.</td></tr>
+    <tr><td class="file-path">Persistence/InMemoryConfigurationRepository.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">The no-DB dev/test fallback bypasses EF (and therefore the interceptor) entirely, so its own <code>AddSourceConnectionAsync</code>/<code>AddDestinationAsync</code>/<code>AddRouteAsync</code> now call the matching guard method directly, resolved through a fresh scope.</td></tr>
+    <tr><td class="file-path">Persistence/InMemoryUserAccessRepository.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Same rationale — took an <code>IServiceScopeFactory</code> constructor dependency for the equivalent user-quota check.</td></tr>
+    <tr><td class="file-path">Persistence/Workflows/SqlWorkflowDefinitionStore.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Sets/resets <code>NextWorkflowDefinitionAddIsGenuineCreate</code> around its Add+Save so the interceptor never double-counts an edit as a new workflow.</td></tr>
+    <tr><td class="file-path">Pipeline/ConfiguredPipelineService.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Adds run-trigger and execution-time guard calls to <code>StartAsync</code>/<code>StartWebhookAsync</code> — see §5, steps 5–6.</td></tr>
+    <tr><td class="file-path">Security/AppSecretAccessor.cs, AppSecretProvisioner.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Provisions/exposes the new <code>InstallationId</code> secret the heartbeat worker sends.</td></tr>
+  </table>
+
+  <h2 id="runtime"><span class="num">11.</span>Main repo — Runtime plane</h2>
+  <p class="section-intro">The Runtime plane (<code>PipelineOrchestrator</code>, explicit-DAG workflows) can't reference <code>FHIRBridge.Application</code> directly (layering rule), so it gets its own thin license-guard abstraction bridged to the real one.</p>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">FHIRBridge.Runtime.Application/Abstractions/Pipeline/IPipelineRunLicenseGuard.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Runtime-plane-local guard contract — <code>EnsureCanStartNewRunAsync</code>, <code>EnsureWorkflowQuotaAvailableAsync</code>.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Runtime.Infrastructure/Licensing/LicenseQuotaGuardAdapter.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Bridges <code>IPipelineRunLicenseGuard</code> to the real, main-Application <code>ILicenseQuotaGuard</code> — the only place that crosses the layering boundary, so the Runtime plane's own code never has to.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Runtime.Application/Services/PipelineOrchestrator.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Adds <code>EnsureCanStartNewRunAsync</code> to the start of <code>StartAsync</code>/bulk-export — the Runtime plane's run-trigger gate, mirroring the Configured Pipeline plane's.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Runtime.Application/Workflows/Storage/InMemoryWorkflowDefinitionStore.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">The no-DB fallback's own workflow-quota check on a genuine new workflow (<code>existing is null</code>).</td></tr>
+    <tr><td class="file-path">FHIRBridge.Runtime.Infrastructure/DependencyInjection.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Registers <code>IPipelineRunLicenseGuard</code> → <code>LicenseQuotaGuardAdapter</code>.</td></tr>
+  </table>
+
+  <h2 id="api"><span class="num">12.</span>Main repo — API layer</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">Controllers/V1/LicenseController.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>GET/POST api/v1/license</code>, <code>UnifiedAdmin</code>-policy-gated — reports current status + live usage (including successful executions this month) and lets an admin apply a new token.</td></tr>
+    <tr><td class="file-path">Controllers/V1/DevLicenseMintingController.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">⚠ Temporary/dev-only — <code>POST api/v1/dev/license-mint</code>, hard-gated to <code>IsDevelopment()</code> (404s everywhere else), backs the portal's throwaway dev-mint page.</td></tr>
+    <tr><td class="file-path">Controllers/V1/AuthController.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>GET setup-status</code> now also injects <code>ILicenseService</code> and returns the license gate's state alongside <code>requiresSetup</code> — anonymous, polled at portal boot and after login/apply.</td></tr>
+    <tr><td class="file-path">Workflows/WorkflowEndpoints.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Adds execution-time allow-list re-checks (source/destination) to the <code>/run</code> and <code>/checkpoint/{token}</code> endpoints — see §5, step 5. The checkpoint endpoint had no such checks at all before this work.</td></tr>
+    <tr><td class="file-path">Program.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Three additions: (1) <code>LoadLicense(app)</code> populates <code>ILicenseService.Current</code> at startup; (2) the global license-gate middleware — see §5, step 3; (3) two new <code>MapException</code> branches mapping <code>LicenseQuotaExceededException</code>/<code>LicenseRestrictionViolationException</code> to HTTP 403.</td></tr>
+  </table>
+
+  <h2 id="worker"><span class="num">13.</span>Main repo — Worker host</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">LicenseUsageSnapshotOptions.cs, LicenseUsageSnapshotWorker.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Daily <code>BackgroundService</code> — appends a new chained <code>UsageLedgerEntry</code> each tick, running the clock-rollback check first and raising a security event on any anomaly (never suppressed).</td></tr>
+    <tr><td class="file-path">LicenseHeartbeatOptions.cs, LicenseHeartbeatContracts.cs, LicenseHeartbeatWorker.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Hourly <code>BackgroundService</code> — POSTs unsent ledger entries to the configured PegasusOne endpoint in bounded batches, advancing a persisted "last sent sequence" marker only on success. Any failure (the expected steady state offline) logs a warning and simply retries next tick — it can never crash the Worker or block any other hosted service.</td></tr>
+    <tr><td class="file-path">Program.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Registers both new workers and <code>LoadLicense</code>'s equivalent startup call, alongside the existing ~25 hosted services.</td></tr>
+  </table>
+
+  <h2 id="tools"><span class="num">14.</span>Main repo — Minting tool</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">tools/FHIRBridge.LicenseMinter/Program.cs (+ .csproj)</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Offline console app that mints a signed license token from CLI arguments (<code>--max-users</code>, <code>--allowed-source-types</code>, <code>--allowed-hospitals</code>, etc.) — the reference implementation the standalone LicenseServer's claim-building logic was copied from verbatim.</td></tr>
+  </table>
+
+  <h2 id="tests"><span class="num">15.</span>Main repo — Tests</h2>
+  <p class="section-intro">85 licensing-specific unit tests, plus dedicated integration tests for the enforcement gate and dev-minting endpoint. A handful of unrelated existing tests were updated only for constructor-signature changes (the new <code>ILicenseQuotaGuard</code>/<code>IPipelineRunLicenseGuard</code> dependencies).</p>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/Licensing/LicenseQuotaGuardTests.cs</td><td class="status"><span class="pill pill-test">Test</span> <span class="pill pill-new">New</span></td><td class="why">85 test cases: at-limit throws, one-under-limit passes, unlimited/no-license/dependency-error all pass (fail-open), every allow-list dimension (source type, hospital, destination type, resource type), including the execution-time-only re-check that never touches the count cap.</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/Licensing/LicenseEnforcementSaveChangesInterceptorTests.cs</td><td class="status"><span class="pill pill-test">Test</span> <span class="pill pill-new">New</span></td><td class="why">Verifies the interceptor watches the right entities, in the right state, and correctly distinguishes a genuine workflow create from an edit.</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/Licensing/SignedLicenseValidatorTests.cs</td><td class="status"><span class="pill pill-test">Test</span> <span class="pill pill-new">New</span></td><td class="why">Signature/issuer/expiry parsing, every claim getter's null/absent/malformed handling.</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/Licensing/UsageLedgerEntryHashChainTests.cs, ClockRollbackDetectorTests.cs</td><td class="status"><span class="pill pill-test">Test</span> <span class="pill pill-new">New</span></td><td class="why">Hash-chain integrity and clock-rollback detection (including the "legitimate restart, no false positive" case).</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/Licensing/DevLicenseMintingServiceTests.cs</td><td class="status"><span class="pill pill-test">Test</span> <span class="pill pill-new">New</span></td><td class="why">Dev-only token-minting logic.</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/TestHelpers/LicenseTestScopeFactory.cs, tests/FHIRBridge.Runtime.UnitTests/TestHelpers/LicenseTestScopeFactory.cs</td><td class="status"><span class="pill pill-test">Test</span> <span class="pill pill-new">New</span></td><td class="why">Always-passes fake <code>ILicenseQuotaGuard</code>/<code>IPipelineRunLicenseGuard</code> scope factories for tests that construct stores directly, bypassing the real DI container.</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.Api.IntegrationTests/Tests/LicenseEnforcementTests.cs</td><td class="status"><span class="pill pill-test">Test</span> <span class="pill pill-new">New</span></td><td class="why">End-to-end: a quota cap actually returns 403 through the real HTTP pipeline.</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.Api.IntegrationTests/Tests/DevLicenseMintingTests.cs, DevLicenseMintingGateUnitTests.cs</td><td class="status"><span class="pill pill-test">Test</span> <span class="pill pill-new">New</span></td><td class="why">Confirms the dev-mint endpoint 404s outside Development and works within it.</td></tr>
+    <tr><td class="file-path">10 pre-existing test files (Configuration/Destinations/Infrastructure/Runtime.UnitTests suites)</td><td class="status"><span class="pill pill-test">Test</span> <span class="pill pill-modified">Modified</span></td><td class="why">Constructor call sites updated to pass the new <code>ILicenseQuotaGuard</code>/<code>IPipelineRunLicenseGuard</code> dependency (via the fake scope factory above) — no test logic itself changed.</td></tr>
+  </table>
+
+  <h2 id="portal"><span class="num">16.</span>Portal (Angular)</h2>
+  <h3>New</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">settings/models/license.model.ts</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-new">New</span></td><td class="why">Mirrors every backend licensing DTO — <code>LicenseState</code>, <code>LicenseLimits</code>, <code>LicenseUsage</code> (now with <code>successfulExecutionsThisMonth</code>), <code>LicenseStatus</code>, <code>LICENSE_UNLIMITED</code> sentinel.</td></tr>
+    <tr><td class="file-path">settings/services/license.service.ts</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-new">New</span></td><td class="why"><code>get()</code>/<code>apply()</code> against <code>api/v1/license</code>; <code>mintDev()</code> for the temporary dev-mint page.</td></tr>
+    <tr><td class="file-path">settings/pages/license-settings/*.ts/.html/.scss</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-new">New</span></td><td class="why">The License settings screen — status card, live usage (users/source connections/workflows/successful executions this month, each shown as X / limit), additional-restrictions card, and the activate/renew form.</td></tr>
+    <tr><td class="file-path">settings/pages/license-dev-mint/*.ts/.html/.scss</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-new">New</span></td><td class="why">⚠ Temporary/dev-only — full mint form with checklists for allowed source/resource/destination types (narrowed to only what the product actually has a real connector/writer for) and an EHR-endpoint-directory-backed hospital picker.</td></tr>
+  </table>
+  <h3>Modified</h3>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">core/api-endpoints.ts</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why">Adds <code>LICENSE_ENDPOINTS</code> (get/apply/devMint).</td></tr>
+    <tr><td class="file-path">settings/settings.routes.ts</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why">Adds the <code>license</code> and <code>license/mint-dev</code> routes, role-gated the same as the backend's <code>UnifiedAdmin</code> policy.</td></tr>
+    <tr><td class="file-path">settings/layout/settings-shell.component.ts</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why">Adds the License tab, visible to SuperAdmin/Admin only (new <code>unifiedAdminOnly</code> tab flag).</td></tr>
+    <tr><td class="file-path">onboarding/services/app-init.service.ts</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why">Adds <code>licenseActive</code>/<code>licenseState</code> signals (fail-open default) sourced from the anonymous setup-status endpoint, plus <code>refreshLicenseGate()</code> to re-poll after login/license-apply.</td></tr>
+    <tr><td class="file-path">auth/services/auth.service.ts</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why">Calls <code>refreshLicenseGate()</code> alongside the existing branding refresh on every successful login/MFA/magic-link completion.</td></tr>
+    <tr><td class="file-path">layout/app-shell/app-shell.component.ts/.html/.scss</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why">The visible license-gate UI: a persistent header banner ("License not active (Expired). Segue is locked...") plus a full-screen overlay over just the working content area (<code>.shell-content</code>) — sidebar and the user menu/sign-out stay usable — with a lock icon and a "Go to License Settings" link for admins. The overlay is suppressed on the License Settings page itself so an admin can still reach it to fix the problem.</td></tr>
+  </table>
+
+  <h2 id="license-server-files"><span class="num">17.</span>FHIRBridge.LicenseServer — full file listing</h2>
+  <p class="section-intro">Every file in the new standalone project (<code>D:\Project\FHIRBridge\FHIRBridge-LicenseServer</code>, its own git repository).</p>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What it does</th></tr>
+    <tr><td class="file-path">Program.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">App entry point — Razor Pages, cookie auth, self-migrating DB startup.</td></tr>
+    <tr><td class="file-path">appsettings.json, appsettings.Development.json</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Connection strings, admin credentials, signing-key config.</td></tr>
+    <tr><td class="file-path">Licensing/LicenseFields.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Plain data holder for every field a license carries — mirrors the main repo's <code>LicenseLimits</code> field-for-field.</td></tr>
+    <tr><td class="file-path">Licensing/LicenseSigningKeyProvider.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Loads the ES256 signing key (currently the dev key, identical to the main repo's dev public key by design).</td></tr>
+    <tr><td class="file-path">Licensing/LicenseSigningOptions.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Config binding for the signing key source (PFX path or dev fallback).</td></tr>
+    <tr><td class="file-path">Licensing/LicenseTokenMinter.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Signs <code>LicenseFields</code> into a compact ES256 JWS — see §4.</td></tr>
+    <tr><td class="file-path">Licensing/LicenseTokenValidator.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">This server's own copy of signature/claims verification (for displaying/re-checking an issued token).</td></tr>
+    <tr><td class="file-path">Domain/IssuedLicense.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Persisted record of every license ever minted — customer, limits, summaries, raw token, signed claims JSON.</td></tr>
+    <tr><td class="file-path">Domain/Installation.cs, CheckIn.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Tracks each customer install (last-seen sequence/time) and its incoming usage heartbeats.</td></tr>
+    <tr><td class="file-path">Api/CheckInEndpoints.cs, CheckInContracts.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Ingest surface for the main product's <code>LicenseHeartbeatWorker</code> POSTs.</td></tr>
+    <tr><td class="file-path">Data/LicenseServerDbContext.cs, LicenseServerDbContextDesignTimeFactory.cs, PostgresDatabaseInitializer.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">EF Core context (PostgreSQL) and self-migrating startup initializer.</td></tr>
+    <tr><td class="file-path">Migrations/20260910104824_InitialCreate.*, 20260911063611_AddMaxSuccessfulWorkflowExecutionsPerMonth.*, LicenseServerDbContextModelSnapshot.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">EF migrations — initial schema, then the added monthly-executions column.</td></tr>
+    <tr><td class="file-path">Security/AdminAccountProvider.cs, AdminCredentialsOptions.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Single hardcoded/config-driven admin account — no self-registration, this tool has exactly one operator role.</td></tr>
+    <tr><td class="file-path">Pages/Account/Login.cshtml(.cs), Logout.cshtml(.cs)</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Cookie-based sign-in/out for the single admin account.</td></tr>
+    <tr><td class="file-path">Pages/Index.cshtml(.cs)</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Dashboard — install/license stat cards with color-coded quota-usage chips.</td></tr>
+    <tr><td class="file-path">Pages/Licenses/Create.cshtml(.cs)</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">The mint-a-license form — see §4.</td></tr>
+    <tr><td class="file-path">Pages/Licenses/Index.cshtml(.cs)</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Lists every issued license.</td></tr>
+    <tr><td class="file-path">Pages/Guide.cshtml, Error.cshtml(.cs)</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Static usage guide page; the standard error page.</td></tr>
+    <tr><td class="file-path">Pages/Shared/_Layout.cshtml, _ViewImports.cshtml, _ViewStart.cshtml</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Shared page chrome — nav with active-link highlighting, inline SVG favicon.</td></tr>
+    <tr><td class="file-path">wwwroot/css/site.css</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">The full visual redesign — color-coded stat chips, card layouts, form sections.</td></tr>
+    <tr><td class="file-path">FHIRBridge.LicenseServer.csproj, .gitignore, README.md, CLAUDE.md, Properties/launchSettings.json</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Project scaffolding and documentation.</td></tr>
+  </table>
+
+  <h2 id="verification"><span class="num">18.</span>Verification</h2>
+  <ul class="feature-list">
+    <li><strong>Unit tests:</strong> 85/85 licensing tests passing (<code>dotnet test tests/FHIRBridge.UnitTests --filter "FullyQualifiedName~Licensing"</code>).</li>
+    <li><strong>Architecture tests:</strong> only one pre-existing, unrelated failure (an <code>ApplicationType</code> switch in <code>WorkflowEndpoints.cs</code>, not part of this work) — no new layering or switch-ban violations introduced.</li>
+    <li><strong>Build:</strong> API, Worker, and the standalone LicenseServer all build cleanly (0 errors) after every change described above; the Angular portal builds cleanly as well.</li>
+    <li><strong>Functional safety review:</strong> every enforcement insertion point was individually diff-reviewed to confirm it is purely additive — a new guard call placed before existing logic, fail-open on no-license/unlimited/internal-error, never altering an existing branch. See the earlier validation pass in this same working session for the full file-by-file confirmation.</li>
+    <li><strong>HIPAA:</strong> no FHIR resource content or patient data is touched anywhere in the licensing code; the audit/governance log tables are untouched by the enforcement interceptor (it only watches User/SourceConnection/ResourcePipelineRoute/WorkflowDefinition/DestinationConfiguration); dev-only minting stays hard-gated to the Development environment.</li>
+  </ul>
+
+  <footer>
+    FHIRBridge — Product Licensing implementation summary. Generated for the <code>feature/licensing</code> branch.
+  </footer>
+
+</div>
+</body>
+</html>

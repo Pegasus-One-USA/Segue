@@ -27,6 +27,7 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
     private readonly IPipelineRunStore _pipelineRunStore;
     private readonly IFhirBulkExportClient _bulkExportClient;
     private readonly ILogger<PipelineOrchestrator> _logger;
+    private readonly IPipelineRunLicenseGuard _licenseGuard;
     private readonly IGlobalExceptionManager? _exceptionManager;
 
     public PipelineOrchestrator(
@@ -36,6 +37,7 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
         IPipelineRunStore pipelineRunStore,
         IFhirBulkExportClient bulkExportClient,
         ILogger<PipelineOrchestrator> logger,
+        IPipelineRunLicenseGuard licenseGuard,
         IGlobalExceptionManager? exceptionManager = null)
     {
         _sourceClientFactory = sourceClientFactory;
@@ -44,6 +46,7 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
         _pipelineRunStore = pipelineRunStore;
         _bulkExportClient = bulkExportClient;
         _logger = logger;
+        _licenseGuard = licenseGuard;
         _exceptionManager = exceptionManager;
     }
 
@@ -51,6 +54,10 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
         StartPipelineRunRequest request,
         CancellationToken cancellationToken)
     {
+        // Gated here, at the very start, before any work begins — never called again anywhere else in this
+        // method, so an in-flight run is never interrupted by this check.
+        await _licenseGuard.EnsureCanStartNewRunAsync(cancellationToken);
+
         using var activity = FhirBridgeActivitySource.Instance.StartActivity("PipelineRun.Process", ActivityKind.Consumer);
         activity?.SetTag("correlation_id", request.CorrelationId);
 
@@ -171,6 +178,10 @@ public sealed class PipelineOrchestrator : IPipelineOrchestrator
         StartBulkExportRunRequest request,
         CancellationToken cancellationToken)
     {
+        // Same run-trigger gate as StartAsync above — checked once, before any work (including the bulk export
+        // kick-off itself) begins.
+        await _licenseGuard.EnsureCanStartNewRunAsync(cancellationToken);
+
         using var activity = FhirBridgeActivitySource.Instance.StartActivity("PipelineRun.Process", ActivityKind.Consumer);
         activity?.SetTag("correlation_id", request.CorrelationId);
 

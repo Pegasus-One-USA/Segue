@@ -73,8 +73,14 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
             updatedOnUtc: existing is not null ? utcNow : null,
             updatedBy: existing is not null ? actor : null);
 
+        // Tells LicenseEnforcementSaveChangesInterceptor this Add is a genuine new workflow (existing is null)
+        // rather than the second half of a same-id edit's delete-then-re-add — see the flag's own remarks on
+        // FHIRBridgeDbContext. Reset immediately after this save so it can never leak into a later, unrelated
+        // SaveChangesAsync call on this same scoped context instance.
+        _dbContext.NextWorkflowDefinitionAddIsGenuineCreate = existing is null;
         await _dbContext.WorkflowDefinitions.AddAsync(workflowDefinition, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        _dbContext.NextWorkflowDefinitionAddIsGenuineCreate = false;
 
         if (transaction is not null)
         {

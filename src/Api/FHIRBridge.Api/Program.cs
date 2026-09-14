@@ -559,6 +559,7 @@ if (swaggerEnabled)
 
 BootstrapDatabase(app);
 ProvisionAppSecrets(app);
+LoadLicense(app);
 SyncDiscoveredPermissions(app);
 
 // Durable (SQL) counterpart to the Serilog request log below, for the workflow/launch API surface only — see
@@ -677,6 +678,53 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseAuthentication();
+
+// License gate: once the license isn't Active (no token applied yet, expired, or invalid), every
+// /api/v1 action is blocked — including anonymous ones — except the handful of endpoints needed to
+// register the first admin, log in/out, see why (GET /auth/me, the setup-status check the portal
+// polls at boot), and actually fix it (the License screen, plus its dev-only minting helper). Without
+// that carve-out an inactive license would be permanently unrecoverable through the app itself. This
+// is the enforcement stage ILicenseService/LicenseStatus's own doc comments said was still to come —
+// everything before this was verification/reporting only.
+var licenseGateAllowedPrefixes = new[]
+{
+    "/api/v1/auth/setup-status",
+    "/api/v1/auth/setup-superadmin",
+    "/api/v1/auth/internal/login",
+    "/api/v1/auth/sso/login",
+    "/api/v1/auth/saml",
+    "/api/v1/auth/magic-link",
+    "/api/v1/auth/mfa",
+    "/api/v1/auth/refresh",
+    "/api/v1/auth/logout",
+    "/api/v1/auth/me",
+    "/api/v1/auth/internal/change-password",
+    "/api/v1/auth/internal/forgot-password",
+    "/api/v1/auth/internal/reset-password",
+    "/api/v1/config",
+    "/api/v1/license",
+    "/api/v1/dev/license-mint",
+};
+var licenseGateService = app.Services.GetRequiredService<FHIRBridge.Application.Abstractions.Licensing.ILicenseService>();
+
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/v1") &&
+        licenseGateService.Current.State != FHIRBridge.Application.Abstractions.Licensing.LicenseState.Active &&
+        !licenseGateAllowedPrefixes.Any(allowed => context.Request.Path.StartsWithSegments(allowed)))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = "license_not_active",
+            message = "Segue is locked: no active license is applied. An administrator must apply a valid license before this action is available.",
+            licenseState = licenseGateService.Current.State.ToString(),
+        });
+        return;
+    }
+
+    await next();
+});
 
 // Each entry blocks every /api/v1 route except its own allowlist while its claim is "true" — e.g.
 // must change password, or must finish MFA enrollment. One shared check so a third gate is just
@@ -842,6 +890,17 @@ static void BootstrapDatabase(WebApplication app)
 static void ProvisionAppSecrets(WebApplication app)
 {
     AppSecretProvisioner.ProvisionAsync(app.Services, CancellationToken.None).GetAwaiter().GetResult();
+}
+
+// Resolves and verifies the signed product license (see ILicenseService's remarks) so ILicenseService.Current
+// is populated before the app starts serving traffic instead of staying LicenseStatus.Unlicensed until the
+// first caller happens to trigger a reload. Verification/reporting only — nothing here blocks startup or
+// requests on the resolved LicenseStatus. Must run after ProvisionAppSecrets/BootstrapDatabase, since one of
+// its token sources is a SystemSetting row.
+static void LoadLicense(WebApplication app)
+{
+    var licenseService = app.Services.GetRequiredService<FHIRBridge.Application.Abstractions.Licensing.ILicenseService>();
+    licenseService.ReloadAsync(CancellationToken.None).GetAwaiter().GetResult();
 }
 
 // Reflection discovers every [StandardPermission] code in use (see PermissionCatalog), but only
@@ -1011,6 +1070,16 @@ static (int status, string message, bool trusted, IReadOnlyDictionary<string, st
         return (StatusCodes.Status404NotFound, nfe.UserMessage, true, null, null);
     if (ex is FHIRBridge.SharedKernel.Exceptions.BulkExportConcurrencyLimitExceededException concurrencyLimitException)
         return (StatusCodes.Status429TooManyRequests, concurrencyLimitException.UserMessage, true, null, null);
+
+    // Real license enforcement (quota caps and allow-list/expiry restrictions) — a commercial boundary, not a
+    // security boundary, but still a deliberate denial rather than a generic bad request. 403 (not 429/400):
+    // there is nothing to retry-after and nothing wrong with the request shape, the license simply doesn't
+    // permit this action right now.
+    if (ex is FHIRBridge.SharedKernel.Exceptions.LicenseQuotaExceededException licenseQuotaExceeded)
+        return (StatusCodes.Status403Forbidden, licenseQuotaExceeded.UserMessage, true, null, null);
+    if (ex is FHIRBridge.SharedKernel.Exceptions.LicenseRestrictionViolationException licenseRestrictionViolation)
+        return (StatusCodes.Status403Forbidden, licenseRestrictionViolation.UserMessage, true, null, null);
+
     if (ex is FHIRBridgeException fbe)
         return (StatusCodes.Status400BadRequest, fbe.UserMessage, true, null, null);
 

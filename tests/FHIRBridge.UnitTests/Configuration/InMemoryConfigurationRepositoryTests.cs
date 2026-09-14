@@ -13,7 +13,7 @@ namespace FHIRBridge.UnitTests.Configuration;
 /// </summary>
 public sealed class InMemoryConfigurationRepositoryTests
 {
-    private readonly InMemoryConfigurationRepository _repository = new();
+    private readonly InMemoryConfigurationRepository _repository = new(TestHelpers.LicenseTestScopeFactory.Create());
 
     private static SourceConnection NewSource(string name = "Epic Backend") =>
         new(name, SourceSystemType.Epic, "https://fhir.example.com",

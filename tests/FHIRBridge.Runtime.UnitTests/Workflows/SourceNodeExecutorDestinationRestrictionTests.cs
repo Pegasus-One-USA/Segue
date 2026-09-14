@@ -45,7 +45,7 @@ public sealed class SourceNodeExecutorDestinationRestrictionTests
         var clientFactory = new Mock<IFhirSourceClientFactory>();
         clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(client.Object);
 
-        var workflowStore = new InMemoryWorkflowDefinitionStore();
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "restriction-test", 1);
         var sourceNode = workflow.AddNode(
             WorkflowNodeTypes.EpicSource,
@@ -100,7 +100,7 @@ public sealed class SourceNodeExecutorDestinationRestrictionTests
         var clientFactory = new Mock<IFhirSourceClientFactory>();
         clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(client.Object);
 
-        var workflowStore = new InMemoryWorkflowDefinitionStore();
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "reference-resolved-restriction-test", 1);
         var sourceNode = workflow.AddNode(
             WorkflowNodeTypes.EpicSource,
@@ -157,7 +157,7 @@ public sealed class SourceNodeExecutorDestinationRestrictionTests
         var clientFactory = new Mock<IFhirSourceClientFactory>();
         clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(client.Object);
 
-        var workflowStore = new InMemoryWorkflowDefinitionStore();
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "explicit-non-compartment-selection-test", 1);
         var sourceNode = workflow.AddNode(
             WorkflowNodeTypes.EpicSource,
@@ -217,7 +217,7 @@ public sealed class SourceNodeExecutorDestinationRestrictionTests
         var clientFactory = new Mock<IFhirSourceClientFactory>();
         clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(client.Object);
 
-        var workflowStore = new InMemoryWorkflowDefinitionStore();
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "no-destination-test", 1);
         var sourceNode = workflow.AddNode(
             WorkflowNodeTypes.EpicSource,

@@ -12,6 +12,10 @@ interface SettingsTab {
   /** Hidden unless the user has the SuperAdmin role — stricter than `permissions`, which a
    *  regular Admin also satisfies via isAdmin(). Takes precedence over `permissions`. */
   superAdminOnly?: boolean;
+  /** Hidden unless the user has SuperAdmin or Admin (AuthStore.isAdmin()) — matches the backend's
+   *  AuthorizationPolicies.UnifiedAdmin policy (LicenseController). Unlike `superAdminOnly`, this also
+   *  admits a plain Admin. Takes precedence over `permissions`, same as `superAdminOnly`. */
+  unifiedAdminOnly?: boolean;
 }
 
 const SETTINGS_TABS: SettingsTab[] = [
@@ -24,6 +28,7 @@ const SETTINGS_TABS: SettingsTab[] = [
   { label: 'Workflow Configurations', route: 'workflow-configurations', icon: 'account_tree', permissions: ['sourceconnections.view', 'destinationconnections.view', 'mappingprofiles.view', 'transformationrules.view'] },
   { label: 'EHR Endpoints', route: 'ehr-endpoints', icon: 'hub', permissions: ['ehrendpoints.view'] },
   { label: 'Allowed Origins', route: 'allowed-origins', icon: 'public', superAdminOnly: true },
+  { label: 'License', route: 'license', icon: 'verified_user', unifiedAdminOnly: true },
   // Merged tab covering the former standalone Email Settings / System Security / System Settings /
   // Terminology Codes tabs — see settings.routes.ts's 'system-settings' route for the sections
   // underneath. NOT superAdminOnly: Email and the four Terminology Codes systems are independently
@@ -53,6 +58,7 @@ export class SettingsShellComponent {
   // tab only appears here if the user could also reach it from the sidebar's old direct links.
   readonly tabs = computed<SettingsTab[]>(() =>
     SETTINGS_TABS.filter(tab => {
+      if (tab.unifiedAdminOnly) return this.store.isAdmin();
       if (tab.superAdminOnly) return this.store.hasRole('SuperAdmin');
       if (!tab.permissions?.length) return true;
       if (this.store.isAdmin()) return true;
