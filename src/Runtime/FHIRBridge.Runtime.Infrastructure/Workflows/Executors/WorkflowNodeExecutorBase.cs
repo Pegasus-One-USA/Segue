@@ -61,12 +61,12 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
         }
 
         using var document = JsonDocument.Parse(node.ConfigurationJson);
-        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        if (!WorkflowNodeConfigurationEnvelope.TryGetSettings(document, out var settings))
         {
             return default;
         }
 
-        if (!document.RootElement.TryGetProperty(propertyName, out var property))
+        if (!settings.TryGetProperty(propertyName, out var property))
         {
             return default;
         }
@@ -127,7 +127,15 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
         // bubble a JsonException up through the workflow run.
         try
         {
-            return JsonSerializer.Deserialize<T>(node.ConfigurationJson, JsonOptions);
+            using var document = JsonDocument.Parse(node.ConfigurationJson);
+            if (!WorkflowNodeConfigurationEnvelope.TryGetSettings(document, out var settings))
+            {
+                return default;
+            }
+
+            // Deserialize from the resolved settings element rather than the raw string, so an enveloped node
+            // binds T against its "config" object instead of against the envelope (which would match nothing).
+            return settings.Deserialize<T>(JsonOptions);
         }
         catch (JsonException)
         {
@@ -138,8 +146,8 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
     protected static string? ReadStringConfiguration(WorkflowNode node, string propertyName)
     {
         using var document = JsonDocument.Parse(node.ConfigurationJson);
-        return document.RootElement.ValueKind == JsonValueKind.Object
-            && document.RootElement.TryGetProperty(propertyName, out var property)
+        return WorkflowNodeConfigurationEnvelope.TryGetSettings(document, out var settings)
+            && settings.TryGetProperty(propertyName, out var property)
             && property.ValueKind == JsonValueKind.String
                 ? property.GetString()
                 : null;

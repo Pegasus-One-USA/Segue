@@ -2816,7 +2816,17 @@ public static class WorkflowEndpoints
 
         try
         {
-            return JsonNode.Parse(configurationJson) as JsonObject;
+            if (JsonNode.Parse(configurationJson) is not JsonObject root)
+            {
+                return null;
+            }
+
+            // Dual-read (plan §3): an enveloped node keeps its settings under "config", with "ref" alongside
+            // carrying copied-from provenance the engine never reads. Resolving here means every caller of this
+            // helper — id lookups, usage reports, the node-removal permission check — reads both shapes without
+            // knowing which one it was handed. Only an object counts as an envelope: a legacy node whose field
+            // bag happens to hold a string called "config" must still be read flat.
+            return root[WorkflowNodeConfigurationEnvelope.ConfigProperty] is JsonObject settings ? settings : root;
         }
         catch (System.Text.Json.JsonException)
         {
