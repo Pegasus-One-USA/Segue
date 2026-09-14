@@ -20,7 +20,12 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
         builder.Property(x => x.Name).HasMaxLength(400).IsRequired();
         // Optional free-text notes (multi-line) shown next to the name in the builder/list. Never read by the engine.
         builder.Property(x => x.Description).HasMaxLength(2000);
-        builder.Property(x => x.Version).IsRequired();
+        // Optimistic concurrency: the API bumps this on every save (see WorkflowEndpoints.BuildWorkflow), and
+        // marking it a concurrency token means two concurrent incremental node writes racing on the same
+        // workflow throw DbUpdateConcurrencyException instead of one silently clobbering the other. Plain int
+        // rather than a SQL Server `rowversion` column, since the control-plane DB is PostgreSQL (no equivalent
+        // binary auto-increment type) and this project targets both providers.
+        builder.Property(x => x.Version).IsRequired().IsConcurrencyToken();
         builder.Property(x => x.IsEnabled).IsRequired();
         builder.Property(x => x.IsPubliclyLaunchable).IsRequired().HasDefaultValue(false);
 

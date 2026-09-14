@@ -176,6 +176,10 @@ export interface FieldLineageFilter {
 /** Matches the backend's LineageSummaryDto — run-wide field-lineage totals for the Lineage panel's stat strip. */
 export interface LineageSummary {
   resourcesProcessed: number;
+  /** Every field with a lineage row, including ones copied verbatim — lineage is provenance, not
+   *  transformation, so a pass-through field is still tracked. */
+  fieldsMapped: number;
+  /** Only fields where a transform rule actually ran — excludes PASS_THROUGH_NODE_TYPE hops. */
   fieldsTransformed: number;
   transformationNodesExecuted: number;
   successRate: number;

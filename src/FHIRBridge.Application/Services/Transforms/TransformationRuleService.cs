@@ -124,34 +124,6 @@ public sealed class TransformationRuleService : ITransformationRuleService
         return matches.Count == 1 ? matches[0] : null;
     }
 
-    public async Task<int> AttachPendingRulesToWorkflowAsync(
-        Guid workflowId,
-        IReadOnlyCollection<DestinationType> destinationTypes,
-        CancellationToken cancellationToken = default)
-    {
-        var pending = await _repository.GetPendingWorkflowRulesAsync(destinationTypes, cancellationToken);
-
-        var attached = 0;
-        foreach (var rule in pending)
-        {
-            // AttachToWorkflow refuses a rule that already belongs to a workflow, so a race with another
-            // builder session cannot silently re-point someone else's rule — it is skipped instead.
-            try
-            {
-                rule.AttachToWorkflow(workflowId);
-            }
-            catch (InvalidOperationException)
-            {
-                continue;
-            }
-
-            await _repository.UpdateAsync(rule, cancellationToken);
-            attached++;
-        }
-
-        return attached;
-    }
-
     public async Task DeleteRuleAsync(Guid ruleId, CancellationToken cancellationToken = default)
     {
         var rule = await _repository.GetByIdAsync(ruleId, cancellationToken);
@@ -230,12 +202,11 @@ public sealed class TransformationRuleService : ITransformationRuleService
         string? sourceSystem,
         string? sourceField,
         CancellationToken cancellationToken = default,
-        bool workflowScopedOnly = false,
         bool includePendingWorkflowRules = false)
     {
         var rules = await _resolver.ResolveAsync(
             destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
-            cancellationToken, workflowScopedOnly, includePendingWorkflowRules);
+            cancellationToken, includePendingWorkflowRules);
         return rules.Select(ToDto).ToList();
     }
 
@@ -266,17 +237,11 @@ public sealed class TransformationRuleService : ITransformationRuleService
         {
             var mappingResourceType = mappingProfilesById[route.MappingProfileId].ResourceType;
 
+            // Field-scope no longer exists (WORKFLOW_V3_PLAN.md Step 3) — a Workflow-scoped rule is the only
+            // kind of override a route can carry now.
             var workflowRules = await _repository.GetWorkflowScopedAsync(
                 route.Id, mappingResourceType, destinationField, sourceSystem: null, sourceField: null, cancellationToken);
             if (workflowRules.Count > 0)
-            {
-                withOverride++;
-                continue;
-            }
-
-            var fieldRules = await _repository.GetFieldScopedAsync(
-                mappingResourceType, destinationField, sourceSystem: null, sourceField: null, cancellationToken);
-            if (fieldRules.Count > 0)
             {
                 withOverride++;
             }

@@ -83,30 +83,11 @@ public sealed class FhirResourceRulePhaseTests
         create.Should().Throw<ArgumentException>();
     }
 
-    [Fact]
-    public async Task The_post_mapping_resolver_tiers_never_return_a_fhir_resource_rule()
-    {
-        // The guarantee that V2's rules cannot execute inside a V1 pipeline. A FHIR-resource rule carries no
-        // DestinationField, so if one leaked through it would match EVERY destination field at its tier.
-        await using var context = CreateContext();
-        context.TransformationRules.Add(FhirRule("valueQuantity.value"));
-        context.TransformationRules.Add(PostMappingRule("EffectiveDate"));
-        await context.SaveChangesAsync();
-
-        var repository = new EfTransformationRuleRepository(context);
-
-        // Queried the way the resolver queries: with the destination column being mapped. (Passing null here
-        // means "wildcard rules only" — rules with no DestinationField — not "every rule for this type".)
-        var resourceTier = await repository.GetResourceTypeScopedAsync("Observation", "EffectiveDate", default);
-        var globalTier = await repository.GetGlobalScopedAsync("EffectiveDate", default);
-        var destinationTier = await repository.GetDestinationTypeScopedAsync(
-            DestinationType.Medplum, "EffectiveDate", default);
-
-        resourceTier.Should().OnlyContain(rule => rule.ExecutionPhase == TransformExecutionPhase.PostMapping);
-        resourceTier.Should().ContainSingle(rule => rule.DestinationField == "EffectiveDate");
-        globalTier.Should().BeEmpty();
-        destinationTier.Should().BeEmpty();
-    }
+    // The isolation guarantee this used to check (PostMapping tier queries never return a FhirResource rule)
+    // is now structural rather than something to test: WORKFLOW_V3_PLAN.md Step 3 removed every PostMapping
+    // tier except GetWorkflowScopedAsync, which — like GetFhirResourceRulesAsync below — already filters on
+    // its own ExecutionPhase explicitly, so there is no shared tier method left for a FhirResource rule to leak
+    // through.
 
     [Fact]
     public async Task ListAsync_hides_fhir_resource_rules_but_still_shows_de_identification_rules()

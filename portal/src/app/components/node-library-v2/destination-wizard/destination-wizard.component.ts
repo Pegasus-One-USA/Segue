@@ -2676,6 +2676,7 @@ export class DestinationWizardComponent implements OnInit {
           destinationType: this.resolveDestinationTypeForRules(),
           sourceSystem: this.sourceVendor() || null,
           columns,
+          resourcePipelineRouteId: this.currentWorkflowId(),
         },
       },
     );
@@ -2692,6 +2693,11 @@ export class DestinationWizardComponent implements OnInit {
       // A whole-resource FHIR destination (Aidbox / Medplum / Azure FHIR) writes each resource verbatim and
       // has no field mappings at all — there is no profile to pick, and offering one implied a step that
       // does not apply to it.
+      //
+      // Same reasoning for the Transformation and De-identification tabs: they configure rules, not field
+      // mappings, so there is no profile for this row to reuse — the button reached a picker that could
+      // only ever change the mapping the user is not looking at.
+      this.configTab() === 'mapping' &&
       !this.isWholeResourceFhirDestination() &&
       !!this.sourceConnectionId() &&
       !!(this.selectedExistingId() ?? this.resolvedDestinationId()) &&

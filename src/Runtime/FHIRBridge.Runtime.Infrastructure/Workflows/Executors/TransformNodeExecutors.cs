@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
@@ -635,8 +635,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             {
                 rules = await _ruleResolver.ResolveAsync(
                     destinationType, resourceType, targetField, resourcePipelineRouteId, sourceSystem,
-                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
-                    workflowScopedOnly: resourcePipelineRouteId is not null);
+                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken);
                 ruleCache[cacheKey] = rules;
             }
 
@@ -693,8 +692,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             {
                 rules = await _ruleResolver.ResolveAsync(
                     destinationType, resourceType, targetField, resourcePipelineRouteId, sourceSystem,
-                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
-                    workflowScopedOnly: resourcePipelineRouteId is not null);
+                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken);
                 ruleCache[cacheKey] = rules;
             }
 
@@ -926,11 +924,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             {
                 rules = await _ruleResolver.ResolveAsync(
                     destinationType.Value, resourceType, destinationField, resourcePipelineRouteId, sourceSystem,
-                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
-                    // A node carrying a workflow id was authored by the V2 builder, whose rules are
-                    // pipeline-private — so it must not inherit another workflow's. A V1 graph never carries
-                    // one, which leaves its five-tier resolution exactly as it was.
-                    workflowScopedOnly: resourcePipelineRouteId is not null);
+                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken);
                 ruleCache[cacheKey] = rules;
             }
 
@@ -943,7 +937,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     destinationField,
                     sourceField,
                     nodeOrder,
-                    "DirectMapping",
+                    FieldLineageEntry.PassThroughNodeType,
                     "{}",
                     SerializeLineageValue(value),
                     SerializeLineageValue(value),

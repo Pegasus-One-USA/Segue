@@ -1170,7 +1170,7 @@
           [disabled]="isNextDisabled() || probeState() === 'testing' || provisioningDestination() || savingMappingProfiles() || applyingSchemaOps()"
           (click)="next()"
         >
-          @if (step() === TOTAL_STEPS) { {{ applyingSchemaOps() ? 'Applying schema changes…' : (savingMappingProfiles() ? 'Saving…' : (editNode() ? '✓ Update' : '✓ Add to Workflow')) }} }
+          @if (step() === TOTAL_STEPS) { {{ applyingSchemaOps() ? 'Applying schema changes…' : (savingMappingProfiles() ? 'Saving…' : '✓ Save') }} }
           @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : (provisioningDestination() ? 'Creating…' : 'Test connection & Next') }} }
           @else if (step() === 1 && isFhir()) { {{ probeState() === 'testing' ? 'Testing…' : (provisioningDestination() ? 'Creating…' : 'Test connection & Next') }} }
           @else if (step() === 1 && provisioningDestination()) { Creating… }

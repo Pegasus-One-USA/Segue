@@ -214,15 +214,24 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
 
         if (entries.Count == 0)
         {
-            return new LineageSummaryDto(0, 0, 0, 0);
+            return new LineageSummaryDto(0, 0, 0, 0, 0);
         }
 
+        // Lineage is provenance, not transformation: a field the Mapping node copied verbatim still gets a row,
+        // tagged with the PassThroughNodeType sentinel. Those rows belong in FieldsMapped (they really were
+        // mapped) but must be kept out of the transform counts — counting the sentinel as a node made a run with
+        // no transform rules at all report "1 transformation node" and "12 fields transformed".
+        var transformHops = entries
+            .Where(x => !string.Equals(x.NodeType, FieldLineageEntry.PassThroughNodeType, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
         var resourcesProcessed = entries.Select(x => x.ResourceId).Distinct().Count();
-        var fieldsTransformed = entries.Select(x => x.DestinationField).Distinct().Count();
-        var nodesExecuted = entries.Select(x => x.NodeType).Distinct().Count();
+        var fieldsMapped = entries.Select(x => x.DestinationField).Distinct().Count();
+        var fieldsTransformed = transformHops.Select(x => x.DestinationField).Distinct().Count();
+        var nodesExecuted = transformHops.Select(x => x.NodeType).Distinct().Count();
         var successRate = entries.Count(x => x.Success) / (double)entries.Count;
 
-        return new LineageSummaryDto(resourcesProcessed, fieldsTransformed, nodesExecuted, successRate);
+        return new LineageSummaryDto(resourcesProcessed, fieldsMapped, fieldsTransformed, nodesExecuted, successRate);
     }
 
     public async Task<IReadOnlyList<ResourceTypeSummaryDto>> GetLineageResourceTreeAsync(

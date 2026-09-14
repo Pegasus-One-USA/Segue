@@ -40,7 +40,7 @@ public sealed class WorkflowDefinition
     /// whitespace-only input is normalized to null rather than stored as a blank string.</summary>
     public string? Description { get; private set; }
 
-    public int Version { get; }
+    public int Version { get; private set; }
 
     public bool IsEnabled { get; private set; }
 
@@ -92,10 +92,11 @@ public sealed class WorkflowDefinition
         double positionX = 0,
         double positionY = 0,
         bool isEnabled = true,
-        bool checkpointUrlEnabled = false)
+        bool checkpointUrlEnabled = false,
+        Guid nodeId = default)
     {
         var node = new WorkflowNode(
-            Guid.NewGuid(),
+            nodeId,
             Id,
             nodeType,
             category,
@@ -122,11 +123,24 @@ public sealed class WorkflowDefinition
         return projected;
     }
 
-    public WorkflowEdge AddEdge(Guid fromNodeId, Guid toNodeId)
+    public WorkflowEdge AddEdge(Guid fromNodeId, Guid toNodeId, Guid edgeId = default)
     {
-        var edge = new WorkflowEdge(Guid.NewGuid(), Id, fromNodeId, toNodeId);
+        var edge = new WorkflowEdge(edgeId, Id, fromNodeId, toNodeId);
         _edges.Add(edge);
         return edge;
+    }
+
+    /// <summary>Removes a node and any edges touching it. No-op if the node does not exist.</summary>
+    public void RemoveNode(Guid nodeId)
+    {
+        _nodes.RemoveAll(node => node.Id == nodeId);
+        _edges.RemoveAll(edge => edge.FromNodeId == nodeId || edge.ToNodeId == nodeId);
+    }
+
+    /// <summary>Removes a single edge. No-op if the edge does not exist.</summary>
+    public void RemoveEdge(Guid edgeId)
+    {
+        _edges.RemoveAll(edge => edge.Id == edgeId);
     }
 
     public WorkflowNodeConfiguration AddNodeConfiguration(Guid nodeId, string key, string value)
@@ -147,6 +161,12 @@ public sealed class WorkflowDefinition
     public void EnablePublicLaunch() => IsPubliclyLaunchable = true;
 
     public void DisablePublicLaunch() => IsPubliclyLaunchable = false;
+
+    /// <summary>Advances the optimistic-concurrency token by one. Every save path must call this exactly once
+    /// (whether it rebuilds the whole definition, as BuildWorkflow's callers do, or mutates one already-loaded
+    /// instance in place, as the activate/deactivate/public-launch toggles do) — SqlWorkflowDefinitionStore
+    /// rejects a save whose Version isn't the stored row's current Version plus one.</summary>
+    public void BumpVersion() => Version++;
 
     /// <summary>Sets creation/modification provenance — called by SqlWorkflowDefinitionStore.SaveAsync, which
     /// resolves createdOnUtc/createdBy from the row being replaced (or "now"/the current user on a true first

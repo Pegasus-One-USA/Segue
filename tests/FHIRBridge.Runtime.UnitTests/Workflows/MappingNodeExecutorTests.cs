@@ -544,7 +544,7 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), null, "Patient.name.family",
-                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
@@ -599,7 +599,7 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 DestinationType.SqlServer, "Observation", "Value", It.IsAny<Guid?>(), null, "Observation.valueQuantity.value",
-                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new UnitConversionNode()]);
@@ -655,7 +655,7 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), null, "Patient.name.family",
-                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<CancellationToken>(), It.IsAny<bool>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new StringNormalizationNode()]);

@@ -207,14 +207,13 @@ export const MAPPING_PROFILES_ENDPOINTS = {
 };
 
 // ─── Transformation Rules (TransformationRulesController — api/v1/transformation-rules) ───
-// The 5-level scope chain (Global/DestinationType/ResourceType/Field/Workflow) that decides which of the 20
-// field-level transform nodes applies to a mapped column — backs the destination wizard's "Rules" button.
+// A PostMapping transform rule belongs to exactly one workflow (WORKFLOW_V3_PLAN.md Step 3 — no
+// Field/ResourceType/DestinationType/Global tier any more) — backs the destination wizard's "Rules" button.
 export const TRANSFORMATION_RULES_ENDPOINTS = {
   list:    `${API_V1_BASE}/transformation-rules`,
   save:    `${API_V1_BASE}/transformation-rules`,
   delete:  (id: string) => `${API_V1_BASE}/transformation-rules/${id}`,
   preview: `${API_V1_BASE}/transformation-rules/preview`,
-  attachPending: (workflowId: string) => `${API_V1_BASE}/transformation-rules/attach-pending/${workflowId}`,
   nodeSchemas: `${API_V1_BASE}/transformation-rules/node-schemas`,
   hidden: `${API_V1_BASE}/transformation-rules/hidden`,
   effective: `${API_V1_BASE}/transformation-rules/effective`,
@@ -458,6 +457,9 @@ export const WORKFLOW_ENDPOINTS = {
   copy:            (id: string) => `${API_V1_BASE}/workflows/${id}/copy`,
   launchUrl:       (id: string) => `${API_V1_BASE}/workflows/${id}/launch-url`,
   destinationData: (id: string) => `${API_V1_BASE}/workflows/${id}/destination-data`,
+  addNode:         (workflowId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes`,
+  updateNode:      (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}`,
+  deleteNode:      (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}`,
   checkpointUrl:    (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}/checkpoint-url`,
   checkpointResult: (workflowRunId: string) => `${API_V1_BASE}/workflows/runs/${workflowRunId}/checkpoint-result`,
   runStatus:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/status`,

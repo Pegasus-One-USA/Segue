@@ -127,7 +127,8 @@ public sealed class WorkflowSqlStoreTests
         }
 
         // Same id, an entirely new graph with fresh node ids — mirrors a PUT rebuilding the definition.
-        var version2 = new WorkflowDefinition(definitionId, "v2", 1);
+        // Version bumped to 2, same as WorkflowEndpoints.BuildWorkflow does off the previously-read definition.
+        var version2 = new WorkflowDefinition(definitionId, "v2", 2);
         var v2Source = version2.AddNode("SampleSourceNode", WorkflowNodeCategory.Source, 0);
         var v2Destination = version2.AddNode("SqlServerDestinationNode", WorkflowNodeCategory.Destination, 30);
         version2.AddEdge(v2Source.Id, v2Destination.Id);
@@ -145,9 +146,56 @@ public sealed class WorkflowSqlStoreTests
             reloaded.Nodes.Select(node => node.NodeType)
                 .Should().BeEquivalentTo("SampleSourceNode", "SqlServerDestinationNode");
 
-            // The v1 graph must be fully gone, not merged.
-            assertContext.WorkflowNodes.Count().Should().Be(2);
-            assertContext.WorkflowEdges.Count().Should().Be(1);
+            // The v1 graph must be fully gone, not merged. Scoped to this definitionId — the suite shares one
+            // database root (see _root/_databaseName above), so an unscoped count would also see every other
+            // test's rows.
+            assertContext.WorkflowNodes.Count(node => node.WorkflowDefinitionId == definitionId).Should().Be(2);
+            assertContext.WorkflowEdges.Count(edge => edge.WorkflowDefinitionId == definitionId).Should().Be(1);
+        }
+    }
+
+    // Two tabs both open the same workflow (both read version 1), tab A saves first (bumping it to 2), then
+    // tab B — still holding the version-1 snapshot it originally loaded — tries to save its own edits as
+    // version 2. Tab B's save must be rejected rather than silently winning and erasing tab A's change: this
+    // is the actual conflict window (load → edit → save), not the instant inside one SaveAsync call.
+    [Fact]
+    public async Task Definition_store_save_rejects_a_stale_concurrent_edit()
+    {
+        var definitionId = Guid.NewGuid();
+
+        var original = new WorkflowDefinition(definitionId, "v1", 1);
+        original.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+
+        await using (var context = CreateContext())
+        {
+            await CreateDefinitionStore(context).SaveAsync(original, CancellationToken.None);
+        }
+
+        // Tab A: reads version 1, saves as version 2.
+        var tabA = new WorkflowDefinition(definitionId, "from tab A", 2);
+        tabA.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+
+        await using (var context = CreateContext())
+        {
+            await CreateDefinitionStore(context).SaveAsync(tabA, CancellationToken.None);
+        }
+
+        // Tab B: also read version 1 (before tab A's save), now tries to save as version 2 too.
+        var tabB = new WorkflowDefinition(definitionId, "from tab B", 2);
+        tabB.AddNode("SampleSourceNode", WorkflowNodeCategory.Source, 0);
+
+        await using (var context = CreateContext())
+        {
+            var save = () => CreateDefinitionStore(context).SaveAsync(tabB, CancellationToken.None);
+            await save.Should().ThrowAsync<DbUpdateConcurrencyException>();
+        }
+
+        // Tab A's save must survive untouched.
+        await using (var assertContext = CreateContext())
+        {
+            var reloaded = await CreateDefinitionStore(assertContext).GetAsync(definitionId, CancellationToken.None);
+            reloaded!.Name.Should().Be("from tab A");
+            reloaded.Version.Should().Be(2);
         }
     }
 
@@ -173,10 +221,11 @@ public sealed class WorkflowSqlStoreTests
         }
 
         // Same id, a fresh graph — mirrors a PUT rebuilding the definition (an edit, not a first save).
+        // Version bumped to 2, same as WorkflowEndpoints.BuildWorkflow does off the previously-read definition.
         await using (var context = CreateContext())
         {
             await CreateDefinitionStore(context, "editor@example.com")
-                .SaveAsync(new WorkflowDefinition(definitionId, "v2", 1), CancellationToken.None);
+                .SaveAsync(new WorkflowDefinition(definitionId, "v2", 2), CancellationToken.None);
         }
 
         await using (var assertContext = CreateContext())
@@ -421,55 +470,4 @@ public sealed class WorkflowSqlStoreTests
         }
     }
 
-    // Scenario B: a Field-scoped TransformationRule authored with no resource type / destination field of
-    // its own — matched purely by source field name, so it applies wherever that source field is mapped, on
-    // any resource type, into any destination column. Previously GetFieldScopedAsync required an exact match
-    // on both, so a rule like this could never match anything at all. Both cases live in one Fact (rather
-    // than one each) reusing this class's own CreateContext() — every additional [Fact] in an EF-InMemory
-    // test class gets its own fresh database name (xUnit gives each Fact a new class instance), and EF
-    // warns-as-error once more than 20 such distinct configurations exist across a full test run; this
-    // suite is already close to that ceiling.
-    [Fact]
-    public async Task Field_rules_with_no_resource_type_match_by_source_field_alone_but_a_specific_rule_still_wins()
-    {
-        var blanket = new TransformationRule(
-            TransformScope.Field, TransformNodeType.DateTimeFormat, "{}",
-            resourceType: null, destinationField: null, sourceField: "birthDate");
-        blanket.MarkCreated("test@example.com");
-
-        await using (var context = CreateContext())
-        {
-            context.TransformationRules.Add(blanket);
-            await context.SaveChangesAsync();
-        }
-
-        await using (var readContext = CreateContext())
-        {
-            var repository = new EfTransformationRuleRepository(readContext);
-            var forPatient = await repository.GetFieldScopedAsync("Patient", "BirthDate", null, "birthDate", CancellationToken.None);
-            var forPractitioner = await repository.GetFieldScopedAsync("Practitioner", "DOB", null, "birthDate", CancellationToken.None);
-
-            forPatient.Should().ContainSingle().Which.Id.Should().Be(blanket.Id);
-            forPractitioner.Should().ContainSingle().Which.Id.Should().Be(blanket.Id);
-        }
-
-        var specific = new TransformationRule(
-            TransformScope.Field, TransformNodeType.HashingMasking, "{}",
-            resourceType: "Patient", destinationField: "BirthDate", sourceField: "birthDate");
-        specific.MarkCreated("test@example.com");
-
-        await using (var context = CreateContext())
-        {
-            context.TransformationRules.Add(specific);
-            await context.SaveChangesAsync();
-        }
-
-        await using (var readContext = CreateContext())
-        {
-            var repository = new EfTransformationRuleRepository(readContext);
-            var rules = await repository.GetFieldScopedAsync("Patient", "BirthDate", null, "birthDate", CancellationToken.None);
-
-            rules.Should().HaveCount(2, "the repository returns every candidate — the resolver picks the most specific one");
-        }
-    }
 }

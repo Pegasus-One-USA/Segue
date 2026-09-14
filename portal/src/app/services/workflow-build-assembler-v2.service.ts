@@ -93,14 +93,21 @@ export class WorkflowBuildAssemblerServiceV2 {
   /** Resources selected on a destination but NOT wired into the build (surfaced to the user as a caveat). */
   readonly lastUnmappedResources: string[] = [];
 
+  /** `workflowId` is the id this build will save to, when one already exists. It is not just metadata: the
+   *  mapper stamps it onto each chain node as `resourcePipelineRouteId`, which is the key
+   *  MappingNodeExecutor/FhirResourceTransformNodeExecutor resolve a workflow's own transformation rules by.
+   *  Passing null (as this did unconditionally before) left every chain node without it, so no workflow-scoped
+   *  rule could ever match at run time — a DateMathAge rule silently did not run and its raw source value hit
+   *  the typed destination column ("Conversion failed when converting the nvarchar value ... to data type int"). */
   assemble(
     name: string,
     trigger?: WorkflowTriggerRequest | null,
     description?: string | null,
+    workflowId?: string | null,
   ): WorkflowBuildRequest {
     this.lastUnmappedResources.length = 0;
 
-    const graph = this.mapper.toRequest(name, trigger, null, description);
+    const graph = this.mapper.toRequest(name, trigger, workflowId ?? null, description);
     const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
 
     const sourceNodeIds = new Set(

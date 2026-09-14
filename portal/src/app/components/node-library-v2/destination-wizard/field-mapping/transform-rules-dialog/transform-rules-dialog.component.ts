@@ -33,11 +33,17 @@ export interface TransformRulesDialogData {
   /** The already-mapped destination columns for this resource, each carrying the SOURCE field it's fed
    *  from (fhirPath + coarse value type) — read automatically from the existing mapping, not re-asked. */
   columns: { tableName: string; targetName: string; sourceField?: string | null; sourceValueType?: string | null }[];
+  /** The workflow this rule belongs to (WORKFLOW_V3_PLAN.md Step 3/4 — a PostMapping rule always belongs to
+   *  exactly one workflow, never a tenant-wide tier). Null only for a workflow that has never been saved —
+   *  Step 1's up-front create means this should be set by the time a user can reach this dialog, but the
+   *  builder still guards for null defensively (see WorkflowBuilderV2Component's currentWorkflowId signal). */
+  resourcePipelineRouteId: string | null;
 }
 
-/** One saved-or-being-added step in a field's rule chain. Always Field-scoped and always carries the
- *  dialog's known sourceSystem/sourceField automatically — no scope or source picker in this screen
- *  (those live only in the Global Rules screen; see TransformationRuleListComponent). */
+/** One saved-or-being-added step in a field's rule chain. Always Workflow-scoped (see
+ *  TransformRulesDialogData.resourcePipelineRouteId's doc comment) and always carries the dialog's known
+ *  sourceSystem/sourceField automatically — no scope or source picker in this screen (those live only in the
+ *  Global Rules screen; see TransformationRuleListComponent). */
 interface RuleStep {
   id: string | null;
   nodeType: TransformNodeType;
@@ -120,7 +126,11 @@ export class TransformRulesDialogComponent implements OnInit {
     this.loading.set(true);
     forkJoin({
       schemas: this.rulesService.getNodeSchemas(),
-      fieldRules: this.rulesService.list({ scope: 'Field', resourceType: this.data.resourceType }),
+      fieldRules: this.rulesService.list({
+        scope: 'Workflow',
+        resourceType: this.data.resourceType,
+        resourcePipelineRouteId: this.data.resourcePipelineRouteId ?? undefined,
+      }),
       previews: forkJoin(
         this.data.columns.map(c => this.rulesService.preview({
           destinationType: this.data.destinationType,
@@ -236,8 +246,10 @@ export class TransformRulesDialogComponent implements OnInit {
       destinationType: this.data.destinationType,
       resourceType: this.data.resourceType,
       destinationField: row.targetName,
+      resourcePipelineRouteId: this.data.resourcePipelineRouteId ?? undefined,
       sourceSystem: this.data.sourceSystem,
       sourceField: row.sourceField,
+      includePending: true,
     }).subscribe({
       next: rules => {
         row.inheritedRules = rules;
@@ -405,11 +417,13 @@ export class TransformRulesDialogComponent implements OnInit {
     this.rows.set([...this.rows()]);
     this.rulesService.save({
       id: step.id,
-      scope: 'Field',
+      scope: 'Workflow',
       nodeType: step.nodeType,
       config: step.config,
+      destinationType: this.data.destinationType,
       resourceType: this.data.resourceType,
       destinationField: row.targetName,
+      resourcePipelineRouteId: this.data.resourcePipelineRouteId,
       sourceSystem: this.data.sourceSystem,
       sourceField: row.sourceField,
       order: step.order,

@@ -118,7 +118,7 @@ public sealed class InMemoryWorkflowNodeResourceHistoryRecorder : IWorkflowNodeR
 
     public Task<LineageSummaryDto> GetLineageSummaryAsync(Guid workflowRunId, CancellationToken cancellationToken)
     {
-        return Task.FromResult(new LineageSummaryDto(0, 0, 0, 0));
+        return Task.FromResult(new LineageSummaryDto(0, 0, 0, 0, 0));
     }
 
     public Task<IReadOnlyList<ResourceTypeSummaryDto>> GetLineageResourceTreeAsync(Guid workflowRunId, CancellationToken cancellationToken)

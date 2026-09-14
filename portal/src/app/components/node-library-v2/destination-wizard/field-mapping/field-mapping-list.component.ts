@@ -189,7 +189,6 @@ export class FieldMappingListComponent {
             // popover answer the same question about the same field, so any divergence shows up directly as
             // "the tab says there's no rule, the connector says there is".
             resourcePipelineRouteId: this.workflowId() ?? undefined,
-            workflowScopedOnly: true,
             includePending: true,
           })
           .subscribe({

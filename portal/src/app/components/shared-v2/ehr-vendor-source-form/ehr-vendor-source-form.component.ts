@@ -903,7 +903,11 @@ export class EhrVendorSourceFormComponent
   protected readonly topbarTitle = computed(() => this.formTitle() ?? `${this.displayVendor()} Configuration`);
 
   readonly cancelled = output<void>();
-  readonly saved = output<void>();
+  /** Emits the canvas node id that was just added/updated (canvas mode only — null in entity mode, which
+   *  has no canvas node). The parent builder uses this to persist the node to the backend immediately,
+   *  same as any other node add/edit — see WizardServiceV2.save()'s canvas-mode branch, which used to only
+   *  ever touch local canvas state and left the node unpersisted until the workflow's next full Save. */
+  readonly saved = output<string | null>();
   /** The relocated "✕" next to "← Back to library" — closes the whole Node Library dialog outright
    *  (unlike cancel(), which only backs out of this form to the library's sidebar). Mirrors the
    *  original top-level close button's behavior verbatim: immediate, no unsaved-changes prompt. */
@@ -3902,7 +3906,7 @@ export class EhrVendorSourceFormComponent
     // (the field the user needs to change to retry) and keep everything else exactly as they left it.
     this.wiz.saveOutcome$.pipe(take(1)).subscribe((outcome) => {
       if (outcome.success) {
-        this.saved.emit();
+        this.saved.emit(outcome.nodeId ?? null);
         return;
       }
       this.saveErrorMessage.set(outcome.error ?? 'Save failed.');

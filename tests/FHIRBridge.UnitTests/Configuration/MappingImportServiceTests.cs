@@ -333,6 +333,87 @@ public sealed class MappingImportServiceTests
     /// this wiring, any such field previously had to be patched onto the profile by hand after every import,
     /// and a later re-import (which fully replaces a profile's fields) would silently wipe it out again.
     /// </summary>
+    /// <summary>
+    /// Adding a column to an already-imported mapping must reach the profile. The wizard round-trips the
+    /// profile id it was given (existingMappingProfileId), so the second import is an UPDATE of that profile —
+    /// and a profile whose field list is frozen at whatever the first import happened to carry is a field the
+    /// pipeline can never extract: no value is produced for it, so no transformation rule bound to it ever
+    /// runs and it never appears in field lineage, even though the builder UI keeps showing it as mapped.
+    /// </summary>
+    [Fact]
+    public async Task Reimporting_with_an_added_column_updates_the_existing_profiles_fields()
+    {
+        var (service, repository, _, destinationId, sourceConnectionId) =
+            CreateSut(existingDestinationTables: ["Patient"]);
+
+        var first = await service.ImportAsync(
+            Parse(GrowingPatientFixture(sourceConnectionId, destinationId, includeAddedColumn: false)),
+            CancellationToken.None);
+        var profileId = first.Profiles[0].MappingProfileId;
+
+        (await repository.GetMappingProfilesAsync(CancellationToken.None))
+            .Single().Fields.Select(f => f.TargetField)
+            .Should().BeEquivalentTo(["PatientId", "FamilyName"]);
+
+        // The user maps one more column and saves again — same profile, one extra field.
+        var second = await service.ImportAsync(
+            Parse(WithExistingMappingProfileIdJson(
+                GrowingPatientFixture(sourceConnectionId, destinationId, includeAddedColumn: true), profileId)),
+            CancellationToken.None);
+
+        second.Profiles[0].MappingProfileId.Should().Be(profileId, "the re-import must update, not fork");
+
+        var profiles = await repository.GetMappingProfilesAsync(CancellationToken.None);
+        profiles.Should().HaveCount(1);
+        profiles.Single().Fields.Select(f => f.TargetField)
+            .Should().BeEquivalentTo(
+                ["PatientId", "FamilyName", "BirthDateAge"],
+                "a column added after the first import must be persisted onto the same profile");
+    }
+
+    /// <summary>Same shape as <see cref="WithExistingMappingProfileId"/>, taking the fixture JSON as a string.</summary>
+    private static string WithExistingMappingProfileIdJson(string json, Guid existingMappingProfileId)
+    {
+        var node = JsonNode.Parse(json)!.AsObject();
+        foreach (var mapping in node["mappings"]!.AsArray())
+        {
+            mapping!.AsObject()["existingMappingProfileId"] = existingMappingProfileId.ToString();
+        }
+
+        return node.ToJsonString();
+    }
+
+    private static string GrowingPatientFixture(
+        Guid sourceConnectionId, Guid destinationId, bool includeAddedColumn)
+    {
+        var addedColumn = includeAddedColumn
+            ? """, { "column": "BirthDateAge", "mode": "directField", "sources": ["Patient.birthDate"], "instance": null }"""
+            : string.Empty;
+
+        return $$"""
+        {
+          "source": "EPIC", "destination": "SQL",
+          "sourceConnectionId": "{{sourceConnectionId}}", "destinationId": "{{destinationId}}",
+          "mappings": [
+            {
+              "resourceType": "Patient", "rank": 0, "generatedAt": "2026-09-13T17:56:07.932Z",
+              "schemaChanges": { "tablesToCreate": [], "columnsToAdd": [], "summary": null },
+              "processingOrder": [
+                { "step": 1, "table": "Patient", "level": 1, "dependsOn": null, "note": null }
+              ],
+              "destination": "SQL",
+              "tables": [
+                { "name": "Patient", "isNew": false, "relation": null, "columns": [
+                  { "column": "PatientId", "mode": "directField", "sources": ["Patient.id"], "instance": null },
+                  { "column": "FamilyName", "mode": "directField", "sources": ["Patient.name.family"], "instance": null }{{addedColumn}}
+                ] }
+              ]
+            }
+          ]
+        }
+        """;
+    }
+
     [Fact]
     public async Task Import_wires_a_columns_referenceLookup_onto_the_resulting_MappingField()
     {

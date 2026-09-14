@@ -73,7 +73,7 @@
         </button>
       }
       @if (canMutate()) {
-        <button class="builder-btn builder-btn--primary" type="button" [disabled]="workflowBusy()" (click)="onSave()" title="Save this workflow">
+        <button class="builder-btn builder-btn--primary" type="button" [disabled]="workflowBusy() || !hasUnsavedWork()" (click)="onSave()" title="Save this workflow">
           <svg class="builder-btn__icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
           </svg>
@@ -107,6 +107,7 @@
     (openTransformPicker)="onOpenTransformPicker($event)"
     (openSourcePicker)="onOpenSourcePicker()"
     (copyCheckpointUrl)="onCopyCheckpointUrl($event)"
+    (graphChanged)="onGraphChanged()"
   />
 </div>
 
@@ -120,6 +121,7 @@
   [currentWorkflowId]="currentWorkflowId()"
   (closed)="onLibraryClosed()"
   (sourceSelected)="onSourceSelected($event)"
+  (sourceNodeUpdated)="onSourceNodeUpdated()"
   (transformSelected)="onTransformSelected($event)"
   (mergeSelected)="onMergeSelected($event)"
 />

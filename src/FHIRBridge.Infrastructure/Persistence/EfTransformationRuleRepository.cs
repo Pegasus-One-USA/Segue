@@ -14,13 +14,17 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
         _db = db;
     }
 
-    // All five scope tiers below back only IEffectiveRuleResolver's PostMapping resolution (the per-destination-
-    // field pass that runs automatically after every mapped row — see TransformNodeExecutors.ApplyTransformRulesAsync).
+    // Backs IEffectiveRuleResolver's PostMapping resolution (the per-destination-field pass that runs
+    // automatically after every mapped row — see TransformNodeExecutors.ApplyTransformRulesAsync). A PostMapping
+    // rule belongs to exactly one workflow (WORKFLOW_V3_PLAN.md Step 3 — there is no Field/ResourceType/
+    // DestinationType/Global tier for PostMapping any more), so this is the only "does a rule apply here" query
+    // left for that phase.
+    //
     // PreMapping rules (e.g. the HIPAA Safe Harbor default profile, applied by SafeHarborDeIdentificationService
     // against raw FHIR JSON via SourceField paths, only when a Compliance node runs) must never be returned here:
     // they carry no DestinationField (they target a SourceField instead), so the "DestinationField == null is a
     // wildcard" fallback below would otherwise match EVERY destination field for that resource type/scope,
-    // masking fields the rule was never meant to touch.
+    // masking fields the rule was never meant to touch. See GetPreMappingRulesAsync — a fully separate path.
     public async Task<IReadOnlyList<TransformationRule>> GetWorkflowScopedAsync(
         Guid resourcePipelineRouteId, string resourceType, string destinationField, string? sourceSystem,
         string? sourceField, CancellationToken cancellationToken) =>
@@ -33,52 +37,6 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
                 x.DestinationField == destinationField &&
                 (x.SourceSystem == null || x.SourceSystem == sourceSystem) &&
                 (x.SourceField == null || x.SourceField == sourceField))
-            .ToListAsync(cancellationToken);
-
-    // ResourceType and DestinationField are null-or-match here (not required exact, unlike Workflow scope) —
-    // a Field rule can be authored "by source field alone," matching wherever that source field is mapped
-    // regardless of resource type or destination column name, same "specific beats blanket" pattern the
-    // broader tiers already use for DestinationField.
-    public async Task<IReadOnlyList<TransformationRule>> GetFieldScopedAsync(
-        string resourceType, string destinationField, string? sourceSystem, string? sourceField,
-        CancellationToken cancellationToken) =>
-        await _db.TransformationRules
-            .Where(x =>
-                x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
-                x.Scope == TransformScope.Field &&
-                (x.ResourceType == null || x.ResourceType == resourceType) &&
-                (x.DestinationField == null || x.DestinationField == destinationField) &&
-                (x.SourceSystem == null || x.SourceSystem == sourceSystem) &&
-                (x.SourceField == null || x.SourceField == sourceField))
-            .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyList<TransformationRule>> GetResourceTypeScopedAsync(
-        string resourceType, string? destinationField, CancellationToken cancellationToken) =>
-        await _db.TransformationRules
-            .Where(x =>
-                x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
-                x.Scope == TransformScope.ResourceType &&
-                x.ResourceType == resourceType &&
-                (x.DestinationField == null || x.DestinationField == destinationField))
-            .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyList<TransformationRule>> GetDestinationTypeScopedAsync(
-        DestinationType destinationType, string? destinationField, CancellationToken cancellationToken) =>
-        await _db.TransformationRules
-            .Where(x =>
-                x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
-                x.Scope == TransformScope.DestinationType &&
-                x.DestinationType == destinationType &&
-                (x.DestinationField == null || x.DestinationField == destinationField))
-            .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyList<TransformationRule>> GetGlobalScopedAsync(
-        string? destinationField, CancellationToken cancellationToken) =>
-        await _db.TransformationRules
-            .Where(x =>
-                x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
-                x.Scope == TransformScope.Global &&
-                (x.DestinationField == null || x.DestinationField == destinationField))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<TransformationRule>> GetPreMappingRulesAsync(
@@ -139,17 +97,6 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
             .Where(x => sourceSystem == null || x.SourceSystem == sourceSystem)
             .Where(x => sourceField == null || x.SourceField == sourceField)
             .OrderBy(x => x.Scope).ThenBy(x => x.Order)
-            .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowRulesAsync(
-        IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken) =>
-        await _db.TransformationRules
-            .Where(x =>
-                x.Scope == TransformScope.Workflow &&
-                x.ResourcePipelineRouteId == null &&
-                // Narrowed to the destination types the saving workflow actually writes to, so a second
-                // unsaved builder session's pending rules for an unrelated destination are left alone.
-                (destinationTypes.Count == 0 || destinationTypes.Contains(x.DestinationType!.Value)))
             .ToListAsync(cancellationToken);
 
     // Same shape as GetWorkflowScopedAsync above, minus the route-id equality (there is no route yet) plus a

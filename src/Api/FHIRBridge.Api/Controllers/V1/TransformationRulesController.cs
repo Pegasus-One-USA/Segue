@@ -10,8 +10,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace FHIRBridge.Api.Controllers.V1;
 
 /// <summary>
-/// CRUD for scoped transform rules (Global/DestinationType/ResourceType/Field/Workflow) plus a resolve-and-apply
-/// preview endpoint — the backend for the destination wizard's "Rules" button and modal.
+/// CRUD for transform rules (a PostMapping rule always belongs to one Workflow — see WORKFLOW_V3_PLAN.md
+/// Step 3; PreMapping de-identification rules still use Global/ResourceType) plus a resolve-and-apply preview
+/// endpoint — the backend for the destination wizard's "Rules" button and modal.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -86,27 +87,6 @@ public sealed class TransformationRulesController : ControllerBase
         return Ok(rule);
     }
 
-    /// <summary>Binds rules authored before this workflow existed to it — called by the builder right after
-    /// every save, not only a brand-new workflow's first one. Until attached, such rules are stored inert
-    /// (Workflow scope, null route), so authoring can happen while the pipeline is still being drawn without
-    /// any rule leaking into another one — but an inert rule that never gets claimed also never runs, so the
-    /// claim is retried each save rather than assumed to have worked once.</summary>
-    [HttpPost("attach-pending/{workflowId:guid}")]
-    [StandardPermission(
-        PermissionGroupCode.TransformationRules,
-        PermissionActionCode.Write,
-        description: "Attach pending transformation rules to a newly saved workflow.")]
-    [ProducesResponseType(typeof(int), StatusCodes.Status200OK)]
-    public async Task<IActionResult> AttachPendingRules(
-        Guid workflowId,
-        [FromQuery] DestinationType[]? destinationTypes,
-        CancellationToken cancellationToken)
-    {
-        var attached = await _service.AttachPendingRulesToWorkflowAsync(
-            workflowId, destinationTypes ?? [], cancellationToken);
-        return Ok(attached);
-    }
-
     [HttpDelete("{ruleId:guid}")]
     [StandardPermission(
         PermissionGroupCode.TransformationRules,
@@ -145,10 +125,6 @@ public sealed class TransformationRulesController : ControllerBase
         [FromQuery] Guid? resourcePipelineRouteId,
         [FromQuery] string? sourceSystem,
         [FromQuery] string? sourceField,
-        /// <summary>True to consider only rules belonging to the workflow named by
-        /// <paramref name="resourcePipelineRouteId"/>, with no fall-through to the tenant-wide tiers. Set by
-        /// the V2 builder, whose rules are pipeline-private; omit for V1's original five-tier resolution.</summary>
-        [FromQuery] bool workflowScopedOnly,
         /// <summary>True to also surface rules authored before the workflow was first saved (Workflow scope,
         /// no route id yet). Set by the builder's save-time type check, which otherwise cannot see a rule the
         /// user has just attached to a field on a pipeline that has no id yet. Never set by the executors —
@@ -158,7 +134,7 @@ public sealed class TransformationRulesController : ControllerBase
     {
         var rules = await _service.GetEffectiveRulesAsync(
             destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
-            cancellationToken, workflowScopedOnly, includePending);
+            cancellationToken, includePending);
         return Ok(rules);
     }
 

@@ -173,6 +173,14 @@ export class NodeLibraryDialogComponent {
   readonly sourceSelected    = output<string>();
   readonly transformSelected = output<AddTransformEvent>();
   readonly mergeSelected     = output<MergeEvent>();
+  /** A source form (headless — generic-fhir/hl7v2, see SELF_CONTAINED_SOURCE_FORM_KEYS — or a self-contained
+   *  vendor form: Epic/Cerner/Athenahealth/Allscripts/eClinicalWorks/MEDITECH/Sample) just added or edited a
+   *  canvas node via store.addNode/updateNode. WizardServiceV2.save()'s canvas-mode branch only ever touches
+   *  local canvas state — the real backend SourceConnection is a separate concern handled independently
+   *  (entity mode / create-on-save) — so the node itself still needs to reach the server the same way any
+   *  other node add/edit does. The parent builder listens to POST (new node) or PUT (existing node) it,
+   *  same as a destination/chain-node edit. */
+  readonly sourceNodeUpdated = output<string>();
 
   // ── local UI state ────────────────────────────────────────────────────────
   readonly searchQuery   = signal('');
@@ -736,7 +744,8 @@ export class NodeLibraryDialogComponent {
     this.openSourceFormType.set(key);
   }
 
-  onSourceFormSaved(): void {
+  onSourceFormSaved(nodeId: string | null): void {
+    if (nodeId) this.sourceNodeUpdated.emit(nodeId);
     this._close();
   }
 
@@ -761,6 +770,7 @@ export class NodeLibraryDialogComponent {
     const editNode = this.sourceFormEditNode();
     if (editNode) {
       this.store.updateNode(editNode.id, { fields } as Partial<CanvasNode>);
+      this.sourceNodeUpdated.emit(editNode.id);
     } else {
       const meta = SOURCES.find(s => s.id === this.openSourceFormType());
       const node: SourceNode = {

@@ -926,7 +926,7 @@
         [title]="form.invalid ? 'Some required fields are still empty — click to jump to the first one' : ''"
         (click)="save()"
       >
-        {{ isEditing ? 'Update' : (wiz.wizardMode() === 'entity' ? 'Save' : 'Add to Workflow') }}
+        {{ isEditing ? 'Update' : 'Save' }}
       </button>
     }
   </div>

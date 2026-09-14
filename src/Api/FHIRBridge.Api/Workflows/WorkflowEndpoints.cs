@@ -441,10 +441,19 @@ public static class WorkflowEndpoints
                 request.Trigger,
                 Description: request.Description);
 
-            // Bump the version off whatever is currently stored (existingDefinition, loaded further up for the
-            // node-removal check) so version history is real instead of always 1.
+            // Bump off the CURRENT stored version, re-read here rather than reusing existingDefinition (loaded
+            // at the top of this request, for the node-removal check). Between that early read and this save,
+            // an incremental /workflows/{id}/nodes call (or another concurrent save) may already have bumped
+            // the row — reusing the stale version would make this save's own version math collide with a
+            // change that already landed, since SqlWorkflowDefinitionStore's concurrency check requires the
+            // write to be exactly currentVersion + 1. The canvas already reflects any such incremental add (its
+            // node carries the real id renameNodeId swapped in), so re-deriving the version here is the only
+            // thing that needed to change — not what gets saved.
+            var currentDefinition = request.WorkflowId is { } workflowIdForVersion
+                ? await store.GetAsync(workflowIdForVersion, cancellationToken)
+                : null;
             var workflow = BuildWorkflow(
-                request.WorkflowId ?? Guid.NewGuid(), definitionRequest, (existingDefinition?.Version ?? 0) + 1);
+                request.WorkflowId ?? Guid.NewGuid(), definitionRequest, (currentDefinition?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
 
             // Retire the mapping profiles / workflow-scoped rules this save just stopped referencing (a
@@ -967,7 +976,15 @@ public static class WorkflowEndpoints
                 }
             }
 
-            var workflow = BuildWorkflow(workflowId, request, (existing?.Version ?? 0) + 1);
+            // Re-read the current version immediately before saving rather than reusing `existing` (loaded
+            // above, before the possibly-slow permission-check loops) — see the matching comment in
+            // /workflows/build for why a stale version here would make this save collide with an incremental
+            // /workflows/{id}/nodes call that landed in between.
+            var currentDefinition = await store.GetAsync(workflowId, cancellationToken);
+            var workflow = BuildWorkflow(
+                workflowId,
+                request with { Nodes = PreserveExecutorConfiguration(request.Nodes, currentDefinition) },
+                (currentDefinition?.Version ?? 0) + 1);
             await store.SaveAsync(workflow, cancellationToken);
 
             // Same retirement pass as /workflows/build — see the comment there. This path provisions
@@ -2002,6 +2019,7 @@ public static class WorkflowEndpoints
             }
 
             workflow.Activate();
+            workflow.BumpVersion();
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Ok(workflow);
         // Toggling IsEnabled modifies the workflow definition — workflow.edit, same as any other change made
@@ -2021,6 +2039,7 @@ public static class WorkflowEndpoints
             }
 
             workflow.Deactivate();
+            workflow.BumpVersion();
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Ok(workflow);
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
@@ -2042,6 +2061,7 @@ public static class WorkflowEndpoints
             }
 
             workflow.EnablePublicLaunch();
+            workflow.BumpVersion();
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Ok(workflow);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
@@ -2058,6 +2078,7 @@ public static class WorkflowEndpoints
             }
 
             workflow.DisablePublicLaunch();
+            workflow.BumpVersion();
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Ok(workflow);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
@@ -2489,6 +2510,69 @@ public static class WorkflowEndpoints
         return newReference;
     }
 
+    /// <summary>
+    /// Configuration keys that only <c>/workflows/build</c> ever writes (see its Mappings step) and that the
+    /// runtime reads back off the node itself — <c>resourceMappings</c> and the legacy
+    /// <c>resourceType</c>/<c>destinationObject</c>/<c>fields</c> trio drive
+    /// DestinationNodeExecutor.CreateMappingProfiles, and <c>sourceConnectionId</c> lets it re-resolve the real
+    /// MappingProfile by natural key. The portal's canvas does not model any of them, so a plain design save
+    /// (PUT) round-trips a node without them.
+    /// </summary>
+    private static readonly string[] ExecutorOwnedConfigurationKeys =
+        ["resourceMappings", "resourceType", "destinationObject", "fields", "sourceConnectionId"];
+
+    /// <summary>
+    /// Carries the build-stamped, executor-owned configuration (see
+    /// <see cref="ExecutorOwnedConfigurationKeys"/>) forward from the stored node onto the incoming one, for any
+    /// key this request does not itself supply. Without it, every PUT silently stripped the mapping shape the
+    /// destination executor needs, so a workflow that had run fine failed its next run with "Mapping profile for
+    /// '...' has no mapped fields".
+    /// <para>
+    /// This is a backstop, NOT the mechanism that keeps those keys current: a canvas carrying mappings autosaves
+    /// through /workflows/build (see WorkflowBuilderV2Component.persistGraph), which regenerates them from the
+    /// wizard's own dest_mappings_v2 and is not routed through here at all. This only stops a plain design save —
+    /// a canvas with nothing left to provision — from deleting what an earlier build wrote. Preserving a key is
+    /// therefore always "keep what the last build derived", never "keep a value the user has since changed".
+    /// </para>
+    /// </summary>
+    private static IReadOnlyCollection<WorkflowNodeRequest> PreserveExecutorConfiguration(
+        IReadOnlyCollection<WorkflowNodeRequest> requestNodes,
+        WorkflowDefinition? existing)
+    {
+        if (existing is null)
+        {
+            return requestNodes;
+        }
+
+        var storedById = existing.Nodes.ToDictionary(node => node.Id.ToString(), StringComparer.OrdinalIgnoreCase);
+
+        return requestNodes
+            .Select(node =>
+            {
+                if (!storedById.TryGetValue(node.Id, out var stored)
+                    || TryParseConfiguration(stored.ConfigurationJson) is not { } storedConfig)
+                {
+                    return node;
+                }
+
+                var missing = ExecutorOwnedConfigurationKeys
+                    .Where(key => storedConfig[key] is not null)
+                    .Where(key => TryParseConfiguration(node.ConfigurationJson)?[key] is null)
+                    .ToArray();
+
+                return missing.Length == 0
+                    ? node
+                    : WithConfiguration(node, config =>
+                    {
+                        foreach (var key in missing)
+                        {
+                            config[key] = storedConfig[key]!.DeepClone();
+                        }
+                    });
+            })
+            .ToArray();
+    }
+
     private static WorkflowNodeRequest WithConfiguration(WorkflowNodeRequest node, Action<JsonObject> mutate)
     {
         var config = TryParseConfiguration(node.ConfigurationJson) ?? new JsonObject();
@@ -2742,7 +2826,7 @@ public static class WorkflowEndpoints
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request, int version = 1)
     {
         var workflow = new WorkflowDefinition(
-            workflowId, request.Name, version: 1, request.IsEnabled, request.IsPubliclyLaunchable, request.Description);
+            workflowId, request.Name, version, request.IsEnabled, request.IsPubliclyLaunchable, request.Description);
         var nodeIdsByClientId = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var nodeRequest in request.Nodes)

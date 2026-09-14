@@ -13,10 +13,12 @@ namespace FHIRBridge.Infrastructure.Persistence.Workflows;
 /// nodes, per-node configuration, and edges — to the control-plane database so graphs survive a restart.
 /// </summary>
 /// <remarks>
-/// A save is a wholesale replace: the API rebuilds the graph with fresh node/edge ids on every update
-/// (POST/PUT), while activate/deactivate reuse the same ids. Deleting the old aggregate and re-inserting
-/// the new one across two <see cref="DbContext.SaveChangesAsync(CancellationToken)"/> calls handles both
-/// without primary-key collisions; a transaction (on relational providers) keeps the swap atomic.
+/// A save is an id-based upsert: nodes/edges present in <paramref name="workflowDefinition"/> that already
+/// exist (by id) are updated in place, new ones are inserted, and ones no longer present are removed. This
+/// keeps node/edge ids stable across saves — required for anything (an incremental "add node" endpoint, a
+/// portal reference) to address a node consistently from one save to the next. <see cref="WorkflowDefinition.Version"/>
+/// is a concurrency token (see WorkflowPersistenceConfigurations), so a stale caller's save throws
+/// <see cref="DbUpdateConcurrencyException"/> rather than silently overwriting a newer save.
 /// </remarks>
 public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
 {
@@ -53,18 +55,6 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
             .AsSplitQuery()
             .FirstOrDefaultAsync(definition => definition.Id == workflowDefinition.Id, cancellationToken);
 
-        if (existing is not null)
-        {
-            // Cascade delete removes the tracked nodes/edges/configurations with the parent.
-            _dbContext.WorkflowDefinitions.Remove(existing);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-
-        // Stamped here, explicitly, rather than via the generic IAuditableEntity/AuditingSaveChangesInterceptor
-        // mechanism: this save is always a delete+re-add (see remarks above), so EF always reports "Added" —
-        // relying on the interceptor would reset CreatedOnUtc/CreatedBy to "now" on every edit. CreatedOnUtc/
-        // CreatedBy carry over from the row just deleted; UpdatedOnUtc/UpdatedBy only get set from the second
-        // save onward (mirrors AuditableChildEntity's ModifiedOnUtc staying null until an actual update).
         var utcNow = DateTime.UtcNow;
         var actor = _currentUserService.CurrentUser.AuditName;
         workflowDefinition.StampAudit(
@@ -73,7 +63,37 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
             updatedOnUtc: existing is not null ? utcNow : null,
             updatedBy: existing is not null ? actor : null);
 
-        await _dbContext.WorkflowDefinitions.AddAsync(workflowDefinition, cancellationToken);
+        if (existing is null)
+        {
+            await _dbContext.WorkflowDefinitions.AddAsync(workflowDefinition, cancellationToken);
+        }
+        else
+        {
+            // The real conflict window is the caller's whole edit — load, let the user work, save — not the
+            // instant between the fresh read above and SaveChangesAsync below. So the concurrency check must
+            // compare the DB's actual current Version against the version the CALLER originally read (baked
+            // into workflowDefinition.Version as "previous version + 1" — see WorkflowEndpoints.BuildWorkflow),
+            // not against whatever this fresh `existing` query happens to see: by definition that query always
+            // agrees with the database, so leaving EF's original-value at `existing`'s tracked value would
+            // make this check pass unconditionally, silently letting a second, stale save win.
+            if (existing.Version != workflowDefinition.Version - 1)
+            {
+                throw new DbUpdateConcurrencyException(
+                    $"Workflow '{workflowDefinition.Id}' was modified by another save (expected version " +
+                    $"{workflowDefinition.Version - 1}, found {existing.Version}).");
+            }
+
+            _dbContext.Entry(existing).CurrentValues.SetValues(workflowDefinition);
+
+            // Node/edge ids are the only thing that must survive a save (see class remarks): every property on
+            // WorkflowNode/WorkflowEdge/WorkflowNodeConfiguration is otherwise immutable, so an id match is
+            // replaced wholesale via the DbSets directly (rather than through the aggregate's own collections,
+            // whose change-tracking fixup does not cope with an item being removed and re-added under the same
+            // id within one SaveChanges) rather than patched property-by-property.
+            UpsertNodes(_dbContext, existing.Id, workflowDefinition.Nodes);
+            UpsertEdges(_dbContext, existing.Id, workflowDefinition.Edges);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         if (transaction is not null)
@@ -96,6 +116,65 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
             workflowDefinition.Trigger?.IntervalMinutes, workflowDefinition.Trigger?.TimeZoneId);
 
         return workflowDefinition;
+    }
+
+    /// <summary>Replaces the persisted node graph for <paramref name="workflowDefinitionId"/> with
+    /// <paramref name="desired"/> by id: an id present in both is removed and re-added (nodes are immutable
+    /// value-ish objects, so a content change always means a new instance), an id only in
+    /// <paramref name="desired"/> is inserted, and an id no longer present is removed (cascade-deletes its
+    /// configuration). Goes through the DbContext's sets directly rather than the aggregate's own Nodes
+    /// collection — removing and re-adding an item under the same id within one SaveChanges does not survive
+    /// EF's relationship fixup when done via the tracked navigation collection.</summary>
+    private static void UpsertNodes(FHIRBridgeDbContext dbContext, Guid workflowDefinitionId, IReadOnlyCollection<WorkflowNode> desired)
+    {
+        var existingNodes = dbContext.ChangeTracker.Entries<WorkflowNode>()
+            .Select(entry => entry.Entity)
+            .Where(node => node.WorkflowDefinitionId == workflowDefinitionId)
+            .ToArray();
+
+        dbContext.WorkflowNodes.RemoveRange(existingNodes);
+
+        foreach (var node in desired)
+        {
+            var copy = new WorkflowNode(
+                node.Id,
+                workflowDefinitionId,
+                node.NodeType,
+                node.Category,
+                node.Rank,
+                node.SubRank,
+                node.DisplayName,
+                node.ConfigurationJson,
+                node.PositionX,
+                node.PositionY,
+                node.IsEnabled,
+                node.CheckpointUrlEnabled);
+
+            foreach (var configuration in node.Configuration)
+            {
+                copy.AddConfiguration(configuration.Key, configuration.Value);
+            }
+
+            dbContext.WorkflowNodes.Add(copy);
+        }
+    }
+
+    /// <summary>Replaces the persisted edges for <paramref name="workflowDefinitionId"/> with
+    /// <paramref name="desired"/>, the same remove-then-reinsert approach as <see cref="UpsertNodes"/>. Must
+    /// run after node rows have settled, since an edge references node ids directly.</summary>
+    private static void UpsertEdges(FHIRBridgeDbContext dbContext, Guid workflowDefinitionId, IReadOnlyCollection<WorkflowEdge> desired)
+    {
+        var existingEdges = dbContext.ChangeTracker.Entries<WorkflowEdge>()
+            .Select(entry => entry.Entity)
+            .Where(edge => edge.WorkflowDefinitionId == workflowDefinitionId)
+            .ToArray();
+
+        dbContext.WorkflowEdges.RemoveRange(existingEdges);
+
+        foreach (var edge in desired)
+        {
+            dbContext.WorkflowEdges.Add(new WorkflowEdge(edge.Id, workflowDefinitionId, edge.FromNodeId, edge.ToNodeId));
+        }
     }
 
     public async Task<IReadOnlyCollection<WorkflowDefinition>> ListAsync(CancellationToken cancellationToken)

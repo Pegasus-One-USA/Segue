@@ -1,7 +1,7 @@
 <app-ehr-vendor-source-form
   [vendor]="'Allscripts'"
   [isMaximized]="isMaximized()"
-  (saved)="saved.emit()"
+  (saved)="saved.emit($event)"
   (cancelled)="cancelled.emit()"
   (closeAll)="closeAll.emit()"
   (toggleMaximizeRequest)="toggleMaximizeRequest.emit()"

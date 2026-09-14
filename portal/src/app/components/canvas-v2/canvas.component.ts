@@ -43,6 +43,10 @@ export class CanvasComponent {
   readonly openSourcePicker    = output<void>();
   /** Node-level "Copy checkpoint URL" (Phase 1) — the parent owns the saved workflow id, so it makes the API call. */
   readonly copyCheckpointUrl   = output<string>();
+  /** The canvas mutated the graph on its own (a delete and the relinking around it). The parent owns
+   *  persistence, so it writes the result out — without this the removal lived only in local state and the
+   *  deleted node came back on the next load. */
+  readonly graphChanged        = output<void>();
 
   /** True once the workflow has a saved id — a checkpoint URL can only be generated against a persisted node. */
   readonly workflowSaved = input<boolean>(false);
@@ -255,6 +259,7 @@ export class CanvasComponent {
         : `${plan.removals.map(removal => removal.label).join(', ')} deleted.`,
     );
     this.pendingDelete.set(null);
+    this.graphChanged.emit();
   }
 
   cancelDelete(): void {

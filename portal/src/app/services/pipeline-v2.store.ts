@@ -49,6 +49,15 @@ export class PipelineStoreV2 {
     this.savedRevision.set(this.revision());
   }
 
+  /**
+   * Marks the canvas as carrying unsaved changes. For mutations that don't go through the node/edge CRUD
+   * below — clearing an already-saved workflow's canvas is still a change the user has to be able to save
+   * (see reset(), which deliberately syncs clean because its other caller blanks a brand-new workflow).
+   */
+  markDirty(): void {
+    this.bump();
+  }
+
   private syncClean(): void {
     this.bump();
     this.markSaved();
@@ -77,6 +86,22 @@ export class PipelineStoreV2 {
     this.nodes.update(ns =>
       ns.map(n => (n.id === id ? { ...n, x, y } : n))
     );
+    this.bump();
+  }
+
+  /** Swaps a node's client-synthetic id (nextNodeId()/nextTransformId()/…) for its real server-assigned id
+   *  once an incremental add persists — see WorkflowBuilderV2Component.insertChainStep. Rewrites every edge
+   *  endpoint referencing the old id too, so a chain step wired up synchronously (before the server call
+   *  resolves) stays correctly connected under its new id. No-op if oldId isn't found. */
+  renameNodeId(oldId: string, newId: string): void {
+    if (oldId === newId) return;
+    this.nodes.update(ns => ns.map(n => (n.id === oldId ? { ...n, id: newId } : n)));
+    this.edges.update(es => es.map(e => ({
+      ...e,
+      from: e.from === oldId ? newId : e.from,
+      to: e.to === oldId ? newId : e.to,
+    })));
+    if (this.editingNodeId() === oldId) this.editingNodeId.set(newId);
     this.bump();
   }
 

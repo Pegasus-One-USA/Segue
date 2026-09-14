@@ -243,7 +243,10 @@ export class WorkflowGraphMapperServiceV2 {
       ?? null;
   }
 
-  private nodeToRequest(node: CanvasNode, catalog: WorkflowCatalogItem[]): WorkflowNodeRequest {
+  /** Public so callers outside this service can reuse the exact same catalog lookup / configurationJson shape
+   *  (including __transformId, __builderVersion, secret redaction) that the final /workflows/build save uses,
+   *  rather than re-deriving an equivalent mapping that could silently drift from it. */
+  nodeToRequest(node: CanvasNode, catalog: WorkflowCatalogItem[]): WorkflowNodeRequest {
     const transformId = this.catalogSupportedTransformId(this.transformIdForNode(node), node, catalog);
     const item = this.catalogForTransform(transformId, catalog);
     const fallbackRank = node.kind === 'transform'

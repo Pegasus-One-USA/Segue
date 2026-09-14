@@ -13,6 +13,8 @@ namespace FHIRBridge.UnitTests.Transforms;
 
 public sealed class TransformationRuleServiceTests
 {
+    private static readonly Guid WorkflowId = Guid.NewGuid();
+
     private static ITransformNodeRegistry CreateRegistry() => new TransformNodeRegistry(
     [
         new DateTimeFormatNode(),
@@ -26,27 +28,22 @@ public sealed class TransformationRuleServiceTests
     {
         var repository = new Mock<ITransformationRuleRepository>();
         var rule = new TransformationRule(
-            TransformScope.ResourceType, TransformNodeType.DateTimeFormat,
+            TransformScope.Workflow, TransformNodeType.DateTimeFormat,
             JsonSerializer.Serialize(new Dictionary<string, string> { ["targetType"] = "date" }),
-            resourceType: "Patient");
+            resourceType: "Patient", destinationField: "BirthDate", resourcePipelineRouteId: WorkflowId);
+        SetupEmptyRepository(repository);
         repository
-            .Setup(x => x.GetResourceTypeScopedAsync("Patient", "BirthDate", It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetWorkflowScopedAsync(WorkflowId, "Patient", "BirthDate", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
-        repository
-            .Setup(x => x.GetFieldScopedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
-        repository
-            .Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
 
         var service = new TransformationRuleService(
             repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         var result = await service.PreviewAsync(new TransformPreviewRequest(
-            DestinationType.SqlServer, "Patient", "BirthDate", "03/14/2026"));
+            DestinationType.SqlServer, "Patient", "BirthDate", "03/14/2026", ResourcePipelineRouteId: WorkflowId));
 
         result.FinalValue.Should().Be("2026-03-14");
-        result.EffectiveScope.Should().Be(TransformScope.ResourceType);
+        result.EffectiveScope.Should().Be(TransformScope.Workflow);
         result.Steps.Should().ContainSingle().Which.Success.Should().BeTrue();
     }
 
@@ -72,18 +69,18 @@ public sealed class TransformationRuleServiceTests
     {
         var repository = new Mock<ITransformationRuleRepository>();
         var rule = new TransformationRule(
-            TransformScope.ResourceType, TransformNodeType.DateTimeFormat,
+            TransformScope.Workflow, TransformNodeType.DateTimeFormat,
             JsonSerializer.Serialize(new Dictionary<string, string> { ["targetType"] = "date" }),
-            resourceType: "Patient");
+            resourceType: "Patient", destinationField: "BirthDate", resourcePipelineRouteId: WorkflowId);
+        SetupEmptyRepository(repository);
         repository
-            .Setup(x => x.GetResourceTypeScopedAsync("Patient", "BirthDate", It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetWorkflowScopedAsync(WorkflowId, "Patient", "BirthDate", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
-        SetupEmptyRepository(repository, exceptResourceType: true);
 
         var service = new TransformationRuleService(
             repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
-        var rules = await service.GetEffectiveRulesAsync(DestinationType.SqlServer, "Patient", "BirthDate", null, null, null);
+        var rules = await service.GetEffectiveRulesAsync(DestinationType.SqlServer, "Patient", "BirthDate", WorkflowId, null, null);
 
         rules.Should().ContainSingle();
         rules[0].Id.Should().Be(rule.Id);
@@ -95,18 +92,20 @@ public sealed class TransformationRuleServiceTests
     {
         var repository = new Mock<ITransformationRuleRepository>();
         var rule = new TransformationRule(
-            TransformScope.ResourceType, TransformNodeType.DateTimeFormat,
+            TransformScope.Workflow, TransformNodeType.DateTimeFormat,
             JsonSerializer.Serialize(new Dictionary<string, string> { ["targetType"] = "date" }),
-            resourceType: "Patient", order: 0, onNull: NullPolicy.Default, onNullDefaultValue: "1900-01-01");
+            resourceType: "Patient", destinationField: "BirthDate", resourcePipelineRouteId: WorkflowId,
+            order: 0, onNull: NullPolicy.Default, onNullDefaultValue: "1900-01-01");
+        SetupEmptyRepository(repository);
         repository
-            .Setup(x => x.GetResourceTypeScopedAsync("Patient", "BirthDate", It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetWorkflowScopedAsync(WorkflowId, "Patient", "BirthDate", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
-        SetupEmptyRepository(repository, exceptResourceType: true);
 
         var service = new TransformationRuleService(
             repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
-        var result = await service.PreviewAsync(new TransformPreviewRequest(DestinationType.SqlServer, "Patient", "BirthDate", null));
+        var result = await service.PreviewAsync(new TransformPreviewRequest(
+            DestinationType.SqlServer, "Patient", "BirthDate", null, ResourcePipelineRouteId: WorkflowId));
 
         result.FinalValue.Should().Be("1900-01-01", "the node must not run at all when OnNull is Default — the default value IS the output");
     }
@@ -116,11 +115,12 @@ public sealed class TransformationRuleServiceTests
     {
         var repository = new Mock<ITransformationRuleRepository>();
         var rule = new TransformationRule(
-            TransformScope.Global, TransformNodeType.HashingMasking,
-            JsonSerializer.Serialize(new Dictionary<string, string> { ["mode"] = "hash" }));
+            TransformScope.Workflow, TransformNodeType.HashingMasking,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["mode"] = "hash" }),
+            resourceType: "Patient", destinationField: "MRN", resourcePipelineRouteId: WorkflowId);
         SetupEmptyRepository(repository);
         repository
-            .Setup(x => x.GetGlobalScopedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetWorkflowScopedAsync(WorkflowId, "Patient", "MRN", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var secretAccessor = new Mock<IAppSecretAccessor>();
@@ -130,53 +130,36 @@ public sealed class TransformationRuleServiceTests
             repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(),
             Mock.Of<IConfigurationRepository>(), secretAccessor.Object);
 
-        var result = await service.PreviewAsync(new TransformPreviewRequest(DestinationType.SqlServer, "Patient", "MRN", "A12345"));
+        var result = await service.PreviewAsync(new TransformPreviewRequest(
+            DestinationType.SqlServer, "Patient", "MRN", "A12345", ResourcePipelineRouteId: WorkflowId));
 
         result.Steps.Should().ContainSingle().Which.Success.Should().BeTrue("the accessor must supply the hash key so the node doesn't fail for lack of a secret");
     }
 
     [Fact]
-    public async Task A_field_rule_with_no_resource_type_resolves_for_any_resource_type()
+    public async Task A_source_specific_workflow_rule_wins_over_a_blanket_any_source_rule_at_the_same_field()
     {
         var repository = new Mock<ITransformationRuleRepository>();
-        var rule = new TransformationRule(
-            TransformScope.Field, TransformNodeType.DateTimeFormat, JsonSerializer.Serialize(new Dictionary<string, string> { ["targetType"] = "date" }),
-            resourceType: null, destinationField: null, sourceField: "birthDate");
+        var anySource = new TransformationRule(
+            TransformScope.Workflow, TransformNodeType.DateTimeFormat,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["targetType"] = "date" }),
+            resourceType: "Patient", destinationField: "BirthDate", resourcePipelineRouteId: WorkflowId);
+        var epicOnly = new TransformationRule(
+            TransformScope.Workflow, TransformNodeType.DefaultNullHandling,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["default"] = "unknown" }),
+            resourceType: "Patient", destinationField: "BirthDate", resourcePipelineRouteId: WorkflowId,
+            sourceSystem: "Epic");
         SetupEmptyRepository(repository);
         repository
-            .Setup(x => x.GetFieldScopedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), "birthDate", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+            .Setup(x => x.GetWorkflowScopedAsync(WorkflowId, "Patient", "BirthDate", "Epic", It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[anySource, epicOnly]);
 
         var service = new TransformationRuleService(
             repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
         var result = await service.PreviewAsync(new TransformPreviewRequest(
-            DestinationType.SqlServer, "Practitioner", "DOB", "03/14/2026", SourceField: "birthDate"));
-
-        result.FinalValue.Should().Be("2026-03-14");
-        result.EffectiveScope.Should().Be(TransformScope.Field);
-    }
-
-    [Fact]
-    public async Task A_resource_and_field_specific_rule_wins_over_a_blanket_source_field_rule_at_the_same_tier()
-    {
-        var repository = new Mock<ITransformationRuleRepository>();
-        var blanket = new TransformationRule(
-            TransformScope.Field, TransformNodeType.DateTimeFormat, JsonSerializer.Serialize(new Dictionary<string, string> { ["targetType"] = "date" }),
-            resourceType: null, destinationField: null, sourceField: "birthDate");
-        var specific = new TransformationRule(
-            TransformScope.Field, TransformNodeType.DefaultNullHandling, JsonSerializer.Serialize(new Dictionary<string, string> { ["default"] = "unknown" }),
-            resourceType: "Patient", destinationField: "BirthDate", sourceField: "birthDate");
-        SetupEmptyRepository(repository);
-        repository
-            .Setup(x => x.GetFieldScopedAsync("Patient", "BirthDate", It.IsAny<string?>(), "birthDate", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<TransformationRule>)[blanket, specific]);
-
-        var service = new TransformationRuleService(
-            repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
-
-        var result = await service.PreviewAsync(new TransformPreviewRequest(
-            DestinationType.SqlServer, "Patient", "BirthDate", null, SourceField: "birthDate"));
+            DestinationType.SqlServer, "Patient", "BirthDate", "03/14/2026",
+            ResourcePipelineRouteId: WorkflowId, SourceSystem: "Epic"));
 
         result.Steps.Should().ContainSingle().Which.NodeType.Should().Be(TransformNodeType.DefaultNullHandling);
     }
@@ -189,17 +172,19 @@ public sealed class TransformationRuleServiceTests
     {
         var repository = new Mock<ITransformationRuleRepository>();
         var rule = new TransformationRule(
-            TransformScope.Global, TransformNodeType.UnitConversion,
-            JsonSerializer.Serialize(new Dictionary<string, string> { ["sourceUnit"] = "Cel", ["targetUnit"] = "[degF]", ["precision"] = "1" }));
+            TransformScope.Workflow, TransformNodeType.UnitConversion,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["sourceUnit"] = "Cel", ["targetUnit"] = "[degF]", ["precision"] = "1" }),
+            resourceType: "Observation", destinationField: "Value", resourcePipelineRouteId: WorkflowId);
         SetupEmptyRepository(repository);
         repository
-            .Setup(x => x.GetGlobalScopedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetWorkflowScopedAsync(WorkflowId, "Observation", "Value", It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var service = new TransformationRuleService(
             repository.Object, new EffectiveRuleResolver(repository.Object), CreateRegistry(), Mock.Of<IConfigurationRepository>());
 
-        var result = await service.PreviewAsync(new TransformPreviewRequest(destinationType, "Observation", "Value", 38.9m));
+        var result = await service.PreviewAsync(new TransformPreviewRequest(
+            destinationType, "Observation", "Value", 38.9m, ResourcePipelineRouteId: WorkflowId));
 
         if (expectFullQuantityObject)
         {
@@ -240,11 +225,12 @@ public sealed class TransformationRuleServiceTests
 
         var dto = await service.SaveRuleAsync(new SaveTransformationRuleRequest(
             Id: null,
-            Scope: TransformScope.Field,
+            Scope: TransformScope.Workflow,
             NodeType: TransformNodeType.StringNormalization,
             Config: new Dictionary<string, string> { ["case"] = "upper" },
             ResourceType: "Patient",
-            DestinationField: "FamilyName"));
+            DestinationField: "FamilyName",
+            ResourcePipelineRouteId: WorkflowId));
 
         added.Should().NotBeNull();
         added!.DestinationField.Should().Be("FamilyName");
@@ -260,12 +246,13 @@ public sealed class TransformationRuleServiceTests
         // left the other three quietly in effect.
         var repository = new Mock<ITransformationRuleRepository>();
         var existing = new TransformationRule(
-            TransformScope.Field,
+            TransformScope.Workflow,
             TransformNodeType.DateMathAge,
             "{\"operation\":\"age\"}",
             resourceType: "Patient",
             destinationField: "BirthDateAge",
-            sourceField: "Patient.birthDate");
+            sourceField: "Patient.birthDate",
+            resourcePipelineRouteId: WorkflowId);
         StubNaturalKeyLookup(repository, existing);
 
         var service = new TransformationRuleService(
@@ -273,12 +260,13 @@ public sealed class TransformationRuleServiceTests
 
         var dto = await service.SaveRuleAsync(new SaveTransformationRuleRequest(
             Id: null,
-            Scope: TransformScope.Field,
+            Scope: TransformScope.Workflow,
             NodeType: TransformNodeType.DateMathAge,
             Config: new Dictionary<string, string> { ["operation"] = "age", ["days"] = "30" },
             ResourceType: "Patient",
             DestinationField: "BirthDateAge",
-            SourceField: "Patient.birthDate"));
+            SourceField: "Patient.birthDate",
+            ResourcePipelineRouteId: WorkflowId));
 
         dto.Id.Should().Be(existing.Id, "the same rule was saved again, not a second one created");
         repository.Verify(
@@ -295,8 +283,9 @@ public sealed class TransformationRuleServiceTests
         // silently rewrite a row the caller did not name.
         var repository = new Mock<ITransformationRuleRepository>();
         TransformationRule Duplicate() => new(
-            TransformScope.Field, TransformNodeType.DateMathAge, "{}",
-            resourceType: "Patient", destinationField: "BirthDateAge", sourceField: "Patient.birthDate");
+            TransformScope.Workflow, TransformNodeType.DateMathAge, "{}",
+            resourceType: "Patient", destinationField: "BirthDateAge", sourceField: "Patient.birthDate",
+            resourcePipelineRouteId: WorkflowId);
         StubNaturalKeyLookup(repository, Duplicate(), Duplicate());
 
         TransformationRule? added = null;
@@ -310,12 +299,13 @@ public sealed class TransformationRuleServiceTests
 
         await service.SaveRuleAsync(new SaveTransformationRuleRequest(
             Id: null,
-            Scope: TransformScope.Field,
+            Scope: TransformScope.Workflow,
             NodeType: TransformNodeType.DateMathAge,
             Config: new Dictionary<string, string>(),
             ResourceType: "Patient",
             DestinationField: "BirthDateAge",
-            SourceField: "Patient.birthDate"));
+            SourceField: "Patient.birthDate",
+            ResourcePipelineRouteId: WorkflowId));
 
         added.Should().NotBeNull();
         repository.Verify(
@@ -326,7 +316,9 @@ public sealed class TransformationRuleServiceTests
     public async Task SaveRuleAsync_updates_in_place_when_an_existing_id_is_supplied()
     {
         var repository = new Mock<ITransformationRuleRepository>();
-        var existing = new TransformationRule(TransformScope.Global, TransformNodeType.DefaultNullHandling, "{}");
+        var existing = new TransformationRule(
+            TransformScope.Workflow, TransformNodeType.DefaultNullHandling, "{}",
+            resourceType: "Patient", destinationField: "BirthDate", resourcePipelineRouteId: WorkflowId);
         repository.Setup(x => x.GetByIdAsync(existing.Id, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
 
         var service = new TransformationRuleService(
@@ -334,7 +326,7 @@ public sealed class TransformationRuleServiceTests
 
         await service.SaveRuleAsync(new SaveTransformationRuleRequest(
             Id: existing.Id,
-            Scope: TransformScope.Global,
+            Scope: TransformScope.Workflow,
             NodeType: TransformNodeType.DefaultNullHandling,
             Config: new Dictionary<string, string> { ["default"] = "unknown" },
             Order: 5));
@@ -348,7 +340,9 @@ public sealed class TransformationRuleServiceTests
     public async Task DeleteRuleAsync_removes_the_rule_when_found()
     {
         var repository = new Mock<ITransformationRuleRepository>();
-        var existing = new TransformationRule(TransformScope.Global, TransformNodeType.DefaultNullHandling, "{}");
+        var existing = new TransformationRule(
+            TransformScope.Workflow, TransformNodeType.DefaultNullHandling, "{}",
+            resourceType: "Patient", destinationField: "BirthDate", resourcePipelineRouteId: WorkflowId);
         repository.Setup(x => x.GetByIdAsync(existing.Id, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
 
         var service = new TransformationRuleService(
@@ -358,21 +352,11 @@ public sealed class TransformationRuleServiceTests
         repository.Verify(x => x.DeleteAsync(existing, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    private static void SetupEmptyRepository(Mock<ITransformationRuleRepository> repository, bool exceptResourceType = false)
+    private static void SetupEmptyRepository(Mock<ITransformationRuleRepository> repository)
     {
         repository.Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
-        repository.Setup(x => x.GetFieldScopedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
-        if (!exceptResourceType)
-        {
-            repository.Setup(x => x.GetResourceTypeScopedAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
-        }
-
-        repository.Setup(x => x.GetDestinationTypeScopedAsync(It.IsAny<DestinationType>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
-        repository.Setup(x => x.GetGlobalScopedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+        repository.Setup(x => x.GetPendingWorkflowScopedAsync(It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
     }
 }

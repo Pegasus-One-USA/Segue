@@ -46,6 +46,15 @@ mat-icon { line-height: 1; }
 
   &.status-succeeded { background: var(--color-success-soft); color: var(--color-success-strong); .status-dot { background: var(--color-success-strong); } }
   &.status-failed     { background: var(--color-error-soft); color: var(--color-error-strong); .status-dot { background: var(--color-error-strong); } }
+
+  /* Pass-through is a neutral outcome, not a degraded one: the field mapped fine, nothing transformed it.
+     Deliberately grey rather than green so a run with zero transform rules can't read as "12 transformed". */
+  &.status-passthrough {
+    background: color-mix(in srgb, var(--color-muted) 12%, transparent);
+    color: var(--color-muted);
+    border: 1px solid color-mix(in srgb, var(--color-muted) 28%, transparent);
+    .status-dot { background: var(--color-muted); }
+  }
 }
 
 /* ── Stat strip — same KPI-card recipe as the Dashboard's own tiles (accent icon chip, hover lift, bold
@@ -80,6 +89,7 @@ mat-icon { line-height: 1; }
   &--info    { --stat-accent: var(--color-info); --stat-accent-soft: var(--color-info-soft); }
   &--warning { --stat-accent: var(--color-warning); --stat-accent-soft: var(--color-warning-soft); }
   &--success { --stat-accent: var(--color-success); --stat-accent-soft: var(--color-success-soft); }
+  &--accent  { --stat-accent: var(--color-accent); --stat-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent); }
 }
 
 .stat-icon {

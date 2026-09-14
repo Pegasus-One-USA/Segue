@@ -204,21 +204,6 @@ public sealed class WorkflowConfigurationCleanupServiceTests
             Guid resourcePipelineRouteId, string resourceType, string destinationField, string? sourceSystem,
             string? sourceField, CancellationToken cancellationToken) => throw new NotSupportedException();
 
-        public Task<IReadOnlyList<TransformationRule>> GetFieldScopedAsync(
-            string resourceType, string destinationField, string? sourceSystem, string? sourceField,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
-
-        public Task<IReadOnlyList<TransformationRule>> GetResourceTypeScopedAsync(
-            string resourceType, string? destinationField, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<IReadOnlyList<TransformationRule>> GetDestinationTypeScopedAsync(
-            DestinationType destinationType, string? destinationField, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<IReadOnlyList<TransformationRule>> GetGlobalScopedAsync(
-            string? destinationField, CancellationToken cancellationToken) => throw new NotSupportedException();
-
         public Task<IReadOnlyList<TransformationRule>> GetPreMappingRulesAsync(
             Guid deIdentificationProfileId, string resourceType, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
@@ -226,10 +211,6 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         public Task<IReadOnlyList<TransformationRule>> GetFhirResourceRulesAsync(
             TransformScope scope, string resourceType, string? sourceField, DestinationType? destinationType,
             Guid? resourcePipelineRouteId, string? sourceSystem, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowRulesAsync(
-            IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowScopedAsync(

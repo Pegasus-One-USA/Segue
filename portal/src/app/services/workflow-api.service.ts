@@ -72,6 +72,50 @@ export interface WorkflowNodeDto extends WorkflowNodeRequest {
   configuration?: Record<string, string>[];
 }
 
+// ── Incremental node endpoints (POST/PUT/DELETE /workflows/{id}/nodes) ────────
+// Persist one node at a time against a workflow that may legitimately be mid-build (no destination yet) —
+// unlike build()/save(), which send and validate the whole graph. See WorkflowNodeEndpoints.cs.
+export interface AddWorkflowNodeRequest {
+  nodeType: string;
+  category: WorkflowNodeCategory;
+  rank: number;
+  subRank?: number;
+  displayName?: string | null;
+  configurationJson?: string | null;
+  positionX?: number;
+  positionY?: number;
+  isEnabled?: boolean;
+  checkpointUrlEnabled?: boolean;
+  /** When set, also adds an edge from this existing node into the new one in the same call. */
+  fromNodeId?: string | null;
+}
+
+/** Every field is optional — an omitted field keeps the node's current server-side value. */
+export interface UpdateWorkflowNodeRequest {
+  displayName?: string | null;
+  configurationJson?: string | null;
+  positionX?: number | null;
+  positionY?: number | null;
+  isEnabled?: boolean | null;
+  checkpointUrlEnabled?: boolean | null;
+}
+
+/** workflowVersion is the workflow's version AFTER this call's save — hold onto it for the next mutation. */
+export interface WorkflowNodeResponse {
+  id: string;
+  nodeType: string;
+  category: WorkflowNodeCategory;
+  rank: number;
+  subRank: number;
+  displayName: string;
+  configurationJson: string;
+  positionX: number;
+  positionY: number;
+  isEnabled: boolean;
+  checkpointUrlEnabled: boolean;
+  workflowVersion: number;
+}
+
 export interface WorkflowEdgeDto {
   id: string;
   fromNodeId: string;
@@ -400,6 +444,22 @@ export class WorkflowApiService {
 
   load(workflowId: string): Observable<WorkflowDefinitionDto> {
     return this.http.get<WorkflowDefinitionDto>(WORKFLOW_ENDPOINTS.byId(workflowId));
+  }
+
+  /** Persists one node (optionally with an edge from an existing node into it) against an already-created
+   *  workflow, immediately — no need for the whole graph to be complete or for a later Save. */
+  addNode(workflowId: string, request: AddWorkflowNodeRequest): Observable<WorkflowNodeResponse> {
+    return this.http.post<WorkflowNodeResponse>(WORKFLOW_ENDPOINTS.addNode(workflowId), request);
+  }
+
+  /** Updates one node's editable fields in place; the node keeps its id. Omitted fields are unchanged. */
+  updateNode(workflowId: string, nodeId: string, request: UpdateWorkflowNodeRequest): Observable<WorkflowNodeResponse> {
+    return this.http.put<WorkflowNodeResponse>(WORKFLOW_ENDPOINTS.updateNode(workflowId, nodeId), request);
+  }
+
+  /** Removes one node (and any edge touching it) from an already-created workflow, immediately. */
+  deleteNode(workflowId: string, nodeId: string): Observable<void> {
+    return this.http.delete<void>(WORKFLOW_ENDPOINTS.deleteNode(workflowId, nodeId));
   }
 
   /** Option B create-on-save: provisions secrets + creates Source/Destination/Mapping and saves the graph in one call. */

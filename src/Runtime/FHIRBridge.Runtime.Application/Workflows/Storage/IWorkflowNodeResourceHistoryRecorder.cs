@@ -54,8 +54,8 @@ public interface IWorkflowNodeResourceHistoryRecorder
         FieldLineageFilter? filter,
         CancellationToken cancellationToken);
 
-    /// <summary>Run-wide field-lineage totals (resources processed, fields transformed, distinct transform
-    /// nodes executed, success rate) — backs the Lineage tab's stat strip.</summary>
+    /// <summary>Run-wide field-lineage totals (resources processed, fields mapped, fields actually transformed,
+    /// distinct transform nodes executed, success rate) — backs the Lineage tab's stat strip.</summary>
     Task<LineageSummaryDto> GetLineageSummaryAsync(Guid workflowRunId, CancellationToken cancellationToken);
 
     /// <summary>Every resource type touched by this run's field lineage, each with the destination fields under
@@ -143,9 +143,14 @@ public sealed record FieldLineageChainDto(
     string? DestinationTypeName,
     string? DestinationName);
 
-/// <summary>Run-wide field-lineage totals — backs the Lineage tab's stat strip.</summary>
+/// <summary>Run-wide field-lineage totals — backs the Lineage tab's stat strip. Lineage is provenance, not
+/// transformation: a field copied verbatim still gets a row (see <see
+/// cref="FHIRBridge.Runtime.Domain.Workflows.FieldLineageEntry.PassThroughNodeType"/>), so <see
+/// cref="FieldsMapped"/> counts every field with lineage while <see cref="FieldsTransformed"/> and <see
+/// cref="TransformationNodesExecuted"/> count only fields/nodes where a transform rule actually ran.</summary>
 public sealed record LineageSummaryDto(
     int ResourcesProcessed,
+    int FieldsMapped,
     int FieldsTransformed,
     int TransformationNodesExecuted,
     double SuccessRate);

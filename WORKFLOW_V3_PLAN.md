@@ -89,14 +89,27 @@ Three things that made this smaller than planned:
 `cancelNewWorkflow()` navigates to `/workflows` rather than leaving the user on a canvas with no workflow
 behind it, since every later action assumes an id exists.
 
-### Step 2 — "Add to Workflow" persists the node — NOT STARTED
+### Step 2 — "Add to Workflow" persists the node — DONE (builds + tests clean)
 
-Needs incremental node endpoints (`POST/PUT/DELETE /workflows/{id}/nodes/...`). Today the only save path is
-`POST /workflows/build` with the **whole graph**, and it validates a *complete* workflow — a source-only
-graph would fail that. Must handle version bump (`WorkflowDefinition.Version`), `RowVersion` concurrency,
-and validation of a legitimately incomplete mid-build graph.
+Added incremental node endpoints (`POST/PUT/DELETE /workflows/{id}/nodes[/{nodeId}]`,
+`WorkflowNodeEndpoints.cs`) — no whole-graph validation, so a legitimately incomplete mid-build graph (source
+only, no destination yet) is accepted. Handles `WorkflowDefinition.Version` bump and the optimistic
+concurrency check on every write.
 
-### Step 3 — Delete the tier system — NOT STARTED (fixes #4, and #2/#5 with step 4)
+Portal wiring, `workflow-builder-v2.component.ts`: every "Add to Workflow" click now calls
+`persistNodeIncrementally()` right after the local canvas add —
+- Source stub add (`addStubSource`)
+- Generic destination/transform-picker add (`onTransformSelected`'s non-chain-step branch)
+- Mapping/Transformation/De-identification chain steps (`insertChainStep`, done earlier this session)
+
+Each swaps the node's client-synthetic id for the server-minted one via `PipelineStoreV2.renameNodeId` once
+the call resolves; a failed incremental save leaves the node on the canvas under its local id and falls back
+to the next full Save, so nothing is lost, only the "usable before Save" benefit for that one node. Newly
+added edges stay client-side only (no `fromNodeId` sent) until the next full Save, since the upstream node's
+real id isn't guaranteed to exist yet when an edge is drawn synchronously on click. Merge nodes are excluded
+by design — a client-only grouping construct with no server node type/category.
+
+### Step 3 — Delete the tier system — DONE (builds + tests clean)
 
 - `IEffectiveRuleResolver` — drop the Field/ResourceType/DestinationType/Global PostMapping tiers
 - `EfTransformationRuleRepository` — drop `GetFieldScopedAsync`, `GetResourceTypeScopedAsync`,
@@ -110,16 +123,19 @@ and validation of a legitimately incomplete mid-build graph.
 **Do not touch PreMapping.** De-identification resolves by *profile* (`GetPreMappingRulesAsync`), a separate
 path. It is out of scope and must keep working.
 
-### Step 4 — Tighten the rule natural key — NOT STARTED (fixes #1)
+### Step 4 — Tighten the rule natural key — DONE (builds + tests clean)
 
-Add `resourcePipelineRouteId` + `destinationType` to `FindByNaturalKeyAsync`, and have the dialogs always
-send a real `id` on edit so the guess is never reached. Switch `transform-rules-dialog.component.ts` from
-`scope: 'Field'` to `scope: 'Workflow'` + route id (fixes #2).
+Added `resourcePipelineRouteId` + `destinationType` to `FindByNaturalKeyAsync`. Switched
+`transform-rules-dialog.component.ts` from `scope: 'Field'` to `scope: 'Workflow'` + route id (fixes #2), and
+`destination-wizard.component.ts` now passes `resourcePipelineRouteId` into the dialog's open call (it never
+did before — root cause of #1 from the portal side).
 
-### Step 5 — Data cleanup — NOT STARTED
+### Step 5 — Data cleanup — DONE
 
-The 2 `ResourceType`/`FhirResource` rules become unreachable when the tiers go. Back up
-(`pg_dump --column-inserts`) and drop, same as the 15 below.
+Backed up (`.scratch-backups/step5-unreachable-fhirresource-rules-backup.{csv,sql}`) and deleted the 2
+`ResourceType`/`FhirResource` rows (`1d420c5d-…`, `abaeeeaa-…` — the latter was already soft-deleted). Final
+state verified: 4 `ResourceType`/`PreMapping` (Safe Harbor, untouched) + 20 `Workflow`/`PostMapping`, matching
+the table below exactly.
 
 ## Database state
 

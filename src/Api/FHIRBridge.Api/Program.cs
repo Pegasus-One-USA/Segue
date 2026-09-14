@@ -730,6 +730,7 @@ if (rateLimitingEnabled)
 }
 app.MapControllers();
 app.MapWorkflowEndpoints();
+app.MapWorkflowNodeEndpoints();
 app.MapHub<RunStatusHub>("/hubs/run-status").RequireAuthorization();
 
 // Client-side (Angular) routes have no server-side match — fall back to index.html so deep links
@@ -1022,6 +1023,18 @@ static (int status, string message, bool trusted, IReadOnlyDictionary<string, st
             StatusCodes.Status422UnprocessableEntity,
             $"Workflow cancelled: this app is not authorized for '{workflowCancelled.ResourceType}', which is " +
             "required as the parent/cohort scope for this workflow. Check the correlation id for full details.",
+            true,
+            null,
+            null);
+
+    // Someone else saved this workflow (or one of the rows this save touches) since the caller last loaded
+    // it — see SqlWorkflowDefinitionStore.SaveAsync's explicit version check. 409 with a trusted, actionable
+    // message rather than the generic 500 below, so the portal can tell the user to refresh and retry instead
+    // of reporting an unexpected error.
+    if (ex is DbUpdateConcurrencyException)
+        return (
+            StatusCodes.Status409Conflict,
+            "This workflow was changed by someone else since you loaded it. Refresh and try again.",
             true,
             null,
             null);

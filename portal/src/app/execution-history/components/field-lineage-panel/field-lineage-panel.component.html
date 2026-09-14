@@ -12,6 +12,13 @@
       <div class="stat-card stat-card--info">
         <span class="stat-icon"><mat-icon>list_alt</mat-icon></span>
         <div>
+          <span class="stat-value">{{ s.fieldsMapped }}</span>
+          <span class="stat-label">Fields Mapped</span>
+        </div>
+      </div>
+      <div class="stat-card stat-card--accent">
+        <span class="stat-icon"><mat-icon>auto_fix_high</mat-icon></span>
+        <div>
           <span class="stat-value">{{ s.fieldsTransformed }}</span>
           <span class="stat-label">Fields Transformed</span>
         </div>
@@ -153,8 +160,8 @@
               <td><mat-icon class="arrow-icon">arrow_forward</mat-icon></td>
               <td class="mono">{{ lastDestinationValue(chain) }}</td>
               <td>
-                <span class="status-badge" [class]="chainSucceeded(chain) ? 'status-succeeded' : 'status-failed'">
-                  <span class="status-dot"></span>{{ chainSucceeded(chain) ? 'Transformed' : 'Failed' }}
+                <span class="status-badge" [class]="chainStatusClass(chain)">
+                  <span class="status-dot"></span>{{ chainStatusLabel(chain) }}
                 </span>
               </td>
               <td><mat-icon class="chevron">chevron_right</mat-icon></td>
@@ -230,7 +237,7 @@
               >
                 <span class="flow-card__glyph">{{ nodeGlyph(hop.nodeType) }}</span>
                 <div>
-                  <span class="flow-card__title">Transformation Node #{{ hop.nodeOrder + 1 }}</span>
+                  <span class="flow-card__title">{{ hopTitle(hop) }}</span>
                   <span class="cell-muted">{{ hop.nodeType }}</span>
                   <span class="cell-muted">{{ formatConfig(hop.configJson) }}</span>
                 </div>
@@ -262,8 +269,8 @@
               <div class="detail-cell"><span class="stat-label">Nodes in Chain</span><span class="cell-primary">{{ chain.hops.length }}</span></div>
               <div class="detail-cell">
                 <span class="stat-label">Status</span>
-                <span class="status-badge" [class]="chainSucceeded(chain) ? 'status-succeeded' : 'status-failed'">
-                  {{ chainSucceeded(chain) ? 'Transformed' : 'Failed' }}
+                <span class="status-badge" [class]="chainStatusClass(chain)">
+                  {{ chainStatusLabel(chain) }}
                 </span>
               </div>
             </div>

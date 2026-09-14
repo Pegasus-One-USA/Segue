@@ -234,7 +234,7 @@
               <app-epic-source-form
                 #activeSourceForm
                 [isMaximized]="isMaximized()"
-                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (saved)="onSourceFormSaved($event)" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
               />
             }
@@ -242,7 +242,7 @@
               <app-cerner-source-form
                 #activeSourceForm
                 [isMaximized]="isMaximized()"
-                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (saved)="onSourceFormSaved($event)" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
               />
             }
@@ -250,7 +250,7 @@
               <app-athenahealth-source-form
                 #activeSourceForm
                 [isMaximized]="isMaximized()"
-                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (saved)="onSourceFormSaved($event)" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
               />
             }
@@ -258,7 +258,7 @@
               <app-allscripts-source-form
                 #activeSourceForm
                 [isMaximized]="isMaximized()"
-                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (saved)="onSourceFormSaved($event)" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
               />
             }
@@ -266,7 +266,7 @@
               <app-healow-source-form
                 #activeSourceForm
                 [isMaximized]="isMaximized()"
-                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (saved)="onSourceFormSaved($event)" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
               />
             }
@@ -274,7 +274,7 @@
               <app-meditech-source-form
                 #activeSourceForm
                 [isMaximized]="isMaximized()"
-                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (saved)="onSourceFormSaved($event)" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
               />
             }
@@ -282,7 +282,7 @@
               <app-sample-source-form
                 #activeSourceForm
                 [isMaximized]="isMaximized()"
-                (saved)="onSourceFormSaved()" (cancelled)="onSourceFormCancelled()"
+                (saved)="onSourceFormSaved($event)" (cancelled)="onSourceFormCancelled()"
                 (closeAll)="close()" (toggleMaximizeRequest)="toggleMaximize()"
               />
             }
@@ -308,7 +308,7 @@
             <div class="nld-generic-fhir-actions">
               <button class="nld-generic-fhir-cancel" type="button" (click)="onSourceFormCancelled()">Cancel</button>
               <button class="nld-cta" type="button" (click)="onHeadlessSourceFormSave()">
-                {{ sourceFormEditNode() ? 'Save' : 'Add to Workflow' }}
+                Save
               </button>
             </div>
           </div>
@@ -535,7 +535,7 @@
                   [disabled]="selectedItem()!.status === 'hide'"
                   (click)="addSelected()"
                 >
-                  +&nbsp; Add to Workflow
+                  +&nbsp; Save
                 </button>
               }
               <button class="nld-back" type="button" (click)="selectedId.set(null)">

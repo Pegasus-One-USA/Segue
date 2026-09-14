@@ -212,6 +212,7 @@ public sealed class Worker : BackgroundService
                 var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
                 var result = await orchestrator.ExecuteAsync(workflow, context, cancellationToken);
                 workflow.MarkTriggered(nowUtc);
+                workflow.BumpVersion();
                 await store.SaveAsync(workflow, cancellationToken);
 
                 _logger.LogInformation(

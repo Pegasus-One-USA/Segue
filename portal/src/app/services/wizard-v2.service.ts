@@ -131,7 +131,9 @@ export class WizardServiceV2 {
    *  fire-and-forget (subscribes internally and returns immediately), so a caller that needs to know the
    *  real outcome (e.g. keep a dialog open and let the user fix a validation error, rather than assuming
    *  success the instant save() is invoked) should subscribe to this first. */
-  readonly saveOutcome$ = new Subject<{ success: boolean; error?: string }>();
+  /** `nodeId`: the canvas node just added/updated (canvas mode only — undefined in entity mode, which has
+   *  no canvas node) — lets a canvas-mode caller persist that node to the backend immediately afterward. */
+  readonly saveOutcome$ = new Subject<{ success: boolean; error?: string; nodeId?: string }>();
 
   // ── step ──────────────────────────────────────────────────────────────────
   readonly step = signal<WizardStep>(1);
@@ -536,6 +538,7 @@ export class WizardServiceV2 {
         const previousFields = this.store.byId(editingId)?.fields ?? {};
         this.store.updateNode(editingId, { fields: { ...previousFields, ...fields }, connected: this.connected() } as any);
         this.toast.show(`${sourceMeta.name} updated`, `${fields['__name']} saved.`);
+        this.saveOutcome$.next({ success: true, nodeId: editingId });
       } else {
         const count = this.store.nodes().filter(n => !n.kind).length;
         const newNode: SourceNode = {
@@ -551,9 +554,9 @@ export class WizardServiceV2 {
         };
         this.store.addNode(newNode);
         this.toast.show(`${sourceMeta.name} added`, `${fields['__name']} added to the canvas.`);
+        this.saveOutcome$.next({ success: true, nodeId: newNode.id });
       }
 
-      this.saveOutcome$.next({ success: true });
       this.close();
       return;
     }

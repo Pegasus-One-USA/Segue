@@ -20,6 +20,15 @@ import { TransformNodeType } from '../../../components/node-library/destination-
 type GroupByMode = 'field' | 'patient' | 'node';
 type DetailTab = 'flow' | 'details' | 'nodeInfo';
 
+/** A chain's overall outcome. 'passthrough' is not a lesser success — it means the Mapping node wrote the
+ *  value verbatim and no transform rule ran, which is the common case and a legitimate lineage result.
+ *  Badging it as "Transformed" (as this table used to) claimed work that never happened. */
+type ChainStatus = 'transformed' | 'passthrough' | 'failed';
+
+/** Mirrors the backend's FieldLineageEntry.PassThroughNodeType sentinel — the nodeType stamped on a hop for a
+ *  field that had no transform rule chain at all. */
+const PASS_THROUGH_NODE_TYPE = 'DirectMapping';
+
 @Component({
   selector: 'app-field-lineage-panel',
   standalone: true,
@@ -163,6 +172,46 @@ export class FieldLineagePanelComponent implements OnInit {
 
   chainSucceeded(chain: FieldLineageChain): boolean {
     return chain.hops.every(h => h.success);
+  }
+
+  /** Failed wins over everything; otherwise a chain made up purely of pass-through hops is 'passthrough'
+   *  (nothing was transformed) and anything with at least one real transform hop is 'transformed'. */
+  chainStatus(chain: FieldLineageChain): ChainStatus {
+    if (!this.chainSucceeded(chain)) {
+      return 'failed';
+    }
+
+    return chain.hops.some(h => h.nodeType !== PASS_THROUGH_NODE_TYPE) ? 'transformed' : 'passthrough';
+  }
+
+  chainStatusLabel(chain: FieldLineageChain): string {
+    switch (this.chainStatus(chain)) {
+      case 'failed':
+        return 'Failed';
+      case 'passthrough':
+        return 'Pass-through';
+      default:
+        return 'Transformed';
+    }
+  }
+
+  chainStatusClass(chain: FieldLineageChain): string {
+    switch (this.chainStatus(chain)) {
+      case 'failed':
+        return 'status-failed';
+      case 'passthrough':
+        return 'status-passthrough';
+      default:
+        return 'status-succeeded';
+    }
+  }
+
+  /** A pass-through hop had no transform node behind it, so the flow card calls it what it is rather than
+   *  "Transformation Node #1". */
+  hopTitle(hop: { nodeType: string; nodeOrder: number }): string {
+    return hop.nodeType === PASS_THROUGH_NODE_TYPE
+      ? 'Direct Mapping (no transformation)'
+      : `Transformation Node #${hop.nodeOrder + 1}`;
   }
 
   firstSourceValue(chain: FieldLineageChain): string {

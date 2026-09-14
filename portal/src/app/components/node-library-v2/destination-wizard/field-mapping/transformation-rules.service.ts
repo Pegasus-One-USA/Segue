@@ -204,18 +204,17 @@ export class TransformationRulesService {
 
   /** The actual rule(s) currently in effect for one field (real id + full config, not a value trace) — lets
    *  the wizard's Rules dialog show/clone what's really running instead of starting an override from blank
-   *  schema defaults. Resolves the same Workflow &gt; Field &gt; ResourceType &gt; DestinationType &gt; Global
-   *  chain as preview(). */
-  /** `workflowScopedOnly` restricts the answer to rules belonging to `resourcePipelineRouteId` — no
-   *  fall-through to the tenant-wide tiers. Set by V2, whose rules are pipeline-private. */
-  /** `includePending` also surfaces rules authored before the workflow was first saved (Workflow scope, no
+   *  schema defaults. A PostMapping rule belongs to exactly one workflow (WORKFLOW_V3_PLAN.md Step 3) — this
+   *  always resolves against that one workflow's own rules, never a tenant-wide default.
+   *
+   *  `includePending` also surfaces rules authored before the workflow was first saved (Workflow scope, no
    *  route id yet). Set by the save-time type check: those rules are attached only after the workflow's first
    *  save, which happens AFTER the mapping profile is saved — so without this the check cannot see a rule the
    *  user can plainly see on the field, and rejects the mapping for the raw source type instead. */
   getEffectiveRules(filter: {
     destinationType: DestinationType; resourceType: string; destinationField: string;
     resourcePipelineRouteId?: string; sourceSystem?: string | null; sourceField?: string | null;
-    workflowScopedOnly?: boolean; includePending?: boolean;
+    includePending?: boolean;
   }): Observable<TransformationRule[]> {
     const params = new URLSearchParams();
     Object.entries(filter).forEach(([key, value]) => {
@@ -226,20 +225,6 @@ export class TransformationRulesService {
 
   save(request: SaveTransformationRuleRequest): Observable<TransformationRule> {
     return this.http.post<TransformationRule>(TRANSFORMATION_RULES_ENDPOINTS.save, request);
-  }
-
-  /** Binds rules authored before the workflow existed to it — called after every save, not just a brand-new
-   *  workflow's first one (an unattached rule never runs, so the claim is retried rather than assumed to have
-   *  worked once; see WorkflowBuilderV2Component.attachPendingRules). Until attached, those rules are stored
-   *  inert (Workflow scope, no workflow), so a pipeline can be drawn and its rules written in any order.
-   *  `destinationTypes` narrows which pending rules are claimed, so a second unsaved builder session's rules
-   *  for another destination are left alone. */
-  attachPending(workflowId: string, destinationTypes: DestinationType[]): Observable<number> {
-    const params = new URLSearchParams();
-    for (const destinationType of destinationTypes) params.append('destinationTypes', destinationType);
-    const qs = params.toString();
-    const url = TRANSFORMATION_RULES_ENDPOINTS.attachPending(workflowId);
-    return this.http.post<number>(qs ? `${url}?${qs}` : url, {});
   }
 
   delete(ruleId: string): Observable<void> {

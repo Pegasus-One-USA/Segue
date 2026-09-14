@@ -11,6 +11,12 @@ namespace FHIRBridge.Runtime.Domain.Workflows;
 /// </summary>
 public sealed class FieldLineageEntry
 {
+    /// <summary>Sentinel <see cref="NodeType"/> for a field the Mapping node wrote verbatim — no transform
+    /// rule chain ran for it at all. Recorded so every mapped field has a provenance row (lineage is "where did
+    /// this value come from", not "what transformed it"), but it must be excluded anywhere the UI counts or
+    /// labels actual transformation work — see <c>EfWorkflowNodeResourceHistoryRecorder.GetLineageSummaryAsync</c>.</summary>
+    public const string PassThroughNodeType = "DirectMapping";
+
     public FieldLineageEntry(
         Guid id,
         Guid workflowRunId,

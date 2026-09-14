@@ -21,7 +21,7 @@ export class HealowSourceFormComponent implements SourceConfigFormComponent {
   readonly isMaximized = input<boolean>(false);
 
   readonly cancelled = output<void>();
-  readonly saved     = output<void>();
+  readonly saved     = output<string | null>();
   readonly closeAll  = output<void>();
   readonly toggleMaximizeRequest = output<void>();
 

@@ -114,6 +114,22 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   // Optional multi-line notes saved alongside the name (WorkflowDefinition.Description). Purely descriptive —
   // never validated or required, and capped to the column's 2000 chars by the textarea's own maxlength.
   protected readonly workflowDescription = signal('');
+  // Last-known-persisted Name/Description (set alongside workflowName/workflowDescription everywhere they're
+  // populated FROM the server: create, load, and post-save refresh) — the baseline nameOrDescriptionChanged
+  // diffs the live fields against, trimmed both sides so whitespace-only edits don't count as a change.
+  private readonly savedWorkflowName = signal('');
+  private readonly savedWorkflowDescription = signal('');
+  protected readonly nameOrDescriptionChanged = computed(() =>
+    this.workflowName().trim() !== this.savedWorkflowName().trim() ||
+    this.workflowDescription().trim() !== this.savedWorkflowDescription().trim());
+  // What actually gates the Save button. Name/description alone is not enough: the canvas is its own source of
+  // unsaved state (add/remove/reconfigure a node, redraw an edge), and after Clear Canvas the graph differs from
+  // what's persisted while the name and description are untouched — so gating on the text fields alone left Save
+  // disabled with real unsaved changes on screen. PipelineStoreV2.dirty is the same revision-vs-savedRevision
+  // signal the unsaved-changes navigation guard already trusts (see hasUnsavedChanges), so the button and the
+  // "Leave this page?" prompt now agree about what counts as unsaved.
+  protected readonly hasUnsavedWork = computed(() =>
+    this.nameOrDescriptionChanged() || this.store.dirty());
   protected readonly workflowIdInput = signal('');
   protected readonly workflowBusy = signal(false);
   protected readonly workflowStatus = signal('Catalog loading...');
@@ -285,6 +301,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         this.workflowIdInput.set(created.id);
         this.workflowName.set(created.name);
         this.workflowDescription.set(created.description ?? '');
+        this.savedWorkflowName.set(created.name);
+        this.savedWorkflowDescription.set(created.description ?? '');
         this.isEditingExistingWorkflow.set(true);
         this.workflowStatus.set(`Created ${created.name}. Add a source to continue.`);
         this.toast.success('Workflow created', `"${created.name}" is ready — add a source to continue.`);
@@ -314,6 +332,10 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     // existing one.
     if (!this.canMutate()) { this.confirmReset.set(false); return; }
     this.store.reset();
+    // reset() syncs clean for its other caller (blanking a brand-new workflow, where an empty canvas IS the
+    // persisted state). Here the workflow is already saved with nodes, so emptying it is an unsaved change —
+    // without this the Save button stayed disabled on a canvas the user had just cleared.
+    if (this.currentWorkflowId()) this.store.markDirty();
     this.toast.show('Canvas reset', 'All nodes removed.');
     this.confirmReset.set(false);
   }
@@ -380,7 +402,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
     let request: WorkflowBuildRequest;
     try {
-      request = this.buildAssembler.assemble(name, this.buildTrigger(), this.workflowDescription().trim() || null);
+      request = this.buildAssembler.assemble(
+        name, this.buildTrigger(), this.workflowDescription().trim() || null, existingId);
     } catch (err) {
       // buildAssembler throws for configuration gaps it can catch up front (e.g. Upsert write mode with no
       // id-mapped key column) — surfaced here rather than round-tripping to the backend for the same rejection.
@@ -582,6 +605,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         this.currentWorkflowId.set(workflow.id);
         this.workflowName.set(workflow.name);
         this.workflowDescription.set(workflow.description ?? '');
+        this.savedWorkflowName.set(workflow.name);
+        this.savedWorkflowDescription.set(workflow.description ?? '');
         this.workflowStatus.set(`Loaded ${workflow.name}.`);
         this.workflowBusy.set(false);
       },
@@ -636,6 +661,18 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     this.addStubSource(src);
   }
 
+  /** A source form (headless, or a self-contained vendor form like Epic) just added or edited a canvas node
+   *  — see NodeLibraryDialogComponent.sourceNodeUpdated's doc comment. Whether the node is brand-new or an
+   *  edit of an existing one makes no difference here: persistGraph writes the whole canvas either way. */
+  onSourceNodeUpdated(): void {
+    this.persistGraph();
+  }
+
+  /** The canvas deleted a node (and relinked around it) — see CanvasComponent.graphChanged. */
+  onGraphChanged(): void {
+    this.persistGraph();
+  }
+
   onTransformSelected(e: AddTransformEvent): void {
     if (!this.canMutate()) return;
     const t = TRANSFORMS.find(x => x.id === e.transformId);
@@ -665,6 +702,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       this.toast.show('Updated', `${e.chainLabel ?? t.name} configuration updated.`);
       const edited = this.store.byId(e.editNodeId);
       if (edited && e.transformId.startsWith('dest-')) this.syncChainNodes(edited);
+      this.persistGraph();
       return;
     }
 
@@ -701,8 +739,11 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       'Step added',
       e.status === 'caveat' ? `${t.name} added with caveat.` : `${t.name} added.`,
     );
-
     if (e.transformId.startsWith('dest-')) this.syncChainNodes(node);
+
+    // After syncChainNodes, so the chain nodes it decomposes out of the destination's config are part of the
+    // same write rather than waiting for another mutation to carry them.
+    this.persistGraph();
   }
 
   /**
@@ -869,7 +910,88 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     const baseY = upstream ? upstream.y : destination.y;
     ordered.forEach((n, i) => this.store.moveNode(n.id, baseX + 300 * (i + 1), baseY));
     this.store.moveNode(destination.id, baseX + 300 * (ordered.length + 1), baseY);
+
+    // Persists the rewired segment as a whole: this method has just torn down and rebuilt every edge between
+    // `upstream` and `destination`, which no per-node write could carry (see persistGraph).
+    this.persistGraph();
   }
+
+  /** Step 2: persists the canvas as it stands right now, so a just-added or just-edited node — and, for chain
+   *  steps, its rules — can be authored before the workflow's next explicit Save (WORKFLOW_V3_PLAN.md's
+   *  requirement #3).
+   *
+   *  This deliberately sends the WHOLE graph (PUT /workflows/{id}) rather than the per-node
+   *  POST/PUT/DELETE /workflows/{id}/nodes endpoints. Those persist a node at a time and can only attach a
+   *  single inbound edge (AddWorkflowNodeRequest.FromNodeId); there is no edge endpoint at all. Every path that
+   *  adds a chain step rewires a whole segment's edges at once (see insertChainStep), and deletes rewire the
+   *  survivors, so a per-node call could never carry that — it persisted nodes with no edges, which loaded back
+   *  as an unreachable graph (the Mapping node vanished from the canvas on reload). One atomic whole-graph
+   *  write is both correct and simpler: node ids stay server-minted on the next load, and adds, edges, config
+   *  edits and deletes all travel the same path. */
+  private graphSaveInFlight = false;
+  private graphSaveQueued = false;
+
+  private persistGraph(): void {
+    const workflowId = this.currentWorkflowId();
+    if (!workflowId) return; // Should not happen post-Step-1 (every workflow gets an id up front), but guard anyway.
+    if (this.workflowApi.catalog().length === 0) return;
+
+    // The backend rejects a blank name (WorkflowDefinition's constructor throws), and this runs unprompted after
+    // every mutation — without this the user would get a failure toast for a name they haven't typed yet rather
+    // than at the Save they actually asked for.
+    const name = this.workflowName().trim();
+    if (!name) return;
+
+    // One save at a time. The server derives the next version from a fresh read of the CURRENT version
+    // (WorkflowEndpoints' PUT handler) and SqlWorkflowDefinitionStore rejects anything that isn't exactly
+    // current + 1, so two overlapping PUTs make the second stale and it 409s with "changed by someone else".
+    // A single mutation can easily fire this twice in a tick (insertChainStep rewires nodes AND edges), so
+    // instead of racing, note that another save is owed and run exactly one more when this one lands — the
+    // canvas is read at send time, so that trailing save carries every change made in the meantime.
+    if (this.graphSaveInFlight) {
+      this.graphSaveQueued = true;
+      return;
+    }
+    this.graphSaveInFlight = true;
+
+    // Deliberately a plain design save, NEVER /workflows/build.
+    //
+    // Build provisions: it mints/repoints mapping profiles and stamps the resulting ids back onto the canvas.
+    // The destination wizard's own Save does the same thing over the same nodes — POST /mapping-profiles/import,
+    // then writes the returned profile id onto the Mapping node from inside its subscribe callback. Two
+    // independent async writers over one field is a race, and autosaving through build lost it: the build
+    // assembled its request from the store BEFORE the import's callback had written the new id back, so it sent
+    // the previous profile id and the backend faithfully reused that older profile. The wizard's freshly
+    // imported profile (with the column the user had just mapped) was left orphaned, the Mapping node stayed
+    // pointed at the stale one, and the canvas reloaded without the new column — while the run itself still
+    // succeeded, because the stale profile was perfectly valid, just out of date.
+    //
+    // Build belongs on the deliberate actions that already own provisioning — the Save button and activate —
+    // where nothing else is writing these ids concurrently. Autosave's job is only to not lose the graph.
+    const onError = () => {
+      this.afterGraphSave();
+      this.toast.error(
+        'Not saved yet',
+        `Your changes will be saved with the workflow, but aren't available to configure until then.`,
+      );
+    };
+
+    this.workflowApi.save(
+      this.graphMapper.toRequest(name, this.buildTrigger(), workflowId, this.workflowDescription().trim() || null),
+      workflowId,
+    ).subscribe({
+      next: () => this.afterGraphSave(),
+      error: onError,
+    });
+  }
+
+  private afterGraphSave(): void {
+    this.graphSaveInFlight = false;
+    if (!this.graphSaveQueued) return;
+    this.graphSaveQueued = false;
+    this.persistGraph();
+  }
+
 
   // V2 attaches every node exactly where the user clicked `+`, giving the authored straight chain
   // Source → Destination → [Mapping →] Transformation → De-identification. V1's
@@ -973,44 +1095,6 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     });
   }
 
-  /**
-   * Binds rules authored before this workflow existed to it, once it does.
-   *
-   * A pipeline is normally drawn and configured in one sitting, so rules get written while the workflow still
-   * has no id — they are stored inert (Workflow scope, no workflow attached) and claimed here.
-   *
-   * Runs on EVERY save, not just the first. "After the first save every rule is authored against a real id"
-   * turned out not to hold: a rule written while the id hadn't propagated, or one whose attach call failed
-   * (see the quiet-failure note below), stayed unattached forever — and an unattached rule is invisible to
-   * the executor's workflow-scoped resolution, so it never transforms anything. That failed silently in the
-   * worst possible way: the rule is listed in the wizard and on the Transformations tab, the workflow saves
-   * clean, and the column is simply written untransformed. Re-running the claim each save is what makes the
-   * "retried on the next save" promise below actually true.
-   *
-   * The cost of re-running it: a claim takes every pending rule for the destination types this workflow
-   * writes to, so a SECOND builder session that is mid-flight against the same destination type — its own
-   * workflow still unsaved, its rules still pending — can have those rules claimed by this save. That window
-   * always existed on first save; this widens it to every save. It is the lesser problem: the other session's
-   * rules are recoverable (re-point or re-author them), whereas a permanently inert rule is a silent data
-   * defect nobody can see.
-   *
-   * Failure is deliberately quiet. The workflow itself saved fine, and the rules are still on disk — a toast
-   * about an internal attach step would only be alarming, and the next save now genuinely retries it.
-   */
-  private attachPendingRules(workflowId: string): void {
-    const destinationTypes = this.store.nodes()
-      .filter(node => node.kind === 'transform' && (node as TransformNode).transformId.startsWith('dest-'))
-      .map(node => TRANSFORMS.find(t => t.id === (node as TransformNode).transformId)?.destinationType)
-      .filter(destinationType => !!destinationType);
-
-    if (destinationTypes.length === 0) return;
-
-    this.transformationRules.attachPending(workflowId, destinationTypes).subscribe({
-      next: () => { /* nothing to report: the rules were already visible in the wizard */ },
-      error: () => { /* see the doc comment — retried on the next save */ },
-    });
-  }
-
   // ── private helpers ────────────────────────────────────────────────────────
   private saveWorkflow(name: string, workflowId?: string | null, activate = false): void {
     if (this.workflowApi.catalog().length === 0) {
@@ -1037,9 +1121,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
             this.workflowIdInput.set(saved.id);
             this.workflowName.set(saved.name);
             this.workflowDescription.set(saved.description ?? '');
-            // Every save, not only the first — see attachPendingRules' own doc comment for why "there is
-            // nothing left pending after the first save" was not a safe assumption.
-            this.attachPendingRules(saved.id);
+            this.savedWorkflowName.set(saved.name);
+            this.savedWorkflowDescription.set(saved.description ?? '');
 
             if (!activate) {
               this.workflowStatus.set(`Saved ${saved.name}.`);
@@ -1156,6 +1239,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     // nameTouched() && !workflowName().trim(), which is now true again on a field nobody has touched yet.
     this.nameTouched.set(false);
     this.workflowDescription.set('');
+    this.savedWorkflowName.set('');
+    this.savedWorkflowDescription.set('');
     this.workflowIdInput.set('');
     this.triggerType.set('Manual');
     this.cronExpression.set('0 0 * * *');
@@ -1183,6 +1268,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     };
     this.store.addNode(node);
     this.toast.show('Source added', `${s.name} added to the canvas.`);
+    this.persistGraph();
   }
 
   private _nodeDisplayName(n: CanvasNode): string {

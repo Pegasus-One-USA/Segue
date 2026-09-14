@@ -2,7 +2,7 @@
   [vendor]="'MeditechGreenfield'"
   [vendorLabel]="'MEDITECH Greenfield'"
   [isMaximized]="isMaximized()"
-  (saved)="saved.emit()"
+  (saved)="saved.emit($event)"
   (cancelled)="cancelled.emit()"
   (closeAll)="closeAll.emit()"
   (toggleMaximizeRequest)="toggleMaximizeRequest.emit()"
