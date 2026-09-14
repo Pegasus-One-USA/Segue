@@ -79,9 +79,18 @@ export class EpicDiscoveryService {
    * Both are best-effort server-side — a plain (non-SMART) FHIR R4 server has no smart-configuration document at
    * all, which surfaces here as `smartConfigurationError` rather than failing the whole call, so the wizard can
    * fall back to manual token/authorize entry instead of blocking the rest of the form.
+   *
+   * `sourceConnectionId` — the id of the "Existing Connection" the caller selected, when there is one — lets the
+   * backend resolve that connection's own vendor and authorize the probe against it (a role scoped to just that
+   * vendor's create/edit can then discover it), instead of requiring the generic sourceconnections.create/edit
+   * permission unconditionally. Omitted (undefined) for a brand-new connection, where no vendor can be resolved
+   * yet — the backend falls back to exactly its prior, generic-only check in that case.
    */
-  discover(baseUrl: string, _envKey?: EnvKey): Observable<DiscoveredEndpoints> {
-    return this.http.post<ProbeResponse>(SOURCE_DISCOVERY_ENDPOINTS.probe, { baseUrl }).pipe(
+  discover(baseUrl: string, _envKey?: EnvKey, sourceConnectionId?: string | null): Observable<DiscoveredEndpoints> {
+    return this.http.post<ProbeResponse>(SOURCE_DISCOVERY_ENDPOINTS.probe, {
+      baseUrl,
+      sourceConnectionId: sourceConnectionId ?? null,
+    }).pipe(
       map(response => ({
         token: response.smartConfiguration.tokenEndpoint ?? '',
         authorize: response.smartConfiguration.authorizationEndpoint ?? '',

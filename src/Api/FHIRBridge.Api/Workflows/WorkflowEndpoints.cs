@@ -12,6 +12,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
@@ -534,6 +535,8 @@ public static class WorkflowEndpoints
             IWorkflowRunStore runStore,
             IConfigurationRepository configurationRepository,
             IUserDisplayNameResolver userDisplayNameResolver,
+            ICurrentUserService currentUserService,
+            IUserPermissionsProvider userPermissionsProvider,
             CancellationToken cancellationToken,
             int page = 1,
             int pageSize = 20,
@@ -548,10 +551,23 @@ public static class WorkflowEndpoints
             var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
             var applicationTypeBySourceId = sources.ToDictionary(source => source.Id, source => source.ApplicationType);
             var systemTypeBySourceId = sources.ToDictionary(source => source.Id, source => source.SourceSystemType);
+            var destinationTypeByDestinationId = (await configurationRepository.GetDestinationsAsync(cancellationToken))
+                .ToDictionary(destination => destination.Id, destination => destination.DestinationType);
+
+            // Row-level visibility: module access (the policy below) only proves the caller holds SOME
+            // workflow/node permission — it says nothing about which specific workflows they should see.
+            // A caller whose only grant is e.g. epic.view should see Epic-sourced workflows, not every
+            // workflow regardless of vendor. Resolved once per request, not per row.
+            var callerUserId = currentUserService.CurrentUser.UserId;
+            var callerPermissions = callerUserId is null
+                ? Array.Empty<string>()
+                : await userPermissionsProvider.GetEffectivePermissionCodesAsync(callerUserId.Value, cancellationToken);
+            var callerHasBlanketWorkflowAccess = HasGlobalWorkflowVisibility(callerPermissions);
 
             var summaries = new List<WorkflowSummaryDto>(workflows.Count);
             foreach (var workflow in workflows)
             {
+                var usedGroups = new HashSet<PermissionGroupCode>();
                 // Walk the source nodes → their referenced connections. Mirror the SQL's MAX(ApplicationType): the
                 // highest-precedence interactive type wins, so a workflow with any EHR-launch/standalone/patient
                 // source is launched rather than run.
@@ -566,6 +582,10 @@ public static class WorkflowEndpoints
                     }
 
                     firstSourceId ??= sourceId;
+                    if (systemTypeBySourceId.TryGetValue(sourceId, out var sourceVendorType))
+                    {
+                        AddVendorGroupIfSpecific(usedGroups, sourceVendorType);
+                    }
                     if (applicationTypeBySourceId.TryGetValue(sourceId, out var type) && type is not null
                         && (applicationType is null || type.Value > applicationType.Value))
                     {
@@ -576,9 +596,28 @@ public static class WorkflowEndpoints
 
                 var isLaunch = applicationType is ApplicationType.EhrLaunch or ApplicationType.Standalone or ApplicationType.Patient;
 
-                var hasDestination = workflow.Nodes.Any(node =>
-                    node.Category == WorkflowNodeCategory.Destination
-                    && TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out _));
+                var hasDestination = false;
+                foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
+                {
+                    if (!TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId))
+                    {
+                        continue;
+                    }
+
+                    hasDestination = true;
+                    if (destinationTypeByDestinationId.TryGetValue(destinationId, out var destinationVendorType))
+                    {
+                        AddVendorGroupIfSpecific(usedGroups, destinationVendorType);
+                    }
+                }
+
+                // Skip rows the caller has no vendor permission for and no blanket workflow.* grant either —
+                // module access alone (any single node permission) only proves they belong on this page at
+                // all, not that every workflow in the system is theirs to see.
+                if (!callerHasBlanketWorkflowAccess && !usedGroups.Any(group => HasAnyActionFor(callerPermissions, group)))
+                {
+                    continue;
+                }
 
                 var runs = await runStore.ListByDefinitionAsync(workflow.Id, cancellationToken);
                 var lastRun = runs.OrderByDescending(run => run.StartedAt).FirstOrDefault();
@@ -910,12 +949,56 @@ public static class WorkflowEndpoints
         group.MapGet("/workflows/{workflowId:guid}", async (
             Guid workflowId,
             IWorkflowDefinitionStore store,
+            IConfigurationRepository configurationRepository,
+            ICurrentUserService currentUserService,
+            IUserPermissionsProvider userPermissionsProvider,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
-            return workflow is null ? Results.NotFound() : Results.Ok(workflow);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            // Same row-level visibility as /workflows/summary (see the shared helpers below) — a workflow
+            // hidden from the list must not be reachable by opening its id directly either, otherwise
+            // "hidden from the list" is cosmetic only. Module access (the policy below) already proved the
+            // caller holds SOME workflow/node permission; this checks it's one this specific workflow uses.
+            var userId = currentUserService.CurrentUser.UserId;
+            var permissions = userId is null
+                ? Array.Empty<string>()
+                : await userPermissionsProvider.GetEffectivePermissionCodesAsync(userId.Value, cancellationToken);
+
+            if (!HasGlobalWorkflowVisibility(permissions))
+            {
+                var usedGroups = new HashSet<PermissionGroupCode>();
+                foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Source))
+                {
+                    if (TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceId))
+                    {
+                        var source = await configurationRepository.GetSourceConnectionAsync(sourceId, cancellationToken);
+                        if (source is not null) AddVendorGroupIfSpecific(usedGroups, source.SourceSystemType);
+                    }
+                }
+                foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
+                {
+                    if (TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId))
+                    {
+                        var destination = await configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+                        if (destination is not null) AddVendorGroupIfSpecific(usedGroups, destination.DestinationType);
+                    }
+                }
+
+                if (!usedGroups.Any(group => HasAnyActionFor(permissions, group)))
+                {
+                    return Results.NotFound();
+                }
+            }
+
+            return Results.Ok(workflow);
         // Module-access gate (workflow.view OR any workflow-node permission) — opening a single workflow to
-        // view it, same as the list endpoints above.
+        // view it, same as the list endpoints above. Row-level vendor visibility is layered on top inside
+        // the handler itself (see above) since it depends on this specific workflow's own nodes.
         }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
 
         // Low-level upsert-by-id — superseded by /workflows/build for the portal's builder canvas (which also
@@ -2706,6 +2789,73 @@ public static class WorkflowEndpoints
             "triggeredBy" => Order(run => (run.TriggeredBy ?? run.TriggerType ?? string.Empty).ToLowerInvariant()),
             _             => Order(run => run.StartedAt),
         };
+    }
+
+    // The set of permission-group wire-prefixes that represent a workflow "node" (a source vendor or
+    // destination type usable inside a workflow) rather than the Workflow module itself — same
+    // enum-crossing composition as WorkflowModuleAccessAuthorizationHandler.NodeGroupPrefixes (kept as a
+    // private copy there; duplicated here rather than made public, matching this file's existing
+    // tolerance for small duplication over shared-helper indirection — see the node-removal check above).
+    private static readonly Lazy<HashSet<string>> NodeGroupPrefixes = new(() =>
+        new HashSet<string>(
+            SourceSystemPermissionGroups.AllGroupsFor(typeof(SourceSystemType))
+                .Concat(SourceSystemPermissionGroups.AllGroupsFor(typeof(DestinationType)))
+                .Select(group => group.ToString()),
+            StringComparer.OrdinalIgnoreCase));
+
+    // Row-level workflow visibility (see /workflows/summary and the single-workflow GET below).
+    //
+    // The Role Permissions screen's dependency engine (permission-matrix-dependencies.ts) auto-includes
+    // workflow.view — and, depending on which action was checked, workflow.create/edit/delete/run too —
+    // as an implied parent of ANY single vendor permission (epic.view, sqlserver.edit, ...), by design,
+    // purely so the screen never shows an internally-inconsistent saved state. Its own header comment is
+    // explicit that this is "NOT a backend authorization change." That means a role holding e.g. only
+    // epic.view will ALWAYS also carry workflow.view in its stored grant — so "does this caller hold any
+    // workflow.* code" can never be used alone to mean "sees every workflow regardless of vendor": it
+    // would be true for essentially every role that has any vendor permission at all, defeating row-level
+    // filtering entirely. A caller only gets the broad "see everything" treatment here when they hold a
+    // workflow.* code AND no vendor-group permission at all — i.e. workflow.view was actually granted in
+    // its own right (via the Workflow row directly), not merely implied by a vendor checkbox.
+    private static bool HasGlobalWorkflowVisibility(IReadOnlyList<string> permissions)
+        => HasBlanketWorkflowAccess(permissions) && !HasAnyVendorGroupPermission(permissions);
+
+    private static bool HasBlanketWorkflowAccess(IReadOnlyList<string> permissions)
+        => permissions.Any(code => code.StartsWith("workflow.", StringComparison.OrdinalIgnoreCase));
+
+    // SourceSystemPermissionGroups.GroupFor falls back to the generic PermissionGroupCode.SourceConnections
+    // for a vendor/destination-type enum value with no same-named group of its own (e.g. DestinationType.
+    // Medplum — its dedicated group was removed the same way NewEHR/Hl7v2 were, leaving the type itself
+    // still selectable on a node but permission-wise ungated). That fallback is the generic Settings-page
+    // "Source Connections" permission, not a stand-in for the vendor's own permission — treating it as
+    // this workflow's "used group" would mean anyone holding the unrelated sourceconnections.view
+    // permission (a very common grant) could see every workflow that happens to use an ungated vendor
+    // type, defeating the filter. WorkflowModuleAccessAuthorizationHandler.NodeGroupPrefixes excludes
+    // this same fallback for the identical reason (via SourceSystemPermissionGroups.AllGroupsFor) — kept
+    // in sync here rather than shared, matching this file's existing tolerance for small duplication.
+    private static void AddVendorGroupIfSpecific(HashSet<PermissionGroupCode> usedGroups, Enum vendorType)
+    {
+        var group = SourceSystemPermissionGroups.GroupFor(vendorType);
+        if (group != PermissionGroupCode.SourceConnections)
+        {
+            usedGroups.Add(group);
+        }
+    }
+
+    private static bool HasAnyVendorGroupPermission(IReadOnlyList<string> permissions)
+        => permissions.Any(code =>
+        {
+            var dot = code.IndexOf('.');
+            var group = dot >= 0 ? code[..dot] : code;
+            return NodeGroupPrefixes.Value.Contains(group);
+        });
+
+    // True if the caller holds any action (view/create/edit/delete/execute) for the given vendor group —
+    // deliberately not just `.view`, so a role scoped to e.g. epic.create (but not epic.view) still sees
+    // the Epic-sourced workflows it's otherwise allowed to reach via the module-access gate.
+    private static bool HasAnyActionFor(IReadOnlyList<string> permissions, PermissionGroupCode group)
+    {
+        var prefix = group.ToString().ToLowerInvariant() + ".";
+        return permissions.Any(code => code.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)

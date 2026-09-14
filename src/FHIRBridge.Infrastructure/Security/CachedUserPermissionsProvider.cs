@@ -57,6 +57,30 @@ public sealed class CachedUserPermissionsProvider : IUserPermissionsProvider
             }
         }
 
+        // RBAC redesign Phase 1 (Step 2): a role with IsFullAccess = true is treated as holding every
+        // currently active permission code in the catalog, not only the ones it has an explicit
+        // PermissionAllocation row for — this is what lets a "Full System Access" role automatically
+        // pick up a brand-new permission the moment it's declared, with no allocation ever added. This is
+        // deliberately additive (a union into roleCodes), never a replacement: for SuperAdmin/Admin
+        // specifically — which already hold an explicit allocation for every permission that exists,
+        // active and the handful of inactive/orphaned legacy codes alike — the union changes nothing, so
+        // their effective set stays byte-for-byte identical to before this change. Inactive permissions
+        // are never added by this branch; only the two role-name-only authorization handlers
+        // (UnifiedAdminAuthorizationHandler/SuperAdminOnlyAuthorizationHandler — untouched, see their own
+        // docs) still don't consult this flag. Evaluated purely from Role.IsFullAccess; role name is
+        // never read here.
+        if (roles.Any(r => r.IsFullAccess))
+        {
+            var allPermissions = await repository.GetPermissionsAsync(cancellationToken);
+            foreach (var permission in allPermissions)
+            {
+                if (permission.IsActive)
+                {
+                    roleCodes.Add(permission.Name);
+                }
+            }
+        }
+
         var userAllocations = await repository.GetUserPermissionAllocationsAsync(userId, cancellationToken);
         var overridden = new HashSet<string>(
             userAllocations.Select(a => a.Permission.Name), StringComparer.OrdinalIgnoreCase);

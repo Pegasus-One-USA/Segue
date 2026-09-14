@@ -61,6 +61,26 @@
         }
       </mat-form-field>
 
+      <div class="form-field form-field--toggle full-access-field">
+        <mat-slide-toggle formControlName="isFullAccess">Full System Access</mat-slide-toggle>
+        @if (form.get('isFullAccess')!.value) {
+          <p class="full-access-hint">
+            <mat-icon>verified_user</mat-icon>
+            This role automatically has every current and future permission — no need to select them individually.
+          </p>
+        } @else {
+          <p class="full-access-hint full-access-hint--muted">
+            Grants every current and future permission automatically, bypassing the permission matrix entirely.
+          </p>
+        }
+        @if (!isSystemRole && !callerHasFullAccess()) {
+          <p class="full-access-hint full-access-hint--locked">
+            <mat-icon>lock</mat-icon>
+            Only a user with Full System Access can grant or revoke this.
+          </p>
+        }
+      </div>
+
     </form>
   </mat-dialog-content>
 

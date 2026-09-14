@@ -46,17 +46,23 @@
               <select
                 id="role-switcher"
                 class="dw-select"
-                [value]="role()!.id"
                 (change)="onRoleChange($any($event.target).value)"
               >
                 @for (r of roles(); track r.id) {
-                  <option [value]="r.id">{{ r.displayName }}</option>
+                  <option [value]="r.id" [selected]="r.id === role()!.id">{{ r.displayName }}</option>
                 }
               </select>
             </div>
           </div>
         </div>
       </div>
+
+      @if (isFullAccessRole()) {
+        <div class="notice full-access-notice">
+          <mat-icon>verified_user</mat-icon>
+          <span>This role has <strong>Full System Access</strong> — it automatically holds every current and future permission. The matrix below does not apply and has been hidden.</span>
+        </div>
+      }
 
       @if (isPermissionsLocked()) {
         <div class="notice">
@@ -73,6 +79,7 @@
       }
 
       <!-- Permissions -->
+      @if (!isFullAccessRole()) {
       <div class="permissions-card">
 
         <!-- Toolbar: search + reset + global select-all -->
@@ -192,10 +199,12 @@
           }
         </div>
       </div>
+      }
 
       <!-- Actions -->
       <div class="page-actions">
         <button mat-stroked-button class="btn-cancel" (click)="goBack()">Cancel</button>
+        @if (!isFullAccessRole()) {
         <button
           mat-flat-button
           class="btn-save"
@@ -208,6 +217,7 @@
           }
           Update
         </button>
+        }
       </div>
 
     }

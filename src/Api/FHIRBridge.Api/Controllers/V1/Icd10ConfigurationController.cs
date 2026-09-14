@@ -30,15 +30,15 @@ public sealed class Icd10ConfigurationController : ControllerBase
         (_freshnessChecker, _importChannel, _db) = (freshnessChecker, importChannel, db);
 
     [HttpGet("freshness")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View ICD-10-CM release freshness status.")]
+    [StandardPermission(PermissionGroupCode.Icd10, PermissionActionCode.View, description: "View ICD-10-CM release freshness status.")]
     public async Task<IActionResult> GetFreshness(CancellationToken cancellationToken) => Ok(await _freshnessChecker.GetLastCheckAsync(SettingsKeyPrefix, cancellationToken));
 
     [HttpPost("check-for-updates")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Check for a newer ICD-10-CM release.")]
+    [StandardPermission(PermissionGroupCode.Icd10, PermissionActionCode.Write, description: "Check for a newer ICD-10-CM release.")]
     public async Task<IActionResult> CheckForUpdates(CancellationToken cancellationToken) => Ok(await _freshnessChecker.CheckAsync(ListingUrl, SettingsKeyPrefix, RequiredKeywords, cancellationToken));
 
     [HttpPost("download-and-import")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Download and import the release identified by the last freshness check.")]
+    [StandardPermission(PermissionGroupCode.Icd10, PermissionActionCode.Write, description: "Download and import the release identified by the last freshness check.")]
     public async Task<IActionResult> DownloadAndImport(CancellationToken cancellationToken)
     {
         string zipPath;
