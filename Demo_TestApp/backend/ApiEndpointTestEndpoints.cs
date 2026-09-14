@@ -28,12 +28,20 @@ public static class ApiEndpointTestEndpoints
     /// <see cref="DataLakeWebhookEndpoints"/>.</summary>
     private const int MaxBodyBytes = 8 * 1024 * 1024;
 
+    /// <summary>Every method FHIRBridge's ApiEndpoint destination itself supports (see
+    /// ApiEndpointSettings.Parse's HttpMethod validation) — no GET, since the destination only ever pushes data
+    /// out, never reads it back.</summary>
+    internal static readonly string[] HttpMethods = ["POST", "PUT", "PATCH", "DELETE"];
+
     public static void MapApiEndpointTestEndpoints(this WebApplication app)
     {
         // ── 1. Single object — "Create Patient Record" ─────────────────────────────────────────────────
         // Body: { "mrn": "...", "firstName": "...", "lastName": "...", "dateOfBirth": "YYYY-MM-DD", "gender": "..." }
         // Matches the ApiEndpoint destination's RecordPerRequest payload shape (or a batch size of 1).
-        app.MapPost("/api/apitest/single-record", async (HttpRequest request, HealthAppDbContext db, CancellationToken ct) =>
+        // Accepts POST/PUT/PATCH/DELETE — the same methods ApiEndpointSettings.Parse allows for the destination's
+        // own "HTTP method" setting (see its validation there) — so a receiver here can be pointed at by any of
+        // them; the method used has no bearing on validation, only on what's recorded against the call.
+        app.MapMethods("/api/apitest/single-record", HttpMethods, async (HttpRequest request, HealthAppDbContext db, CancellationToken ct) =>
         {
             var (body, tooLarge) = await ReadBodyAsync(request, ct);
             if (tooLarge)
@@ -51,7 +59,7 @@ public static class ApiEndpointTestEndpoints
                 error = RequireStringFields(root, "mrn", "firstName", "lastName");
             }
 
-            var call = await RecordCallAsync(db, SingleRecord, body, error, ct);
+            var call = await RecordCallAsync(db, SingleRecord, request.Method, body, null, error, ct);
             return error is null
                 ? Results.Ok(new { status = "Accepted", callId = call.Id, apiName = SingleRecord })
                 : Results.Json(new { status = "Rejected", callId = call.Id, error }, statusCode: 400);
@@ -60,7 +68,7 @@ public static class ApiEndpointTestEndpoints
         // ── 2. Array of objects — "Bulk Import Records" ────────────────────────────────────────────────
         // Body: [ { "mrn": "...", ... }, { "mrn": "...", ... }, ... ]
         // Matches the ApiEndpoint destination's JsonArray payload shape (its default).
-        app.MapPost("/api/apitest/records-batch", async (HttpRequest request, HealthAppDbContext db, CancellationToken ct) =>
+        app.MapMethods("/api/apitest/records-batch", HttpMethods, async (HttpRequest request, HealthAppDbContext db, CancellationToken ct) =>
         {
             var (body, tooLarge) = await ReadBodyAsync(request, ct);
             if (tooLarge)
@@ -106,7 +114,7 @@ public static class ApiEndpointTestEndpoints
                 }
             }
 
-            var call = await RecordCallAsync(db, RecordsBatch, body, error, ct);
+            var call = await RecordCallAsync(db, RecordsBatch, request.Method, body, null, error, ct);
             return error is null
                 ? Results.Ok(new { status = "Accepted", callId = call.Id, apiName = RecordsBatch, recordsReceived = recordCount })
                 : Results.Json(new { status = "Rejected", callId = call.Id, error }, statusCode: 400);
@@ -115,7 +123,7 @@ public static class ApiEndpointTestEndpoints
         // ── 3. Envelope — "Batch With Run Metadata" ─────────────────────────────────────────────────────
         // Body: { "meta": { "resourceType": "...", "recordCount": N, ... }, "records": [ {...}, ... ] }
         // Matches the ApiEndpoint destination's Envelope payload shape.
-        app.MapPost("/api/apitest/records-envelope", async (HttpRequest request, HealthAppDbContext db, CancellationToken ct) =>
+        app.MapMethods("/api/apitest/records-envelope", HttpMethods, async (HttpRequest request, HealthAppDbContext db, CancellationToken ct) =>
         {
             var (body, tooLarge) = await ReadBodyAsync(request, ct);
             if (tooLarge)
@@ -150,7 +158,7 @@ public static class ApiEndpointTestEndpoints
                 recordCount = records.GetArrayLength();
             }
 
-            var call = await RecordCallAsync(db, RecordsEnvelope, body, error, ct);
+            var call = await RecordCallAsync(db, RecordsEnvelope, request.Method, body, null, error, ct);
             return error is null
                 ? Results.Ok(new { status = "Accepted", callId = call.Id, apiName = RecordsEnvelope, recordsReceived = recordCount })
                 : Results.Json(new { status = "Rejected", callId = call.Id, error }, statusCode: 400);
@@ -161,7 +169,7 @@ public static class ApiEndpointTestEndpoints
         // Not one of FHIRBridge's own framings at all — this is the API a real partner integration looks like,
         // for exercising the ApiEndpoint destination's Request Body Template feature (a caller-supplied JSON
         // shape with {{fieldName}} placeholders substituted per record) end to end.
-        app.MapPost("/api/apitest/custom-event", async (HttpRequest request, HealthAppDbContext db, CancellationToken ct) =>
+        app.MapMethods("/api/apitest/custom-event", HttpMethods, async (HttpRequest request, HealthAppDbContext db, CancellationToken ct) =>
         {
             var (body, tooLarge) = await ReadBodyAsync(request, ct);
             if (tooLarge)
@@ -187,7 +195,7 @@ public static class ApiEndpointTestEndpoints
                 error = $"patient.{patientError}";
             }
 
-            var call = await RecordCallAsync(db, CustomEvent, body, error, ct);
+            var call = await RecordCallAsync(db, CustomEvent, request.Method, body, null, error, ct);
             return error is null
                 ? Results.Ok(new { status = "Accepted", callId = call.Id, apiName = CustomEvent })
                 : Results.Json(new { status = "Rejected", callId = call.Id, error }, statusCode: 400);
@@ -219,13 +227,23 @@ public static class ApiEndpointTestEndpoints
 
     // ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-    private static async Task<ApiTestCallEntity> RecordCallAsync(
-        HealthAppDbContext db, string apiName, string content, string? errorMessage, CancellationToken ct)
+    /// <summary>Shared with <see cref="ApiAuthTestEndpoints"/> — every call, on any route, lands in the one
+    /// <see cref="ApiTestCallEntity"/> table via this same method.</summary>
+    internal static async Task<ApiTestCallEntity> RecordCallAsync(
+        HealthAppDbContext db,
+        string apiName,
+        string httpMethod,
+        string content,
+        string? authMode,
+        string? errorMessage,
+        CancellationToken ct)
     {
         var call = new ApiTestCallEntity
         {
             ApiName = apiName,
+            HttpMethod = httpMethod,
             Content = content,
+            AuthMode = authMode,
             IsValid = errorMessage is null,
             ErrorMessage = errorMessage,
             ReceivedOnUtc = DateTime.UtcNow,
