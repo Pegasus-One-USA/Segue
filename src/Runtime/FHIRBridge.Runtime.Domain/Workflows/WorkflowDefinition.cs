@@ -1,4 +1,4 @@
-namespace FHIRBridge.Runtime.Domain.Workflows;
+﻿namespace FHIRBridge.Runtime.Domain.Workflows;
 
 public sealed class WorkflowDefinition
 {
@@ -187,13 +187,6 @@ public sealed class WorkflowDefinition
         return edge;
     }
 
-    public WorkflowNodeConfiguration AddNodeConfiguration(Guid nodeId, string key, string value)
-    {
-        var node = _nodes.SingleOrDefault(candidate => candidate.Id == nodeId)
-            ?? throw new InvalidOperationException($"Workflow node '{nodeId}' does not exist.");
-
-        return node.AddConfiguration(key, value);
-    }
 
     /// <summary>Replaces the free-text description (null / whitespace clears it).</summary>
     public void SetDescription(string? description) => Description = NormalizeDescription(description);

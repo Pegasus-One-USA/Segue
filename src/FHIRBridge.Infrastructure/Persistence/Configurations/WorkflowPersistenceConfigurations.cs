@@ -1,4 +1,4 @@
-using FHIRBridge.Runtime.Domain.Workflows;
+﻿using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -92,34 +92,11 @@ public sealed class WorkflowNodeEntityTypeConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.IsEnabled).IsRequired();
         builder.Property(x => x.CheckpointUrlEnabled).IsRequired().HasDefaultValue(false);
 
-        builder.HasMany(x => x.Configuration)
-            .WithOne()
-            .HasForeignKey(configuration => configuration.WorkflowNodeId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.Metadata.FindNavigation(nameof(WorkflowNode.Configuration))!
-            .SetPropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasIndex(x => x.WorkflowDefinitionId);
     }
 }
 
-public sealed class WorkflowNodeConfigurationEntityTypeConfiguration
-    : IEntityTypeConfiguration<WorkflowNodeConfiguration>
-{
-    public void Configure(EntityTypeBuilder<WorkflowNodeConfiguration> builder)
-    {
-        builder.ToTable("WorkflowNodeConfigurations");
-        builder.HasKey(x => x.Id);
-
-        builder.Property(x => x.WorkflowNodeId).IsRequired();
-        builder.Property(x => x.Key).HasMaxLength(200).IsRequired();
-        builder.Property(x => x.Value).IsRequired();
-        builder.Property(x => x.IsSecret).IsRequired();
-
-        builder.HasIndex(x => x.WorkflowNodeId);
-    }
-}
 
 public sealed class WorkflowEdgeEntityTypeConfiguration : IEntityTypeConfiguration<WorkflowEdge>
 {

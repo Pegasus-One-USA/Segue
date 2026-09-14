@@ -1037,10 +1037,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         WorkflowNode node,
         IReadOnlyCollection<WorkflowNodeOutput> inputs)
     {
-        var destinationId = node.Configuration.FirstOrDefault(configuration =>
-                string.Equals(configuration.Key, "destinationId", StringComparison.OrdinalIgnoreCase))
-            ?.Value
-            ?? node.Id.ToString("N");
+        // Read from ConfigurationJson, now the single store for a node's settings (plan §6).
+        var destinationId = ReadStringConfiguration(node, "destinationId") ?? node.Id.ToString("N");
 
         return new RuntimeDestinationWriteResult(destinationId, inputs.Count, DateTimeOffset.UtcNow);
     }

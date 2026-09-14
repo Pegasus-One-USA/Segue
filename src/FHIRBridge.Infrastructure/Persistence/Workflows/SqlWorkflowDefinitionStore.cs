@@ -48,7 +48,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
 
         var existing = await _dbContext.WorkflowDefinitions
             .Include(definition => definition.Nodes)
-                .ThenInclude(node => node.Configuration)
+
             .Include(definition => definition.Edges)
             .AsSplitQuery()
             .FirstOrDefaultAsync(definition => definition.Id == workflowDefinition.Id, cancellationToken);
@@ -109,7 +109,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
         return await _dbContext.WorkflowDefinitions
             .AsNoTracking()
             .Include(definition => definition.Nodes)
-                .ThenInclude(node => node.Configuration)
+
             .Include(definition => definition.Edges)
             .AsSplitQuery()
             .OrderBy(definition => definition.Name)
@@ -121,7 +121,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
         return await _dbContext.WorkflowDefinitions
             .AsNoTracking()
             .Include(definition => definition.Nodes)
-                .ThenInclude(node => node.Configuration)
+
             .Include(definition => definition.Edges)
             .AsSplitQuery()
             .FirstOrDefaultAsync(definition => definition.Id == workflowId, cancellationToken);
@@ -131,7 +131,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
     {
         var existing = await _dbContext.WorkflowDefinitions
             .Include(definition => definition.Nodes)
-                .ThenInclude(node => node.Configuration)
+
             .Include(definition => definition.Edges)
             .AsSplitQuery()
             .FirstOrDefaultAsync(definition => definition.Id == workflowId, cancellationToken);

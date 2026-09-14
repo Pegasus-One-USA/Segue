@@ -51,9 +51,14 @@ public sealed class WorkflowSqlStoreTests
         var definitionId = Guid.NewGuid();
         var workflow = new WorkflowDefinition(definitionId, "Epic -> SQL", 1);
         var source = workflow.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
-        var destination = workflow.AddNode("SqlServerDestinationNode", WorkflowNodeCategory.Destination, 30);
+        // ConfigurationJson is now the single store for a node's settings — the parallel key/value table it
+        // used to round-trip alongside is gone (plan §6).
+        var destination = workflow.AddNode(
+            "SqlServerDestinationNode",
+            WorkflowNodeCategory.Destination,
+            30,
+            configurationJson: """{"table":"dbo.Patient"}""");
         workflow.AddEdge(source.Id, destination.Id);
-        workflow.AddNodeConfiguration(destination.Id, "table", "dbo.Patient");
 
         await using (var context = CreateContext())
         {
@@ -69,8 +74,7 @@ public sealed class WorkflowSqlStoreTests
             reloaded.Nodes.Should().HaveCount(2);
             reloaded.Edges.Should().ContainSingle();
             reloaded.Nodes.Single(node => node.NodeType == "SqlServerDestinationNode")
-                .Configuration.Should().ContainSingle(configuration =>
-                    configuration.Key == "table" && configuration.Value == "dbo.Patient");
+                .ConfigurationJson.Should().Contain("dbo.Patient");
         }
     }
 

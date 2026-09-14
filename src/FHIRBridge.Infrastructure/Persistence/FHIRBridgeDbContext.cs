@@ -1,4 +1,4 @@
-using FHIRBridge.Domain.Entities;
+﻿using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Domain.Entities.Licensing;
 using FHIRBridge.Domain.Entities.Terminology;
@@ -101,7 +101,6 @@ public sealed class FHIRBridgeDbContext : DbContext
     // Ranked-workflow graph engine (Scenario A): durable pipeline graphs + per-node run history.
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
     public DbSet<WorkflowNode> WorkflowNodes => Set<WorkflowNode>();
-    public DbSet<WorkflowNodeConfiguration> WorkflowNodeConfigurations => Set<WorkflowNodeConfiguration>();
     public DbSet<WorkflowEdge> WorkflowEdges => Set<WorkflowEdge>();
     public DbSet<WorkflowRun> WorkflowRuns => Set<WorkflowRun>();
     public DbSet<WorkflowNodeRun> WorkflowNodeRuns => Set<WorkflowNodeRun>();
