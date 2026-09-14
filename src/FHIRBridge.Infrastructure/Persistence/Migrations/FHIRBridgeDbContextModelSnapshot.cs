@@ -1606,6 +1606,65 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("WorkflowAuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Licensing.UsageLedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("CumulativeConfiguredPipelineRunCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CumulativeRuntimeWorkflowRunCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("EntryHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<long>("MonotonicTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ObservedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PreviousHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<long>("ProcessedRecordsThisMonth")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("SequenceNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("SequenceNumber"));
+
+                    b.Property<int>("SourceConnectionCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TenantCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WorkflowCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ObservedUtc");
+
+                    b.HasIndex("SequenceNumber")
+                        .IsUnique();
+
+                    b.ToTable("UsageLedgerEntries", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.MappingProfile", b =>
                 {
                     b.Property<Guid>("Id")

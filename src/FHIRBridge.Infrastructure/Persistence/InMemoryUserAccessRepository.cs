@@ -1,12 +1,21 @@
 using System.Collections.Concurrent;
+using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Infrastructure.Persistence;
 
 public sealed class InMemoryUserAccessRepository : IUserAccessRepository
 {
+    // This store bypasses EF entirely (see class remarks on InMemoryConfigurationRepository, which this store
+    // mirrors), so LicenseEnforcementSaveChangesInterceptor never runs against it — the no-DB dev/test profile
+    // needs its own equivalent enforcement at this one Add choke point. Resolved through a fresh scope (this
+    // repository is a singleton; ILicenseQuotaGuard is scoped) rather than taken as a direct constructor
+    // dependency, the same captive-dependency-avoidance pattern used elsewhere in this codebase for a singleton
+    // needing a scoped collaborator (e.g. ISystemSettingsCache/ICurrentTenantResolver).
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<Guid, User> _users = new();
     private readonly ConcurrentDictionary<Guid, Role> _roles = new(
         new[]
@@ -49,8 +58,10 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     private readonly ConcurrentDictionary<string, PermissionAllocation> _userPermissionAllocations = new();
     private readonly ConcurrentDictionary<string, UserRole> _userRoles = new();
 
-    public InMemoryUserAccessRepository()
+    public InMemoryUserAccessRepository(IServiceScopeFactory scopeFactory)
     {
+        _scopeFactory = scopeFactory;
+
         foreach (var (roleId, permissionIds) in RbacSeedData.RolePermissions)
         {
             foreach (var permissionId in permissionIds)
@@ -119,7 +130,6 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
     public Task AddUserAsync(User user, CancellationToken cancellationToken)
     {
         _users[user.Id] = user;
-
         return Task.CompletedTask;
     }
 

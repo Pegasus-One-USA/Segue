@@ -23,4 +23,12 @@ public static class AppSecretReferences
     /// excluded from <c>AppSecretsAdminService</c>'s regeneration catalog: unlike the signing secrets,
     /// rotating this key would leave every previously-encrypted row undecryptable.</summary>
     public static readonly SecretReference PhiEncryptionKey = new("app", "phi-encryption-key");
+
+    /// <summary>Opaque, auto-generated identifier for this install — one per install, generated on first
+    /// boot like the other app secrets and never rotated in the ordinary course of things. Sent as
+    /// <c>installationId</c> in <c>LicenseHeartbeatWorker</c>'s check-in payload so the remote service can
+    /// tell installs apart. Deliberately excluded from <c>AppSecretsAdminService</c>'s regeneration catalog,
+    /// same reasoning as <see cref="PhiEncryptionKey"/>: regenerating it would make this install look like a
+    /// brand-new one to the remote service.</summary>
+    public static readonly SecretReference InstallationId = new("app", "installation-id");
 }

@@ -255,6 +255,20 @@ export const APP_SECRETS_ENDPOINTS = {
   regenerate: (secretName: string) => `${API_V1_BASE}/system/app-secrets/${secretName}/regenerate`,
 };
 
+// ─── License (LicenseController — api/v1/license) ───────────────────────────
+// UnifiedAdmin-only (SuperAdmin or Admin): reports the product's current signed license and lets an
+// admin apply a new token. Verification/reporting only — no enforcement lives behind this yet.
+export const LICENSE_ENDPOINTS = {
+  get:   `${API_V1_BASE}/license`,
+  apply: `${API_V1_BASE}/license`,
+  // ⚠ TEMPORARY / DEV-ONLY — backs the "Dev: Mint a test license" page
+  // (settings/license/mint-dev). The backend controller behind this URL 404s itself on any host
+  // that isn't running in the Development environment (see DevLicenseMintingController's remarks) —
+  // that server-side gate is the actual security boundary, not this URL being hard to find. Delete
+  // this entry alongside the license-dev-mint page once minting moves to its own separate internal tool.
+  devMint: `${API_V1_BASE}/dev/license-mint`,
+};
+
 export const LOINC_ENDPOINTS = {
   configuration: `${API_V1_BASE}/terminology/loinc/configuration`,
   synchronize: `${API_V1_BASE}/terminology/loinc/configuration/synchronize`,

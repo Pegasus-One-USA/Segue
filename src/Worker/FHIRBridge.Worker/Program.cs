@@ -184,6 +184,18 @@ builder.Services.AddHostedService<RetentionPurgeWorker>();
 builder.Services.Configure<AuditChainVerificationOptions>(builder.Configuration.GetSection("AuditChainVerification"));
 builder.Services.AddHostedService<AuditChainVerificationWorker>();
 
+// Local, tamper-evident usage tracking (see UsageLedgerEntry) — a purely local hash-chained snapshot of live
+// usage counts, zero network dependency. Enabled by default.
+builder.Services.Configure<LicenseUsageSnapshotOptions>(builder.Configuration.GetSection("LicenseUsageSnapshot"));
+builder.Services.AddHostedService<LicenseUsageSnapshotWorker>();
+
+// Best-effort "phone home" heartbeat to a PegasusOne-hosted check-in service. LicenseHeartbeat:EndpointUrl is
+// blank by default (no real service exists at a known address yet) — the worker no-ops until it's set, and
+// never blocks/crashes on an unreachable or misconfigured endpoint. See LicenseHeartbeatWorker's remarks.
+builder.Services.Configure<LicenseHeartbeatOptions>(builder.Configuration.GetSection("LicenseHeartbeat"));
+builder.Services.AddHttpClient(nameof(LicenseHeartbeatWorker));
+builder.Services.AddHostedService<LicenseHeartbeatWorker>();
+
 // Alert Engine: evaluates every enabled AlertRule against SecurityEvents on a timer, firing real alerts
 // (AlertHistoryEntry + email) — see IAlertEvaluationService.
 builder.Services.Configure<AlertEvaluationOptions>(builder.Configuration.GetSection("AlertEvaluation"));
@@ -230,5 +242,13 @@ using (var scope = host.Services.CreateScope())
 // resolve the same value; sharing the DB-provisioned secret (and Data Protection key ring) is what makes
 // that safe. See AppSecretProvisioner's remarks. Must run after the migration above.
 AppSecretProvisioner.ProvisionAsync(host.Services, CancellationToken.None).GetAwaiter().GetResult();
+
+// Resolves and verifies the signed product license (see ILicenseService's remarks) so ILicenseService.Current
+// is populated before the Worker starts its hosted services, instead of staying LicenseStatus.Unlicensed until
+// something happens to trigger a reload. Verification/reporting only — nothing here blocks startup on the
+// resolved LicenseStatus. Must run after the AppSecretProvisioner/migration calls above, since one of its
+// token sources is a SystemSetting row.
+host.Services.GetRequiredService<FHIRBridge.Application.Abstractions.Licensing.ILicenseService>()
+    .ReloadAsync(CancellationToken.None).GetAwaiter().GetResult();
 
 host.Run();

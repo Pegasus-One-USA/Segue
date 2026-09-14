@@ -40,7 +40,7 @@ public sealed class ReferenceScopedResourceFetchTests
             .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(source);
 
-        var workflowStore = new InMemoryWorkflowDefinitionStore();
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "reference-scoped-fetch-test", 1);
         var sourceNode = workflow.AddNode(
             WorkflowNodeTypes.EpicSource,

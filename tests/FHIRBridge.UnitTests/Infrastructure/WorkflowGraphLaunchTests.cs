@@ -76,7 +76,7 @@ public sealed class WorkflowGraphLaunchTests
     public async Task Resolver_projects_and_persists_once_then_reuses()
     {
         var repository = BuildRepositoryWithOneRoute(out var sourceId, DestinationType.SqlServer);
-        var store = new InMemoryWorkflowDefinitionStore();
+        var store = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
         var resolver = new LaunchWorkflowResolver(new RouteToWorkflowGraphProjection(repository), store);
 
         var first = await resolver.ResolveForSourceAsync(sourceId, CancellationToken.None);

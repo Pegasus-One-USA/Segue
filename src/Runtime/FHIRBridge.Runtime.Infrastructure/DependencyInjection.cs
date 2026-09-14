@@ -3,10 +3,12 @@ using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.Abstractions.Destinations;
 using FHIRBridge.Runtime.Application.Abstractions.Persistence;
+using FHIRBridge.Runtime.Application.Abstractions.Pipeline;
 using FHIRBridge.Runtime.Infrastructure.Applications;
 using FHIRBridge.Runtime.Infrastructure.Auth;
 using FHIRBridge.Runtime.Infrastructure.Connectors;
 using FHIRBridge.Runtime.Infrastructure.Destinations;
+using FHIRBridge.Runtime.Infrastructure.Licensing;
 using FHIRBridge.Runtime.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -131,6 +133,11 @@ public static class DependencyInjection
         }
 
         services.AddScoped<IDestinationWriterFactory, DestinationWriterFactory>();
+
+        // Bridges Runtime.Application's PipelineOrchestrator to the real, main-Application license quota guard —
+        // see LicenseQuotaGuardAdapter's remarks for why this indirection exists (Runtime.Application cannot
+        // reference FHIRBridge.Application directly).
+        services.AddScoped<IPipelineRunLicenseGuard, LicenseQuotaGuardAdapter>();
 
         return services;
     }
