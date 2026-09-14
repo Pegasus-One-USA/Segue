@@ -5046,34 +5046,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.ToTable("WorkflowNodes", (string)null);
                 });
 
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeConfiguration", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsSecret")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("WorkflowNodeId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("WorkflowNodeId");
-
-                    b.ToTable("WorkflowNodeConfigurations", (string)null);
-                });
-
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6007,15 +5979,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeConfiguration", b =>
-                {
-                    b.HasOne("FHIRBridge.Runtime.Domain.Workflows.WorkflowNode", null)
-                        .WithMany("Configuration")
-                        .HasForeignKey("WorkflowNodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeRun", b =>
                 {
                     b.HasOne("FHIRBridge.Runtime.Domain.Workflows.WorkflowRun", null)
@@ -6035,11 +5998,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Navigation("Edges");
 
                     b.Navigation("Nodes");
-                });
-
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNode", b =>
-                {
-                    b.Navigation("Configuration");
                 });
 
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowRun", b =>

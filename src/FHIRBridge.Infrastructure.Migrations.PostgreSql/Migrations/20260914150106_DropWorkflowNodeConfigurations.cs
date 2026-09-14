@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace FHIRBridge.Infrastructure.Persistence.Migrations
+namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 {
     /// <inheritdoc />
     public partial class DropWorkflowNodeConfigurations : Migration
@@ -22,11 +22,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                 name: "WorkflowNodeConfigurations",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    IsSecret = table.Column<bool>(type: "bit", nullable: false),
-                    Key = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Value = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    WorkflowNodeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsSecret = table.Column<bool>(type: "boolean", nullable: false),
+                    Key = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Value = table.Column<string>(type: "text", nullable: false),
+                    WorkflowNodeId = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
                 {
