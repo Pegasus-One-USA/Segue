@@ -148,6 +148,14 @@
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                  <!-- Placeholder only — view details for an EHR endpoint is not implemented yet.
+                       Disabled, no click handler; same visibility/View pattern (including the .view
+                       permission gate) as source-connection-list's own View menu item, just not wired to
+                       anything yet. -->
+                  <button mat-menu-item disabled *appHideWithoutPermission="'ehrendpoints.view'">
+                    <mat-icon>visibility</mat-icon>
+                    View (Coming Soon)
+                  </button>
                   <button mat-menu-item *appHideWithoutPermission="'ehrendpoints.edit'" (click)="openEdit(e)">
                     <mat-icon>edit</mat-icon>
                     Edit

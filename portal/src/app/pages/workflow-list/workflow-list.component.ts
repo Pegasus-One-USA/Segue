@@ -67,6 +67,10 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   readonly summaries = signal<WorkflowSummary[]>([]);
   readonly loading = signal(true);
   readonly searchQuery = signal('');
+  /** True only while a search-box-triggered reload is in flight — see onSearch/reload. Drives a small inline
+   *  spinner in the search box instead of the app-wide global loader, which would otherwise blur the very
+   *  input the user is still typing into (AppComponent marks the routed content `[inert]` while busy). */
+  readonly searching = signal(false);
 
   /** Workflow id currently running/launching — disables its action button. Not set for an async ("background") run,
    *  which returns immediately so the row stays interactive; see runAsync. */
@@ -276,19 +280,25 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     }
   }
 
-  reload(): void {
+  /** `silent` (only ever passed from onSearch's debounce) skips the app-wide global loader for this request —
+   *  see WorkflowApiService.summary for why: without it, every debounced keystroke blurs the search box mid-type. */
+  reload(silent = false): void {
     this.loading.set(true);
+    if (silent) this.searching.set(true);
     this.api
-      .summary({
-        page: this.pageIndex() + 1,
-        pageSize: this.pageSize(),
-        search: this.searchQuery().trim() || undefined,
-        sortColumn: this.sortColumn(),
-        sortDirection: this.sortDirection(),
-        statuses: [...this.selectedStatuses()],
-        applicationTypes: [...this.selectedAudiences()],
-        sourceSystemTypes: [...this.selectedSources()],
-      })
+      .summary(
+        {
+          page: this.pageIndex() + 1,
+          pageSize: this.pageSize(),
+          search: this.searchQuery().trim() || undefined,
+          sortColumn: this.sortColumn(),
+          sortDirection: this.sortDirection(),
+          statuses: [...this.selectedStatuses()],
+          applicationTypes: [...this.selectedAudiences()],
+          sourceSystemTypes: [...this.selectedSources()],
+        },
+        silent,
+      )
       .subscribe({
         next: result => {
           this.summaries.set(result.items);
@@ -297,16 +307,18 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
           this.availableAudiences.set(result.availableApplicationTypes);
           this.availableSources.set(result.availableSourceSystemTypes);
           this.loading.set(false);
+          this.searching.set(false);
           // A delete/copy (or a filter/page-size change) can shrink the matching set out from under a page index
           // that pointed past the new last page — snap back and refetch rather than showing an empty page.
           const lastPageIndex = Math.max(0, Math.ceil(result.totalCount / this.pageSize()) - 1);
           if (this.pageIndex() > lastPageIndex) {
             this.pageIndex.set(lastPageIndex);
-            this.reload();
+            this.reload(silent);
           }
         },
         error: err => {
           this.loading.set(false);
+          this.searching.set(false);
           this.toast.error(this.messageOf(err, 'Failed to load workflows.'));
         },
       });
@@ -318,7 +330,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (this.searchDebounceHandle) {
       clearTimeout(this.searchDebounceHandle);
     }
-    this.searchDebounceHandle = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS);
+    this.searchDebounceHandle = setTimeout(() => this.reload(true), SEARCH_DEBOUNCE_MS);
   }
 
   /** Which builder the New action opens — V2 (the Source → Mapping → Transformation →
