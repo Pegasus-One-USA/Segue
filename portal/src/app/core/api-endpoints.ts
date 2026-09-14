@@ -136,6 +136,8 @@ export const DESTINATION_ENDPOINTS = {
   paged:               `${API_V1_BASE}/destinations/paged`,
   byId:                (id: string) => `${API_V1_BASE}/destinations/${id}`,
   hasExecutionHistory: (id: string) => `${API_V1_BASE}/destinations/${id}/has-execution-history`,
+  // Narrow profile-only update — the full byId PUT demands secret fields the wizard never re-displays.
+  deIdentificationProfile: (id: string) => `${API_V1_BASE}/destinations/${id}/deidentification-profile`,
   schemaPreview:       `${API_V1_BASE}/destinations/schema-preview`,
   schema:              (id: string) => `${API_V1_BASE}/destinations/${id}/schema`,
   sftpTest:            `${API_V1_BASE}/destinations/sftp-test`,
