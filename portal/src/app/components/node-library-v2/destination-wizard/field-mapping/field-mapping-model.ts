@@ -159,30 +159,41 @@ export interface DefaultValuePreset {
   /** The MappingValueType this preset always produces — lets checkColumnTypeCompatibility validate a
    *  default column exactly like a real mapped one. */
   valueType: string;
+  /** True hides this preset from the "Set default value" picker (see VISIBLE_DEFAULT_VALUE_PRESETS) while
+   *  leaving it fully functional everywhere else — JsonMappingEngine, CreateMappingProfileRequestValidator,
+   *  and any column a profile already has saved with it keep working and keep displaying correctly (see
+   *  field-mapping-list.component.ts's defaultTokenLabel, which always looks up the FULL list). A temporary
+   *  UI curation, not a feature removal — flip back to false to re-offer a preset. */
+  hidden?: boolean;
 }
 
 export const DEFAULT_VALUE_PRESETS: readonly DefaultValuePreset[] = [
   { token: '@default', label: 'Literal value', description: 'Always write the exact text you type below.', valueType: 'String' },
   { token: '@now', label: 'Current date/time (UTC)', description: 'The moment this record is written by the pipeline.', valueType: 'DateTime' },
   { token: '@runId', label: 'Pipeline run ID', description: "This execution's own run id.", valueType: 'String' },
-  { token: '@resourceType', label: 'FHIR resource type', description: 'The resource type being mapped (e.g. "Patient").', valueType: 'String' },
-  { token: '@sourceResourceId', label: 'Source resource ID', description: "The source FHIR resource's own id.", valueType: 'String' },
+  { token: '@resourceType', label: 'FHIR resource type', description: 'The resource type being mapped (e.g. "Patient").', valueType: 'String', hidden: true },
+  { token: '@sourceResourceId', label: 'Source resource ID', description: "The source FHIR resource's own id.", valueType: 'String', hidden: true },
   // A fresh value per RECORD, not per run (unlike every other token above) — see JsonMappingEngine/
   // ConfiguredPipelineService, which regenerate it inside the per-resource loop. A row fanned out into
   // multiple destination rows via RepeatParent shares one value across all of them (same limitation @now/
   // @runId already have), since the token resolves once per source resource, not per fanned-out row.
   { token: '@newGuid', label: 'New GUID', description: 'A fresh random GUID generated for each record — useful as a surrogate key when no natural id exists.', valueType: 'String' },
-  { token: '@mappingProfileName', label: 'Mapping profile name', description: 'The name of the mapping profile that wrote this row.', valueType: 'String' },
-  { token: '@mappingProfileId', label: 'Mapping profile ID', description: 'The GUID of the mapping profile that wrote this row.', valueType: 'String' },
-  { token: '@destinationObject', label: 'Destination table/object', description: 'The table or file this profile writes to (e.g. "dbo.Patient").', valueType: 'String' },
-  { token: '@sourceConnectionId', label: 'Source connection ID', description: 'The GUID of the source connection this data came from.', valueType: 'String' },
+  { token: '@mappingProfileName', label: 'Mapping profile name', description: 'The name of the mapping profile that wrote this row.', valueType: 'String', hidden: true },
+  { token: '@mappingProfileId', label: 'Mapping profile ID', description: 'The GUID of the mapping profile that wrote this row.', valueType: 'String', hidden: true },
+  { token: '@destinationObject', label: 'Destination table/object', description: 'The table or file this profile writes to (e.g. "dbo.Patient").', valueType: 'String', hidden: true },
+  { token: '@sourceConnectionId', label: 'Source connection ID', description: 'The GUID of the source connection this data came from.', valueType: 'String', hidden: true },
   // Only populated by the Configured Pipeline (ConfiguredPipelineService) — the Runtime Plane's transform
   // executor has no trigger identity to report, so this resolves to null there (like any absent token).
   // TriggeredBy is itself nullable at run time (some scheduled/system runs carry none) — see
   // CreateMappingProfileRequestValidator's NOT NULL check, which does NOT exempt this token the way it does
   // every other one above.
-  { token: '@triggeredBy', label: 'Triggered by', description: 'Who or what started this run — a user, "scheduled", or "webhook". May be empty for some automated runs.', valueType: 'String' },
+  { token: '@triggeredBy', label: 'Triggered by', description: 'Who or what started this run — a user, "scheduled", or "webhook". May be empty for some automated runs.', valueType: 'String', hidden: true },
 ];
+
+/** What the "Set default value" picker actually offers — DEFAULT_VALUE_PRESETS minus anything currently
+ *  `hidden`. See DefaultValuePreset.hidden's own doc comment for why this is a UI curation, not a removal. */
+export const VISIBLE_DEFAULT_VALUE_PRESETS: readonly DefaultValuePreset[] =
+  DEFAULT_VALUE_PRESETS.filter(p => !p.hidden);
 
 export interface MappingRow {
   resource: string;

@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, ElementRef, OnInit, ViewChild, input, output, signal } from '@angular/core';
-import { DEFAULT_VALUE_PRESETS, DefaultValueToken } from './field-mapping-model';
+import { DEFAULT_VALUE_PRESETS, VISIBLE_DEFAULT_VALUE_PRESETS, DefaultValueToken } from './field-mapping-model';
 
 export interface FmDefaultValueSubmit {
   token: DefaultValueToken;
@@ -41,7 +41,11 @@ export class FieldMappingDefaultValueModalComponent implements OnInit, AfterView
   readonly removed = output<void>();
   readonly cancelled = output<void>();
 
-  readonly presets = DEFAULT_VALUE_PRESETS;
+  // Only the currently-visible presets are offered in the picker (see VISIBLE_DEFAULT_VALUE_PRESETS'
+  // own doc comment) — a temporary UI curation, not a removal. selectedPresetDescription below still
+  // resolves against the FULL list, so re-opening this modal on a column already set to a now-hidden
+  // token (@resourceType, @triggeredBy, …) still shows a real description, not a blank one.
+  readonly presets = VISIBLE_DEFAULT_VALUE_PRESETS;
   readonly valueTypes = VALUE_TYPES;
 
   // Seeded with plain defaults here (NOT from `existing()`) — a field initializer runs as part of the
@@ -71,8 +75,10 @@ export class FieldMappingDefaultValueModalComponent implements OnInit, AfterView
   }
 
   /** Template expressions can't contain arrow functions (Angular's NG5002) — computed here instead of
-   *  inline so the description hint stays in sync with the currently-picked preset. */
-  readonly selectedPresetDescription = () => this.presets.find(p => p.token === this.token())?.description ?? '';
+   *  inline so the description hint stays in sync with the currently-picked preset. Resolved against the
+   *  FULL preset list (not just the visible picker options), so a column already set to a now-hidden token
+   *  still shows a real description instead of falling back to an empty string. */
+  readonly selectedPresetDescription = () => DEFAULT_VALUE_PRESETS.find(p => p.token === this.token())?.description ?? '';
 
   onLiteralInput(value: string): void { this.literalValue.set(value); }
   onValueTypeChange(value: string): void { this.valueType.set(value); }
