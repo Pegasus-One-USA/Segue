@@ -2295,7 +2295,63 @@ export class DestinationWizardComponent implements OnInit {
         }
         const defs = fields.map((f) => this._toFieldDef(resource, f));
         this.catalogByResource.update((m) => ({ ...m, [resource]: defs }));
+        this._repairGuessedFhirPaths(resource);
       });
+  }
+
+  /**
+   * Re-resolves rows whose fhirPath was GUESSED because this catalog had not loaded yet.
+   *
+   * _applyExistingProfile builds its rows synchronously from whatever the catalog holds at that instant,
+   * but _ensureCatalog fetches asynchronously — so reopening a saved workflow can rebuild every row before
+   * its catalog arrives, leaving each one on _resolveFhirPath's last-resort "${resource}.${targetField}"
+   * fallback (e.g. "Patient.FamilyName" instead of "Patient.name.family").
+   *
+   * That fallback is not cosmetic: transformation rules are looked up by EXACT SourceField match
+   * (EfTransformationRuleRepository.GetWorkflowScopedAsync), so a guessed path silently finds no rules at
+   * all — the field shows as mapped, but every rule attached to it disappears from the UI while remaining
+   * in the database. It also breaks the connector wire, for the reason _resolveFhirPath's own comment
+   * gives. Repairing here means the rows heal as soon as the catalog lands, whatever order they arrive in.
+   */
+  private _repairGuessedFhirPaths(resource: string): void {
+    const catalog = this.availableFields(resource);
+    if (catalog.length === 0) {
+      return;
+    }
+
+    // Rewriting mappingRows is enough to retrigger FieldMappingListComponent's ruleByRowKey effect (it
+    // reads visibleRows, which derive from these) — no explicit refresh nudge is needed or available here,
+    // since ruleRefreshTrigger belongs to FieldMappingCanvasComponent.
+    this.mappingRows.update((rows) =>
+      rows.map((row) => {
+        if (row.resource !== resource || row.mode !== 'value') {
+          return row;
+        }
+
+        const source = row.sources[0];
+        // Only a row still sitting on the fallback needs repairing — anything the catalog already
+        // resolved is left exactly as it is.
+        if (!source || source.fhirPath !== `${resource}.${row.targetName}`) {
+          return row;
+        }
+
+        const match =
+          (source.jsonPath ? catalog.find((c) => c.jsonPath === source.jsonPath) : undefined) ??
+          catalog.find(
+            (c) =>
+              c.sqlColumn.toLowerCase() === row.targetName.toLowerCase() ||
+              c.csvColumn.toLowerCase() === row.targetName.toLowerCase(),
+          );
+        if (!match || match.path === source.fhirPath) {
+          return row;
+        }
+
+        return {
+          ...row,
+          sources: [{ ...source, fhirPath: match.path, label: match.label, arrays: match.arrays }],
+        };
+      }),
+    );
   }
 
   private _toFieldDef(resource: string, f: FhirElement): ResourceFieldDef {
