@@ -864,6 +864,8 @@
           (createDeIdentificationProfileRequested)="createDeIdentificationProfile()"
           [mappingRows]="mappingRows()"
           [targetByResource]="targetByResource()"
+          [pendingFreeColumns]="pendingFreeColumnsByCard()"
+          (pendingFreeColumnsChange)="pendingFreeColumnsByCard.set($event)"
           [availableFields]="availableFieldsFn"
           [defaultAvailableFields]="defaultAvailableFieldsFn"
           [columnsForResourceTarget]="columnsForResourceTargetFn"
@@ -903,6 +905,7 @@
           (schemaOpsCancelledForTable)="onSchemaOpsCancelledForTable($event)"
           (sourcePayloadLoaded)="onSourcePayloadLoaded($event)"
           (sourcePayloadReset)="onSourcePayloadReset($event)"
+          (destinationTemplateGenerated)="onDestinationTemplateGenerated($event)"
           (childTableRelationAdded)="onChildTableRelationAdded($event)"
           (retrySchemaLoad)="retrySchemaLoad()"
         />

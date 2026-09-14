@@ -110,6 +110,10 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
 
   readonly addFreeColumn = output<string>();
   readonly openAddColumn = output<void>();
+  /** "⇩ Load JSON payload" on a file-shaped card (never shown for a real SQL table — see the template's
+   *  isSqlFamily() branch) — the parent opens FieldMappingLoadDestinationPayloadModalComponent for this
+   *  specific card (see FieldMappingCanvasComponent.openLoadDestinationPayloadModal). */
+  readonly loadDestinationPayload = output<void>();
   readonly columnActivate = output<string>();
   /** A mapped (or unmapped — the canvas no-ops then) column was clicked, not dragged onto — a row here
    *  is a drop TARGET (drag always starts from the source tree), so unlike a source leaf there's no

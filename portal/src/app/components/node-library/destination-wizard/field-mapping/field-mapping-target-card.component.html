@@ -101,6 +101,13 @@
           aria-label="Add column"
           (click)="commitNewColumn(newColumnInput); newColumnInput.focus()"
         >Add</button>
+        <button
+          type="button"
+          class="fm-target-add-btn fm-target-add-btn--icon"
+          title="Paste a sample JSON body to build this table's columns from its shape, instead of typing each one by hand"
+          aria-label="Load JSON payload to build columns"
+          (click)="loadDestinationPayload.emit()"
+        >⇩ JSON</button>
       </div>
     }
     @if (hasActiveFilter() && filteredColumns().length === 0) {

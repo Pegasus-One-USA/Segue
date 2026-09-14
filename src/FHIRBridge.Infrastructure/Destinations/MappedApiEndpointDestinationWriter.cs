@@ -119,12 +119,31 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
         // parsed tree is never mutated across records.
         var template = settings.HasBodyTemplate ? JsonNode.Parse(settings.BodyTemplateJson!) : null;
 
+        // A template shaped like { "meta": {...}, "records": [ {...one record...} ] } — the same convention the
+        // portal's "Load JSON payload" destination-side loader now generates — describes the WHOLE envelope, not
+        // one record. Only meaningful when Payload shape is actually Envelope; for any other shape the template
+        // is used exactly as written, same as always. Without this split, the one-record-shaped "records[0]"
+        // item (including its own literal "meta"/"records" keys) would be substituted per record and THEN
+        // wrapped in ANOTHER envelope by Frame/BuildEnvelope below — a whole extra {meta,records} nested inside
+        // every record instead of one shared envelope around all of them.
+        JsonNode? recordTemplate = template;
+        JsonObject? metaTemplate = null;
+        if (settings.PayloadShape == ApiEndpointPayloadShape.Envelope
+            && template is JsonObject templateObj
+            && templateObj["meta"] is JsonObject metaObj
+            && templateObj["records"] is JsonArray { Count: 1 } recordsArray
+            && recordsArray[0] is { } singleRecordTemplate)
+        {
+            metaTemplate = metaObj.DeepClone().AsObject();
+            recordTemplate = singleRecordTemplate.DeepClone();
+        }
+
         if (settings.PayloadShape == ApiEndpointPayloadShape.RecordPerRequest)
         {
             return records
                 .Select(record => (
                     Records: new List<MappedDestinationRecord> { record },
-                    Body: BuildRecordLine(record, settings, template)))
+                    Body: BuildRecordLine(record, settings, recordTemplate)))
                 .ToList();
         }
 
@@ -135,7 +154,7 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
 
         foreach (var record in records)
         {
-            var line = BuildRecordLine(record, settings, template);
+            var line = BuildRecordLine(record, settings, recordTemplate);
             var lineBytes = Encoding.UTF8.GetByteCount(line) + 1;
 
             var wouldExceedBytes = current.Count > 0 && currentBytes + lineBytes > settings.MaxRequestBytes;
@@ -143,7 +162,7 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
 
             if (wouldExceedBytes || wouldExceedCount)
             {
-                batches.Add((current, Frame(currentLines, mappingProfile, context, settings, current.Count)));
+                batches.Add((current, Frame(currentLines, mappingProfile, context, settings, current, metaTemplate)));
                 current = [];
                 currentLines = [];
                 currentBytes = 0;
@@ -156,7 +175,7 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
 
         if (current.Count > 0)
         {
-            batches.Add((current, Frame(currentLines, mappingProfile, context, settings, current.Count)));
+            batches.Add((current, Frame(currentLines, mappingProfile, context, settings, current, metaTemplate)));
         }
 
         return batches;
@@ -169,26 +188,57 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
         MappingProfile mappingProfile,
         PipelineWriteContext context,
         ApiEndpointSettings settings,
-        int recordCount)
+        List<MappedDestinationRecord> batchRecords,
+        JsonObject? metaTemplate)
         => settings.PayloadShape switch
         {
             ApiEndpointPayloadShape.Ndjson => string.Join('\n', lines),
-            ApiEndpointPayloadShape.Envelope => BuildEnvelope(lines, mappingProfile, context, recordCount),
+            ApiEndpointPayloadShape.Envelope => BuildEnvelope(lines, mappingProfile, context, batchRecords, metaTemplate),
             _ => $"[{string.Join(',', lines)}]",
         };
 
     private static string BuildEnvelope(
-        List<string> lines, MappingProfile mappingProfile, PipelineWriteContext context, int recordCount)
+        List<string> lines,
+        MappingProfile mappingProfile,
+        PipelineWriteContext context,
+        List<MappedDestinationRecord> batchRecords,
+        JsonObject? metaTemplate)
     {
-        var meta = new JsonObject
+        JsonObject meta;
+        if (metaTemplate is not null && batchRecords.Count > 0)
         {
-            ["resourceType"] = mappingProfile.ResourceType,
-            ["destinationObject"] = mappingProfile.DestinationObject,
-            ["recordCount"] = recordCount,
-            ["routeName"] = context.RouteName,
-            ["correlationId"] = context.CorrelationId,
-            ["emittedOnUtc"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
-        };
+            // The caller's own meta shape — a "meta" field is mappable exactly like a "records" field is (the
+            // portal's mapping canvas offers both as regular draggable columns, just distinctly labeled), so it
+            // resolves the SAME way a per-record field does: against the batch's first record's mapped values
+            // (record.Values, plus the same handful of addressable names — pipelineRunId/resourceType/... — every
+            // per-record template already gets). "meta" is sent once per BATCH, not once per record, which is
+            // exactly why this only ever reads ONE record rather than substituting per record like "records"
+            // does — every record in a batch shares the same mapping profile/resource type, so its first record's
+            // values are representative of the whole batch for whatever the caller chose to put in "meta".
+            // recordCount is the one field with no per-record source at all (it's a fact about the whole batch,
+            // not any single record) — addressable by name here same as the others, resolving to the real count.
+            meta = metaTemplate.DeepClone().AsObject();
+            var firstRecord = batchRecords[0];
+            var recordCount = batchRecords.Count;
+            SubstituteInPlace(meta, field =>
+                field == "recordCount" ? recordCount : ResolveTemplateField(field, firstRecord));
+        }
+        else
+        {
+            // No custom meta template configured — the original fixed provenance envelope every caller got
+            // before Request Body Template could describe the envelope itself. Never used once a caller opts
+            // into a custom envelope shape (metaTemplate above), so this stays exactly as it always was for
+            // every destination that hasn't touched this feature.
+            meta = new JsonObject
+            {
+                ["resourceType"] = mappingProfile.ResourceType,
+                ["destinationObject"] = mappingProfile.DestinationObject,
+                ["recordCount"] = batchRecords.Count,
+                ["routeName"] = context.RouteName,
+                ["correlationId"] = context.CorrelationId,
+                ["emittedOnUtc"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+            };
+        }
 
         return $"{{\"meta\":{meta.ToJsonString()},\"records\":[{string.Join(',', lines)}]}}";
     }
@@ -202,7 +252,7 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
         if (template is not null)
         {
             var instance = template.DeepClone();
-            SubstituteInPlace(instance, record);
+            SubstituteInPlace(instance, field => ResolveTemplateField(field, record));
             return instance.ToJsonString(PayloadJsonOptions);
         }
 
@@ -218,9 +268,12 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
     /// typed JSON value (a number stays a number, not <c>"42"</c>) — anything else (<c>"id-{{Age}}"</c>, or plain
     /// static text with no placeholder at all) is left as a string, with any placeholders inside it
     /// string-interpolated. Non-string template values (numbers, booleans, null) are copied through untouched —
-    /// a template can mix fixed, static fields with mapped ones.
+    /// a template can mix fixed, static fields with mapped ones. Generic over `resolve` so the exact same walker
+    /// serves both a per-record template (resolve = ResolveTemplateField against one record) and the "meta"
+    /// section of a custom envelope (resolve = ResolveTemplateField against the batch's first record, plus
+    /// recordCount — see BuildEnvelope).
     /// </summary>
-    private static void SubstituteInPlace(JsonNode? node, MappedDestinationRecord record)
+    private static void SubstituteInPlace(JsonNode? node, Func<string, object?> resolve)
     {
         switch (node)
         {
@@ -229,11 +282,11 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
                 {
                     if (obj[key] is JsonValue value && value.TryGetValue(out string? text))
                     {
-                        obj[key] = SubstituteString(text, record);
+                        obj[key] = SubstituteString(text, resolve);
                     }
                     else
                     {
-                        SubstituteInPlace(obj[key], record);
+                        SubstituteInPlace(obj[key], resolve);
                     }
                 }
                 break;
@@ -243,23 +296,23 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
                 {
                     if (array[i] is JsonValue value && value.TryGetValue(out string? text))
                     {
-                        array[i] = SubstituteString(text, record);
+                        array[i] = SubstituteString(text, resolve);
                     }
                     else
                     {
-                        SubstituteInPlace(array[i], record);
+                        SubstituteInPlace(array[i], resolve);
                     }
                 }
                 break;
         }
     }
 
-    private static JsonNode? SubstituteString(string text, MappedDestinationRecord record)
+    private static JsonNode? SubstituteString(string text, Func<string, object?> resolve)
     {
         var exact = ExactPlaceholder.Match(text);
         if (exact.Success)
         {
-            var resolved = ResolveTemplateField(exact.Groups[1].Value, record);
+            var resolved = resolve(exact.Groups[1].Value);
             return resolved is null ? null : JsonSerializer.SerializeToNode(resolved, resolved.GetType());
         }
 
@@ -271,7 +324,7 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
 
         var interpolated = EmbeddedPlaceholder.Replace(text, match =>
         {
-            var resolved = ResolveTemplateField(match.Groups[1].Value, record);
+            var resolved = resolve(match.Groups[1].Value);
             return resolved switch
             {
                 null => string.Empty,

@@ -106,11 +106,25 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
   /** True while the host is reusing a previously-saved connection unchanged — the secret is never repopulated
    *  when patching from an existing connection, so requiring it would block reuse unless the user retyped it. */
   readonly reusingExisting = input<boolean>(false);
+  /** Set by DestinationWizardComponent.activeFormInputs() on every registry-routed form (see its own doc
+   *  comment) — declaring it here is what stops NG0303 ("Can't set value of the 'existingDestinationId'
+   *  input") from throwing on every change-detection pass once this form is mounted. Not otherwise read by
+   *  this form (its own Test Connection resolves credentials from the form fields directly, not a stored
+   *  secret server-side, unlike the SQL-family forms this pattern originates from). */
+  readonly existingDestinationId = input<string | null>(null);
 
   readonly advancedOpen = signal(false);
 
   toggleAdvanced(): void {
     this.advancedOpen.update(open => !open);
+  }
+
+  /** Called by DestinationWizardComponent.onDestinationTemplateGenerated (duck-typed — see its own doc
+   *  comment) after the mapping canvas's "Load JSON payload" on the destination side builds a Request Body
+   *  Template with {{ColumnName}} placeholders already matching the columns that same load just created.
+   *  Overwrites whatever was here before, same "replaces" semantics as the columns it was built from. */
+  setBodyTemplateFromMapping(json: string): void {
+    this.apiForm.controls.bodyTemplateJson.setValue(json);
   }
 
   private static readonly ADVANCED_CONTROLS = [
