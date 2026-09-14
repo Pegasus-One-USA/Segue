@@ -702,7 +702,9 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       this.toast.show('Updated', `${e.chainLabel ?? t.name} configuration updated.`);
       const edited = this.store.byId(e.editNodeId);
       if (edited && e.transformId.startsWith('dest-')) this.syncChainNodes(edited);
-      this.persistGraph();
+      // Provisioning save: this runs from the destination wizard's `saved` output, i.e. after its
+      // mapping-profile import has already completed and stamped its ids, so building here can't race it.
+      this.persistGraph(true);
       return;
     }
 
@@ -742,8 +744,9 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     if (e.transformId.startsWith('dest-')) this.syncChainNodes(node);
 
     // After syncChainNodes, so the chain nodes it decomposes out of the destination's config are part of the
-    // same write rather than waiting for another mutation to carry them.
-    this.persistGraph();
+    // same write rather than waiting for another mutation to carry them. Provisioning, for the same reason as
+    // the edit branch above — a newly added destination carries the mappings the build has to translate.
+    this.persistGraph(true);
   }
 
   /**
@@ -912,8 +915,10 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     this.store.moveNode(destination.id, baseX + 300 * (ordered.length + 1), baseY);
 
     // Persists the rewired segment as a whole: this method has just torn down and rebuilt every edge between
-    // `upstream` and `destination`, which no per-node write could carry (see persistGraph).
-    this.persistGraph();
+    // `upstream` and `destination`, which no per-node write could carry (see persistGraph). Provisioning —
+    // this runs from the wizard's `saved` output for a newly added Mapping/Transformation/De-identification
+    // step, so the destination's mappings need translating into the node config the executor reads.
+    this.persistGraph(true);
   }
 
   /** Step 2: persists the canvas as it stands right now, so a just-added or just-edited node — and, for chain
@@ -930,8 +935,16 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
    *  edits and deletes all travel the same path. */
   private graphSaveInFlight = false;
   private graphSaveQueued = false;
+  /** Whether the save owed after the in-flight one must provision (see persistGraph's `provision`). Sticky:
+   *  a queued provisioning save must never be downgraded by a plain mutation arriving behind it. */
+  private graphSaveQueuedProvision = false;
 
-  private persistGraph(): void {
+  /**
+   * @param provision Run the full /workflows/build instead of a plain design save. Only true on the paths that
+   *   have just received provisioned configuration from the destination wizard — see the comment at the build
+   *   branch below for why every other mutation must NOT build.
+   */
+  private persistGraph(provision = false): void {
     const workflowId = this.currentWorkflowId();
     if (!workflowId) return; // Should not happen post-Step-1 (every workflow gets an id up front), but guard anyway.
     if (this.workflowApi.catalog().length === 0) return;
@@ -950,24 +963,13 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     // canvas is read at send time, so that trailing save carries every change made in the meantime.
     if (this.graphSaveInFlight) {
       this.graphSaveQueued = true;
+      // OR, never assign: a provisioning save owed from the wizard must still provision even if a plain
+      // mutation (a drag, a rename) queues behind it before the in-flight save lands.
+      this.graphSaveQueuedProvision ||= provision;
       return;
     }
     this.graphSaveInFlight = true;
 
-    // Deliberately a plain design save, NEVER /workflows/build.
-    //
-    // Build provisions: it mints/repoints mapping profiles and stamps the resulting ids back onto the canvas.
-    // The destination wizard's own Save does the same thing over the same nodes — POST /mapping-profiles/import,
-    // then writes the returned profile id onto the Mapping node from inside its subscribe callback. Two
-    // independent async writers over one field is a race, and autosaving through build lost it: the build
-    // assembled its request from the store BEFORE the import's callback had written the new id back, so it sent
-    // the previous profile id and the backend faithfully reused that older profile. The wizard's freshly
-    // imported profile (with the column the user had just mapped) was left orphaned, the Mapping node stayed
-    // pointed at the stale one, and the canvas reloaded without the new column — while the run itself still
-    // succeeded, because the stale profile was perfectly valid, just out of date.
-    //
-    // Build belongs on the deliberate actions that already own provisioning — the Save button and activate —
-    // where nothing else is writing these ids concurrently. Autosave's job is only to not lose the graph.
     const onError = () => {
       this.afterGraphSave();
       this.toast.error(
@@ -975,6 +977,34 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         `Your changes will be saved with the workflow, but aren't available to configure until then.`,
       );
     };
+
+    // Build ONLY when the caller says the canvas has just been handed provisioned configuration (`provision`).
+    //
+    // Build is what derives the destination node's `resourceMappings` — the field DestinationNodeExecutor
+    // actually writes from — out of the wizard's dest_mappings, and it mints/repoints mapping profiles and
+    // stamps the resulting ids back onto the canvas. It must therefore run after a mapping edit, or a run
+    // fails with "Mapping profile for '...' has no mapped fields".
+    //
+    // But it must NOT run on every mutation. The destination wizard's own Save writes the profile id onto the
+    // Mapping node from inside its POST /mapping-profiles/import subscribe callback, so a build racing that
+    // callback assembles its request from the store BEFORE the new id lands, sends the previous id, and the
+    // backend faithfully reuses the older profile — orphaning the profile the import had just written with the
+    // column the user mapped. The canvas then reloads without that column while the run still succeeds off the
+    // stale profile. Gating on `provision` keeps build on the one path that runs AFTER the import has
+    // completed (onTransformSelected, reached from the wizard's `saved` output), so the two never overlap.
+    if (provision) {
+      const request = this.buildAutoSaveRequest(name, workflowId);
+      if (request) {
+        this.workflowApi.build(request).subscribe({
+          next: result => {
+            this.stampBuildResultIds(result);
+            this.afterGraphSave();
+          },
+          error: onError,
+        });
+        return;
+      }
+    }
 
     this.workflowApi.save(
       this.graphMapper.toRequest(name, this.buildTrigger(), workflowId, this.workflowDescription().trim() || null),
@@ -985,11 +1015,34 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     });
   }
 
+  /** The build request this autosave should send, or null when the canvas has nothing the build step needs to
+   *  translate (no sources/destinations/mappings to provision) and a plain design save is enough. Mirrors
+   *  onSave()'s own hasSpecs decision so the two paths can never disagree about which save a given canvas needs.
+   *  Returns null rather than throwing when assemble() rejects the canvas: an autosave must never surface a
+   *  configuration error the user has not asked to save yet — onSave() still reports it properly. */
+  private buildAutoSaveRequest(name: string, workflowId: string): WorkflowBuildRequest | null {
+    let assembled: WorkflowBuildRequest;
+    try {
+      assembled = this.buildAssembler.assemble(
+        name, this.buildTrigger(), this.workflowDescription().trim() || null, workflowId);
+    } catch {
+      return null;
+    }
+
+    const hasSpecs = (assembled.sources?.length ?? 0) > 0
+      || (assembled.destinations?.length ?? 0) > 0
+      || (assembled.mappings?.length ?? 0) > 0;
+
+    return hasSpecs ? { ...assembled, workflowId } : null;
+  }
+
   private afterGraphSave(): void {
     this.graphSaveInFlight = false;
     if (!this.graphSaveQueued) return;
     this.graphSaveQueued = false;
-    this.persistGraph();
+    const provision = this.graphSaveQueuedProvision;
+    this.graphSaveQueuedProvision = false;
+    this.persistGraph(provision);
   }
 
 
