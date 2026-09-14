@@ -214,6 +214,16 @@ export class CorrelationSearchComponent implements OnInit {
     this.correlationId.set(value);
   }
 
+  /** Clears the correlation-id filter and any loaded result — the standard Reset action shared by the
+   *  other Logs & Compliance tabs' filter bars. */
+  reset(): void {
+    this.correlationId.set('');
+    this.searched.set(false);
+    this.errorMessage.set(null);
+    this.result.set(null);
+    this.expandedIndex.set(null);
+  }
+
   search(): void {
     if (!this.correlationId().trim()) {
       return;
