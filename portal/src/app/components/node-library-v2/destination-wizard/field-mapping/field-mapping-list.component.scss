@@ -586,7 +586,6 @@
 }
 
 // The config form renders mode plus whichever field that mode uses, inside the Config cell.
-//
 // Nested under .rule-config-form--inline on purpose, and not merely under .config-control: the component's
 // own rule compiles to `.config-control[_ngcontent] select[_ngcontent]`, which ties any override written as
 // `.fm-draft-tr .config-control select` exactly on specificity (0,3,1) and then wins on stylesheet order.
