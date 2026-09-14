@@ -101,6 +101,31 @@ describe('settingsLandingGuard', () => {
     expectPath(result, '/unauthorized');
   });
 
+  // ── Real-shape divergence: JWT id (=name placeholder) vs API id (real GUID), plus a divergent
+  // displayName -- neither may affect the result; matching is by `name` alone (team lead review
+  // comments #1/#2). The plain makeRole() helper above can't exercise this since it sets
+  // id === name === displayName on both sides.
+  it('matches by role name alone -- unaffected by a JWT-vs-API id mismatch or a divergent displayName', async () => {
+    // Mirrors jwt-user.mapper.ts's real shape: the held role's id is the role NAME used as a
+    // placeholder, never a real database identifier.
+    const heldRole: Role = {
+      id: 'Healthcare Platform Admin', name: 'Healthcare Platform Admin', displayName: 'Healthcare Platform Admin',
+      description: 'role.', permissions: [], color: '#000', isSystemRole: true, isFullAccess: false, createdAt: '',
+    };
+    // Mirrors the real API shape (RoleDto): a real database GUID as id, and a displayName that
+    // deliberately differs from name.
+    const apiRole: Role = {
+      id: '3fa85f64-5717-4562-b3fc-2c963f66afa6', name: 'Healthcare Platform Admin', displayName: 'Platform Administrator',
+      description: 'role.', permissions: [], color: '#000', isSystemRole: false, isFullAccess: true, createdAt: '',
+    };
+    authStore.setUser(makeTestUser([], 'Healthcare Platform Admin', [heldRole]));
+    roleService.getRoles.and.returnValue(of([apiRole]));
+
+    const result = await runGuard(SUPER_ADMIN_ONLY_CANDIDATES);
+
+    expectPath(result, '/settings/system-settings/general');
+  });
+
   // ── Multiple roles with one Full Access → treated as Full Access ───────────────────
   it('treats a user holding multiple roles as elevated when at least one has IsFullAccess=true', async () => {
     const normalRole = makeRole('Epic Integration Manager', false);

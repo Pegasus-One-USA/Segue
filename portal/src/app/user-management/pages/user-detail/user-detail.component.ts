@@ -22,6 +22,7 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { IUserService } from '../../../auth/services/i-user.service';
 import { AuthService } from '../../../auth/services/auth.service';
 import { IRoleService } from '../../services/i-role.service';
+import { FullAccessResolverService } from '../../../auth/services/full-access-resolver.service';
 import {
   User, UserRole, Permission, PermissionCategory, PasswordResetLinkResult,
 } from '../../../auth/models/user.model';
@@ -88,8 +89,9 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   // as soon as the view initializes regardless of which tab is active.
   @ViewChild(UserPermissionOverridesComponent) private overridesComponent?: UserPermissionOverridesComponent;
 
-  private readonly userService = inject(IUserService);
-  private readonly roleService = inject(IRoleService);
+  private readonly userService   = inject(IUserService);
+  private readonly roleService   = inject(IRoleService);
+  private readonly fullAccessSvc = inject(FullAccessResolverService);
   readonly authService         = inject(AuthService);
   private readonly dialog      = inject(MatDialog);
   private readonly customDialog = inject(DialogService);
@@ -136,12 +138,11 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   });
 
   // RBAC Fix 7: whether the current caller holds Full System Access via any of their own roles —
-  // resolved the same way settings-shell.component.ts's/system-settings-shell.component.ts's
-  // callerHasFullAccess (Fix 5/6) / role-dialog.component.ts / both guards do: the real per-role
-  // IsFullAccess flag from IRoleService.getRoles(), cross-referenced by name against the roles this
-  // session's own claims say it holds — never a hardcoded role name for this capability. Starts false
-  // (fails closed) until the async check resolves in ngOnInit, or if it ever errors. Resolved once per
-  // component instance, and skipped entirely for a literal SuperAdmin claim (see ngOnInit below).
+  // resolved via the shared FullAccessResolverService (see that file for why it matches by role
+  // NAME, never displayName or id), cross-referenced against the roles this session's own claims say
+  // it holds. Starts false (fails closed) until the async check resolves in ngOnInit, or if it ever
+  // errors. Resolved once per component instance, and skipped entirely for a literal SuperAdmin claim
+  // (see ngOnInit below).
   private readonly callerHasFullAccess = signal(false);
 
   // Bypassing a user's second factor entirely is too sensitive to delegate to the general "edit
@@ -231,13 +232,10 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
     // satisfies isSuperAdmin's OR on its own, so skip this extra API call entirely for that common case,
     // exactly as the other Full-Access sites (Fix 3-6) do.
     if (!this.authService.hasRole('SuperAdmin')) {
-      const heldRoleNames = new Set(this.authService.roles().map(r => r.displayName));
-      this.roleService.getRoles()
+      const heldRoleNames = new Set(this.authService.roles().map(r => r.name));
+      this.fullAccessSvc.resolve(heldRoleNames)
         .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: allRoles => this.callerHasFullAccess.set(allRoles.some(r => heldRoleNames.has(r.name) && r.isFullAccess)),
-          error: () => this.callerHasFullAccess.set(false),
-        });
+        .subscribe(hasFullAccess => this.callerHasFullAccess.set(hasFullAccess));
     }
 
     if (this.id) {

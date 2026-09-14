@@ -2,7 +2,7 @@ import { Component, inject, computed, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthStore } from '../../../auth/store/auth.store';
-import { IRoleService } from '../../../user-management/services/i-role.service';
+import { FullAccessResolverService } from '../../../auth/services/full-access-resolver.service';
 import { TERMINOLOGY_FEATURE_ENABLED } from '../../../data/terminology-feature.config';
 
 interface SystemSettingsSection {
@@ -47,14 +47,13 @@ const SYSTEM_SETTINGS_SECTIONS: SystemSettingsSection[] = [
   styleUrl: './system-settings-shell.component.scss',
 })
 export class SystemSettingsShellComponent {
-  private readonly store   = inject(AuthStore);
-  private readonly roleSvc = inject(IRoleService);
+  private readonly store         = inject(AuthStore);
+  private readonly fullAccessSvc = inject(FullAccessResolverService);
 
   // RBAC Fix 6: whether the current caller holds Full System Access via any of their own roles —
-  // resolved the same way settings-shell.component.ts's callerHasFullAccess (Fix 5) / role-dialog's /
-  // both guards' do: the real per-role IsFullAccess flag from IRoleService.getRoles(), cross-referenced
-  // by name against the roles this session's own claims say it holds — never a hardcoded role name for
-  // this capability. Starts false (fails closed) until the async check resolves or if it ever errors,
+  // resolved via the shared FullAccessResolverService (see that file for why it matches by role
+  // NAME, never displayName or id), cross-referenced against the roles this session's own claims say
+  // it holds. Starts false (fails closed) until the async check resolves or if it ever errors,
   // exactly like a caller who simply isn't SuperAdmin today; General/Security/SSO Configurations stay
   // hidden either way, never shown speculatively.
   private readonly callerHasFullAccess = signal(false);
@@ -64,11 +63,8 @@ export class SystemSettingsShellComponent {
     // entirely for that common case, exactly as the other Full-Access sites do.
     if (this.store.hasRole('SuperAdmin')) return;
 
-    const heldRoleNames = new Set(this.store.roles().map(r => r.displayName));
-    this.roleSvc.getRoles().subscribe({
-      next: allRoles => this.callerHasFullAccess.set(allRoles.some(r => heldRoleNames.has(r.name) && r.isFullAccess)),
-      error: () => this.callerHasFullAccess.set(false),
-    });
+    const heldRoleNames = new Set(this.store.roles().map(r => r.name));
+    this.fullAccessSvc.resolve(heldRoleNames).subscribe(hasFullAccess => this.callerHasFullAccess.set(hasFullAccess));
   }
 
   // Same visibility rule as settings-shell.component.ts's own tab list — kept in sync deliberately

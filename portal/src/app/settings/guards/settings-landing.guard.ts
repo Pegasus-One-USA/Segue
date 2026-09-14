@@ -1,9 +1,9 @@
 // settings/guards/settings-landing.guard.ts
 import { inject } from '@angular/core';
 import { CanActivateFn, Router, UrlTree } from '@angular/router';
-import { catchError, map, of } from 'rxjs';
+import { map } from 'rxjs';
 import { AuthStore } from '../../auth/store/auth.store';
-import { IRoleService } from '../../user-management/services/i-role.service';
+import { FullAccessResolverService } from '../../auth/services/full-access-resolver.service';
 
 export interface SettingsLandingCandidate {
   /** Path segment, absolute-relative to `basePath` (no leading slash), to land on if reachable. */
@@ -30,9 +30,9 @@ export interface SettingsLandingCandidate {
  */
 export function settingsLandingGuard(basePath: string, candidates: SettingsLandingCandidate[]): CanActivateFn {
   return () => {
-    const store   = inject(AuthStore);
-    const router  = inject(Router);
-    const roleSvc = inject(IRoleService);
+    const store         = inject(AuthStore);
+    const router        = inject(Router);
+    const fullAccessSvc = inject(FullAccessResolverService);
 
     // Pure function of the one thing that can't be decided synchronously (does this caller have
     // elevated -- SuperAdmin OR Full System Access -- settings access); every other candidate still
@@ -76,15 +76,14 @@ export function settingsLandingGuard(basePath: string, candidates: SettingsLandi
     }
 
     // Only reached when the outcome genuinely depends on this caller's real Full Access status.
-    // Resolved the same way super-admin.guard.ts does: the real per-role IsFullAccess flag via
-    // IRoleService.getRoles(), cross-referenced by name against the roles this session's own claims say
-    // it holds -- never a hardcoded role name for this capability. Fails closed (treated as not elevated,
-    // same as today's plain "not SuperAdmin" outcome) on any lookup error.
-    const heldRoleNames = new Set(store.roles().map(r => r.displayName));
+    // Resolved via the shared FullAccessResolverService (see that file for why it matches by role
+    // NAME, never displayName or id), cross-referenced against the roles this session's own claims
+    // say it holds. Fails closed (treated as not elevated, same as today's plain "not SuperAdmin"
+    // outcome) on any lookup error.
+    const heldRoleNames = new Set(store.roles().map(r => r.name));
 
-    return roleSvc.getRoles().pipe(
-      map(allRoles => resolveWith(allRoles.some(r => heldRoleNames.has(r.name) && r.isFullAccess))),
-      catchError(() => of(resolveWith(false))),
+    return fullAccessSvc.resolve(heldRoleNames).pipe(
+      map(hasFullAccess => resolveWith(hasFullAccess)),
     );
   };
 }

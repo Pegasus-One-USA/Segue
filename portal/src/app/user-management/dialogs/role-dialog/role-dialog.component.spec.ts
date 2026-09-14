@@ -82,6 +82,56 @@ describe('RoleDialogComponent', () => {
     return fixture.componentInstance;
   }
 
+  // RBAC review fix: mirrors setup() above but takes the held Role[] directly instead of deriving it
+  // by filtering allRoles by name -- setup()'s heldRoles are literally the same objects as their
+  // allRoles counterparts, so they can never exercise a genuine id/displayName divergence between the
+  // JWT-held role and the API role list. This lets a test supply two distinct objects for that.
+  function setupWithHeldRoles(data: RoleDialogData, allRoles: Role[], heldRoles: Role[]): RoleDialogComponent {
+    roleService = jasmine.createSpyObj<IRoleService>('IRoleService', [
+      'getRoles', 'getPagedRoles', 'getRole', 'createRole', 'updateRole', 'deleteRole',
+      'getPermissions', 'getPermissionCatalog',
+    ]);
+    roleService.getRoles.and.returnValue(of(allRoles));
+    roleService.createRole.and.returnValue(of(normalRole));
+    roleService.updateRole.and.returnValue(of(normalRole));
+
+    TestBed.configureTestingModule({
+      imports: [RoleDialogComponent],
+      providers: [
+        { provide: IRoleService, useValue: roleService },
+        { provide: AuthService, useValue: { roles: () => heldRoles } },
+        { provide: PermissionActionGuard, useValue: { ensure: () => true } },
+        { provide: DialogRef, useValue: { close: jasmine.createSpy('close') } },
+        { provide: DIALOG_DATA, useValue: data },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(RoleDialogComponent);
+    fixture.detectChanges();
+    return fixture.componentInstance;
+  }
+
+  // ── Real-shape divergence: JWT id (=name placeholder) vs API id (real GUID), plus a divergent
+  // displayName -- neither may affect the result; matching is by `name` alone (team lead review
+  // comments #1/#2).
+  it('a Full Access caller can edit the toggle when matching by name alone, unaffected by a JWT-vs-API id mismatch or a divergent displayName', () => {
+    // Mirrors jwt-user.mapper.ts's real shape: the held role's id is the role NAME used as a
+    // placeholder, never a real database identifier.
+    const heldRole: Role = {
+      id: 'Healthcare Platform Admin', name: 'Healthcare Platform Admin', displayName: 'Healthcare Platform Admin',
+      description: 'role.', permissions: [], color: '#000', isSystemRole: true, isFullAccess: false, createdAt: '',
+    };
+    // Mirrors the real API shape (RoleDto): a real database GUID as id, and a displayName that
+    // deliberately differs from name.
+    const apiFullAccessRole: Role = {
+      ...fullAccessRole, id: '3fa85f64-5717-4562-b3fc-2c963f66afa6', displayName: 'Platform Administrator',
+    };
+    const component = setupWithHeldRoles({ role: normalRole }, [normalRole, apiFullAccessRole], [heldRole]);
+
+    expect(component.callerHasFullAccess()).toBeTrue();
+    expect(component.form.controls.isFullAccess.disabled).toBeFalse();
+  });
+
   it('a Full Access caller can edit the toggle', () => {
     const component = setup({ role: normalRole }, [normalRole, fullAccessRole], ['Healthcare Platform Admin']);
 

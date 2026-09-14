@@ -12,6 +12,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { IRoleService } from '../../services/i-role.service';
 import { Role } from '../../../auth/models/user.model';
 import { AuthService } from '../../../auth/services/auth.service';
+import { FullAccessResolverService } from '../../../auth/services/full-access-resolver.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
 import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
@@ -43,10 +44,11 @@ export interface RoleDialogData {
 // boilerplate. isSaveInProgress() is kept explicit below since "a save is actually in flight" isn't
 // something a generic dirty-check can infer from a form alone.
 export class RoleDialogComponent {
-  private readonly svc         = inject(IRoleService);
-  private readonly fb          = inject(FormBuilder);
-  private readonly actionGuard = inject(PermissionActionGuard);
-  private readonly authService = inject(AuthService);
+  private readonly svc           = inject(IRoleService);
+  private readonly fb            = inject(FormBuilder);
+  private readonly actionGuard   = inject(PermissionActionGuard);
+  private readonly authService   = inject(AuthService);
+  private readonly fullAccessSvc = inject(FullAccessResolverService);
   readonly dialogRef   = inject<DialogRef<boolean>>(DialogRef);
   readonly data: RoleDialogData = inject(DIALOG_DATA) as RoleDialogData;
 
@@ -57,11 +59,11 @@ export class RoleDialogComponent {
   readonly errorMessage = signal<string | null>(null);
 
   // RBAC redesign Step 6: whether the ACTING/current user holds Full System Access themselves —
-  // resolved from the real per-role IsFullAccess flag (IRoleService.getRoles(), the same RoleDto the
-  // Role & Permissions screen already reads), cross-referenced by name against the roles this
-  // session's own claims say it holds (authService.roles()) — never a hardcoded SuperAdmin/Admin
-  // name check, and never a role-name check at all: a future custom role marked Full System Access
-  // satisfies this identically. Only such a caller may edit the toggle below; the backend
+  // resolved via the shared FullAccessResolverService (see that file for why it matches by role
+  // NAME, never displayName or id), cross-referenced against the roles this session's own claims say
+  // it holds (authService.roles()) — never a hardcoded SuperAdmin/Admin name check, and never a
+  // role-name check at all: a future custom role marked Full System Access satisfies this
+  // identically. Only such a caller may edit the toggle below; the backend
   // (RoleManagementService.CreateRoleAsync/UpdateRoleAsync) independently and authoritatively
   // enforces the exact same rule regardless of what this renders as — this is UX only.
   readonly callerHasFullAccess = signal(false);
@@ -84,19 +86,15 @@ export class RoleDialogComponent {
   });
 
   constructor() {
-    // RBAC Fix 9: fail closed on API failure — if getRoles() errors, callerHasFullAccess stays/becomes
-    // false and the toggle stays disabled (its constructed default), exactly as for a caller who simply
-    // isn't Full Access, rather than leaving the decision in whatever state it was already in.
-    this.svc.getRoles().subscribe({
-      next: allRoles => {
-        const heldRoleNames = new Set(this.authService.roles().map(r => r.displayName));
-        const hasFullAccess = allRoles.some(r => heldRoleNames.has(r.name) && r.isFullAccess);
-        this.callerHasFullAccess.set(hasFullAccess);
-        if (hasFullAccess && !this.isSystemRole) {
-          this.form.controls.isFullAccess.enable();
-        }
-      },
-      error: () => this.callerHasFullAccess.set(false),
+    // RBAC Fix 9: fail closed on API failure — the shared resolver resolves `false` (never errors) on
+    // any getRoles() failure, so callerHasFullAccess stays/becomes false and the toggle stays disabled
+    // (its constructed default), exactly as for a caller who simply isn't Full Access.
+    const heldRoleNames = new Set(this.authService.roles().map(r => r.name));
+    this.fullAccessSvc.resolve(heldRoleNames).subscribe(hasFullAccess => {
+      this.callerHasFullAccess.set(hasFullAccess);
+      if (hasFullAccess && !this.isSystemRole) {
+        this.form.controls.isFullAccess.enable();
+      }
     });
   }
 
