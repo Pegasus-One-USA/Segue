@@ -189,7 +189,56 @@ export class WorkflowBuildAssemblerServiceV2 {
       );
     }
 
-    return { ...graph, sources, destinations, mappings };
+    return { ...graph, sources, destinations, mappings: this.stampInlineMappings(graph, mappings) };
+  }
+
+  /**
+   * Writes each mapping node's fields into its OWN configuration, alongside the ids (plan §3.3 / phase 7).
+   *
+   * Until now a mapping node stored only `mappingProfileIds`, so every read had to fetch the profile by id and
+   * rebuild the field list from it — which is what let the executor and the wizard disagree about what a node
+   * maps, and what made a run depend on a master record that could have been edited since.
+   * MappingNodeExecutor now prefers this inline block (phase 5), so what runs is what the node says.
+   *
+   * The ids are deliberately KEPT for now: dual-read means nothing breaks if a reader hasn't been migrated yet,
+   * and the profiles are still the authoring surface the wizard loads from. Dropping them is phase 9.
+   */
+  private stampInlineMappings(
+    graph: { nodes: WorkflowNodeRequest[] },
+    mappings: MappingBuildSpec[],
+  ): MappingBuildSpec[] {
+    if (mappings.length === 0) return mappings;
+
+    const byNode = new Map<string, MappingBuildSpec[]>();
+    for (const spec of mappings) {
+      const existing = byNode.get(spec.nodeId);
+      if (existing) existing.push(spec);
+      else byNode.set(spec.nodeId, [spec]);
+    }
+
+    for (const node of graph.nodes) {
+      const specs = byNode.get(node.id);
+      if (!specs?.length) continue;
+
+      const inline: Record<string, { destinationObject: string; fields: MappingFieldRequest[] }> = {};
+      for (const spec of specs) {
+        inline[spec.resourceType] = {
+          destinationObject: spec.destinationObject,
+          fields: spec.fields,
+        };
+      }
+
+      let config: Record<string, unknown>;
+      try {
+        config = JSON.parse(node.configurationJson || '{}') as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+
+      node.configurationJson = JSON.stringify({ ...config, mappings: inline });
+    }
+
+    return mappings;
   }
 
   // ── source ────────────────────────────────────────────────────────────────
