@@ -140,6 +140,15 @@ export interface TransformConfigFieldSchema {
   /** True for a fine-tuning/edge-case field the rule works fine without touching — rendered under a
    *  collapsed "Advanced Options" section by RuleConfigFormComponent instead of the main field list. */
   isAdvanced?: boolean;
+  /** Set when this field only applies while another field holds one of these values (e.g. keepLength only
+   *  when mode is "mask"). Unlike isAdvanced, which merely buries the field, this excludes it: it is neither
+   *  rendered nor stored in a mode it has no effect on. See isConfigFieldVisible(). */
+  visibleWhen?: TransformConfigFieldVisibility | null;
+}
+
+export interface TransformConfigFieldVisibility {
+  key: string;
+  values: string[];
 }
 
 export interface TransformNodeSchema {

@@ -42,6 +42,16 @@ public interface IConfigurationService
 
     Task<DestinationConfigurationDto> SetDestinationConfigurationEnabledAsync(Guid destinationId, bool isEnabled, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Sets (or clears, when <paramref name="deIdentificationProfileId"/> is null) the de-identification profile a
+    /// destination's resources are redacted against. Deliberately narrow rather than routed through
+    /// <see cref="UpdateDestinationConfigurationAsync"/>: that path runs the full create-request validator, which
+    /// requires KeyVaultName/SecretName on every call — values the destination wizard never re-displays for a
+    /// stored secret, so a profile-only change would have to fabricate them to pass validation.
+    /// </summary>
+    Task<DestinationConfigurationDto> SetDestinationConfigurationDeIdentificationProfileAsync(
+        Guid destinationId, Guid? deIdentificationProfileId, CancellationToken cancellationToken);
+
     Task DeleteDestinationConfigurationAsync(Guid destinationId, CancellationToken cancellationToken);
 
     Task<bool> HasDestinationExecutionHistoryAsync(Guid destinationId, CancellationToken cancellationToken);

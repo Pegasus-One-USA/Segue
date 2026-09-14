@@ -35,6 +35,13 @@ public static class WorkflowEndpoints
     // Node executors read config with JsonSerializerDefaults.Web (camelCase); serialize embedded fields the same way.
     private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
 
+    // The nodes that sit between a source and its destination and resolve transformation rules for themselves —
+    // mirrors the portal's own CHAIN_NODE_TYPES (workflow-graph-mapper-v2.service.ts). String literals for the
+    // same reason the mappingNodeType constant below is one: WorkflowNodeTypes lives in Runtime.Application,
+    // which this file does not reference.
+    private static readonly string[] ChainNodeTypes =
+        ["MappingNode", "FhirResourceTransformNode", "DeIdentificationNode"];
+
     // Standardizes every /workflows/build validation rejection to the same { error, message, fieldErrors } shape
     // Program.cs's MapException already produces for RequestValidationException, instead of the bare strings this
     // endpoint used to return — so the Angular error handler has one shape to read regardless of which check failed.
@@ -2964,6 +2971,48 @@ public static class WorkflowEndpoints
         }
     }
 
+
+    /// <summary>
+    /// Returns <paramref name="nodeRequest"/>'s configuration with the workflow's own id stamped on, for the
+    /// chain nodes that resolve transformation rules for themselves.
+    ///
+    /// <c>resourcePipelineRouteId</c> is the key the rule resolver's Workflow tier is addressed by. Without it
+    /// MappingNodeExecutor and FhirResourceTransformNodeExecutor read a null route id, the resolver skips that
+    /// tier outright and falls through to the tenant-wide tiers — and a Workflow-scoped rule, the only kind the
+    /// builder authors, matches none of those. The rule then sits visibly attached to a field in the wizard
+    /// while every run writes the value untransformed, with no error anywhere to say so.
+    ///
+    /// Done here rather than in any one endpoint because there are four save paths (POST /workflows,
+    /// PUT /workflows/{id}, /workflows/build, and copy) and they all funnel through this method — the portal
+    /// stamps this too, but only on a path that requires the canvas node to already carry a destinationId, so
+    /// a graph whose destination was created by the build endpoint never got it from either side.
+    ///
+    /// Overwrites rather than preserving an existing value: these nodes are being persisted INTO this workflow,
+    /// so this id is theirs by definition, and overwriting also repairs a graph copied from another workflow
+    /// (whose nodes would otherwise keep aiming their rule lookups at the original).
+    /// </summary>
+    private static string WithWorkflowRouteId(WorkflowNodeRequest nodeRequest, Guid workflowId)
+    {
+        var configurationJson = nodeRequest.ConfigurationJson ?? "{}";
+        if (!ChainNodeTypes.Contains(nodeRequest.NodeType, StringComparer.Ordinal))
+        {
+            return configurationJson;
+        }
+
+        try
+        {
+            var config = JsonNode.Parse(configurationJson) as JsonObject ?? [];
+            config["resourcePipelineRouteId"] = workflowId.ToString();
+            return config.ToJsonString(WebJsonOptions);
+        }
+        catch (JsonException)
+        {
+            // Unparseable config is left exactly as it arrived — the same "never make a bad save worse"
+            // stance the rest of this file's configuration helpers take.
+            return configurationJson;
+        }
+    }
+
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request, int version = 1)
     {
         var workflow = new WorkflowDefinition(
@@ -2978,7 +3027,7 @@ public static class WorkflowEndpoints
                 nodeRequest.Rank,
                 nodeRequest.SubRank,
                 nodeRequest.DisplayName,
-                nodeRequest.ConfigurationJson ?? "{}",
+                WithWorkflowRouteId(nodeRequest, workflowId),
                 nodeRequest.PositionX,
                 nodeRequest.PositionY,
                 nodeRequest.IsEnabled,

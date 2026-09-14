@@ -207,7 +207,13 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             (schemaName, tableName) = SplitTableName(type, request.TableName);
             columnName = SqlIdentifier.Validate(request.ColumnName);
             (normalizedDataType, maxLength) = ValidateDataType(type, request.DataType);
-            connectionString = BuildConnectionString(request.Connection);
+            // Resolve, don't just build: the wizard never re-displays a stored password, so a schema change
+            // against a saved destination arrives with the password blank and only ExistingDestinationId set.
+            // Building the string directly produced a credential-less connection and failed with the SQL
+            // server's own "Login failed for user 'sa'" — which reads like wrong credentials rather than
+            // credentials that were never attached. Test Connection already went through this resolver, so a
+            // connection the user had just successfully tested would fail the moment it altered a table.
+            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -276,7 +282,13 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         try
         {
             (schemaName, tableName) = SplitTableName(type, request.TableName);
-            connectionString = BuildConnectionString(request.Connection);
+            // Resolve, don't just build: the wizard never re-displays a stored password, so a schema change
+            // against a saved destination arrives with the password blank and only ExistingDestinationId set.
+            // Building the string directly produced a credential-less connection and failed with the SQL
+            // server's own "Login failed for user 'sa'" — which reads like wrong credentials rather than
+            // credentials that were never attached. Test Connection already went through this resolver, so a
+            // connection the user had just successfully tested would fail the moment it altered a table.
+            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
 
             foreach (var column in request.Columns ?? [])
             {
@@ -440,7 +452,13 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         {
             (schemaName, tableName) = SplitTableName(type, request.TableName);
             columnName = SqlIdentifier.Validate(request.ColumnName);
-            connectionString = BuildConnectionString(request.Connection);
+            // Resolve, don't just build: the wizard never re-displays a stored password, so a schema change
+            // against a saved destination arrives with the password blank and only ExistingDestinationId set.
+            // Building the string directly produced a credential-less connection and failed with the SQL
+            // server's own "Login failed for user 'sa'" — which reads like wrong credentials rather than
+            // credentials that were never attached. Test Connection already went through this resolver, so a
+            // connection the user had just successfully tested would fail the moment it altered a table.
+            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -493,7 +511,13 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             {
                 newColumnName = SqlIdentifier.Validate(request.NewColumnName);
             }
-            connectionString = BuildConnectionString(request.Connection);
+            // Resolve, don't just build: the wizard never re-displays a stored password, so a schema change
+            // against a saved destination arrives with the password blank and only ExistingDestinationId set.
+            // Building the string directly produced a credential-less connection and failed with the SQL
+            // server's own "Login failed for user 'sa'" — which reads like wrong credentials rather than
+            // credentials that were never attached. Test Connection already went through this resolver, so a
+            // connection the user had just successfully tested would fail the moment it altered a table.
+            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
         }
         catch (Exception exception)
         {

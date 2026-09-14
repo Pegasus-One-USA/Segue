@@ -97,7 +97,17 @@ public sealed record TransformConfigFieldSchema(
     // a collapsed "Advanced Options" section instead of the main field list. False (the default) for whatever
     // a person configuring this node type actually needs to look at first — the node's core behavior selector,
     // or a field with real compliance/output impact (e.g. DateMathAge's redactOver89) even if it has a default.
-    bool IsAdvanced = false);
+    bool IsAdvanced = false,
+    // Set when this field only applies while ANOTHER field holds one of a set of values — e.g. keepLength is
+    // meaningful only when mode is "mask". IsAdvanced merely buries such a field; this excludes it, so the UI
+    // neither renders nor stores it in a mode it does not affect. Before this, every field's default was
+    // written regardless of mode, producing configs like "mode = hash, keepLength = 4" that read as though
+    // keepLength did something.
+    TransformConfigFieldVisibility? VisibleWhen = null);
+
+/// <summary>"Only while <see cref="Key"/> holds one of <see cref="Values"/>" — see
+/// <see cref="TransformConfigFieldSchema.VisibleWhen"/>.</summary>
+public sealed record TransformConfigFieldVisibility(string Key, IReadOnlyList<string> Values);
 
 public sealed record TransformNodeSchemaDto(
     TransformNodeType NodeType,

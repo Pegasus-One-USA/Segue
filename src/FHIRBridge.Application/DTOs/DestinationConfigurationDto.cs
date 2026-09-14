@@ -18,3 +18,10 @@ public sealed record DestinationConfigurationDto(
     DateTime? ModifiedOnUtc = null,
     string? ModifiedBy = null,
     Guid? DeIdentificationProfileId = null);
+
+/// <summary>
+/// Body for the narrow "set this destination's de-identification profile" endpoint. A null
+/// <see cref="DeIdentificationProfileId"/> clears the assignment (the UI's "None" option), which is why this is a
+/// body rather than a route segment — a nullable Guid has no natural URL form.
+/// </summary>
+public sealed record SetDestinationDeIdentificationProfileRequest(Guid? DeIdentificationProfileId);
