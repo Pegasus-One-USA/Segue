@@ -815,6 +815,10 @@ app.MapResource11Endpoints();
 // DataLakeWebhook:AuthMode credential check.
 app.MapDataLakeWebhookEndpoints();
 
+// Four sample third-party APIs (single object / array / envelope / arbitrary partner-shaped event) so
+// FHIRBridge's ApiEndpoint destination can be pointed at each one end to end — see ApiEndpointTestEndpoints.
+app.MapApiEndpointTestEndpoints();
+
 // SPA fallback: any GET that doesn't match a mapped route or an existing static file resolves to
 // index.html instead of 404ing, so Angular's client-side routes work on refresh/deep link. Fallback
 // endpoints are always lowest-priority, so this can't shadow the /api/* routes above regardless of
