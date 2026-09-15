@@ -148,13 +148,20 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
     }
 
     /// <summary>
-    /// Builds the probe's connection string from the request's discrete fields (server/database/auth/etc.,
-    /// possibly a blank password), then — when the request forked from an already-saved destination
+    /// Builds a connection string from the request's discrete fields (server/database/auth/etc., possibly a
+    /// blank password), then — when the request came from an already-saved destination
     /// (<see cref="DestinationConnectionProbeRequest.ExistingDestinationId"/>) and left the password blank —
     /// splices in that destination's stored credentials via <see cref="ISqlConnectionSecretMerger"/>. This lets
-    /// Test Connection succeed for the exact scenario ConfigurationService.ResolveInlineSecretAsync already
-    /// handles at save time: an existing SQL connection forked by editing an unrelated field (e.g. Require SSL)
-    /// without retyping the password.
+    /// it succeed for the exact scenario ConfigurationService.ResolveInlineSecretAsync already handles at save
+    /// time: an existing SQL connection whose password the client does not have.
+    ///
+    /// Used by every schema operation, not just Test Connection. The four DDL mutations below used to build
+    /// their connection string directly from the request, which works only while the wizard still holds a
+    /// plaintext password — i.e. on the session that first typed it. Reopening a SAVED destination never has
+    /// one (dest_password is deliberately stripped before the node is persisted — see the portal's
+    /// SECRET_FIELD_KEYS), so "+ Add column", "Create a new table…", drop and alter all failed with "Login
+    /// failed for user" on every workflow after the first, while the read-only schema probe beside them
+    /// worked because it resolves credentials server-side from the destination id.
     /// </summary>
     private async Task<string> ResolveProbeConnectionStringAsync(
         DestinationConnectionProbeRequest request,
@@ -207,7 +214,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             (schemaName, tableName) = SplitTableName(type, request.TableName);
             columnName = SqlIdentifier.Validate(request.ColumnName);
             (normalizedDataType, maxLength) = ValidateDataType(type, request.DataType);
-            connectionString = BuildConnectionString(request.Connection);
+            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -276,7 +283,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         try
         {
             (schemaName, tableName) = SplitTableName(type, request.TableName);
-            connectionString = BuildConnectionString(request.Connection);
+            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
 
             foreach (var column in request.Columns ?? [])
             {
@@ -440,7 +447,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         {
             (schemaName, tableName) = SplitTableName(type, request.TableName);
             columnName = SqlIdentifier.Validate(request.ColumnName);
-            connectionString = BuildConnectionString(request.Connection);
+            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -493,7 +500,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             {
                 newColumnName = SqlIdentifier.Validate(request.NewColumnName);
             }
-            connectionString = BuildConnectionString(request.Connection);
+            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
         }
         catch (Exception exception)
         {
