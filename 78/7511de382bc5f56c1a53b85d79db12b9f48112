@@ -1,0 +1,124 @@
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_01cdc638c2acfa::t_4442d03c0a6567 85
+  s_01cdc638c2acfa::t_7c12e494191c4d 18-21,34
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_01cdc638c2acfa::t_145a6236be7b77 1600-1657
+portal/src/app/auth/services/auth.service.ts
+  s_e4f33bc5f787da::t_df46e8bea688e7 13,36,74,110,143
+portal/src/app/core/api-endpoints.ts
+  s_e4f33bc5f787da::t_f1e60cd16d7ff5 258-271
+portal/src/app/layout/app-shell/app-shell.component.html
+  s_62affcfc9947ba::t_c2956ace829794 11-23,47-50,53-69
+portal/src/app/layout/app-shell/app-shell.component.scss
+  s_62affcfc9947ba::t_6b8347985b3be5 30-54,162-214
+portal/src/app/layout/app-shell/app-shell.component.ts
+  s_37e45e8f10a841::t_61fbfb5aa79ebf 2,9-10,35,42-43,48-61,83-84
+portal/src/app/settings/settings.routes.ts
+  s_85e5f4509df794::t_d773d480ec671a 4,134-162
+src/Api/FHIRBridge.Api/Controllers/V1/AuthController.cs
+  s_e4f33bc5f787da::t_3c8b036caf9ed0 3,31,54,66,82,84
+src/Api/FHIRBridge.Api/Program.cs
+  s_01cdc638c2acfa::t_c4750b0b287fb2 599,719-765,932-942,979-988
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_01cdc638c2acfa::t_0b8d24a9092b20 6,68-70,105-108,1104-1107,1400,1417-1422,1428-1435,1444-1449,1454-1456,1467-1472,1477-1478,1734-1735,1751-1787
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_8c124f3f2435f0::t_c8031e45cb02ba 2,6,98-99
+src/FHIRBridge.Application/FHIRBridge.Application.csproj
+  s_d68f9144c308b2::t_20c1dd7fa8f7fe 13
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_563b36e6d1f96c::t_081511e5e7920a 89-90,450-451,813-815,854-855
+src/FHIRBridge.Application/Services/UserManagementService.cs
+  s_01cdc638c2acfa::t_e442cd1263e1ea 92-94,165-166
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_5849c970b9c366::t_b38b4e5bb29c3e 24,175-190,234-239,253-257,262-263,287-289
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_5849c970b9c366::t_39621bb5d10fd4 3,19-31,43
+src/FHIRBridge.Infrastructure/Persistence/InMemoryConfigurationRepository.cs
+  s_563b36e6d1f96c::t_28c3be1b98b60f 2,5,23-33,108,110-115,219,221-226,355,357-369
+src/FHIRBridge.Infrastructure/Persistence/InMemoryUserAccessRepository.cs
+  s_01cdc638c2acfa::t_d62c07b7eb4c40 2,6,12-18,61,63-64
+src/FHIRBridge.Infrastructure/Pipeline/ConfiguredPipelineService.cs
+  s_8c124f3f2435f0::t_c6f187db3931f1 4,61,75,118,184-188,231-265,582-584,614-621,629-652
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_563b36e6d1f96c::t_a7a8f4b8ceed3d 79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "787511de382bc5f56c1a53b85d79db12b9f48112",
+  "prompts": {},
+  "sessions": {
+    "s_01cdc638c2acfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05d0a862-c14d-4220-9ff8-579c3faf088c",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_37e45e8f10a841": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b30259a-0bc9-4b0f-bbb6-d06034ce4f47",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_563b36e6d1f96c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d1be468-7973-4038-9618-43ded366ad88",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_5849c970b9c366": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19927945-db4e-4217-9b93-44e52555a598",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_62affcfc9947ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ac879ba-717b-4d10-9392-5ac0366d83cf",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_85e5f4509df794": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d7ce0dc8-ced5-4aba-a5f7-13b80b101734",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_8c124f3f2435f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09a04c75-137f-4f0f-bcff-6d642457bd9a",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_d68f9144c308b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce1442db-a849-4f80-bb3b-506c1d276fbc",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    },
+    "s_e4f33bc5f787da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10ccc10d-34e4-496a-b8dd-34d264792a59",
+        "model": "unknown"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

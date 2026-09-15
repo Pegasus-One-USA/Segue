@@ -1,0 +1,73 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_cf3967cb308c19::t_8120a41adcca7b 197-204,208,211-216,220-228,231-246,251
+  s_cf3967cb308c19::t_593b0d318fb669 37,181,192,194-196
+  s_cf3967cb308c19::t_90d321d73d788c 172-174
+  s_cf3967cb308c19::t_83b2dcf8be6fd9 205-207,209-210,217-219,229-230
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_cf3967cb308c19::t_57e71cd3e42f0d 173-185
+  s_cf3967cb308c19::t_593b0d318fb669 304-323
+  s_cf3967cb308c19::t_0d06bc92707819 1,326-330,347,398
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.scss
+  s_cf3967cb308c19::t_20a2aa5307c581 306-325
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_cf3967cb308c19::t_20a2aa5307c581 64-65,69,183-187,234-238
+  s_cf3967cb308c19::t_7e95a99c138f15 239-240
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.scss
+  s_cf3967cb308c19::t_20a2aa5307c581 306-325
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_cf3967cb308c19::t_0d06bc92707819 304-308,325,376
+  s_cf3967cb308c19::t_57e71cd3e42f0d 1,163-175
+  s_cf3967cb308c19::t_593b0d318fb669 282-301
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_cf3967cb308c19::t_7e95a99c138f15 239-240
+  s_cf3967cb308c19::t_20a2aa5307c581 64-65,69,183-187,234-238
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_cf3967cb308c19::t_af1b27471f45a2 590,599,602-603,607-612,614-615,617-623,626-633
+  s_cf3967cb308c19::t_e39d505569e594 568-571,573-576,580-581,583-584
+  s_cf3967cb308c19::t_cdc541f4dccbc5 561
+  s_cf3967cb308c19::t_3911a4fcb70dd2 562-567,572,577,585-588,591-598,600,605-606,616,624-625
+  s_cf3967cb308c19::t_66e8fddd026702 478-481,487
+  s_cf3967cb308c19::t_ef0c22e7acc34c 634
+  s_cf3967cb308c19::t_07818832619563 589,601,604,613
+  s_cf3967cb308c19::t_4f930d118002ac 635
+  s_cf3967cb308c19::t_90d321d73d788c 578-579,582
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_cf3967cb308c19::t_6e3ef5f2a8f04a 2712-2715
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_cf3967cb308c19::t_e39d505569e594 568-571,573-576,580-581,583-584
+  s_cf3967cb308c19::t_af1b27471f45a2 590,599,602-603,607-612,614-615,617-623,626-633
+  s_cf3967cb308c19::t_66e8fddd026702 478-481,487
+  s_cf3967cb308c19::t_ef0c22e7acc34c 634
+  s_cf3967cb308c19::t_07818832619563 589,601,604,613
+  s_cf3967cb308c19::t_cdc541f4dccbc5 561
+  s_cf3967cb308c19::t_3911a4fcb70dd2 562-567,572,577,585-588,591-598,600,605-606,616,624-625
+  s_cf3967cb308c19::t_4f930d118002ac 635
+  s_cf3967cb308c19::t_90d321d73d788c 578-579,582
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_cf3967cb308c19::t_cbaa75d4486c4f 2745-2783,2801
+  s_cf3967cb308c19::t_e3ba4f409afb9b 36-42
+  s_cf3967cb308c19::t_8d293d05d546c4 2784-2786
+portal/src/app/components/nodes-v2/transform-node/transform-node.component.ts
+  s_cf3967cb308c19::t_752fc6280e1697 13-16
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_cf3967cb308c19::t_593b0d318fb669 37,181,192,194-196
+  s_cf3967cb308c19::t_90d321d73d788c 172-174
+  s_cf3967cb308c19::t_8120a41adcca7b 197-204,208,211-216,220-228,231-246,251
+  s_cf3967cb308c19::t_a3c13d032f4b98 205-207,209-210,217-219,229-230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "05af4ada4bc36158d7bdf371906a825728b728db",
+  "prompts": {},
+  "sessions": {
+    "s_cf3967cb308c19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66d990c3-0cfc-4e6d-af22-3febae2af8ba",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}

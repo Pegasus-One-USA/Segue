@@ -1,0 +1,19 @@
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_37057509f377cf::t_69059d342e2059 134-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0df85de2aa9b46c0abfc42ad35b93e7bd88b0627",
+  "prompts": {},
+  "sessions": {
+    "s_37057509f377cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df555302-e040-494d-9944-3e0a128c42b8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
