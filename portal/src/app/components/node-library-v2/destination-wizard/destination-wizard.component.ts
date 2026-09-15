@@ -726,9 +726,19 @@ export class DestinationWizardComponent implements OnInit {
    * persisted identically — and then closes back to the canvas (see
    * NodeLibraryDialogComponent.onDestWizardSaved). Configuring a second resource means reopening the
    * node, which keeps "Save" unambiguous: it finishes the step rather than half-committing it.
+   *
+   * Flushes the queued schema DDL first, exactly as the Review step's own "Add to Workflow"/"Update"
+   * does (see next()'s final-step branch) — this entry point is the ONLY other place _save() runs, and
+   * without the flush a column added via the canvas's "+ Add column" was never actually created against
+   * the destination: the mapping profile was then saved referencing a column that doesn't exist, and the
+   * backend's own column-existence check (WorkflowEndpoints.ValidateMappedColumnsExistAsync) rejected the
+   * whole save with "field '<name>' does not exist on '<table>'". Same contract as there: on failure the
+   * op stays queued and the save is skipped, so a profile is never persisted against absent schema.
    */
   saveChainNode(): void {
-    this._save();
+    this.flushPendingSchemaOps().subscribe((ok) => {
+      if (ok) this._save();
+    });
   }
 
   /** Maps this wizard's chain-node tab onto the Mapping list's own tab names — that list
