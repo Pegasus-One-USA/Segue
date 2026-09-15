@@ -1,0 +1,49 @@
+.claude/skills/runsegue/scripts/runsegue.ps1
+  s_a6fcafde4a9839::t_000f7774fc0e48 388-402,404-413,417-426
+  s_a6fcafde4a9839::t_7f11dc2dd6c973 467-470
+  s_cdde4e5bdf38da::t_2efc8c5709514e 1-85,93-358,370-387,403,414-416,427-433,435-466,471-518
+  s_a6fcafde4a9839::t_362c22781de96a 359-369
+  s_cdde4e5bdf38da::t_2c65a414490005 434
+  s_a6fcafde4a9839::t_005b8f4970e66e 86-92
+.claude/skills/runsegue/SKILL.md
+  s_a6fcafde4a9839::t_4541f0fa88e6aa 58-60,65
+  s_a6fcafde4a9839::t_cb27aef70e4e04 86-89
+  s_10829cf00ed675::t_ce0bcb0130c232 1-3,5-12,32-35,40-57,61-64,66-70,79-85,90-102,108-110,127-132
+  s_a6fcafde4a9839::t_09c825496c37b4 13-31,36-39
+  s_a6fcafde4a9839::t_f62c42b4a92707 114-126
+  s_a6fcafde4a9839::t_8a3fdcf53ce5b6 4
+  s_a6fcafde4a9839::t_f4556c96ae1ef0 71-78
+  s_a6fcafde4a9839::t_2b0517b6c9a68a 103-107,111-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "614f2ea564d1767a6b68d79d597a8f2c43d60316",
+  "prompts": {},
+  "sessions": {
+    "s_10829cf00ed675": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c3b63c8-eb2b-4b3d-9742-f574683a0697",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_a6fcafde4a9839": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb973df7-acfb-4478-87c1-5bf8b5fa792f",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    },
+    "s_cdde4e5bdf38da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "636067e7-2fe3-4199-aadd-61a064d435f9",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
