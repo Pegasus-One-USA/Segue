@@ -59,3 +59,25 @@ public enum ApiEndpointCompression
     None = 0,
     Gzip,
 }
+
+/// <summary>
+/// Whether this destination combines MORE THAN ONE mapped resource type's records into a single outgoing
+/// document — every other setting on this destination (auth, payload shape, the single-resource Request Body
+/// Template, batching/retry) behaves exactly as it always has when this is <see cref="None"/>, which is every
+/// destination that existed before this setting did. See <see cref="ApiEndpointResourceRelation"/> for how
+/// each participating resource type is declared, and MappedApiEndpointDestinationWriter's own remarks for why
+/// this is handled entirely inside the writer (an in-memory per-run accumulator), never by changing how or how
+/// often the pipeline orchestrator calls WriteAsync — every other destination type, and every ApiEndpoint
+/// destination that doesn't opt into this, is completely unaffected.
+/// </summary>
+public enum ApiEndpointMultiResourceMode
+{
+    /// <summary>Default — one resource type per write, exactly today's behavior.</summary>
+    None = 0,
+    /// <summary>Every participating resource type's records land as its own sibling array in one combined
+    /// document (<c>{ "patients": [...], "encounters": [...] }</c>) — no correlation between them.</summary>
+    Flat,
+    /// <summary>A child resource type's records are correlated to their parent (by a mapped reference field)
+    /// and nested inside that parent's own record (<c>{ "patients": [{ ..., "encounters": [...] }] }</c>).</summary>
+    Nested,
+}

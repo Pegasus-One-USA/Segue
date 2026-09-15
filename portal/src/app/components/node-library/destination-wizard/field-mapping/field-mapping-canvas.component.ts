@@ -1536,22 +1536,31 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
 
     const { resource, tableName } = target;
     const key = `${resource}::${tableName}`;
-    // A fresh column list — same "replaces what was there" semantics as the source side's Load JSON
-    // Payload, so re-running this after a wrong paste doesn't leave stray columns behind. Any existing
-    // mapping row for this exact card is dropped for the same reason submitLoadPayload clears the
-    // resource's rows: a row still pointing at a column this shape no longer has would silently dangle.
-    this.updatePendingFreeColumns(m => ({ ...m, [key]: Array.from(new Set(result.columns)) }));
+    // A fresh column list reflecting the newly pasted structure. Unlike a full wipe, a mapping row is only
+    // dropped when its OWN target column is no longer part of the new structure — re-pasting JSON to tweak
+    // or add one field must not silently discard every other already-configured mapping on this card, which
+    // is exactly what re-loading used to do (every column's row was dropped regardless of whether that
+    // column still existed afterward). A row whose column survives the reload keeps its mapping untouched.
+    const newColumns = Array.from(new Set(result.columns));
+    this.updatePendingFreeColumns(m => ({ ...m, [key]: newColumns }));
+    const newColumnSet = new Set(newColumns);
+    const rowsBefore = this.mappingRows();
+    const droppedCount = rowsBefore.filter(
+      r => r.resource === resource && r.tableName === tableName && !newColumnSet.has(r.targetName)).length;
     this.mappingRowsChange.emit(
-      this.mappingRows().filter(r => !(r.resource === resource && r.tableName === tableName)));
+      rowsBefore.filter(r => !(r.resource === resource && r.tableName === tableName) || newColumnSet.has(r.targetName)));
     this.destinationTemplateGenerated.emit(result.templateJson);
 
     this.loadDestinationPayloadTarget.set(null);
     this.loadDestinationPayloadError.set(null);
     const count = `${result.columns.length} column${result.columns.length === 1 ? '' : 's'}`;
+    const droppedNote = droppedCount > 0
+      ? ` ${droppedCount} mapping${droppedCount === 1 ? '' : 's'} for column${droppedCount === 1 ? '' : 's'} no longer in the new structure ${droppedCount === 1 ? 'was' : 'were'} dropped.`
+      : ' Existing mappings for columns still present were kept.';
     this.toast.success(
       'Payload loaded',
-      `${count} found in the pasted JSON — previous columns and mappings for ${tableName || resource} were cleared. `
-        + `Drag each source field onto its matching column, then Save — the request body template updates itself.`
+      `${count} found in the pasted JSON for ${tableName || resource}.${droppedNote} `
+        + `Drag each source field onto any new column, then Save — the request body template updates itself.`
         + (result.note ? ` ${result.note}` : ''),
     );
   }

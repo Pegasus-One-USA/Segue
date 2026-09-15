@@ -44,7 +44,8 @@ const SAMPLE_APIS: SampleApi[] = [
     description: 'Accepts exactly one JSON object per request — the shape a destination sends when its Payload '
       + 'shape is "One request per record".',
     matchingPayloadShape: 'One request per record (recordPerRequest)',
-    requiredFields: 'mrn, firstName, lastName (all non-empty strings)',
+    requiredFields: 'mrn, firstName, lastName (all non-empty strings). dateOfBirth/gender are optional but must '
+      + 'be strings when present. No other field is accepted.',
     validExample: JSON.stringify(
       { mrn: 'MRN-1001', firstName: 'Alice', lastName: 'Johnson', dateOfBirth: '1985-03-14', gender: 'female' },
       null, 2),
@@ -59,7 +60,8 @@ const SAMPLE_APIS: SampleApi[] = [
     description: 'Accepts a JSON array of records in one request — the destination\'s default "JSON array" '
       + 'payload shape, batching many mapped records into a single call.',
     matchingPayloadShape: 'JSON array (jsonArray) — the default',
-    requiredFields: 'A non-empty array; every element needs an "mrn" field.',
+    requiredFields: 'A non-empty array; every element needs "mrn" (firstName/lastName optional strings, no other '
+      + 'field accepted).',
     validExample: JSON.stringify(
       [
         { mrn: 'MRN-2001', firstName: 'Bob', lastName: 'Smith' },
@@ -69,14 +71,31 @@ const SAMPLE_APIS: SampleApi[] = [
     invalidReason: 'Record 0 is missing the required "mrn" field.',
   },
   {
+    apiName: 'RecordsNdjson',
+    title: '3. NDJSON — Streamed Records',
+    method: 'POST',
+    path: '/api/apitest/records-ndjson',
+    description: 'Accepts one JSON object per line (no surrounding array, no commas between lines) — the '
+      + 'destination\'s "NDJSON" payload shape, for an API that streams/parses records line by line.',
+    matchingPayloadShape: 'NDJSON — one record per line (ndjson)',
+    requiredFields: 'At least one non-empty line; every line is its own JSON object needing an "mrn" field.',
+    validExample: [
+      JSON.stringify({ mrn: 'MRN-7001', firstName: 'Grace', lastName: 'Kim' }),
+      JSON.stringify({ mrn: 'MRN-7002', firstName: 'Hiro', lastName: 'Tanaka' }),
+    ].join('\n'),
+    invalidExample: JSON.stringify({ firstName: 'Grace' }),
+    invalidReason: 'Line 0 is missing the required "mrn" field.',
+  },
+  {
     apiName: 'RecordsEnvelope',
-    title: '3. Envelope — Batch With Run Metadata',
+    title: '4. Envelope — Batch With Run Metadata',
     method: 'POST',
     path: '/api/apitest/records-envelope',
     description: 'Accepts a batch wrapped with run/route provenance metadata — the destination\'s "Envelope" '
       + 'payload shape, for an API that wants to know what a batch IS before reading what\'s in it.',
     matchingPayloadShape: 'Envelope — run metadata plus records (envelope)',
-    requiredFields: 'meta.resourceType (string); records (non-empty array)',
+    requiredFields: 'meta.resourceType (string, recordCount/routeName optional); records (non-empty array, each '
+      + 'needing "mrn"). No other field is accepted.',
     validExample: JSON.stringify(
       {
         meta: { resourceType: 'Patient', recordCount: 2, routeName: 'Nightly Patient Sync' },
@@ -90,7 +109,7 @@ const SAMPLE_APIS: SampleApi[] = [
   },
   {
     apiName: 'CustomEvent',
-    title: '4. Arbitrary partner shape — Custom Event (for Request Body Template)',
+    title: '5. Arbitrary partner shape — Custom Event (for Request Body Template)',
     method: 'POST',
     path: '/api/apitest/custom-event',
     description: 'Not one of FHIRBridge\'s own framings at all — this is what a real partner\'s own event '
@@ -98,12 +117,54 @@ const SAMPLE_APIS: SampleApi[] = [
       + 'exact shape into the destination\'s "Request body template" field, with {{fieldName}} placeholders '
       + '(matching your Mapping Profile\'s field names) in place of the values below.',
     matchingPayloadShape: 'Any — pair with a Request Body Template matching this exact shape',
-    requiredFields: 'eventType (string); patient.id (string)',
+    requiredFields: 'eventType (string); patient.id (string). "source" and patient.fullName/age are optional but '
+      + 'must be the right type when present. No other top-level or patient field is accepted.',
     validExample: JSON.stringify(
       { eventType: 'PatientUpdated', patient: { id: 'MRN-4001', fullName: 'Farah Khan', age: 42 }, source: 'FHIRBridge' },
       null, 2),
     invalidExample: JSON.stringify({ patient: { fullName: 'Farah Khan' } }, null, 2),
     invalidReason: 'Missing the required "eventType" field, and patient.id.',
+  },
+  {
+    apiName: 'MultiResourceFlat',
+    title: '6. Multi-resource, flat — Patients + Encounters (sibling arrays)',
+    method: 'POST',
+    path: '/api/apitest/multi-resource-flat',
+    description: 'Accepts more than one mapped resource type combined into a single document as top-level '
+      + 'sibling arrays, with no nesting — the destination\'s multi-resource "Flat" combine mode. Each encounter '
+      + 'carries its own patientMrn so the receiver can correlate it back to a patient by hand.',
+    matchingPayloadShape: 'Multi-resource — Flat (dest_apiMultiResourceMode = flat)',
+    requiredFields: 'patients (non-empty array, each needing "mrn"); encounters (non-empty array, each needing '
+      + '"encounterId" and "patientMrn"). No other top-level field is accepted.',
+    validExample: JSON.stringify(
+      {
+        patients: [{ mrn: 'MRN-5001', firstName: 'Grace', lastName: 'Kim' }],
+        encounters: [{ encounterId: 'ENC-9001', patientMrn: 'MRN-5001', reason: 'Annual checkup' }],
+      }, null, 2),
+    invalidExample: JSON.stringify({ patients: [{ mrn: 'MRN-5001' }], encounters: [] }, null, 2),
+    invalidReason: '"encounters" is an empty array — at least one record is required.',
+  },
+  {
+    apiName: 'MultiResourceNested',
+    title: '7. Multi-resource, nested — Patients With Nested Encounters',
+    method: 'POST',
+    path: '/api/apitest/multi-resource-nested',
+    description: 'Accepts a child resource type correlated to its parent and embedded directly inside the '
+      + 'parent\'s own record — the destination\'s multi-resource "Nested" combine mode. Which patient an '
+      + 'encounter belongs to is purely a function of where it sits in the document, so no correlation field is '
+      + 'needed on the encounter itself.',
+    matchingPayloadShape: 'Multi-resource — Nested (dest_apiMultiResourceMode = nested)',
+    requiredFields: 'patients (non-empty array, each needing "mrn"; an optional "encounters" array, each needing '
+      + '"encounterId"). No other top-level field is accepted.',
+    validExample: JSON.stringify(
+      {
+        patients: [{
+          mrn: 'MRN-6001', firstName: 'Henry', lastName: 'Osei',
+          encounters: [{ encounterId: 'ENC-9101', reason: 'Follow-up' }],
+        }],
+      }, null, 2),
+    invalidExample: JSON.stringify({ patients: [{ mrn: 'MRN-6001', encounters: [{ reason: 'Follow-up' }] }] }, null, 2),
+    invalidReason: 'patients[0].encounters[0] is missing the required "encounterId" field.',
   },
 ];
 
@@ -229,10 +290,13 @@ const AUTH_MODE_DOCS: AuthModeDoc[] = [
 ];
 
 /**
- * A small, self-contained console for exercising FHIRBridge's ApiEndpoint destination end to end: four sample
- * APIs (see SAMPLE_APIS above / backend/ApiEndpointTestEndpoints.cs), each expecting a different request shape,
- * plus one endpoint per auth mode the destination supports (see AUTH_MODE_DOCS above / backend/ApiAuthTestEndpoints.cs),
- * all landing in one shared table so every call — valid or not — is visible from one place.
+ * A small, self-contained console for exercising FHIRBridge's ApiEndpoint destination end to end: seven sample
+ * APIs (see SAMPLE_APIS above / backend/ApiEndpointTestEndpoints.cs) covering every payload shape and
+ * multi-resource combine mode the destination supports, each expecting a different request shape and each
+ * strictly validated (required fields present and correctly typed, optional fields correctly typed when present,
+ * any unrecognized field rejected outright), plus one endpoint per auth mode the destination supports (see
+ * AUTH_MODE_DOCS above / backend/ApiAuthTestEndpoints.cs), all landing in one shared table so every call — valid
+ * or not — is visible from one place.
  *
  * Reached at a dedicated path (see app.ts's isApiTestConsole), rendered BEFORE the login gate — same pattern as
  * the EHR-launch bypass: this is a developer tool independent of any HealthApp role, and the table it reads holds

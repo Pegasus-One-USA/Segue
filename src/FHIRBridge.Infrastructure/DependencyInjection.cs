@@ -467,6 +467,11 @@ public static class DependencyInjection
         // Data Lake Webhook, with the widest auth surface of any destination writer (see ApiEndpointAuthMode).
         services.AddHttpClient(nameof(Destinations.ApiEndpoint.ApiEndpointSender));
         services.AddScoped<Destinations.ApiEndpoint.IApiEndpointSender, Destinations.ApiEndpoint.ApiEndpointSender>();
+        // Singleton: the multi-resource accumulator must survive across the several scoped WriteAsync calls (one
+        // per resource type) that make up a single pipeline run — see IApiEndpointMultiResourceAccumulator remarks.
+        services.AddSingleton<
+            Destinations.ApiEndpoint.IApiEndpointMultiResourceAccumulator,
+            Destinations.ApiEndpoint.ApiEndpointMultiResourceAccumulator>();
         services.AddScoped<MappedApiEndpointDestinationWriter>();
 
         // Microsoft Fabric / OneLake: reuses the singleton BlobContainerClientCache registered above (OneLake

@@ -76,6 +76,12 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
     bodyTemplateJson: ['', [ApiEndpointDestinationFormComponent.jsonValidator]],
     includeSourceJson: [false, []],
     onFailure: ['fail', [Validators.required]],
+    // Multi-resource (flat/nested parent-child) combining — opt-in, defaults to 'none' so every destination that
+    // doesn't use this behaves exactly as it always has. See ApiEndpointMultiResourceMode/ApiEndpointResourceRelation.
+    multiResourceMode: ['none', []],
+    resourceRelationsJson: ['', [ApiEndpointDestinationFormComponent.jsonArrayValidator]],
+    recordTemplatesByResourceTypeJson: ['', [ApiEndpointDestinationFormComponent.jsonObjectValidator]],
+    batchTemplateJson: ['', [ApiEndpointDestinationFormComponent.jsonValidator]],
   });
 
   /** Blank passes — an empty box means "none configured", not "invalid". */
@@ -87,6 +93,19 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? null : { jsonObject: true };
     } catch {
       return { jsonObject: true };
+    }
+  }
+
+  /** Blank passes. Used for resourceRelationsJson — a JSON array of { resourceType, parentResourceType?,
+   *  correlationColumn?, parentKeyColumn?, nestKey } entries, mirroring ApiEndpointResourceRelation. */
+  private static jsonArrayValidator(control: { value: unknown }): Record<string, boolean> | null {
+    const raw = (control.value ?? '') as string;
+    if (!raw.trim()) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? null : { jsonArray: true };
+    } catch {
+      return { jsonArray: true };
     }
   }
 
@@ -229,6 +248,10 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       dest_apiBodyTemplateJson: v.bodyTemplateJson ?? '',
       dest_apiIncludeSourceJson: String(v.includeSourceJson ?? false),
       dest_apiOnFailure: v.onFailure ?? 'fail',
+      dest_apiMultiResourceMode: v.multiResourceMode ?? 'none',
+      dest_apiResourceRelationsJson: v.resourceRelationsJson ?? '',
+      dest_apiRecordTemplatesByResourceType: v.recordTemplatesByResourceTypeJson ?? '',
+      dest_apiBatchTemplateJson: v.batchTemplateJson ?? '',
     };
   }
 
@@ -270,6 +293,10 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       bodyTemplateJson: fields['dest_apiBodyTemplateJson'] || '',
       includeSourceJson: fields['dest_apiIncludeSourceJson'] === 'true',
       onFailure: fields['dest_apiOnFailure'] || 'fail',
+      multiResourceMode: fields['dest_apiMultiResourceMode'] || 'none',
+      resourceRelationsJson: fields['dest_apiResourceRelationsJson'] || '',
+      recordTemplatesByResourceTypeJson: fields['dest_apiRecordTemplatesByResourceType'] || '',
+      batchTemplateJson: fields['dest_apiBatchTemplateJson'] || '',
     });
     this._syncAuthModeValidators(this.apiForm.value.authMode ?? null, this.reusingExisting());
   }
@@ -283,6 +310,7 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       batchSize: 500, maxRequestBytes: 4194304, timeoutSeconds: 30, retryCount: 3, retryBackoffSeconds: 2,
       expectedStatusCodes: '', headersJson: '', queryParamsJson: '', bodyTemplateJson: '',
       includeSourceJson: false, onFailure: 'fail',
+      multiResourceMode: 'none', resourceRelationsJson: '', recordTemplatesByResourceTypeJson: '', batchTemplateJson: '',
     });
     this._syncAuthModeValidators(this.apiForm.value.authMode ?? null, this.reusingExisting());
   }

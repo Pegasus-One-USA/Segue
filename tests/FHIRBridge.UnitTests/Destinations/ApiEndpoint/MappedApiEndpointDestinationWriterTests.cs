@@ -43,7 +43,7 @@ public sealed class MappedApiEndpointDestinationWriterTests
     private static PipelineWriteContext Context() => new(false, "Partner Export Workflow", DateTimeOffset.UtcNow, "corr-1");
 
     private MappedApiEndpointDestinationWriter CreateWriter() =>
-        new(_sender.Object, NullLogger<MappedApiEndpointDestinationWriter>.Instance);
+        new(_sender.Object, new ApiEndpointMultiResourceAccumulator(), NullLogger<MappedApiEndpointDestinationWriter>.Instance);
 
     private void SetupSender(bool delivered = true, string? error = null)
         => _sender
@@ -184,5 +184,75 @@ public sealed class MappedApiEndpointDestinationWriterTests
 
         result.Count.Should().Be(0);
         result.RecordErrors.Should().ContainSingle().Which.Should().Contain("not delivered");
+    }
+
+    [Fact]
+    public async Task Multi_resource_flat_mode_waits_for_every_resource_type_then_sends_one_combined_document()
+    {
+        SetupSender();
+        var destination = Destination(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiMultiResourceMode"] = "flat",
+            ["dest_apiResourceRelationsJson"] = """
+                [
+                    {"resourceType":"Patient","nestKey":"patients"},
+                    {"resourceType":"Encounter","nestKey":"encounters"}
+                ]
+                """,
+        }));
+        var writer = CreateWriter();
+
+        var patientResult = await writer.WriteAsync(
+            destination, Mapping("Patient", "Patient"), [Record("p1")], Context(), CancellationToken.None);
+
+        patientResult.Count.Should().Be(1, "the first resource type's records are accepted but nothing is sent until every resource type lands");
+        _sent.Should().BeEmpty();
+
+        var encounterResult = await writer.WriteAsync(
+            destination, Mapping("Encounter", "Encounter"), [Record("e1")], Context(), CancellationToken.None);
+
+        encounterResult.Count.Should().Be(1);
+        _sent.Should().HaveCount(1, "the last resource type to land triggers exactly one combined send");
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        body.RootElement.GetProperty("patients").GetArrayLength().Should().Be(1);
+        body.RootElement.GetProperty("encounters").GetArrayLength().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Multi_resource_nested_mode_correlates_children_under_their_parent_record()
+    {
+        SetupSender();
+        var destination = Destination(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiMultiResourceMode"] = "nested",
+            ["dest_apiResourceRelationsJson"] = """
+                [
+                    {"resourceType":"Patient","nestKey":"patients"},
+                    {"resourceType":"Encounter","parentResourceType":"Patient","correlationColumn":"PatientId","parentKeyColumn":"Id","nestKey":"encounters"}
+                ]
+                """,
+        }));
+        var writer = CreateWriter();
+
+        await writer.WriteAsync(
+            destination,
+            Mapping("Patient", "Patient"),
+            [RecordWithValues("p1", new Dictionary<string, object?> { ["Id"] = "pat-1" })],
+            Context(),
+            CancellationToken.None);
+        await writer.WriteAsync(
+            destination,
+            Mapping("Encounter", "Encounter"),
+            [RecordWithValues("e1", new Dictionary<string, object?> { ["PatientId"] = "pat-1" })],
+            Context(),
+            CancellationToken.None);
+
+        _sent.Should().HaveCount(1);
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        var patients = body.RootElement.GetProperty("patients");
+        patients.GetArrayLength().Should().Be(1);
+        var encounters = patients[0].GetProperty("encounters");
+        encounters.GetArrayLength().Should().Be(1, "the encounter record is nested under the patient it correlates to, not left top-level");
+        body.RootElement.TryGetProperty("encounters", out _).Should().BeFalse("a non-root resource type is nested only, never also emitted top-level");
     }
 }

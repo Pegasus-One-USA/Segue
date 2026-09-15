@@ -13,8 +13,9 @@ public sealed class ApiTestCallEntity
     public int Id { get; set; }
 
     /// <summary>Which sample API received this call — see <see cref="ApiEndpointTestEndpoints"/>'s
-    /// <c>SingleRecord</c>/<c>RecordsBatch</c>/<c>RecordsEnvelope</c>/<c>CustomEvent</c> constants, or, for a call
-    /// landing on one of <see cref="ApiAuthTestEndpoints"/>'s routes, "Auth:&lt;mode&gt;".</summary>
+    /// <c>SingleRecord</c>/<c>RecordsBatch</c>/<c>RecordsNdjson</c>/<c>RecordsEnvelope</c>/<c>CustomEvent</c>/
+    /// <c>MultiResourceFlat</c>/<c>MultiResourceNested</c> constants, or, for a call landing on one of
+    /// <see cref="ApiAuthTestEndpoints"/>'s routes, "Auth:&lt;mode&gt;".</summary>
     public string ApiName { get; set; } = string.Empty;
 
     /// <summary>The exact request body as received, verbatim — no reformatting, no re-serialization.</summary>

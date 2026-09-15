@@ -29,11 +29,16 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
     };
 
     private readonly IApiEndpointSender _sender;
+    private readonly IApiEndpointMultiResourceAccumulator _multiResourceAccumulator;
     private readonly ILogger<MappedApiEndpointDestinationWriter> _logger;
 
-    public MappedApiEndpointDestinationWriter(IApiEndpointSender sender, ILogger<MappedApiEndpointDestinationWriter> logger)
+    public MappedApiEndpointDestinationWriter(
+        IApiEndpointSender sender,
+        IApiEndpointMultiResourceAccumulator multiResourceAccumulator,
+        ILogger<MappedApiEndpointDestinationWriter> logger)
     {
         _sender = sender;
+        _multiResourceAccumulator = multiResourceAccumulator;
         _logger = logger;
     }
 
@@ -50,6 +55,16 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
         }
 
         var settings = ApiEndpointSettings.Parse(destination);
+
+        // Multi-resource destinations (dest_apiMultiResourceMode) accumulate every participating resource type's
+        // records in-process until the last one lands for this pipeline run, then send ONE combined document —
+        // entirely inside this writer, so ConfiguredPipelineService keeps calling WriteAsync exactly as it always
+        // has (once per resource type per route) and every other destination type is completely untouched.
+        if (settings.IsMultiResource)
+        {
+            return await WriteMultiResourceAsync(destination, mappingProfile, records, settings, cancellationToken);
+        }
+
         var batches = BuildBatches(mappingProfile, records, context, settings);
 
         var written = 0;
@@ -104,6 +119,199 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
     private static string BuildIdempotencyKey(Guid pipelineRunId, MappingProfile mappingProfile, int batchIndex)
         => $"{pipelineRunId:N}:{mappingProfile.ResourceType}:{mappingProfile.DestinationObject}:{batchIndex}"
             .ToLowerInvariant();
+
+    /// <summary>
+    /// Holds this resource type's records until every resource type declared in
+    /// <see cref="ApiEndpointSettings.ResourceRelations"/> has landed for the same pipeline run, then sends ONE
+    /// combined document built by <see cref="BuildMultiResourceBody"/>. The call that completes the set is the one
+    /// that actually delivers — every earlier call for the same run simply hands its records to the accumulator
+    /// and reports them as accepted, since (by design, see <see cref="IApiEndpointMultiResourceAccumulator"/>)
+    /// nothing outside this writer changes how often or in what order WriteAsync is invoked per resource type.
+    /// </summary>
+    private async Task<DestinationWriteResult> WriteMultiResourceAsync(
+        DestinationConfiguration destination,
+        MappingProfile mappingProfile,
+        IReadOnlyCollection<MappedDestinationRecord> records,
+        ApiEndpointSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var pipelineRunId = records.First().PipelineRunId;
+        _multiResourceAccumulator.Add(destination.Id, pipelineRunId, mappingProfile, records);
+
+        if (!_multiResourceAccumulator.TryTakeComplete(
+                destination.Id, pipelineRunId, settings.ExpectedResourceTypes, out var batches))
+        {
+            return new DestinationWriteResult(records.Count);
+        }
+
+        var body = BuildMultiResourceBody(settings, batches);
+        var totalRecordCount = batches.Sum(b => b.Records.Count);
+        var batch = new ApiEndpointBatch(
+            body,
+            totalRecordCount,
+            BuildIdempotencyKey(pipelineRunId, mappingProfile, 0),
+            mappingProfile.ResourceType,
+            mappingProfile.DestinationObject);
+
+        var result = await _sender.SendAsync(destination, settings, batch, cancellationToken);
+
+        if (result.Delivered)
+        {
+            return new DestinationWriteResult(records.Count);
+        }
+
+        var reason = $"Multi-resource batch ({totalRecordCount} record(s) across {batches.Count} resource "
+            + $"type(s)) not delivered after {result.Attempts} attempt(s): {result.Error ?? "unknown error"}";
+
+        if (settings.FailureMode == ApiEndpointFailureMode.Fail)
+        {
+            throw new InvalidOperationException(
+                $"API Endpoint delivery to destination '{destination.Name}' failed. {reason}");
+        }
+
+        _logger.LogWarning(
+            "API Endpoint destination {DestinationId} isolating failed multi-resource batch: {Reason}",
+            destination.Id,
+            reason);
+
+        return new DestinationWriteResult(records.Count, RecordErrors: [reason]);
+    }
+
+    /// <summary>
+    /// Builds the combined document for a completed set of resource-type batches. Each resource type's records are
+    /// rendered first (via its own <see cref="ApiEndpointSettings.RecordTemplatesByResourceType"/> entry, falling
+    /// back to the same fixed record shape single-resource writes use). In
+    /// <see cref="ApiEndpointMultiResourceMode.Nested"/>, non-root resource types are then correlated to their
+    /// parent record (by <see cref="ApiEndpointResourceRelation.CorrelationColumn"/> /
+    /// <see cref="ApiEndpointResourceRelation.ParentKeyColumn"/>) and injected into that parent object under
+    /// <see cref="ApiEndpointResourceRelation.NestKey"/>, so only root resource types remain top-level; in
+    /// <see cref="ApiEndpointMultiResourceMode.Flat"/> every resource type stays a top-level sibling array. The
+    /// resulting arrays are placed into <see cref="ApiEndpointSettings.BatchTemplateJson"/> at their
+    /// <c>{{NestKey}}</c> placeholder when configured, else assembled into a plain object keyed by NestKey.
+    /// </summary>
+    private static string BuildMultiResourceBody(
+        ApiEndpointSettings settings,
+        IReadOnlyList<(MappingProfile MappingProfile, IReadOnlyCollection<MappedDestinationRecord> Records)> batches)
+    {
+        var recordsByType = new Dictionary<string, List<(MappedDestinationRecord Record, JsonObject Node)>>(
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (mappingProfile, batchRecords) in batches)
+        {
+            settings.RecordTemplatesByResourceType.TryGetValue(mappingProfile.ResourceType, out var recordTemplateJson);
+            var template = string.IsNullOrWhiteSpace(recordTemplateJson) ? null : JsonNode.Parse(recordTemplateJson);
+
+            var pairs = new List<(MappedDestinationRecord, JsonObject)>();
+            foreach (var record in batchRecords)
+            {
+                JsonNode? node;
+                if (template is not null)
+                {
+                    node = template.DeepClone();
+                    SubstituteInPlace(node, field => ResolveTemplateField(field, record));
+                }
+                else
+                {
+                    node = JsonSerializer.SerializeToNode(BuildRecordPayload(record, settings), PayloadJsonOptions);
+                }
+
+                if (node is JsonObject obj)
+                {
+                    pairs.Add((record, obj));
+                }
+            }
+
+            recordsByType[mappingProfile.ResourceType] = pairs;
+        }
+
+        var topLevel = new Dictionary<string, JsonArray>(StringComparer.OrdinalIgnoreCase);
+
+        if (settings.MultiResourceMode == ApiEndpointMultiResourceMode.Nested)
+        {
+            foreach (var relation in settings.ResourceRelations.Where(r => !r.IsRoot))
+            {
+                if (relation.ParentResourceType is null
+                    || string.IsNullOrWhiteSpace(relation.CorrelationColumn)
+                    || string.IsNullOrWhiteSpace(relation.ParentKeyColumn)
+                    || !recordsByType.TryGetValue(relation.ResourceType, out var childPairs)
+                    || !recordsByType.TryGetValue(relation.ParentResourceType, out var parentPairs))
+                {
+                    continue;
+                }
+
+                foreach (var (childRecord, childNode) in childPairs)
+                {
+                    if (!childRecord.Values.TryGetValue(relation.CorrelationColumn, out var correlationValue)
+                        || correlationValue is null)
+                    {
+                        continue;
+                    }
+
+                    var parentMatch = parentPairs.FirstOrDefault(p =>
+                        p.Record.Values.TryGetValue(relation.ParentKeyColumn, out var parentKeyValue)
+                        && parentKeyValue is not null
+                        && string.Equals(
+                            parentKeyValue.ToString(), correlationValue.ToString(), StringComparison.Ordinal));
+
+                    if (parentMatch.Node is null)
+                    {
+                        continue;
+                    }
+
+                    if (parentMatch.Node[relation.NestKey] is not JsonArray nestedArray)
+                    {
+                        nestedArray = [];
+                        parentMatch.Node[relation.NestKey] = nestedArray;
+                    }
+
+                    nestedArray.Add(childNode.DeepClone());
+                }
+            }
+
+            foreach (var relation in settings.ResourceRelations.Where(r => r.IsRoot))
+            {
+                if (recordsByType.TryGetValue(relation.ResourceType, out var rootPairs))
+                {
+                    topLevel[relation.NestKey] =
+                        new JsonArray(rootPairs.Select(p => (JsonNode)p.Node.DeepClone()).ToArray());
+                }
+            }
+        }
+        else
+        {
+            foreach (var relation in settings.ResourceRelations)
+            {
+                if (recordsByType.TryGetValue(relation.ResourceType, out var pairs))
+                {
+                    topLevel[relation.NestKey] =
+                        new JsonArray(pairs.Select(p => (JsonNode)p.Node.DeepClone()).ToArray());
+                }
+            }
+        }
+
+        JsonNode document;
+        var batchTemplate = string.IsNullOrWhiteSpace(settings.BatchTemplateJson)
+            ? null
+            : JsonNode.Parse(settings.BatchTemplateJson);
+
+        if (batchTemplate is not null)
+        {
+            SubstituteInPlace(batchTemplate, field => topLevel.TryGetValue(field, out var array) ? array : null);
+            document = batchTemplate;
+        }
+        else
+        {
+            var obj = new JsonObject();
+            foreach (var (key, array) in topLevel)
+            {
+                obj[key] = array;
+            }
+
+            document = obj;
+        }
+
+        return document.ToJsonString(PayloadJsonOptions);
+    }
 
     /// <summary>
     /// Splits the batch on whichever bound is hit first — record count or serialized bytes. A single record that

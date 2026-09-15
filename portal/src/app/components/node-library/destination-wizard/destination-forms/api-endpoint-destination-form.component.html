@@ -123,6 +123,53 @@
       }
     </div>
 
+    <div class="dw-field dw-field--full">
+      <label class="dw-label" for="dw-ae-multiResourceMode">Multiple resources in one document</label>
+      <div class="dw-select-wrap">
+        <select id="dw-ae-multiResourceMode" class="dw-select" formControlName="multiResourceMode">
+          <option value="none">No — one resource type per write (default)</option>
+          <option value="flat">Flat — each resource type as its own sibling array</option>
+          <option value="nested">Nested — child records nested inside their parent record</option>
+        </select>
+      </div>
+      <span class="dw-hint">Combines more than one mapped resource type (e.g. Patient + Encounter) into a single outgoing document instead of sending each separately. Leave "No" unless your API expects a combined payload.</span>
+    </div>
+
+    @if (apiForm.get('multiResourceMode')!.value !== 'none') {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('resourceRelationsJson')!.invalid && apiForm.get('resourceRelationsJson')!.touched">
+        <label class="dw-label" for="dw-ae-resourceRelationsJson">Participating resource types (JSON)</label>
+        <textarea id="dw-ae-resourceRelationsJson" class="dw-input" rows="4" formControlName="resourceRelationsJson"
+          placeholder="e.g. one entry per resource type: resourceType, optional parentResourceType, correlationColumn, parentKeyColumn, and nestKey"></textarea>
+        @if (apiForm.get('resourceRelationsJson')!.hasError('jsonArray') && apiForm.get('resourceRelationsJson')!.touched) {
+          <span class="dw-error">Must be a JSON array.</span>
+        } @else {
+          <span class="dw-hint">One entry per resource type routed to this destination. <code>nestKey</code> is the array/object key it's written under. For "Nested", every non-root entry also needs <code>parentResourceType</code>, <code>correlationColumn</code> (this resource's mapped column carrying its parent's key) and <code>parentKeyColumn</code> (the parent's own mapped key column).</span>
+        }
+      </div>
+
+      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('recordTemplatesByResourceTypeJson')!.invalid && apiForm.get('recordTemplatesByResourceTypeJson')!.touched">
+        <label class="dw-label" for="dw-ae-recordTemplatesByResourceTypeJson">Per-resource-type record template (JSON, optional)</label>
+        <textarea id="dw-ae-recordTemplatesByResourceTypeJson" class="dw-input" rows="3" formControlName="recordTemplatesByResourceTypeJson"
+          placeholder="e.g. a JSON object of resourceType to that resource type's own Request Body Template string"></textarea>
+        @if (apiForm.get('recordTemplatesByResourceTypeJson')!.hasError('jsonObject') && apiForm.get('recordTemplatesByResourceTypeJson')!.touched) {
+          <span class="dw-error">Must be a JSON object mapping resource type to a JSON-template string.</span>
+        } @else {
+          <span class="dw-hint">Maps a resource type to its own Request Body Template (same <code>{{ '{' }}{{ '{' }}fieldName{{ '}' }}{{ '}' }}</code> syntax as above). Leave blank for any resource type to use the default per-record shape.</span>
+        }
+      </div>
+
+      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('batchTemplateJson')!.invalid && apiForm.get('batchTemplateJson')!.touched">
+        <label class="dw-label" for="dw-ae-batchTemplateJson">Combined document template (JSON, optional)</label>
+        <textarea id="dw-ae-batchTemplateJson" class="dw-input" rows="3" formControlName="batchTemplateJson"
+          placeholder="e.g. the outer document shape, with each root nestKey as a placeholder"></textarea>
+        @if (apiForm.get('batchTemplateJson')!.hasError('json') && apiForm.get('batchTemplateJson')!.touched) {
+          <span class="dw-error">Must be valid JSON.</span>
+        } @else {
+          <span class="dw-hint">The outer document shape. Reference each root-level <code>nestKey</code> from above as a <code>{{ '{' }}{{ '{' }}nestKey{{ '}' }}{{ '}' }}</code> placeholder to place its array. Leave blank to send a plain object keyed by each root <code>nestKey</code>.</span>
+        }
+      </div>
+    }
+
     <div class="dw-field">
       <label class="dw-label" for="dw-ae-payloadShape">Payload shape</label>
       <div class="dw-select-wrap">
