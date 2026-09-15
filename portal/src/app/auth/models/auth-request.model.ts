@@ -115,10 +115,21 @@ export interface CreateRoleRequest {
   name:          string;
   description:   string;
   permissionIds: string[];
+  // RBAC redesign Step 6 (backend: CreateRoleRequest.IsFullAccess, default false). Omitting this
+  // creates a normal role exactly as before this field existed — the backend rejects `true` from a
+  // caller who doesn't already have Full System Access themselves (RoleManagementService.CreateRoleAsync).
+  isFullAccess?: boolean;
 }
 
 export interface UpdateRoleRequest {
   name:          string;
   description:   string;
   permissionIds: string[];
+  // RBAC redesign Step 6 (backend: UpdateRoleRequest.IsFullAccess, nullable). `null`/omitted means "not
+  // touching this field" and is always accepted regardless of the role's current value or the caller's
+  // own access — see role-permissions.component.ts's save(), which never sets this. A concrete
+  // true/false is only gated by the backend when it actually differs from the role's current value
+  // (RoleManagementService.UpdateRoleAsync) — role-dialog.component.ts always sends its form's current
+  // value, changed or not, and relies entirely on that backend no-op-if-unchanged behavior.
+  isFullAccess?: boolean | null;
 }

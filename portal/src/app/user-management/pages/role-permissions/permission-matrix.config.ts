@@ -147,7 +147,10 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
       vendor('athenahealth', 'Athenahealth', 'athenahealth'),
       vendor('cerner', 'Cerner', 'cerner'),
       vendor('allscripts', 'Allscripts', 'allscripts'),
-      vendor('healow', 'Healow', 'healow'),
+      // Label leads with "eClinicalWorks" — the Node Library tile for this same connector
+      // (sources-v2.data.ts's 'healow' entry) shows that as its product name; see the matching comment
+      // on PermissionGroupCode.Healow. Row id/prefix stay 'healow' — only the display label changes.
+      vendor('healow', 'eClinicalWorks (Healow)', 'healow'),
       vendor('meditech', 'Meditech', 'meditechgreenfield'),
       vendor('genericfhir', 'Generic FHIR', 'genericfhir'),
       vendor('hl7v2', 'HL7 v2', 'hl7v2'),
@@ -160,6 +163,13 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
       vendor('csv', 'CSV', 'csv'),
       vendor('sftp', 'SFTP', 'sftp'),
       vendor('blobstorage', 'Azure Blob Storage', 'blobstorage'),
+      // Cloud/FHIR destinations (transforms-v2.data.ts, rank 1) — newly given their own dedicated
+      // PermissionGroupCode members instead of falling back to the generic Source Connections
+      // permission. Labels match the product each one actually writes to (Aidbox/Medplum/Azure Health
+      // Data Services), not the raw DestinationType enum name.
+      vendor('fhirrepository', 'Aidbox', 'fhirrepository'),
+      vendor('medplum', 'Medplum (FHIR)', 'medplum'),
+      vendor('azurefhirservice', 'Azure FHIR Service', 'azurefhirservice'),
     ],
   },
   {
@@ -181,8 +191,11 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
         id: 'destination-connections', label: 'Destination Connections',
         actions: [
           { label: 'View', code: 'destinationconnections.view' },
+          { label: 'Create', code: 'destinationconnections.create' },
+          { label: 'Edit', code: 'destinationconnections.edit' },
           { label: 'Deactivate', code: 'destinationconnections.deactivate' },
           { label: 'Delete', code: 'destinationconnections.delete' },
+          { label: 'Test', code: 'destinationconnections.test' },
         ],
       },
       {

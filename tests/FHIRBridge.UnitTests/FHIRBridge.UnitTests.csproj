@@ -28,6 +28,11 @@
     <ProjectReference Include="..\..\src\FHIRBridge.Domain\FHIRBridge.Domain.csproj" />
     <ProjectReference Include="..\..\src\FHIRBridge.Infrastructure\FHIRBridge.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\FHIRBridge.Observability\FHIRBridge.Observability.csproj" />
+    <!-- RBAC redesign Step 3: UnifiedAdminAuthorizationHandler/SuperAdminOnlyAuthorizationHandler live in
+         the Api project. Referenced here so they can be unit-tested directly (constructing
+         AuthorizationHandlerContext + mocked dependencies) without going through the integration-test
+         harness (ApiFactory/WebApplicationFactory), which is known-broken independent of this change. -->
+    <ProjectReference Include="..\..\src\Api\FHIRBridge.Api\FHIRBridge.Api.csproj" />
   </ItemGroup>
 
 </Project>

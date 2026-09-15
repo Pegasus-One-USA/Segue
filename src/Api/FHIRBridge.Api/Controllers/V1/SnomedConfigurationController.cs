@@ -24,15 +24,15 @@ public sealed class SnomedConfigurationController : ControllerBase
         (_service, _importChannel, _db) = (service, importChannel, db);
 
     [HttpGet]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View SNOMED CT terminology configuration.")]
+    [StandardPermission(PermissionGroupCode.SnomedCt, PermissionActionCode.View, description: "View SNOMED CT terminology configuration.")]
     public async Task<ActionResult<SnomedConfigurationDto>> Get(CancellationToken cancellationToken) => Ok(await _service.GetAsync(cancellationToken));
 
     [HttpPut]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Update SNOMED CT terminology configuration and credentials.")]
+    [StandardPermission(PermissionGroupCode.SnomedCt, PermissionActionCode.Write, description: "Update SNOMED CT terminology configuration and credentials.")]
     public async Task<ActionResult<SnomedConfigurationDto>> Update([FromBody] UpdateSnomedConfigurationRequest request, CancellationToken cancellationToken) => Ok(await _service.UpdateAsync(request, cancellationToken));
 
     [HttpPost("synchronize")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Manually synchronize the SNOMED CT release.")]
+    [StandardPermission(PermissionGroupCode.SnomedCt, PermissionActionCode.Write, description: "Manually synchronize the SNOMED CT release.")]
     public IActionResult Synchronize()
     {
         _importChannel.Enqueue(async (services, ct) =>

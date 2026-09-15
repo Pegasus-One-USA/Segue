@@ -1,7 +1,8 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { WORKFLOW_ENDPOINTS } from '../core/api-endpoints';
+import { SKIP_LOADER } from '../core/loading.interceptor';
 
 export type WorkflowNodeCategory = 0 | 10 | 20 | 30 | 40;
 export type WorkflowDataContract =
@@ -414,8 +415,11 @@ export class WorkflowApiService {
   }
 
   /** Workflow-list screen: one summary row per workflow with the derived Launch/Run action. Paging/search/sort are
-   *  applied server-side — see WorkflowEndpoints.MapGet("/workflows/summary"). */
-  summary(query: WorkflowSummaryQuery): Observable<WorkflowSummaryPage> {
+   *  applied server-side — see WorkflowEndpoints.MapGet("/workflows/summary"). `silent` skips the global loader
+   *  (SKIP_LOADER — see loading.interceptor.ts) so this call can't trigger AppComponent's app-wide `[inert]`
+   *  toggle, which blurs whatever currently has focus, including — mid-keystroke — the search box that just
+   *  triggered this very request (see WorkflowListComponent.onSearch). */
+  summary(query: WorkflowSummaryQuery, silent = false): Observable<WorkflowSummaryPage> {
     let params = new HttpParams().set('page', query.page).set('pageSize', query.pageSize);
     if (query.search) params = params.set('search', query.search);
     if (query.sortColumn) params = params.set('sortColumn', query.sortColumn);
@@ -423,7 +427,8 @@ export class WorkflowApiService {
     for (const value of query.statuses ?? []) params = params.append('statuses', value);
     for (const value of query.applicationTypes ?? []) params = params.append('applicationTypes', value);
     for (const value of query.sourceSystemTypes ?? []) params = params.append('sourceSystemTypes', value);
-    return this.http.get<WorkflowSummaryPage>(WORKFLOW_ENDPOINTS.summary, { params });
+    const context = silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<WorkflowSummaryPage>(WORKFLOW_ENDPOINTS.summary, { params, context });
   }
 
   /**

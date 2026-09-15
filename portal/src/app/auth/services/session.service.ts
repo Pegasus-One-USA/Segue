@@ -1,12 +1,13 @@
 import { Injectable, inject, NgZone } from '@angular/core';
 import { Router } from '@angular/router';
+import { catchError, finalize, EMPTY } from 'rxjs';
 import { Session } from '../models/auth-state.model';
 import { AuthStore } from '../store/auth.store';
 import { TokenService } from './token.service';
+import { IAuthService } from './i-auth.service';
 import { MappingSnapshotService } from '../../components/node-library-v2/destination-wizard/field-mapping/mapping-snapshot.service';
 
-const IDLE_MS = 30 * 60 * 1000; // 30-minute idle timeout
-
+ const IDLE_MS = 30 * 60 * 1000; // 30-minute idle timeout
 // Deliberately excludes 'mousemove' — that fires dozens of times a second while the user's hand merely
 // rests near the mouse, far too noisy a signal for "the user is actively working" even throttled. These
 // five already cover every real interaction (clicking a button, typing a field, a canvas drag starting
@@ -24,6 +25,7 @@ export class SessionService {
   private readonly router = inject(Router);
   private readonly zone   = inject(NgZone);
   private readonly mappingSnapshots = inject(MappingSnapshotService);
+  private readonly authApi = inject(IAuthService);
 
   private idleTimer?: ReturnType<typeof setTimeout>;
   private activityListenersActive = false;
@@ -114,9 +116,21 @@ export class SessionService {
   }
 
   private onIdle(): void {
-    this.end();
-    this.store.setError('Your session has expired due to inactivity. Please sign in again.');
-    this.router.navigate(['/auth/login']);
+    // Revoke the refresh token + clear the HttpOnly access/refresh/CSRF cookies server-side — the
+    // exact same POST /auth/logout call AuthService.logout() makes for a manual logout. Without
+    // this, end() below only ever clears THIS tab's in-memory/localStorage state; the still-valid
+    // HttpOnly cookies would silently re-authenticate the user via initFromToken()'s GET /auth/me
+    // on the very next page load/refresh, undoing the inactivity logout entirely. catchError+finalize
+    // mirrors AuthService.logout() exactly, so a failed/offline logout call still redirects rather
+    // than leaving the user stuck.
+    this.authApi.logout().pipe(
+      catchError(() => EMPTY),
+      finalize(() => {
+        this.end();
+        this.store.setError('Your session has expired due to inactivity. Please sign in again.');
+        this.router.navigate(['/auth/login']);
+      }),
+    ).subscribe();
   }
 
   // ─── Restore session from storage ─────────────────────────────────────────

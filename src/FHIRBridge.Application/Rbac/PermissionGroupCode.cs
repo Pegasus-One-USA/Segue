@@ -70,7 +70,12 @@ public enum PermissionGroupCode
     // mechanism as Epic/Athenahealth/Cerner/Allscripts above — completes source-type coverage to the
     // SOURCES catalog entries that have a real, working execution path, so every one of those Node Library
     // source tiles has its own dedicated Edit permission.
-    [PermissionGroup("30000000-0000-0000-0000-000000000016", PermissionCategoryCode.Pipelines, "Healow")]
+    // Display name leads with "eClinicalWorks" — the Node Library tile for this same connector
+    // (sources-v2.data.ts's 'healow' entry, backed by EClinicalWorksFhirSourceClient) shows that as its
+    // product name, "Healow" being eClinicalWorks' own patient-facing app rather than what an admin
+    // configuring RBAC would recognize. The enum member itself stays Healow — SourceSystemPermissionGroups
+    // resolves by that name against SourceSystemType.Healow, so renaming it would break discovery.
+    [PermissionGroup("30000000-0000-0000-0000-000000000016", PermissionCategoryCode.Pipelines, "eClinicalWorks (Healow)")]
     Healow = 16,
 
     [PermissionGroup("30000000-0000-0000-0000-000000000017", PermissionCategoryCode.Pipelines, "MeditechGreenfield")]
@@ -160,4 +165,19 @@ public enum PermissionGroupCode
     // blobstorage.view/create/edit/delete/execute; no new attribute declarations are needed anywhere.
     [PermissionGroup("30000000-0000-0000-0000-000000000037", PermissionCategoryCode.Pipelines, "Blob Storage")]
     BlobStorage = 37,
+
+    // Three more Cloud/FHIR destination types (transforms-v2.data.ts, rank 1) that were reachable from
+    // the Node Library today but, having no dedicated group of their own, fell back to the generic
+    // SourceConnections permission — same auto-discovery mechanism as BlobStorage above, member name
+    // matching DestinationType exactly, no other backend change needed. Display name is the product each
+    // one actually writes to, since that's what an admin configuring RBAC would recognize, not the raw
+    // enum name (DestinationType.FhirRepository predates "Aidbox" being the product it targets).
+    [PermissionGroup("30000000-0000-0000-0000-000000000038", PermissionCategoryCode.Pipelines, "Aidbox")]
+    FhirRepository = 38,
+
+    [PermissionGroup("30000000-0000-0000-0000-000000000039", PermissionCategoryCode.Pipelines, "Medplum")]
+    Medplum = 39,
+
+    [PermissionGroup("30000000-0000-0000-0000-000000000040", PermissionCategoryCode.Pipelines, "Azure FHIR Service")]
+    AzureFhirService = 40,
 }

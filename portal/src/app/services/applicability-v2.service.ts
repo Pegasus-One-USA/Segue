@@ -121,6 +121,15 @@ export class ApplicabilityServiceV2 {
     allNodes: CanvasNode[],
     allEdges: { id: string; from: string; to: string }[],
   ): boolean {
+    // De-identification is the last step in V2's chain (DEIDENTIFICATION_RANK — Source → Mapping →
+    // Transformation → De-identification → Destination), so nothing can be added after it. The button reads
+    // "Add next module", but addableChainSteps always inserts in canonical order, so the only step it could
+    // still offer here (Transformation) would land UPSTREAM of this node — the button pointed at a position
+    // nothing can go into and then inserted somewhere else. Add that step from any other node's `+` instead.
+    if (isTransformNode(node) && node.transformId === 'deidentification') {
+      return false;
+    }
+
     const model = this.pickerModel(node, allNodes, allEdges);
     return model.items.length > 0 || !!model.mergeOpt;
   }
