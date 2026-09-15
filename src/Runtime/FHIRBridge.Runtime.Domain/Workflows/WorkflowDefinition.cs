@@ -72,6 +72,13 @@ public sealed class WorkflowDefinition
 
     public string? UpdatedBy { get; private set; }
 
+    /// <summary>Human-quotable sequential identifier (e.g. <c>WLW-150926-0042</c>), assigned once when the
+    /// workflow is first created and never reassigned — an edit re-saves the same number (see
+    /// SqlWorkflowDefinitionStore.SaveAsync, which carries it over from the row it replaces, exactly as it
+    /// does CreatedOnUtc/CreatedBy). Null for workflows created before numbering existed, and whenever
+    /// WorkflowNumbering:Enabled is off. Unlike <see cref="Name"/>, this is unique.</summary>
+    public string? WorkflowNumber { get; private set; }
+
     public IReadOnlyCollection<WorkflowNode> Nodes => _nodes;
 
     public IReadOnlyCollection<WorkflowEdge> Edges => _edges;
@@ -175,6 +182,7 @@ public sealed class WorkflowDefinition
     public WorkflowDefinition WithNodesAndEdges(IReadOnlyCollection<WorkflowNode> nodes, IReadOnlyCollection<WorkflowEdge> edges)
     {
         var projected = new WorkflowDefinition(Id, Name, Version, IsEnabled, IsPubliclyLaunchable, Description);
+        projected.WorkflowNumber = WorkflowNumber;
         projected._nodes.AddRange(nodes);
         projected._edges.AddRange(edges);
         return projected;
@@ -209,6 +217,12 @@ public sealed class WorkflowDefinition
         UpdatedOnUtc = updatedOnUtc;
         UpdatedBy = updatedBy;
     }
+
+    /// <summary>Assigns the generated workflow number. Called by SqlWorkflowDefinitionStore.SaveAsync only —
+    /// with a freshly allocated number on a genuine create, or with the existing row's number on an edit, so a
+    /// workflow keeps the number it was first given for its whole life.</summary>
+    public void SetWorkflowNumber(string? workflowNumber) =>
+        WorkflowNumber = string.IsNullOrWhiteSpace(workflowNumber) ? null : workflowNumber.Trim();
 
     private static string? NormalizeDescription(string? description) =>
         string.IsNullOrWhiteSpace(description) ? null : description.Trim();

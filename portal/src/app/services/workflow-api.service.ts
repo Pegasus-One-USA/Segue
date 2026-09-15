@@ -330,6 +330,10 @@ export interface WorkflowSummary {
   createdBy?: string | null;
   modifiedOnUtc?: string | null;
   modifiedBy?: string | null;
+  /** Human-quotable sequential id (e.g. `WLW-150926-0042`), assigned when the workflow is created and stable
+   *  for its life. Null for workflows created before numbering existed, or while numbering is switched off.
+   *  Unlike `name`, this is unique — it is what the UI quotes when identifying one workflow among duplicates. */
+  workflowNumber?: string | null;
 }
 
 /** Server-side page of /workflows/summary — items is just this page's rows, totalCount is the full matching-row

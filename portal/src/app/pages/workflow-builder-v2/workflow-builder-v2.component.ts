@@ -1,9 +1,10 @@
-import { Component, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, Subject } from 'rxjs';
 import { PermissionService } from '../../auth/services/permission.service';
 import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
+import { BlockingConfirmService } from '../../core/services/blocking-confirm.service';
 import { PipelineStoreV2 } from '../../services/pipeline-v2.store';
 import { TransformationRulesService } from '../../components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
 import type { LegacyMappingRow } from '../../components/node-library-v2/destination-wizard/field-mapping/field-mapping-model';
@@ -58,6 +59,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   private readonly buildAssembler = inject(WorkflowBuildAssemblerServiceV2);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly blockingConfirm = inject(BlockingConfirmService);
   private readonly permissions = inject(PermissionService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
 
@@ -1083,17 +1085,35 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   readonly pendingLeaveConfirm = signal(false);
   private leaveConfirmResult: Subject<boolean> | null = null;
 
+  // Safety net: a forced navigation (session timeout, failed token refresh) can destroy this
+  // component while the confirm is still open. Release the [inert] suppression then too, or the
+  // whole app would stay permanently non-inert for the rest of the session.
+  private readonly leaveConfirmDestroyRef = inject(DestroyRef).onDestroy(() => this.closeLeaveConfirm());
+
   confirmLeaveDialog(): Observable<boolean> {
     this.leaveConfirmResult = new Subject<boolean>();
     this.pendingLeaveConfirm.set(true);
+    // The navigation this dialog is gating keeps LoadingService busy until the dialog is answered,
+    // and AppComponent marks the whole routed subtree [inert] while busy — which would remove this
+    // very dialog from hit-testing (no z-index can override inert) and deadlock the page. Announce
+    // the dialog so AppComponent can suppress [inert] for exactly this window.
+    this.blockingConfirm.open();
     return this.leaveConfirmResult.asObservable();
   }
 
   cancelLeavePage(): void {
-    this.pendingLeaveConfirm.set(false);
+    this.closeLeaveConfirm();
     this.leaveConfirmResult?.next(false);
     this.leaveConfirmResult?.complete();
     this.leaveConfirmResult = null;
+  }
+
+  /** Clears the dialog and always releases the [inert] suppression, so the two can never drift out
+   *  of sync and leave the app permanently non-inert. */
+  private closeLeaveConfirm(): void {
+    if (!this.pendingLeaveConfirm()) return;
+    this.pendingLeaveConfirm.set(false);
+    this.blockingConfirm.close();
   }
 
   onLeaveBackdropClick(e: MouseEvent): void {
@@ -1101,7 +1121,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   }
 
   confirmLeavePage(): void {
-    this.pendingLeaveConfirm.set(false);
+    this.closeLeaveConfirm();
     this.leaveConfirmResult?.next(true);
     this.leaveConfirmResult?.complete();
     this.leaveConfirmResult = null;

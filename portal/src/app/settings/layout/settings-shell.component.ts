@@ -18,6 +18,9 @@ interface SettingsTab {
   /** Hidden unless the user has SuperAdmin or Admin (AuthStore.isAdmin()) — matches the backend's
    *  AuthorizationPolicies.UnifiedAdmin policy (LicenseController). Unlike `superAdminOnly`, this also
    *  admits a plain Admin. Takes precedence over `permissions`, same as `superAdminOnly`. */
+  /** Currently unused — License was this flag's only consumer before it moved to a launcher row on
+   *  System Settings > General. Kept because it is generic tab-visibility infrastructure, and the
+   *  filter below still honours it for any future UnifiedAdmin-gated tab. */
   unifiedAdminOnly?: boolean;
 }
 
@@ -29,15 +32,18 @@ const SETTINGS_TABS: SettingsTab[] = [
   // to its own dedicated View permission — this used to only list two of them, which hid this tab
   // from e.g. a Destination-Connections-only role even though the route itself would let them in).
   { label: 'Workflow Configurations', route: 'workflow-configurations', icon: 'account_tree', permissions: ['sourceconnections.view', 'destinationconnections.view', 'mappingprofiles.view', 'transformationrules.view'] },
-  { label: 'EHR Endpoints', route: 'ehr-endpoints', icon: 'hub', permissions: ['ehrendpoints.view'] },
-  { label: 'Allowed Origins', route: 'allowed-origins', icon: 'public', superAdminOnly: true },
-  { label: 'License', route: 'license', icon: 'verified_user', unifiedAdminOnly: true },
-  // Merged tab covering the former standalone Email Settings / System Security / System Settings /
-  // Terminology Codes tabs — see settings.routes.ts's 'system-settings' route for the sections
-  // underneath. NOT superAdminOnly: Email and the four Terminology Codes systems are independently
-  // permission-controlled and must be reachable without the SuperAdmin role; General/Security are
-  // still SuperAdmin-role-only, but that's enforced by their OWN route guards and by
-  // system-settings-shell.component.ts's own section filtering, not by hiding this whole tab.
+  // EHR Endpoints and Allowed Origins are no longer tabs here — both are launcher rows on
+  // System Settings > General, opened as full dialogs (SettingsPageDialogService). Their routes were
+  // removed, so leaving the tabs would point at paths that no longer resolve.
+  // License is no longer a tab here either — it is a launcher row on System Settings > General, gated
+  // superAdminOnly, and its route was removed.
+  //
+  // System Settings now lands directly on its General row list (its sub-tab strip is gone: Email,
+  // Security and SSO Configurations became launcher rows on General, and Terminology Codes is
+  // feature-flagged off). NOT superAdminOnly: Email and the Terminology Codes systems are independently
+  // permission-controlled and must be reachable without the SuperAdmin role, as is the EHR Endpoints
+  // row; the restricted rows are gated individually inside the page (SystemSettingListComponent),
+  // never by hiding this whole tab.
   {
     label: 'System Settings', route: 'system-settings', icon: 'tune',
     // Terminology's codes only count toward this tab's visibility while the feature is enabled —

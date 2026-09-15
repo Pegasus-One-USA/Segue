@@ -658,7 +658,8 @@ public static class WorkflowEndpoints
                     workflow.CreatedBy,
                     workflow.UpdatedOnUtc,
                     workflow.UpdatedBy,
-                    workflow.Description));
+                    workflow.Description,
+                    workflow.WorkflowNumber));
             }
 
             // Resolve each summary's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/pre-conversion
@@ -686,7 +687,10 @@ public static class WorkflowEndpoints
                 matching = matching.Where(summary =>
                     summary.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
                     || (summary.ApplicationType?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
-                    || (summary.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+                    || (summary.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+                    // Without this, pasting a workflow number read off a ticket or an email returns nothing —
+                    // which defeats the point of having a quotable id at all.
+                    || (summary.WorkflowNumber?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
             }
 
             if (statuses is { Length: > 0 })

@@ -1,4 +1,4 @@
-namespace FHIRBridge.Api.Workflows;
+﻿namespace FHIRBridge.Api.Workflows;
 
 /// <summary>
 /// One row of the workflow-list screen: the graph's shape (node/edge counts), its lifecycle status, the most recent
@@ -28,7 +28,11 @@ public sealed record WorkflowSummaryDto(
     string? CreatedBy = null,
     DateTime? ModifiedOnUtc = null,
     string? ModifiedBy = null,
-    string? Description = null);
+    string? Description = null,
+    /// <summary>Human-quotable sequential id (e.g. <c>WLW-150926-0042</c>), assigned at creation and stable
+    /// for the workflow's life. Null for workflows created before numbering existed, or while numbering is
+    /// switched off. Unlike <see cref="Name"/>, this is unique — it is what the UI quotes in confirmations.</summary>
+    string? WorkflowNumber = null);
 
 /// <summary>One server-side page of the workflow-list screen — <see cref="Items"/> is just this page's rows;
 /// <see cref="TotalCount"/> is the count across every row matching the active search/filters (before paging), for

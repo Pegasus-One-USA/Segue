@@ -86,6 +86,10 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Workflow pending copy (duplicate) confirmation — holds the name typed into the modal. */
   readonly confirmCopy = signal<WorkflowSummary | null>(null);
   readonly copyName = signal('');
+  /** The pre-filled "<name> (copy)" suggestion, kept so an untouched name can be told from an edited one. */
+  private readonly copyNameSuggestion = signal('');
+  /** Shows the "discard your input?" confirm layered over the Copy-workflow modal. */
+  readonly confirmDiscardCopyWorkflow = signal(false);
   // Default sort surfaces the most recently run (created/updated activity proxy) workflows first —
   // per user direction, so a newly built or just-triggered workflow is immediately visible without
   // having to search/sort manually. Backend orders never-run workflows last (LastRunAt ?? -1).
@@ -343,6 +347,8 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   readonly newWorkflowName = signal('');
   readonly newWorkflowDescription = signal('');
   readonly creatingWorkflow = signal(false);
+  /** Shows the "discard your input?" confirm layered over the New-workflow modal. */
+  readonly confirmDiscardNewWorkflow = signal(false);
 
   /** Opens the name/description modal. The canvas is only reached once the workflow is actually created. */
   onNewWorkflow(): void {
@@ -352,9 +358,42 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.showNewWorkflow.set(true);
   }
 
+  /** True once anything has been typed into the New-workflow form. */
+  private hasNewWorkflowInput(): boolean {
+    return !!this.newWorkflowName().trim() || !!this.newWorkflowDescription().trim();
+  }
+
+  /** Close attempt from ×, Cancel or Escape. Anything typed is confirmed before it is thrown away;
+   *  an untouched form closes immediately, with nothing to lose. */
   cancelNewWorkflow(): void {
-    if (this.creatingWorkflow()) return;
+    // Mid-create, and while the discard confirm is already up, the base modal ignores close attempts —
+    // the confirm owns the interaction until it is answered.
+    if (this.creatingWorkflow() || this.confirmDiscardNewWorkflow()) return;
+
+    if (this.hasNewWorkflowInput()) {
+      this.confirmDiscardNewWorkflow.set(true);
+      return;
+    }
+
+    this.closeNewWorkflow();
+  }
+
+  /** Confirmed discard — drops the typed values and closes. */
+  discardNewWorkflow(): void {
+    this.confirmDiscardNewWorkflow.set(false);
+    this.closeNewWorkflow();
+  }
+
+  /** "Keep editing" — dismisses the confirm and leaves the New-workflow modal exactly as it was. */
+  keepEditingNewWorkflow(): void {
+    this.confirmDiscardNewWorkflow.set(false);
+  }
+
+  private closeNewWorkflow(): void {
     this.showNewWorkflow.set(false);
+    this.confirmDiscardNewWorkflow.set(false);
+    this.newWorkflowName.set('');
+    this.newWorkflowDescription.set('');
   }
 
   /** Creates an empty workflow (no nodes, no edges) and opens the builder on it. It starts life as Draft —
@@ -370,7 +409,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       .subscribe({
         next: created => {
           this.creatingWorkflow.set(false);
-          this.showNewWorkflow.set(false);
+          this.closeNewWorkflow();
           // new=1 tells the builder this workflow has an id but an EMPTY graph, so it resets the canvas
           // instead of taking the edit path — see its ngOnInit. Without it the builder treats the id as
           // an existing workflow to load, and the stale canvas state breaks the `+` picker.
@@ -608,13 +647,45 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  POST /workflows/{id}/copy gate. */
   askCopyWorkflow(row: WorkflowSummary): void {
     if (!this.canCreate()) return;
-    this.copyName.set(`${row.name} (copy)`);
+    const suggestion = `${row.name} (copy)`;
+    this.copyName.set(suggestion);
+    this.copyNameSuggestion.set(suggestion);
     this.confirmCopy.set(row);
   }
 
+  /** True once the pre-filled "<name> (copy)" suggestion has actually been edited. The untouched
+   *  suggestion is not the user's work, so closing on it has nothing to lose. */
+  private hasCopyInput(): boolean {
+    return this.copyName().trim() !== this.copyNameSuggestion().trim();
+  }
+
+  /** Same deliberate-close rule as the New-workflow modal: an edited name is confirmed before it is
+   *  thrown away; an untouched one closes immediately. */
   cancelCopyWorkflow(): void {
+    if (this.confirmDiscardCopyWorkflow()) return;
+
+    if (this.hasCopyInput()) {
+      this.confirmDiscardCopyWorkflow.set(true);
+      return;
+    }
+
+    this.closeCopyWorkflow();
+  }
+
+  discardCopyWorkflow(): void {
+    this.confirmDiscardCopyWorkflow.set(false);
+    this.closeCopyWorkflow();
+  }
+
+  keepEditingCopyWorkflow(): void {
+    this.confirmDiscardCopyWorkflow.set(false);
+  }
+
+  private closeCopyWorkflow(): void {
     this.confirmCopy.set(null);
+    this.confirmDiscardCopyWorkflow.set(false);
     this.copyName.set('');
+    this.copyNameSuggestion.set('');
   }
 
   /** Duplicates the workflow under the typed name. The copy is always created disabled (see
@@ -628,8 +699,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.api.copy(row.workflowId, name).subscribe({
       next: () => {
         this.rowBusyId.set(null);
-        this.confirmCopy.set(null);
-        this.copyName.set('');
+        this.closeCopyWorkflow();
         this.reload();
         this.toast.success('Workflow copied', `"${name}" was created (disabled). Enable it when you're ready.`);
       },

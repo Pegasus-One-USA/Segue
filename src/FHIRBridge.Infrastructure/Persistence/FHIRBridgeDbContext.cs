@@ -1,4 +1,4 @@
-﻿using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Domain.Entities.Licensing;
 using FHIRBridge.Domain.Entities.Terminology;
@@ -59,6 +59,9 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<BrandConfiguration> BrandConfigurations => Set<BrandConfiguration>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+
+    /// <summary>Per-period counters behind generated workflow numbers (WLW-ddMMyy-NNNN).</summary>
+    public DbSet<WorkflowNumberSequence> WorkflowNumberSequences => Set<WorkflowNumberSequence>();
     public DbSet<UserFhirContextBinding> UserFhirContextBindings => Set<UserFhirContextBinding>();
     public DbSet<LoincConcept> LoincConcepts => Set<LoincConcept>();
     public DbSet<LoincPart> LoincParts => Set<LoincPart>();
@@ -160,6 +163,14 @@ public sealed class FHIRBridgeDbContext : DbContext
                 .Property(x => x.CodeVal)
                 .UseCollation("SQL_Latin1_General_CP1_CS_AS");
         }
+
+        // The unique index on WorkflowDefinitions.WorkflowNumber is filtered so that the many rows with a
+        // null number (numbering disabled, or legacy rows) do not collide. The filter is raw SQL, so the
+        // identifier quoting differs per provider — see WorkflowDefinitionEntityTypeConfiguration.
+        modelBuilder.Entity<WorkflowDefinition>()
+            .HasIndex(x => x.WorkflowNumber)
+            .IsUnique()
+            .HasFilter(isNpgsql ? "\"WorkflowNumber\" IS NOT NULL" : "[WorkflowNumber] IS NOT NULL");
 
         // Cross-cutting conventions applied after the per-entity configurations:
         //  • soft-deletable entities get a global "hide deleted rows" query filter

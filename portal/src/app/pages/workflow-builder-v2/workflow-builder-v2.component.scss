@@ -538,15 +538,20 @@
 // Same structure/values as .reset-* above and as destination-wizard's .dw-confirm-* ("Exit
 // mapping for ...?", the design reference this needs to match) — 380px width per that reference.
 .leave-backdrop {
-  position: absolute;
+  // position: fixed, not absolute: this covers the whole viewport rather than only the nearest
+  // positioned ancestor, so the dialog is centred on screen instead of within the canvas pane.
+  position: fixed;
   inset: 0;
-  // Deliberately above app-global-loader's $global-loader-z (300, global-loader.component.scss) —
-  // that component is mounted once at the app root and intentionally floats above every --z-modal
-  // (200) dialog so an in-flight request is never hidden (see styles.scss's --z-modal comment).
-  // This is the one exception: this dialog blocks all other interaction while it's open (a pending
+  // Deliberately above app-global-loader's $global-loader-z (--z-loading-overlay, 1050) — that
+  // component is mounted once at the app root and intentionally floats above every --z-modal (200)
+  // dialog so an in-flight request is never hidden (see styles.scss's --z-modal comment). This is
+  // the one exception: this dialog blocks all other interaction while it's open (a pending
   // CanDeactivate guard), so it needs to sit above even the loader, not just other modals — a fix
   // scoped to this class only, not to --z-modal or the shared loader component.
-  z-index: 301;
+  // Must stay ABOVE --z-loading-overlay. This was 301, chosen when the loader sat at 300; when the
+  // loader was later raised to 1050 the loader began painting its skeleton rows over this dialog
+  // and its backdrop swallowed the Cancel/Leave clicks, leaving the page unleaveable.
+  z-index: calc(var(--z-loading-overlay, 1050) + 1);
   background: rgba(15, 20, 30, 0.45);
   backdrop-filter: blur(2px);
   display: grid;

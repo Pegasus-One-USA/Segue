@@ -16,7 +16,10 @@
             License not active ({{ licenseState() }}). Segue is locked until a valid license is applied.
           </span>
           @if (isAdminUser()) {
-            <a routerLink="/settings/license">Go to License Settings</a>
+            <!-- License no longer has its own route (it is a dialog off Settings > System Settings >
+                 General now), so this opens that dialog directly. The dialog sits at --z-modal (200),
+                 well above this gate's overlay (40), so it stays usable while the app is locked. -->
+            <button type="button" class="license-gate-link" (click)="openLicenseDialog()">Go to License Settings</button>
           }
         </div>
       }
@@ -62,7 +65,7 @@
               <p>License not active ({{ licenseState() }}).</p>
               <p>This area is locked until a valid license is applied.</p>
               @if (isAdminUser()) {
-                <a routerLink="/settings/license">Go to License Settings</a>
+                <button type="button" class="license-gate-link" (click)="openLicenseDialog()">Go to License Settings</button>
               }
             </div>
           </div>

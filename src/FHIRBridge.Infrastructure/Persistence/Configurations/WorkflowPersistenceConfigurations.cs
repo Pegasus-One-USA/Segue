@@ -1,4 +1,5 @@
-﻿using FHIRBridge.Runtime.Domain.Workflows;
+using FHIRBridge.Domain.Entities;
+using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -20,6 +21,13 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
         builder.Property(x => x.Name).HasMaxLength(400).IsRequired();
         // Optional free-text notes (multi-line) shown next to the name in the builder/list. Never read by the engine.
         builder.Property(x => x.Description).HasMaxLength(2000);
+
+        // Nullable: rows created before numbering existed have none, and so does anything created while
+        // WorkflowNumbering:Enabled is off. The unique filtered index is the real backstop against a
+        // duplicate number — two instances racing the same period row is expected to be resolved by
+        // WorkflowNumberGenerator's concurrency retry, and this index is what makes a miss fail loudly
+        // rather than silently issuing the same number twice.
+        builder.Property(x => x.WorkflowNumber).HasMaxLength(64);
         builder.Property(x => x.Version).IsRequired();
         builder.Property(x => x.IsEnabled).IsRequired();
         builder.Property(x => x.IsPubliclyLaunchable).IsRequired().HasDefaultValue(false);
@@ -34,6 +42,12 @@ public sealed class WorkflowDefinitionEntityTypeConfiguration : IEntityTypeConfi
         builder.Ignore(x => x.LifecycleStatus);
 
         builder.Property(x => x.LastTriggeredOnUtc);
+
+        // Filter is provider-specific (bracket vs. double-quote identifier quoting), so the SQL itself is
+        // applied in FHIRBridgeDbContext.OnModelCreating where the active provider is known. Declaring it
+        // here with T-SQL brackets would leave the Npgsql model permanently out of sync with its snapshot.
+        builder.HasIndex(x => x.WorkflowNumber)
+            .IsUnique();
 
         // Required with a DB-level default so this is never null even for a row inserted outside the normal
         // SqlWorkflowDefinitionStore.SaveAsync path (that path itself always stamps a real actor/timestamp —
@@ -220,5 +234,26 @@ public sealed class WorkflowNodeRunEntityTypeConfiguration : IEntityTypeConfigur
         builder.Property(x => x.LineageJson);
 
         builder.HasIndex(x => x.WorkflowRunId);
+    }
+}
+
+/// <summary>Durable per-period counter behind generated workflow numbers — see
+/// <see cref="FHIRBridge.Domain.Entities.WorkflowNumberSequence"/> for why this is a table and not a SQL
+/// sequence.</summary>
+public sealed class WorkflowNumberSequenceEntityTypeConfiguration : IEntityTypeConfiguration<WorkflowNumberSequence>
+{
+    public void Configure(EntityTypeBuilder<WorkflowNumberSequence> builder)
+    {
+        builder.ToTable("WorkflowNumberSequences");
+        builder.HasKey(x => x.Id);
+
+        // Unique: one counter row per period, and the constraint is what makes two instances creating the
+        // very first workflow of a period collide loudly (handled by WorkflowNumberGenerator's retry)
+        // instead of quietly producing two independent counters that both hand out "0001".
+        builder.Property(x => x.PeriodKey).HasMaxLength(100).IsRequired();
+        builder.HasIndex(x => x.PeriodKey).IsUnique();
+
+        builder.Property(x => x.LastValue).IsRequired();
+        builder.Property(x => x.UpdatedOnUtc).IsRequired();
     }
 }

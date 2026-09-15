@@ -3,6 +3,7 @@ import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { LicenseService } from '../../services/license.service';
+import { SettingsPageDialogService } from '../../services/settings-page-dialog.service';
 import { LICENSE_UNLIMITED } from '../../models/license.model';
 import { ToastService } from '../../../services/toast.service';
 import { IEhrEndpointService } from '../../../ehr-endpoints/services/i-ehr-endpoint.service';
@@ -83,6 +84,7 @@ export class LicenseDevMintComponent implements OnInit {
   private readonly licenseSvc = inject(LicenseService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly settingsPageDialog = inject(SettingsPageDialogService);
   private readonly ehrEndpointSvc = inject(IEhrEndpointService);
 
   protected readonly minting = signal(false);
@@ -244,7 +246,10 @@ export class LicenseDevMintComponent implements OnInit {
       next: () => {
         this.applying.set(false);
         this.toast.success('License activated', 'The freshly minted test license is now active.');
-        this.router.navigate(['/settings/license']);
+        // '/settings/license' no longer exists (License is a dialog off System Settings > General now),
+        // so land on the page that hosts it and open it, rather than navigating to a dead route.
+        void this.router.navigate(['/settings/system-settings/general'])
+          .then(() => this.settingsPageDialog.open('license'));
       },
       error: (err: HttpErrorResponse) => {
         this.applying.set(false);

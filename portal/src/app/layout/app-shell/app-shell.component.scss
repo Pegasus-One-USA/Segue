@@ -43,12 +43,21 @@
   font-weight:   600;
   flex-shrink:   0;
 
-  a {
+  // .license-gate-link is a <button> (License opens a dialog now, it is no longer a route), reset to look
+  // exactly like the anchor it replaced.
+  a,
+  .license-gate-link {
     color:           inherit;
     text-decoration: underline;
     font-weight:     700;
     margin-left:     auto;
     white-space:     nowrap;
+    background:      none;
+    border:          0;
+    padding:         0;
+    font-size:       inherit;
+    font-family:     inherit;
+    cursor:          pointer;
   }
 }
 
@@ -200,11 +209,18 @@
     font-weight: 500;
   }
 
-  a {
+  a,
+  .license-gate-link {
     margin-top:      8px;
     color:           var(--color-error);
     font-weight:     700;
     text-decoration: underline;
+    background:      none;
+    border:          0;
+    padding:         0;
+    font-size:       inherit;
+    font-family:     inherit;
+    cursor:          pointer;
   }
 }
 

@@ -250,7 +250,16 @@
                     @if (w.description) {
                       <span class="cell-desc" [title]="w.description">{{ w.description }}</span>
                     }
-                    <span class="cell-meta">{{ w.action === 'Launch' ? 'Interactive launch' : 'Backend / on-demand' }}</span>
+                    <!-- Number rides the existing meta line rather than taking its own column: the table is
+                         already 8 columns wide (Nodes/Edges were commented out for width), and pairing the
+                         number with the name it identifies reads better than a separate column anyway. -->
+                    <span class="cell-meta">
+                      @if (w.workflowNumber) {
+                        <span class="cell-number">{{ w.workflowNumber }}</span>
+                        <span class="cell-meta-sep">·</span>
+                      }
+                      {{ w.action === 'Launch' ? 'Interactive launch' : 'Backend / on-demand' }}
+                    </span>
                   </div>
                 </div>
               </td>
@@ -397,7 +406,10 @@
       </div>
       <div class="modal-body">
         <p class="modal-sub">
-          Delete <strong>{{ w.name }}</strong>? This removes the workflow graph permanently.
+          <!-- The number is quoted here because workflow names are NOT unique (no unique constraint on
+               WorkflowDefinitions.Name) — on a destructive, irreversible action it is the only thing that
+               tells two same-named workflows apart. -->
+          Delete <strong>{{ w.name }}</strong>@if (w.workflowNumber) { <span class="cell-number">({{ w.workflowNumber }})</span> }? This removes the workflow graph permanently.
           The source, destination and mapping records it references are <strong>not</strong> deleted.
         </p>
         <div class="modal-actions">
@@ -415,9 +427,12 @@
      Creates the workflow up front so the builder always opens on a real id — node config, mappings and
      transform rules then always have an owner to belong to. ── -->
 @if (showNewWorkflow()) {
-  <div class="modal-overlay" (click)="cancelNewWorkflow()" (keydown.escape)="cancelNewWorkflow()" tabindex="-1">
+  <!-- No (click) on the overlay: a stray click outside must NOT discard a half-filled form. Closing is
+       deliberate only — ×, Cancel, or Escape — and each of those routes through cancelNewWorkflow(),
+       which confirms first when anything has been typed. -->
+  <div class="modal-overlay" (keydown.escape)="cancelNewWorkflow()" tabindex="-1">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-workflow-title"
-         (click)="$event.stopPropagation()" (keydown.escape)="cancelNewWorkflow()" tabindex="-1">
+         (keydown.escape)="cancelNewWorkflow()" tabindex="-1">
       <div class="modal-head">
         <h3 id="new-workflow-title">New workflow</h3>
         <button class="modal-close" type="button" (click)="cancelNewWorkflow()">&times;</button>
@@ -455,7 +470,7 @@
             Cancel
           </button>
           <button
-            class="btn-primary"
+            class="btn-cta"
             type="button"
             [disabled]="creatingWorkflow() || !newWorkflowName().trim()"
             (click)="confirmNewWorkflow()"
@@ -466,12 +481,37 @@
       </div>
     </div>
   </div>
+
+  <!-- Discard confirmation, layered ON TOP of the New-workflow modal (nested inside its @if, so the
+       form is still mounted behind it and "Keep editing" returns to it with every value intact). -->
+  @if (confirmDiscardNewWorkflow()) {
+    <div class="modal-overlay modal-overlay--stacked" (keydown.escape)="keepEditingNewWorkflow()" tabindex="-1">
+      <div class="modal modal--sm" role="alertdialog" aria-modal="true" aria-labelledby="discard-new-workflow-title"
+           (keydown.escape)="keepEditingNewWorkflow()" tabindex="-1">
+        <div class="modal-head">
+          <h3 id="discard-new-workflow-title">Discard this workflow?</h3>
+          <button class="modal-close" type="button" (click)="keepEditingNewWorkflow()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-sub">
+            You have unsaved changes that will be lost. The workflow has not been created yet.
+          </p>
+          <div class="modal-actions">
+            <button class="btn-secondary" type="button" (click)="keepEditingNewWorkflow()">Keep editing</button>
+            <button class="btn-danger" type="button" (click)="discardNewWorkflow()">Discard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
 }
 
 <!-- ── Copy (duplicate) workflow modal ──────────────────────────────────────── -->
 @if (confirmCopy(); as w) {
-  <div class="modal-overlay" (click)="cancelCopyWorkflow()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <!-- No backdrop close: same rule as the New-workflow modal — a stray click outside must not discard
+       an edited name. ×, Cancel and Escape all route through cancelCopyWorkflow(), which confirms first. -->
+  <div class="modal-overlay" (keydown.escape)="cancelCopyWorkflow()" tabindex="-1">
+    <div class="modal" (keydown.escape)="cancelCopyWorkflow()" tabindex="-1">
       <div class="modal-head">
         <h2>Copy workflow</h2>
         <button class="modal-close" type="button" (click)="cancelCopyWorkflow()">&times;</button>
@@ -492,7 +532,7 @@
         <div class="modal-actions">
           <button class="btn-secondary" type="button" (click)="cancelCopyWorkflow()">Cancel</button>
           <button
-            class="btn-primary"
+            class="btn-cta"
             type="button"
             [disabled]="rowBusyId() === w.workflowId || !copyName().trim()"
             (click)="confirmCopyWorkflow()"
@@ -503,6 +543,29 @@
       </div>
     </div>
   </div>
+
+  <!-- Discard confirmation, layered over the Copy modal (nested inside its @if so "Keep editing"
+       returns to the form with the typed name intact). -->
+  @if (confirmDiscardCopyWorkflow()) {
+    <div class="modal-overlay modal-overlay--stacked" (keydown.escape)="keepEditingCopyWorkflow()" tabindex="-1">
+      <div class="modal modal--sm" role="alertdialog" aria-modal="true" aria-labelledby="discard-copy-workflow-title"
+           (keydown.escape)="keepEditingCopyWorkflow()" tabindex="-1">
+        <div class="modal-head">
+          <h3 id="discard-copy-workflow-title">Discard this copy?</h3>
+          <button class="modal-close" type="button" (click)="keepEditingCopyWorkflow()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-sub">
+            You have unsaved changes that will be lost. The copy has not been created yet.
+          </p>
+          <div class="modal-actions">
+            <button class="btn-secondary" type="button" (click)="keepEditingCopyWorkflow()">Keep editing</button>
+            <button class="btn-danger" type="button" (click)="discardCopyWorkflow()">Discard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
 }
 
 <!-- ── Destination data modal ───────────────────────────────────────────────── -->

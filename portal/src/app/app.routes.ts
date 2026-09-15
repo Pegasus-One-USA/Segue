@@ -121,8 +121,11 @@ export const routes: Routes = [
       },
 
       // Backward-compatible redirects for the old standalone URLs these pages used to live at.
-      { path: 'ehr-endpoints', redirectTo: 'settings/ehr-endpoints' },
-      { path: 'allowed-origins', redirectTo: 'settings/allowed-origins' },
+      // EHR Endpoints and Allowed Origins are launcher rows on System Settings > General now (opened as
+      // dialogs), not routes of their own — so these land on that page rather than a path that no longer
+      // resolves. The row still has to be clicked; a URL can't open the dialog directly.
+      { path: 'ehr-endpoints', redirectTo: 'settings/system-settings/general' },
+      { path: 'allowed-origins', redirectTo: 'settings/system-settings/general' },
       { path: 'system-security', redirectTo: 'settings/system-settings/security' },
       { path: 'source-connections', redirectTo: 'settings/workflow-configurations/source-connections' },
       { path: 'destination-connections', redirectTo: 'settings/workflow-configurations/destination-connections' },
