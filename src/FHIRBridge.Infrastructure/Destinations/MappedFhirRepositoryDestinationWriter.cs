@@ -145,11 +145,16 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         var autoFetchMaxCount = ConnectionMetadataReader.GetInt(
             destination.ConnectionMetadataJson, "dest_autoFetchMaxCount", DefaultAutoFetchMaxCount);
 
+        // Epic (and other FHIR servers) return fully-qualified references into their own base URL; this is what
+        // lets those be recognized as local and resolved rather than skipped as external. Null when the run has no
+        // single identifiable source, which keeps every absolute reference external exactly as before.
+        var sourceBaseUrl = context.SourceBaseUrl;
+
         var (writableRecords, referenceErrors) = await ResolveMissingReferencesAsync(
             httpClient, baseUrl, authHeader, records, resolvedResourceCache,
-            autoFetchEnabled, autoFetchMaxCount, context.FetchMissingReferenceAsync, cancellationToken);
+            autoFetchEnabled, autoFetchMaxCount, context.FetchMissingReferenceAsync, sourceBaseUrl, cancellationToken);
 
-        records = OrderRecordsByFhirReferenceDependency(writableRecords, resolvedResourceCache);
+        records = OrderRecordsByFhirReferenceDependency(writableRecords, resolvedResourceCache, sourceBaseUrl);
 
         // Best-effort, pre-write warning for a gap this destination genuinely can't help with: a resource type
         // referenced by something in THIS batch but never included in it at all — this destination's own resource
@@ -287,6 +292,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         bool autoFetchEnabled,
         int autoFetchMaxCount,
         Func<string, string, CancellationToken, Task<string?>>? fetchMissingReferenceAsync,
+        string? sourceBaseUrl,
         CancellationToken cancellationToken)
     {
         var present = new HashSet<ResourceReference>();
@@ -304,7 +310,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                 identityByRecord[record] = identity;
             }
 
-            var referenced = ExtractReferencedResources(record.SourceJson);
+            var referenced = ExtractReferencedResources(record.SourceJson, sourceBaseUrl);
             if (referenced.Count > 0)
             {
                 referencesByRecord[record] = referenced;
@@ -540,9 +546,10 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             if (string.IsNullOrWhiteSpace(json))
             {
                 // A null/empty response means the source genuinely doesn't have it (e.g. a 404) — the fetch
-                // delegate itself has no way to distinguish "not found" from other quiet failures, so this
-                // case has no specific reason to report.
-                return (null, null);
+                // delegate itself has no way to distinguish "not found" from other quiet failures. Reported as an
+                // explicit reason regardless: without one, a record excluded for this cause produced no diagnostic
+                // at all, which is what made a dangling reference impossible to tell apart from a cap/scope skip.
+                return (null, "the source returned no resource for it (not found, or the fetch was refused)");
             }
 
             if (JsonNode.Parse(json) is not JsonObject fetchedResource
@@ -1217,7 +1224,8 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     /// </summary>
     private static List<MappedDestinationRecord> OrderRecordsByFhirReferenceDependency(
         IReadOnlyCollection<MappedDestinationRecord> records,
-        Dictionary<MappedDestinationRecord, (string ResourceType, JsonObject Resource)?> resolvedResourceCache)
+        Dictionary<MappedDestinationRecord, (string ResourceType, JsonObject Resource)?> resolvedResourceCache,
+        string? sourceBaseUrl)
     {
         var recordsList = records as IReadOnlyList<MappedDestinationRecord> ?? records.ToList();
 
@@ -1237,7 +1245,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         var dependencies = new Dictionary<MappedDestinationRecord, List<MappedDestinationRecord>>(ReferenceEqualityComparer.Instance);
         foreach (var record in recordsList)
         {
-            dependencies[record] = ExtractReferencedResources(record.SourceJson)
+            dependencies[record] = ExtractReferencedResources(record.SourceJson, sourceBaseUrl)
                 .Where(reference => recordByReference.TryGetValue(reference, out var target) && !ReferenceEquals(target, record))
                 .Select(reference => recordByReference[reference])
                 .Distinct()
@@ -1287,7 +1295,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     /// non-FHIR fallback flow has no references to extract. See <see cref="TryParseReference"/> for exactly which
     /// reference shapes are resolved and which are deliberately left alone.
     /// </summary>
-    private static List<ResourceReference> ExtractReferencedResources(string? sourceJson)
+    private static List<ResourceReference> ExtractReferencedResources(string? sourceJson, string? sourceBaseUrl)
     {
         var referencedResources = new List<ResourceReference>();
         if (string.IsNullOrWhiteSpace(sourceJson))
@@ -1298,7 +1306,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         try
         {
             using var document = JsonDocument.Parse(sourceJson);
-            WalkForReferences(document.RootElement, referencedResources);
+            WalkForReferences(document.RootElement, referencedResources, sourceBaseUrl);
         }
         catch (JsonException)
         {
@@ -1308,7 +1316,8 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         return referencedResources;
     }
 
-    private static void WalkForReferences(JsonElement element, List<ResourceReference> referencedResources)
+    private static void WalkForReferences(
+        JsonElement element, List<ResourceReference> referencedResources, string? sourceBaseUrl)
     {
         switch (element.ValueKind)
         {
@@ -1318,7 +1327,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                     if (string.Equals(property.Name, "reference", StringComparison.Ordinal)
                         && property.Value.ValueKind == JsonValueKind.String)
                     {
-                        var parsed = TryParseReference(property.Value.GetString());
+                        var parsed = TryParseReference(property.Value.GetString(), sourceBaseUrl);
                         if (parsed is { } reference)
                         {
                             referencedResources.Add(reference);
@@ -1326,14 +1335,14 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                     }
                     else
                     {
-                        WalkForReferences(property.Value, referencedResources);
+                        WalkForReferences(property.Value, referencedResources, sourceBaseUrl);
                     }
                 }
                 break;
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
                 {
-                    WalkForReferences(item, referencedResources);
+                    WalkForReferences(item, referencedResources, sourceBaseUrl);
                 }
                 break;
         }
@@ -1353,13 +1362,28 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     /// <c>'/'</c>-delimited segments are taken as Type and Id, so a versioned reference still matches the same
     /// (Type, Id) an unversioned one would.
     /// </summary>
-    private static ResourceReference? TryParseReference(string? reference)
+    private static ResourceReference? TryParseReference(string? reference, string? sourceBaseUrl = null)
     {
-        if (string.IsNullOrEmpty(reference)
-            || reference[0] == '#'
-            || reference.Contains("://", StringComparison.Ordinal))
+        if (string.IsNullOrEmpty(reference) || reference[0] == '#')
         {
             return null;
+        }
+
+        if (reference.Contains("://", StringComparison.Ordinal))
+        {
+            // An absolute reference is only resolvable when it points back at THIS run's own source server — Epic
+            // returns fully-qualified references (Observation.focus, hasMember, derivedFrom) into its own base URL,
+            // and skipping those made them invisible to reference resolution: never existence-checked, never
+            // auto-fetched, never excluded, so the referencing record went to the destination carrying a guaranteed
+            // dangling reference and came back as an opaque 422. Anything pointing at a DIFFERENT host stays
+            // skipped exactly as before — this destination never assumes another server's URL is reachable here.
+            var relative = TryGetSourceRelativeReference(reference, sourceBaseUrl);
+            if (relative is null)
+            {
+                return null;
+            }
+
+            reference = relative;
         }
 
         var segments = reference.Split('/');
@@ -1369,5 +1393,36 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         }
 
         return new ResourceReference(segments[0], segments[1]);
+    }
+
+    /// <summary>
+    /// Returns the <c>Type/id</c> tail of an absolute <paramref name="reference"/> that sits under
+    /// <paramref name="sourceBaseUrl"/>, or null when there is no source base URL, the hosts differ, or the tail
+    /// isn't shaped like a FHIR resource path. Compared scheme- and case-insensitively on host, and the base's own
+    /// path prefix must match, so a reference into an unrelated path on the same host is not misread as local.
+    /// </summary>
+    private static string? TryGetSourceRelativeReference(string reference, string? sourceBaseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(sourceBaseUrl)
+            || !Uri.TryCreate(reference, UriKind.Absolute, out var referenceUri)
+            || !Uri.TryCreate(sourceBaseUrl.TrimEnd('/'), UriKind.Absolute, out var baseUri)
+            || !string.Equals(referenceUri.Host, baseUri.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var basePath = baseUri.AbsolutePath.TrimEnd('/');
+        var referencePath = referenceUri.AbsolutePath;
+        if (basePath.Length > 0
+            && !referencePath.StartsWith(basePath + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var tail = referencePath[(basePath.Length)..].TrimStart('/');
+        var segments = tail.Split('/');
+        return segments.Length >= 2 && segments[0].Length > 0 && segments[1].Length > 0
+            ? $"{segments[0]}/{segments[1]}"
+            : null;
     }
 }

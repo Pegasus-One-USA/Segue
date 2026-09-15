@@ -19,9 +19,17 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// closes over its own source client/connection internally. Null by default: every destination/writer that never
 /// opts into this behaves exactly as before.
 /// </param>
+/// <param name="SourceBaseUrl">
+/// Optional FHIR base URL of the single source feeding this run (e.g. Epic's <c>.../api/FHIR/R4</c>), when exactly
+/// one source node does. Lets a writer recognize an ABSOLUTE reference that points back at that same source
+/// (<c>https://fhir.epic.com/.../R4/Observation/abc</c>) as the relative <c>Observation/abc</c> it is, so it takes
+/// part in reference resolution/auto-fetch instead of being skipped as external. Null when the source is ambiguous
+/// or unknown, in which case every absolute reference keeps being treated as external, exactly as before.
+/// </param>
 public sealed record PipelineWriteContext(
     bool AllowInlineDelivery,
     string RouteName,
     DateTimeOffset RunStartedAtUtc,
     string? CorrelationId = null,
-    Func<string, string, CancellationToken, Task<string?>>? FetchMissingReferenceAsync = null);
+    Func<string, string, CancellationToken, Task<string?>>? FetchMissingReferenceAsync = null,
+    string? SourceBaseUrl = null);
