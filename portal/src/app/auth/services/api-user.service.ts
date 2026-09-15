@@ -57,6 +57,7 @@ export function mapRoleDto(dto: RoleDto): Role {
     permissions:  (dto.permissions ?? []).map(mapPermissionDto),
     color:        DEFAULT_ROLE_COLOR,
     isSystemRole: dto.isSystemRole,
+    isFullAccess: dto.isFullAccess ?? false,
     createdAt:    dto.createdOnUtc ?? '',
     createdBy:    dto.createdBy,
     modifiedOnUtc: dto.modifiedOnUtc,

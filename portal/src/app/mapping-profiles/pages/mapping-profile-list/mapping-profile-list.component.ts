@@ -60,10 +60,14 @@ export class MappingProfileListComponent implements OnInit {
   private readonly actionGuard = inject(PermissionActionGuard);
   readonly permissions         = inject(PermissionService);
 
-  /** Whether a row's 3-dot menu has anything in it at all — a view-only role (e.g. Audit) with
-   *  neither edit nor delete should never see an empty kebab menu. */
+  /** Whether a row's 3-dot menu has anything in it at all — a view-only role (e.g. Audit) with none
+   *  of view/edit/delete should never see an empty kebab menu. mappingprofiles.view gates only the
+   *  placeholder View (Coming Soon) item today, same as sourceconnections.view does for
+   *  source-connection-list's own (implemented) View item — included here so a view-only role still
+   *  sees the menu at all, not just roles that can also edit or delete. */
   hasRowMenu(): boolean {
-    return this.permissions.hasPermission('mappingprofiles.edit')
+    return this.permissions.hasPermission('mappingprofiles.view')
+      || this.permissions.hasPermission('mappingprofiles.edit')
       || this.permissions.hasPermission('mappingprofiles.delete');
   }
 

@@ -57,6 +57,15 @@ export class DestinationConfigurationService {
     return this.http.delete<void>(DESTINATION_ENDPOINTS.byId(id));
   }
 
+  /** Sets (or clears, with null) the destination's de-identification profile on its own. Deliberately not the
+   *  full `update()` above: that PUT runs the create-request validator, which requires KeyVaultName/SecretName on
+   *  every call — values this wizard never re-displays for a stored secret. The Map-fields screen changes the
+   *  profile long after Step 1 provisioned the connection, so it needs a write that touches nothing else. */
+  setDeIdentificationProfile(id: string, deIdentificationProfileId: string | null): Observable<DestinationConfigurationDto> {
+    return this.http.put<DestinationConfigurationDto>(
+      DESTINATION_ENDPOINTS.deIdentificationProfile(id), { deIdentificationProfileId });
+  }
+
   hasExecutionHistory(id: string): Observable<DestinationExecutionHistory> {
     return this.http.get<DestinationExecutionHistory>(DESTINATION_ENDPOINTS.hasExecutionHistory(id));
   }

@@ -487,21 +487,21 @@ export class NodeLibraryDialogComponent {
     const byRank = new Map<number, LibraryItem[]>();
 
     // Rank 0 — Sources (filtered by phase config: only enabled sources shown; and by RBAC — a source
-    // with a dedicated permission group the current role lacks View for is excluded from the library
-    // entirely, same as a phase-hidden source, rather than shown disabled. Tile visibility is
-    // specifically the vendor's own View permission — separate from Create (gates actually adding a
-    // new node, see onSourceSelected) and Edit (gates modifying an existing one) — a role could hold
-    // View without Create/Edit and still see the tile, just be unable to complete adding/editing it.
-    // This is a presentation-only filter: the backend re-validates the exact same permissions
-    // independently at save time (WorkflowEndpoints.cs) regardless of what this dialog ever showed, so
-    // removing a node from view here is not a security control — it's purely so a user never sees, or
-    // can search up, a type their role can't use.
+    // with a dedicated permission group the current role holds NONE of View/Create/Edit for is excluded
+    // from the library entirely, same as a phase-hidden source, rather than shown disabled. Any one of
+    // the three is enough to see the tile — a role scoped to just Create (no separate View) must still
+    // be able to find and use the tile to create a node, exactly as a View-only role can see it to look
+    // but not add/edit. This is a presentation-only filter: the backend re-validates the exact same
+    // permissions independently at save time (WorkflowEndpoints.cs) regardless of what this dialog ever
+    // showed, so removing a node from view here is not a security control — it's purely so a user never
+    // sees, or can search up, a type their role can't use at all.
     // Hidden entirely (not just disabled) while picking a destination/transform — a source tile is
     // never a valid pick outside 'source' mode, so there's nothing useful to show it disabled for.
     if (m === 'source') {
       const visibleSources = SOURCES.filter(s =>
         this.phaseCfg.isSourceEnabled(s.id) &&
-        (!s.permissionPrefix || this.permissions.hasPermission(`${s.permissionPrefix}.view`))
+        (!s.permissionPrefix || this.permissions.hasAny(
+          [`${s.permissionPrefix}.view`, `${s.permissionPrefix}.create`, `${s.permissionPrefix}.edit`]))
       );
       byRank.set(0, visibleSources.map(s => ({
         id:       s.id,
@@ -528,10 +528,14 @@ export class NodeLibraryDialogComponent {
       // 'transform' mode, same reasoning as hiding sources above.
       if (t.rank === 7 && m === 'source') return;
       // RBAC: a destination type with a dedicated permission group (see transforms.data.ts) the current
-      // role lacks View for is excluded from the library entirely, same as a phase-hidden item — see
-      // the matching comment on the Sources filter above for why this is presentation-only, not a
-      // security control, and for the View/Create/Edit distinction.
-      if (t.permissionPrefix && !this.permissions.hasPermission(`${t.permissionPrefix}.view`)) return;
+      // role holds NONE of View/Create/Edit for is excluded from the library entirely, same as a
+      // phase-hidden item — see the matching comment on the Sources filter above for why this is
+      // presentation-only, not a security control, and for why any one of the three is sufficient
+      // (a role scoped to just {vendor}.create, e.g. mysql.create, must still see the MySQL tile to
+      // use it — the backend's own check in WorkflowEndpoints.cs is vendor-Create/Edit-specific too,
+      // with no generic destinationconnections.create/.edit of its own to fall back on).
+      if (t.permissionPrefix && !this.permissions.hasAny(
+        [`${t.permissionPrefix}.view`, `${t.permissionPrefix}.create`, `${t.permissionPrefix}.edit`])) return;
 
       const meta = TRANSFORM_META[t.id] ?? { abbr: t.name.slice(0, 3).toUpperCase(), color: '#64748B' };
       let status: ItemStatus = 'disabled';

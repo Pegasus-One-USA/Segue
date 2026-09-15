@@ -715,6 +715,18 @@ export class DestinationWizardComponent implements OnInit {
   readonly configHeading = computed(() => `${this.chainNodeLabel() ?? this.destLabel()} Configuration`);
 
   /**
+   * Hides the four-step rail and Step 3's "Map fields" heading on the De-identification screen.
+   *
+   * Both describe a journey the user isn't on: chainNodeEntry already documents that Step 3 IS the screen
+   * in this mode, so Configure → Data groups → Map fields → Review is progress through steps they never
+   * take, and the heading ("Map fields — Map FHIR paths to SQL table columns") names an activity that
+   * doesn't happen here — nothing is being mapped to a column, redaction rules are being chosen. The
+   * resource list and its per-group actions below carry the whole screen on their own.
+   */
+  readonly hideMapFieldsChrome = computed(
+    () => this.chainNodeEntry() && this.configTab() === 'deidentification');
+
+  /**
    * Step 3's Save when this wizard was opened from a chain node (see chainNodeEntry). Commits exactly
    * what "Add to Workflow"/"Update" commits — same _save() path, so the node and its configuration are
    * persisted identically — and then closes back to the canvas (see
@@ -1836,6 +1848,10 @@ export class DestinationWizardComponent implements OnInit {
   // branches and Step 4's review summary.
   readonly deIdentificationProfiles = signal<DeIdentificationProfileDto[]>([]);
   readonly selectedDeIdentificationProfileId = signal<string | null>(null);
+  // What the server currently has, so _save() can PUT the profile only when it actually changed. Without this
+  // baseline every destination save would issue a redundant profile write — and, because that write is
+  // deliberately audit-logged, would file a "policy changed" log entry for saves that changed nothing.
+  private readonly _persistedDeIdentificationProfileId = signal<string | null>(null);
   readonly newProfileName = signal('');
   readonly creatingProfile = signal(false);
   readonly selectedDeIdentificationProfileName = computed(() => {
@@ -2725,6 +2741,10 @@ export class DestinationWizardComponent implements OnInit {
       // has no field mappings at all — there is no profile to pick, and offering one implied a step that
       // does not apply to it.
       !this.isWholeResourceFhirDestination() &&
+      // Same reasoning for the De-identification screen: it configures redaction rules on a profile, not
+      // field mappings, so a mapping-profile picker sitting beside each data group offered an action that
+      // has nothing to do with what that screen does.
+      this.configTab() !== 'deidentification' &&
       !!this.sourceConnectionId() &&
       !!(this.selectedExistingId() ?? this.resolvedDestinationId()) &&
       !!this.sourceVendor(),
@@ -3784,9 +3804,11 @@ export class DestinationWizardComponent implements OnInit {
     // this is a no-op for every non-SQL destination.
     this._refreshSqlTablesFromLiveSchema();
 
-    // Read-only here — reusing an existing connection as-is never calls provisionDestinationConnection's
-    // create/update branch (see _save()), so there's nothing to change the profile through in this mode.
+    // Reusing an existing connection as-is never calls provisionDestinationConnection's create/update branch,
+    // so _save() persists any change to this via the narrow profile-only endpoint instead — a policy change
+    // must never fork the connection. Baseline recorded alongside so that write only fires on a real change.
     this.selectedDeIdentificationProfileId.set(selected.deIdentificationProfileId ?? null);
+    this._persistedDeIdentificationProfileId.set(selected.deIdentificationProfileId ?? null);
 
     const metadata = this._parseConnectionMetadata(
       selected.connectionMetadataJson,
@@ -4371,8 +4393,16 @@ export class DestinationWizardComponent implements OnInit {
     const destinationId = f['destinationId'];
     if (destinationId) {
       this.destinationConfigSvc.getById(destinationId).subscribe({
-        next: dto => this.selectedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null),
-        error: () => this.selectedDeIdentificationProfileId.set(null),
+        next: dto => {
+          this.selectedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null);
+          this._persistedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null);
+        },
+        // Leave the selection alone on a failed read. Resetting it to null here would make a transient list
+        // fetch failure look like "no policy assigned", and the next save would then persist that null over a
+        // policy that is actually set — turning a read blip into real, silent data loss.
+        error: () => {
+          // Intentional no-op: keep the current selection. See the note above.
+        },
       });
     }
     if (this.isFhir()) {
@@ -5007,6 +5037,49 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
+  /**
+   * Writes the Step 3 de-identification policy selection to the DestinationConfiguration row.
+   *
+   * Needed because provisionDestinationConnection() — the only other writer — can't cover this case: it
+   * early-returns for reused ("existing") connections, and for new ones it runs on Step 1 → Next, long before
+   * the De-identification tab on Step 3 is even reachable. So a selection made there was simply discarded, the
+   * column stayed NULL, and reopening honestly rendered "None".
+   *
+   * Uses the narrow profile-only endpoint rather than destinationConfigSvc.update(): a full PUT runs the
+   * create-request validator, which demands KeyVaultName/SecretName on every call — values this wizard never
+   * re-displays for a stored secret — and routing a policy change through provisionDestinationConnection would
+   * fork the connection instead of updating it.
+   *
+   * Non-blocking with a toast on failure, matching the mapping-profile import below: the node's own local save
+   * never depended on this, so a failed policy write must not block "Add to Workflow"/"Update".
+   *
+   * Takes the id straight from the config bag _save() just built rather than reading
+   * selectedExistingId()/resolvedDestinationId() itself, because those two are NOT the row this node ends up
+   * pointing at in every mode: when an existing connection was picked and then edited, the save forks a brand-new
+   * connection while selectedExistingId() still holds the ORIGINAL's id. Writing the policy there would mutate a
+   * connection the user deliberately forked away from — and one another workflow may share. config['destinationId']
+   * is set only in the two modes that reuse a real row as-is, which is exactly when this write is safe.
+   */
+  private _persistDeIdentificationProfile(destinationId: string | undefined): void {
+    const profileId = this.selectedDeIdentificationProfileId();
+    // No destination row this node actually owns — nothing to attach a policy to. Unchanged means no write, so
+    // a plain re-save neither issues a redundant PUT nor files a spurious "policy changed" audit entry.
+    if (!destinationId || profileId === this._persistedDeIdentificationProfileId()) {
+      return;
+    }
+
+    this.destinationConfigSvc.setDeIdentificationProfile(destinationId, profileId).subscribe({
+      next: () => this._persistedDeIdentificationProfileId.set(profileId),
+      error: (err) => {
+        const msg = err?.error?.title ?? err?.error?.error ?? err?.message;
+        this.toast.show(
+          'De-identification policy not saved',
+          typeof msg === 'string' ? msg : 'Failed to save the de-identification policy for this destination.',
+        );
+      },
+    });
+  }
+
   private _save(): void {
     // Drop any mapping row left behind pointing at a column that's since been renamed/dropped directly in
     // the database (rather than through this wizard) — without this, a save can silently persist (and a
@@ -5133,6 +5206,19 @@ export class DestinationWizardComponent implements OnInit {
       existingMappingProfileIdByResource,
     });
     config['dest_mapping_summary_v1'] = JSON.stringify(doc);
+
+    // The de-identification policy picked on Step 3's "De-identification" tab. Two separate destinations for
+    // it, both previously missing — which is why the picker reset to "None" on every reopen:
+    //  - This node field, which workflow-builder-v2.component.ts reads (its `hasDeIdentification` check) to
+    //    decide whether the graph gets a De-identification chain node. Nothing wrote the key before, so that
+    //    check could never fire.
+    //  - The DestinationConfiguration row itself, via _persistDeIdentificationProfile() below — the node field
+    //    alone is local canvas state and is not what the pipeline reads at run time.
+    const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
+    if (deIdentificationProfileId) {
+      config['deIdentificationProfileId'] = deIdentificationProfileId;
+    }
+    this._persistDeIdentificationProfile(config['destinationId']);
 
     const emitSaved = () => {
       this.saved.emit({

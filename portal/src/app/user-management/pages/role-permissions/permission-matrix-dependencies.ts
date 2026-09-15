@@ -46,6 +46,13 @@ const WORKFLOW_ACTION_FOR_NODE_ACTION: Readonly<Record<string, string>> = {
   execute: 'run',
 };
 
+/** Which of the two Settings connection rows a node prefix's stored connection lives in — nothing in
+ *  MATRIX_SECTIONS marks a node row as "source" vs "destination", so this is hand-maintained. Every
+ *  prefix in NODE_PREFIXES not listed here is treated as a destination type. */
+const SOURCE_NODE_PREFIXES: ReadonlySet<string> = new Set([
+  'epic', 'athenahealth', 'cerner', 'allscripts', 'healow', 'meditechgreenfield', 'genericfhir', 'hl7v2', 'sample',
+]);
+
 /** The Workflow-module codes `code` requires to be logically consistent, per the table:
  *    node.view    → workflow.view
  *    node.create  → workflow.create + workflow.view
@@ -61,11 +68,26 @@ export function requiredParentCodes(code: string): readonly string[] {
   const action = code.slice(dot + 1);
   if (!NODE_PREFIXES.has(prefix)) return [];
 
-  const workflowAction = WORKFLOW_ACTION_FOR_NODE_ACTION[action];
-  if (!workflowAction) return [];
+  const parents: string[] = [];
 
-  const workflowCode = `workflow.${workflowAction}`;
-  return workflowAction === 'view' ? [workflowCode] : [workflowCode, 'workflow.view'];
+  const workflowAction = WORKFLOW_ACTION_FOR_NODE_ACTION[action];
+  if (workflowAction) {
+    parents.push(`workflow.${workflowAction}`);
+    if (workflowAction !== 'view') parents.push('workflow.view');
+  }
+
+  // Create/Edit on a source or destination node also require the same action (+ View) on that node's
+  // own stored-connection row in Settings — e.g. checking Epic -> Create must not leave "Source
+  // Connections -> Create" unchecked, since building/probing an Epic connection needs it directly (see
+  // SourceDiscoveryAccessAuthorizationHandler / SourceConnectionsController / ConfigurationsController).
+  // Deliberately excludes Delete (independently assignable by design — see the vendor() row's own
+  // Delete tooltip) and Execute (no such action exists on either Connections row).
+  if (action === 'create' || action === 'edit') {
+    const connectionsPrefix = SOURCE_NODE_PREFIXES.has(prefix) ? 'sourceconnections' : 'destinationconnections';
+    parents.push(`${connectionsPrefix}.${action}`, `${connectionsPrefix}.view`);
+  }
+
+  return parents;
 }
 
 /** Explicit ∪ transitive closure of required parents — the displayed/saved set. Recursive rather

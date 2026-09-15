@@ -124,7 +124,24 @@ public sealed class RoleManagementService : IRoleManagementService
 
         await ValidatePermissionsAsync(request.PermissionIds, cancellationToken);
 
+        // RBAC redesign Step 4: "Full System Access" is itself a protected capability — a caller cannot
+        // create a role with IsFullAccess = true unless they already hold Full System Access themselves
+        // (via one of THEIR OWN assigned roles). This is deliberately independent of role.create: holding
+        // role.create lets you make roles, not necessarily ones as powerful as SuperAdmin/Admin. A request
+        // that doesn't set this field (the default, false) is completely unaffected — every existing
+        // caller keeps creating roles exactly as before.
+        if (request.IsFullAccess && !await CallerHasFullAccessAsync(cancellationToken))
+        {
+            throw new InvalidOperationException(
+                "Only a caller with Full System Access can create a role with Full System Access.");
+        }
+
         var role = new Role(Guid.NewGuid(), request.Name.Trim(), request.Description.Trim());
+        if (request.IsFullAccess)
+        {
+            role.SetFullAccess(true);
+        }
+
         await _repository.AddRoleAsync(role, cancellationToken);
         await _repository.SetRolePermissionsAsync(role.Id, request.PermissionIds, cancellationToken);
 
@@ -162,6 +179,15 @@ public sealed class RoleManagementService : IRoleManagementService
                 throw new InvalidOperationException("System roles' name and description cannot be modified.");
             }
 
+            // RBAC redesign Step 4 — see CreateRoleAsync's comment for the general rule. Applies here too
+            // (e.g. revoking Admin's Full System Access), just never for SuperAdmin, which already threw
+            // above and never reaches this line.
+            var superAdminFullAccessChanged = await ApplyFullAccessChangeIfRequestedAsync(role, request.IsFullAccess, cancellationToken);
+            if (superAdminFullAccessChanged)
+            {
+                await _repository.UpdateRoleAsync(role, cancellationToken);
+            }
+
             await _repository.SetRolePermissionsAsync(role.Id, request.PermissionIds, cancellationToken);
             return await ToDtoAsync(role, cancellationToken);
         }
@@ -173,10 +199,65 @@ public sealed class RoleManagementService : IRoleManagementService
         }
 
         role.Update(request.Name.Trim(), request.Description.Trim());
+
+        // RBAC redesign Step 4: "Full System Access" is itself a protected capability — a caller cannot
+        // grant OR revoke it on any role unless they already hold Full System Access themselves (via one
+        // of THEIR OWN assigned roles), independent of whatever role.edit permission got them into this
+        // method at all. request.IsFullAccess is null (or already matches the role's current value) for
+        // the overwhelming majority of calls — a genuine no-op, not gated at all — see
+        // UpdateRoleRequest.IsFullAccess's own comment for exactly why that matters for backward
+        // compatibility.
+        await ApplyFullAccessChangeIfRequestedAsync(role, request.IsFullAccess, cancellationToken);
+
         await _repository.UpdateRoleAsync(role, cancellationToken);
         await _repository.SetRolePermissionsAsync(role.Id, request.PermissionIds, cancellationToken);
 
         return await ToDtoAsync(role, cancellationToken);
+    }
+
+    /// <summary>
+    /// RBAC redesign Step 4. Applies a genuine, explicit change to <see cref="Role.IsFullAccess"/> — a
+    /// null request, or one that already matches the role's current value, is a no-op and never consults
+    /// the caller's own access at all (see <see cref="UpdateRoleRequest.IsFullAccess"/>'s doc comment).
+    /// Only an actual grant or revoke is gated: it requires the ACTING caller to already hold Full System
+    /// Access via one of their own assigned roles — checked fresh from the repository, never trusted from
+    /// a claim, so a caller can never grant themselves this capability through this field. Returns true
+    /// when the in-memory <paramref name="role"/> was actually mutated, so a caller that doesn't
+    /// unconditionally persist the role afterward (the IsSystem branch above) knows a write is needed.
+    /// </summary>
+    private async Task<bool> ApplyFullAccessChangeIfRequestedAsync(
+        Role role, bool? requestedIsFullAccess, CancellationToken cancellationToken)
+    {
+        if (requestedIsFullAccess is not { } wantsFullAccess || wantsFullAccess == role.IsFullAccess)
+        {
+            return false;
+        }
+
+        if (!await CallerHasFullAccessAsync(cancellationToken))
+        {
+            throw new InvalidOperationException(
+                "Only a caller with Full System Access can grant or revoke Full System Access.");
+        }
+
+        role.SetFullAccess(wantsFullAccess);
+        return true;
+    }
+
+    /// <summary>Whether the current caller holds Full System Access via any of their OWN assigned roles —
+    /// resolved fresh from the repository (never from a JWT role-name claim), mirroring exactly how
+    /// UnifiedAdminAuthorizationHandler/SuperAdminOnlyAuthorizationHandler resolve the same flag for
+    /// per-request authorization (RBAC redesign Step 3). A caller with no resolvable user id (e.g. a
+    /// non-interactive/system context) never has it.</summary>
+    private async Task<bool> CallerHasFullAccessAsync(CancellationToken cancellationToken)
+    {
+        var callerId = _currentUserService.CurrentUser.UserId;
+        if (callerId is null)
+        {
+            return false;
+        }
+
+        var callerRoles = await _repository.GetUserRolesAsync(callerId.Value, cancellationToken);
+        return callerRoles.Any(r => r.IsFullAccess);
     }
 
     public async Task DeleteRoleAsync(Guid roleId, CancellationToken cancellationToken)
@@ -253,7 +334,8 @@ public sealed class RoleManagementService : IRoleManagementService
             role.CreatedOnUtc,
             createdBy,
             role.ModifiedOnUtc,
-            modifiedBy);
+            modifiedBy,
+            role.IsFullAccess);
     }
 
     private static PermissionDto ToDto(Permission permission)

@@ -51,6 +51,8 @@
       </div>
     </div>
 
+    <!-- Not shown on the De-identification screen — see hideMapFieldsChrome(). -->
+    @if (!hideMapFieldsChrome()) {
     <div class="dw-stepper">
       @for (label of STEP_LABELS; track $index) {
         <div class="dw-step" [class.active]="isStepActive($index + 1)" [class.done]="isStepDone($index + 1)">
@@ -64,6 +66,7 @@
         }
       }
     </div>
+    }
   }
 
   <!-- ── Body ─────────────────────────────────────────────────────────────── -->
@@ -248,43 +251,11 @@
         }
       }
 
-      <!-- Cross-cutting — applies regardless of destination type, so it lives outside the per-type form
-           component. Read-only when reusing an existing connection as-is (nothing to save it through in
-           that mode — see selectExisting()/provisionDestinationConnection()). -->
-      <div class="dw-field dw-field--full">
-        <label class="dw-label" for="dw-deid-profile">De-identification profile</label>
-        <div class="dw-existing-connection-row">
-          <div class="dw-select-wrap">
-            <select
-              id="dw-deid-profile"
-              class="dw-select"
-              [disabled]="connectionMode() === 'existing'"
-              [value]="selectedDeIdentificationProfileId() ?? ''"
-              (change)="selectedDeIdentificationProfileId.set($any($event.target).value || null)"
-            >
-              <option value="">None</option>
-              @for (p of deIdentificationProfiles(); track p.id) {
-                <option [value]="p.id">{{ p.name }}</option>
-              }
-            </select>
-          </div>
-        </div>
-        @if (connectionMode() !== 'existing') {
-          <div class="dw-existing-connection-row" style="margin-top: 8px;">
-            <input
-              type="text"
-              class="dw-select"
-              placeholder="New profile name…"
-              [value]="newProfileName()"
-              (input)="newProfileName.set($any($event.target).value)"
-            />
-            <button type="button" class="dw-clear-btn" title="Create a new de-identification profile"
-                    [disabled]="!newProfileName().trim() || creatingProfile()"
-                    (click)="createDeIdentificationProfile()">+ New</button>
-          </div>
-          <span class="dw-hint">Resources routed to this destination are redacted per the selected profile's rules before delivery. Manage a profile's rules on the Transformation Rules screen.</span>
-        }
-      </div>
+      <!-- The de-identification profile picker used to live here. It moved to Step 3's "De-identification"
+           tab, which is where the profile's rules are authored — having the picker on Step 1 as well meant two
+           controls for one value, and the Step 1 copy was the misleading one: it was disabled for a reused
+           connection even though the profile is perfectly editable in that mode. selectedDeIdentificationProfileId
+           and createDeIdentificationProfile() are unchanged and still bound by the Step 3 panel below. -->
     }
 
     <!-- ── Connection form host ── the component DESTINATION_FORM_REGISTRY resolves for this destination
@@ -762,6 +733,7 @@
     } @else if (isStepActive(3)) {
       @if (!activeMappingGroup()) {
         <!-- ── Data group selection screen ── choose which group's canvas to open ── -->
+        @if (!hideMapFieldsChrome()) {
         <div class="dw-section-head">
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
@@ -770,6 +742,7 @@
             Choose a data group to configure.
           </span>
         </div>
+        }
 
         <!-- The Mapping / Transformation / De-identification tabs the user actually works in live inside
              the mapping canvas's own Mapping list (see field-mapping-list.component.html). Whichever

@@ -172,6 +172,9 @@ builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHan
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, WorkflowModuleAccessAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, MappingCatalogAccessAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionCatalogAccessAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, SourceDiscoveryAccessAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, GenericConnectionPermissionAuthorizationHandler>();
 // Custom pipeline/API metrics + (when configured) OTLP/Azure Monitor export — was built but never actually called
 // from either host, so IPipelineMetrics/IApiMetrics silently no-op'd (optional dependency) and OTel never exported
 // anything. Always registers the in-process singletons the API Analytics/System Health screens read regardless
@@ -262,10 +265,44 @@ builder.Services.AddAuthorization(options =>
         policy.AddRequirements(new MappingCatalogAccessRequirement());
     });
 
+    // UnifiedAdmin OR "sourceconnections.create"/".edit" (see SourceDiscoveryAccessAuthorizationHandler) —
+    // pre-create source endpoint discovery is part of the source-connection wizard, not a separate
+    // admin-only capability.
+    options.AddPolicy(AuthorizationPolicies.SourceDiscoveryAccess, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new SourceDiscoveryAccessRequirement());
+    });
+
+    // UnifiedAdmin OR "role.view" (see PermissionCatalogAccessAuthorizationHandler) — the permission
+    // catalog is read-only reference metadata needed to render the Role Permissions screen's read-only
+    // grid, reachable with role.view alone. GetAll on the same controller keeps its own UnifiedAdmin-only
+    // policy directly, unaffected by this one.
+    options.AddPolicy(AuthorizationPolicies.PermissionCatalogAccess, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.AddRequirements(new PermissionCatalogAccessRequirement());
+    });
+
     // Permission-based policies — one per permission code declared in RbacSeedData.Permissions
-    // or referenced via [StandardPermission] on a controller (see PermissionCatalog).
+    // or referenced via [StandardPermission] on a controller (see PermissionCatalog). A
+    // sourceconnections.*/destinationconnections.* code gets the OR-vendor-permission composite
+    // (GenericConnectionPermissionRequirement) instead of a plain single-code check — see that
+    // type's own doc comment. Every other code is unaffected.
     foreach (var code in PermissionCatalog.AllPermissionCodes(typeof(Program).Assembly))
     {
+        if (GenericConnectionPermissionRequirement.TryParse(code, out var genericGroup, out var genericAction))
+        {
+            options.AddPolicy(
+                AuthorizationPolicies.HasPermission(code),
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(new GenericConnectionPermissionRequirement(genericGroup, genericAction));
+                });
+            continue;
+        }
+
         options.AddPolicy(
             AuthorizationPolicies.HasPermission(code),
             policy =>
@@ -907,7 +944,9 @@ static void LoadLicense(WebApplication app)
 // registering an in-memory authorization policy for it isn't enough to let anyone through — the
 // code also has to exist as a Permission row before any role can be granted it. This closes that
 // gap automatically at startup instead of requiring a manual PermissionConfiguration + migration
-// edit for every new permission-gated feature.
+// edit for every new permission-gated feature. The actual synchronization logic lives in
+// FHIRBridge.Api.Rbac.DiscoveredPermissionSynchronizer (RBAC redesign Step 5) — pulled out of this file
+// so it's directly unit-testable without a WebApplicationFactory host.
 static void SyncDiscoveredPermissions(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
@@ -917,140 +956,7 @@ static void SyncDiscoveredPermissions(WebApplication app)
         return;
     }
 
-    SyncDiscoveredPermissionsAsync(repository, app.Logger).GetAwaiter().GetResult();
-}
-
-static async Task SyncDiscoveredPermissionsAsync(
-    IUserAccessRepository repository,
-    Microsoft.Extensions.Logging.ILogger logger)
-{
-    // Every permission referenced by a [StandardPermission] attribute. PermissionCatalog already
-    // deduplicates these by code and combines descriptions/instances, so each entry here is unique
-    // by Id — no further grouping needed.
-    var discoveredPermissions = PermissionCatalog.DiscoveredPermissions(typeof(Program).Assembly);
-    var discoveredPermissionsById = discoveredPermissions.ToDictionary(p => p.Id);
-
-    var existingPermissions = await repository.GetPermissionsAsync(CancellationToken.None);
-    var existingPermissionsById = existingPermissions.ToDictionary(p => p.Id);
-
-    // Permissions declared in RbacSeedData are owned by RbacBootstrapper and must never be
-    // deactivated by this method.
-    var seedDeclaredPermissionIds = new HashSet<Guid>(RbacSeedData.Permissions.Select(p => p.Id));
-
-    // Every role that exists at the moment a brand-new dynamically-discovered permission is first created
-    // (built-in AND custom, e.g. an admin-created role) — see the grant loop in step 2/3 below for why this
-    // keeps the rollout of a new source/destination-type permission non-breaking.
-    var allRoles = await repository.GetRolesAsync(CancellationToken.None);
-
-    // 1. Deactivate a non-seeded permission that's active but no longer discovered in code.
-    foreach (var existingPermission in existingPermissions)
-    {
-        if (!existingPermission.IsActive)
-        {
-            continue;
-        }
-
-        if (seedDeclaredPermissionIds.Contains(existingPermission.Id))
-        {
-            continue;
-        }
-
-        if (!discoveredPermissionsById.ContainsKey(existingPermission.Id))
-        {
-            existingPermission.Deactivate();
-            await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
-        }
-    }
-
-    // 2 & 3. Update an existing permission's fields, or create a new one.
-    foreach (var discoveredPermission in discoveredPermissions)
-    {
-        var displayName = PermissionTaxonomy.BuildPermissionDisplayName(
-            discoveredPermission.Group,
-            discoveredPermission.Action);
-
-        var description = string.IsNullOrWhiteSpace(discoveredPermission.Description)
-            ? $"Auto-registered permission for '{discoveredPermission.Code}'."
-            : discoveredPermission.Description;
-
-        if (existingPermissionsById.TryGetValue(discoveredPermission.Id, out var existingPermission))
-        {
-            // Keep every mutable field synchronized with what's currently discovered from source code.
-            var changed = false;
-
-            if (existingPermission.Name != discoveredPermission.Code)
-            {
-                existingPermission.UpdateName(discoveredPermission.Code);
-                changed = true;
-            }
-
-            if (existingPermission.DisplayName != displayName)
-            {
-                existingPermission.UpdateDisplayName(displayName);
-                changed = true;
-            }
-
-            if (!string.Equals(existingPermission.Description, description, StringComparison.Ordinal))
-            {
-                existingPermission.UpdateDescription(description);
-                changed = true;
-            }
-
-            if (existingPermission.Instances != discoveredPermission.Instances)
-            {
-                existingPermission.UpdateInstances(discoveredPermission.Instances);
-                changed = true;
-            }
-
-            if (!existingPermission.IsActive)
-            {
-                existingPermission.Activate();
-                changed = true;
-            }
-
-            if (changed)
-            {
-                await repository.UpdatePermissionAsync(existingPermission, CancellationToken.None);
-            }
-
-            continue;
-        }
-
-        // New permission.
-        var groupId = RbacSeedData.GroupIdsByCode[discoveredPermission.Group];
-
-        var newPermission = new Permission(
-            discoveredPermission.Id,
-            discoveredPermission.Code,
-            displayName,
-            description,
-            groupId,
-            isSystem: false,
-            instances: discoveredPermission.Instances);
-
-        await repository.AddPermissionAsync(newPermission, CancellationToken.None);
-
-        if (string.IsNullOrWhiteSpace(discoveredPermission.Description))
-        {
-            logger.LogWarning(
-                "Auto-registered new permission '{PermissionCode}' discovered via [StandardPermission] with no description; add one to the attribute.",
-                discoveredPermission.Code);
-        }
-
-        // Non-breaking rollout: grant a genuinely brand-new permission (e.g. a newly added source or
-        // destination vendor's Edit permission) to every role that already exists right now — not just
-        // SuperAdmin — so nothing loses access to a source/destination it could already use before this
-        // permission existed. This only ever runs inside the "new permission" branch above (the `continue`
-        // a few lines up handles the "already exists" case), and a Permission row is only ever created
-        // once in its lifetime (removed permissions are deactivated, never deleted — see step 1 above) —
-        // so this grant loop can only ever fire once per permission. A role that has this permission
-        // unchecked later via the Role Permissions screen is therefore never silently re-granted it on a
-        // subsequent restart.
-        foreach (var role in allRoles)
-        {
-            await repository.AddRolePermissionAsync(role.Id, newPermission.Id, CancellationToken.None);
-        }
-    }
+    FHIRBridge.Api.Rbac.DiscoveredPermissionSynchronizer.SyncAsync(repository, app.Logger).GetAwaiter().GetResult();
 }
 
 // Returns the HTTP status, a candidate client message, whether that message is TRUSTED (author-written and safe

@@ -1,4 +1,8 @@
 @if (loading.isLoading() && branding.current().loaderStyle !== 'none') {
+  <!-- Blocks pointer interaction with whatever is underneath for as long as the app is busy — see
+       .global-loader-backdrop in the stylesheet. Decorative only; the spinner/bar/list markup below
+       carries its own role="status"/aria-live, so this needs no accessible name of its own. -->
+  <div class="global-loader-backdrop" aria-hidden="true"></div>
   @switch (branding.current().loaderStyle) {
     @case ('spinner') {
       <div class="global-loader global-loader--spinner" role="status" aria-live="polite" aria-label="Loading">

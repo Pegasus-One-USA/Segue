@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Destinations;
+﻿using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
@@ -130,5 +130,87 @@ public sealed class SqlDestinationSchemaServiceProbeMergeTests
         _secretMerger.Verify(
             x => x.TryInheritCredentials(It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>()),
             Times.Never);
+    }
+
+    // ── Schema MUTATIONS, not just the probe ────────────────────────────────────────────────────────────
+    // Regression: only ProbeSchemaAsync resolved the stored secret. AddColumn/CreateTable/DropColumn/
+    // AlterColumn each built the connection string directly from the request, so a schema change against a
+    // saved destination — where the wizard never re-displays the password and sends only
+    // ExistingDestinationId — connected with no credentials and failed with the server's own
+    // "Login failed for user 'sa'". A connection the user had just tested successfully would break the
+    // moment it altered a table.
+
+    private DestinationConnectionProbeRequest BlankPasswordConnection() =>
+        new(DestinationType.PostgreSql, Server: "new", Database: "fhirbridge_output",
+            ExistingDestinationId: _destination.Id);
+
+    private void ArrangeStoredSecret()
+    {
+        _secretProvider.Setup(x => x.GetSecretAsync(_destination.SecretReference, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Host=old;Username=admin;Password=hunter2;");
+        _secretMerger
+            .Setup(x => x.TryInheritCredentials(
+                DestinationType.PostgreSql, "Host=old;Username=admin;Password=hunter2;", It.IsAny<string>()))
+            .Returns("Host=new;Username=admin;Password=hunter2;");
+    }
+
+    private void VerifyStoredSecretWasResolved()
+    {
+        _secretProvider.Verify(
+            x => x.GetSecretAsync(_destination.SecretReference, It.IsAny<CancellationToken>()), Times.Once);
+        _secretMerger.Verify(
+            x => x.TryInheritCredentials(
+                DestinationType.PostgreSql, "Host=old;Username=admin;Password=hunter2;", It.IsAny<string>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task AddColumnAsync_blank_password_resolves_the_stored_secret()
+    {
+        ArrangeStoredSecret();
+
+        // Fails at the (unreachable here) connection stage; the assertions prove the credentials were attached.
+        await _sut.AddColumnAsync(
+            new AddColumnRequest(BlankPasswordConnection(), "dbo.Observations", "EncounterId", "bigint"),
+            CancellationToken.None);
+
+        VerifyStoredSecretWasResolved();
+    }
+
+    [Fact]
+    public async Task CreateTableAsync_blank_password_resolves_the_stored_secret()
+    {
+        ArrangeStoredSecret();
+
+        await _sut.CreateTableAsync(
+            new CreateTableRequest(BlankPasswordConnection(), "dbo.Observations",
+                [new TableColumnDefinition("EncounterId", "bigint")]),
+            CancellationToken.None);
+
+        VerifyStoredSecretWasResolved();
+    }
+
+    [Fact]
+    public async Task DropColumnAsync_blank_password_resolves_the_stored_secret()
+    {
+        ArrangeStoredSecret();
+
+        await _sut.DropColumnAsync(
+            new DropColumnRequest(BlankPasswordConnection(), "dbo.Observations", "EncounterId"),
+            CancellationToken.None);
+
+        VerifyStoredSecretWasResolved();
+    }
+
+    [Fact]
+    public async Task AlterColumnAsync_blank_password_resolves_the_stored_secret()
+    {
+        ArrangeStoredSecret();
+
+        await _sut.AlterColumnAsync(
+            new AlterColumnRequest(BlankPasswordConnection(), "dbo.Observations", "EncounterId", "bigint"),
+            CancellationToken.None);
+
+        VerifyStoredSecretWasResolved();
     }
 }
