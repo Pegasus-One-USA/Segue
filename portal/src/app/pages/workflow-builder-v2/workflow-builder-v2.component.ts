@@ -736,17 +736,31 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       return;
     }
 
-    // SQL-family rules are still Field-scoped and carry no workflow id, so "this workflow's rules" cannot be
-    // asked for directly. It can be answered though: a rule is this pipeline's business only if it targets a
-    // field this destination node actually maps. The mapped triples are local (dest_mappings), so the
-    // tenant-wide result gets intersected with them.
+    // SQL-family rules authored in this builder are Workflow-scoped and DO carry the workflow id, so ask for
+    // this pipeline's own rules rather than every rule pointed at this destination TYPE. Filtering only by
+    // destinationType returned other workflows' rules too, and the mapped-key intersection below cannot tell
+    // them apart: it matches on (resourceType, column[, sourceField]), which is exactly what two workflows
+    // writing Patient.name.family into FamilyName have in common. The result was a Transformation node on a
+    // workflow with no rules at all, purely because some OTHER workflow had a rule on a column this one also
+    // maps — the same "a rule anywhere makes the node appear everywhere" failure the FHIR branch above was
+    // already fixed for, one step further in.
+    //
+    // The intersection is still applied on top: a rule can outlive the mapping it was authored against (the
+    // column gets retargeted or removed), and a node for a rule that no longer has a field to attach to would
+    // be just as misleading as the cross-workflow one.
+    const workflowId = this.currentWorkflowId();
+    if (!workflowId) return;
+
     const mappedKeys = this.mappedRuleKeys(fields);
     if (mappedKeys.size === 0) return;
 
-    this.transformationRules.list({ destinationType }).subscribe({
+    this.transformationRules.list({ destinationType, resourcePipelineRouteId: workflowId }).subscribe({
       next: rules => {
         const appliesHere = rules.some(rule =>
-          !!rule.resourceType
+          // Belt-and-braces against a server-side filter that ever widens: this node is only this workflow's
+          // business when the rule actually belongs to it.
+          rule.resourcePipelineRouteId === workflowId
+          && !!rule.resourceType
           && !!rule.destinationField
           && mappedKeys.has(`${rule.resourceType}|${rule.destinationField}`)
           // A rule naming a different source field is about a different mapping of the same column.
