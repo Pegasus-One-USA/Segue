@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "13408318135437644126"
+      "templateHash": "12800884282119461838"
     }
   },
   "parameters": {
@@ -25,9 +25,9 @@
     },
     "useAzurePostgresql": {
       "type": "bool",
-      "defaultValue": false,
+      "defaultValue": true,
       "metadata": {
-        "description": "Chooses which Postgres FHIRBridge's own database (FHIRBridgeDb) gets. false (default) keeps a containerized Postgres (stock postgres:16-alpine, Azure Files-backed persistence, single replica, internal-only network access). true creates a managed Azure Database for PostgreSQL Flexible Server instead and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no volume; Azure manages patching/backups/HA."
+        "description": "Chooses which Postgres FHIRBridge's own database (FHIRBridgeDb) gets. true (default, recommended) creates a managed Azure Database for PostgreSQL Flexible Server and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no volume; Azure manages patching, and (the reason this became the default) automated daily backups with point-in-time restore for a configurable window. false instead keeps a containerized Postgres (stock postgres:16-alpine, single replica) — its data lives on the container's own local disk and is only copied out to Azure Files on a graceful shutdown (see postgresApp's own comment), so a crash can lose recent data with no fixed limit. Choosing false also creates postgresBackupJob below — a scheduled pg_dump-to-Blob-Storage job that meaningfully reduces that risk (bounds data loss to one backup interval instead of \"unpredictable\"), but it is a compensating control, not parity with Flexible Server's point-in-time restore: restoring means manually running psql against the newest dump, not a one-click Azure restore."
       }
     },
     "postgresPassword": {
@@ -46,14 +46,14 @@
     "imageRegistryServer": {
       "type": "string",
       "metadata": {
-        "description": "Registry the 3 custom images were published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package)."
+        "description": "Registry every custom image this deployment references was published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package) — fhirbridge-app/-worker/-redis/-postgres always, plus fhirbridge-postgres-backup too if useAzurePostgresql is false."
       }
     },
     "imageTag": {
       "type": "string",
       "defaultValue": "latest",
       "metadata": {
-        "description": "Tag the 3 custom images were published under."
+        "description": "Tag every custom image this deployment references was published under."
       }
     },
     "imageRegistryUsername": {
@@ -149,6 +149,31 @@
       ],
       "metadata": {
         "description": "Seq container size. Only consulted when enableSeq is true."
+      }
+    },
+    "enableFrontDoorWaf": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "false (default) — fhirbridgeApp is reached directly at its *.azurecontainerapps.io URL, with no inspection layer in front of it. true creates an Azure Front Door (Standard tier) profile with a WAF policy in front of fhirbridgeApp — Front Door is both a global HTTP load balancer and a WAF in one resource, so this single toggle gets both. Standard (not Premium) keeps cost down and is enough to start; the one thing it does not close is that fhirbridgeApp's own *.azurecontainerapps.io address stays technically reachable directly, bypassing Front Door, since Standard has no Private Link to hide the origin behind — that address is not published anywhere once a custom domain is set, so real-world exposure is low. See wafPolicyMode below for whether the WAF actually blocks anything, and the Front Door resources further down for the full reasoning, including why this can be created in this SAME deployment unlike the custom-domain flow above."
+      }
+    },
+    "wafPolicyMode": {
+      "type": "string",
+      "defaultValue": "Prevention",
+      "allowedValues": [
+        "Prevention",
+        "Detection"
+      ],
+      "metadata": {
+        "description": "Only consulted when enableFrontDoorWaf is true. Prevention (default) actually blocks requests the WAF custom rule flags. Detection only logs/scores them — the WAF exists but blocks nothing, which is a real, deliberate choice for a cautious rollout (watch its logs for false positives against this app's own traffic before switching), not just a lesser default. Prevention is the default here rather than the more common \"start in Detection, graduate later\" advice specifically because this template ships to many independent client installs with no central place for anyone to watch logs and decide when it's safe to flip each one — left in Detection, it would likely just stay a no-op indefinitely."
+      }
+    },
+    "wafRateLimitThreshold": {
+      "type": "int",
+      "defaultValue": 300,
+      "metadata": {
+        "description": "Only consulted when enableFrontDoorWaf is true. Requests from a single client IP per minute before the WAF's rate-limit custom rule flags it (see frontDoorWafPolicy below) — the baseline protection this template uses in place of Premium-only managed rule sets, which Standard_AzureFrontDoor cannot host. 300/min is generous enough not to trip up a legitimate integration polling the API; tighten it for a smaller, known client base."
       }
     },
     "fhirbridgeAppCustomDomain": {
@@ -249,6 +274,17 @@
       "metadata": {
         "description": "Worker container size."
       }
+    },
+    "storageRedundancy": {
+      "type": "string",
+      "defaultValue": "Standard_ZRS",
+      "allowedValues": [
+        "Standard_ZRS",
+        "Standard_LRS"
+      ],
+      "metadata": {
+        "description": "Replication for the storage account backing Azure Files (containerized Postgres/Redis/keys/Seq data) and, when useAzurePostgresql is false, the postgres-backups blob container. Standard_ZRS (default) synchronously replicates across 3 availability zones in the region, protecting against a single-datacenter outage — Standard_LRS keeps all copies in one datacenter and is only cheaper. Exposed as a dropdown, not hardcoded, because ZRS is not available in every Azure region — if a deploy fails on this resource with a SKU/region error, redeploy with Standard_LRS instead."
+      }
     }
   },
   "variables": {
@@ -308,16 +344,27 @@
     "registryConfig": "[if(variables('hasRegistryCreds'), createArray(createObject('server', parameters('imageRegistryServer'), 'username', parameters('imageRegistryUsername'), 'passwordSecretRef', 'registry-password')), createArray())]",
     "registrySecret": "[if(variables('hasRegistryCreds'), createArray(createObject('name', 'registry-password', 'value', parameters('imageRegistryPassword'))), createArray())]",
     "tenantSecretsKeyVaultName": "[toLower(format('{0}-tkv-{1}', take(parameters('namePrefix'), 8), take(variables('uniqueSuffix'), 8)))]",
+    "postgresBackupSasProperties": {
+      "signedServices": "b",
+      "signedResourceTypes": "co",
+      "signedPermission": "rwc",
+      "signedProtocol": "https",
+      "signedExpiry": "2035-01-01T00:00:00Z"
+    },
     "postgresManagedAdminLogin": "fhirbridgeadmin",
-    "postgresManifestItems": "[if(parameters('useAzurePostgresql'), createArray(resourceId('Microsoft.DBforPostgreSQL/flexibleServers/firewallRules', format('{0}-pg', parameters('namePrefix')), 'AllowAzureServices'), resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('{0}-pg', parameters('namePrefix')), 'FHIRBridge'), resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix')))), createArray(resourceId('Microsoft.App/containerApps', variables('postgresName'))))]",
+    "wafPolicyName": "[toLower(format('{0}wafpolicy', replace(parameters('namePrefix'), '-', '')))]",
+    "frontDoorEndpointName": "[toLower(format('{0}-{1}', parameters('namePrefix'), take(variables('uniqueSuffix'), 8)))]",
+    "postgresManifestItems": "[if(parameters('useAzurePostgresql'), createArray(resourceId('Microsoft.DBforPostgreSQL/flexibleServers/firewallRules', format('{0}-pg', parameters('namePrefix')), 'AllowAzureServices'), resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('{0}-pg', parameters('namePrefix')), 'FHIRBridge'), resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix')))), createArray(resourceId('Microsoft.App/jobs', format('{0}-postgres-backup', parameters('namePrefix'))), resourceId('Microsoft.App/containerApps', variables('postgresName'))))]",
     "postgresStorageManifestItems": "[if(parameters('useAzurePostgresql'), createArray(), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'postgres-data')))]",
     "postgresShareManifestItems": "[if(parameters('useAzurePostgresql'), createArray(), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/postgres-data', variables('storageAccountName')), '/')[2])))]",
+    "postgresBackupManifestItems": "[if(parameters('useAzurePostgresql'), createArray(), createArray(resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'postgres-backups')))]",
     "redisManifestItems": "[if(parameters('useAzureCacheForRedis'), createArray(resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default'), resourceId('Microsoft.Cache/redisEnterprise', format('{0}-cache', parameters('namePrefix')))), createArray(resourceId('Microsoft.App/containerApps', variables('redisName'))))]",
     "redisStorageManifestItems": "[if(parameters('useAzureCacheForRedis'), createArray(), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'redis-data')))]",
     "redisShareManifestItems": "[if(parameters('useAzureCacheForRedis'), createArray(), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/redis-data', variables('storageAccountName')), '/')[2])))]",
     "seqManifestItems": "[if(parameters('enableSeq'), createArray(resourceId('Microsoft.App/containerApps', variables('seqName'))), createArray())]",
     "seqStorageManifestItems": "[if(parameters('enableSeq'), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'seq-data')), createArray())]",
-    "seqShareManifestItems": "[if(parameters('enableSeq'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[2])), createArray())]"
+    "seqShareManifestItems": "[if(parameters('enableSeq'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[2])), createArray())]",
+    "frontDoorManifestItems": "[if(parameters('enableFrontDoorWaf'), createArray(resourceId('Microsoft.Cdn/profiles/securityPolicies', format('{0}-afd', parameters('namePrefix')), format('{0}-app-security-policy', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/afdEndpoints/routes', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName'), format('{0}-app-route', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/originGroups/origins', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')), format('{0}-app-origin', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/originGroups', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/afdEndpoints', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName')), resourceId('Microsoft.Cdn/profiles', format('{0}-afd', parameters('namePrefix'))), resourceId('Microsoft.Network/FrontDoorWebApplicationFirewallPolicies', variables('wafPolicyName'))), createArray())]"
   },
   "resources": [
     {
@@ -334,7 +381,8 @@
           "name": "standard"
         },
         "enableRbacAuthorization": true,
-        "softDeleteRetentionInDays": 7
+        "softDeleteRetentionInDays": 7,
+        "enablePurgeProtection": true
       }
     },
     {
@@ -486,9 +534,40 @@
       "location": "[parameters('location')]",
       "tags": "[variables('commonTags')]",
       "sku": {
-        "name": "Standard_LRS"
+        "name": "[parameters('storageRedundancy')]"
       },
       "kind": "StorageV2"
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/{1}', variables('storageAccountName'), 'default')]",
+      "properties": {
+        "deleteRetentionPolicy": {
+          "enabled": true,
+          "days": 30
+        },
+        "containerDeleteRetentionPolicy": {
+          "enabled": true,
+          "days": 30
+        },
+        "isVersioningEnabled": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "condition": "[not(parameters('useAzurePostgresql'))]",
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', 'postgres-backups')]",
+      "properties": {
+        "publicAccess": "None"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+      ]
     },
     {
       "condition": "[not(parameters('useAzurePostgresql'))]",
@@ -683,6 +762,70 @@
       "dependsOn": [
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'postgres-data')]"
+      ]
+    },
+    {
+      "condition": "[not(parameters('useAzurePostgresql'))]",
+      "type": "Microsoft.App/jobs",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}-postgres-backup', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "environmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "configuration": {
+          "triggerType": "Schedule",
+          "scheduleTriggerConfig": {
+            "cronExpression": "0 * * * *",
+            "parallelism": 1,
+            "replicaCompletionCount": 1
+          },
+          "replicaTimeout": 900,
+          "replicaRetryLimit": 1,
+          "secrets": "[concat(createArray(createObject('name', 'postgres-password', 'value', parameters('postgresPassword')), createObject('name', 'backup-container-sas-url', 'value', if(not(parameters('useAzurePostgresql')), format('{0}postgres-backups?{1}', reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').primaryEndpoints.blob, listAccountSas(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01', variables('postgresBackupSasProperties')).accountSasToken), ''))), variables('registrySecret'))]",
+          "registries": "[variables('registryConfig')]"
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "postgres-backup",
+              "image": "[format('{0}/fhirbridge-postgres-backup:{1}', parameters('imageRegistryServer'), parameters('imageTag'))]",
+              "resources": "[variables('containerSizes').Small]",
+              "env": [
+                {
+                  "name": "POSTGRES_HOST",
+                  "value": "[variables('postgresName')]"
+                },
+                {
+                  "name": "POSTGRES_PORT",
+                  "value": "[string(parameters('postgresPort'))]"
+                },
+                {
+                  "name": "POSTGRES_USER",
+                  "value": "fhirbridge"
+                },
+                {
+                  "name": "POSTGRES_DB",
+                  "value": "FHIRBridge"
+                },
+                {
+                  "name": "POSTGRES_PASSWORD",
+                  "secretRef": "postgres-password"
+                },
+                {
+                  "name": "BACKUP_CONTAINER_SAS_URL",
+                  "secretRef": "backup-container-sas-url"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.App/containerApps', variables('postgresName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'postgres-backups')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
     },
     {
@@ -1006,12 +1149,187 @@
         "[resourceId('Microsoft.App/containerApps', variables('redisName'))]",
         "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]"
       ]
+    },
+    {
+      "condition": "[parameters('enableFrontDoorWaf')]",
+      "type": "Microsoft.Network/FrontDoorWebApplicationFirewallPolicies",
+      "apiVersion": "2022-05-01",
+      "name": "[variables('wafPolicyName')]",
+      "location": "global",
+      "tags": "[variables('commonTags')]",
+      "sku": {
+        "name": "Standard_AzureFrontDoor"
+      },
+      "properties": {
+        "policySettings": {
+          "enabledState": "Enabled",
+          "mode": "[parameters('wafPolicyMode')]"
+        },
+        "customRules": {
+          "rules": [
+            {
+              "name": "RateLimitPerClientIp",
+              "priority": 100,
+              "enabledState": "Enabled",
+              "ruleType": "RateLimitRule",
+              "rateLimitDurationInMinutes": 1,
+              "rateLimitThreshold": "[parameters('wafRateLimitThreshold')]",
+              "matchConditions": [
+                {
+                  "matchVariable": "RemoteAddr",
+                  "operator": "IPMatch",
+                  "negateCondition": false,
+                  "matchValue": [
+                    "0.0.0.0/0",
+                    "::/0"
+                  ]
+                }
+              ],
+              "action": "Block"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "condition": "[parameters('enableFrontDoorWaf')]",
+      "type": "Microsoft.Cdn/profiles",
+      "apiVersion": "2024-02-01",
+      "name": "[format('{0}-afd', parameters('namePrefix'))]",
+      "location": "global",
+      "tags": "[variables('commonTags')]",
+      "sku": {
+        "name": "Standard_AzureFrontDoor"
+      }
+    },
+    {
+      "condition": "[parameters('enableFrontDoorWaf')]",
+      "type": "Microsoft.Cdn/profiles/afdEndpoints",
+      "apiVersion": "2024-02-01",
+      "name": "[format('{0}/{1}', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName'))]",
+      "location": "global",
+      "properties": {
+        "enabledState": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cdn/profiles', format('{0}-afd', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableFrontDoorWaf')]",
+      "type": "Microsoft.Cdn/profiles/originGroups",
+      "apiVersion": "2024-02-01",
+      "name": "[format('{0}/{1}', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')))]",
+      "properties": {
+        "loadBalancingSettings": {
+          "sampleSize": 4,
+          "successfulSamplesRequired": 3
+        },
+        "healthProbeSettings": {
+          "probePath": "/health",
+          "probeRequestType": "GET",
+          "probeProtocol": "Https",
+          "probeIntervalInSeconds": 30
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cdn/profiles', format('{0}-afd', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableFrontDoorWaf')]",
+      "type": "Microsoft.Cdn/profiles/originGroups/origins",
+      "apiVersion": "2024-02-01",
+      "name": "[format('{0}/{1}/{2}', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')), format('{0}-app-origin', parameters('namePrefix')))]",
+      "properties": {
+        "hostName": "[reference(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), '2024-03-01').configuration.ingress.fqdn]",
+        "originHostHeader": "[reference(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), '2024-03-01').configuration.ingress.fqdn]",
+        "httpPort": 80,
+        "httpsPort": 443,
+        "priority": 1,
+        "weight": 1000
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName'))]",
+        "[resourceId('Microsoft.Cdn/profiles/originGroups', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableFrontDoorWaf')]",
+      "type": "Microsoft.Cdn/profiles/afdEndpoints/routes",
+      "apiVersion": "2024-02-01",
+      "name": "[format('{0}/{1}/{2}', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName'), format('{0}-app-route', parameters('namePrefix')))]",
+      "properties": {
+        "originGroup": {
+          "id": "[resourceId('Microsoft.Cdn/profiles/originGroups', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')))]"
+        },
+        "supportedProtocols": [
+          "Https"
+        ],
+        "patternsToMatch": [
+          "/*"
+        ],
+        "forwardingProtocol": "HttpsOnly",
+        "httpsRedirect": "Enabled",
+        "linkToDefaultDomain": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cdn/profiles/afdEndpoints', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName'))]",
+        "[resourceId('Microsoft.Cdn/profiles/originGroups/origins', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')), format('{0}-app-origin', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Cdn/profiles/originGroups', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableFrontDoorWaf')]",
+      "type": "Microsoft.Cdn/profiles/securityPolicies",
+      "apiVersion": "2024-02-01",
+      "name": "[format('{0}/{1}', format('{0}-afd', parameters('namePrefix')), format('{0}-app-security-policy', parameters('namePrefix')))]",
+      "properties": {
+        "parameters": {
+          "type": "WebApplicationFirewall",
+          "wafPolicy": {
+            "id": "[resourceId('Microsoft.Network/FrontDoorWebApplicationFirewallPolicies', variables('wafPolicyName'))]"
+          },
+          "associations": [
+            {
+              "domains": [
+                {
+                  "id": "[resourceId('Microsoft.Cdn/profiles/afdEndpoints', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName'))]"
+                }
+              ],
+              "patternsToMatch": [
+                "/*"
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cdn/profiles/afdEndpoints', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName'))]",
+        "[resourceId('Microsoft.Cdn/profiles', format('{0}-afd', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Cdn/profiles/afdEndpoints/routes', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName'), format('{0}-app-route', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Network/FrontDoorWebApplicationFirewallPolicies', variables('wafPolicyName'))]"
+      ]
     }
   ],
   "outputs": {
     "fhirbridgeAppUrl": {
       "type": "string",
       "value": "[format('https://{0}.{1}', variables('fhirbridgeAppName'), reference(resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), '2024-03-01').defaultDomain)]"
+    },
+    "frontDoorEndpointUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Populated only when enableFrontDoorWaf is true. The actual public entry point once Front Door + WAF is enabled — send traffic here, not to fhirbridgeAppUrl directly, so the WAF actually inspects it. fhirbridgeAppUrl above still works underneath (Standard tier has no Private Link to hide it) — a documented, accepted tradeoff, see the comment above the Front Door resources."
+      },
+      "value": "[if(parameters('enableFrontDoorWaf'), format('https://{0}', coalesce(tryGet(if(parameters('enableFrontDoorWaf'), reference(resourceId('Microsoft.Cdn/profiles/afdEndpoints', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName')), '2024-02-01', 'full'), null()), 'properties', 'hostName'), '')), '')]"
+    },
+    "postgresScheduledBackupActive": {
+      "type": "bool",
+      "metadata": {
+        "description": "true when the containerized Postgres path is active — meaning postgresBackupJob is running hourly pg_dump backups to the postgres-backups blob container as a compensating control. false means useAzurePostgresql is active instead, which has real automated backups from Azure directly and needs no such job."
+      },
+      "value": "[not(parameters('useAzurePostgresql'))]"
     },
     "seqUrl": {
       "type": "string",
@@ -1101,7 +1419,7 @@
     },
     "resourceManifest": {
       "type": "array",
-      "value": "[concat(variables('postgresManifestItems'), variables('redisManifestItems'), variables('seqManifestItems'), createArray(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), resourceId('Microsoft.App/containerApps', variables('workerName'))), variables('postgresStorageManifestItems'), variables('redisStorageManifestItems'), variables('seqStorageManifestItems'), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')), variables('postgresShareManifestItems'), variables('redisShareManifestItems'), variables('seqShareManifestItems'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2]), resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix')))), if(parameters('enableTenantSecretsKeyVault'), createArray(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))), createArray()))]"
+      "value": "[concat(variables('postgresManifestItems'), variables('redisManifestItems'), variables('seqManifestItems'), createArray(resourceId('Microsoft.App/containerApps', variables('fhirbridgeAppName')), resourceId('Microsoft.App/containerApps', variables('workerName'))), variables('postgresStorageManifestItems'), variables('redisStorageManifestItems'), variables('seqStorageManifestItems'), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')), variables('postgresShareManifestItems'), variables('redisShareManifestItems'), variables('seqShareManifestItems'), variables('postgresBackupManifestItems'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2]), resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix')))), if(parameters('enableTenantSecretsKeyVault'), createArray(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))), createArray()), variables('frontDoorManifestItems'))]"
     }
   }
 }
