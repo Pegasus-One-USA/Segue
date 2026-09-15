@@ -28,8 +28,10 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
         new(Guid.NewGuid(), resourceType, resourceType, sourceResourceId, new Dictionary<string, object?>(), sourceJson);
 
     private static PipelineWriteContext Context(
-        Func<string, string, CancellationToken, Task<string?>>? fetchMissingReferenceAsync = null) =>
-        new(true, "Workflow", DateTimeOffset.UtcNow, FetchMissingReferenceAsync: fetchMissingReferenceAsync);
+        Func<string, string, CancellationToken, Task<string?>>? fetchMissingReferenceAsync = null,
+        string? sourceBaseUrl = null) =>
+        new(true, "Workflow", DateTimeOffset.UtcNow, FetchMissingReferenceAsync: fetchMissingReferenceAsync,
+            SourceBaseUrl: sourceBaseUrl);
 
     private static (MappedFhirRepositoryDestinationWriter Writer, CapturingHandler Handler, Mock<ISecretProvider> SecretProvider)
         CreateWriter(
@@ -1225,5 +1227,97 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
 
             return new HttpResponseMessage(HttpStatusCode.OK);
         }
+    }
+
+    // ---- Absolute (source-qualified) references -------------------------------------------------------------
+    // Epic returns fully-qualified references into its own base URL (Observation.focus/hasMember/derivedFrom).
+    // These were previously skipped as "external", so they were never existence-checked, auto-fetched, or
+    // excluded — the referencing record went to the destination carrying a guaranteed dangling reference and came
+    // back as an opaque 422 "Referenced resource ... does not exist".
+
+    private const string EpicBase = "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4";
+
+    private static MappedDestinationRecord ObservationWithFocus(string id, string focusReference) =>
+        new(Guid.NewGuid(), "Observation", "Observation", id, new Dictionary<string, object?>(),
+            $$"""{"resourceType":"Observation","id":"{{id}}","focus":[{"reference":"{{focusReference}}"}]}""");
+
+    [Fact]
+    public async Task Absolute_reference_into_source_base_url_is_auto_fetched_instead_of_written_dangling()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none","dest_autoFetchMissingReferences":"true"}""");
+        var record = ObservationWithFocus("obs-1", $"{EpicBase}/Observation/obs-target");
+
+        var fetched = new List<string>();
+        Task<string?> Fetch(string type, string id, CancellationToken ct)
+        {
+            fetched.Add($"{type}/{id}");
+            return Task.FromResult<string?>($$"""{"resourceType":"Observation","id":"{{id}}"}""");
+        }
+
+        var result = await writer.WriteAsync(
+            destination, Mapping(), [record], Context(Fetch, EpicBase), CancellationToken.None);
+
+        // The absolute reference is recognized as the source-relative Observation/obs-target and fetched.
+        fetched.Should().Contain("Observation/obs-target");
+        // Both the referencing record and the fetched target are written; nothing is excluded.
+        result.RecordErrors.Should().BeNullOrEmpty();
+        handler.Requests.Select(r => r.Request.RequestUri!.AbsolutePath)
+            .Should().Contain(p => p.EndsWith("/Observation/obs-target", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Absolute_reference_that_cannot_be_fetched_excludes_the_record_instead_of_writing_it()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none","dest_autoFetchMissingReferences":"true"}""");
+        var record = ObservationWithFocus("obs-1", $"{EpicBase}/Observation/gone");
+
+        // Source has no such resource — exactly the case that previously produced Aidbox's 422.
+        var result = await writer.WriteAsync(
+            destination, Mapping(), [record],
+            Context((_, _, _) => Task.FromResult<string?>(null), EpicBase), CancellationToken.None);
+
+        result.RecordErrors.Should().NotBeNullOrEmpty();
+        string.Join(" ", result.RecordErrors!).Should().Contain("Observation/gone");
+        // The existence-check GET is expected (it proves the reference is now checked at all); what must NOT
+        // happen is the PUT that previously came back as Aidbox's 422.
+        handler.Requests.Should().NotContain(
+            r => r.Request.Method == HttpMethod.Put,
+            "the record with an unresolvable reference must never be written");
+    }
+
+    [Fact]
+    public async Task Absolute_reference_to_a_different_host_is_still_treated_as_external_and_ignored()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none","dest_autoFetchMissingReferences":"true"}""");
+        var record = ObservationWithFocus("obs-1", "https://other-hospital.org/fhir/Observation/elsewhere");
+
+        var fetchCalled = false;
+        var result = await writer.WriteAsync(
+            destination, Mapping(), [record],
+            Context((_, _, _) => { fetchCalled = true; return Task.FromResult<string?>(null); }, EpicBase),
+            CancellationToken.None);
+
+        fetchCalled.Should().BeFalse("a reference to a different server is not this source's to resolve");
+        result.RecordErrors.Should().BeNullOrEmpty();
+        handler.Requests.Should().ContainSingle("the record still writes, exactly as before this change");
+    }
+
+    [Fact]
+    public async Task Absolute_reference_is_ignored_when_no_source_base_url_is_known()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none","dest_autoFetchMissingReferences":"true"}""");
+        var record = ObservationWithFocus("obs-1", $"{EpicBase}/Observation/obs-target");
+
+        // No SourceBaseUrl (ambiguous/unknown source) — behavior is unchanged from before this change.
+        var result = await writer.WriteAsync(
+            destination, Mapping(), [record],
+            Context((_, _, _) => Task.FromResult<string?>(null)), CancellationToken.None);
+
+        result.RecordErrors.Should().BeNullOrEmpty();
+        handler.Requests.Should().ContainSingle();
     }
 }
