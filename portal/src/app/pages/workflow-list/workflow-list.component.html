@@ -415,10 +415,11 @@
      Creates the workflow up front so the builder always opens on a real id — node config, mappings and
      transform rules then always have an owner to belong to. ── -->
 @if (showNewWorkflow()) {
-  <div class="modal-overlay" (click)="cancelNewWorkflow()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <div class="modal-overlay" (click)="cancelNewWorkflow()" (keydown.escape)="cancelNewWorkflow()" tabindex="-1">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-workflow-title"
+         (click)="$event.stopPropagation()" (keydown.escape)="cancelNewWorkflow()" tabindex="-1">
       <div class="modal-head">
-        <h3>New workflow</h3>
+        <h3 id="new-workflow-title">New workflow</h3>
         <button class="modal-close" type="button" (click)="cancelNewWorkflow()">&times;</button>
       </div>
       <div class="modal-body">
