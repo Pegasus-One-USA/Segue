@@ -1,0 +1,19 @@
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d7660ebc02e075::t_7aeb511383bf30 729-736,739-741
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7774eab307eda24ad2e0214449830cbdd876a6af",
+  "prompts": {},
+  "sessions": {
+    "s_d7660ebc02e075": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5d81ce8-1bc2-463d-9ca2-c79f9a78e133",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
