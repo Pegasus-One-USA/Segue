@@ -393,10 +393,27 @@ function computeProcessingOrder(tables: ResolvedTable[]): MappingProcessingStep[
  * destination type — a SQL/MySQL table this session hasn't (re)probed yet gets exactly the same "insufficient
  * evidence, keep it" treatment as a brand-new table does, per the table-not-found branch above.
  */
+/**
+ * Does `candidate` — a table name from a queued schema op, a restored mapping row, or targetByResource —
+ * refer to the same real table as `probed`, a live-probed DestinationTable? Matches the fully qualified
+ * name first, then falls back to the bare name, case-insensitively (SQL Server and MySQL identifiers are
+ * not case-sensitive by default).
+ *
+ * Callers routinely hold only the bare spelling (a mapping restored via bareName(), an "add column" op
+ * built from the canvas's own target) while a live probe reports the qualified one. A lookup that misses
+ * because of that mismatch does not fail loudly — it returns the schema unchanged, so a column added via
+ * "+ Add column" never lands in sqlTables() even though the real ALTER TABLE succeeded, and the row mapped
+ * onto it is then deleted as an orphan on the next save. Shared with DestinationWizardComponent so both
+ * sides resolve table names the same way.
+ */
+export function tableNameMatches(probed: DestinationTable, candidate: string): boolean {
+  const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  return eq(probed.fullName, candidate) || eq(probed.tableName, candidate);
+}
+
 export function pruneOrphanedMappingRows(mappingRows: MappingRow[], sqlTables: DestinationTable[]): MappingRow[] {
-  const tablesByName = new Map(sqlTables.map(t => [t.fullName, t]));
   return mappingRows.filter(row => {
-    const table = tablesByName.get(row.tableName);
+    const table = sqlTables.find(t => tableNameMatches(t, row.tableName));
     return !table || table.origin !== 'probed' || table.columns.some(c => c.name === row.targetName);
   });
 }

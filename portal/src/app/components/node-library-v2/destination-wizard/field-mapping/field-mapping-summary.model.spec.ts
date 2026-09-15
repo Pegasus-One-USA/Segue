@@ -1,5 +1,5 @@
 import {
-  buildMappingSummaryDocument, applyMappingSummaryDocument, pruneOrphanedMappingRows,
+  buildMappingSummaryDocument, applyMappingSummaryDocument, pruneOrphanedMappingRows, tableNameMatches,
   ChildTableRelation, MappingSummaryDocument,
 } from './field-mapping-summary.model';
 import { MappingRow } from './field-mapping-model';
@@ -416,6 +416,33 @@ describe('reference lookup (referencesResource)', () => {
   });
 });
 
+describe('tableNameMatches', () => {
+  const probed: DestinationTable = {
+    schemaName: 'dbo', tableName: 'Patient_NewMapped', fullName: 'dbo.Patient_NewMapped', origin: 'probed',
+    columns: [],
+  };
+
+  it('matches the fully qualified name', () => {
+    expect(tableNameMatches(probed, 'dbo.Patient_NewMapped')).toBe(true);
+  });
+
+  it('matches the bare name — the spelling a queued "add column" op and a restored mapping row both carry', () => {
+    // Regression: this fallback used to be gated on MySQL only, so for SQL Server the lookup in
+    // onColumnAdded silently matched nothing. The real ALTER TABLE succeeded but the new column never
+    // landed in sqlTables(), and pruneOrphanedMappingRows then deleted the row mapped onto it, with no
+    // error, on every save — the user's column came back but their mapping for it did not.
+    expect(tableNameMatches(probed, 'Patient_NewMapped')).toBe(true);
+  });
+
+  it('matches case-insensitively (SQL Server/MySQL identifiers are not case-sensitive by default)', () => {
+    expect(tableNameMatches(probed, 'DBO.PATIENT_NEWMAPPED')).toBe(true);
+  });
+
+  it('does not match a genuinely different table', () => {
+    expect(tableNameMatches(probed, 'dbo.Encounter')).toBe(false);
+  });
+});
+
 describe('pruneOrphanedMappingRows', () => {
   const encounterTable: DestinationTable = {
     schemaName: 'dbo', tableName: 'Encounter', fullName: 'dbo.Encounter', origin: 'probed',
@@ -436,6 +463,27 @@ describe('pruneOrphanedMappingRows', () => {
 
     expect(pruned).toHaveSize(1);
     expect(pruned[0].targetName).toBe('Identifier');
+  });
+
+  it('keeps a row mapped onto a column that really exists, when the row carries the BARE table name', () => {
+    // The row's tableName is the bare spelling while the probe reports the qualified one — the same
+    // mismatch tableNameMatches exists to absorb. Before that, this lookup missed, the row fell into the
+    // "table not found, insufficient evidence" branch and survived by luck rather than by checking; a row
+    // naming a genuinely dropped column on a bare-named table survived too. Now it resolves the table for
+    // real, so a valid column is kept deliberately.
+    const rows: MappingRow[] = [
+      { resource: 'Encounter', sources: [{ fhirPath: 'Encounter.id', label: 'Id' }], mode: 'value', targetName: 'Identifier', tableName: 'Encounter' },
+    ];
+
+    expect(pruneOrphanedMappingRows(rows, [encounterTable])).toHaveSize(1);
+  });
+
+  it('drops a stale column on a bare-named table (the lookup now resolves instead of silently missing)', () => {
+    const rows: MappingRow[] = [
+      { resource: 'Encounter', sources: [{ fhirPath: 'Encounter.id', label: 'Id' }], mode: 'value', targetName: 'NotAColumn', tableName: 'Encounter' },
+    ];
+
+    expect(pruneOrphanedMappingRows(rows, [encounterTable])).toHaveSize(0);
   });
 
   it('keeps every row for a table this session has never probed/created yet (nothing to validate against)', () => {

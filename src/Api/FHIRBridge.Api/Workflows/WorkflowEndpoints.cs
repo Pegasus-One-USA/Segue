@@ -86,6 +86,8 @@ public static class WorkflowEndpoints
             IParentReferenceResolver parentReferenceResolver,
             IDestinationSchemaService destinationSchemaService,
             IAuthorizationService authorizationService,
+            IServiceProvider serviceProvider,
+            [FromKeyedServices(FhirElementCatalogKeys.Generic)] IFhirElementCatalog genericFhirCatalog,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
@@ -104,6 +106,29 @@ public static class WorkflowEndpoints
             // License workflow-quota enforcement (create vs. edit — an edit never changes row count) lives
             // centrally in LicenseEnforcementSaveChangesInterceptor, resolved at the actual persistence choke
             // point (SqlWorkflowDefinitionStore.SaveAsync) rather than here.
+
+            // Re-derive any mapping field whose JsonPath is missing its array wildcards, BEFORE anything is
+            // validated or persisted, so both the mapping node's inline "mappings" block and the destination
+            // node's "resourceMappings" (built from the same spec.Fields below) get the corrected path.
+            //
+            // The wizard stamps the catalog's array-aware JsonPath ("$.name[*].family") onto each row, but the
+            // catalog is fetched asynchronously: a field mapped before it arrives falls back to the built-in
+            // DEST_RESOURCE_DEFS, which carry no JsonPath at all, and the client then builds a naive
+            // "$.name.family". That resolves to nothing against an array (JsonMappingEngine.ResolveAll needs an
+            // object to read a property from), so every array-nested column — name, address, identifier —
+            // silently writes NULL, and any transformation rule on that column never runs because there is no
+            // value to transform. It only looked correct on a second edit, when the catalog was already cached.
+            //
+            // The server always has the catalog, so it is the right place to repair this. Deliberately reuses
+            // the catalog's own pre-computed JsonPath rather than appending "[*]" to every ancestor segment:
+            // only genuinely repeating elements are wildcarded (Condition.code.coding.code wildcards "coding"
+            // but not "code") — see MappingImportService.BuildResolvableJsonPath, which documents the
+            // production bug that naive approach caused.
+            request = request with
+            {
+                Mappings = await RepairMappingJsonPathsAsync(
+                    request, configurationRepository, serviceProvider, genericFhirCatalog, cancellationToken),
+            };
 
             // Fail fast, before provisioning anything: every "child of" declaration on a mapping spec must
             // resolve to a real reference field, mapped, targeting a sibling resource on the same destination.
@@ -306,8 +331,67 @@ public static class WorkflowEndpoints
                 // transformation rule targeted, so the rule had nothing to attach to.
                 //
                 // Masters are created only by an explicit "Mark as Master" in the wizard.
-                continue;
+                //
+                // The DESTINATION node still has to be told this resource type's write shape, though. It builds its
+                // own MappingProfile at run time (DestinationNodeExecutor.CreateMappingProfiles) and uses that
+                // profile's Fields to create/align the target table's columns — it does NOT read the mapping node's
+                // config. With no master profile to fall back on either, leaving this unstamped means the executor
+                // synthesizes a profile with zero fields and the write fails outright:
+                // "Mapping profile for 'dbo.X' has no mapped fields — a SQL destination needs at least one mapped
+                // column." Accumulated per destination node (never overwritten) so a destination fed by several
+                // resource types keeps each one's own table and columns.
+                if (!resourceMappingsByNode.TryGetValue(spec.DestinationNodeId, out var destinationResourceMappings))
+                {
+                    destinationResourceMappings = new Dictionary<string, DestinationResourceMappingConfig>(StringComparer.OrdinalIgnoreCase);
+                    resourceMappingsByNode[spec.DestinationNodeId] = destinationResourceMappings;
+                }
 
+                destinationResourceMappings[spec.ResourceType] =
+                    new DestinationResourceMappingConfig(spec.DestinationObject, spec.Fields);
+            }
+
+            // Re-stamp each mapping node's own inline "mappings" block from the (now repaired) specs.
+            //
+            // The client stamps this block itself, in the browser, BEFORE the request is sent
+            // (WorkflowBuildAssemblerServiceV2.stampInlineMappings) — so it carries whatever JsonPath the wizard
+            // had at that moment, naive fallbacks included. RepairMappingJsonPathsAsync above fixes
+            // request.Mappings, which is what the destination node's resourceMappings is built from, but it
+            // cannot retroactively fix a block the client already wrote. MappingNodeExecutor PREFERS this inline
+            // block over every other source (see TryReadInlineResourceMapping), so leaving it stale means the
+            // repaired paths never actually run: the destination node would hold "$.address[*].city" while the
+            // node that does the mapping still held "$.address.city", and every array-nested column would keep
+            // writing NULL. Rewritten from the same repaired specs so the two can never disagree.
+            foreach (var specsByNode in (request.Mappings ?? []).GroupBy(spec => spec.NodeId, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!nodes.TryGetValue(specsByNode.Key, out var mappingSpecNode))
+                {
+                    continue;
+                }
+
+                var inline = specsByNode.ToDictionary(
+                    spec => spec.ResourceType,
+                    spec => new DestinationResourceMappingConfig(spec.DestinationObject, spec.Fields),
+                    StringComparer.OrdinalIgnoreCase);
+
+                nodes[specsByNode.Key] = WithConfiguration(
+                    mappingSpecNode,
+                    config => config["mappings"] = JsonSerializer.SerializeToNode(inline, WebJsonOptions));
+            }
+
+            // Stamp each destination node's accumulated per-resource write shapes onto its own config. Carries the
+            // fields themselves, not an id — same self-contained rule the mapping node follows (plan §2.d), so a
+            // run can never depend on a master record that may have been edited or deleted since.
+            foreach (var (destinationNodeId, resourceMappings) in resourceMappingsByNode)
+            {
+                if (!nodes.TryGetValue(destinationNodeId, out var destinationNode))
+                {
+                    continue;
+                }
+
+                nodes[destinationNodeId] = WithConfiguration(
+                    destinationNode,
+                    config => config["resourceMappings"] =
+                        JsonSerializer.SerializeToNode(resourceMappings, WebJsonOptions));
             }
 
             // 3b. Stamp destinationId onto any mapping node the mappings loop above didn't touch. A whole-resource
@@ -2777,6 +2861,111 @@ public static class WorkflowEndpoints
     /// The server always knows the id, so stamping at the persistence choke point fixes first save and re-save
     /// alike. An id the client already set is left alone.
     /// </summary>
+    /// <summary>
+    /// Replaces any mapping field's <c>JsonPath</c> that is missing its array wildcards with the FHIR element
+    /// catalog's own pre-computed path, matched on the field's source FHIR path.
+    ///
+    /// Only fields whose stored path contains no <c>[*]</c> are considered, and a field is only rewritten when
+    /// the catalog knows that exact element AND its own path actually differs — so a correct path (the common
+    /// case, where the wizard's catalog had loaded) is never touched, and an unknown/custom element is left
+    /// exactly as the client sent it rather than guessed at.
+    /// </summary>
+    private static async Task<IReadOnlyCollection<MappingBuildSpec>?> RepairMappingJsonPathsAsync(
+        WorkflowBuildRequest request,
+        IConfigurationRepository configurationRepository,
+        IServiceProvider serviceProvider,
+        IFhirElementCatalog genericFhirCatalog,
+        CancellationToken cancellationToken)
+    {
+        if (request.Mappings is not { Count: > 0 } specs)
+        {
+            return request.Mappings;
+        }
+
+        var catalog = await ResolveBuildCatalogAsync(
+            request, configurationRepository, serviceProvider, genericFhirCatalog, cancellationToken);
+
+        var repaired = new List<MappingBuildSpec>(specs.Count);
+        foreach (var spec in specs)
+        {
+            // Indexed per resource type, not per field: Fields(resourceType) walks the whole catalog.
+            var byFhirPath = catalog.Fields(spec.ResourceType)
+                .GroupBy(element => element.FhirPath, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+            var fields = spec.Fields
+                .Select(field => RepairFieldJsonPath(field, spec.ResourceType, byFhirPath))
+                .ToArray();
+
+            repaired.Add(spec with { Fields = fields });
+        }
+
+        return repaired;
+    }
+
+    private static MappingFieldDto RepairFieldJsonPath(
+        MappingFieldDto field,
+        string resourceType,
+        IReadOnlyDictionary<string, FhirElementDto> catalogByFhirPath)
+    {
+        if (string.IsNullOrWhiteSpace(field.JsonPath) || field.JsonPath.Contains("[*]", StringComparison.Ordinal))
+        {
+            return field;
+        }
+
+        // "$.name.family" -> "name.family", the shape the catalog keys its elements by (it stores FhirPath
+        // without the resource-type prefix). A joined/aggregate path ("a|b") or the whole-document "$" has no
+        // single element to match and falls out here.
+        var candidate = field.JsonPath.StartsWith("$.", StringComparison.Ordinal)
+            ? field.JsonPath[2..]
+            : null;
+        if (string.IsNullOrWhiteSpace(candidate) || candidate.Contains('|', StringComparison.Ordinal))
+        {
+            return field;
+        }
+
+        if (!catalogByFhirPath.TryGetValue(candidate, out var element)
+            && !catalogByFhirPath.TryGetValue($"{resourceType}.{candidate}", out element))
+        {
+            return field;
+        }
+
+        return string.IsNullOrWhiteSpace(element.JsonPath)
+            || string.Equals(element.JsonPath, field.JsonPath, StringComparison.Ordinal)
+                ? field
+                : field with { JsonPath = element.JsonPath };
+    }
+
+    /// <summary>The catalog for whichever vendor this build's source connections speak — mirrors
+    /// MappingController.ResolveCatalogAsync. Falls back to the generic R4 catalog when no source is
+    /// resolvable yet (a brand-new workflow whose source connection this same request is about to create).</summary>
+    private static async Task<IFhirElementCatalog> ResolveBuildCatalogAsync(
+        WorkflowBuildRequest request,
+        IConfigurationRepository configurationRepository,
+        IServiceProvider serviceProvider,
+        IFhirElementCatalog genericFhirCatalog,
+        CancellationToken cancellationToken)
+    {
+        foreach (var source in request.Sources ?? [])
+        {
+            if (source.ExistingId is { } existingId)
+            {
+                var connection = await configurationRepository.GetSourceConnectionAsync(existingId, cancellationToken);
+                if (connection is not null)
+                {
+                    return serviceProvider.GetRequiredKeyedService<IFhirElementCatalog>(
+                        FhirElementCatalogKeys.For(connection.SourceSystemType));
+                }
+            }
+
+            // Not yet created (this request creates it) — the spec already names the vendor it will be.
+            return serviceProvider.GetRequiredKeyedService<IFhirElementCatalog>(
+                FhirElementCatalogKeys.For(source.Source.SourceSystemType));
+        }
+
+        return genericFhirCatalog;
+    }
+
     private static string StampWorkflowId(string? configurationJson, string nodeType, Guid workflowId)
     {
         if (!RuleResolvingNodeTypes.Contains(nodeType))

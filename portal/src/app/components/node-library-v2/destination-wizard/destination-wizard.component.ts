@@ -78,6 +78,7 @@ import {
   MappingSummaryDocument,
   ChildTableRelation,
   buildMappingSummaryDocument,
+  tableNameMatches,
   applyMappingSummaryDocument,
   pruneOrphanedMappingRows,
 } from './field-mapping/field-mapping-summary.model';
@@ -1564,7 +1565,7 @@ export class DestinationWizardComponent implements OnInit {
         // schema probe) for the exact same real table. Without this, the lookup below silently never
         // matches — the column is queued (the toast fires unconditionally) but never actually appears
         // on the canvas, since every table in sqlTables() comes back unchanged.
-        const matches = t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName);
+        const matches = tableNameMatches(t, e.tableName);
         if (!matches) return t;
         const idx = t.columns.findIndex((c) => c.name === column.name);
         const columns =
@@ -1891,6 +1892,7 @@ export class DestinationWizardComponent implements OnInit {
   // Medplum is a FHIR R4 server destination: columnless (writes whole resources), no live schema probe,
   // a single target (the FHIR base URL) and an opaque secret. Its own form/branches, like Mongo.
   readonly isMedplum = computed(() => this.destType() === 'medplum');
+
   /** A FHIR-native repository (Aidbox) — writes whole FHIR resources, so it has no field-mapping canvas of
    *  its own; step 3 offers passthrough vs. per-field transform rules instead. */
   readonly isFhir = computed(() => this.destType() === 'fhir');
@@ -4957,7 +4959,23 @@ export class DestinationWizardComponent implements OnInit {
       this.sqlTables(),
     );
     if (pruned.length !== this.mappingRows().length) {
+      // Never drop a user's mapping without saying so. This prune is a safety net for a column deleted or
+      // renamed OUT-OF-BAND (directly in the database), which is rare — but it can't tell that apart from a
+      // column this wizard itself just created whose local schema update didn't land (see tableNameMatches:
+      // exactly that bug silently deleted a freshly mapped row on every save, with no error, for a column
+      // that really did exist in the database). Silence is what made that invisible, so name the rows.
+      const keptKeys = new Set(pruned.map((r) => `${r.tableName}.${r.targetName}`));
+      const dropped = this.mappingRows().filter(
+        (r) => !keptKeys.has(`${r.tableName}.${r.targetName}`),
+      );
       this.mappingRows.set(pruned);
+      this.toast.error(
+        `Removed ${dropped.length} mapping${dropped.length === 1 ? '' : 's'} with no matching column`,
+        dropped
+          .map((r) => `"${r.targetName}" on ${r.tableName}`)
+          .join(', ') +
+          ' — the column was not found in the destination schema. Re-add the column, then map it again.',
+      );
     }
 
     const type = this.destType();

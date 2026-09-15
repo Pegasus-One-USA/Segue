@@ -635,6 +635,23 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         this.toast.error('No destination', 'Add a destination before adding this step.');
         return;
       }
+      // The wizard that produced this config is the DESTINATION's wizard — adding a chain step is just one
+      // way to leave it — so its config describes the destination, not only the step being added. Merge it
+      // back onto the destination node before inserting the step.
+      //
+      // Without this, mapping a field and then leaving via "add Transformation" silently discarded the
+      // mapping: the config (13 rows) landed only on the new chain node, while the destination node kept
+      // its previous 12, and WorkflowBuildAssemblerServiceV2.buildMappings reads mapping rows off the
+      // DESTINATION node — so the row reached neither the build request nor the database, with no error
+      // anywhere. Merged (not replaced) for the same reason the editNodeId branch above merges: machine
+      // keys injected server-side (destinationId, secretKeyVaultName/secretName) are not form controls
+      // here and must survive.
+      if (e.config) {
+        const destinationFields = this.store.byId(destination.id)?.fields ?? {};
+        this.store.updateNode(destination.id, {
+          fields: { ...destinationFields, ...e.config },
+        });
+      }
       this.insertChainStep(destination, e.transformId, e.config);
       this.toast.show('Step added', `${t.name} added.`);
       return;

@@ -551,6 +551,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         // resource type genuinely has no mapping configured for this destination) instead of needing to check
         // MappingProfiles by hand.
         var skippedResourceTypes = new List<string>();
+        // Resources that WERE mapped (a field list resolved for their type) but produced no writable value at
+        // all — see the per-resource check below for why an empty result has to be reported rather than dropped.
+        var unmappedByResourceType = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         // A single Field Mapping node can receive a heterogeneous batch — e.g. an EpicSource node configured
         // for both Patient and Observation scopes feeds one Mapping node before a single Destination node.
@@ -667,6 +670,16 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 // empty Values) because the writer captures the child rows' FK value off THAT row's own write
                 // (OUTPUT INSERTED) — dropping it would silently lose the child data instead of just writing an
                 // extra near-empty row.
+                if (mapped.Values.Count == 0 && childTables is null && !wholeResourceFhir)
+                {
+                    // Every mapped field came back empty for this resource, so there is no row to write. Counted
+                    // (not silently dropped) because a WHOLE batch landing here is indistinguishable at the run
+                    // level from "nothing to do" — the node emits zero records, the destination is handed nothing
+                    // to reject, and the run reports Succeeded having written nothing at all. That is precisely
+                    // how a node whose inline mapping failed to deserialize looked green while doing nothing.
+                    unmappedByResourceType[resourceType] = unmappedByResourceType.GetValueOrDefault(resourceType) + 1;
+                }
+
                 if (mapped.Values.Count > 0 || childTables is not null || wholeResourceFhir)
                 {
                     var dataset = _mappingMaterializer?.Materialize(destinationObject, mapped);
@@ -750,7 +763,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase),
                 // Resource types present in the upstream batch that had no resolvable MappingProfile for this
                 // node's (sourceConnectionId, destinationId) — every one of their records was skipped entirely.
-                ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.Distinct().ToArray() : null
+                // Reported through the same key the orchestrator already aggregates into
+                // WorkflowRunStatus.PartialSuccess (see RankedWorkflowOrchestrator), so a mapping that yields
+                // nothing is surfaced exactly like a destination write that rejects everything, instead of
+                // passing as a clean success.
+                ["skippedResourceTypes"] = BuildMappingOmissions(skippedResourceTypes, unmappedByResourceType)
             });
     }
 
@@ -1000,6 +1017,32 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         }
 
         return (null, configuredDestinationObject);
+    }
+
+    /// <summary>
+    /// The omissions this mapping node needs to report, in the shape the orchestrator aggregates into
+    /// <c>WorkflowRunStatus.PartialSuccess</c>: resource types with no resolvable mapping at all, plus resource
+    /// types that WERE mapped but whose records all came out empty.
+    ///
+    /// The second case used to be invisible. A resource that maps to no values is not written (there is no row to
+    /// write), so with an entire batch in that state the node emits zero records, the destination writer is handed
+    /// nothing and therefore rejects nothing, and every node plus the run itself reports Succeeded — a green run
+    /// that moved no data. Returns null when there is nothing to report, matching the key's existing contract.
+    /// </summary>
+    private static string[]? BuildMappingOmissions(
+        IReadOnlyCollection<string> skippedResourceTypes,
+        IReadOnlyDictionary<string, int> unmappedByResourceType)
+    {
+        var reasons = new List<string>(skippedResourceTypes.Distinct(StringComparer.OrdinalIgnoreCase));
+
+        foreach (var entry in unmappedByResourceType.OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            reasons.Add(
+                $"{entry.Key}: {entry.Value} record(s) produced no mapped values and were not written "
+                + "(check this resource type's field mappings)");
+        }
+
+        return reasons.Count > 0 ? reasons.ToArray() : null;
     }
 
     /// <summary>
