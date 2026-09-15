@@ -80,6 +80,14 @@
             }
           },
           {
+            "name": "frontDoorEndpointApi",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "request": {
+              "method": "GET",
+              "path": "[concat(subscription().id, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Cdn/profiles/', basics('namePrefix'), '-afd/afdEndpoints?api-version=2024-02-01')]"
+            }
+          },
+          {
             "name": "domain",
             "type": "Microsoft.Common.TextBox",
             "label": "Custom domain (optional)",
@@ -97,7 +105,7 @@
             "visible": "[and(equals(steps('fhirbridgeAppStep').usesFrontDoorWaf, 'No'), not(empty(steps('fhirbridgeAppStep').domain)))]",
             "options": {
               "icon": "Info",
-              "text": "[concat('Create these records at your DNS provider:', '\n', '  CNAME   ', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '  TXT     asuid.', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n\n', 'Create these records and wait for them to propagate BEFORE deploying - this one deploy registers the hostname, creates the certificate, and binds it, all together. Deploying before DNS is ready fails cleanly (InvalidCustomHostNameValidation) - just wait and redeploy once it resolves.')]"
+              "text": "[concat('Steps:', '\n', '1. Create these records at your DNS provider:', '\n', '     CNAME   ', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '     TXT     asuid.', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n', '2. Wait for both records to propagate (minutes to hours - check with nslookup/dig).', '\n', '3. Click Review + create, then Create below. This one deployment registers the hostname, creates the certificate, and binds it, all together.', '\n', '4. If DNS was not actually ready yet, this deployment fails cleanly with InvalidCustomHostNameValidation - just wait longer and redeploy once it resolves; redeploying is always safe.', '\n', '5. Once it succeeds, open https://', steps('fhirbridgeAppStep').domain, ' and confirm it loads.')]"
             }
           },
           {
@@ -106,7 +114,7 @@
             "visible": "[and(equals(steps('fhirbridgeAppStep').usesFrontDoorWaf, 'Yes'), not(empty(steps('fhirbridgeAppStep').domain)))]",
             "options": {
               "icon": "Info",
-              "text": "Front Door's validation token is different from the Container App's, and only exists once the domain is actually created — it cannot be shown here before you deploy. After this deployment finishes, open its Outputs tab and copy frontDoorCustomDomainValidationToken, then create a TXT record at _dnsauth.<your domain> with that value. Azure detects it and issues the certificate automatically in the background — no second deploy needed for this path."
+              "text": "[concat('Steps (this domain routes through Front Door + the WAF, not directly to the app):', '\n', '1. Create this CNAME at your DNS provider now - it can be created before you deploy:', '\n', '     CNAME   ', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').frontDoorEndpointApi), '\"hostName\":\"')), '\"')), '\n', '2. Click Review + create, then Create below to deploy now. The Front Door domain-ownership validation token does not exist yet at this point, so there is nothing else to create until after this deploy finishes.', '\n', '3. After the deployment finishes, open its Outputs tab and copy the value of frontDoorCustomDomainValidationToken.', '\n', '4. Create a TXT record at _dnsauth.', steps('fhirbridgeAppStep').domain, ' with that value at your DNS provider.', '\n', '5. Wait - Azure detects the TXT record and issues the managed certificate automatically in the background. No second deployment is needed for this path.', '\n', '6. Once the certificate finishes issuing (can take several minutes), open https://', steps('fhirbridgeAppStep').domain, ' and confirm it loads through Front Door, not through the containerapps.io address directly.')]"
             }
           }
         ]
