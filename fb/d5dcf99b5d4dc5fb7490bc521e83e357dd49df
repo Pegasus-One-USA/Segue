@@ -1,0 +1,202 @@
+tests/FHIRBridge.UnitTests/Terminology/HapiHcpcsDataFileSelectionTests.cs
+  s_b103e9ccd1f7e5::t_adc25f06e51ab9 1-66
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  s_10829cf00ed675::t_45c741c4bc3961 21,179-183
+  s_10829cf00ed675::t_126e9183e54417 77-80,83-103,115,122-124,131-132
+  s_10829cf00ed675::t_3065ef0217d4dd 134-155
+  s_10829cf00ed675::t_c4f3fa757fa37d 363-366,368,370,372,386,416-417,421-422,489-493
+  s_10829cf00ed675::t_9b772d09c01660 69-73,75-76,81-82,104-114,125,156,418-419,497-498
+  s_10829cf00ed675::t_a787d3cbe4ee0b 367,369,371,423-432
+  s_10829cf00ed675::t_f92531c11732bc 17,74,116-121,126-130,133,177,494-496
+  s_10829cf00ed675::t_97314f5b26c9d5 36-44,448-450
+  s_10829cf00ed675::t_b3e8ba364bca01 194-201
+  s_10829cf00ed675::t_17e2c44d26e7ab 373-385
+  s_10829cf00ed675::t_7d89aac230fc1f 18-19,178,184-193,202-208
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_10829cf00ed675::t_4563c049815a6b 4668-4696,5002-5005,5008-5009,5011,5912-5914
+  s_cdde4e5bdf38da::t_38669954fcfac6 5010,5266,5429,5654,5722,5746,5771,5821-5911,5915,5998
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_cdde4e5bdf38da::t_fb3d4a5d88a79f 1,46-48,50
+  s_10829cf00ed675::t_2d61144ecc6692 24-30,49,51,239-259
+  s_10829cf00ed675::t_8359ec3acb0140 2
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_10829cf00ed675::t_058d4f0ea8262f 3-7
+  s_10829cf00ed675::t_7d1f6b8d540658 46,49,58-59
+  s_10829cf00ed675::t_1ca6b3d50b066c 135,148-150,162,170,183-185,202-207,233
+  s_10829cf00ed675::t_93bb77834bd0bf 82-90
+  s_10829cf00ed675::t_8f05616b7dc177 50-57
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowDefinition.cs
+  s_10829cf00ed675::t_7517b9af0ea2cb 185
+  s_10829cf00ed675::t_5c7c4cfb9d3dc9 75-81,221-226
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowDefinitionStore.cs
+  s_10829cf00ed675::t_fd6c736b34117d 1-2,26,32,37,84-94
+src/FHIRBridge.Domain/Entities/WorkflowNumberSequence.cs
+  s_10829cf00ed675::t_ce0bcb0130c232 1-57
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_10829cf00ed675::t_b71871806fdeeb 4703-4732,5038-5041,5044-5047
+tests/FHIRBridge.UnitTests/Security/CompositeSecretMetadataProviderTests.cs
+  s_b103e9ccd1f7e5::t_adc25f06e51ab9 1-196
+portal/src/app/system-settings/dialogs/general-setting-group-dialog/general-setting-group-dialog.component.ts
+  s_10829cf00ed675::t_e88f9e1a61b201 4,11-46
+  s_10829cf00ed675::t_beb0cb41885343 1,8,47,92-147
+portal/src/app/layout/app-shell/app-shell.component.html
+  s_10829cf00ed675::t_9dc213f73fd6b5 19-22,68
+src/FHIRBridge.Application/Services/Workflows/Numbering/WorkflowNumberResetPolicy.cs
+  s_10829cf00ed675::t_ce0bcb0130c232 1-31
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.html
+  s_10829cf00ed675::t_f8b05c1349bab7 1-5,7
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260915073803_AddWorkflowNumbering.Designer.cs
+  s_10829cf00ed675::t_463f230a610604 5013
+  s_10829cf00ed675::t_4563c049815a6b 1-5012,5014-6056
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260915073803_AddWorkflowNumbering.cs
+  s_10829cf00ed675::t_4563c049815a6b 1-40,46-69
+  s_10829cf00ed675::t_297542ab410258 41-45
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_b103e9ccd1f7e5::t_adc25f06e51ab9 1,7,62,1088-1092,1096-1100,1105,1111-1118,1124
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_10829cf00ed675::t_207e6fe40f6f9a 436-440
+  s_10829cf00ed675::t_7477d3459df43b 584-591,603-606
+portal/src/app/core/services/blocking-confirm.service.ts
+  s_b103e9ccd1f7e5::t_adc25f06e51ab9 1-32
+src/Api/FHIRBridge.Api/Workflows/WorkflowSummaryModels.cs
+  s_10829cf00ed675::t_3bd0f83a4ec7dd 1,31-35
+portal/src/app/settings/settings.routes.ts
+  s_10829cf00ed675::t_5c37295e4d834c 123,151-153
+  s_10829cf00ed675::t_78c3f593f809af 156-160
+  s_10829cf00ed675::t_5c7da51e605861 289-293,297
+  s_10829cf00ed675::t_ff0d952cec6dda 187-191
+  s_10829cf00ed675::t_e089b7bba44a78 41-43,120-121,313-317
+  s_10829cf00ed675::t_eed95556e1fc6c 122,124-127
+  s_10829cf00ed675::t_306d8d51f88b02 175-184,186
+portal/src/app/layout/app-shell/app-shell.component.scss
+  s_10829cf00ed675::t_50f3c3ac874ed3 46-49,55-60,212-213,218-223
+src/FHIRBridge.Infrastructure/Security/AzureKeyVaultSecretProvider.cs
+  s_b103e9ccd1f7e5::t_adc25f06e51ab9 1,49-73
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.spec.ts
+  s_b103e9ccd1f7e5::t_adc25f06e51ab9 4-5,12-19,21,23,28,38-44,47,52,60-61,66-70,73,75-76,79,87,92,99,104,111-113,125,132,138,145,150,157,161,166,170,174,182,186-205,207
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260915073728_AddWorkflowNumbering.cs
+  s_10829cf00ed675::t_b71871806fdeeb 1-8,13-69
+  s_10829cf00ed675::t_7814d8800de759 9-12
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_10829cf00ed675::t_69d71c0cf4bd88 1,62-64,167-174
+portal/src/app/layout/app-shell/app-shell.component.ts
+  s_10829cf00ed675::t_3bf1bdd6061cf1 86-89,99-101,103-104
+  s_10829cf00ed675::t_8d1d0d228474d0 2,36-37
+  s_10829cf00ed675::t_6502c65e44ce98 11,43,102
+tests/FHIRBridge.UnitTests/Workflows/WorkflowNumberPeriodTests.cs
+  s_10829cf00ed675::t_641f1312366d55 1-98
+portal/src/app/app.component.ts
+  s_b103e9ccd1f7e5::t_adc25f06e51ab9 9,27,46-50
+portal/src/app/app.routes.ts
+  s_10829cf00ed675::t_aa6afc1d012001 124-128
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  s_10829cf00ed675::t_f4d4132de9cccd 1,45-54
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260915073728_AddWorkflowNumbering.Designer.cs
+  s_10829cf00ed675::t_b71871806fdeeb 1-6092
+src/FHIRBridge.Infrastructure/Persistence/Workflows/WorkflowPersistenceServiceCollectionExtensions.cs
+  s_10829cf00ed675::t_4553e95e8c6ebc 1-2,4,30-31
+src/FHIRBridge.Application/Services/Workflows/Numbering/IWorkflowNumberGenerator.cs
+  s_10829cf00ed675::t_ce0bcb0130c232 1-25
+portal/src/app/settings/pages/license-dev-mint/license-dev-mint.component.ts
+  s_10829cf00ed675::t_9ac44d85ba7640 249-251
+  s_10829cf00ed675::t_6502c65e44ce98 6,87,252
+portal/src/app/settings/layout/system-settings-shell/system-settings-shell.component.ts
+  s_b103e9ccd1f7e5::t_adc25f06e51ab9 1-2,4-19,23,27
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiHcpcsTerminologySyncService.cs
+  s_85e0c9481f4edd::t_4fbd42efaf2be0 16-18
+  s_85e0c9481f4edd::t_e90d92a67873aa 108-126
+  s_85e0c9481f4edd::t_5b46a210a45961 135-137
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_cdde4e5bdf38da::t_38669954fcfac6 99-187
+  s_10829cf00ed675::t_9270ab4c030bb5 1-2,7,47-61,63,98
+src/FHIRBridge.Application/Services/Workflows/Numbering/WorkflowNumberPeriod.cs
+  s_10829cf00ed675::t_ce0bcb0130c232 1-76
+portal/src/app/settings/services/settings-page-dialog.service.ts
+  s_10829cf00ed675::t_06328432b00da3 5-11,23-30,59-67
+  s_10829cf00ed675::t_782ef499c6c842 1-4,12-22,31-58,68-70
+portal/src/app/system-settings/dialogs/general-setting-group-dialog/general-setting-group-dialog.component.html
+  s_10829cf00ed675::t_827d387a74b4f2 28,32,48,52
+  s_10829cf00ed675::t_e8836b979fe3e4 14-20,22,64-69
+  s_10829cf00ed675::t_05e376b6a0e23d 33-40,70
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_10829cf00ed675::t_a081fdd3425ed0 473,535
+  s_10829cf00ed675::t_b8abc1c2de5225 511-514,546-568
+  s_10829cf00ed675::t_9c374796a1e59a 253-262
+  s_10829cf00ed675::t_881dbae9a93f20 409-412
+  s_10829cf00ed675::t_530bafc41e0f08 430-433,435
+  s_10829cf00ed675::t_63ea1c8a430b13 484-506
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.scss
+  s_2cfdc9c4f1ecfb::t_e096bbc62d9350 541-543,545-548,551-554
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_10829cf00ed675::t_d002bfd4160730 350-351,361-367,372-392,394-396,412
+  s_10829cf00ed675::t_84ff8b46195c12 369-371
+  s_10829cf00ed675::t_2ab0505c5bc90a 650-652,656-663,665-684,686,688
+  s_10829cf00ed675::t_16ccd5e390daf0 89-92,702
+portal/src/app/system-settings/utils/terminology-setting-field.ts
+  s_10829cf00ed675::t_2e400d0f1ca4a2 128-135
+  s_10829cf00ed675::t_171cb02a9585c1 17,21-30,109-113
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_b103e9ccd1f7e5::t_95799176143e94 690
+portal/src/app/services/workflow-api.service.ts
+  s_10829cf00ed675::t_c4fad6eab1d2a4 333-336
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_10829cf00ed675::t_3bd0f83a4ec7dd 661-662,690-693
+portal/src/app/settings/layout/settings-shell.component.ts
+  s_10829cf00ed675::t_c92a457dbfeacf 38-46
+  s_10829cf00ed675::t_823322147441bb 35-37
+  s_10829cf00ed675::t_6818f6f45b6bc1 21-23
+portal/src/app/system-settings/dialogs/general-setting-group-dialog/general-setting-group-dialog.component.scss
+  s_10829cf00ed675::t_1e1800c36c6449 40-77
+src/FHIRBridge.Infrastructure/Security/CompositeSecretMetadataProvider.cs
+  s_b103e9ccd1f7e5::t_adc25f06e51ab9 1-98
+src/FHIRBridge.Infrastructure/Workflows/Numbering/WorkflowNumberGenerator.cs
+  s_10829cf00ed675::t_ce0bcb0130c232 1-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fbd5dcf99b5d4dc5fb7490bc521e83e357dd49df",
+  "prompts": {},
+  "sessions": {
+    "s_10829cf00ed675": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c3b63c8-eb2b-4b3d-9742-f574683a0697",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_2cfdc9c4f1ecfb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89f91330-63cf-46d8-9d4f-67247ed297be",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    },
+    "s_85e0c9481f4edd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0b56f0a7-d3d6-4bd4-b499-a3bbfbf1257d",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    },
+    "s_b103e9ccd1f7e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b3a55f3f-15e9-43cf-a9c6-40daec3f9859",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_cdde4e5bdf38da": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "636067e7-2fe3-4199-aadd-61a064d435f9",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
