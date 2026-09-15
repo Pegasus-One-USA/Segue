@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Services.Transforms;
 using Microsoft.Extensions.Configuration;
 
@@ -41,6 +41,16 @@ public sealed class SystemSettingsSeeder : ISystemSettingsSeeder
             ("AuditChainVerification:IntervalHours", Int("AuditChainVerification:IntervalHours", 24), "Audit chain verification interval, in hours."),
             ("AlertEvaluation:Enabled", Bool("AlertEvaluation:Enabled", true), "Master on/off for the alert-rule evaluation worker."),
             ("AlertEvaluation:IntervalSeconds", Int("AlertEvaluation:IntervalSeconds", 300), "Alert evaluation interval, in seconds."),
+
+            // Workflow Numbering — surfaces as one "Workflow Numbering" group row on Settings > System
+            // Settings > General (grouping is automatic: generalSettingGroupOf() splits on the key prefix).
+            // Policy only; the live per-period counter lives in WorkflowNumberSequences, not here.
+            ("WorkflowNumbering:Enabled", Bool("WorkflowNumbering:Enabled", true), "Master on/off for generated workflow numbers (e.g. WLW-150926-0042). When off, new workflows are created without a number."),
+            ("WorkflowNumbering:Prefix", _configuration.GetValue("WorkflowNumbering:Prefix", "WLW"), "Leading segment of a generated workflow number."),
+            ("WorkflowNumbering:DateFormat", _configuration.GetValue("WorkflowNumbering:DateFormat", "ddMMyy"), "Date segment format (.NET format string), e.g. ddMMyy or yyyyMMdd."),
+            ("WorkflowNumbering:ResetPolicy", _configuration.GetValue("WorkflowNumbering:ResetPolicy", "Daily"), "When the incremental counter restarts at 1: Never, Daily, Monthly, Quarterly, Yearly, or CustomAnchorDate."),
+            ("WorkflowNumbering:AnchorDate", _configuration.GetValue("WorkflowNumbering:AnchorDate", "04-01"), "Anniversary (MM-dd) the counter restarts on when ResetPolicy is CustomAnchorDate. Ignored otherwise."),
+            ("WorkflowNumbering:PadWidth", Int("WorkflowNumbering:PadWidth", 4), "Digits in the incremental segment, zero-padded (4 gives 0001)."),
 
             ("AnomalyDetection:LatencySigmaMultiplier", Double("AnomalyDetection:LatencySigmaMultiplier", 3.0), "Standard-deviation multiplier that flags a latency outlier."),
             ("AnomalyDetection:MinBaselineRuns", Int("AnomalyDetection:MinBaselineRuns", 5), "Minimum runs required before a statistical baseline is trusted."),

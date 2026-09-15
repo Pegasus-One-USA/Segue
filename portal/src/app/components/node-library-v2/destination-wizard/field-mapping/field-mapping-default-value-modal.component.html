@@ -1,0 +1,66 @@
+<div
+  class="fm-defval-backdrop"
+  tabindex="0"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="fm-defval-title"
+  (click)="onBackdropClick($event)"
+  (keydown.escape)="onEscape()"
+>
+  <div class="fm-defval-dialog">
+    <h3 class="fm-defval-title" id="fm-defval-title">Set default value for {{ columnName() }}</h3>
+    <p class="fm-defval-subtitle">
+      Every record written to {{ tableName() }} will use this value — mapping a source field to
+      {{ columnName() }} later replaces it.
+    </p>
+
+    <label class="fm-defval-field">
+      <span class="text-label">Default</span>
+      <select
+        class="fm-defval-select"
+        [value]="token()"
+        (change)="onTokenChange($any($event.target).value)"
+      >
+        @for (p of presets; track p.token) { <option [value]="p.token" [selected]="p.token === token()">{{ p.label }}</option> }
+      </select>
+      <span class="fm-defval-hint">{{ selectedPresetDescription() }}</span>
+    </label>
+
+    @if (token() === '@default') {
+      <label class="fm-defval-field">
+        <span class="text-label">Value<span class="req">*</span></span>
+        <input
+          #literalInput
+          class="fm-defval-input"
+          [value]="literalValue()"
+          (input)="onLiteralInput($any($event.target).value)"
+          placeholder='e.g. "Patient"'
+        />
+      </label>
+
+      <label class="fm-defval-field">
+        <span class="text-label">Data type</span>
+        <select
+          class="fm-defval-select"
+          [value]="valueType()"
+          (change)="onValueTypeChange($any($event.target).value)"
+        >
+          @for (t of valueTypes; track t) { <option [value]="t" [selected]="t === valueType()">{{ t }}</option> }
+        </select>
+      </label>
+    }
+
+    @if (error()) {
+      <p class="fm-defval-error">{{ error() }}</p>
+    }
+
+    <div class="fm-defval-actions">
+      @if (existing()) {
+        <button type="button" class="btn btn-secondary fm-defval-remove" (click)="removed.emit()">Clear default</button>
+      }
+      <span class="fm-defval-spacer"></span>
+      <button type="button" class="btn btn-secondary" (click)="cancelled.emit()">Cancel</button>
+      <button type="button" class="btn btn-primary" [disabled]="!canSubmit()" (click)="submit()">Save default</button>
+    </div>
+  </div>
+</div>

@@ -1,4 +1,5 @@
-using FHIRBridge.Application.Abstractions.Security;
+﻿using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Application.Services.Workflows.Numbering;
 using FHIRBridge.Observability.Logging;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -22,15 +23,18 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
 {
     private readonly FHIRBridgeDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IWorkflowNumberGenerator _workflowNumberGenerator;
     private readonly ILogger<SqlWorkflowDefinitionStore> _logger;
 
     public SqlWorkflowDefinitionStore(
         FHIRBridgeDbContext dbContext,
         ICurrentUserService currentUserService,
+        IWorkflowNumberGenerator workflowNumberGenerator,
         ILogger<SqlWorkflowDefinitionStore>? logger = null)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _workflowNumberGenerator = workflowNumberGenerator;
         _logger = logger ?? NullLogger<SqlWorkflowDefinitionStore>.Instance;
     }
 
@@ -48,7 +52,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
 
         var existing = await _dbContext.WorkflowDefinitions
             .Include(definition => definition.Nodes)
-                .ThenInclude(node => node.Configuration)
+
             .Include(definition => definition.Edges)
             .AsSplitQuery()
             .FirstOrDefaultAsync(definition => definition.Id == workflowDefinition.Id, cancellationToken);
@@ -77,6 +81,17 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
         // rather than the second half of a same-id edit's delete-then-re-add — see the flag's own remarks on
         // FHIRBridgeDbContext. Reset immediately after this save so it can never leak into a later, unrelated
         // SaveChangesAsync call on this same scoped context instance.
+        // Carried over from the row being replaced on an edit, allocated fresh only on a genuine create.
+        // This save is ALWAYS a delete-and-re-add (see remarks above), so without this an edit would mint a
+        // brand-new number every time — renumbering a workflow users may already have quoted, and burning a
+        // counter value per save. Same reasoning as CreatedOnUtc/CreatedBy just above.
+        //
+        // Allocation deliberately happens inside this method's transaction: a create that fails after this
+        // point must roll the counter back with it rather than leaving a permanent gap.
+        workflowDefinition.SetWorkflowNumber(
+            existing?.WorkflowNumber
+            ?? await _workflowNumberGenerator.NextAsync(cancellationToken));
+
         _dbContext.NextWorkflowDefinitionAddIsGenuineCreate = existing is null;
         await _dbContext.WorkflowDefinitions.AddAsync(workflowDefinition, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -109,7 +124,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
         return await _dbContext.WorkflowDefinitions
             .AsNoTracking()
             .Include(definition => definition.Nodes)
-                .ThenInclude(node => node.Configuration)
+
             .Include(definition => definition.Edges)
             .AsSplitQuery()
             .OrderBy(definition => definition.Name)
@@ -121,7 +136,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
         return await _dbContext.WorkflowDefinitions
             .AsNoTracking()
             .Include(definition => definition.Nodes)
-                .ThenInclude(node => node.Configuration)
+
             .Include(definition => definition.Edges)
             .AsSplitQuery()
             .FirstOrDefaultAsync(definition => definition.Id == workflowId, cancellationToken);
@@ -131,7 +146,7 @@ public sealed class SqlWorkflowDefinitionStore : IWorkflowDefinitionStore
     {
         var existing = await _dbContext.WorkflowDefinitions
             .Include(definition => definition.Nodes)
-                .ThenInclude(node => node.Configuration)
+
             .Include(definition => definition.Edges)
             .AsSplitQuery()
             .FirstOrDefaultAsync(definition => definition.Id == workflowId, cancellationToken);

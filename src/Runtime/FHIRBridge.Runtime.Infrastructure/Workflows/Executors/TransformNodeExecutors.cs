@@ -71,16 +71,27 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
     private readonly IConfigurationRepository? _configurationRepository;
     private readonly ILineageCaptureDispatcher? _lineageCaptureDispatcher;
 
+    /// <summary>Needed to run a node's OWN rules: the inline path builds a transform service around an
+    /// <see cref="InlineFhirResourceRuleResolver"/> rather than the repository-backed one, so it needs the same
+    /// node registry (and optional secret accessor) that service is normally composed with. Null simply means
+    /// the inline path is unavailable and the node resolves by route id as before.</summary>
+    private readonly ITransformNodeRegistry? _transformNodeRegistry;
+    private readonly IAppSecretAccessor? _secretAccessor;
+
     public FhirResourceTransformNodeExecutor(
         IFhirResourceTransformService? transformService = null,
         IConfigurationRepository? configurationRepository = null,
         ILineageCaptureDispatcher? lineageCaptureDispatcher = null,
-        IResourceNormalizationService? normalizationService = null)
+        IResourceNormalizationService? normalizationService = null,
+        ITransformNodeRegistry? transformNodeRegistry = null,
+        IAppSecretAccessor? secretAccessor = null)
         : base(WorkflowNodeTypes.FhirResourceTransform, WorkflowDataContract.NormalizedResourceBatch, normalizationService)
     {
         _transformService = transformService;
         _configurationRepository = configurationRepository;
         _lineageCaptureDispatcher = lineageCaptureDispatcher;
+        _transformNodeRegistry = transformNodeRegistry;
+        _secretAccessor = secretAccessor;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -92,6 +103,15 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
         if (_transformService is null || _configurationRepository is null)
         {
             return await base.ExecuteAsync(context, node, inputs, cancellationToken);
+        }
+
+        // Self-contained first (plan §3.4): rules the node carries itself need no destination, no route id and
+        // no repository — which is exactly why they cannot be orphaned, cross-wired between workflows, or left
+        // inert by a null ResourcePipelineRouteId.
+        var inlineRules = _transformNodeRegistry is null ? null : TryReadInlineRules(node);
+        if (inlineRules is { Count: > 0 })
+        {
+            return await ExecuteWithInlineRulesAsync(context, node, inputs, inlineRules, cancellationToken);
         }
 
         // The destination decides which rules apply (its DestinationType is a resolver tier), so a node with no
@@ -173,6 +193,144 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
                 ["transformed"] = transformedCount,
                 ["ruleErrors"] = ruleErrors
             });
+    }
+
+    /// <summary>
+    /// Runs the node's OWN rules — no destination lookup, no source-connection lookup, no route id, no
+    /// repository. Everything this needs is on the node, which is the whole point of the self-contained model:
+    /// the rules cannot be orphaned by a null route id, cannot be swept up by another workflow's save, and
+    /// cannot be changed by an edit to a shared master record.
+    /// </summary>
+    private async Task<WorkflowNodeOutput> ExecuteWithInlineRulesAsync(
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        IReadOnlyCollection<WorkflowNodeOutput> inputs,
+        IReadOnlyList<TransformationRule> inlineRules,
+        CancellationToken cancellationToken)
+    {
+        var resolver = new InlineFhirResourceRuleResolver(inlineRules);
+        var transformService = new FhirResourceTransformService(resolver, _transformNodeRegistry!, _secretAccessor);
+
+        var transformed = new List<ResourceEnvelope>();
+        var transformedCount = 0;
+        var ruleErrors = new List<string>();
+
+        foreach (var resource in ReadResourceEnvelopes(inputs))
+        {
+            var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+
+            // DestinationType is required by the service signature but is never consulted by the inline
+            // resolver — these rules already belong to exactly one node, so there is nothing to filter by.
+            var result = await transformService.TransformAsync(
+                sourceJson, resource.ResourceType, resource.ResourceId, DestinationType.SqlServer,
+                resourcePipelineRouteId: null, sourceSystem: null, cancellationToken);
+
+            if (!ReferenceEquals(result.Json, sourceJson))
+            {
+                transformedCount++;
+            }
+
+            foreach (var hop in result.Hops.Where(hop => !hop.Success))
+            {
+                ruleErrors.Add($"{resource.ResourceType}/{resource.ResourceId} {hop.SourceField} [{hop.NodeType}]: {hop.Error}");
+            }
+
+            transformed.Add(resource with { Payload = result.Json });
+        }
+
+        Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
+            Logger,
+            FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
+            "Transform applied to {RecordCount} resource(s) from {RuleCount} inline rule(s); "
+            + "{TransformedCount} changed, {RuleErrorCount} rule hop(s) failed.",
+            transformed.Count, inlineRules.Count, transformedCount, ruleErrors.Count);
+
+        return new WorkflowNodeOutput(
+            node.Id,
+            node.NodeType,
+            new NormalizedResourceBatch(transformed),
+            OutputContract,
+            new Dictionary<string, object?>
+            {
+                ["executor"] = GetType().Name,
+                ["count"] = transformed.Count,
+                ["transformed"] = transformedCount,
+                ["ruleErrors"] = ruleErrors,
+                ["inlineRules"] = inlineRules.Count,
+            });
+    }
+
+    /// <summary>
+    /// This node's own transformation rules, from the self-contained <c>rules</c> array (plan §3.4). Null when
+    /// the node carries none — the caller then falls back to resolving them out of the shared table by route id,
+    /// which is how every node behaves until it has been migrated.
+    /// </summary>
+    private static IReadOnlyList<TransformationRule>? TryReadInlineRules(WorkflowNode node)
+    {
+        var specs = ReadConfiguration<List<InlineRuleSpec>>(node, "rules");
+        if (specs is null || specs.Count == 0)
+        {
+            return null;
+        }
+
+        var rules = new List<TransformationRule>(specs.Count);
+        foreach (var spec in specs)
+        {
+            if (string.IsNullOrWhiteSpace(spec.SourceField) || !Enum.TryParse<TransformNodeType>(spec.NodeType, true, out var nodeType))
+            {
+                // A rule with no source field has nothing to read, and an unknown node type has nothing to run
+                // it — skipping beats throwing, which would fail the whole run over one malformed entry.
+                continue;
+            }
+
+            rules.Add(new TransformationRule(
+                TransformScope.ResourceType,
+                nodeType,
+                spec.Config?.ToString() ?? "{}",
+                resourceType: spec.ResourceType,
+                destinationField: spec.DestinationField,
+                sourceField: spec.SourceField,
+                order: spec.Order,
+                onNull: Enum.TryParse<NullPolicy>(spec.OnNull, true, out var onNull) ? onNull : NullPolicy.Skip,
+                errorPolicy: Enum.TryParse<TransformErrorPolicy>(spec.ErrorPolicy, true, out var errorPolicy)
+                    ? errorPolicy
+                    : TransformErrorPolicy.NullOut,
+                onNullDefaultValue: spec.OnNullDefaultValue,
+                arrayMode: Enum.TryParse<TransformArrayMode>(spec.ArrayMode, true, out var arrayMode)
+                    ? arrayMode
+                    : TransformArrayMode.Whole,
+                fhirWriteBackJsonPath: spec.FhirWriteBackJsonPath,
+                executionPhase: TransformExecutionPhase.FhirResource));
+        }
+
+        return rules.Count > 0 ? rules : null;
+    }
+
+    /// <summary>One transformation rule as stored on the node. Mirrors the authoring shape in plan §3.4.</summary>
+    private sealed class InlineRuleSpec
+    {
+        public string? ResourceType { get; set; }
+
+        public string? SourceField { get; set; }
+
+        public string? DestinationField { get; set; }
+
+        public string? NodeType { get; set; }
+
+        public int Order { get; set; }
+
+        public string? OnNull { get; set; }
+
+        public string? ErrorPolicy { get; set; }
+
+        public string? OnNullDefaultValue { get; set; }
+
+        public string? ArrayMode { get; set; }
+
+        public string? FhirWriteBackJsonPath { get; set; }
+
+        /// <summary>The node's own settings, kept as raw JSON — its shape is decided by NodeType.</summary>
+        public System.Text.Json.JsonElement? Config { get; set; }
     }
 
     /// <summary>Fire-and-continue, matching MappingNodeExecutor: a lineage publish failure must never fail the
@@ -393,6 +551,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         // resource type genuinely has no mapping configured for this destination) instead of needing to check
         // MappingProfiles by hand.
         var skippedResourceTypes = new List<string>();
+        // Resources that WERE mapped (a field list resolved for their type) but produced no writable value at
+        // all — see the per-resource check below for why an empty result has to be reported rather than dropped.
+        var unmappedByResourceType = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         // A single Field Mapping node can receive a heterogeneous batch — e.g. an EpicSource node configured
         // for both Patient and Observation scopes feeds one Mapping node before a single Destination node.
@@ -467,6 +628,26 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     resourcePipelineRouteId, ruleCache, cancellationToken);
             }
 
+            // Pipeline/runtime values a @token field can draw from (audit/lineage columns not present in the
+            // source FHIR document): the run id, a shared write timestamp, and this group's resource type/
+            // destination. Built once per group (everything here is constant across every resource IN this
+            // group — including "@resourceType", since the outer GroupBy already guarantees every resource's
+            // own ResourceType equals this group's key) and reused/mutated per resource below, rather than
+            // reallocated on every iteration: the mapping engine only ever reads it synchronously within its
+            // own Map() call, so nothing holds onto a stale snapshot between resources.
+            var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["@runId"] = context.WorkflowRunId,
+                ["@now"] = runTimestampUtc,
+                ["@resourceType"] = resourceType,
+                ["@destinationObject"] = destinationObject,
+                // @mappingProfileName/@mappingProfileId/@sourceConnectionId/@triggeredBy have no equivalent
+                // here — the Runtime Plane's node config is inline JSON, not a Domain MappingProfile entity,
+                // and this executor has no trigger identity to report. Left unset rather than a misleading
+                // placeholder; a field using one of them resolves to null here exactly like an unmapped
+                // token, same as JsonMappingEngine already does for any token absent from systemValues.
+            };
+
             foreach (var resource in group)
             {
                 var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
@@ -474,15 +655,10 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     && preMappingRedactionsByResourceId.TryGetValue(resource.ResourceId, out var resourceHops)
                         ? resourceHops
                         : (IReadOnlyList<DeIdentificationFieldHop>)[];
-                // Pipeline/runtime values a @token field can draw from (audit/lineage columns not present in the
-                // source FHIR document): the run id, a shared write timestamp, and the resource's own type/id.
-                var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["@runId"] = context.WorkflowRunId,
-                    ["@now"] = runTimestampUtc,
-                    ["@resourceType"] = resource.ResourceType,
-                    ["@sourceResourceId"] = resource.ResourceId,
-                };
+                systemValues["@sourceResourceId"] = resource.ResourceId;
+                // Freshly generated per resource (unlike every other token above) — mirrors
+                // ConfiguredPipelineService's identical Configured Pipeline handling of this token.
+                systemValues["@newGuid"] = Guid.NewGuid();
                 var mapped = _mappingEngine?.Map(sourceJson, fields, systemValues);
                 if (mapped is null)
                 {
@@ -509,6 +685,16 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 // empty Values) because the writer captures the child rows' FK value off THAT row's own write
                 // (OUTPUT INSERTED) — dropping it would silently lose the child data instead of just writing an
                 // extra near-empty row.
+                if (mapped.Values.Count == 0 && childTables is null && !wholeResourceFhir)
+                {
+                    // Every mapped field came back empty for this resource, so there is no row to write. Counted
+                    // (not silently dropped) because a WHOLE batch landing here is indistinguishable at the run
+                    // level from "nothing to do" — the node emits zero records, the destination is handed nothing
+                    // to reject, and the run reports Succeeded having written nothing at all. That is precisely
+                    // how a node whose inline mapping failed to deserialize looked green while doing nothing.
+                    unmappedByResourceType[resourceType] = unmappedByResourceType.GetValueOrDefault(resourceType) + 1;
+                }
+
                 if (mapped.Values.Count > 0 || childTables is not null || wholeResourceFhir)
                 {
                     var dataset = _mappingMaterializer?.Materialize(destinationObject, mapped);
@@ -592,7 +778,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase),
                 // Resource types present in the upstream batch that had no resolvable MappingProfile for this
                 // node's (sourceConnectionId, destinationId) — every one of their records was skipped entirely.
-                ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.Distinct().ToArray() : null
+                // Reported through the same key the orchestrator already aggregates into
+                // WorkflowRunStatus.PartialSuccess (see RankedWorkflowOrchestrator), so a mapping that yields
+                // nothing is surfaced exactly like a destination write that rejects everything, instead of
+                // passing as a clean success.
+                ["skippedResourceTypes"] = BuildMappingOmissions(skippedResourceTypes, unmappedByResourceType)
             });
     }
 
@@ -785,14 +975,19 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     }
 
     /// <summary>
-    /// Resolves one resource type's fields + destination object, preferring (in order): <c>mappingProfileIds</c>
-    /// — a JSON object of <c>{resourceType: mappingProfileId}</c> the build endpoint stamps onto this exact node
-    /// (see WorkflowEndpoints.cs's Mappings step) — the id THIS node itself saved, so resolving by it can never
-    /// pick up a different workflow's profile; the legacy single <c>mappingProfileId</c> (one resource per node,
-    /// pre-dating multi-resource destinations) — only for the node's OWN configured resource type, since it can
-    /// only ever refer to one specific profile; and finally the node's own inline "fields"/"destinationObject"
-    /// config (no repository composed, or a hand-authored node) — again only for its own configured resource
-    /// type. Deliberately does NOT fall back to searching MappingProfile by the natural key (resourceType,
+    /// Resolves one resource type's fields + destination object.
+    ///
+    /// <para><b>Self-contained first</b> (plan §3.3): a node carrying its own inline mapping for this resource
+    /// type is authoritative and is used without touching the repository. That is the whole point of the
+    /// self-contained model — what ran is what the node says, so a run is reproducible and editing a shared
+    /// master cannot silently change this workflow.</para>
+    ///
+    /// <para><b>Then by id</b>, for nodes not yet migrated: <c>mappingProfileIds</c> — a JSON object of
+    /// <c>{resourceType: mappingProfileId}</c> the build endpoint stamps onto this exact node — then the legacy
+    /// single <c>mappingProfileId</c> for the node's own configured resource type. Both are ids THIS node saved,
+    /// so neither can pick up a different workflow's profile.</para>
+    ///
+    /// Deliberately does NOT fall back to searching MappingProfile by the natural key (resourceType,
     /// sourceConnectionId, destinationId): that triple is shared by any workflow built on the same source
     /// connection + destination + resource type, so a search-based fallback would silently resolve to (and,
     /// once profiles diverge, keep flapping onto) a DIFFERENT workflow's profile — the exact "Invalid column
@@ -807,6 +1002,19 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         string configuredDestinationObject,
         CancellationToken cancellationToken)
     {
+        // Inline mapping for this exact resource type wins outright — no lookup, nothing to go stale.
+        if (TryReadInlineResourceMapping(node, resourceType) is { } inline)
+        {
+            return (inline.Fields, inline.DestinationObject ?? configuredDestinationObject);
+        }
+
+        // The node's own single-resource config counts as inline too, when it names this resource type.
+        if (configuredFields.Count > 0
+            && string.Equals(resourceType, configuredResourceType, StringComparison.OrdinalIgnoreCase))
+        {
+            return (configuredFields, configuredDestinationObject);
+        }
+
         if (_configurationRepository is not null && ReadProfileIds(node).TryGetValue(resourceType, out var profileId))
         {
             var profile = await _configurationRepository.GetMappingProfileAsync(profileId, cancellationToken);
@@ -824,6 +1032,68 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         }
 
         return (null, configuredDestinationObject);
+    }
+
+    /// <summary>
+    /// The omissions this mapping node needs to report, in the shape the orchestrator aggregates into
+    /// <c>WorkflowRunStatus.PartialSuccess</c>: resource types with no resolvable mapping at all, plus resource
+    /// types that WERE mapped but whose records all came out empty.
+    ///
+    /// The second case used to be invisible. A resource that maps to no values is not written (there is no row to
+    /// write), so with an entire batch in that state the node emits zero records, the destination writer is handed
+    /// nothing and therefore rejects nothing, and every node plus the run itself reports Succeeded — a green run
+    /// that moved no data. Returns null when there is nothing to report, matching the key's existing contract.
+    /// </summary>
+    private static string[]? BuildMappingOmissions(
+        IReadOnlyCollection<string> skippedResourceTypes,
+        IReadOnlyDictionary<string, int> unmappedByResourceType)
+    {
+        var reasons = new List<string>(skippedResourceTypes.Distinct(StringComparer.OrdinalIgnoreCase));
+
+        foreach (var entry in unmappedByResourceType.OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            reasons.Add(
+                $"{entry.Key}: {entry.Value} record(s) produced no mapped values and were not written "
+                + "(check this resource type's field mappings)");
+        }
+
+        return reasons.Count > 0 ? reasons.ToArray() : null;
+    }
+
+    /// <summary>
+    /// This node's own inline mapping for one resource type, from the self-contained <c>mappings</c> block
+    /// (plan §3.3): <c>{"mappings": {"Patient": {"destinationObject": "dbo.Patient", "fields": [ … ]}}}</c>.
+    /// Null when the node carries no such block, or none for this resource type — the caller then falls back to
+    /// the id-based lookups for nodes that have not been migrated yet.
+    /// </summary>
+    private static (IReadOnlyCollection<MappingFieldDto> Fields, string? DestinationObject)? TryReadInlineResourceMapping(
+        WorkflowNode node,
+        string resourceType)
+    {
+        var mappings = ReadConfiguration<Dictionary<string, InlineResourceMapping>>(node, "mappings");
+        if (mappings is null || mappings.Count == 0)
+        {
+            return null;
+        }
+
+        // Resource types are case-insensitive everywhere else in the engine; the JSON dictionary is not.
+        var match = mappings.FirstOrDefault(entry =>
+            string.Equals(entry.Key, resourceType, StringComparison.OrdinalIgnoreCase));
+
+        if (match.Value?.Fields is not { Count: > 0 } fields)
+        {
+            return null;
+        }
+
+        return (fields.Where(field => field.IsEnabled).ToArray(), match.Value.DestinationObject);
+    }
+
+    /// <summary>One resource type's self-contained mapping, as stored on the node.</summary>
+    private sealed class InlineResourceMapping
+    {
+        public string? DestinationObject { get; set; }
+
+        public List<MappingFieldDto>? Fields { get; set; }
     }
 
     private async Task<(DestinationType? Type, string? Name)> ResolveDestinationTypeAsync(Guid destinationId, CancellationToken cancellationToken)

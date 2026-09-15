@@ -129,14 +129,17 @@ public sealed class WorkflowGraphValidator : IWorkflowGraphValidator
         WorkflowNode node,
         WorkflowNodeCatalogItem catalogItem)
     {
-        var keys = node.Configuration.Select(configuration => configuration.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // ConfigurationJson is now the single store for a node's settings — the parallel key/value table it
+        // used to be unioned with is gone (plan §6), so this reads one place instead of reconciling two.
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
             using var document = JsonDocument.Parse(node.ConfigurationJson);
-            if (document.RootElement.ValueKind == JsonValueKind.Object)
+            var settings = WorkflowNodeConfigurationEnvelope.ResolveSettings(document.RootElement);
+            if (settings.ValueKind == JsonValueKind.Object)
             {
-                foreach (var property in document.RootElement.EnumerateObject())
+                foreach (var property in settings.EnumerateObject())
                 {
                     keys.Add(property.Name);
                 }

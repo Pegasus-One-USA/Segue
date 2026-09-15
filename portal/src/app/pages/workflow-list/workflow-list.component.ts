@@ -10,6 +10,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import {
   WorkflowApiService,
   WorkflowSummary,
+  WorkflowLifecycleStatus,
   WorkflowRunStatus,
   DestinationData,
 } from '../../services/workflow-api.service';
@@ -85,6 +86,10 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Workflow pending copy (duplicate) confirmation — holds the name typed into the modal. */
   readonly confirmCopy = signal<WorkflowSummary | null>(null);
   readonly copyName = signal('');
+  /** The pre-filled "<name> (copy)" suggestion, kept so an untouched name can be told from an edited one. */
+  private readonly copyNameSuggestion = signal('');
+  /** Shows the "discard your input?" confirm layered over the Copy-workflow modal. */
+  readonly confirmDiscardCopyWorkflow = signal(false);
   // Default sort surfaces the most recently run (created/updated activity proxy) workflows first —
   // per user direction, so a newly built or just-triggered workflow is immediately visible without
   // having to search/sort manually. Backend orders never-run workflows last (LastRunAt ?? -1).
@@ -333,26 +338,90 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.searchDebounceHandle = setTimeout(() => this.reload(true), SEARCH_DEBOUNCE_MS);
   }
 
-  /** Which builder the New action opens — V2 (the Source → Mapping → Transformation →
-   *  De-identification → Destination canvas under pages/workflow-builder-v2) by default, V1 for the
-   *  original canvas. */
-  readonly builderVersion = signal<'v1' | 'v2'>('v2');
+  // ── New workflow (name + description first) ──────────────────────────────
+  //
+  // The workflow is created BEFORE the canvas opens, so it always has a real id. That is what removes the
+  // "authored before the workflow existed" class of bug at its root: node config, mapping and transform rules
+  // no longer have to be parked somewhere without an owner and reconciled on a later save.
+  readonly showNewWorkflow = signal(false);
+  readonly newWorkflowName = signal('');
+  readonly newWorkflowDescription = signal('');
+  readonly creatingWorkflow = signal(false);
+  /** Shows the "discard your input?" confirm layered over the New-workflow modal. */
+  readonly confirmDiscardNewWorkflow = signal(false);
 
-  /** Whether the user actually picked a version, as opposed to this just holding its default. Edit reads
-   *  the same signal as an override (see onEdit), so without this the new V2 default would force EVERY
-   *  existing workflow into V2 — including V1-authored ones, whose V1-only steps (normalize, terminology,
-   *  patient matching) V2's catalog has no entry for and cannot render. */
-  private builderVersionTouched = false;
-
-  onBuilderVersionChange(value: string): void {
-    this.builderVersionTouched = true;
-    this.builderVersion.set(value === 'v2' ? 'v2' : 'v1');
-  }
-
-  /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
+  /** Opens the name/description modal. The canvas is only reached once the workflow is actually created. */
   onNewWorkflow(): void {
     if (!this.canCreate()) return;
-    this.router.navigate([this.builderVersion() === 'v2' ? '/workflow-builder-v2' : '/workflow-builder']);
+    this.newWorkflowName.set('');
+    this.newWorkflowDescription.set('');
+    this.showNewWorkflow.set(true);
+  }
+
+  /** True once anything has been typed into the New-workflow form. */
+  private hasNewWorkflowInput(): boolean {
+    return !!this.newWorkflowName().trim() || !!this.newWorkflowDescription().trim();
+  }
+
+  /** Close attempt from ×, Cancel or Escape. Anything typed is confirmed before it is thrown away;
+   *  an untouched form closes immediately, with nothing to lose. */
+  cancelNewWorkflow(): void {
+    // Mid-create, and while the discard confirm is already up, the base modal ignores close attempts —
+    // the confirm owns the interaction until it is answered.
+    if (this.creatingWorkflow() || this.confirmDiscardNewWorkflow()) return;
+
+    if (this.hasNewWorkflowInput()) {
+      this.confirmDiscardNewWorkflow.set(true);
+      return;
+    }
+
+    this.closeNewWorkflow();
+  }
+
+  /** Confirmed discard — drops the typed values and closes. */
+  discardNewWorkflow(): void {
+    this.confirmDiscardNewWorkflow.set(false);
+    this.closeNewWorkflow();
+  }
+
+  /** "Keep editing" — dismisses the confirm and leaves the New-workflow modal exactly as it was. */
+  keepEditingNewWorkflow(): void {
+    this.confirmDiscardNewWorkflow.set(false);
+  }
+
+  private closeNewWorkflow(): void {
+    this.showNewWorkflow.set(false);
+    this.confirmDiscardNewWorkflow.set(false);
+    this.newWorkflowName.set('');
+    this.newWorkflowDescription.set('');
+  }
+
+  /** Creates an empty workflow (no nodes, no edges) and opens the builder on it. It starts life as Draft —
+   *  it has no destination yet — and is created enabled, so adding a destination is all it takes to be Ready. */
+  confirmNewWorkflow(): void {
+    const name = this.newWorkflowName().trim();
+    if (!name || this.creatingWorkflow()) return;
+
+    const description = this.newWorkflowDescription().trim();
+    this.creatingWorkflow.set(true);
+    this.api
+      .save({ name, description: description || null, isEnabled: true, nodes: [], edges: [] })
+      .subscribe({
+        next: created => {
+          this.creatingWorkflow.set(false);
+          this.closeNewWorkflow();
+          // new=1 tells the builder this workflow has an id but an EMPTY graph, so it resets the canvas
+          // instead of taking the edit path — see its ngOnInit. Without it the builder treats the id as
+          // an existing workflow to load, and the stale canvas state breaks the `+` picker.
+          this.router.navigate(['/workflow-builder-v2'], {
+            queryParams: { id: created.id, new: '1' },
+          });
+        },
+        error: err => {
+          this.creatingWorkflow.set(false);
+          this.toast.error(this.messageOf(err, 'Could not create the workflow.'));
+        },
+      });
   }
 
   /** Launch rows are unaffected (still their own thing — see below). Every Run row now always dispatches in the
@@ -462,60 +531,17 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /**
    * Open the workflow in the Pipeline Builder for full graph editing (Save there issues a PUT update).
    *
-   * A workflow authored in V2 MUST reopen in V2: the two builders read the same graph differently. V2's
-   * canvas order is Source → Mapping → Transformation → De-identification → Destination, while the
-   * persisted edges are in execution order (see WorkflowGraphMapperServiceV2.toAuthoringOrder, which
-   * reverses that on load). V1 has no such step, so it draws V2's execution-order edges against
-   * authoring-order node positions — every edge crosses backwards, and V2-only steps render as raw ids
-   * because V1's catalog has no entry for them.
-   *
-   * The builder is therefore detected from the graph itself rather than left to the toolbar selector:
-   * the presence of a V2-only chain step decides it. Detection needs the node list, which
-   * /workflows/summary doesn't carry, so this fetches the definition first; a failed fetch just falls
-   * back to the selected version rather than blocking navigation.
+   * Now a straight navigation. It used to fetch the definition first purely to decide WHICH builder to
+   * open, by looking for a V2-only chain step — a guess that could not tell a V2 workflow containing no
+   * such step (a bare Source → Destination) from a V1 one, and so silently opened it in a builder that
+   * could not configure Field Mapping. With V1 retired (plan §8) there is nothing to detect.
    */
   onEdit(row: WorkflowSummary): void {
-    // The toolbar selector doubles as a manual override, for workflows saved before __builderVersion
-    // existed — those can't be detected and would otherwise always open in V1. Only counts once the user
-    // has actually picked a version: the default is V2 now, and treating that as an override would send
-    // every V1 workflow to a builder that cannot draw it.
-    const forcedV2 = this.builderVersionTouched && this.builderVersion() === 'v2';
-    this.api.load(row.workflowId).subscribe({
-      next: definition => this.openBuilder(row.workflowId, forcedV2 || this.isV2Definition(definition)),
-      error: () => this.openBuilder(row.workflowId, forcedV2),
-    });
+    this.openBuilder(row.workflowId);
   }
 
-  private openBuilder(workflowId: string, useV2: boolean): void {
-    this.router.navigate([useV2 ? '/workflow-builder-v2' : '/workflow-builder'], {
-      queryParams: { id: workflowId },
-    });
-  }
-
-  /**
-   * Whether this graph was authored in V2. Prefers the explicit `__builderVersion` stamp
-   * (WorkflowGraphMapperServiceV2.nodeToRequest); falls back to spotting a V2-only chain step for
-   * workflows saved before that stamp existed. The fallback can't identify a V2 workflow that contains
-   * no such step — a bare Source → Destination looks identical either way — which is what the toolbar
-   * override above is for.
-   */
-  private isV2Definition(definition: { nodes: { configurationJson?: string | null }[] }): boolean {
-    return definition.nodes.some(node => {
-      const config = this.configOf(node);
-      if (config['__builderVersion'] === 'v2') return true;
-      const transformId = config['__transformId'];
-      return transformId === 'transformation' || transformId === 'deidentification';
-    });
-  }
-
-  private configOf(node: { configurationJson?: string | null }): Record<string, unknown> {
-    if (!node.configurationJson) return {};
-    try {
-      const parsed = JSON.parse(node.configurationJson) as unknown;
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      return {};
-    }
+  private openBuilder(workflowId: string): void {
+    this.router.navigate(['/workflow-builder-v2'], { queryParams: { id: workflowId } });
   }
 
   /** Enable/disable toggle via the activate/deactivate endpoints. */
@@ -527,9 +553,14 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     call.subscribe({
       next: () => {
         this.rowBusyId.set(null);
+        // Re-enabling does not simply restore "Enabled" — Draft/Ready is derived from the graph, so a
+        // workflow with no destination wired up goes back to Draft, exactly as the server would report it
+        // on the next reload. Getting this wrong would show a stale "Ready" until the list refreshed.
         this.summaries.update(rows =>
           rows.map(w =>
-            w.workflowId === row.workflowId ? { ...w, status: enabling ? 'Enabled' : 'Disabled' } : w,
+            w.workflowId === row.workflowId
+              ? { ...w, status: enabling ? (w.hasDestination ? 'Ready' : 'Draft') : 'Disabled' }
+              : w,
           ),
         );
         this.toast.success(enabling ? 'Enabled' : 'Disabled', `"${row.name}" is now ${enabling ? 'enabled' : 'disabled'}.`);
@@ -616,13 +647,45 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  POST /workflows/{id}/copy gate. */
   askCopyWorkflow(row: WorkflowSummary): void {
     if (!this.canCreate()) return;
-    this.copyName.set(`${row.name} (copy)`);
+    const suggestion = `${row.name} (copy)`;
+    this.copyName.set(suggestion);
+    this.copyNameSuggestion.set(suggestion);
     this.confirmCopy.set(row);
   }
 
+  /** True once the pre-filled "<name> (copy)" suggestion has actually been edited. The untouched
+   *  suggestion is not the user's work, so closing on it has nothing to lose. */
+  private hasCopyInput(): boolean {
+    return this.copyName().trim() !== this.copyNameSuggestion().trim();
+  }
+
+  /** Same deliberate-close rule as the New-workflow modal: an edited name is confirmed before it is
+   *  thrown away; an untouched one closes immediately. */
   cancelCopyWorkflow(): void {
+    if (this.confirmDiscardCopyWorkflow()) return;
+
+    if (this.hasCopyInput()) {
+      this.confirmDiscardCopyWorkflow.set(true);
+      return;
+    }
+
+    this.closeCopyWorkflow();
+  }
+
+  discardCopyWorkflow(): void {
+    this.confirmDiscardCopyWorkflow.set(false);
+    this.closeCopyWorkflow();
+  }
+
+  keepEditingCopyWorkflow(): void {
+    this.confirmDiscardCopyWorkflow.set(false);
+  }
+
+  private closeCopyWorkflow(): void {
     this.confirmCopy.set(null);
+    this.confirmDiscardCopyWorkflow.set(false);
     this.copyName.set('');
+    this.copyNameSuggestion.set('');
   }
 
   /** Duplicates the workflow under the typed name. The copy is always created disabled (see
@@ -636,8 +699,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.api.copy(row.workflowId, name).subscribe({
       next: () => {
         this.rowBusyId.set(null);
-        this.confirmCopy.set(null);
-        this.copyName.set('');
+        this.closeCopyWorkflow();
         this.reload();
         this.toast.success('Workflow copied', `"${name}" was created (disabled). Enable it when you're ready.`);
       },
@@ -672,6 +734,15 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       () => this.toast.success('Copied', `${label} copied to clipboard.`),
       () => this.toast.error('Could not copy to the clipboard.'),
     );
+  }
+
+  /** Tooltip for the lifecycle badge — "Draft" on its own does not say why the workflow cannot run. */
+  statusHint(status: WorkflowLifecycleStatus): string {
+    return {
+      Draft: 'No destination configured yet, so this workflow cannot run. Add one to make it Ready.',
+      Ready: 'Source and destination are configured — this workflow will run.',
+      Disabled: 'Deliberately paused. Enable it from the row menu to make it runnable again.',
+    }[status];
   }
 
   /** Deliberately mirrors ExecutionHistoryListComponent's statusClass so the same run never renders as two

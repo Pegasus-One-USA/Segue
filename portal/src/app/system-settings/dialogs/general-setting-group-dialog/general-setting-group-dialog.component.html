@@ -11,18 +11,33 @@
       <div class="gsg-notice">{{ errorMessage() }}</div>
     }
 
+    @if (numberPreview(); as preview) {
+      <div class="gsg-preview">
+        <span class="gsg-preview-label">Next number will look like</span>
+        <span class="gsg-preview-value">{{ preview }}</span>
+      </div>
+    }
+
     @for (field of fields; track field.setting.key) {
-      <div class="gsg-field" [class.gsg-field--toggle]="field.descriptor.kind === 'toggle'">
+      <div class="gsg-field" [hidden]="isHiddenField(field.setting.key)" [class.gsg-field--toggle]="field.descriptor.kind === 'toggle'">
         @switch (field.descriptor.kind) {
           @case ('toggle') {
             <label class="gsg-toggle">
               <input type="checkbox" [formControlName]="field.setting.key" />
               <span class="gsg-toggle-track"><span class="gsg-toggle-thumb"></span></span>
-              <span class="gsg-field-label">{{ field.setting.key }}</span>
+              <span class="gsg-field-label">{{ fieldLabel(field.setting.key) }}</span>
             </label>
           }
           @case ('frequency') {
-            <label class="gsg-field-label" [attr.for]="field.setting.key">{{ field.setting.key }}</label>
+            <label class="gsg-field-label" [attr.for]="field.setting.key">{{ fieldLabel(field.setting.key) }}</label>
+            <select class="gsg-input" [id]="field.setting.key" [formControlName]="field.setting.key">
+              @for (option of field.descriptor.options; track option) {
+                <option [value]="option">{{ option }}</option>
+              }
+            </select>
+          }
+          @case ('select') {
+            <label class="gsg-field-label" [attr.for]="field.setting.key">{{ fieldLabel(field.setting.key) }}</label>
             <select class="gsg-input" [id]="field.setting.key" [formControlName]="field.setting.key">
               @for (option of field.descriptor.options; track option) {
                 <option [value]="option">{{ option }}</option>
@@ -30,11 +45,11 @@
             </select>
           }
           @case ('time') {
-            <label class="gsg-field-label" [attr.for]="field.setting.key">{{ field.setting.key }}</label>
+            <label class="gsg-field-label" [attr.for]="field.setting.key">{{ fieldLabel(field.setting.key) }}</label>
             <input class="gsg-input" type="time" [id]="field.setting.key" [formControlName]="field.setting.key" />
           }
           @default {
-            <label class="gsg-field-label" [attr.for]="field.setting.key">{{ field.setting.key }}</label>
+            <label class="gsg-field-label" [attr.for]="field.setting.key">{{ fieldLabel(field.setting.key) }}</label>
             <input class="gsg-input" type="text" [id]="field.setting.key" [formControlName]="field.setting.key" autocomplete="off" />
           }
         }
@@ -45,6 +60,13 @@
     }
 
   </div>
+
+  @if (resetPolicyChanged()) {
+    <div class="gsg-warning">
+      Changing the reset policy starts a new counter: the next workflow will be numbered
+      <strong>0001</strong> again. Numbers already issued are not affected.
+    </div>
+  }
 
   <div class="gsg-actions">
     <button class="gsg-btn-cancel" type="button" (click)="dialogRef.close(false)">Cancel</button>

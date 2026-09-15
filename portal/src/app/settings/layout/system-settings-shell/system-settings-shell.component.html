@@ -1,10 +1,8 @@
-<nav class="shell-tabs">
-  @for (section of sections(); track section.route) {
-    <a class="shell-tab" [routerLink]="section.route" routerLinkActive="active">
-      <mat-icon>{{ section.icon }}</mat-icon>
-      {{ section.label }}
-    </a>
-  }
-</nav>
+<!-- No tab bar: General is the only section left. Email, Security and SSO Configurations are launcher
+     rows on General (opened as dialogs), and Terminology Codes is feature-flagged off — so a tab strip
+     would render a single tab that always points at the page already showing. The shell stays as the
+     route's component (it still carries the parent permission gate, and its child routes still resolve
+     for deep links); it just renders its child directly now.
 
+     Restore the nav below, and settings.routes.ts's settingsLandingGuard, if a second section returns. -->
 <router-outlet />

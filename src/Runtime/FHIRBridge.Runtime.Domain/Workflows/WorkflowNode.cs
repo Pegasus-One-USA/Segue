@@ -1,4 +1,4 @@
-namespace FHIRBridge.Runtime.Domain.Workflows;
+﻿namespace FHIRBridge.Runtime.Domain.Workflows;
 
 public sealed class WorkflowNode
 {
@@ -40,8 +40,6 @@ public sealed class WorkflowNode
         CheckpointUrlEnabled = checkpointUrlEnabled;
     }
 
-    private readonly List<WorkflowNodeConfiguration> _configuration = [];
-
     public Guid Id { get; }
 
     public Guid WorkflowDefinitionId { get; }
@@ -71,14 +69,7 @@ public sealed class WorkflowNode
     /// </summary>
     public bool CheckpointUrlEnabled { get; private set; }
 
-    public IReadOnlyCollection<WorkflowNodeConfiguration> Configuration => _configuration;
 
     public void SetCheckpointUrlEnabled(bool enabled) => CheckpointUrlEnabled = enabled;
 
-    public WorkflowNodeConfiguration AddConfiguration(string key, string value)
-    {
-        var configuration = new WorkflowNodeConfiguration(Guid.NewGuid(), Id, key, value);
-        _configuration.Add(configuration);
-        return configuration;
-    }
 }

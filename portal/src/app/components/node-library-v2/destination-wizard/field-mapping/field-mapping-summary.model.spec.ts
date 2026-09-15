@@ -1,5 +1,5 @@
 import {
-  buildMappingSummaryDocument, applyMappingSummaryDocument, pruneOrphanedMappingRows,
+  buildMappingSummaryDocument, applyMappingSummaryDocument, pruneOrphanedMappingRows, tableNameMatches,
   ChildTableRelation, MappingSummaryDocument,
 } from './field-mapping-summary.model';
 import { MappingRow } from './field-mapping-model';
@@ -98,6 +98,24 @@ describe('buildMappingSummaryDocument', () => {
     const col = doc.mappings[0].tables[0].columns[0];
     expect(col.mode).toBe('wholeNodeAsJson');
     expect(col.sourceNode).toBe('Patient.name');
+    expect(col.sources).toBeUndefined();
+  });
+
+  it('emits mode "default" with defaultToken/defaultValue/defaultValueType, never sources', () => {
+    const rows: MappingRow[] = [{
+      resource: 'Patient', sources: [], mode: 'default',
+      defaultToken: '@default', defaultValue: 'Patient', defaultValueType: 'String',
+      targetName: 'ClientType', tableName: 'dbo.Patient',
+    }];
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType: 'sql', destLabel: 'SQL Server',
+      mappingRows: rows, sqlTables: [], childTableRelationsByTable: {}, availableFields, sourceConnectionId: null, destinationId: null,
+    });
+    const col = doc.mappings[0].tables[0].columns[0];
+    expect(col.mode).toBe('default');
+    expect(col.defaultToken).toBe('@default');
+    expect(col.defaultValue).toBe('Patient');
+    expect(col.defaultValueType).toBe('String');
     expect(col.sources).toBeUndefined();
   });
 
@@ -285,6 +303,31 @@ describe('applyMappingSummaryDocument (round-trip)', () => {
     expect(rebuilt.mappings[0].schemaChanges.tablesToCreate.map(t => t.name)).toEqual(doc.mappings[0].schemaChanges.tablesToCreate.map(t => t.name));
   });
 
+  it('round-trips a default-value column intact — the exact bug this shape was added to fix', () => {
+    // Before mode "default" existed, this fell through to the plain directField branch with sources: [],
+    // which reloaded as an empty mode: 'value' row — indistinguishable from a genuinely broken mapping, and
+    // the reason "Edit doesn't show the saved default" and "raw resource JSON written to the column" both
+    // happened: see field-mapping-model.ts's toJsonPath('') -> "$" fallback.
+    const rows: MappingRow[] = [{
+      resource: 'Patient', sources: [], mode: 'default',
+      defaultToken: '@default', defaultValue: 'Patient', defaultValueType: 'String',
+      targetName: 'ClientType', tableName: 'dbo.Patient',
+    }];
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType: 'sql', destLabel: 'SQL Server',
+      mappingRows: rows, sqlTables: [], childTableRelationsByTable: {}, availableFields, sourceConnectionId: null, destinationId: null,
+    });
+
+    const applied = applyMappingSummaryDocument(doc, 'sql');
+
+    const restored = applied.mappingRows.find(r => r.targetName === 'ClientType');
+    expect(restored?.mode).toBe('default');
+    expect(restored?.sources).toEqual([]);
+    expect(restored?.defaultToken).toBe('@default');
+    expect(restored?.defaultValue).toBe('Patient');
+    expect(restored?.defaultValueType).toBe('String');
+  });
+
   it('self-heals a document saved BEFORE the cross-resource-relation guard existed — loading it must not restore the bad relation even transiently', () => {
     // Hand-built (not via buildMappingSummaryDocument) to simulate exactly what's actually on disk from
     // before this fix: Encounter's only table wrongly carries a relation pointing at Patient's own root.
@@ -416,6 +459,33 @@ describe('reference lookup (referencesResource)', () => {
   });
 });
 
+describe('tableNameMatches', () => {
+  const probed: DestinationTable = {
+    schemaName: 'dbo', tableName: 'Patient_NewMapped', fullName: 'dbo.Patient_NewMapped', origin: 'probed',
+    columns: [],
+  };
+
+  it('matches the fully qualified name', () => {
+    expect(tableNameMatches(probed, 'dbo.Patient_NewMapped')).toBe(true);
+  });
+
+  it('matches the bare name — the spelling a queued "add column" op and a restored mapping row both carry', () => {
+    // Regression: this fallback used to be gated on MySQL only, so for SQL Server the lookup in
+    // onColumnAdded silently matched nothing. The real ALTER TABLE succeeded but the new column never
+    // landed in sqlTables(), and pruneOrphanedMappingRows then deleted the row mapped onto it, with no
+    // error, on every save — the user's column came back but their mapping for it did not.
+    expect(tableNameMatches(probed, 'Patient_NewMapped')).toBe(true);
+  });
+
+  it('matches case-insensitively (SQL Server/MySQL identifiers are not case-sensitive by default)', () => {
+    expect(tableNameMatches(probed, 'DBO.PATIENT_NEWMAPPED')).toBe(true);
+  });
+
+  it('does not match a genuinely different table', () => {
+    expect(tableNameMatches(probed, 'dbo.Encounter')).toBe(false);
+  });
+});
+
 describe('pruneOrphanedMappingRows', () => {
   const encounterTable: DestinationTable = {
     schemaName: 'dbo', tableName: 'Encounter', fullName: 'dbo.Encounter', origin: 'probed',
@@ -436,6 +506,27 @@ describe('pruneOrphanedMappingRows', () => {
 
     expect(pruned).toHaveSize(1);
     expect(pruned[0].targetName).toBe('Identifier');
+  });
+
+  it('keeps a row mapped onto a column that really exists, when the row carries the BARE table name', () => {
+    // The row's tableName is the bare spelling while the probe reports the qualified one — the same
+    // mismatch tableNameMatches exists to absorb. Before that, this lookup missed, the row fell into the
+    // "table not found, insufficient evidence" branch and survived by luck rather than by checking; a row
+    // naming a genuinely dropped column on a bare-named table survived too. Now it resolves the table for
+    // real, so a valid column is kept deliberately.
+    const rows: MappingRow[] = [
+      { resource: 'Encounter', sources: [{ fhirPath: 'Encounter.id', label: 'Id' }], mode: 'value', targetName: 'Identifier', tableName: 'Encounter' },
+    ];
+
+    expect(pruneOrphanedMappingRows(rows, [encounterTable])).toHaveSize(1);
+  });
+
+  it('drops a stale column on a bare-named table (the lookup now resolves instead of silently missing)', () => {
+    const rows: MappingRow[] = [
+      { resource: 'Encounter', sources: [{ fhirPath: 'Encounter.id', label: 'Id' }], mode: 'value', targetName: 'NotAColumn', tableName: 'Encounter' },
+    ];
+
+    expect(pruneOrphanedMappingRows(rows, [encounterTable])).toHaveSize(0);
   });
 
   it('keeps every row for a table this session has never probed/created yet (nothing to validate against)', () => {

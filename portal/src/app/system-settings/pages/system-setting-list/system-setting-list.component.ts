@@ -14,7 +14,11 @@ import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/compone
 import { ToastService } from '../../../services/toast.service';
 import { terminologyCodeOf, generalSettingGroupOf } from '../../utils/terminology-setting-field';
 import { DialogService } from '../../../core/services/dialog.service';
+import { SettingsPageDialogService, SettingsPageDialogKey } from '../../../settings/services/settings-page-dialog.service';
+import { AuthStore } from '../../../auth/store/auth.store';
+import { FullAccessResolverService } from '../../../auth/services/full-access-resolver.service';
 import { HapiTerminologyTableComponent } from '../../components/hapi-terminology-table/hapi-terminology-table.component';
+import { TERMINOLOGY_FEATURE_ENABLED } from '../../../data/terminology-feature.config';
 import { GeneralSettingGroupDialogComponent, GeneralSettingGroupDialogData } from '../../dialogs/general-setting-group-dialog/general-setting-group-dialog.component';
 
 // These now render in their own dedicated table (HapiTerminologyTableComponent, above this generic
@@ -28,6 +32,15 @@ const HAPI_TERMINOLOGY_KEY_PATTERN = /^Terminology:\w+Hapi:/;
 // modal instead (see HapiTerminologySystemRegistry.DownloadApiUrlSettingKey) — everything else in
 // LOINC's legacy group is either superseded by LoincHapi:* or unused by any sync code at all.
 const LEGACY_TERMINOLOGY_KEY_PATTERN = /^Terminology:(Loinc|Ndc|RxNorm|Snomed|Ucum):/;
+
+// "License:Token" is the applied license token itself — live data written by the License screen's Activate
+// flow (LicenseService.ApplyAsync upserts it), not a configuration knob. It only ever appeared here because
+// it happens to be stored as a SystemSetting row, and rendering it as an editable "License" group is both
+// redundant (the License launcher row above manages licensing properly) and dangerous: hand-editing a signed
+// token through a free-text field can only invalidate it.
+//
+// Hidden from this list only. The row stays in the database — deleting it would deactivate the product.
+const LICENSE_TOKEN_KEY_PATTERN = /^License:/;
 
 interface GroupHeaderRow {
   isGroupHeader: true;
@@ -53,7 +66,94 @@ interface GeneralGroupRow {
   lastModifiedOnUtc: string | null;
 }
 
-type GroupedRow = SystemSetting | GroupHeaderRow | CodeGroupHeaderRow | GeneralGroupRow;
+// A row that opens an existing full PAGE component in a dialog rather than editing SystemSetting keys —
+// for configuration that has its own screen and its own API (License), not a set of key/value rows.
+// Static: unlike every other row type here, it is not derived from settings data.
+interface LauncherRow {
+  isLauncher: true;
+  code: SettingsPageDialogKey;
+  label: string;
+  summary: string;
+  /** Hidden unless the viewer is SuperAdmin / Full System Access. */
+  superAdminOnly?: boolean;
+  /** OR-list of permission codes that reveal this row. Omitted means "anyone who reached this page". */
+  permissions?: string[];
+}
+
+// Setting-group prefixes only a SuperAdmin (or a Full System Access role) may see or edit.
+//
+// This page is no longer SuperAdmin-only as a whole — it is reachable with configuration.view/write so
+// operational groups (worker intervals, caching, workflow numbering) can be managed without elevating
+// someone to SuperAdmin. These groups are the ones where that would be a security downgrade: credentials
+// and token config, MFA enforcement, audit-chain integrity, abuse protection, compliance controls, and
+// terminology (which carries external download credentials/URLs).
+//
+// UI-ONLY. SystemSettingsController authorizes every key with the same configuration.* policy, so a caller
+// holding configuration.write can still change these by calling the API directly. Enforcing it for real
+// needs per-key gating server-side.
+const SUPER_ADMIN_ONLY_GROUPS: readonly string[] = [
+  'Authentication',
+  'LocalAuth',
+  'Mfa',
+  'Compliance',
+  'RateLimiting',
+  'AuditChainVerification',
+  'Terminology',
+];
+
+type GroupedRow = SystemSetting | GroupHeaderRow | CodeGroupHeaderRow | GeneralGroupRow | LauncherRow;
+
+// Rows on this page that open a full existing page-component in a dialog. License moved here from its own
+// Settings nav entry; the route was removed, so this row is now the ONLY way in — which also means License
+// is SuperAdmin-only now, matching this page's own guard (it was previously roleGuard SuperAdmin|Admin).
+const LAUNCHER_ROWS: readonly LauncherRow[] = [
+  {
+    isLauncher: true,
+    code: 'license',
+    label: 'License',
+    summary: 'Status, restrictions, usage and activation',
+    superAdminOnly: true,
+  },
+  {
+    isLauncher: true,
+    code: 'ehr-endpoints',
+    label: 'EHR Endpoints',
+    summary: 'Vendor endpoints workflows connect through',
+    // Its own former route guard — this row is how an ehrendpoints.view holder reaches the screen now
+    // that /settings/ehr-endpoints is gone.
+    permissions: ['ehrendpoints.view'],
+  },
+  {
+    isLauncher: true,
+    code: 'allowed-origins',
+    label: 'Allowed Origins',
+    summary: 'CORS origins permitted to call the API',
+    // Was superAdminGuard as a route; unchanged here.
+    superAdminOnly: true,
+  },
+  {
+    isLauncher: true,
+    code: 'email',
+    label: 'Email',
+    summary: 'SMTP delivery and notification sender',
+    // Same permission pair its own route/nav tab used.
+    permissions: ['configuration.view', 'configuration.write'],
+  },
+  {
+    isLauncher: true,
+    code: 'security',
+    label: 'Security',
+    summary: 'Application secrets and key management',
+    superAdminOnly: true,
+  },
+  {
+    isLauncher: true,
+    code: 'sso-configurations',
+    label: 'SSO Configurations',
+    summary: 'External identity providers for single sign-on',
+    superAdminOnly: true,
+  },
+];
 
 @Component({
   selector: 'app-system-setting-list',
@@ -74,6 +174,38 @@ type GroupedRow = SystemSetting | GroupHeaderRow | CodeGroupHeaderRow | GeneralG
 export class SystemSettingListComponent implements OnInit {
   private readonly svc    = inject(ISystemSettingsService);
   private readonly customDialog = inject(DialogService);
+  private readonly settingsPageDialog = inject(SettingsPageDialogService);
+  private readonly authStore = inject(AuthStore);
+
+  /** Whether the Terminology feature is switched on at all — see data/terminology-feature.config.ts.
+   *  Template-only: it gates the HAPI terminology table, whose ngOnInit otherwise fires
+   *  GET /api/v1/terminology/hapi on every load of this page for a feature that is turned off. */
+  protected readonly terminologyFeatureEnabled = TERMINOLOGY_FEATURE_ENABLED;
+  private readonly fullAccessSvc = inject(FullAccessResolverService);
+
+  // Same elevated-access resolution the System Settings shell uses: a literal SuperAdmin claim answers
+  // synchronously, and any other role is checked once against the Full System Access role list. Starts
+  // false so restricted rows are hidden until proven otherwise — fail closed, never flash them.
+  private readonly callerHasFullAccess = signal(false);
+
+  /** True for SuperAdmin or a role carrying Full System Access. */
+  readonly isElevated = computed(() => this.authStore.hasRole('SuperAdmin') || this.callerHasFullAccess());
+
+  /** True for a viewer who may see the SystemSetting key/value groups at all. The page is also reachable
+   *  with only ehrendpoints.view (that permission exists to open the EHR Endpoints row, which moved here
+   *  from its own route) — such a viewer must not see unrelated configuration rows. */
+  readonly canViewSettingGroups = computed(() =>
+    this.isElevated() || this.authStore.isAdmin()
+    || this.authStore.hasPermission('configuration.view')
+    || this.authStore.hasPermission('configuration.write'));
+
+  /** Whether a launcher row / setting group is visible to this viewer. */
+  private canSee(rule: { superAdminOnly?: boolean; permissions?: string[] }): boolean {
+    if (rule.superAdminOnly) return this.isElevated();
+    if (!rule.permissions?.length) return true;
+    return this.isElevated() || this.authStore.isAdmin()
+      || rule.permissions.some(permission => this.authStore.hasPermission(permission));
+  }
   private readonly toast  = inject(ToastService);
 
   readonly loading  = signal(true);
@@ -227,9 +359,31 @@ export class SystemSettingListComponent implements OnInit {
     // for them; they're managed under Settings > System Settings > Terminology Codes instead (that
     // route/its dedicated per-code-system pages were never removed, just unlinked from nav — restore
     // system-settings-shell.component.ts's commented-out 'Terminology Codes' nav entry to reach them).
-    const other = rows.filter(s => !s.key.startsWith('Terminology:'));
-
     const result: GroupedRow[] = [];
+
+    // Launcher rows participate in the same free-text search as everything else, so typing "license"
+    // finds it; they are not SystemSettings, so they're matched on their own label/summary here.
+    const term = this.search().trim().toLowerCase();
+    const visibleLaunchers = LAUNCHER_ROWS.filter(row => this.canSee(row));
+    const launchers = term
+      ? visibleLaunchers.filter(row =>
+          row.label.toLowerCase().includes(term) || row.summary.toLowerCase().includes(term))
+      : visibleLaunchers;
+    result.push(...launchers);
+
+    // An ehrendpoints.view-only viewer reaches this page solely to open the EHR Endpoints launcher —
+    // the configuration key/value groups are not theirs to see.
+    if (!this.canViewSettingGroups()) {
+      return result;
+    }
+
+    const other = rows
+      .filter(s => !s.key.startsWith('Terminology:'))
+      // Restricted groups are removed from the data itself, not just hidden in the template, so a
+      // non-elevated viewer can neither see their values nor open their edit dialog. Keys with no
+      // group prefix stay visible: they are ungrouped one-off rows, none of which are restricted.
+      .filter(s => this.isElevated() || !SUPER_ADMIN_ONLY_GROUPS.includes(s.key.split(':')[0]));
+
     if (other.length) {
       result.push(...this.buildSection(other, false, collapsed));
     }
@@ -259,8 +413,23 @@ export class SystemSettingListComponent implements OnInit {
     return 'isGeneralGroup' in row;
   }
 
+  isLauncherRow(_index: number, row: GroupedRow): row is LauncherRow {
+    return 'isLauncher' in row;
+  }
+
   isDataRow(_index: number, row: GroupedRow): row is SystemSetting {
-    return !('isGroupHeader' in row) && !('isCodeGroupHeader' in row) && !('isGeneralGroup' in row);
+    return !('isGroupHeader' in row) && !('isCodeGroupHeader' in row) && !('isGeneralGroup' in row)
+      && !('isLauncher' in row);
+  }
+
+  constructor() {
+    // A literal SuperAdmin claim already satisfies isElevated() on its own — skip the extra API call
+    // for that common case, exactly as the System Settings shell does.
+    if (this.authStore.hasRole('SuperAdmin')) return;
+
+    const heldRoleNames = new Set(this.authStore.roles().map(role => role.name));
+    this.fullAccessSvc.resolve(heldRoleNames)
+      .subscribe(hasFullAccess => this.callerHasFullAccess.set(hasFullAccess));
   }
 
   ngOnInit(): void {
@@ -276,7 +445,9 @@ export class SystemSettingListComponent implements OnInit {
     this.svc.getAll().subscribe({
       next: settings => {
         this.settings.set(settings.filter(s =>
-          !HAPI_TERMINOLOGY_KEY_PATTERN.test(s.key) && !LEGACY_TERMINOLOGY_KEY_PATTERN.test(s.key)));
+          !HAPI_TERMINOLOGY_KEY_PATTERN.test(s.key)
+          && !LEGACY_TERMINOLOGY_KEY_PATTERN.test(s.key)
+          && !LICENSE_TOKEN_KEY_PATTERN.test(s.key)));
         this.loading.set(false);
 
         if (!this.collapseDefaultsApplied) {
@@ -313,6 +484,16 @@ export class SystemSettingListComponent implements OnInit {
           this.load();
         }
       });
+  }
+
+  /** Opens a launcher row's page component as a full, edge-to-edge dialog — the same treatment Source and
+   *  Destination Connections give their own screens (fillContent + maximizable), so a dense page gets the full
+   *  content area with proper internal scrolling instead of being clipped inside a small centered card.
+   *  The hosted component is the UNCHANGED page component, so behaviour matches the old menu entry exactly. */
+  openLauncher(row: LauncherRow): void {
+    // Shared opener, so every entry point (this row, the app shell's license banners, the dev-mint page)
+    // lands on the identical dialog.
+    this.settingsPageDialog.open(row.code);
   }
 
   openAdd(): void {

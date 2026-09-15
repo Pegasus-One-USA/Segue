@@ -38,15 +38,9 @@ export const SETTINGS_ROUTES: Routes = [
         loadComponent: () =>
           import('./pages/branding/branding-settings.component').then(m => m.BrandingSettingsComponent),
       },
-      {
-        path: 'ehr-endpoints',
-        canActivate: [permissionGuard],
-        data: { permissions: ['ehrendpoints.view'] },
-        loadComponent: () =>
-          import('../ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component').then(
-            m => m.EhrEndpointListComponent
-          ),
-      },
+      // NOTE: 'ehr-endpoints' was removed — it is now a launcher row on System Settings > General, opened
+      // as a full dialog. The row keeps the same ehrendpoints.view gate this route had, and General itself
+      // is reachable with configuration.view/write, so a non-SuperAdmin holder still gets there.
       {
         // Merges the formerly-standalone Source Connections, Destination Connections, and Mapping
         // Profiles tabs into one screen with a section per former tab — grouped because all three
@@ -123,28 +117,14 @@ export const SETTINGS_ROUTES: Routes = [
           },
         ],
       },
-      {
-        path: 'allowed-origins',
-        canActivate: [superAdminGuard],
-        loadComponent: () =>
-          import('../allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component').then(
-            m => m.AllowedCorsOriginListComponent
-          ),
-      },
-      {
-        // Gated on role rather than a permission code, matching the backend LicenseController's own
-        // gate ([Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)], which UnifiedAdminRequirement
-        // accepts for SuperAdmin or Admin token-role claims). superAdminGuard is SuperAdmin-only and
-        // would incorrectly hide this from an Admin the backend actually lets in, so this uses the
-        // generic roleGuard instead, with the same two role strings AuthStore.isAdmin() checks.
-        path: 'license',
-        canActivate: [roleGuard],
-        data: { roles: ['SuperAdmin', 'Admin'] },
-        loadComponent: () =>
-          import('./pages/license-settings/license-settings.component').then(
-            m => m.LicenseSettingsComponent
-          ),
-      },
+      // NOTE: 'allowed-origins' was removed — also a launcher row on System Settings > General now, still
+      // gated superAdminOnly exactly as this route was, so nobody gained or lost access.
+      // NOTE: the 'license' route was removed — License is now a launcher row on Settings > System Settings >
+      // General, opened as a full dialog (SettingsPageDialogService). That row is gated superAdminOnly,
+      // so License is SuperAdmin-only now; it was previously roleGuard ['SuperAdmin','Admin'], matching
+      // LicenseController's UnifiedAdmin policy, which still accepts Admin. An Admin who is not a SuperAdmin
+      // therefore no longer has any UI path to License, even though the API would still serve them.
+      // The dev-mint route below deliberately keeps its own roleGuard and is still reachable directly.
       {
         // ⚠ TEMPORARY / DEV-ONLY — backs the "Dev: Mint a test license" page, linked from the License
         // settings screen's "Dev: Mint a test license →" button. Same roleGuard/roles as the 'license'
@@ -168,11 +148,16 @@ export const SETTINGS_ROUTES: Routes = [
         // the four Terminology Codes systems are independently permission-controlled (configuration.*/
         // loinc.*/snomedct.*/rxnorm.*/icd10.*) and must be reachable by a role that holds one of those
         // without also being SuperAdmin — so this parent gate is an OR across every one of them, exactly
-        // like workflow-configurations above; General/Security get their OWN explicit superAdminGuard on
-        // their child routes below rather than inheriting a blanket one from here.
+        // like workflow-configurations above; Security gets its OWN explicit superAdminGuard on its child
+        // route below rather than inheriting a blanket one from here. (General used to as well — it now
+        // gates per row instead; see its child route.)
         path: 'system-settings',
         canActivate: [permissionGuard],
-        data: { permissions: SYSTEM_SETTINGS_PERMISSIONS },
+        // ehrendpoints.view is included because EHR Endpoints moved here from its own route: a role holding
+        // only that permission must still get through this shell to reach General's EHR Endpoints row.
+        // The General child re-checks configuration.* on its own, and each row gates itself, so widening
+        // this parent OR does not expose anything further.
+        data: { permissions: [...SYSTEM_SETTINGS_PERMISSIONS, 'ehrendpoints.view'] },
         loadComponent: () =>
           import('./layout/system-settings-shell/system-settings-shell.component').then(
             m => m.SystemSettingsShellComponent
@@ -187,8 +172,23 @@ export const SETTINGS_ROUTES: Routes = [
               import('./pages/email-settings/email-settings.component').then(m => m.EmailSettingsComponent),
           },
           {
+            // Opened up from superAdminGuard to the same permission pair Email uses: General now hosts
+            // rows that a configuration.* holder legitimately manages (worker intervals, caching,
+            // workflow numbering), plus rows that stay SuperAdmin-only. The page gates each row itself
+            // (see SystemSettingListComponent's SUPER_ADMIN_ONLY_GROUPS / LAUNCHER_ROWS) rather than
+            // locking the whole screen, so nothing that was SuperAdmin-only before became reachable.
+            //
+            // NOTE: this row-level split is UI-only. SystemSettingsController still authorizes every key
+            // with the same configuration.* policy, so a caller holding configuration.write can still
+            // change a locked key by calling the API directly. Making the restriction real needs
+            // per-key gating server-side.
             path: 'general',
-            canActivate: [superAdminGuard],
+            canActivate: [permissionGuard],
+            // ehrendpoints.view is in the OR because EHR Endpoints is a row on this page now: a role holding
+            // only that permission has to reach General to open it. Such a role sees the EHR Endpoints row
+            // and nothing else — the setting groups themselves still render only for configuration.* holders
+            // (see SystemSettingListComponent.canSee / SUPER_ADMIN_ONLY_GROUPS).
+            data: { permissions: ['configuration.view', 'configuration.write', 'ehrendpoints.view'] },
             loadComponent: () =>
               import('../system-settings/pages/system-setting-list/system-setting-list.component').then(
                 m => m.SystemSettingListComponent
@@ -286,26 +286,15 @@ export const SETTINGS_ROUTES: Routes = [
                 m => m.SsoConfigurationsComponent
               ),
           },
-          // Was a static `redirectTo: 'email'` — landed a Terminology-Codes-only (or General/Security-
-          // only) role on Email's own route, which their permissions/role don't cover, bouncing them
-          // straight to /unauthorized instead of into the section they can actually use.
+          // Every former sibling tab (Email, Security, SSO Configurations) is a launcher row on General
+          // now, and Terminology Codes is feature-flagged off — so General is the only section left and a
+          // permission-aware landing guard has nothing left to choose between. A plain redirect replaces
+          // it. General's own child guard still decides whether this caller may proceed; restore
+          // settingsLandingGuard here if a second section is ever added back.
           {
             path: '',
             pathMatch: 'full',
-            // Empty children only to satisfy route-config validation; the guard always
-            // redirects (UrlTree) so nothing renders here. See NG04014 note above.
-            // 'terminology' is only offered as a landing candidate while the feature is enabled —
-            // otherwise a role holding just loinc.view etc. would land here only to be immediately
-            // bounced back by featureFlagGuard above, right back into this same guard: an infinite
-            // redirect loop between the two.
-            canActivate: [settingsLandingGuard('/settings/system-settings', [
-              { path: 'email', permissions: ['configuration.view', 'configuration.write'] },
-              ...(TERMINOLOGY_FEATURE_ENABLED ? [{ path: 'terminology', permissions: TERMINOLOGY_PERMISSIONS }] : []),
-              { path: 'general', superAdminOnly: true },
-              { path: 'security', superAdminOnly: true },
-              { path: 'sso-configurations', superAdminOnly: true },
-            ])],
-            children: [],
+            redirectTo: 'general',
           },
         ],
       },
@@ -321,9 +310,11 @@ export const SETTINGS_ROUTES: Routes = [
         canActivate: [settingsLandingGuard('/settings', [
           { path: 'branding', permissions: ['configuration.write'] },
           { path: 'workflow-configurations', permissions: ['sourceconnections.view', 'destinationconnections.view', 'mappingprofiles.view', 'transformationrules.view'] },
-          { path: 'ehr-endpoints', permissions: ['ehrendpoints.view'] },
-          { path: 'system-settings', permissions: SYSTEM_SETTINGS_PERMISSIONS },
-          { path: 'allowed-origins', superAdminOnly: true },
+          // ehr-endpoints / allowed-origins are no longer routes (they are launcher rows on
+          // system-settings/general), so landing candidates point at system-settings instead — otherwise
+          // this guard would redirect to a path that no longer resolves.
+          { path: 'system-settings', permissions: [...SYSTEM_SETTINGS_PERMISSIONS, 'ehrendpoints.view'] },
+          { path: 'system-settings', superAdminOnly: true },
         ])],
         children: [],
       },

@@ -1,9 +1,10 @@
-import { Component, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, OnInit, inject, signal, computed, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, Subject } from 'rxjs';
 import { PermissionService } from '../../auth/services/permission.service';
 import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
+import { BlockingConfirmService } from '../../core/services/blocking-confirm.service';
 import { PipelineStoreV2 } from '../../services/pipeline-v2.store';
 import { TransformationRulesService } from '../../components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
 import type { LegacyMappingRow } from '../../components/node-library-v2/destination-wizard/field-mapping/field-mapping-model';
@@ -58,6 +59,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   private readonly buildAssembler = inject(WorkflowBuildAssemblerServiceV2);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly blockingConfirm = inject(BlockingConfirmService);
   private readonly permissions = inject(PermissionService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
 
@@ -215,22 +217,50 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     // Deep-link from the Workflow List "Edit" action: ?id=<workflowId> loads that graph onto the canvas after the
     // catalog resolves (the mapper needs node metadata), so Save issues a PUT update of the same workflow.
     const editId = this.route.snapshot.queryParamMap.get('id');
-    this.isEditingExistingWorkflow.set(!!editId);
+
+    // ?new=1 means the Workflow List just CREATED this workflow (name + description only) and handed us its
+    // id — so it has an id like an edit, but an empty graph like a new canvas. Without this distinction the
+    // id alone made it take the edit path: the canvas was never reset, and loading an empty graph left the
+    // store holding whatever the previous session left behind, so the `+` picker resolved its chain steps
+    // against stale nodes (no Transformation / De-identification offered, Mapping falling through to
+    // "nothing to configure", an added node not rendering).
+    const isFreshlyCreated = this.route.snapshot.queryParamMap.get('new') === '1';
+    this.isEditingExistingWorkflow.set(!!editId && !isFreshlyCreated);
 
     // The PipelineStoreV2 is a root singleton, so its canvas state outlives this component (e.g. an abandoned,
     // unsaved edit/creation left nodes on it). A fresh "New Workflow" navigation must always start blank rather
     // than inheriting whatever was left over from whatever was on the canvas before.
-    if (!editId) {
+    if (!editId || isFreshlyCreated) {
       this.resetCanvasAndWorkflowState();
     }
 
     this.workflowApi.loadCatalog().subscribe({
       next: items => {
         this.workflowStatus.set(`Catalog loaded (${items.length} nodes).`);
-        if (editId) {
-          this.workflowIdInput.set(editId);
-          this.onLoadWorkflow();
+        if (!editId) {
+          return;
         }
+
+        this.workflowIdInput.set(editId);
+
+        if (isFreshlyCreated) {
+          // The graph is empty by construction, so there is no canvas to load — but the name and
+          // description the create modal captured live on the server and were just cleared by the reset
+          // above, so fetch them back. Adopting the id here is what makes Save update this workflow
+          // instead of creating a second one.
+          this.currentWorkflowId.set(editId);
+          this.workflowApi.load(editId).subscribe({
+            next: workflow => {
+              this.workflowName.set(workflow.name);
+              this.workflowDescription.set(workflow.description ?? '');
+              this.workflowStatus.set(`${workflow.name} — add a source to begin.`);
+            },
+            error: () => this.workflowStatus.set('Workflow load failed.'),
+          });
+          return;
+        }
+
+        this.onLoadWorkflow();
       },
       error: () => this.workflowStatus.set('Catalog could not be loaded. Save is disabled.'),
     });
@@ -309,7 +339,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
     let request: WorkflowBuildRequest;
     try {
-      request = this.buildAssembler.assemble(name, this.buildTrigger(), this.workflowDescription().trim() || null);
+      request = this.buildAssembler.assemble(
+        name, this.buildTrigger(), this.workflowDescription().trim() || null, this.currentWorkflowId());
     } catch (err) {
       // buildAssembler throws for configuration gaps it can catch up front (e.g. Upsert write mode with no
       // id-mapped key column) — surfaced here rather than round-tripping to the backend for the same rejection.
@@ -606,6 +637,23 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         this.toast.error('No destination', 'Add a destination before adding this step.');
         return;
       }
+      // The wizard that produced this config is the DESTINATION's wizard — adding a chain step is just one
+      // way to leave it — so its config describes the destination, not only the step being added. Merge it
+      // back onto the destination node before inserting the step.
+      //
+      // Without this, mapping a field and then leaving via "add Transformation" silently discarded the
+      // mapping: the config (13 rows) landed only on the new chain node, while the destination node kept
+      // its previous 12, and WorkflowBuildAssemblerServiceV2.buildMappings reads mapping rows off the
+      // DESTINATION node — so the row reached neither the build request nor the database, with no error
+      // anywhere. Merged (not replaced) for the same reason the editNodeId branch above merges: machine
+      // keys injected server-side (destinationId, secretKeyVaultName/secretName) are not form controls
+      // here and must survive.
+      if (e.config) {
+        const destinationFields = this.store.byId(destination.id)?.fields ?? {};
+        this.store.updateNode(destination.id, {
+          fields: { ...destinationFields, ...e.config },
+        });
+      }
       this.insertChainStep(destination, e.transformId, e.config);
       this.toast.show('Step added', `${t.name} added.`);
       return;
@@ -690,17 +738,31 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       return;
     }
 
-    // SQL-family rules are still Field-scoped and carry no workflow id, so "this workflow's rules" cannot be
-    // asked for directly. It can be answered though: a rule is this pipeline's business only if it targets a
-    // field this destination node actually maps. The mapped triples are local (dest_mappings), so the
-    // tenant-wide result gets intersected with them.
+    // SQL-family rules authored in this builder are Workflow-scoped and DO carry the workflow id, so ask for
+    // this pipeline's own rules rather than every rule pointed at this destination TYPE. Filtering only by
+    // destinationType returned other workflows' rules too, and the mapped-key intersection below cannot tell
+    // them apart: it matches on (resourceType, column[, sourceField]), which is exactly what two workflows
+    // writing Patient.name.family into FamilyName have in common. The result was a Transformation node on a
+    // workflow with no rules at all, purely because some OTHER workflow had a rule on a column this one also
+    // maps — the same "a rule anywhere makes the node appear everywhere" failure the FHIR branch above was
+    // already fixed for, one step further in.
+    //
+    // The intersection is still applied on top: a rule can outlive the mapping it was authored against (the
+    // column gets retargeted or removed), and a node for a rule that no longer has a field to attach to would
+    // be just as misleading as the cross-workflow one.
+    const workflowId = this.currentWorkflowId();
+    if (!workflowId) return;
+
     const mappedKeys = this.mappedRuleKeys(fields);
     if (mappedKeys.size === 0) return;
 
-    this.transformationRules.list({ destinationType }).subscribe({
+    this.transformationRules.list({ destinationType, resourcePipelineRouteId: workflowId }).subscribe({
       next: rules => {
         const appliesHere = rules.some(rule =>
-          !!rule.resourceType
+          // Belt-and-braces against a server-side filter that ever widens: this node is only this workflow's
+          // business when the rule actually belongs to it.
+          rule.resourcePipelineRouteId === workflowId
+          && !!rule.resourceType
           && !!rule.destinationField
           && mappedKeys.has(`${rule.resourceType}|${rule.destinationField}`)
           // A rule naming a different source field is about a different mapping of the same column.
@@ -1023,17 +1085,35 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   readonly pendingLeaveConfirm = signal(false);
   private leaveConfirmResult: Subject<boolean> | null = null;
 
+  // Safety net: a forced navigation (session timeout, failed token refresh) can destroy this
+  // component while the confirm is still open. Release the [inert] suppression then too, or the
+  // whole app would stay permanently non-inert for the rest of the session.
+  private readonly leaveConfirmDestroyRef = inject(DestroyRef).onDestroy(() => this.closeLeaveConfirm());
+
   confirmLeaveDialog(): Observable<boolean> {
     this.leaveConfirmResult = new Subject<boolean>();
     this.pendingLeaveConfirm.set(true);
+    // The navigation this dialog is gating keeps LoadingService busy until the dialog is answered,
+    // and AppComponent marks the whole routed subtree [inert] while busy — which would remove this
+    // very dialog from hit-testing (no z-index can override inert) and deadlock the page. Announce
+    // the dialog so AppComponent can suppress [inert] for exactly this window.
+    this.blockingConfirm.open();
     return this.leaveConfirmResult.asObservable();
   }
 
   cancelLeavePage(): void {
-    this.pendingLeaveConfirm.set(false);
+    this.closeLeaveConfirm();
     this.leaveConfirmResult?.next(false);
     this.leaveConfirmResult?.complete();
     this.leaveConfirmResult = null;
+  }
+
+  /** Clears the dialog and always releases the [inert] suppression, so the two can never drift out
+   *  of sync and leave the app permanently non-inert. */
+  private closeLeaveConfirm(): void {
+    if (!this.pendingLeaveConfirm()) return;
+    this.pendingLeaveConfirm.set(false);
+    this.blockingConfirm.close();
   }
 
   onLeaveBackdropClick(e: MouseEvent): void {
@@ -1041,7 +1121,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   }
 
   confirmLeavePage(): void {
-    this.pendingLeaveConfirm.set(false);
+    this.closeLeaveConfirm();
     this.leaveConfirmResult?.next(true);
     this.leaveConfirmResult?.complete();
     this.leaveConfirmResult = null;

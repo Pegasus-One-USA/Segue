@@ -6,6 +6,7 @@ import { BrandingService } from './services/branding.service';
 import { ToastComponent } from './components/shared/toast/toast.component';
 import { GlobalLoaderComponent } from './components/shared/global-loader/global-loader.component';
 import { LoadingService } from './services/loading.service';
+import { BlockingConfirmService } from './core/services/blocking-confirm.service';
 
 @Component({
   selector: 'app-root',
@@ -23,7 +24,7 @@ import { LoadingService } from './services/loading.service';
   // <app-toast /> and <app-global-loader /> stay outside this wrapper, deliberately: a toast must stay
   // dismissible and the loader itself must never be the thing it's blocking.
   template: `
-    <div [attr.inert]="loading.isLoading() ? '' : null">
+    <div [attr.inert]="loading.isLoading() && !blockingConfirm.isOpen() ? '' : null">
       <router-outlet />
     </div>
     <app-toast />
@@ -42,6 +43,11 @@ export class AppComponent {
   private readonly branding = inject(BrandingService);
   // protected (not private): read from the inline template above to drive [attr.inert].
   protected readonly loading = inject(LoadingService);
+  // Also drives [attr.inert] above: a route's own in-template CanDeactivate confirm lives INSIDE the
+  // routed subtree, and the navigation it is gating keeps LoadingService busy the whole time it is
+  // open — so without this exception the dialog would inert its own buttons and deadlock navigation.
+  // See BlockingConfirmService for the full explanation.
+  protected readonly blockingConfirm = inject(BlockingConfirmService);
 
   constructor() {
     // Router navigations are a second, non-HTTP source of "the app is busy" — a lazy-loaded

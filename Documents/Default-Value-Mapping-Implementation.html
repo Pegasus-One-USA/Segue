@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Default Value Mapping — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+    --hidden-bg: #F1F5F9;
+    --hidden: #475569;
+    --visible-bg: #D1FAE5;
+    --visible: #059669;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1150px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1150px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; max-width: 820px; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 {
+    font-size: 16.5px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h4 { font-size: 14px; font-weight: 700; margin: 20px 0 8px; color: var(--ink); }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    padding: 14px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-visible  { color: var(--visible);  background: var(--visible-bg); }
+  .pill-hidden   { color: var(--hidden);   background: var(--hidden-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.data-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.data-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.data-table tr:last-child td { border-bottom: none; }
+  table.data-table tr:hover td { background: #FAFBFC; }
+  table.data-table td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.data-table td.why { color: #475569; }
+  table.data-table td.status { text-align: center; width: 90px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.bad { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout.good { border-left-color: var(--new); background: var(--new-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .flow-steps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 24px; }
+  .flow-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-step .step-body strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .flow-step .step-body span { font-size: 13px; color: var(--muted); }
+
+  .dodont { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0 28px; }
+  .dodont .col { border-radius: 10px; padding: 16px 20px; }
+  .dodont .do { background: var(--new-bg); border: 1px solid #A7F3D0; }
+  .dodont .dont { background: var(--deleted-bg); border: 1px solid #FECACA; }
+  .dodont h4 { margin-top: 0; }
+  .dodont ul { margin: 0; padding-left: 18px; }
+  .dodont li { margin-bottom: 8px; font-size: 13.5px; }
+  @media (max-width: 720px) { .dodont { grid-template-columns: 1fr; } }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.data-table { font-size: 12px; }
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>Default Value Mapping</h1>
+    <p class="subtitle">Lets a destination column in the mapping node always write a fixed value — a literal constant or a pipeline/runtime token — instead of a source field. Implementation summary, every option explained, destination-type behavior, mapping do's/don'ts, and the full file-by-file change log.</p>
+    <div class="meta">
+      <div><strong>Branch</strong> feature/defaultvalue</div>
+      <div><strong>Scope</strong> Backend (.NET 9) + Frontend (Angular 20, node-library-v2 destination wizard)</div>
+      <div><strong>Status</strong> Implemented, reviewed, tested</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview &amp; concept</a></li>
+      <li><a href="#ui">Where it lives in the UI</a></li>
+      <li><a href="#options-all">All default value options</a></li>
+      <li><a href="#options-visible">Currently visible options — detail</a></li>
+      <li><a href="#options-hidden">Currently hidden options — detail &amp; how to re-enable</a></li>
+      <li><a href="#destinations">How it behaves across destination types</a></li>
+      <li><a href="#exclusivity">Mutual exclusivity with source mapping</a></li>
+      <li><a href="#dodont">Do's and don'ts</a></li>
+      <li><a href="#bug">The round-trip bug that was found and fixed</a></li>
+      <li><a href="#files-frontend">Files changed — frontend</a></li>
+      <li><a href="#files-backend">Files changed — backend</a></li>
+      <li><a href="#files-tests">Files changed — tests</a></li>
+      <li><a href="#files-unrelated">Files changed — unrelated build fixes (same session)</a></li>
+      <li><a href="#verification">Verification performed</a></li>
+      <li><a href="#limitations">Known limitations</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview &amp; concept</h2>
+  <p class="section-intro">
+    Previously, every destination column in the mapping node had to be mapped from a source field (or left
+    unmapped). This feature adds a third option: a column can be set to <strong>always write a fixed value</strong> —
+    either a literal constant you type in (e.g. every row's "ClientType" column always says <code>"Patient"</code>),
+    or a pipeline/runtime value that JSON MappingEngine already has access to at execution time (the current
+    timestamp, the pipeline run's own id, a freshly generated GUID, etc.).
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">11</div><div class="label">Total options (1 literal + 10 tokens)</div></div>
+    <div class="card"><div class="num">4</div><div class="label">Currently visible in the picker</div></div>
+    <div class="card"><div class="num">7</div><div class="label">Currently hidden (fully implemented)</div></div>
+    <div class="card"><div class="num">27</div><div class="label">Files touched across frontend + backend + tests</div></div>
+  </div>
+
+  <div class="callout">
+    <strong>Core design decision</strong>
+    A column is either mapped from a source, or set to a default — never both. There is only ever one
+    <code>MappingRow</code> per destination column; setting a default <em>replaces</em> whatever mapping that
+    column had, and mapping a new source onto a default column replaces the default right back. This is what
+    makes the two mutually exclusive without needing extra validation flags — see
+    <a href="#exclusivity">§7</a>.
+  </div>
+
+  <h2 id="ui"><span class="num">2.</span>Where it lives in the UI</h2>
+  <p>
+    In the workflow builder's destination wizard (<code>node-library-v2</code>), the mapping canvas shows one card
+    per destination table, one row per column. Every column row now has a small flag button (<strong>⚑</strong>)
+    next to the existing edit/delete controls. Clicking it opens the <strong>Set default value</strong> modal.
+    A column currently set to a default shows a <code>DEFAULT</code> badge on its row, and its upsert-key toggle
+    (🔑) is hidden — see <a href="#exclusivity">§7</a> for why.
+  </p>
+  <p>
+    Clicking a column already mapped, or its "Edit…" link in the flat mapping list at the bottom of the canvas,
+    re-opens the same modal (pre-filled with the current value) if that column is set to a default — instead of
+    the ordinary source-mapping popover.
+  </p>
+
+  <h2 id="options-all"><span class="num">3.</span>All default value options</h2>
+  <p class="section-intro">
+    Every option is a row in <code>DEFAULT_VALUE_PRESETS</code>
+    (<code>portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts</code>).
+    <span class="pill pill-visible">VISIBLE</span> options appear in the "Set default value" picker today;
+    <span class="pill pill-hidden">HIDDEN</span> options are fully implemented end-to-end (backend included) but
+    temporarily curated out of the picker — see <a href="#options-hidden">§5</a>.
+  </p>
+
+  <table class="data-table">
+    <tr>
+      <th>Token</th><th>Picker label</th><th>Status</th><th>Value type</th><th>Per-record or per-run?</th><th>Example value</th>
+    </tr>
+    <tr>
+      <td class="mono">@default</td><td>Literal value</td><td class="status"><span class="pill pill-visible">VISIBLE</span></td>
+      <td>User-chosen (String / Integer / Decimal / Boolean / Date / DateTime)</td><td>Constant (you type it)</td>
+      <td class="mono">"Patient"</td>
+    </tr>
+    <tr>
+      <td class="mono">@now</td><td>Current date/time (UTC)</td><td class="status"><span class="pill pill-visible">VISIBLE</span></td>
+      <td>DateTime</td><td>Per run (one timestamp shared by every row the run writes)</td>
+      <td class="mono">2026-09-14T11:32:07.502Z</td>
+    </tr>
+    <tr>
+      <td class="mono">@runId</td><td>Pipeline run ID</td><td class="status"><span class="pill pill-visible">VISIBLE</span></td>
+      <td>String (GUID)</td><td>Per run</td>
+      <td class="mono">3fa85f64-5717-4562-b3fc-2c963f66afa6</td>
+    </tr>
+    <tr>
+      <td class="mono">@newGuid</td><td>New GUID</td><td class="status"><span class="pill pill-visible">VISIBLE</span></td>
+      <td>String (GUID)</td><td><strong>Per record</strong> — a fresh value for every row</td>
+      <td class="mono">9c858901-8a57-4791-81fe-4c455b099bc9</td>
+    </tr>
+    <tr>
+      <td class="mono">@resourceType</td><td>FHIR resource type</td><td class="status"><span class="pill pill-hidden">HIDDEN</span></td>
+      <td>String</td><td>Per run (this whole mapping profile always maps one resource type)</td>
+      <td class="mono">"Patient"</td>
+    </tr>
+    <tr>
+      <td class="mono">@sourceResourceId</td><td>Source resource ID</td><td class="status"><span class="pill pill-hidden">HIDDEN</span></td>
+      <td>String</td><td>Per record</td>
+      <td class="mono">eq081-VQEgP8drUUqCWzHfw3</td>
+    </tr>
+    <tr>
+      <td class="mono">@mappingProfileName</td><td>Mapping profile name</td><td class="status"><span class="pill pill-hidden">HIDDEN</span></td>
+      <td>String</td><td>Per run</td>
+      <td class="mono">"Epic Patient → dbo.Patient"</td>
+    </tr>
+    <tr>
+      <td class="mono">@mappingProfileId</td><td>Mapping profile ID</td><td class="status"><span class="pill pill-hidden">HIDDEN</span></td>
+      <td>String (GUID)</td><td>Per run</td>
+      <td class="mono">3f2504e0-4f89-11d3-9a0c-0305e82c3301</td>
+    </tr>
+    <tr>
+      <td class="mono">@destinationObject</td><td>Destination table/object</td><td class="status"><span class="pill pill-hidden">HIDDEN</span></td>
+      <td>String</td><td>Per run (per field, see §5)</td>
+      <td class="mono">"dbo.Patient"</td>
+    </tr>
+    <tr>
+      <td class="mono">@sourceConnectionId</td><td>Source connection ID</td><td class="status"><span class="pill pill-hidden">HIDDEN</span></td>
+      <td>String (GUID)</td><td>Per run</td>
+      <td class="mono">a1b2c3d4-1234-5678-9abc-def012345678</td>
+    </tr>
+    <tr>
+      <td class="mono">@triggeredBy</td><td>Triggered by</td><td class="status"><span class="pill pill-hidden">HIDDEN</span></td>
+      <td>String</td><td>Per run — <strong>may be null</strong> (see §5)</td>
+      <td class="mono">"scheduled" / "mitul.shah@pegasusone.com"</td>
+    </tr>
+  </table>
+
+  <h2 id="options-visible"><span class="num">4.</span>Currently visible options — detail</h2>
+
+  <div class="card">
+    <h4><code>@default</code> — Literal value</h4>
+    <p>You type free text and every record writes that exact value. The only option with a second input field
+      (the literal text) and a data-type picker, since there's no source to infer a type from. Works for any
+      destination column type the value type dropdown offers (String/Integer/Decimal/Boolean/Date/DateTime) —
+      pick whichever matches the real column so <code>CreateMappingProfileRequestValidator</code>'s type check
+      passes at save time.</p>
+  </div>
+
+  <div class="card">
+    <h4><code>@now</code> — Current date/time (UTC)</h4>
+    <p>The moment the pipeline run <em>starts</em> writing — one single UTC timestamp, computed once and shared
+      by every record that run writes (not a per-record "row write time"). Good for "ImportedOnUtc" /
+      "LastSyncedUtc" style columns. Must map onto a DateTime-typed column.</p>
+  </div>
+
+  <div class="card">
+    <h4><code>@runId</code> — Pipeline run ID</h4>
+    <p>The GUID identifying this specific pipeline execution. Every record written by the same run shares the
+      same value. Useful for audit/traceability columns ("which run produced this row"), or for grouping rows
+      from the same execution for later cleanup/debugging.</p>
+  </div>
+
+  <div class="card">
+    <h4><code>@newGuid</code> — New GUID</h4>
+    <p>The only default that is genuinely <strong>different for every record</strong>, not shared across a run.
+      Intended as a surrogate primary key when the source data has no natural id you'd want to map (or you
+      deliberately don't want to reuse the source's own id). See <a href="#exclusivity">§7</a> for the
+      important caveat about combining this with upsert mode.</p>
+  </div>
+
+  <h2 id="options-hidden"><span class="num">5.</span>Currently hidden options — detail &amp; how to re-enable</h2>
+  <p class="section-intro">
+    These seven presets were built, tested, and are fully wired end-to-end (backend included) — they're just
+    temporarily filtered out of the picker at your request, to keep the initial rollout's option list short.
+    Nothing about them was removed.
+  </p>
+
+  <div class="card">
+    <h4><code>@resourceType</code> <span class="pill pill-hidden">HIDDEN</span></h4>
+    <p>The FHIR resource type this mapping profile maps (e.g. <code>"Patient"</code>). Since one mapping
+      profile always maps exactly one resource type, this is a run-level constant, not per-record.</p>
+  </div>
+
+  <div class="card">
+    <h4><code>@sourceResourceId</code> <span class="pill pill-hidden">HIDDEN</span></h4>
+    <p>The source FHIR resource's own <code>.id</code> — the same value a normal <code>$.id</code> source
+      mapping would extract, but reachable as a "default" without having to map the field explicitly. Genuinely
+      per-record (every row gets its own source resource's id).</p>
+  </div>
+
+  <div class="card">
+    <h4><code>@mappingProfileName</code> / <code>@mappingProfileId</code> <span class="pill pill-hidden">HIDDEN</span></h4>
+    <p>Records which mapping profile (by name or GUID) actually wrote a given row — useful for provenance when
+      more than one profile can write to the same destination table.</p>
+  </div>
+
+  <div class="card">
+    <h4><code>@destinationObject</code> <span class="pill pill-hidden">HIDDEN</span></h4>
+    <p>The table/file this row was written to. Resolved <strong>per field</strong>, not just per run: a field on
+      a genuine child table (e.g. a repeating <code>Patient.name</code> array fanned out onto
+      <code>dbo.PatientName</code>) correctly reports <code>"dbo.PatientName"</code>, not the mapping profile's
+      primary table — see <a href="#bug">§9</a>'s "hardening" note and
+      <code>JsonMappingEngine.cs</code> in the file list.</p>
+  </div>
+
+  <div class="card">
+    <h4><code>@sourceConnectionId</code> <span class="pill pill-hidden">HIDDEN</span></h4>
+    <p>The GUID of the source connection the data came from — useful when a destination table can receive data
+      from more than one source connection (e.g. two different Epic environments feeding the same table).</p>
+  </div>
+
+  <div class="card">
+    <h4><code>@triggeredBy</code> <span class="pill pill-hidden">HIDDEN</span></h4>
+    <p>Who or what started the pipeline run: a user's identifier for a manual trigger, or <code>"scheduled"</code>
+      / <code>"webhook"</code> for an automated one. <strong>Only populated by the Configured Pipeline</strong>
+      (the production execution path this UI feeds) — the Runtime Plane's DAG executor has no trigger identity
+      to report, so this resolves to <code>null</code> there. It is also the <em>one</em> token that can
+      genuinely be null even in the Configured Pipeline (some scheduled/system-initiated runs carry no
+      identifier) — mapping it onto a <code>NOT NULL</code> column is still validated normally at save time,
+      unlike every other token here (which the validator trusts to always resolve to something).</p>
+  </div>
+
+  <h4>How to re-enable a hidden option</h4>
+  <p>Open <code>field-mapping-model.ts</code>, find the preset's entry in <code>DEFAULT_VALUE_PRESETS</code>, and
+    remove (or set to <code>false</code>) its <code>hidden: true</code> flag:</p>
+  <pre><code>// Before:
+{ token: '@triggeredBy', label: 'Triggered by', description: '…', valueType: 'String', hidden: true },
+
+// After (re-enabled):
+{ token: '@triggeredBy', label: 'Triggered by', description: '…', valueType: 'String' },</code></pre>
+  <p>Nothing else needs to change — the modal, the mapping list, <code>JsonMappingEngine</code>, and the
+    validator already handle every token regardless of visibility. Visibility only filters the picker's
+    dropdown (via the derived <code>VISIBLE_DEFAULT_VALUE_PRESETS</code> export).</p>
+
+  <h2 id="destinations"><span class="num">6.</span>How it behaves across destination types</h2>
+  <p class="section-intro">
+    Default-value resolution happens in <code>JsonMappingEngine</code>, entirely <strong>before</strong> any
+    destination-specific writer runs — the engine just produces a plain value for the column; every destination
+    writer then persists it exactly like any other mapped value. That means every default option works
+    identically in principle across every destination type. The differences below are about what the
+    <em>destination's own schema</em> constrains, not the default-value mechanism itself.
+  </p>
+
+  <table class="data-table">
+    <tr><th>Destination family</th><th>What matters when setting a default</th></tr>
+    <tr>
+      <td><strong>SQL Server / MySQL / PostgreSQL</strong><br><span style="color:var(--muted); font-size:12px;">(relational, real schema)</span></td>
+      <td class="why">The column has a real, fixed data type. Pick the matching Data type in the modal
+        (String/Integer/Decimal/Boolean/Date/DateTime) — <code>CreateMappingProfileRequestValidator</code>
+        rejects a mismatch at save time (e.g. a <code>DateTime</code> default on an <code>int</code> column).
+        A default on a <code>NOT NULL</code> column is always safe for every token except
+        <code>@triggeredBy</code>, which can genuinely resolve to null.</td>
+    </tr>
+    <tr>
+      <td><strong>CSV / Blob / Datalake / Fabric</strong><br><span style="color:var(--muted); font-size:12px;">(no live schema)</span></td>
+      <td class="why">Columns are free-text; the data-type picker is advisory only (used for the wire's
+        <code>ValueType</code>, which downstream consumers of the file may care about). No live-schema
+        type-mismatch check applies.</td>
+    </tr>
+    <tr>
+      <td><strong>Mongo</strong></td>
+      <td class="why">Schemaless — the default value is written as a normal document field with whatever
+        BSON-mappable type its declared ValueType implies. Works the same as any other mapped field.</td>
+    </tr>
+    <tr>
+      <td><strong>Medplum / Aidbox / Azure FHIR Service</strong><br><span style="color:var(--muted); font-size:12px;">(whole-resource FHIR destinations)</span></td>
+      <td class="why">These destinations write the source resource largely verbatim, so field-level default
+        columns are a less common use case there — but the mechanism still works identically for any mapping
+        profile that does target individual fields on these destinations.</td>
+    </tr>
+  </table>
+
+  <div class="callout warn">
+    <strong>Upsert mode — the one real cross-destination caveat</strong>
+    Whenever a destination's write mode is <code>upsert</code> (SQL family and Mongo both support this), a
+    default-value column <strong>cannot</strong> be the upsert key, on any destination type. A run-constant
+    token (e.g. <code>@mappingProfileId</code>) would make every row collide on the same key; a per-record
+    token (<code>@newGuid</code>, <code>@now</code>) would never match a row from a previous run. Both the UI
+    (the 🔑 toggle is hidden on default columns) and the backend validator (rejects it, scoped specifically to
+    upsert-mode destinations) enforce this. <strong>Insert-only</strong> mode is unaffected — using
+    <code>@newGuid</code> as a surrogate primary key on an Insert-only table is the intended, supported use case.
+  </div>
+
+  <h2 id="exclusivity"><span class="num">7.</span>Mutual exclusivity with source mapping</h2>
+  <p>
+    A column is either mapped from a source or set to a default — never both, and this needs no separate
+    validation flag to enforce. There is only ever one <code>MappingRow</code> object per (resource, table,
+    column). Setting a default calls <code>replaceRow(...)</code>, which wholesale-replaces whatever row that
+    column had — any prior source mapping is simply gone. Conversely, dragging a new source field onto a column
+    that's currently set to a default replaces the default row right back with a normal source-mapped row. Each
+    action fully owns the column's identity; there's structurally nothing left over from the other state.
+  </p>
+
+  <h2 id="dodont"><span class="num">8.</span>Do's and don'ts</h2>
+  <div class="dodont">
+    <div class="col do">
+      <h4>✅ Do</h4>
+      <ul>
+        <li>Match the default's <strong>Data type</strong> to the real destination column's type — mismatches
+          are rejected at save time, not silently truncated at run time.</li>
+        <li>Use <code>@newGuid</code> as a surrogate primary key when a table has no natural source id and the
+          destination write mode is <strong>Insert only</strong>.</li>
+        <li>Use <code>@now</code> / <code>@runId</code> for audit-trail columns (ImportedOnUtc, RunId) rather
+          than hand-rolling the same thing with a transform rule.</li>
+        <li>Re-open a default column via its ⚑ button (or Edit…) to check/change its value — the modal always
+          reflects exactly what's currently saved.</li>
+        <li>Save the whole workflow and reopen it after setting a default, to confirm the value round-trips
+          correctly before relying on it in production.</li>
+      </ul>
+    </div>
+    <div class="col dont">
+      <h4>❌ Don't</h4>
+      <ul>
+        <li>Don't mark a default-value column as the upsert key on an upsert-mode destination — no token is a
+          sound upsert key (see the callout in §6). The UI already prevents this; don't try to work around it
+          via a raw API call either, the validator rejects it too.</li>
+        <li>Don't map <code>@triggeredBy</code> onto a <code>NOT NULL</code> column without also marking the
+          field required or supplying a literal fallback — it's the one token that can genuinely be null.</li>
+        <li>Don't assume <code>@now</code>/<code>@runId</code>/most tokens vary per record — they're one shared
+          value for the whole run. Only <code>@newGuid</code> and <code>@sourceResourceId</code> vary per row.</li>
+        <li>Don't expect a default value to fan out correctly across a <code>RepeatParent</code> array field —
+          if a single source resource produces multiple destination rows, they all share the <em>same</em>
+          resolved default (the token resolves once per source resource, not once per fanned-out row).</li>
+        <li>Don't re-set an already-hidden preset's visibility as a way to "delete" it if it turns out unwanted
+          long-term — flip <code>hidden</code>, don't remove the whole entry, or you also remove support for
+          any already-saved column still using it.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 id="bug"><span class="num">9.</span>The round-trip bug that was found and fixed</h2>
+  <p class="section-intro">
+    During implementation, saving a workflow with a default column and reopening it later silently corrupted
+    the mapping and, on the next save, wrote the <strong>entire raw source resource JSON</strong> into the
+    default column. This was found and fixed before release; documented here since it explains several of the
+    files in §10–11.
+  </p>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Save</strong><span> — The canonical "Mapping JSON" save format
+        (<code>field-mapping-summary.model.ts</code>'s <code>toSummaryColumn</code>) had no branch for
+        <code>mode: 'default'</code> rows. They silently fell through to the ordinary "direct field" shape with
+        an empty <code>sources</code> array, losing the token/literal entirely.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>Reload</strong><span> — <code>applyMappingSummaryDocument</code>
+        reconstructed that as an empty, broken <code>mode: 'value'</code> row with no source at all — this is
+        why re-opening a saved default column showed nothing.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Re-save</strong><span> — That broken empty row's path resolved through
+        <code>workflow-build-assembler.service.ts</code>'s <code>toJsonPath('')</code>, which has a fallback:
+        <code>if (!p || p === resourceType) return '$';</code> — <code>$</code> means <em>"the whole
+        document"</em> to the mapping engine. Every subsequent pipeline run wrote the entire raw resource JSON
+        into that column.</span></div>
+    </div>
+  </div>
+  <div class="callout good">
+    <strong>Fix</strong>
+    Both <code>toSummaryColumn</code> and <code>applyMappingSummaryDocument</code> (frontend) and the matching
+    backend <code>MappingImportService.BuildJsonPathAndFormat</code>/<code>BuildFieldAsync</code> now handle
+    <code>mode: "default"</code> explicitly, carrying <code>defaultToken</code>/<code>defaultValue</code>/
+    <code>defaultValueType</code> through the full round trip. The "Select Existing" profile picker
+    (<code>destination-wizard.component.ts</code>'s <code>_applyExistingProfile</code>) had the identical gap
+    and was fixed the same way.
+  </div>
+
+  <h2 id="files-frontend"><span class="num">10.</span>Files changed — frontend</h2>
+  <table class="data-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="mono">field-mapping-model.ts</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">Core data model. Added <code>DefaultValueToken</code> union, <code>DEFAULT_VALUE_PRESETS</code>
+        / <code>VISIBLE_DEFAULT_VALUE_PRESETS</code>, <code>MappingRow</code>'s <code>mode: 'default'</code> +
+        <code>defaultToken</code>/<code>defaultValue</code>/<code>defaultValueType</code> fields, and new
+        branches in <code>resolveArrayPolicy</code>/<code>effectiveMappingValueType</code>/<code>serializeRowsFlat</code>.
+        Necessary because this file is the single source of truth for the mapping row shape every other part
+        of the canvas reads.</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-default-value-modal.component.ts</td><td class="status"><span class="pill pill-new">NEW</span></td>
+      <td class="why">The "Set default value" modal: preset picker, literal-value input, data-type picker.
+        Pre-fills via <code>ngOnInit</code> (not a field initializer) reading a snapshot captured once at open
+        time by the canvas — this specific combination is what fixed a real bug where the modal sometimes
+        didn't show a column's previously-saved value on Edit.</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-default-value-modal.component.html</td><td class="status"><span class="pill pill-new">NEW</span></td>
+      <td class="why">Modal template.</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-default-value-modal.component.scss</td><td class="status"><span class="pill pill-new">NEW</span></td>
+      <td class="why">Modal styling, matching the canvas's existing modal conventions (add-column/edit-column modals).</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-canvas.component.ts</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">Orchestration: <code>openDefaultValueModal</code>/<code>submitDefaultValue</code>/
+        <code>removeDefaultValue</code>; routes a click or Edit… on a default-mode column to this modal instead
+        of the ordinary join popover. Captures the column's existing default value once, at open time, rather
+        than recomputing it reactively every change-detection tick (the fix for the modal-not-prefilling bug).</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-canvas.component.html</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">Renders the new modal, wires its <code>existing</code> input to the captured snapshot.</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-target-card.component.ts</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">New <code>setDefaultValue</code> output, emitted when the ⚑ button is clicked.</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-target-card.component.html</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">Adds the ⚑ button and the <code>DEFAULT</code> badge; hides the upsert-key toggle (🔑) for
+        default-mode columns (see §7/§8's upsert-mode caveat).</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-target-card.component.scss</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">Styling for the new button and badge.</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-list.component.ts</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">The flat mapping-list table's <code>sourceSummary</code>/<code>modeLabel</code> now show
+        <code>Default: "value"</code> or <code>Default: &lt;preset label&gt;</code> for default rows instead of
+        rendering blank (they previously assumed every row had at least one source).</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-summary.model.ts</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why"><strong>The critical round-trip fix</strong> — see §9. <code>toSummaryColumn</code> (save)
+        and <code>applyMappingSummaryDocument</code> (load) now handle <code>mode: "default"</code> explicitly.</td>
+    </tr>
+    <tr>
+      <td class="mono">destination-wizard.component.ts</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why"><code>_applyExistingProfile</code> (the "Select Existing" profile-picker's load path) had
+        the identical round-trip gap as §9 — fixed the same way: a <code>@token</code> JsonPath now reconstructs
+        as a proper <code>mode: 'default'</code> row instead of a broken <code>'value'</code> row.</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-model.spec.ts</td><td class="status"><span class="pill pill-test">TEST</span></td>
+      <td class="why">New tests: <code>serializeRowsFlat</code>/<code>resolveArrayPolicy</code>/
+        <code>effectiveMappingValueType</code> for <code>mode: 'default'</code>, including a regression guard for
+        the exact "empty jsonPath falls back to $" bug from §9.</td>
+    </tr>
+    <tr>
+      <td class="mono">field-mapping-summary.model.spec.ts</td><td class="status"><span class="pill pill-test">TEST</span></td>
+      <td class="why">New tests: <code>buildMappingSummaryDocument</code> emits <code>mode: "default"</code>
+        correctly; a full save → load round-trip test that is a direct regression guard for the §9 bug.</td>
+    </tr>
+  </table>
+
+  <h2 id="files-backend"><span class="num">11.</span>Files changed — backend</h2>
+  <table class="data-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="mono">JsonMappingEngine.cs</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">Added the <code>"@default"</code> literal-constant branch (writes <code>DefaultValue</code>
+        unconditionally, with a defensive null-check for a profile saved before the save-time validation rule
+        existed). Special-cased <code>"@destinationObject"</code> to prefer the individual field's own
+        <code>DestinationObject</code> (for child-table columns) over the run-level profile default — a
+        hardening fix from code review, see §5.</td>
+    </tr>
+    <tr>
+      <td class="mono">MappingImportDtos.cs</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why"><code>ColumnMappingDto</code> gained <code>DefaultToken</code>/<code>DefaultValue</code>/
+        <code>DefaultValueType</code> — the wire shape for the <code>"default"</code> column mode, mirroring the
+        frontend's <code>MappingSummaryColumn</code>.</td>
+    </tr>
+    <tr>
+      <td class="mono">MappingImportService.cs</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why"><code>BuildJsonPathAndFormat</code> gained a <code>"default"</code> case (previously
+        threw <code>"Unknown column mode"</code>); <code>BuildFieldAsync</code> now carries
+        <code>DefaultValue</code> through only for that mode. This is the backend half of the §9 fix — it's what
+        actually persists a default column to the database via <code>POST /mapping-profiles/import</code>, the
+        real save path for "Add to Pipeline"/Update on an existing workflow.</td>
+    </tr>
+    <tr>
+      <td class="mono">CreateMappingProfileRequestValidator.cs</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">Rejects an unrecognized <code>@token</code> at save time (catches typos instead of
+        silently mapping to null at run time); requires <code>DefaultValue</code> whenever the token is
+        <code>"@default"</code>; new rule rejecting a default-value column as the upsert key, scoped to
+        upsert-mode destinations only (see §6/§8).</td>
+    </tr>
+    <tr>
+      <td class="mono">ConfiguredPipelineService.cs</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">This is the <strong>production execution path</strong> the mapping node actually runs
+        through. Added every token to its <code>systemValues</code> dictionary (previously this dictionary
+        wasn't even being passed to the mapping engine at all on this path — see the very first fix in this
+        feature's history). Threaded a new <code>triggeredBy</code> parameter through. Optimization: the
+        dictionary is now built once per route execution and mutated (not reallocated) for the two genuinely
+        per-record keys each iteration, instead of rebuilding all ten entries for every single resource.</td>
+    </tr>
+    <tr>
+      <td class="mono">TransformNodeExecutors.cs</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">The Runtime Plane's (<code>/api/v1/workflows</code> DAG engine) equivalent token wiring,
+        for parity — <code>@mappingProfileName</code>/<code>Id</code>/<code>@sourceConnectionId</code>/
+        <code>@triggeredBy</code> have no equivalent here (no <code>MappingProfile</code> entity or trigger
+        identity in this execution path) and are deliberately left unset. Same per-group dictionary-reuse
+        optimization as <code>ConfiguredPipelineService</code>.</td>
+    </tr>
+    <tr>
+      <td class="mono">appsettings.Development.json (Api &amp; Worker)</td><td class="status"><span class="pill pill-modified">MODIFIED</span></td>
+      <td class="why">Unrelated to the feature itself — a local-dev-only fix (<code>DataProtection:
+        AllowAppSecretRegeneration: true</code>) so this development environment's Data Protection key ring
+        (which doesn't survive across sessions here) stops blocking startup every time a new app secret is
+        introduced. Never applies outside the <code>Development</code> environment.</td>
+    </tr>
+  </table>
+
+  <h2 id="files-tests"><span class="num">12.</span>Files changed — tests</h2>
+  <table class="data-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="mono">JsonMappingEngineSystemValueTests.cs</td><td class="status"><span class="pill pill-test">TEST</span></td>
+      <td class="why">New tests: <code>@default</code> writes the literal and errors cleanly with none
+        configured; <code>@destinationObject</code> prefers the field-level override; <code>@newGuid</code>
+        resolves from <code>systemValues</code> like any other token.</td>
+    </tr>
+    <tr>
+      <td class="mono">MappingImportServiceTests.cs</td><td class="status"><span class="pill pill-test">TEST</span></td>
+      <td class="why">New test: a full JSON import fixture with a <code>"default"</code> mode column, asserting
+        the persisted <code>MappingField</code> ends up with the correct <code>JsonPath</code>/<code>DefaultValue</code>.</td>
+    </tr>
+    <tr>
+      <td class="mono">CreateMappingProfileRequestValidatorTests.cs</td><td class="status"><span class="pill pill-test">TEST</span></td>
+      <td class="why">New tests: unrecognized token rejected; <code>@default</code> without a value rejected;
+        a default column as the upsert key rejected on an upsert-mode destination but <em>passes</em> on an
+        insert-only one (the surrogate-key use case from §8).</td>
+    </tr>
+  </table>
+
+  <h2 id="files-unrelated"><span class="num">13.</span>Files changed — unrelated build fixes (same session)</h2>
+  <p class="section-intro">
+    While validating this branch after merging the latest <code>main_v2</code>, two pre-existing compile errors
+    were found on <code>main_v2</code> itself (unrelated to this feature — confirmed by building
+    <code>main_v2</code> alone in an isolated worktree) that were blocking the local dev restart script
+    (<code>Api</code>/<code>Worker</code>/<code>Gateway</code> all skipped because the whole solution failed to
+    build). Fixed as a courtesy since they blocked verifying this feature at all.
+  </p>
+  <table class="data-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr>
+      <td class="mono">InMemoryUserAccessRepositoryFullAccessTests.cs</td><td class="status"><span class="pill pill-test">TEST</span></td>
+      <td class="why"><code>InMemoryUserAccessRepository</code>'s constructor gained a required
+        <code>IServiceScopeFactory</code> parameter (from the licensing feature's quota-guard integration) but
+        6 call sites here were never updated. Fixed by passing the existing
+        <code>TestHelpers.LicenseTestScopeFactory.Create()</code> no-op fake.</td>
+    </tr>
+    <tr>
+      <td class="mono">SourceDiscoveryProbeAuthorizationTests.cs</td><td class="status"><span class="pill pill-test">TEST</span></td>
+      <td class="why">Same root cause, different class (<code>InMemoryConfigurationRepository</code>), 4 call
+        sites. This test project has no existing scope-factory helper, so a small local
+        <code>NoOpLicenseScopeFactory()</code> was added, mirroring the pattern above.</td>
+    </tr>
+  </table>
+
+  <h2 id="verification"><span class="num">14.</span>Verification performed</h2>
+  <ul class="feature-list">
+    <li><strong>Backend build</strong> — full solution (<code>FHIRBridge.sln</code>) builds clean, 0 warnings, 0 errors.</li>
+    <li><strong>Frontend build</strong> — <code>tsc --noEmit</code> (app + spec configs) and full <code>ng build</code> both clean.</li>
+    <li><strong>Unit tests</strong> — 1318/1321 passing; the 3 failures are pre-existing and unrelated (a
+      locale-dependent date-parsing test, a forgot-password email-mock assertion, an execution-history gate
+      test), confirmed by reproducing them on the pre-change branch tip in an isolated git worktree.</li>
+    <li><strong>Architecture tests</strong> — the one failure present (<code>WorkflowEndpoints.cs</code> switching
+      on <code>ApplicationType</code>) has zero diff against <code>main_v2</code> — provably pre-existing.</li>
+    <li><strong>Integration tests</strong> — the Security suite (including both newly-fixed files) passes 7/7 and 6/6.</li>
+    <li><strong>Live verification</strong> — the API was booted locally and swagger confirmed reachable
+      (<code>http://localhost:5000/swagger/index.html</code> → 200) after every fix in this feature's history.</li>
+  </ul>
+
+  <h2 id="limitations"><span class="num">15.</span>Known limitations</h2>
+  <ul class="feature-list">
+    <li><strong>No per-fanned-out-row variation.</strong> A source resource that fans out into multiple
+      destination rows via <code>RepeatParent</code> shares one resolved default value across all of them — the
+      token resolves once per source resource, not once per output row (documented in each preset's own code comment).</li>
+    <li><strong>No automated end-to-end (Karma) coverage.</strong> The Angular test runner is currently broken in
+      this development environment (a corrupted <code>ajv</code> dependency under <code>node_modules</code>,
+      unrelated to this feature) — new frontend logic was verified via TypeScript compilation and manual live
+      testing instead of an automated browser test run.</li>
+    <li><strong>Hidden presets have no dropdown fallback for already-set values.</strong> If a column is already
+      set to a now-hidden token and you reopen its modal, the dropdown won't visually show it as selected
+      (native <code>&lt;select&gt;</code> behavior when its bound value has no matching option) — but the
+      underlying saved value is untouched and submits correctly if you don't change the dropdown. Purely
+      cosmetic, and only reachable today via a token that's already hidden by design.</li>
+  </ul>
+
+</div>
+
+<footer>
+  Generated for the FHIRBridge project — <code>feature/defaultvalue</code> branch. See also
+  <code>Documents/Licensing-Implementation.html</code> for the same-format writeup of the licensing feature.
+</footer>
+
+</body>
+</html>

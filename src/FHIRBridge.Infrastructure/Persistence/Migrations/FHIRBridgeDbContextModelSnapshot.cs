@@ -4700,6 +4700,36 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("WebhookConfigurations", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.WorkflowNumberSequence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("LastValue")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PeriodKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PeriodKey")
+                        .IsUnique();
+
+                    b.ToTable("WorkflowNumberSequences", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Infrastructure.Messaging.ProcessedMessage", b =>
                 {
                     b.Property<string>("MessageId")
@@ -5005,7 +5035,15 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<int>("Version")
                         .HasColumnType("int");
 
+                    b.Property<string>("WorkflowNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("WorkflowNumber")
+                        .IsUnique()
+                        .HasFilter("[WorkflowNumber] IS NOT NULL");
 
                     b.ToTable("WorkflowDefinitions", (string)null);
                 });
@@ -5085,34 +5123,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasIndex("WorkflowDefinitionId");
 
                     b.ToTable("WorkflowNodes", (string)null);
-                });
-
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeConfiguration", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("IsSecret")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("WorkflowNodeId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("WorkflowNodeId");
-
-                    b.ToTable("WorkflowNodeConfigurations", (string)null);
                 });
 
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeRun", b =>
@@ -6048,15 +6058,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeConfiguration", b =>
-                {
-                    b.HasOne("FHIRBridge.Runtime.Domain.Workflows.WorkflowNode", null)
-                        .WithMany("Configuration")
-                        .HasForeignKey("WorkflowNodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeRun", b =>
                 {
                     b.HasOne("FHIRBridge.Runtime.Domain.Workflows.WorkflowRun", null)
@@ -6076,11 +6077,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Navigation("Edges");
 
                     b.Navigation("Nodes");
-                });
-
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNode", b =>
-                {
-                    b.Navigation("Configuration");
                 });
 
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowRun", b =>

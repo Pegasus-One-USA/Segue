@@ -94,6 +94,8 @@ public static class WorkflowEndpoints
             IParentReferenceResolver parentReferenceResolver,
             IDestinationSchemaService destinationSchemaService,
             IAuthorizationService authorizationService,
+            IServiceProvider serviceProvider,
+            [FromKeyedServices(FhirElementCatalogKeys.Generic)] IFhirElementCatalog genericFhirCatalog,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
@@ -112,6 +114,29 @@ public static class WorkflowEndpoints
             // License workflow-quota enforcement (create vs. edit — an edit never changes row count) lives
             // centrally in LicenseEnforcementSaveChangesInterceptor, resolved at the actual persistence choke
             // point (SqlWorkflowDefinitionStore.SaveAsync) rather than here.
+
+            // Re-derive any mapping field whose JsonPath is missing its array wildcards, BEFORE anything is
+            // validated or persisted, so both the mapping node's inline "mappings" block and the destination
+            // node's "resourceMappings" (built from the same spec.Fields below) get the corrected path.
+            //
+            // The wizard stamps the catalog's array-aware JsonPath ("$.name[*].family") onto each row, but the
+            // catalog is fetched asynchronously: a field mapped before it arrives falls back to the built-in
+            // DEST_RESOURCE_DEFS, which carry no JsonPath at all, and the client then builds a naive
+            // "$.name.family". That resolves to nothing against an array (JsonMappingEngine.ResolveAll needs an
+            // object to read a property from), so every array-nested column — name, address, identifier —
+            // silently writes NULL, and any transformation rule on that column never runs because there is no
+            // value to transform. It only looked correct on a second edit, when the catalog was already cached.
+            //
+            // The server always has the catalog, so it is the right place to repair this. Deliberately reuses
+            // the catalog's own pre-computed JsonPath rather than appending "[*]" to every ancestor segment:
+            // only genuinely repeating elements are wildcarded (Condition.code.coding.code wildcards "coding"
+            // but not "code") — see MappingImportService.BuildResolvableJsonPath, which documents the
+            // production bug that naive approach caused.
+            request = request with
+            {
+                Mappings = await RepairMappingJsonPathsAsync(
+                    request, configurationRepository, serviceProvider, genericFhirCatalog, cancellationToken),
+            };
 
             // Fail fast, before provisioning anything: every "child of" declaration on a mapping spec must
             // resolve to a real reference field, mapped, targeting a sibling resource on the same destination.
@@ -303,115 +328,78 @@ public static class WorkflowEndpoints
                     return ValidationBadRequest(columnError);
                 }
 
-                var mappingRequest = new CreateMappingProfileRequest(
-                    spec.Name,
-                    spec.ResourceType,
-                    sourceConnectionId,
-                    destinationId,
-                    spec.DestinationObject,
-                    spec.Fields,
-                    // ResourcePipelineRouteId (below) is what lets the validator resolve this workflow's own
-                    // Workflow-scoped transformation rules — without it, it sees only the tenant-wide tiers and
-                    // rejects a rule-backed field for its raw source type. Null on a first build (the workflow
-                    // has no id yet), which the validator covers via the pending tier instead.
-                    SourceConfigurationId: null,
-                    ResourcePipelineRouteId: request.WorkflowId);
-                // Resolve strictly by spec.ExistingId — the id this exact node/resource saved last time (round-
-                // tripped by the canvas). Never by searching for "the" profile matching (resourceType, source,
-                // destination): that triple is shared by any workflow built on the same source connection +
-                // destination + resource type, so a search-based fallback would silently find and attach to a
-                // DIFFERENT workflow's profile — and then either overwrite it (data loss for that other
-                // workflow) or, once that workflow next builds, get its own mapping silently rewritten out from
-                // under it (the "Invalid column name" incident this replaces). A found profile whose MappingJson
-                // is set was authored by the richer Mapping Config Import wizard (proper JsonPath/[*] derivation,
-                // DDL, etc.) and must never be overwritten by this endpoint's cruder, best-effort field list —
-                // reused as-is. No id at all means a genuinely first-ever save for this node/resource: always
-                // create a new profile rather than adopting one that happens to match the triple.
-                var existingMapping = spec.ExistingId is { } existingMappingId
-                    ? await configurationRepository.GetMappingProfileAsync(existingMappingId, cancellationToken) is { } found
-                        ? ConfigurationMapper.ToDto(found)
-                        : null
-                    : null;
-                var mapping = existingMapping switch
+                // A mapping now lives on its node and nowhere else (plan §2.d): the node's own config already
+                // carries every field, so an ordinary save writes NO MappingProfile. This loop is kept purely
+                // for the column validation above, which is the only thing that catches a mapped column the
+                // customer's table does not actually have before a run fails on it.
+                //
+                // Creating a profile here is what produced duplicate masters on every save — two named
+                // "Patient" seconds apart — and left two sources of truth for one mapping, free to diverge. A
+                // node holding 12 fields while its profile held 13 silently dropped the BirthDateAge column a
+                // transformation rule targeted, so the rule had nothing to attach to.
+                //
+                // Masters are created only by an explicit "Mark as Master" in the wizard.
+                //
+                // The DESTINATION node still has to be told this resource type's write shape, though. It builds its
+                // own MappingProfile at run time (DestinationNodeExecutor.CreateMappingProfiles) and uses that
+                // profile's Fields to create/align the target table's columns — it does NOT read the mapping node's
+                // config. With no master profile to fall back on either, leaving this unstamped means the executor
+                // synthesizes a profile with zero fields and the write fails outright:
+                // "Mapping profile for 'dbo.X' has no mapped fields — a SQL destination needs at least one mapped
+                // column." Accumulated per destination node (never overwritten) so a destination fed by several
+                // resource types keeps each one's own table and columns.
+                if (!resourceMappingsByNode.TryGetValue(spec.DestinationNodeId, out var destinationResourceMappings))
                 {
-                    { MappingJson.Length: > 0 } => existingMapping,
-                    not null => await configurationService.UpdateMappingProfileAsync(existingMapping.Id, mappingRequest, cancellationToken),
-                    null => await configurationService.AddMappingProfileAsync(mappingRequest, cancellationToken),
-                };
-                mappingIds[spec.NodeId] = mapping.Id;
-
-                if (!profileIdsByNode.TryGetValue(spec.NodeId, out var idsForNode))
-                {
-                    // Seed from whatever this destination's mapping node already had persisted BEFORE this
-                    // save — a later save that only touches some of a destination's already-mapped resource
-                    // types (e.g. the wizard adds Encounter without restoring Patient's rows into this
-                    // request.Mappings — CSV/Email destinations have no live-schema probe to catch a failed
-                    // restore the way SQL destinations do) must not silently drop the untouched resource
-                    // types from mappingProfileIds: that field is exactly what MappingNodeExecutor/
-                    // DestinationNodeExecutor read at run time to decide which resource types to process, so
-                    // losing an entry here means that resource's output vanishes from every future run, not
-                    // just an unsaved profile row (the "add Encounter, Patient stops appearing in the CSV/
-                    // email zip" regression this fixes). Matched via destinationId rather than node.Id since
-                    // a node's own row id is regenerated every save (see WorkflowDefinition.AddNode / the
-                    // "removed node" comment above) and can't be relied on to identify the same logical node
-                    // across saves.
-                    idsForNode = SeedExistingMappingProfileIds(existingDefinition, destinationId);
-                    profileIdsByNode[spec.NodeId] = idsForNode;
+                    destinationResourceMappings = new Dictionary<string, DestinationResourceMappingConfig>(StringComparer.OrdinalIgnoreCase);
+                    resourceMappingsByNode[spec.DestinationNodeId] = destinationResourceMappings;
                 }
-                idsForNode[spec.ResourceType] = mapping.Id.ToString();
 
-                nodes[spec.NodeId] = WithConfiguration(node, config =>
+                destinationResourceMappings[spec.ResourceType] =
+                    new DestinationResourceMappingConfig(spec.DestinationObject, spec.Fields);
+            }
+
+            // Re-stamp each mapping node's own inline "mappings" block from the (now repaired) specs.
+            //
+            // The client stamps this block itself, in the browser, BEFORE the request is sent
+            // (WorkflowBuildAssemblerServiceV2.stampInlineMappings) — so it carries whatever JsonPath the wizard
+            // had at that moment, naive fallbacks included. RepairMappingJsonPathsAsync above fixes
+            // request.Mappings, which is what the destination node's resourceMappings is built from, but it
+            // cannot retroactively fix a block the client already wrote. MappingNodeExecutor PREFERS this inline
+            // block over every other source (see TryReadInlineResourceMapping), so leaving it stale means the
+            // repaired paths never actually run: the destination node would hold "$.address[*].city" while the
+            // node that does the mapping still held "$.address.city", and every array-nested column would keep
+            // writing NULL. Rewritten from the same repaired specs so the two can never disagree.
+            foreach (var specsByNode in (request.Mappings ?? []).GroupBy(spec => spec.NodeId, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!nodes.TryGetValue(specsByNode.Key, out var mappingSpecNode))
                 {
-                    // Kept for backward compatibility with anything still reading the single legacy field (reflects
-                    // whichever resource was processed last when there's more than one — MappingNodeExecutor prefers
-                    // mappingProfileIds below whenever it's present, so this is display/compat-only in that case).
-                    config["mappingProfileId"] = mapping.Id.ToString();
-                    config["mappingProfileIds"] = JsonSerializer.SerializeToNode(idsForNode, WebJsonOptions);
-                    // sourceConnectionId/destinationId let MappingNodeExecutor re-resolve the correct profile by
-                    // natural key at run time (same lookup as above) instead of only trusting a stamped id, which
-                    // can go stale if a later save mints a different profile for this same combination.
-                    config["sourceConnectionId"] = sourceConnectionId.ToString();
-                    config["destinationId"] = destinationId.ToString();
-                });
-
-                // The destination executor rebuilds its write-time mapping (target table + the columns it auto-creates)
-                // from its OWN node config rather than resolving the mapping by id, so mirror every spec's target and
-                // fields onto the destination node under resourceMappings, keyed by resource type — the same
-                // accumulate-don't-overwrite treatment as profileIdsByNode above, and for the same reason: a
-                // destination fed by more than one resource spec (Patient + Condition + Observation sharing one SQL
-                // Server destination, say) must let DestinationNodeExecutor route each resource type's records to its
-                // own table/columns instead of forcing every resource type through whichever one saved first (that
-                // used to silently misroute every resource but the first into the wrong table, failing with
-                // "Invalid column name"). The single legacy resourceType/destinationObject/fields trio is still
-                // mirrored from the first spec only, kept only for any older consumer still reading that single shape.
-                if (nodes.TryGetValue(spec.DestinationNodeId, out var destinationNode))
-                {
-                    if (!resourceMappingsByNode.TryGetValue(spec.DestinationNodeId, out var resourceMappingsForNode))
-                    {
-                        resourceMappingsForNode = new Dictionary<string, DestinationResourceMappingConfig>(StringComparer.OrdinalIgnoreCase);
-                        resourceMappingsByNode[spec.DestinationNodeId] = resourceMappingsForNode;
-                    }
-                    resourceMappingsForNode[spec.ResourceType] = new DestinationResourceMappingConfig(spec.DestinationObject, spec.Fields);
-
-                    var mirrorLegacyShape = ReadConfigString(destinationNode, "resourceType") is null;
-                    nodes[spec.DestinationNodeId] = WithConfiguration(destinationNode, config =>
-                    {
-                        if (mirrorLegacyShape)
-                        {
-                            config["resourceType"] = spec.ResourceType;
-                            config["destinationObject"] = spec.DestinationObject;
-                            config["fields"] = JsonSerializer.SerializeToNode(spec.Fields, WebJsonOptions);
-                        }
-
-                        config["resourceMappings"] = JsonSerializer.SerializeToNode(resourceMappingsForNode, WebJsonOptions);
-                        // sourceConnectionId lets DestinationNodeExecutor re-resolve each resource type's real
-                        // MappingProfile by the SAME natural key (ResourceType, SourceConnectionId, DestinationId)
-                        // the mapping node above uses — without it, a destination with more than one MappingProfile
-                        // sharing its DestinationId (a stale one left behind by an earlier save, say) has no way to
-                        // pick the one this workflow's own source connection actually produced.
-                        config["sourceConnectionId"] = sourceConnectionId.ToString();
-                    });
+                    continue;
                 }
+
+                var inline = specsByNode.ToDictionary(
+                    spec => spec.ResourceType,
+                    spec => new DestinationResourceMappingConfig(spec.DestinationObject, spec.Fields),
+                    StringComparer.OrdinalIgnoreCase);
+
+                nodes[specsByNode.Key] = WithConfiguration(
+                    mappingSpecNode,
+                    config => config["mappings"] = JsonSerializer.SerializeToNode(inline, WebJsonOptions));
+            }
+
+            // Stamp each destination node's accumulated per-resource write shapes onto its own config. Carries the
+            // fields themselves, not an id — same self-contained rule the mapping node follows (plan §2.d), so a
+            // run can never depend on a master record that may have been edited or deleted since.
+            foreach (var (destinationNodeId, resourceMappings) in resourceMappingsByNode)
+            {
+                if (!nodes.TryGetValue(destinationNodeId, out var destinationNode))
+                {
+                    continue;
+                }
+
+                nodes[destinationNodeId] = WithConfiguration(
+                    destinationNode,
+                    config => config["resourceMappings"] =
+                        JsonSerializer.SerializeToNode(resourceMappings, WebJsonOptions));
             }
 
             // 3b. Stamp destinationId onto any mapping node the mappings loop above didn't touch. A whole-resource
@@ -603,7 +591,12 @@ public static class WorkflowEndpoints
 
                 var isLaunch = applicationType is ApplicationType.EhrLaunch or ApplicationType.Standalone or ApplicationType.Patient;
 
-                var hasDestination = false;
+                // A destination node that is present but not yet wired to a destination record does not count:
+                // the workflow still has nowhere to write, so it is not Ready. WorkflowDefinition.HasDestination
+                // asks the weaker "is a Destination node present" question for callers that only have the graph;
+                // the loop below answers the stronger one — and, in the same pass, collects the vendor groups the
+                // permission filter after it needs — so both the status and the response flag read off it.
+                var hasConfiguredDestination = false;
                 foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
                 {
                     if (!TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId))
@@ -611,7 +604,7 @@ public static class WorkflowEndpoints
                         continue;
                     }
 
-                    hasDestination = true;
+                    hasConfiguredDestination = true;
                     if (destinationTypeByDestinationId.TryGetValue(destinationId, out var destinationVendorType))
                     {
                         AddVendorGroupIfSpecific(usedGroups, destinationVendorType);
@@ -621,10 +614,20 @@ public static class WorkflowEndpoints
                 // Skip rows the caller has no vendor permission for and no blanket workflow.* grant either —
                 // module access alone (any single node permission) only proves they belong on this page at
                 // all, not that every workflow in the system is theirs to see.
-                if (!callerHasBlanketWorkflowAccess && !usedGroups.Any(group => HasAnyActionFor(callerPermissions, group)))
+                //
+                // A workflow that names no vendor-specific source or destination yet (usedGroups empty) is not
+                // filtered: that is what a just-created workflow looks like before its canvas is ever saved, and
+                // hiding it would drop the row the user is about to open. Same reasoning as the by-id read.
+                if (usedGroups.Count > 0
+                    && !callerHasBlanketWorkflowAccess
+                    && !usedGroups.Any(group => HasAnyActionFor(callerPermissions, group)))
                 {
                     continue;
                 }
+
+                var status = !workflow.IsEnabled ? nameof(WorkflowLifecycleStatus.Disabled)
+                    : hasConfiguredDestination ? nameof(WorkflowLifecycleStatus.Ready)
+                    : nameof(WorkflowLifecycleStatus.Draft);
 
                 var runs = await runStore.ListByDefinitionAsync(workflow.Id, cancellationToken);
                 var lastRun = runs.OrderByDescending(run => run.StartedAt).FirstOrDefault();
@@ -637,7 +640,7 @@ public static class WorkflowEndpoints
                 summaries.Add(new WorkflowSummaryDto(
                     workflow.Id,
                     workflow.Name,
-                    workflow.IsEnabled ? "Enabled" : "Disabled",
+                    status,
                     workflow.Nodes.Count,
                     workflow.Edges.Count,
                     lastRun?.Status.ToString(),
@@ -649,13 +652,14 @@ public static class WorkflowEndpoints
                     resolvedSourceId,
                     sourceSystemType,
                     applicationType?.ToString(),
-                    hasDestination,
+                    hasConfiguredDestination,
                     workflow.IsPubliclyLaunchable,
                     workflow.CreatedOnUtc,
                     workflow.CreatedBy,
                     workflow.UpdatedOnUtc,
                     workflow.UpdatedBy,
-                    workflow.Description));
+                    workflow.Description,
+                    workflow.WorkflowNumber));
             }
 
             // Resolve each summary's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/pre-conversion
@@ -683,7 +687,10 @@ public static class WorkflowEndpoints
                 matching = matching.Where(summary =>
                     summary.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
                     || (summary.ApplicationType?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
-                    || (summary.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+                    || (summary.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+                    // Without this, pasting a workflow number read off a ticket or an email returns nothing —
+                    // which defeats the point of having a quotable id at all.
+                    || (summary.WorkflowNumber?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
             }
 
             if (statuses is { Length: > 0 })
@@ -996,7 +1003,13 @@ public static class WorkflowEndpoints
                     }
                 }
 
-                if (!usedGroups.Any(group => HasAnyActionFor(permissions, group)))
+                // An empty set means this workflow names no vendor-specific source or destination yet — which
+                // is exactly what a workflow looks like between "New" creating it (name + description, no
+                // canvas) and its first save. There is no vendor permission to check against, so filtering on
+                // one hides the workflow the caller just created: the builder opens in edit mode and reads
+                // back a 404, rendering blank name and description fields over a record that does exist.
+                // Absence of a vendor is not evidence of a vendor the caller lacks.
+                if (usedGroups.Count > 0 && !usedGroups.Any(group => HasAnyActionFor(permissions, group)))
                 {
                     return Results.NotFound();
                 }
@@ -2654,6 +2667,12 @@ public static class WorkflowEndpoints
         return newReference;
     }
 
+    /// <summary>
+    /// Mutates a node's configuration and re-serializes it. Uses <see cref="TryParseConfiguration"/> (the ROOT),
+    /// never <see cref="TryParseConfigurationSettings"/>: whatever this is handed becomes the ENTIRE node
+    /// configuration, so resolving an envelope here would save the inner <c>config</c> object as the whole thing
+    /// and drop the envelope and every sibling key with it.
+    /// </summary>
     private static WorkflowNodeRequest WithConfiguration(WorkflowNodeRequest node, Action<JsonObject> mutate)
     {
         var config = TryParseConfiguration(node.ConfigurationJson) ?? new JsonObject();
@@ -2662,7 +2681,7 @@ public static class WorkflowEndpoints
     }
 
     private static string? ReadConfigString(WorkflowNodeRequest node, string key) =>
-        TryParseConfiguration(node.ConfigurationJson)?[key]?.ToString();
+        TryParseConfigurationSettings(node.ConfigurationJson)?[key]?.ToString();
 
     private static bool TryResolveEntityId(
         string nodeId,
@@ -2678,7 +2697,7 @@ public static class WorkflowEndpoints
 
         // Picker flow: the referenced node already carries the entity id in its configuration.
         if (nodes.TryGetValue(nodeId, out var node)
-            && TryParseConfiguration(node.ConfigurationJson) is { } config
+            && TryParseConfigurationSettings(node.ConfigurationJson) is { } config
             && config[configurationKey]?.ToString() is { } raw
             && Guid.TryParse(raw, out entityId))
         {
@@ -2868,13 +2887,13 @@ public static class WorkflowEndpoints
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)
     {
         value = Guid.Empty;
-        return TryParseConfiguration(configurationJson) is { } config
+        return TryParseConfigurationSettings(configurationJson) is { } config
             && config[key]?.ToString() is { } raw
             && Guid.TryParse(raw, out value);
     }
 
     private static string? GetConfigurationString(string? configurationJson, string key)
-        => TryParseConfiguration(configurationJson) is { } config ? config[key]?.ToString() : null;
+        => TryParseConfigurationSettings(configurationJson) is { } config ? config[key]?.ToString() : null;
 
     // Used by the node-removal permission check above: every node whose config carries `key` (sourceConnectionId
     // or destinationId) as a valid Guid, across a set of nodes' raw ConfigurationJson strings. A mapping/merge
@@ -2912,7 +2931,7 @@ public static class WorkflowEndpoints
                 continue;
             }
 
-            if (TryParseConfiguration(node.ConfigurationJson)?["mappingProfileIds"] is JsonObject idsByResource)
+            if (TryParseConfigurationSettings(node.ConfigurationJson)?["mappingProfileIds"] is JsonObject idsByResource)
             {
                 foreach (var entry in idsByResource)
                 {
@@ -2931,7 +2950,7 @@ public static class WorkflowEndpoints
     // the "Kept for backward compatibility" comment in BuildWorkflow) — collect ids from whichever are present.
     private static IEnumerable<Guid> GetMappingProfileIdsFromConfiguration(string? configurationJson)
     {
-        var config = TryParseConfiguration(configurationJson);
+        var config = TryParseConfigurationSettings(configurationJson);
         if (config is null)
         {
             yield break;
@@ -2971,46 +2990,179 @@ public static class WorkflowEndpoints
         }
     }
 
+    /// <summary>
+    /// A node's settings for READING: the <c>config</c> object when the node is enveloped (plan §3), otherwise
+    /// the root itself.
+    ///
+    /// Deliberately separate from <see cref="TryParseConfiguration"/>, which returns the ROOT and is what
+    /// mutation paths must use. <see cref="WithConfiguration"/> re-serializes whatever it is handed as the whole
+    /// node configuration, so resolving the envelope there would save the inner object as the entire config and
+    /// silently drop the envelope and every sibling key with it.
+    /// </summary>
+    private static JsonObject? TryParseConfigurationSettings(string? configurationJson)
+    {
+        if (TryParseConfiguration(configurationJson) is not { } root)
+        {
+            return null;
+        }
+
+        // Only an object counts as an envelope: a wizard field bag is Record<string,string>, so a legacy node
+        // can carry a STRING called "config" and must still be read flat.
+        return root[WorkflowNodeConfigurationEnvelope.ConfigProperty] as JsonObject ?? root;
+    }
+
+    /// <summary>Node types whose executors resolve workflow-scoped transformation rules, and so must know which
+    /// workflow they belong to.</summary>
+    private static readonly HashSet<string> RuleResolvingNodeTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        WorkflowNodeTypes.Mapping,
+        WorkflowNodeTypes.FhirResourceTransform,
+        WorkflowNodeTypes.DeIdentification,
+    };
 
     /// <summary>
-    /// Returns <paramref name="nodeRequest"/>'s configuration with the workflow's own id stamped on, for the
-    /// chain nodes that resolve transformation rules for themselves.
+    /// Stamps the workflow's own id onto every rule-resolving node, under the key those executors read
+    /// (<c>resourcePipelineRouteId</c>).
     ///
-    /// <c>resourcePipelineRouteId</c> is the key the rule resolver's Workflow tier is addressed by. Without it
-    /// MappingNodeExecutor and FhirResourceTransformNodeExecutor read a null route id, the resolver skips that
-    /// tier outright and falls through to the tenant-wide tiers — and a Workflow-scoped rule, the only kind the
-    /// builder authors, matches none of those. The rule then sits visibly attached to a field in the wizard
-    /// while every run writes the value untransformed, with no error anywhere to say so.
+    /// Done HERE rather than in the client because the client does not reliably know the id: on a first save
+    /// the workflow has none yet, so WorkflowGraphMapperServiceV2's own stamping loop skips the key entirely and
+    /// the node is persisted without it. The executor then cannot tell which workflow it is running for, every
+    /// workflow-scoped rule misses, and the resource is written untransformed — silently, with the run still
+    /// reporting success. That is how a DateMathAge rule went missing and a raw birthDate reached an int column.
     ///
-    /// Done here rather than in any one endpoint because there are four save paths (POST /workflows,
-    /// PUT /workflows/{id}, /workflows/build, and copy) and they all funnel through this method — the portal
-    /// stamps this too, but only on a path that requires the canvas node to already carry a destinationId, so
-    /// a graph whose destination was created by the build endpoint never got it from either side.
-    ///
-    /// Overwrites rather than preserving an existing value: these nodes are being persisted INTO this workflow,
-    /// so this id is theirs by definition, and overwriting also repairs a graph copied from another workflow
-    /// (whose nodes would otherwise keep aiming their rule lookups at the original).
+    /// The server always knows the id, so stamping at the persistence choke point fixes first save and re-save
+    /// alike. An id the client already set is left alone.
     /// </summary>
-    private static string WithWorkflowRouteId(WorkflowNodeRequest nodeRequest, Guid workflowId)
+    /// <summary>
+    /// Replaces any mapping field's <c>JsonPath</c> that is missing its array wildcards with the FHIR element
+    /// catalog's own pre-computed path, matched on the field's source FHIR path.
+    ///
+    /// Only fields whose stored path contains no <c>[*]</c> are considered, and a field is only rewritten when
+    /// the catalog knows that exact element AND its own path actually differs — so a correct path (the common
+    /// case, where the wizard's catalog had loaded) is never touched, and an unknown/custom element is left
+    /// exactly as the client sent it rather than guessed at.
+    /// </summary>
+    private static async Task<IReadOnlyCollection<MappingBuildSpec>?> RepairMappingJsonPathsAsync(
+        WorkflowBuildRequest request,
+        IConfigurationRepository configurationRepository,
+        IServiceProvider serviceProvider,
+        IFhirElementCatalog genericFhirCatalog,
+        CancellationToken cancellationToken)
     {
-        var configurationJson = nodeRequest.ConfigurationJson ?? "{}";
-        if (!ChainNodeTypes.Contains(nodeRequest.NodeType, StringComparer.Ordinal))
+        if (request.Mappings is not { Count: > 0 } specs)
         {
-            return configurationJson;
+            return request.Mappings;
         }
 
-        try
+        var catalog = await ResolveBuildCatalogAsync(
+            request, configurationRepository, serviceProvider, genericFhirCatalog, cancellationToken);
+
+        var repaired = new List<MappingBuildSpec>(specs.Count);
+        foreach (var spec in specs)
         {
-            var config = JsonNode.Parse(configurationJson) as JsonObject ?? [];
-            config["resourcePipelineRouteId"] = workflowId.ToString();
-            return config.ToJsonString(WebJsonOptions);
+            // Indexed per resource type, not per field: Fields(resourceType) walks the whole catalog.
+            var byFhirPath = catalog.Fields(spec.ResourceType)
+                .GroupBy(element => element.FhirPath, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+            var fields = spec.Fields
+                .Select(field => RepairFieldJsonPath(field, spec.ResourceType, byFhirPath))
+                .ToArray();
+
+            repaired.Add(spec with { Fields = fields });
         }
-        catch (JsonException)
+
+        return repaired;
+    }
+
+    private static MappingFieldDto RepairFieldJsonPath(
+        MappingFieldDto field,
+        string resourceType,
+        IReadOnlyDictionary<string, FhirElementDto> catalogByFhirPath)
+    {
+        if (string.IsNullOrWhiteSpace(field.JsonPath) || field.JsonPath.Contains("[*]", StringComparison.Ordinal))
         {
-            // Unparseable config is left exactly as it arrived — the same "never make a bad save worse"
-            // stance the rest of this file's configuration helpers take.
-            return configurationJson;
+            return field;
         }
+
+        // "$.name.family" -> "name.family", the shape the catalog keys its elements by (it stores FhirPath
+        // without the resource-type prefix). A joined/aggregate path ("a|b") or the whole-document "$" has no
+        // single element to match and falls out here.
+        var candidate = field.JsonPath.StartsWith("$.", StringComparison.Ordinal)
+            ? field.JsonPath[2..]
+            : null;
+        if (string.IsNullOrWhiteSpace(candidate) || candidate.Contains('|', StringComparison.Ordinal))
+        {
+            return field;
+        }
+
+        if (!catalogByFhirPath.TryGetValue(candidate, out var element)
+            && !catalogByFhirPath.TryGetValue($"{resourceType}.{candidate}", out element))
+        {
+            return field;
+        }
+
+        return string.IsNullOrWhiteSpace(element.JsonPath)
+            || string.Equals(element.JsonPath, field.JsonPath, StringComparison.Ordinal)
+                ? field
+                : field with { JsonPath = element.JsonPath };
+    }
+
+    /// <summary>The catalog for whichever vendor this build's source connections speak — mirrors
+    /// MappingController.ResolveCatalogAsync. Falls back to the generic R4 catalog when no source is
+    /// resolvable yet (a brand-new workflow whose source connection this same request is about to create).</summary>
+    private static async Task<IFhirElementCatalog> ResolveBuildCatalogAsync(
+        WorkflowBuildRequest request,
+        IConfigurationRepository configurationRepository,
+        IServiceProvider serviceProvider,
+        IFhirElementCatalog genericFhirCatalog,
+        CancellationToken cancellationToken)
+    {
+        foreach (var source in request.Sources ?? [])
+        {
+            if (source.ExistingId is { } existingId)
+            {
+                var connection = await configurationRepository.GetSourceConnectionAsync(existingId, cancellationToken);
+                if (connection is not null)
+                {
+                    return serviceProvider.GetRequiredKeyedService<IFhirElementCatalog>(
+                        FhirElementCatalogKeys.For(connection.SourceSystemType));
+                }
+            }
+
+            // Not yet created (this request creates it) — the spec already names the vendor it will be.
+            return serviceProvider.GetRequiredKeyedService<IFhirElementCatalog>(
+                FhirElementCatalogKeys.For(source.Source.SourceSystemType));
+        }
+
+        return genericFhirCatalog;
+    }
+
+    private static string StampWorkflowId(string? configurationJson, string nodeType, Guid workflowId)
+    {
+        if (!RuleResolvingNodeTypes.Contains(nodeType))
+        {
+            return configurationJson ?? "{}";
+        }
+
+        // Written to the ROOT, not through the envelope resolver: this is a mutation, and the executors read
+        // the key from whichever shape the node is in (see WorkflowNodeConfigurationEnvelope).
+        //
+        // Unparseable config is returned exactly as it arrived rather than replaced with a bare stamped
+        // object — the same "never make a bad save worse" stance the rest of this file's configuration
+        // helpers take. Stamping over it would silently discard whatever the node actually held.
+        if (TryParseConfiguration(configurationJson) is not { } config)
+        {
+            return configurationJson ?? "{}";
+        }
+
+        if (config["resourcePipelineRouteId"]?.ToString() is { Length: > 0 })
+        {
+            return configurationJson ?? "{}";
+        }
+
+        config["resourcePipelineRouteId"] = workflowId.ToString();
+        return config.ToJsonString();
     }
 
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request, int version = 1)
@@ -3027,7 +3179,7 @@ public static class WorkflowEndpoints
                 nodeRequest.Rank,
                 nodeRequest.SubRank,
                 nodeRequest.DisplayName,
-                WithWorkflowRouteId(nodeRequest, workflowId),
+                StampWorkflowId(nodeRequest.ConfigurationJson, nodeRequest.NodeType, workflowId),
                 nodeRequest.PositionX,
                 nodeRequest.PositionY,
                 nodeRequest.IsEnabled,

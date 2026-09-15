@@ -1,4 +1,4 @@
-namespace FHIRBridge.Runtime.Domain.Workflows;
+﻿namespace FHIRBridge.Runtime.Domain.Workflows;
 
 public sealed class WorkflowDefinition
 {
@@ -72,9 +72,29 @@ public sealed class WorkflowDefinition
 
     public string? UpdatedBy { get; private set; }
 
+    /// <summary>Human-quotable sequential identifier (e.g. <c>WLW-150926-0042</c>), assigned once when the
+    /// workflow is first created and never reassigned — an edit re-saves the same number (see
+    /// SqlWorkflowDefinitionStore.SaveAsync, which carries it over from the row it replaces, exactly as it
+    /// does CreatedOnUtc/CreatedBy). Null for workflows created before numbering existed, and whenever
+    /// WorkflowNumbering:Enabled is off. Unlike <see cref="Name"/>, this is unique.</summary>
+    public string? WorkflowNumber { get; private set; }
+
     public IReadOnlyCollection<WorkflowNode> Nodes => _nodes;
 
     public IReadOnlyCollection<WorkflowEdge> Edges => _edges;
+
+    /// <summary>True once the graph has somewhere to write. Derived from the nodes rather than stored, so it
+    /// can never disagree with the graph it describes.</summary>
+    public bool HasDestination =>
+        _nodes.Any(node => node.Category == WorkflowNodeCategory.Destination);
+
+    /// <summary>Draft / Ready / Disabled — see <see cref="WorkflowLifecycleStatus"/>. Disabled is checked
+    /// first: an admin pausing a workflow is a statement about this workflow specifically, and stays visible
+    /// whether or not the graph happens to be complete.</summary>
+    public WorkflowLifecycleStatus LifecycleStatus =>
+        !IsEnabled ? WorkflowLifecycleStatus.Disabled
+        : HasDestination ? WorkflowLifecycleStatus.Ready
+        : WorkflowLifecycleStatus.Draft;
 
     /// <summary>Sets (or clears) the scheduling trigger. Manual/null means the workflow only runs on demand.</summary>
     public void SetTrigger(WorkflowTrigger? trigger) => Trigger = trigger;
@@ -112,11 +132,57 @@ public sealed class WorkflowDefinition
         return node;
     }
 
+    /// <summary>
+    /// Adds a node under an id the caller already holds, instead of minting a new one.
+    ///
+    /// Only for rebuilding an EXISTING graph in place — the configuration migration (see
+    /// docs/backend/18-workflow-self-contained-config-plan.md §7) rewrites every node's ConfigurationJson, and
+    /// nodes are immutable, so the graph has to be reconstructed. Node ids must survive that: edges reference
+    /// them, and so do WorkflowNodeRuns, FieldLineageEntries and issued checkpoint urls. Use <see cref="AddNode"/>
+    /// for anything genuinely new.
+    /// </summary>
+    public WorkflowNode AddNodeWithId(
+        Guid nodeId,
+        string nodeType,
+        WorkflowNodeCategory category,
+        int rank,
+        int subRank = 0,
+        string? displayName = null,
+        string configurationJson = "{}",
+        double positionX = 0,
+        double positionY = 0,
+        bool isEnabled = true,
+        bool checkpointUrlEnabled = false)
+    {
+        if (nodeId == Guid.Empty)
+        {
+            throw new ArgumentException("Node id is required when rebuilding an existing graph.", nameof(nodeId));
+        }
+
+        var node = new WorkflowNode(
+            nodeId,
+            Id,
+            nodeType,
+            category,
+            rank,
+            subRank,
+            displayName ?? nodeType,
+            configurationJson,
+            positionX,
+            positionY,
+            isEnabled,
+            checkpointUrlEnabled);
+
+        _nodes.Add(node);
+        return node;
+    }
+
     /// <summary>Projects this definition onto a restricted node/edge subset (e.g. a checkpoint's ancestor closure).
     /// Used only for in-flight execution — never persisted — so it deliberately does not go through AddNode/AddEdge.</summary>
     public WorkflowDefinition WithNodesAndEdges(IReadOnlyCollection<WorkflowNode> nodes, IReadOnlyCollection<WorkflowEdge> edges)
     {
         var projected = new WorkflowDefinition(Id, Name, Version, IsEnabled, IsPubliclyLaunchable, Description);
+        projected.WorkflowNumber = WorkflowNumber;
         projected._nodes.AddRange(nodes);
         projected._edges.AddRange(edges);
         return projected;
@@ -129,13 +195,6 @@ public sealed class WorkflowDefinition
         return edge;
     }
 
-    public WorkflowNodeConfiguration AddNodeConfiguration(Guid nodeId, string key, string value)
-    {
-        var node = _nodes.SingleOrDefault(candidate => candidate.Id == nodeId)
-            ?? throw new InvalidOperationException($"Workflow node '{nodeId}' does not exist.");
-
-        return node.AddConfiguration(key, value);
-    }
 
     /// <summary>Replaces the free-text description (null / whitespace clears it).</summary>
     public void SetDescription(string? description) => Description = NormalizeDescription(description);
@@ -158,6 +217,12 @@ public sealed class WorkflowDefinition
         UpdatedOnUtc = updatedOnUtc;
         UpdatedBy = updatedBy;
     }
+
+    /// <summary>Assigns the generated workflow number. Called by SqlWorkflowDefinitionStore.SaveAsync only —
+    /// with a freshly allocated number on a genuine create, or with the existing row's number on an edit, so a
+    /// workflow keeps the number it was first given for its whole life.</summary>
+    public void SetWorkflowNumber(string? workflowNumber) =>
+        WorkflowNumber = string.IsNullOrWhiteSpace(workflowNumber) ? null : workflowNumber.Trim();
 
     private static string? NormalizeDescription(string? description) =>
         string.IsNullOrWhiteSpace(description) ? null : description.Trim();

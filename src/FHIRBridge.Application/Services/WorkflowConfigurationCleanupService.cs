@@ -258,7 +258,16 @@ public sealed class WorkflowConfigurationCleanupService : IWorkflowConfiguration
 
         try
         {
-            return JsonNode.Parse(configurationJson) as JsonObject;
+            if (JsonNode.Parse(configurationJson) is not JsonObject root)
+            {
+                return null;
+            }
+
+            // Dual-read (plan §3): resolve an enveloped node's "config" object, falling back to the root for the
+            // legacy flat shape. This service is slated for deletion once nodes carry their own configuration
+            // (plan §5) — until then it must still see the ids it is deciding about, or a migrated workflow's
+            // mapping profiles would look unreferenced and be soft-deleted out from under it.
+            return root[WorkflowNodeConfigurationEnvelope.ConfigProperty] is JsonObject settings ? settings : root;
         }
         catch (JsonException)
         {

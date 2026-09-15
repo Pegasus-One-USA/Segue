@@ -1,5 +1,5 @@
 import { Component, signal, inject, OnInit, HostListener } from '@angular/core';
-import { RouterOutlet, RouterLink, Router, NavigationEnd } from '@angular/router';
+import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { SidebarComponent } from '../../dashboard/layout/sidebar/sidebar.component';
 import { UserMenuComponent } from '../../user/components/user-menu/user-menu.component';
@@ -8,6 +8,7 @@ import { UnsavedChangesRegistryService } from '../../core/services/unsaved-chang
 import { DialogOutletComponent } from '../../core/components/dialog-outlet/dialog-outlet.component';
 import { AppInitService } from '../../onboarding/services/app-init.service';
 import { AuthService } from '../../auth/services/auth.service';
+import { SettingsPageDialogService } from '../../settings/services/settings-page-dialog.service';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':                    'Dashboard',
@@ -32,12 +33,14 @@ const PAGE_TITLES: Record<string, string> = {
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, SidebarComponent, UserMenuComponent, AppFooterComponent, DialogOutletComponent],
+  // RouterLink dropped: the only links here were the two license-gate deep links, now dialog-opening buttons.
+  imports: [RouterOutlet, SidebarComponent, UserMenuComponent, AppFooterComponent, DialogOutletComponent],
   templateUrl: './app-shell.component.html',
   styleUrl: './app-shell.component.scss',
 })
 export class AppShellComponent implements OnInit {
   private readonly router = inject(Router);
+  private readonly settingsPageDialog = inject(SettingsPageDialogService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
   private readonly appInit = inject(AppInitService);
   private readonly auth = inject(AuthService);
@@ -80,7 +83,10 @@ export class AppShellComponent implements OnInit {
 
   private updateTitle(url: string): void {
     const cleanUrl = url.split('?')[0];
-    this.onLicenseSettingsPage.set(cleanUrl.startsWith('/settings/license'));
+    // Still the dev-mint page specifically: License itself is now a dialog (see openLicenseDialog), which
+    // renders above the lock overlay anyway, but /settings/license/mint-dev is a real route that must stay
+    // reachable while the app is locked — that page is how a license gets applied in a dev environment.
+    this.onLicenseSettingsPage.set(cleanUrl.startsWith('/settings/license/mint-dev'));
 
     if (PAGE_TITLES[cleanUrl]) {
       this.pageTitle.set(PAGE_TITLES[cleanUrl]);
@@ -88,6 +94,12 @@ export class AppShellComponent implements OnInit {
     }
     const base = '/' + cleanUrl.split('/')[1];
     this.pageTitle.set(PAGE_TITLES[base] ?? 'Segue');
+  }
+
+  /** License moved off its own route onto a dialog (Settings > System Settings > General). Both license-gate
+   *  banners open it here rather than deep-linking to a route that no longer exists. */
+  protected openLicenseDialog(): void {
+    this.settingsPageDialog.open('license');
   }
 
   toggleSidebar(): void {
