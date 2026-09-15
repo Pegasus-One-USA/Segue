@@ -214,6 +214,19 @@ export class CorrelationSearchComponent implements OnInit {
     this.correlationId.set(value);
   }
 
+  /** Clears the correlation-id filter and any loaded result — the standard Reset action shared by the
+   *  other Logs & Compliance tabs' filter bars. */
+  reset(): void {
+    this.correlationId.set('');
+    this.searched.set(false);
+    this.errorMessage.set(null);
+    this.result.set(null);
+    this.expandedIndex.set(null);
+    // Clear collapse state too, so section-collapse from a previous correlation id doesn't carry into
+    // the next search. viewMode is left as-is — it's a display preference, not per-result state.
+    this.collapsedSections.set(new Set());
+  }
+
   search(): void {
     if (!this.correlationId().trim()) {
       return;

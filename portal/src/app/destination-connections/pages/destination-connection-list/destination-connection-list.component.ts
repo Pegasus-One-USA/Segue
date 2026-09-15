@@ -90,9 +90,14 @@ export class DestinationConnectionListComponent implements OnInit {
   }
 
   /** Whether this row's 3-dot menu has anything in it at all — a view-only role (e.g. Audit) with
-   *  neither edit nor delete on this row should never see an empty kebab menu. */
+   *  none of view/edit/delete on this row should never see an empty kebab menu. destinationconnections.view
+   *  gates only the placeholder View (Coming Soon) item today, same as sourceconnections.view does for
+   *  source-connection-list's own (implemented) View item — included here so a view-only role still sees
+   *  the menu at all, not just roles that can also edit or delete. */
   hasRowMenu(item: DestinationConfigurationDto): boolean {
-    return this.canOpenEntity(item) || this.permissions.hasAll(this.deleteCodes(item));
+    return this.permissions.hasPermission('destinationconnections.view')
+      || this.canOpenEntity(item)
+      || this.permissions.hasAll(this.deleteCodes(item));
   }
 
   readonly searchQuery = signal('');

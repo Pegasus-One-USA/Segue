@@ -48,10 +48,15 @@ export class EhrEndpointListComponent implements OnInit {
   private readonly permissions = inject(PermissionService);
   private readonly destroyRef  = inject(DestroyRef);
 
-  /** Whether the row's 3-dot menu has anything in it at all — a view-only role (e.g. Audit) with
-   *  neither ehrendpoints.edit nor ehrendpoints.delete should never see an empty kebab menu. */
+  /** Whether the row's 3-dot menu has anything in it at all — a view-only role (e.g. Audit) with none
+   *  of ehrendpoints.view/edit/delete should never see an empty kebab menu. ehrendpoints.view gates
+   *  only the placeholder View (Coming Soon) item today, same as sourceconnections.view does for
+   *  source-connection-list's own (implemented) View item — included here so a view-only role still
+   *  sees the menu at all, not just roles that can also edit or delete. */
   hasRowMenu(): boolean {
-    return this.permissions.hasPermission('ehrendpoints.edit') || this.permissions.hasPermission('ehrendpoints.delete');
+    return this.permissions.hasPermission('ehrendpoints.view')
+      || this.permissions.hasPermission('ehrendpoints.edit')
+      || this.permissions.hasPermission('ehrendpoints.delete');
   }
 
   readonly searchQuery  = signal('');
