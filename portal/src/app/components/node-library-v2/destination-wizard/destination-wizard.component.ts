@@ -67,6 +67,7 @@ import {
   qualifyTableName,
   reconcileTargetsForDestTypeSwitch,
   checkColumnTypeCompatibility,
+  DefaultValueToken,
 } from './field-mapping/field-mapping-model';
 import { computePendingTableNames, runQueuedOpsSequentially } from './field-mapping/field-mapping-schema-ops.util';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
@@ -2917,6 +2918,26 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     const newRows: MappingRow[] = profile.fields.map((f) => {
+      // A "@token" JsonPath (JsonMappingEngine.IsSystemToken) has no real source at all — reconstructing
+      // it as an ordinary mode: 'value' row (as every field below unconditionally used to) produced a
+      // broken row with a fabricated fhirPath and, worse, silently lost defaultValue/defaultValueType on
+      // the very next save (see field-mapping-summary.model.ts's identical fix for the canonical Mapping
+      // JSON round-trip — this is the same gap in the "Select Existing" profile-picker's own load path).
+      if (f.jsonPath?.startsWith('@')) {
+        return {
+          resource,
+          sources: [],
+          mode: 'default',
+          defaultToken: f.jsonPath as DefaultValueToken,
+          defaultValue: f.defaultValue ?? null,
+          defaultValueType: f.valueType,
+          targetName: f.targetField,
+          tableName: resolvedTarget,
+          isRequired: f.isRequired,
+          format: f.format ?? null,
+          isUpsertKey: f.isUpsertKey ?? false,
+        };
+      }
       const resolved = this._resolveFhirPath(resource, f);
       return {
         resource,

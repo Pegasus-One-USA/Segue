@@ -28,12 +28,48 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
 
         foreach (var field in fields)
         {
+            // "Set default value" column (field-mapping-model.ts's DefaultValueToken '@default'): always
+            // writes the literal DefaultValue text, never anything read from the source payload — there IS
+            // no source at all for this field, by construction (see MappingRow's own doc comment on why
+            // that's what keeps "default" and "mapped from a source" mutually exclusive).
+            if (string.Equals(field.JsonPath, "@default", StringComparison.OrdinalIgnoreCase))
+            {
+                // CreateMappingProfileRequestValidator requires DefaultValue whenever JsonPath is "@default",
+                // but that's a save-time guarantee, not a compile-time one — a profile saved before that
+                // rule existed could still reach here with none.
+                if (string.IsNullOrWhiteSpace(field.DefaultValue))
+                {
+                    errors.Add($"Field '{field.TargetField}' is set to a literal default value but has none configured.");
+                    parent[field.TargetField] = null;
+                    continue;
+                }
+
+                parent[field.TargetField] = ConvertValue(
+                    field.DefaultValue, field.ValueType, field.Format, field.TargetField, errors,
+                    field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform);
+                continue;
+            }
+
             // System-value field: sourced from pipeline/runtime context (run id, write time, resource type, …)
             // rather than the source JSON. The value flows into the row exactly like a normal mapped column.
             if (IsSystemToken(field.JsonPath))
             {
                 object? systemValue = null;
-                systemValues?.TryGetValue(field.JsonPath, out systemValue);
+                // "@destinationObject" is special-cased to this FIELD's own DestinationObject when it has one
+                // — a field on a child/extra table (ArrayPolicy.SeparateDestination, e.g. a Patient.name array
+                // fanned out onto dbo.PatientName) must report ITS OWN table, not the profile's primary table
+                // the run-level systemValues dictionary carries. Only the primary-table fields (the common
+                // case, where DestinationObject is unset) fall back to the profile-level value.
+                if (string.Equals(field.JsonPath, "@destinationObject", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(field.DestinationObject))
+                {
+                    systemValue = field.DestinationObject;
+                }
+                else
+                {
+                    systemValues?.TryGetValue(field.JsonPath, out systemValue);
+                }
+
                 if (systemValue is null && field.IsRequired)
                 {
                     errors.Add($"Required system field '{field.TargetField}' had no value for token '{field.JsonPath}'.");

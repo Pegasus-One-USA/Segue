@@ -828,6 +828,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                 routeExecutionId,
                 mappingProfile,
                 governedResources,
+                triggeredBy,
                 errors,
                 cancellationToken);
 
@@ -1620,6 +1621,7 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         Guid routeExecutionId,
         MappingProfile mappingProfile,
         IReadOnlyCollection<ResourceEnvelope> resources,
+        string? triggeredBy,
         List<string> errors,
         CancellationToken cancellationToken)
     {
@@ -1637,9 +1639,38 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
 
         mappingFields = await EnrichWithDestinationSchemaAsync(mappingFields, mappingProfile, cancellationToken);
 
+        // One timestamp for the whole run so every row written from it shares the same @now value — mirrors
+        // TransformNodeExecutors' identical Runtime Plane handling of these system-value @tokens.
+        var runTimestampUtc = DateTime.UtcNow;
+
+        // Pipeline/runtime values a @token default field can draw from (audit/lineage columns not present in
+        // the source FHIR document) — see JsonMappingEngine.IsSystemToken. Every entry here is constant for
+        // the whole route execution EXCEPT "@sourceResourceId" and "@newGuid" (a surrogate key for a column
+        // with no natural source id) — those two are overwritten, not re-added, for each resource below.
+        // Built once and reused/mutated across the loop rather than reallocated per resource: JsonMappingEngine
+        // .Map only ever reads from it synchronously within the one Map() call below, so nothing holds onto a
+        // stale snapshot between iterations.
+        var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["@runId"] = pipelineRunId,
+            ["@now"] = runTimestampUtc,
+            ["@resourceType"] = mappingProfile.ResourceType,
+            ["@mappingProfileName"] = mappingProfile.Name,
+            ["@mappingProfileId"] = mappingProfile.Id,
+            ["@destinationObject"] = mappingProfile.DestinationObject,
+            ["@sourceConnectionId"] = mappingProfile.SourceConnectionId,
+            // Who/what kicked off this run — a user identifier for a manual trigger, or "scheduled"/
+            // "webhook" for an automated one (see PipelineTriggerService's own TriggeredBy values). Null on
+            // triggers that don't carry one, in which case a required field on this token errors like any
+            // other missing value (see JsonMappingEngine's IsSystemToken branch).
+            ["@triggeredBy"] = triggeredBy,
+        };
+
         foreach (var resource in resources)
         {
-            var result = _mappingEngine.Map(resource.RawJson, mappingFields);
+            systemValues["@sourceResourceId"] = resource.ResourceId;
+            systemValues["@newGuid"] = Guid.NewGuid();
+            var result = _mappingEngine.Map(resource.RawJson, mappingFields, systemValues);
             if (result.Errors.Count > 0)
             {
                 errors.AddRange(result.Errors.Select(error =>

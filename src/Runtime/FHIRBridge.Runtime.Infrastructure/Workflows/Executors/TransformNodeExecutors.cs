@@ -628,6 +628,26 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     resourcePipelineRouteId, ruleCache, cancellationToken);
             }
 
+            // Pipeline/runtime values a @token field can draw from (audit/lineage columns not present in the
+            // source FHIR document): the run id, a shared write timestamp, and this group's resource type/
+            // destination. Built once per group (everything here is constant across every resource IN this
+            // group — including "@resourceType", since the outer GroupBy already guarantees every resource's
+            // own ResourceType equals this group's key) and reused/mutated per resource below, rather than
+            // reallocated on every iteration: the mapping engine only ever reads it synchronously within its
+            // own Map() call, so nothing holds onto a stale snapshot between resources.
+            var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["@runId"] = context.WorkflowRunId,
+                ["@now"] = runTimestampUtc,
+                ["@resourceType"] = resourceType,
+                ["@destinationObject"] = destinationObject,
+                // @mappingProfileName/@mappingProfileId/@sourceConnectionId/@triggeredBy have no equivalent
+                // here — the Runtime Plane's node config is inline JSON, not a Domain MappingProfile entity,
+                // and this executor has no trigger identity to report. Left unset rather than a misleading
+                // placeholder; a field using one of them resolves to null here exactly like an unmapped
+                // token, same as JsonMappingEngine already does for any token absent from systemValues.
+            };
+
             foreach (var resource in group)
             {
                 var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
@@ -635,15 +655,10 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     && preMappingRedactionsByResourceId.TryGetValue(resource.ResourceId, out var resourceHops)
                         ? resourceHops
                         : (IReadOnlyList<DeIdentificationFieldHop>)[];
-                // Pipeline/runtime values a @token field can draw from (audit/lineage columns not present in the
-                // source FHIR document): the run id, a shared write timestamp, and the resource's own type/id.
-                var systemValues = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["@runId"] = context.WorkflowRunId,
-                    ["@now"] = runTimestampUtc,
-                    ["@resourceType"] = resource.ResourceType,
-                    ["@sourceResourceId"] = resource.ResourceId,
-                };
+                systemValues["@sourceResourceId"] = resource.ResourceId;
+                // Freshly generated per resource (unlike every other token above) — mirrors
+                // ConfiguredPipelineService's identical Configured Pipeline handling of this token.
+                systemValues["@newGuid"] = Guid.NewGuid();
                 var mapped = _mappingEngine?.Map(sourceJson, fields, systemValues);
                 if (mapped is null)
                 {

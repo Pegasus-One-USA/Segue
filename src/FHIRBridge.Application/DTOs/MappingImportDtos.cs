@@ -68,7 +68,7 @@ public sealed record TargetTableDto(
     TableRelationDto? Relation,
     IReadOnlyList<ColumnMappingDto> Columns);
 
-/// <summary><see cref="Mode"/> is one of "directField" | "joinedFields" | "wholeNodeAsJson".</summary>
+/// <summary><see cref="Mode"/> is one of "directField" | "joinedFields" | "wholeNodeAsJson" | "default".</summary>
 public sealed record ColumnMappingDto(
     string Column,
     string Mode,
@@ -79,7 +79,16 @@ public sealed record ColumnMappingDto(
     /// <summary>Non-null when this column is a FHIR reference (e.g. "$.subject.reference") that must be
     /// resolved against another table's row at write time rather than written verbatim — see
     /// <see cref="Domain.ValueObjects.MappingField.ReferenceLookupTable"/>.</summary>
-    ReferenceLookupDto? ReferenceLookup = null);
+    ReferenceLookupDto? ReferenceLookup = null,
+    /// <summary>Mode "default" only — which @token this column always resolves to (e.g. "@default",
+    /// "@now") — see JsonMappingEngine.IsSystemToken / field-mapping-model.ts's DefaultValueToken.</summary>
+    string? DefaultToken = null,
+    /// <summary>Mode "default" only, and only meaningful when DefaultToken is "@default" — the literal
+    /// text written for every record.</summary>
+    string? DefaultValue = null,
+    /// <summary>Mode "default" only — the MappingValueType this column writes, since there's no source
+    /// field to derive one from.</summary>
+    string? DefaultValueType = null);
 
 /// <summary>Where to resolve a reference column's extracted id against: <see cref="Table"/> is the other
 /// mapped resource's own destination table, <see cref="KeyColumn"/> is the column there holding that
