@@ -6,12 +6,17 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "Deploys FHIRBridge (portal + API), the Demo app, and their supporting SQL Server Express, Redis, and background Worker into a single Azure Container Apps environment in this subscription.",
+        "description": "Deploys Segue (portal + API) and its supporting Postgres, Redis, and background Worker into a single Azure Container Apps environment in this subscription.",
         "subscription": {
           "resourceProviders": [
             "Microsoft.App",
             "Microsoft.OperationalInsights",
-            "Microsoft.Storage"
+            "Microsoft.Storage",
+            "Microsoft.DBforPostgreSQL",
+            "Microsoft.Cache",
+            "Microsoft.KeyVault",
+            "Microsoft.Cdn",
+            "Microsoft.Network"
           ]
         },
         "location": {
@@ -26,7 +31,7 @@
         "type": "Microsoft.Common.TextBox",
         "label": "Deployment name prefix",
         "defaultValue": "fhirbridge",
-        "toolTip": "Short name used to build every resource name in this deployment (e.g. <prefix>-app, <prefix>-sqlserver).",
+        "toolTip": "Short name used to build every resource name in this deployment (e.g. <prefix>-app, <prefix>-postgres).",
         "constraints": {
           "required": true,
           "regex": "^[a-z][a-z0-9-]{1,20}$",
@@ -37,16 +42,36 @@
     "steps": [
       {
         "name": "fhirbridgeSettings",
-        "label": "FHIRBridge Settings",
+        "label": "Segue Settings",
         "elements": [
           {
-            "name": "sqlSaPassword",
+            "name": "postgresMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Postgres deployment type",
+            "defaultValue": "Managed",
+            "toolTip": "Managed (default, recommended) creates an Azure Database for PostgreSQL Flexible Server — no container, no volume; Azure handles patching and automated daily backups with point-in-time restore. Containerized instead keeps a single-replica Postgres container with Azure Files-backed storage — cheaper, but its data only survives a graceful shutdown; choosing it also adds an hourly scheduled backup job as a compensating control (see 'What Gets Created').",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Managed — Azure Database for PostgreSQL (recommended)",
+                  "value": "Managed"
+                },
+                {
+                  "label": "Containerized (cheaper, weaker durability)",
+                  "value": "Containerized"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "postgresPassword",
             "type": "Microsoft.Common.PasswordBox",
             "label": {
-              "password": "SQL Server SA password",
-              "confirmPassword": "Confirm password"
+              "password": "Postgres password",
+              "confirmPassword": "Confirm Postgres password"
             },
-            "toolTip": "Password for the SQL Server Express container's sa account. Must satisfy SQL Server's complexity policy (8+ chars, upper/lower/digit/symbol).",
+            "toolTip": "Password for Segue's own Postgres database — the 'fhirbridge' role's password when Containerized, or the Flexible Server's administrator password when Managed.",
             "constraints": {
               "required": true,
               "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
@@ -57,11 +82,69 @@
             }
           },
           {
+            "name": "azurePostgresqlSku",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Managed Postgres pricing tier",
+            "defaultValue": "Burstable_B1ms",
+            "toolTip": "Azure Database for PostgreSQL Flexible Server compute/pricing tier. Only used when Postgres deployment type is Managed.",
+            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Burstable B1ms (cheapest — dev/test)",
+                  "value": "Burstable_B1ms"
+                },
+                {
+                  "label": "Burstable B2s",
+                  "value": "Burstable_B2s"
+                },
+                {
+                  "label": "General Purpose D2s v3 (production-appropriate)",
+                  "value": "GeneralPurpose_D2s_v3"
+                },
+                {
+                  "label": "General Purpose D4s v3",
+                  "value": "GeneralPurpose_D4s_v3"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "azurePostgresqlStorageMb",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Managed Postgres storage",
+            "defaultValue": "32768",
+            "toolTip": "Storage can only be scaled up later, not down — don't over-provision speculatively. Only used when Postgres deployment type is Managed.",
+            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "32 GB (platform minimum)",
+                  "value": "32768"
+                },
+                {
+                  "label": "64 GB",
+                  "value": "65536"
+                },
+                {
+                  "label": "128 GB",
+                  "value": "131072"
+                },
+                {
+                  "label": "256 GB",
+                  "value": "262144"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
             "name": "jwtSigningKey",
             "type": "Microsoft.Common.PasswordBox",
             "label": {
               "password": "API signing key",
-              "confirmPassword": "Confirm signing key"
+              "confirmPassword": "Confirm API signing key"
             },
             "toolTip": "FHIRBridge.Api's Authentication:SigningKey (HS256) — used to sign access/refresh tokens. At least 32 random characters; treat it like a secret.",
             "constraints": {
@@ -74,13 +157,34 @@
             }
           },
           {
+            "name": "redisMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Redis deployment type",
+            "defaultValue": "Containerized",
+            "toolTip": "Containerized keeps a single-replica Redis container (custom image with a self-signed TLS cert). Managed creates an Azure Managed Redis cluster instead (classic Azure Cache for Redis is retired and already blocked for new caches in some subscriptions) — no container, no self-signed cert to generate; Azure issues its own CA-trusted certificate.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Containerized (default)",
+                  "value": "Containerized"
+                },
+                {
+                  "label": "Managed — Azure Managed Redis",
+                  "value": "Managed"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
             "name": "redisPassword",
             "type": "Microsoft.Common.PasswordBox",
             "label": {
               "password": "Redis password",
-              "confirmPassword": "Confirm password"
+              "confirmPassword": "Confirm Redis password"
             },
             "toolTip": "Password Redis requires to connect (--requirepass) — defense-in-depth on top of network isolation.",
+            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
             "constraints": {
               "required": true,
               "regex": "^.{8,}$",
@@ -88,6 +192,162 @@
             },
             "options": {
               "hideConfirmation": false
+            }
+          },
+          {
+            "name": "redisTrustedCertificateThumbprint",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Redis TLS certificate thumbprint",
+            "toolTip": "SHA-1 thumbprint of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value (e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F). The app refuses the Redis connection if this doesn't match what Redis actually presents.",
+            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
+            "constraints": {
+              "required": true,
+              "regex": "^[0-9A-Fa-f]{40}$",
+              "validationMessage": "A 40-character SHA-1 thumbprint (hex characters only)."
+            }
+          },
+          {
+            "name": "azureCacheForRedisTier",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Azure Managed Redis SKU",
+            "defaultValue": "Balanced_B0",
+            "toolTip": "Balanced offers a healthy memory/compute ratio; Memory Optimized suits larger, less compute-intensive workloads. All sizes include SLA/high availability and TLS. Only used when Redis deployment type is Managed.",
+            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Managed')]",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Balanced B0 (1GB, cheapest)",
+                  "value": "Balanced_B0"
+                },
+                {
+                  "label": "Balanced B5 (6GB)",
+                  "value": "Balanced_B5"
+                },
+                {
+                  "label": "Memory Optimized M10 (12GB)",
+                  "value": "MemoryOptimized_M10"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "secretsMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Tenant/app secret storage",
+            "defaultValue": "Local database",
+            "toolTip": "Local database (default) keeps tenant connection secrets and app-level secrets on the local DataProtection-encrypted table — no extra Azure resource, no extra permission needed. Azure Key Vault creates a dedicated RBAC-enabled vault, grants the app's managed identities access to it, and moves secret storage + DataProtection key-ring wrapping there instead. Granting that access needs Owner or User Access Administrator on the resource group — see the tooltip on the deployment's own docs if you only have Contributor.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Local database (default)",
+                  "value": "Local database"
+                },
+                {
+                  "label": "Azure Key Vault",
+                  "value": "Azure Key Vault"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "seqMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Centralized log viewing (Seq)",
+            "defaultValue": "None",
+            "toolTip": "None (default) — no Seq container; the app logs to console/Log Analytics only. Seq creates a Seq container with its own public URL (protected by the admin password below) that Api, Gateway, and Worker all send structured logs to, for browsing/searching/monitoring them in one place.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "None (default)",
+                  "value": "None"
+                },
+                {
+                  "label": "Seq",
+                  "value": "Seq"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "seqAdminPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Seq admin password",
+              "confirmPassword": "Confirm Seq admin password"
+            },
+            "toolTip": "Password for the Seq web UI (SEQ_FIRSTRUN_ADMINPASSWORD) — the only thing protecting that URL, since no other authentication is configured. Only used when Centralized log viewing is Seq.",
+            "visible": "[equals(steps('fhirbridgeSettings').seqMode, 'Seq')]",
+            "constraints": {
+              "required": true,
+              "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
+              "validationMessage": "At least 8 characters, including upper case, lower case, and a digit."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "wafMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Web Application Firewall",
+            "defaultValue": "None",
+            "toolTip": "None (default) — Segue is reached directly with no inspection layer in front of it. Front Door WAF creates an Azure Front Door (Standard tier) profile with a WAF policy in front of the app — Front Door is both a WAF and a global load balancer in one resource. Standard tier can't host Premium-only managed rule sets, so the policy instead enforces a per-client-IP rate limit; recommended since this app processes PHI, most healthcare security reviews ask about this specifically.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "None (default)",
+                  "value": "None"
+                },
+                {
+                  "label": "Front Door WAF (Standard) — recommended",
+                  "value": "Front Door WAF"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "wafPolicyMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "WAF policy mode",
+            "defaultValue": "Prevention",
+            "toolTip": "Prevention (default) actually blocks requests the rate-limit rule flags. Detection only logs/scores them and blocks nothing — a valid choice if you'd rather watch its findings against your own traffic for a while first, but it provides no real protection until switched to Prevention. Only used when Web Application Firewall above is enabled.",
+            "visible": "[equals(steps('fhirbridgeSettings').wafMode, 'Front Door WAF')]",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Prevention — actually blocks malicious requests (recommended)",
+                  "value": "Prevention"
+                },
+                {
+                  "label": "Detection — logs only, blocks nothing",
+                  "value": "Detection"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "storageRedundancy",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Storage redundancy",
+            "defaultValue": "Standard_ZRS",
+            "toolTip": "Applies to the storage account backing Azure Files data (Postgres/Redis/keys/Seq, whichever are containerized) and the Postgres backup container. Zone-redundant synchronously replicates across 3 datacenters in the region, protecting against a single-datacenter outage. Locally-redundant keeps all copies in one datacenter and is only cheaper. Not every Azure region supports zone-redundant storage — switch to Locally-redundant if deployment fails with a SKU/region error.",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Zone-redundant (recommended)",
+                  "value": "Standard_ZRS"
+                },
+                {
+                  "label": "Locally-redundant (cheaper, single datacenter)",
+                  "value": "Standard_LRS"
+                }
+              ],
+              "required": true
             }
           }
         ]
@@ -97,17 +357,30 @@
         "label": "Container Sizes",
         "elements": [
           {
-            "name": "sqlServerSize",
+            "name": "postgresSize",
             "type": "Microsoft.Common.DropDown",
-            "label": "SQL Server size",
+            "label": "Postgres size",
             "defaultValue": "Large",
-            "toolTip": "SQL Server's first-run setup can need more headroom than steady-state — pick XLarge if it fails to initialize on Large.",
+            "toolTip": "Containerized Postgres container size. Only used when Postgres deployment type is Containerized.",
+            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Containerized')]",
             "constraints": {
               "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB) — current default", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+                {
+                  "label": "Small (0.25 CPU / 0.5 GB)",
+                  "value": "Small"
+                },
+                {
+                  "label": "Medium (0.5 CPU / 1 GB)",
+                  "value": "Medium"
+                },
+                {
+                  "label": "Large (1.0 CPU / 2 GB) — current default",
+                  "value": "Large"
+                },
+                {
+                  "label": "XLarge (2.0 CPU / 4 GB)",
+                  "value": "XLarge"
+                }
               ],
               "required": true
             }
@@ -117,13 +390,26 @@
             "type": "Microsoft.Common.DropDown",
             "label": "Redis size",
             "defaultValue": "Medium",
-            "toolTip": "Redis's own cache/queue memory needs — separate from the data it persists to its file share.",
+            "toolTip": "Redis's own cache/queue memory needs — separate from the data it persists to its file share. Only used when Redis deployment type is Containerized.",
+            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
             "constraints": {
               "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB) — current default", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+                {
+                  "label": "Small (0.25 CPU / 0.5 GB)",
+                  "value": "Small"
+                },
+                {
+                  "label": "Medium (0.5 CPU / 1 GB) — current default",
+                  "value": "Medium"
+                },
+                {
+                  "label": "Large (1.0 CPU / 2 GB)",
+                  "value": "Large"
+                },
+                {
+                  "label": "XLarge (2.0 CPU / 4 GB)",
+                  "value": "XLarge"
+                }
               ],
               "required": true
             }
@@ -131,31 +417,27 @@
           {
             "name": "fhirbridgeAppSize",
             "type": "Microsoft.Common.DropDown",
-            "label": "FHIRBridge app size",
+            "label": "Segue app size",
             "defaultValue": "Medium",
             "toolTip": "Runs both FHIRBridge.Api and FHIRBridge.Gateway in this one container.",
             "constraints": {
               "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB) — current default", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
-              ],
-              "required": true
-            }
-          },
-          {
-            "name": "demoAppSize",
-            "type": "Microsoft.Common.DropDown",
-            "label": "Demo app size",
-            "defaultValue": "Small",
-            "toolTip": "The lightweight demo application.",
-            "constraints": {
-              "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB) — current default", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+                {
+                  "label": "Small (0.25 CPU / 0.5 GB)",
+                  "value": "Small"
+                },
+                {
+                  "label": "Medium (0.5 CPU / 1 GB) — current default",
+                  "value": "Medium"
+                },
+                {
+                  "label": "Large (1.0 CPU / 2 GB)",
+                  "value": "Large"
+                },
+                {
+                  "label": "XLarge (2.0 CPU / 4 GB)",
+                  "value": "XLarge"
+                }
               ],
               "required": true
             }
@@ -168,10 +450,51 @@
             "toolTip": "Background scheduler/pipeline processor — no HTTP endpoint.",
             "constraints": {
               "allowedValues": [
-                { "label": "Small (0.25 CPU / 0.5 GB) — current default", "value": "Small" },
-                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
-                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
-                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+                {
+                  "label": "Small (0.25 CPU / 0.5 GB) — current default",
+                  "value": "Small"
+                },
+                {
+                  "label": "Medium (0.5 CPU / 1 GB)",
+                  "value": "Medium"
+                },
+                {
+                  "label": "Large (1.0 CPU / 2 GB)",
+                  "value": "Large"
+                },
+                {
+                  "label": "XLarge (2.0 CPU / 4 GB)",
+                  "value": "XLarge"
+                }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "seqSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Seq size",
+            "defaultValue": "Small",
+            "toolTip": "Structured log viewer. Only used when Centralized log viewing is Seq.",
+            "visible": "[equals(steps('fhirbridgeSettings').seqMode, 'Seq')]",
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "Small (0.25 CPU / 0.5 GB) — current default",
+                  "value": "Small"
+                },
+                {
+                  "label": "Medium (0.5 CPU / 1 GB)",
+                  "value": "Medium"
+                },
+                {
+                  "label": "Large (1.0 CPU / 2 GB)",
+                  "value": "Large"
+                },
+                {
+                  "label": "XLarge (2.0 CPU / 4 GB)",
+                  "value": "XLarge"
+                }
               ],
               "required": true
             }
@@ -186,7 +509,7 @@
             "name": "imageTag",
             "type": "Microsoft.Common.TextBox",
             "label": "Version to install",
-            "defaultValue": "v1.0.0",
+            "defaultValue": "v1.2.1",
             "toolTip": "The published version tag to deploy (see the vendor registry's release list for available versions).",
             "constraints": {
               "required": true
@@ -196,7 +519,7 @@
       },
       {
         "name": "customDomains",
-        "label": "Custom Domains",
+        "label": "Network Access",
         "elements": [
           {
             "name": "domainsInfo",
@@ -204,35 +527,15 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "Optional custom domains need TWO deploys (Azure cannot create a managed SSL cert before the hostname exists on the app).\n\nPhase 1 — Register hostname only:\n• Enter your domain(s) below\n• Leave \"Bind managed SSL certificates now\" UNCHECKED\n• Deploy — hostnames are registered (no SSL yet)\n• From deployment outputs, copy fhirbridgeAppDomainVerificationId / demoAppDomainVerificationId\n• At your DNS provider create: CNAME (your domain → the *.azurecontainerapps.io FQDN) and TXT (asuid.<your domain> = verification id)\n• Wait until DNS has propagated\n\nPhase 2 — Bind free managed SSL:\n• Redeploy with the SAME domain values\n• CHECK \"Bind managed SSL certificates now\"\n• Deploy — Azure issues and binds the certificate\n\nLeaving both domains blank keeps the default *.azurecontainerapps.io URLs. Do not check Bind SSL on the first domain deploy or you will hit RequireCustomHostnameInEnvironment.\n\nFallback: containerization/scripts/manage-custom-domain.ps1|.sh (Info → Add → Bind) against an already-deployed app."
+              "text": "The domain fields below are just a reminder for later — entering one here does NOT configure anything in Azure yet. Azure only assigns each app's domain-verification ID once the app already exists, so a domain can never be activated on the very first deploy. Once this deployment finishes, use the separate Step 2 (custom-domain.bicep) Deploy-to-Azure link to actually activate a domain — it re-asks for the domain and does the real work against the now-existing app."
             }
           },
           {
-            "name": "fhirbridgeAppCustomDomain",
+            "name": "fhirbridgeAppIntendedDomain",
             "type": "Microsoft.Common.TextBox",
-            "label": "FHIRBridge / Segue app custom domain",
+            "label": "Segue app domain (optional, informational only)",
             "defaultValue": "",
-            "toolTip": "e.g. app.customer.com. Leave blank for the default *.azurecontainerapps.io URL.",
-            "constraints": {
-              "required": false
-            }
-          },
-          {
-            "name": "demoAppCustomDomain",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Demo app custom domain",
-            "defaultValue": "",
-            "toolTip": "e.g. demo.customer.com. Leave blank for the default *.azurecontainerapps.io URL.",
-            "constraints": {
-              "required": false
-            }
-          },
-          {
-            "name": "bindCustomDomainCertificates",
-            "type": "Microsoft.Common.CheckBox",
-            "label": "Bind managed SSL certificates now (Phase 2 only)",
-            "defaultValue": false,
-            "toolTip": "Check ONLY after Phase 1 registered the hostnames and DNS CNAME + asuid TXT have propagated. Unchecked = register hostname only (Phase 1)."
+            "toolTip": "e.g. app.customer.com. Not activated by this deployment - just recorded in the outputs as a reminder to complete Step 2 afterward."
           }
         ]
       },
@@ -246,7 +549,7 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "This deployment creates resources in the selected resource group only:\n\n• 5 Container Apps — SQL Server Express, Redis, FHIRBridge/Segue (Api + Gateway), Demo App, Worker\n• 1 Container Apps Environment hosting all 5\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (SQL data, Redis data, Data Protection keys)\n\nCustom domains are optional and require a two-phase deploy (hostname first, then Bind SSL) — see the Custom Domains step. SQL Server and Redis are internal-only. Deployment outputs include a resourceManifest used by the cleanup scripts."
+              "text": "This deployment creates resources in the selected resource group only:\n\n• Container Apps — Redis, Segue (Api + Gateway), Worker, plus Postgres too if you chose Containerized (plus a 5th, Seq, if you enabled centralized log viewing)\n• 1 Container Apps Environment hosting all of the above\n• 1 Log Analytics workspace\n• 1 Storage Account with Azure File shares (Redis data, Data Protection keys, Postgres data if Containerized, Seq data if enabled) and zone-redundant replication by default\n• If Postgres deployment type is Managed (the default): 1 Azure Database for PostgreSQL Flexible Server with automated daily backups\n• If Postgres deployment type is Containerized instead: 1 scheduled backup job (hourly pg_dump to a dedicated blob container) as a compensating control, since that path's own data only survives a graceful shutdown otherwise\n• If Web Application Firewall is enabled: 1 Azure Front Door (Standard) profile with a WAF policy in front of the Segue app — use the deployment's frontDoorEndpointUrl output afterward, not the app's own default URL, so traffic actually passes through the WAF\n\nCustom domains are optional and activated in a SEPARATE deployment (Step 2 - custom-domain.bicep) after this one finishes — any domain entered on the Network Access step here is just a reminder, not yet active. Postgres and Redis are internal-only by default; Seq (if enabled) gets its own public URL specifically so you can browse to it. Deployment outputs include a resourceManifest used by the cleanup scripts."
             }
           },
           {
@@ -263,21 +566,31 @@
     "outputs": {
       "namePrefix": "[basics('namePrefix')]",
       "location": "[location()]",
-      "sqlSaPassword": "[steps('fhirbridgeSettings').sqlSaPassword]",
+      "useAzurePostgresql": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
+      "postgresPassword": "[steps('fhirbridgeSettings').postgresPassword]",
+      "azurePostgresqlSku": "[steps('fhirbridgeSettings').azurePostgresqlSku]",
+      "azurePostgresqlStorageMb": "[int(steps('fhirbridgeSettings').azurePostgresqlStorageMb)]",
       "jwtSigningKey": "[steps('fhirbridgeSettings').jwtSigningKey]",
-      "redisPassword": "[steps('fhirbridgeSettings').redisPassword]",
-      "sqlServerSize": "[steps('containerSizing').sqlServerSize]",
+      "useAzureCacheForRedis": "[equals(steps('fhirbridgeSettings').redisMode, 'Managed')]",
+      "redisPassword": "[if(equals(steps('fhirbridgeSettings').redisMode, 'Containerized'), steps('fhirbridgeSettings').redisPassword, '')]",
+      "redisTrustedCertificateThumbprint": "[if(equals(steps('fhirbridgeSettings').redisMode, 'Containerized'), steps('fhirbridgeSettings').redisTrustedCertificateThumbprint, '')]",
+      "azureCacheForRedisTier": "[steps('fhirbridgeSettings').azureCacheForRedisTier]",
+      "enableTenantSecretsKeyVault": "[equals(steps('fhirbridgeSettings').secretsMode, 'Azure Key Vault')]",
+      "enableSeq": "[equals(steps('fhirbridgeSettings').seqMode, 'Seq')]",
+      "seqAdminPassword": "[if(equals(steps('fhirbridgeSettings').seqMode, 'Seq'), steps('fhirbridgeSettings').seqAdminPassword, '')]",
+      "enableFrontDoorWaf": "[equals(steps('fhirbridgeSettings').wafMode, 'Front Door WAF')]",
+      "wafPolicyMode": "[steps('fhirbridgeSettings').wafPolicyMode]",
+      "storageRedundancy": "[steps('fhirbridgeSettings').storageRedundancy]",
+      "postgresSize": "[steps('containerSizing').postgresSize]",
       "redisSize": "[steps('containerSizing').redisSize]",
       "fhirbridgeAppSize": "[steps('containerSizing').fhirbridgeAppSize]",
-      "demoAppSize": "[steps('containerSizing').demoAppSize]",
       "workerSize": "[steps('containerSizing').workerSize]",
-      "fhirbridgeAppCustomDomain": "[steps('customDomains').fhirbridgeAppCustomDomain]",
-      "demoAppCustomDomain": "[steps('customDomains').demoAppCustomDomain]",
-      "bindCustomDomainCertificates": "[steps('customDomains').bindCustomDomainCertificates]",
+      "seqSize": "[steps('containerSizing').seqSize]",
+      "fhirbridgeAppIntendedDomain": "[steps('customDomains').fhirbridgeAppIntendedDomain]",
       "imageTag": "[steps('imageSettings').imageTag]",
-      "imageRegistryServer": "fhirbridgevendor8ae7f3.azurecr.io",
+      "imageRegistryServer": "seguebuilds.azurecr.io",
       "imageRegistryUsername": "one-click-pull",
-      "imageRegistryPassword": "80qAFIR5wDXFOLTcxaIKRm8r0Vr8cVazt4LCBdBUnn2LtUCYIAWFJQQJ99CGACYeBjFEqg7NAAABAZCR1nko"
+      "imageRegistryPassword": "401K4t2K0LniPnjsqlSjjXDaUof0VPIzLyDodMHeXgWv2WYgGmn2JQQJ99CHACYeBjFEqg7NAAABAZCREYP3"
     }
   }
 }

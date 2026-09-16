@@ -1,0 +1,523 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.45.15.27210",
+      "templateHash": "4127570997119736019"
+    }
+  },
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "The same deployment name prefix used for the original FHIRBridge deployment (e.g. segue12). Used to derive the environment name (<prefix>-env) and the app name."
+      }
+    },
+    "fhirbridgeAppDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain for the FHIRBridge app (e.g. app.example.com). Leave blank to skip this app entirely this run. Its CNAME + asuid TXT records must already be created and propagated BEFORE this deploy - see main.bicep's fhirbridgeAppDomainVerificationId output for the TXT value."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Region for the (re)deployed container app + managed certificate. An existing container app's own location can't be read back at compile time (Bicep BCP120), so this must match wherever the environment/app actually lives — defaults to the resource group's region, which is what main.bicep itself uses."
+      }
+    },
+    "enableFrontDoorWaf": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "MUST match whatever enableFrontDoorWaf was set to on the original main.bicep deployment for this namePrefix — this template has no way to detect that on its own. false (default) binds the domain directly to the Container App, exactly as this template always has. true instead binds it to Front Door's endpoint (skipping the Container App binding entirely — Front Door reaches the app using its own default hostname, so the app never needs the custom domain registered on it), so traffic through the domain actually passes through the WAF instead of bypassing it. Passing true when Front Door was never actually enabled fails outright — the Front Door resources this template then tries to read simply won't exist."
+      }
+    }
+  },
+  "variables": {
+    "environmentName": "[format('{0}-env', parameters('namePrefix'))]",
+    "allAppConfigs": [
+      {
+        "key": "fhirbridgeApp",
+        "name": "[format('{0}-app', parameters('namePrefix'))]",
+        "domain": "[parameters('fhirbridgeAppDomain')]"
+      }
+    ],
+    "activeAppConfigs": "[if(parameters('enableFrontDoorWaf'), createArray(), filter(variables('allAppConfigs'), lambda('c', not(empty(lambdaVariables('c').domain)))))]",
+    "uniqueSuffix": "[uniqueString(resourceGroup().id, parameters('namePrefix'))]",
+    "frontDoorEndpointName": "[toLower(format('{0}-{1}', parameters('namePrefix'), take(variables('uniqueSuffix'), 8)))]",
+    "frontDoorProfileName": "[format('{0}-afd', parameters('namePrefix'))]",
+    "frontDoorRouteName": "[format('{0}-app-route', parameters('namePrefix'))]",
+    "frontDoorSecurityPolicyName": "[format('{0}-app-security-policy', parameters('namePrefix'))]"
+  },
+  "resources": [
+    {
+      "condition": "[and(parameters('enableFrontDoorWaf'), not(empty(parameters('fhirbridgeAppDomain'))))]",
+      "type": "Microsoft.Cdn/profiles/customDomains",
+      "apiVersion": "2024-02-01",
+      "name": "[format('{0}/{1}', variables('frontDoorProfileName'), replace(parameters('fhirbridgeAppDomain'), '.', '-'))]",
+      "properties": {
+        "hostName": "[parameters('fhirbridgeAppDomain')]",
+        "tlsSettings": {
+          "certificateType": "ManagedCertificate"
+        }
+      }
+    },
+    {
+      "copy": {
+        "name": "registerHostnames",
+        "count": "[length(variables('activeAppConfigs'))]"
+      },
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('register-{0}-customdomain', variables('activeAppConfigs')[copyIndex()].name)]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appName": {
+            "value": "[variables('activeAppConfigs')[copyIndex()].name]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[variables('environmentName')]"
+          },
+          "managedEnvironmentId": {
+            "value": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').managedEnvironmentId]"
+          },
+          "domain": {
+            "value": "[variables('activeAppConfigs')[copyIndex()].domain]"
+          },
+          "bindCertificate": {
+            "value": false
+          },
+          "baseConfiguration": {
+            "value": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').configuration]"
+          },
+          "existingSecrets": {
+            "value": "[listSecrets(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').value]"
+          },
+          "otherCustomDomains": {
+            "value": "[filter(coalesce(tryGet(reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').configuration.ingress, 'customDomains'), createArray()), lambda('cd', not(equals(lambdaVariables('cd').name, variables('activeAppConfigs')[copyIndex()].domain))))]"
+          },
+          "containerTemplate": {
+            "value": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').template]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "2322192660738068580"
+            }
+          },
+          "parameters": {
+            "appName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the container app being updated."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region - must match the app's existing region."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Container Apps managed environment (parents the managed certificate)."
+              }
+            },
+            "managedEnvironmentId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Container Apps managed environment this app belongs to."
+              }
+            },
+            "domain": {
+              "type": "string",
+              "metadata": {
+                "description": "The domain being registered/bound on this app."
+              }
+            },
+            "bindCertificate": {
+              "type": "bool",
+              "metadata": {
+                "description": "Whether `domain` was already present in the app's customDomains BEFORE this deployment (computed by the caller from live state) — true creates the managed certificate and binds SniEnabled SSL now; false just registers the hostname (bindingType Disabled) for a subsequent run to bind once DNS has propagated."
+              }
+            },
+            "baseConfiguration": {
+              "type": "object",
+              "metadata": {
+                "description": "The app's current full configuration object (secrets redacted, ingress as-is) — read by the caller via an `existing` reference. `secrets` and `ingress.customDomains` are overridden below; everything else (registries, targetPort, transport, existing traffic weights, etc.) passes through unchanged."
+              }
+            },
+            "existingSecrets": {
+              "type": "array",
+              "metadata": {
+                "description": "The app's current secrets WITH real values (from the caller's listSecrets() call — a plain GET/`existing` reference redacts secret values to name-only, which would blank them out if reused as-is)."
+              }
+            },
+            "otherCustomDomains": {
+              "type": "array",
+              "metadata": {
+                "description": "Every custom domain already on the app OTHER than `domain` (already filtered by the caller) — preserved untouched so this app's other bound domains survive this update."
+              }
+            },
+            "containerTemplate": {
+              "type": "object",
+              "metadata": {
+                "description": "The app's existing containers/scale template, passed through unchanged."
+              }
+            }
+          },
+          "variables": {
+            "thisCustomDomain": "[if(parameters('bindCertificate'), createObject('name', parameters('domain'), 'certificateId', resourceId('Microsoft.App/managedEnvironments/managedCertificates', parameters('environmentName'), format('{0}-{1}-cert', parameters('appName'), replace(parameters('domain'), '.', '-'))), 'bindingType', 'SniEnabled'), createObject('name', parameters('domain'), 'bindingType', 'Disabled'))]"
+          },
+          "resources": [
+            {
+              "condition": "[parameters('bindCertificate')]",
+              "type": "Microsoft.App/managedEnvironments/managedCertificates",
+              "apiVersion": "2024-03-01",
+              "name": "[format('{0}/{1}', parameters('environmentName'), format('{0}-{1}-cert', parameters('appName'), replace(parameters('domain'), '.', '-')))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subjectName": "[parameters('domain')]",
+                "domainControlValidation": "CNAME"
+              }
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[parameters('appName')]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('managedEnvironmentId')]",
+                "configuration": "[union(parameters('baseConfiguration'), createObject('secrets', parameters('existingSecrets'), 'ingress', union(parameters('baseConfiguration').ingress, createObject('external', true(), 'customDomains', concat(parameters('otherCustomDomains'), createArray(variables('thisCustomDomain')))))))]",
+                "template": "[parameters('containerTemplate')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', parameters('environmentName'), format('{0}-{1}-cert', parameters('appName'), replace(parameters('domain'), '.', '-')))]"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "copy": {
+        "name": "bindCertificates",
+        "count": "[length(variables('activeAppConfigs'))]"
+      },
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('bind-{0}-customdomain', variables('activeAppConfigs')[copyIndex()].name)]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appName": {
+            "value": "[variables('activeAppConfigs')[copyIndex()].name]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[variables('environmentName')]"
+          },
+          "managedEnvironmentId": {
+            "value": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').managedEnvironmentId]"
+          },
+          "domain": {
+            "value": "[variables('activeAppConfigs')[copyIndex()].domain]"
+          },
+          "bindCertificate": {
+            "value": true
+          },
+          "baseConfiguration": {
+            "value": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').configuration]"
+          },
+          "existingSecrets": {
+            "value": "[listSecrets(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').value]"
+          },
+          "otherCustomDomains": {
+            "value": "[filter(coalesce(tryGet(reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').configuration.ingress, 'customDomains'), createArray()), lambda('cd', not(equals(lambdaVariables('cd').name, variables('activeAppConfigs')[copyIndex()].domain))))]"
+          },
+          "containerTemplate": {
+            "value": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').template]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "2322192660738068580"
+            }
+          },
+          "parameters": {
+            "appName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the container app being updated."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region - must match the app's existing region."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Container Apps managed environment (parents the managed certificate)."
+              }
+            },
+            "managedEnvironmentId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Container Apps managed environment this app belongs to."
+              }
+            },
+            "domain": {
+              "type": "string",
+              "metadata": {
+                "description": "The domain being registered/bound on this app."
+              }
+            },
+            "bindCertificate": {
+              "type": "bool",
+              "metadata": {
+                "description": "Whether `domain` was already present in the app's customDomains BEFORE this deployment (computed by the caller from live state) — true creates the managed certificate and binds SniEnabled SSL now; false just registers the hostname (bindingType Disabled) for a subsequent run to bind once DNS has propagated."
+              }
+            },
+            "baseConfiguration": {
+              "type": "object",
+              "metadata": {
+                "description": "The app's current full configuration object (secrets redacted, ingress as-is) — read by the caller via an `existing` reference. `secrets` and `ingress.customDomains` are overridden below; everything else (registries, targetPort, transport, existing traffic weights, etc.) passes through unchanged."
+              }
+            },
+            "existingSecrets": {
+              "type": "array",
+              "metadata": {
+                "description": "The app's current secrets WITH real values (from the caller's listSecrets() call — a plain GET/`existing` reference redacts secret values to name-only, which would blank them out if reused as-is)."
+              }
+            },
+            "otherCustomDomains": {
+              "type": "array",
+              "metadata": {
+                "description": "Every custom domain already on the app OTHER than `domain` (already filtered by the caller) — preserved untouched so this app's other bound domains survive this update."
+              }
+            },
+            "containerTemplate": {
+              "type": "object",
+              "metadata": {
+                "description": "The app's existing containers/scale template, passed through unchanged."
+              }
+            }
+          },
+          "variables": {
+            "thisCustomDomain": "[if(parameters('bindCertificate'), createObject('name', parameters('domain'), 'certificateId', resourceId('Microsoft.App/managedEnvironments/managedCertificates', parameters('environmentName'), format('{0}-{1}-cert', parameters('appName'), replace(parameters('domain'), '.', '-'))), 'bindingType', 'SniEnabled'), createObject('name', parameters('domain'), 'bindingType', 'Disabled'))]"
+          },
+          "resources": [
+            {
+              "condition": "[parameters('bindCertificate')]",
+              "type": "Microsoft.App/managedEnvironments/managedCertificates",
+              "apiVersion": "2024-03-01",
+              "name": "[format('{0}/{1}', parameters('environmentName'), format('{0}-{1}-cert', parameters('appName'), replace(parameters('domain'), '.', '-')))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "subjectName": "[parameters('domain')]",
+                "domainControlValidation": "CNAME"
+              }
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[parameters('appName')]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('managedEnvironmentId')]",
+                "configuration": "[union(parameters('baseConfiguration'), createObject('secrets', parameters('existingSecrets'), 'ingress', union(parameters('baseConfiguration').ingress, createObject('external', true(), 'customDomains', concat(parameters('otherCustomDomains'), createArray(variables('thisCustomDomain')))))))]",
+                "template": "[parameters('containerTemplate')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', parameters('environmentName'), format('{0}-{1}-cert', parameters('appName'), replace(parameters('domain'), '.', '-')))]"
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "registerHostnames"
+      ]
+    },
+    {
+      "condition": "[and(parameters('enableFrontDoorWaf'), not(empty(parameters('fhirbridgeAppDomain'))))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "frontdoor-route-waf-customdomain-update",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "profileName": {
+            "value": "[variables('frontDoorProfileName')]"
+          },
+          "endpointName": {
+            "value": "[variables('frontDoorEndpointName')]"
+          },
+          "routeName": {
+            "value": "[variables('frontDoorRouteName')]"
+          },
+          "securityPolicyName": {
+            "value": "[variables('frontDoorSecurityPolicyName')]"
+          },
+          "newCustomDomainId": {
+            "value": "[resourceId('Microsoft.Cdn/profiles/customDomains', variables('frontDoorProfileName'), replace(parameters('fhirbridgeAppDomain'), '.', '-'))]"
+          },
+          "existingRouteProperties": {
+            "value": "[reference(resourceId('Microsoft.Cdn/profiles/afdEndpoints/routes', variables('frontDoorProfileName'), variables('frontDoorEndpointName'), variables('frontDoorRouteName')), '2024-02-01')]"
+          },
+          "existingSecurityPolicyParameters": {
+            "value": "[reference(resourceId('Microsoft.Cdn/profiles/securityPolicies', variables('frontDoorProfileName'), variables('frontDoorSecurityPolicyName')), '2024-02-01').parameters]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.45.15.27210",
+              "templateHash": "13830252167185128604"
+            }
+          },
+          "parameters": {
+            "profileName": {
+              "type": "string",
+              "metadata": {
+                "description": "Front Door profile name."
+              }
+            },
+            "endpointName": {
+              "type": "string",
+              "metadata": {
+                "description": "Front Door endpoint name (parent of the route)."
+              }
+            },
+            "routeName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the route to update - newCustomDomainId is appended to its customDomains array; everything else passes through unchanged."
+              }
+            },
+            "securityPolicyName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the WAF security policy to update - newCustomDomainId is appended to its domain associations; everything else passes through unchanged."
+              }
+            },
+            "newCustomDomainId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Front Door custom domain to associate with both the route (so traffic to it actually reaches the origin) and the WAF security policy (so the WAF actually applies to it, not just the default *.azurefd.net domain)."
+              }
+            },
+            "existingRouteProperties": {
+              "type": "object",
+              "metadata": {
+                "description": "The route's current properties, read by the caller via an `existing` reference."
+              }
+            },
+            "existingSecurityPolicyParameters": {
+              "type": "object",
+              "metadata": {
+                "description": "The security policy's current properties.parameters object, read by the caller via an `existing` reference."
+              }
+            }
+          },
+          "variables": {
+            "otherRouteCustomDomains": "[filter(coalesce(tryGet(parameters('existingRouteProperties'), 'customDomains'), createArray()), lambda('cd', not(equals(lambdaVariables('cd').id, parameters('newCustomDomainId')))))]",
+            "existingAssociation": "[parameters('existingSecurityPolicyParameters').associations[0]]",
+            "otherAssociationDomains": "[filter(variables('existingAssociation').domains, lambda('d', not(equals(lambdaVariables('d').id, parameters('newCustomDomainId')))))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Cdn/profiles/afdEndpoints/routes",
+              "apiVersion": "2024-02-01",
+              "name": "[format('{0}/{1}/{2}', parameters('profileName'), parameters('endpointName'), parameters('routeName'))]",
+              "properties": "[union(parameters('existingRouteProperties'), createObject('customDomains', concat(variables('otherRouteCustomDomains'), createArray(createObject('id', parameters('newCustomDomainId'))))))]"
+            },
+            {
+              "type": "Microsoft.Cdn/profiles/securityPolicies",
+              "apiVersion": "2024-02-01",
+              "name": "[format('{0}/{1}', parameters('profileName'), parameters('securityPolicyName'))]",
+              "properties": {
+                "parameters": "[union(parameters('existingSecurityPolicyParameters'), createObject('associations', createArray(union(variables('existingAssociation'), createObject('domains', concat(variables('otherAssociationDomains'), createArray(createObject('id', parameters('newCustomDomainId')))))))))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cdn/profiles/afdEndpoints/routes', parameters('profileName'), parameters('endpointName'), parameters('routeName'))]"
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cdn/profiles/customDomains', variables('frontDoorProfileName'), replace(parameters('fhirbridgeAppDomain'), '.', '-'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "results": {
+      "type": "array",
+      "copy": {
+        "count": "[length(variables('activeAppConfigs'))]",
+        "input": {
+          "app": "[variables('activeAppConfigs')[copyIndex()].key]",
+          "appName": "[variables('activeAppConfigs')[copyIndex()].name]",
+          "domain": "[variables('activeAppConfigs')[copyIndex()].domain]",
+          "appFqdn": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').configuration.ingress.fqdn]",
+          "domainVerificationId": "[reference(resourceId('Microsoft.App/containerApps', variables('activeAppConfigs')[copyIndex()].name), '2024-03-01').customDomainVerificationId]",
+          "customDomainUrl": "[format('https://{0}', variables('activeAppConfigs')[copyIndex()].domain)]"
+        }
+      }
+    },
+    "frontDoorCustomDomainValidationToken": {
+      "type": "string",
+      "metadata": {
+        "description": "Populated only when enableFrontDoorWaf is true and fhirbridgeAppDomain is set. A Front Door-specific validation token — different from fhirbridgeAppDomainVerificationId's asuid.<domain> mechanism, which only applies to the Container-App-direct path. Add a TXT record at _dnsauth.<your domain> with this value; Azure auto-detects it and issues the managed certificate once found — no further deployment needed."
+      },
+      "value": "[if(and(parameters('enableFrontDoorWaf'), not(empty(parameters('fhirbridgeAppDomain')))), reference(resourceId('Microsoft.Cdn/profiles/customDomains', variables('frontDoorProfileName'), replace(parameters('fhirbridgeAppDomain'), '.', '-')), '2024-02-01').validationProperties.validationToken, '')]"
+    },
+    "frontDoorCustomDomainUrl": {
+      "type": "string",
+      "value": "[if(and(parameters('enableFrontDoorWaf'), not(empty(parameters('fhirbridgeAppDomain')))), format('https://{0}', parameters('fhirbridgeAppDomain')), '')]"
+    }
+  }
+}

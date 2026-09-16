@@ -35,7 +35,6 @@ function Get-EnvValue([string]$Name, [string]$Default) {
     return $Default
 }
 $AppPort = Get-EnvValue "APP_HOST_PORT" "8080"
-$DemoPort = Get-EnvValue "DEMO_HOST_PORT" "5500"
 
 Write-Host "==> Starting stack (docker compose up -d)"
 $env:IMAGE_TAG = $Tag
@@ -48,7 +47,6 @@ try {
 $Sites = @(
     @{ Name = "fhirbridge-app portal";  Url = "http://localhost:$AppPort/" }
     @{ Name = "fhirbridge-app swagger"; Url = "http://localhost:$AppPort/swagger/index.html" }
-    @{ Name = "demo-app";                Url = "http://localhost:$DemoPort/" }
 )
 
 Write-Host "==> Waiting for sites to respond (timeout: ${TimeoutSeconds}s each)"

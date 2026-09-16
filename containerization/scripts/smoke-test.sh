@@ -46,7 +46,6 @@ get_env_value() {
   echo "${val:-$default}"
 }
 APP_PORT=$(get_env_value "APP_HOST_PORT" "8080")
-DEMO_PORT=$(get_env_value "DEMO_HOST_PORT" "5500")
 
 echo "==> Starting stack (docker compose up -d)"
 export IMAGE_TAG="${TAG}"
@@ -55,7 +54,6 @@ export IMAGE_TAG="${TAG}"
 declare -A SITES=(
   ["fhirbridge-app portal"]="http://localhost:${APP_PORT}/"
   ["fhirbridge-app swagger"]="http://localhost:${APP_PORT}/swagger/index.html"
-  ["demo-app"]="http://localhost:${DEMO_PORT}/"
 )
 
 echo "==> Waiting for sites to respond (timeout: ${TIMEOUT}s each)"
