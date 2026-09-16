@@ -632,6 +632,98 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
+/* ── Integration details panel ───────────────────────────────────────────────
+   Read top-to-bottom by a third-party developer who has no access to this portal and no one to ask, so it is
+   laid out as a document (what it is → how it works → what you need → what's blocking) rather than a form. */
+.integration-summary {
+  font-size: 14px; line-height: 1.55; color: var(--color-ink);
+  margin: 0 0 16px;
+}
+
+.integration-banner {
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-base);
+  padding: 11px 14px; margin-bottom: 18px;
+  font-size: 13.5px; line-height: 1.5; color: var(--color-ink);
+}
+
+.integration-heading {
+  font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--color-ink-2);
+  margin: 22px 0 10px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--color-border);
+}
+
+.integration-steps {
+  margin: 0 0 4px; padding-left: 20px;
+  li { font-size: 13.5px; line-height: 1.6; color: var(--color-ink); margin-bottom: 4px; }
+}
+
+.integration-value { margin-bottom: 16px; }
+
+.integration-value-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 5px;
+}
+
+.integration-label { font-size: 13px; font-weight: 600; color: var(--color-ink); }
+
+.integration-plain {
+  font-size: 13.5px; color: var(--color-ink);
+  padding: 8px 0;
+}
+
+.integration-hint {
+  font-size: 12.5px; line-height: 1.5; color: var(--color-ink-2);
+  margin: 6px 0 0;
+}
+
+.integration-checks { list-style: none; margin: 0; padding: 0; }
+
+.integration-check {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--color-border);
+  &:last-child { border-bottom: none; }
+
+  strong { display: block; font-size: 13.5px; color: var(--color-ink); margin-bottom: 2px; }
+  .integration-hint { margin-top: 0; }
+}
+
+.integration-check-body { flex: 1; min-width: 0; }
+
+/* Fixed-width badge so the labels line up into a scannable column down the left. */
+.integration-check-badge {
+  flex: 0 0 auto; width: 92px; text-align: center;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+  padding: 3px 0; border-radius: var(--radius-pill, 999px);
+  margin-top: 1px;
+}
+
+.integration-check.is-ok .integration-check-badge {
+  background: var(--color-success-soft); color: var(--color-success-strong);
+}
+
+.integration-check.is-blocked .integration-check-badge {
+  background: var(--color-warning-soft); color: var(--color-warning-strong);
+}
+
+.integration-check.is-note .integration-check-badge {
+  background: var(--color-side); color: var(--color-ink-2);
+}
+
+.btn-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-size: 12.5px; font-weight: 600; color: var(--color-primary);
+  &:hover { text-decoration: underline; }
+}
+
+@media (max-width: 640px) {
+  .integration-check { flex-direction: column; gap: 6px; }
+  .integration-check-badge { width: auto; padding: 3px 10px; }
+}
+
 .text-input {
   width: 100%; box-sizing: border-box;
   padding: 9px 12px; font-size: 14px;

@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { WORKFLOW_ENDPOINTS } from '../core/api-endpoints';
 import { SKIP_LOADER } from '../core/loading.interceptor';
@@ -472,6 +472,16 @@ export class WorkflowApiService {
       WORKFLOW_ENDPOINTS.destinationData(workflowId),
       { params: new HttpParams().set('top', top) },
     );
+  }
+
+  /** Downloads the full configuration dump (every config table this workflow touches, with the SQL that
+   *  selected each one) as a text file. Observed as the full response so the caller can honour the
+   *  server-supplied Content-Disposition filename rather than inventing its own. */
+  configurationExport(workflowId: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(WORKFLOW_ENDPOINTS.configurationExport(workflowId), {
+      responseType: 'blob',
+      observe: 'response',
+    });
   }
 
   runs(workflowId: string): Observable<WorkflowRunDto[]> {

@@ -474,6 +474,7 @@ export const WORKFLOW_ENDPOINTS = {
   copy:            (id: string) => `${API_V1_BASE}/workflows/${id}/copy`,
   launchUrl:       (id: string) => `${API_V1_BASE}/workflows/${id}/launch-url`,
   destinationData: (id: string) => `${API_V1_BASE}/workflows/${id}/destination-data`,
+  configurationExport: (id: string) => `${API_V1_BASE}/workflows/${id}/configuration-export`,
   checkpointUrl:    (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}/checkpoint-url`,
   checkpointResult: (workflowRunId: string) => `${API_V1_BASE}/workflows/runs/${workflowRunId}/checkpoint-result`,
   runStatus:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/status`,

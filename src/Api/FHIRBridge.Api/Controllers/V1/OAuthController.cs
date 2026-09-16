@@ -74,7 +74,12 @@ public sealed class OAuthController : ControllerBase
                     $"workflow:{workflowId}",
                     launchType,
                     Success: false,
-                    FailureReason: reason),
+                    FailureReason: reason,
+                    // Stamped so Governance > Correlation Search can find these: it matches SmartLaunchLogs on
+                    // CorrelationId, and a refusal happens before any run — so without this the workflow id lives
+                    // only inside SourceName's "workflow:{id}" text and the record is unsearchable by the one
+                    // identifier an admin actually has when a partner reports a bare 404.
+                    CorrelationId: workflowId.ToString()),
                 cancellationToken);
         }
         catch (Exception exception)

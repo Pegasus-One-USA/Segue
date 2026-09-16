@@ -1352,6 +1352,37 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 : currentValue;
         }
 
+        // A configured field whose source path matched nothing in this resource never reaches `row` at all, so
+        // the loop above cannot see it and it would otherwise leave NO trace anywhere: no value, no lineage row,
+        // no error, and a run that still reports Succeeded while the destination column silently holds NULL.
+        // That silence is what makes an addressing mistake (e.g. a jsonPath that lost its "[*]" and so no longer
+        // matches an array-valued element) practically undiagnosable from the product — the only way to notice
+        // was to query the destination and find the column empty. Record an explicit unsuccessful hop instead,
+        // so "the field resolved to nothing" is visible in lineage exactly like any other failure.
+        if (lineageEntries is not null)
+        {
+            foreach (var (destinationField, sourceField) in sourceFieldByTarget)
+            {
+                if (row.ContainsKey(destinationField))
+                {
+                    continue;
+                }
+
+                lineageEntries.Add(new LineageHopEntryDto(
+                    destinationField,
+                    sourceField,
+                    0,
+                    "SkippedNoMatch",
+                    "{}",
+                    null,
+                    null,
+                    false,
+                    $"Source path '{sourceField}' matched no value in this {resourceType} — the destination column was left unwritten.",
+                    null,
+                    DateTimeOffset.UtcNow));
+            }
+        }
+
         return (transformed ?? row, fhirWriteBackPatches, lineageEntries);
     }
 
