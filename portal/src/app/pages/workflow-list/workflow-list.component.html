@@ -228,18 +228,34 @@
                     <mat-icon>tag</mat-icon> Copy Workflow ID
                   </button>
 
-                  <!-- Read-only dump of every configuration table this workflow touches, for offline analysis.
-                       Available with workflow.view alone, matching the endpoint's own gate. -->
-                  <button
-                    mat-menu-item
-                    type="button"
-                    [disabled]="exportingId() === w.workflowId"
-                    title="Download every configuration table this workflow uses, with the SQL query and data for each, as a text file."
-                    (click)="onDownloadConfiguration(w)"
-                  >
-                    <mat-icon>download</mat-icon>
-                    {{ exportingId() === w.workflowId ? 'Preparing…' : 'Download Configuration' }}
-                  </button>
+                  <!-- Both items below expose the workflow's own wiring rather than act on it — the
+                       integration URLs/ids a third party would drive it with, and a dump of every
+                       configuration table it touches. That is disclosure, not an action, so both are
+                       SuperAdmin-only (see canViewConfiguration) rather than gated on a workflow.* permission. -->
+                  @if (canViewConfiguration()) {
+                    <!-- Everything a third-party app needs to drive this workflow from their own product, varying
+                         by audience. Read-only and built from the summary row already loaded — no extra call. -->
+                    <button
+                      mat-menu-item
+                      type="button"
+                      title="Show the URLs and values a third-party app needs to run this workflow."
+                      (click)="openIntegrationDetails(w)"
+                    >
+                      <mat-icon>integration_instructions</mat-icon> Integration Details
+                    </button>
+
+                    <!-- Read-only dump of every configuration table this workflow touches, for offline analysis. -->
+                    <button
+                      mat-menu-item
+                      type="button"
+                      [disabled]="exportingId() === w.workflowId"
+                      title="Download every configuration table this workflow uses, with the SQL query and data for each, as a text file."
+                      (click)="onDownloadConfiguration(w)"
+                    >
+                      <mat-icon>download</mat-icon>
+                      {{ exportingId() === w.workflowId ? 'Preparing…' : 'Download Configuration' }}
+                    </button>
+                  }
 
                   @if (canDelete()) {
                     <mat-divider></mat-divider>
@@ -403,6 +419,80 @@
           @if (m.opensDirectly) {
             <a class="btn-primary is-launch" [href]="m.url" target="_blank" rel="noopener">Open</a>
           }
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Integration details (third-party self-serve) ──────────────────────────── -->
+@if (integrationModal(); as m) {
+  <!-- Escape rather than a backdrop click: a click handler on a plain div needs a keyboard equivalent to be
+       operable without a mouse (@angular-eslint/template/click-events-have-key-events), and this dialog is
+       read-only, so dismissal is × or Escape — the same pattern the new/copy-workflow modals below use. -->
+  <div class="modal-overlay" (keydown.escape)="closeIntegrationDetails()" tabindex="-1">
+    <div class="modal modal-wide" role="dialog" aria-modal="true"
+         (keydown.escape)="closeIntegrationDetails()" tabindex="-1">
+      <div class="modal-head">
+        <h2>Integration Details</h2>
+        <button class="modal-close" type="button" (click)="closeIntegrationDetails()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-sub">
+          <strong>{{ m.name }}</strong> — {{ m.audience }}
+        </p>
+        <p class="integration-summary">{{ m.summary }}</p>
+
+        @if (hasBlockingChecks(m)) {
+          <div class="integration-banner">
+            This workflow is not ready yet. The calls below will fail until the items marked
+            <strong>Action needed</strong> are resolved.
+          </div>
+        }
+
+        <h3 class="integration-heading">How it works</h3>
+        <ol class="integration-steps">
+          @for (step of m.steps; track step) {
+            <li>{{ step }}</li>
+          }
+        </ol>
+
+        <h3 class="integration-heading">What you need</h3>
+        @for (value of m.values; track value.label) {
+          <div class="integration-value">
+            <div class="integration-value-head">
+              <span class="integration-label">{{ value.label }}</span>
+              <button class="btn-link" type="button" (click)="copy(value.value, value.label)">Copy</button>
+            </div>
+            @if (value.code) {
+              <div class="url-box"><code>{{ value.value }}</code></div>
+            } @else {
+              <div class="integration-plain">{{ value.value }}</div>
+            }
+            @if (value.hint) {
+              <p class="integration-hint">{{ value.hint }}</p>
+            }
+          </div>
+        }
+
+        <h3 class="integration-heading">Before this will work</h3>
+        <ul class="integration-checks">
+          @for (check of m.checks; track check.label) {
+            <li class="integration-check" [class]="'is-' + check.state">
+              <span class="integration-check-badge">
+                {{ check.state === 'ok' ? 'Ready' : check.state === 'blocked' ? 'Action needed' : 'Note' }}
+              </span>
+              <span class="integration-check-body">
+                <strong>{{ check.label }}</strong>
+                <span class="integration-hint">{{ check.detail }}</span>
+              </span>
+            </li>
+          }
+        </ul>
+
+        <div class="modal-actions">
+          <button class="btn-secondary" type="button" (click)="copyIntegrationDetails(m)">Copy all</button>
+          <button class="btn-primary" type="button" (click)="closeIntegrationDetails()">Close</button>
         </div>
       </div>
     </div>

@@ -59,7 +59,10 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
         {
             await _governanceLogger.LogSmartLaunchAsync(
                 new SmartLaunchEntry(
-                    Guid.Empty, $"workflow:{workflowId}", "PatientStandalone", Success: false, FailureReason: reason),
+                    Guid.Empty, $"workflow:{workflowId}", "PatientStandalone", Success: false, FailureReason: reason,
+                    // Same reason as OAuthController's own refusal logger: the workflow id doubles as the
+                    // correlation id so Governance > Correlation Search can surface these pre-launch refusals.
+                    CorrelationId: workflowId.ToString()),
                 cancellationToken);
         }
         catch (Exception exception)

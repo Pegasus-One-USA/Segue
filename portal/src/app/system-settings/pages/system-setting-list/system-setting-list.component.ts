@@ -18,7 +18,7 @@ import { SettingsPageDialogService, SettingsPageDialogKey } from '../../../setti
 import { AuthStore } from '../../../auth/store/auth.store';
 import { FullAccessResolverService } from '../../../auth/services/full-access-resolver.service';
 import { HapiTerminologyTableComponent } from '../../components/hapi-terminology-table/hapi-terminology-table.component';
-import { TERMINOLOGY_FEATURE_ENABLED } from '../../../data/terminology-feature.config';
+import { TERMINOLOGY_SERVER_TABLE_ENABLED } from '../../../data/terminology-feature.config';
 import { GeneralSettingGroupDialogComponent, GeneralSettingGroupDialogData } from '../../dialogs/general-setting-group-dialog/general-setting-group-dialog.component';
 
 // These now render in their own dedicated table (HapiTerminologyTableComponent, above this generic
@@ -177,10 +177,12 @@ export class SystemSettingListComponent implements OnInit {
   private readonly settingsPageDialog = inject(SettingsPageDialogService);
   private readonly authStore = inject(AuthStore);
 
-  /** Whether the Terminology feature is switched on at all — see data/terminology-feature.config.ts.
+  /** Whether the "Terminology Server" table (the 13 HAPI-synced code systems) is switched on — see
+   *  data/terminology-feature.config.ts. Deliberately NOT TERMINOLOGY_FEATURE_ENABLED: that flag
+   *  governs the separate, newer Terminology Codes tab, which stays off while this table stays on.
    *  Template-only: it gates the HAPI terminology table, whose ngOnInit otherwise fires
    *  GET /api/v1/terminology/hapi on every load of this page for a feature that is turned off. */
-  protected readonly terminologyFeatureEnabled = TERMINOLOGY_FEATURE_ENABLED;
+  protected readonly terminologyServerTableEnabled = TERMINOLOGY_SERVER_TABLE_ENABLED;
   private readonly fullAccessSvc = inject(FullAccessResolverService);
 
   // Same elevated-access resolution the System Settings shell uses: a literal SuperAdmin claim answers

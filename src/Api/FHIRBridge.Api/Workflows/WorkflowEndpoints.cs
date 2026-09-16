@@ -2,6 +2,7 @@
 using System.Text.Json.Nodes;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Api.Workflows;
+using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Mapping;
@@ -915,14 +916,42 @@ public static class WorkflowEndpoints
         // reflects what the source last fetched from Execution History; it never triggers a new run.
         group.MapGet("/workflows/{workflowId:guid}/latest-launch-result", async (
             Guid workflowId,
+            string? callerId,
             IWorkflowDefinitionStore store,
             IWorkflowRunStore runStore,
             IWorkflowNodeResourceHistoryRecorder recorder,
+            IAllowedCorsOriginsCache allowedCorsOriginsCache,
+            IGovernanceLogger governanceLogger,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
             if (workflow is null || !workflow.IsPubliclyLaunchable)
             {
+                await LogRefusedLatestLaunchResultAsync(
+                    governanceLogger,
+                    workflowId,
+                    workflow is null
+                        ? "Refused: no workflow with this id exists."
+                        : "Refused: workflow is not opted into public launch (POST /workflows/{id}/enable-public-launch).",
+                    cancellationToken);
+                return Results.NotFound();
+            }
+
+            // This endpoint returns a Patient resource to an UNAUTHENTICATED caller, so — unlike the launch-url
+            // minting endpoints, where an absent callerId simply skips the check — callerId is REQUIRED here and
+            // must name an allowed origin. Treating "no callerId" as "no check" would leave the whole gate
+            // bypassable by omitting one query parameter, which for a PHI-bearing response is no gate at all.
+            // The workflow id alone is not a credential: it travels through URLs, configs and support tickets.
+            if (string.IsNullOrWhiteSpace(callerId)
+                || !await CallerIdOriginValidator.IsAllowedOriginAsync(callerId, allowedCorsOriginsCache, cancellationToken))
+            {
+                await LogRefusedLatestLaunchResultAsync(
+                    governanceLogger,
+                    workflowId,
+                    string.IsNullOrWhiteSpace(callerId)
+                        ? "Refused: callerId is required (must be an allowed origin)."
+                        : "Refused: callerId is not an allowed origin.",
+                    cancellationToken);
                 return Results.NotFound();
             }
 
@@ -1026,8 +1055,12 @@ public static class WorkflowEndpoints
         // plus every source/destination/mapping/route/rule row they reference — each section carrying the SELECT
         // that produced it and its rows printed one data point per line, for offline analysis and support triage.
         // Returns text/plain as an attachment rather than JSON: the caller is a human reading a file, not code.
-        // Gated the same as GET /workflows/{id} (this is strictly a read of config the caller can already see);
-        // secret VALUES are excluded by the exporter — only their Key Vault references are written.
+        // SuperAdmin-only, NOT the workflow-module gate the rest of these endpoints use: this returns the
+        // whole configuration surface in one file — connection endpoints, Key Vault references, mapping and
+        // rule rows across every table the workflow touches — which is far more than the caller sees through
+        // any individual screen, and is useful to an attacker as a map even with secret VALUES excluded.
+        // UnifiedAdmin would also admit a tenant Admin; this is deliberately the stricter role check, and it
+        // matches the portal's own canViewConfiguration gate on the menu item that calls it.
         group.MapGet("/workflows/{workflowId:guid}/configuration-export", async (
             Guid workflowId,
             IWorkflowConfigurationExporter exporter,
@@ -1037,7 +1070,7 @@ public static class WorkflowEndpoints
             return export is null
                 ? Results.NotFound()
                 : Results.File(System.Text.Encoding.UTF8.GetBytes(export.Content), "text/plain; charset=utf-8", export.FileName);
-        }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
+        }).RequireAuthorization(AuthorizationPolicies.SuperAdminOnly);
 
         // Low-level upsert-by-id — superseded by /workflows/build for the portal's builder canvas (which also
         // provisions source/destination/mapping records), kept for any lower-level caller. Always modifies
@@ -2900,6 +2933,38 @@ public static class WorkflowEndpoints
     {
         var prefix = group.ToString().ToLowerInvariant() + ".";
         return permissions.Any(code => code.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Records a refused anonymous <c>latest-launch-result</c> read into the SMART launch audit trail, with the
+    /// workflow id as the correlation id.
+    ///
+    /// The correlation id is what Governance > Correlation Search matches on
+    /// (<c>EfGovernanceQueryService.GetCorrelationSearchResultAsync</c> filters SmartLaunchLogs by it), and a
+    /// refusal happens before any run exists, so there is no run correlation id to attach. Stamping the workflow
+    /// id means an admin handed nothing but "my integration gets a 404" can paste that id and see exactly which
+    /// gate rejected the call — the reason never goes back to the anonymous caller on purpose, since telling it
+    /// apart from "no such workflow" would leak whether a given workflow exists.
+    /// </summary>
+    private static async Task LogRefusedLatestLaunchResultAsync(
+        IGovernanceLogger governanceLogger, Guid workflowId, string reason, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await governanceLogger.LogSmartLaunchAsync(
+                new SmartLaunchEntry(
+                    Guid.Empty,
+                    $"workflow:{workflowId}",
+                    "LatestLaunchResult",
+                    Success: false,
+                    FailureReason: reason,
+                    CorrelationId: workflowId.ToString()),
+                cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Audit-trail best effort: a logging failure must never turn a clean 404 into a 500.
+        }
     }
 
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)
