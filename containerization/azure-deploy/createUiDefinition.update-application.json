@@ -6,7 +6,7 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "Redeploys an EXISTING Segue install onto a new application version — the minimum-steps update path (Container Apps roll a new revision on the new image tag; FHIRBridgeDb migrates automatically on boot). This targets the SAME resource group and resources as your original install, it does not create a new environment. Enter the exact same deployment name prefix, Postgres password, API signing key, and storage redundancy you used originally — storage redundancy in particular CANNOT be changed after creation (Azure rejects Standard_LRS <-> Standard_ZRS conversion outright), so picking the wrong one here fails the whole deployment. Every other setting (Postgres/Redis mode, container sizes, WAF, Seq, Key Vault) is left at main.bicep's own defaults by this limited wizard — if your original install customized any of those, use the full Segue Deploy-to-Azure wizard instead (same values as before, just a new Version), or the CLI script containerization/scripts/update-application.ps1|sh, so nothing gets silently reset.",
+        "description": "Redeploys an EXISTING Segue install onto a new application version — the minimum-steps update path (Container Apps roll a new revision on the new image tag; FHIRBridgeDb migrates automatically on boot). This targets the SAME resource group and resources as your original install, it does not create a new environment. Enter the exact same deployment name prefix, Postgres/Redis/secrets mode, storage redundancy, passwords, and API signing key you used originally — getting Postgres mode, Redis mode, secrets mode, or storage redundancy wrong doesn't just misconfigure something, it breaks connectivity or makes existing secrets unreachable (or, for storage redundancy, fails the deployment outright). Container/database/cache SIZES are still left at main.bicep's own defaults by this limited wizard (getting those wrong only under/over-provisions, it doesn't break anything) — use Step 4 (upgrade-resources) or the full Deploy-to-Azure wizard if your original install customized those.",
         "subscription": {
           "resourceProviders": [
             "Microsoft.App",
@@ -49,8 +49,8 @@
             "type": "Microsoft.Common.InfoBox",
             "visible": true,
             "options": {
-              "icon": "Info",
-              "text": "Re-enter the same Postgres password, API signing key, and storage redundancy your original install used. Passwords/keys are not stored anywhere Azure can read back for you — supplying the wrong values here will not break the database, but the app will fail to connect until corrected. Storage redundancy is different: Azure does not allow converting an existing storage account between Standard_LRS and Standard_ZRS at all, so picking the wrong one here fails the deployment outright (PreflightValidationCheckFailed / StorageAccountTypeConversionNotAllowed) rather than just misconfiguring something."
+              "icon": "Warning",
+              "text": "Every field below MUST match your original install exactly. Postgres mode, Redis mode, and secrets mode determine which real resource (and which real secret store) the app connects to at runtime — getting any of these wrong doesn't fail the deployment, it deploys successfully and then the app can't find its database, cache, or secrets. Storage redundancy is checked at deploy time instead: Azure does not allow converting an existing storage account between Standard_LRS and Standard_ZRS at all, so picking the wrong one here fails the deployment outright (PreflightValidationCheckFailed / StorageAccountTypeConversionNotAllowed). Check the original install's parameters (or the Portal resource list) if you're unsure of any of these."
             }
           },
           {
@@ -63,6 +63,20 @@
               "allowedValues": [
                 { "label": "Zone-redundant (Standard_ZRS)", "value": "Standard_ZRS" },
                 { "label": "Locally-redundant (Standard_LRS)", "value": "Standard_LRS" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "postgresMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Postgres deployment type",
+            "defaultValue": "Managed",
+            "toolTip": "MUST match your original install. Managed = Azure Database for PostgreSQL Flexible Server. Containerized = a Postgres container in this same environment.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Managed — Azure Database for PostgreSQL", "value": "Managed" },
+                { "label": "Containerized", "value": "Containerized" }
               ],
               "required": true
             }
@@ -100,6 +114,64 @@
             "options": {
               "hideConfirmation": false
             }
+          },
+          {
+            "name": "redisMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Redis deployment type",
+            "defaultValue": "Containerized",
+            "toolTip": "MUST match your original install. Containerized = a Redis container in this same environment (self-signed TLS cert). Managed = Azure Managed Redis.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Containerized", "value": "Containerized" },
+                { "label": "Managed — Azure Managed Redis", "value": "Managed" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "redisPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Redis password",
+              "confirmPassword": "Confirm Redis password"
+            },
+            "toolTip": "The SAME Redis password your original install used.",
+            "visible": "[equals(steps('currentConfig').redisMode, 'Containerized')]",
+            "constraints": {
+              "required": true,
+              "regex": "^.{8,}$",
+              "validationMessage": "At least 8 characters."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "redisTrustedCertificateThumbprint",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Redis TLS certificate thumbprint",
+            "toolTip": "The SAME thumbprint your original install used (see generate-cert.ps1|sh).",
+            "visible": "[equals(steps('currentConfig').redisMode, 'Containerized')]",
+            "constraints": {
+              "required": true,
+              "regex": "^[0-9A-Fa-f]{40}$",
+              "validationMessage": "A 40-character SHA-1 thumbprint (hex characters only)."
+            }
+          },
+          {
+            "name": "secretsMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Tenant/app secret storage",
+            "defaultValue": "Local database",
+            "toolTip": "MUST match your original install. If your original install used Azure Key Vault, picking Local database here will make the app unable to find secrets that only exist in that vault (SecretNotConfiguredException at runtime) — and vice versa.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Local database", "value": "Local database" },
+                { "label": "Azure Key Vault", "value": "Azure Key Vault" }
+              ],
+              "required": true
+            }
           }
         ]
       },
@@ -130,7 +202,7 @@
             "visible": true,
             "options": {
               "icon": "Warning",
-              "text": "This wizard only changes the application version (storage redundancy above must still match your original install exactly). It otherwise assumes every other setting on your original install is still at main.bicep's defaults (Managed Postgres, Containerized Redis, no WAF, no Seq, secrets in the local database, current default container sizes). If any of those were customized on the original install, use the full Deploy-to-Azure wizard instead with the same custom values plus this new version — otherwise this deployment will reset them back to their defaults."
+              "text": "This wizard changes only the application version — every field on the previous step must match your original install exactly (Postgres/Redis/secrets mode, storage redundancy, passwords/keys). It leaves container/database/cache SIZES at main.bicep's own defaults; if your original install customized those, use Step 4 (upgrade-resources) or the full Deploy-to-Azure wizard instead, or those will be reset to their defaults on this deploy. WAF and Seq are also left at their defaults (both off) — if either was enabled on the original install, use the full wizard instead so it isn't silently disabled."
             }
           }
         ]
@@ -139,9 +211,14 @@
     "outputs": {
       "namePrefix": "[basics('namePrefix')]",
       "location": "[location()]",
+      "storageRedundancy": "[steps('currentConfig').storageRedundancy]",
+      "useAzurePostgresql": "[equals(steps('currentConfig').postgresMode, 'Managed')]",
       "postgresPassword": "[steps('currentConfig').postgresPassword]",
       "jwtSigningKey": "[steps('currentConfig').jwtSigningKey]",
-      "storageRedundancy": "[steps('currentConfig').storageRedundancy]",
+      "useAzureCacheForRedis": "[equals(steps('currentConfig').redisMode, 'Managed')]",
+      "redisPassword": "[if(equals(steps('currentConfig').redisMode, 'Containerized'), steps('currentConfig').redisPassword, '')]",
+      "redisTrustedCertificateThumbprint": "[if(equals(steps('currentConfig').redisMode, 'Containerized'), steps('currentConfig').redisTrustedCertificateThumbprint, '')]",
+      "enableTenantSecretsKeyVault": "[equals(steps('currentConfig').secretsMode, 'Azure Key Vault')]",
       "imageTag": "[steps('versionStep').imageTag]",
       "imageRegistryServer": "seguebuilds.azurecr.io",
       "imageRegistryUsername": "one-click-pull",
