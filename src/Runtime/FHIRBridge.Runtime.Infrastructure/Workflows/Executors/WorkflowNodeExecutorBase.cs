@@ -3,6 +3,7 @@ using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 
@@ -61,12 +62,12 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
         }
 
         using var document = JsonDocument.Parse(node.ConfigurationJson);
-        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        if (!WorkflowNodeConfigurationEnvelope.TryGetSettings(document, out var settings))
         {
             return default;
         }
 
-        if (!document.RootElement.TryGetProperty(propertyName, out var property))
+        if (!settings.TryGetProperty(propertyName, out var property))
         {
             return default;
         }
@@ -127,7 +128,15 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
         // bubble a JsonException up through the workflow run.
         try
         {
-            return JsonSerializer.Deserialize<T>(node.ConfigurationJson, JsonOptions);
+            using var document = JsonDocument.Parse(node.ConfigurationJson);
+            if (!WorkflowNodeConfigurationEnvelope.TryGetSettings(document, out var settings))
+            {
+                return default;
+            }
+
+            // Deserialize from the resolved settings element rather than the raw string, so an enveloped node
+            // binds T against its "config" object instead of against the envelope (which would match nothing).
+            return settings.Deserialize<T>(JsonOptions);
         }
         catch (JsonException)
         {
@@ -138,8 +147,8 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
     protected static string? ReadStringConfiguration(WorkflowNode node, string propertyName)
     {
         using var document = JsonDocument.Parse(node.ConfigurationJson);
-        return document.RootElement.ValueKind == JsonValueKind.Object
-            && document.RootElement.TryGetProperty(propertyName, out var property)
+        return WorkflowNodeConfigurationEnvelope.TryGetSettings(document, out var settings)
+            && settings.TryGetProperty(propertyName, out var property)
             && property.ValueKind == JsonValueKind.String
                 ? property.GetString()
                 : null;
@@ -199,5 +208,21 @@ public abstract class WorkflowNodeExecutorBase : IWorkflowNodeExecutor
                 : null;
     }
 
-    protected static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    /// <summary>
+    /// Deserializer for everything read off a node's ConfigurationJson.
+    ///
+    /// The string-enum converter is REQUIRED, not a convenience. Node config is written by the portal and by
+    /// the API, both of which serialize an enum as its NAME ("FirstItem"), while a bare
+    /// <see cref="JsonSerializerDefaults.Web"/> reads an enum only as a NUMBER. Without it, any config object
+    /// containing an enum — most importantly a Field Mapping node's self-contained "mappings" block, whose every
+    /// field carries an <c>arrayPolicy</c> — throws <see cref="JsonException"/> mid-parse. ReadConfiguration
+    /// catches that and returns default, so the node silently behaves as though it had no inline mapping at all:
+    /// it falls back to the id-based profile lookup, finds nothing (self-contained workflows no longer create
+    /// master profiles), maps zero fields, and the run reports Succeeded having written nothing. The converter
+    /// accepts numbers as well as names, so previously-saved numeric values keep working.
+    /// </summary>
+    protected static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
 }

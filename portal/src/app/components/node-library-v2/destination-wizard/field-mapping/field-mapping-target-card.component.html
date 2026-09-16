@@ -143,7 +143,7 @@
             <span class="fm-target-key fm-target-key--fk" [title]="key.references ? 'Foreign key → ' + key.references : 'Foreign key'">FK</span>
           }
         }
-        @if (rowForColumn()(col) && destType() !== 'csv') {
+        @if (rowForColumn()(col) && destType() !== 'csv' && rowForColumn()(col)?.mode !== 'default') {
           <button
             type="button"
             class="fm-target-key-toggle"
@@ -157,10 +157,20 @@
           <span class="fm-target-tag">×{{ rowForColumn()(col)?.sources?.length }}</span>
         } @else if (rowForColumn()(col)?.mode === 'childJson') {
           <span class="fm-target-tag">JSON</span>
+        } @else if (rowForColumn()(col)?.mode === 'default') {
+          <span class="fm-target-tag fm-target-tag--default" title="Always writes a fixed value, never mapped from a source">DEFAULT</span>
         }
         @if (rowForColumn()(col) && isApproximated()(rowForColumn()(col)!)) {
           <span class="fm-target-caveat" title="Preview only — not yet enforced by the pipeline engine">⚠</span>
         }
+        <button
+          type="button"
+          class="fm-target-col-default"
+          [class.fm-target-col-default--active]="rowForColumn()(col)?.mode === 'default'"
+          [attr.aria-label]="'Set default value for ' + col"
+          title="Set default value"
+          (click)="setDefaultValue.emit(col)"
+        >⚑</button>
         @if (canEditColumn(col)) {
           <button
             type="button"

@@ -11,7 +11,7 @@
 
 import { DestinationTable, DestinationColumn } from '../../../../services/destination-schema.service';
 import type { ResourceFieldDef } from '../destination-wizard.component';
-import { MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType, qualifyTableName } from './field-mapping-model';
+import { MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType, DefaultValueToken, qualifyTableName } from './field-mapping-model';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { dependencyRankFor } from '../resource-dependency.config';
 
@@ -76,13 +76,22 @@ export interface MappingSummaryInstance {
 
 export interface MappingSummaryColumn {
   column: string;
-  mode: 'directField' | 'joinedFields' | 'wholeNodeAsJson';
+  mode: 'directField' | 'joinedFields' | 'wholeNodeAsJson' | 'default';
   /** directField / joinedFields only. */
   sources?: string[];
   /** wholeNodeAsJson only. */
   sourceNode?: string;
   /** joinedFields only. */
   delimiter?: string;
+  /** default only — which @token this column always resolves to (see field-mapping-model.ts's
+   *  DefaultValueToken). */
+  defaultToken?: DefaultValueToken;
+  /** default only, and only meaningful when defaultToken === '@default' — the literal text written for
+   *  every record. */
+  defaultValue?: string | null;
+  /** default only — the MappingValueType this column writes, since there's no source field to read one
+   *  from. */
+  defaultValueType?: string;
   instance: MappingSummaryInstance | null;
   /** Set when this column is a FHIR reference that must be resolved against another mapped resource's
    *  own table + id column at write time — see MappingRow.referencesResource for how this is derived. */
@@ -224,6 +233,13 @@ function toSummaryColumn(
 
   if (row.mode === 'childJson') {
     return { column: row.targetName, mode: 'wholeNodeAsJson', sourceNode: row.childNodeId ?? '', instance, ...referenceLookup, ...upsertKey };
+  }
+  if (row.mode === 'default') {
+    return {
+      column: row.targetName, mode: 'default',
+      defaultToken: row.defaultToken ?? '@default', defaultValue: row.defaultValue ?? null, defaultValueType: row.defaultValueType,
+      instance, ...referenceLookup, ...upsertKey,
+    };
   }
   const sources = row.sources.map(s => s.fhirPath);
   if (sources.length > 1) {
@@ -393,10 +409,27 @@ function computeProcessingOrder(tables: ResolvedTable[]): MappingProcessingStep[
  * destination type — a SQL/MySQL table this session hasn't (re)probed yet gets exactly the same "insufficient
  * evidence, keep it" treatment as a brand-new table does, per the table-not-found branch above.
  */
+/**
+ * Does `candidate` — a table name from a queued schema op, a restored mapping row, or targetByResource —
+ * refer to the same real table as `probed`, a live-probed DestinationTable? Matches the fully qualified
+ * name first, then falls back to the bare name, case-insensitively (SQL Server and MySQL identifiers are
+ * not case-sensitive by default).
+ *
+ * Callers routinely hold only the bare spelling (a mapping restored via bareName(), an "add column" op
+ * built from the canvas's own target) while a live probe reports the qualified one. A lookup that misses
+ * because of that mismatch does not fail loudly — it returns the schema unchanged, so a column added via
+ * "+ Add column" never lands in sqlTables() even though the real ALTER TABLE succeeded, and the row mapped
+ * onto it is then deleted as an orphan on the next save. Shared with DestinationWizardComponent so both
+ * sides resolve table names the same way.
+ */
+export function tableNameMatches(probed: DestinationTable, candidate: string): boolean {
+  const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  return eq(probed.fullName, candidate) || eq(probed.tableName, candidate);
+}
+
 export function pruneOrphanedMappingRows(mappingRows: MappingRow[], sqlTables: DestinationTable[]): MappingRow[] {
-  const tablesByName = new Map(sqlTables.map(t => [t.fullName, t]));
   return mappingRows.filter(row => {
-    const table = tablesByName.get(row.tableName);
+    const table = sqlTables.find(t => tableNameMatches(t, row.tableName));
     return !table || table.origin !== 'probed' || table.columns.some(c => c.name === row.targetName);
   });
 }
@@ -621,6 +654,15 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
         if (col.mode === 'wholeNodeAsJson') {
           mappingRows.push({
             resource, sources: [], mode: 'childJson', childNodeId: col.sourceNode ?? '',
+            instance, targetName: col.column, tableName: fullName,
+            ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
+          });
+          continue;
+        }
+        if (col.mode === 'default') {
+          mappingRows.push({
+            resource, sources: [], mode: 'default',
+            defaultToken: col.defaultToken ?? '@default', defaultValue: col.defaultValue ?? null, defaultValueType: col.defaultValueType,
             instance, targetName: col.column, tableName: fullName,
             ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
           });

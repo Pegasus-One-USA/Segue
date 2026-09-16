@@ -687,7 +687,7 @@ public static class DependencyInjection
             services.AddScoped<DbSecretStore>();
             services.AddScoped<ISecretWriter, CompositeSecretWriter>();
             services.AddScoped<ISecretProvider, CompositeSecretProvider>();
-            services.AddScoped<IAppSecretMetadataProvider>(sp => sp.GetRequiredService<DbSecretStore>());
+            services.AddScoped<IAppSecretMetadataProvider, CompositeSecretMetadataProvider>();
         }
 
         services.AddScoped<IAppSecretsAdminService, AppSecretsAdminService>();

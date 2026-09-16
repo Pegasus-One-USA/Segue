@@ -123,6 +123,11 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   readonly renameTable = output<string>();
   readonly deleteColumn = output<string>();
   readonly editColumn = output<string>();
+  /** "Set default value" (⚑) clicked for a column — opens FieldMappingDefaultValueModalComponent (see
+   *  FieldMappingCanvasComponent.openDefaultValueModal). Always offered, mapped or not: submitting it
+   *  wholesale replaces whatever row this column had, which is what keeps "default" and "mapped from a
+   *  source" mutually exclusive. */
+  readonly setDefaultValue = output<string>();
   /** A free-text column's name was changed via the inline rename (✎ on a column with no real schema —
    *  see isFreeTextColumn) — no real ALTER COLUMN here, unlike editColumn (a real, session-created SQL
    *  column, which still opens the real edit-column modal), so this is just "now called something else"

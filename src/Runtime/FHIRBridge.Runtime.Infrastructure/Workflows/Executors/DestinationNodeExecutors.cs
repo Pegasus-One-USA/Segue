@@ -692,19 +692,20 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     /// knows how to build a client for; or its <c>sourceConnectionId</c> doesn't parse. Ambiguity anywhere in this
     /// resolution intentionally falls back to null rather than picking arbitrarily.
     /// </summary>
-    private async Task<Func<string, string, CancellationToken, Task<string?>>?> ResolveFetchMissingReferenceDelegateAsync(
+    private async Task<(Func<string, string, CancellationToken, Task<string?>>? Fetch, string? SourceBaseUrl)>
+        ResolveFetchMissingReferenceDelegateAsync(
         WorkflowNode node,
         CancellationToken cancellationToken)
     {
         if (_sourceClientFactory is null || _sourceConnectionResolver is null || _workflowDefinitionStore is null)
         {
-            return null;
+            return (null, null);
         }
 
         var definition = await _workflowDefinitionStore.GetAsync(node.WorkflowDefinitionId, cancellationToken);
         if (definition is null)
         {
-            return null;
+            return (null, null);
         }
 
         // Walk edges backward from this destination node to find every upstream node reachable from it.
@@ -729,19 +730,24 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 
         if (sourceNodes.Count != 1 || !SourceNodeTypeByNodeType.TryGetValue(sourceNodes[0].NodeType, out var sourceType))
         {
-            return null;
+            return (null, null);
         }
 
         var sourceConnectionIdRaw = ReadStringConfiguration(sourceNodes[0], "sourceConnectionId");
         if (!Guid.TryParse(sourceConnectionIdRaw, out var sourceConnectionId))
         {
-            return null;
+            return (null, null);
         }
 
         var client = _sourceClientFactory.Create(sourceType);
         var resolver = _sourceConnectionResolver;
 
-        return async (resourceType, id, ct) =>
+        // Resolved up front (not inside the delegate) so the writer can recognize absolute references pointing back
+        // at this same source even when nothing is ever auto-fetched — reference RESOLUTION needs the base URL just
+        // as much as fetching does.
+        var resolvedSource = await resolver.ResolveAsync(sourceConnectionId, null, null, cancellationToken);
+
+        return (async (resourceType, id, ct) =>
         {
             var source = await resolver.ResolveAsync(sourceConnectionId, null, null, ct);
             if (source is null)
@@ -751,7 +757,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 
             var envelope = await client.ReadByIdAsync(resourceType, id, source, ct);
             return envelope?.RawJson;
-        };
+        }, resolvedSource?.BaseUrl);
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -836,13 +842,14 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         // RouteName drives both the email {{RouteName}} template placeholder and (for CSV) the multi-resource ZIP
         // filename — the workflow's own name is far more useful here than the generic node type string.
         var workflowName = await ResolveWorkflowNameAsync(node, cancellationToken) ?? node.NodeType;
-        var fetchMissingReferenceAsync = await ResolveFetchMissingReferenceDelegateAsync(node, cancellationToken);
+        var (fetchMissingReferenceAsync, sourceBaseUrl) = await ResolveFetchMissingReferenceDelegateAsync(node, cancellationToken);
         var writeContext = new PipelineWriteContext(
             AllowInlineDelivery: false,
             workflowName,
             DateTimeOffset.UtcNow,
             CorrelationId: context.CorrelationId,
-            FetchMissingReferenceAsync: fetchMissingReferenceAsync);
+            FetchMissingReferenceAsync: fetchMissingReferenceAsync,
+            SourceBaseUrl: sourceBaseUrl);
 
         int written;
         string? downloadUrl;
@@ -1037,10 +1044,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         WorkflowNode node,
         IReadOnlyCollection<WorkflowNodeOutput> inputs)
     {
-        var destinationId = node.Configuration.FirstOrDefault(configuration =>
-                string.Equals(configuration.Key, "destinationId", StringComparison.OrdinalIgnoreCase))
-            ?.Value
-            ?? node.Id.ToString("N");
+        // Read from ConfigurationJson, now the single store for a node's settings (plan §6).
+        var destinationId = ReadStringConfiguration(node, "destinationId") ?? node.Id.ToString("N");
 
         return new RuntimeDestinationWriteResult(destinationId, inputs.Count, DateTimeOffset.UtcNow);
     }

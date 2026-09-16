@@ -299,12 +299,18 @@ export interface WorkflowBuildResult {
 // ── Workflow-list screen (GET /workflows/summary) ──────────────────────────────
 export type WorkflowAction = 'Launch' | 'Run';
 
+/** Mirrors the backend's WorkflowLifecycleStatus. */
+export type WorkflowLifecycleStatus = 'Draft' | 'Ready' | 'Disabled';
+
 export interface WorkflowSummary {
   workflowId: string;
   name: string;
   /** Free-text notes captured in the builder; null/absent when never filled in. */
   description?: string | null;
-  status: 'Enabled' | 'Disabled';
+  /** Draft = no destination wired up yet, so it cannot run; Ready = it will run; Disabled = complete but
+   *  deliberately paused. Draft/Ready are derived from the graph server-side (never stored), Disabled is the
+   *  stored IsEnabled flag. Replaces the former 'Enabled' value, which no longer exists. */
+  status: WorkflowLifecycleStatus;
   nodes: number;
   edges: number;
   lastRun: string | null;           // WorkflowRunStatus name (Running | Succeeded | Failed) or null
@@ -324,6 +330,10 @@ export interface WorkflowSummary {
   createdBy?: string | null;
   modifiedOnUtc?: string | null;
   modifiedBy?: string | null;
+  /** Human-quotable sequential id (e.g. `WLW-150926-0042`), assigned when the workflow is created and stable
+   *  for its life. Null for workflows created before numbering existed, or while numbering is switched off.
+   *  Unlike `name`, this is unique — it is what the UI quotes when identifying one workflow among duplicates. */
+  workflowNumber?: string | null;
 }
 
 /** Server-side page of /workflows/summary — items is just this page's rows, totalCount is the full matching-row

@@ -1,5 +1,7 @@
-using FHIRBridge.Infrastructure.Persistence.Pipeline;
+﻿using FHIRBridge.Infrastructure.Persistence.Pipeline;
+using FHIRBridge.Application.Services.Workflows.Numbering;
 using FHIRBridge.Infrastructure.Workflows;
+using FHIRBridge.Infrastructure.Workflows.Numbering;
 using FHIRBridge.Runtime.Application.Abstractions.Persistence;
 using FHIRBridge.Runtime.Application.Workflows.Audit;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -25,6 +27,8 @@ public static class WorkflowPersistenceServiceCollectionExtensions
         IConfiguration configuration)
     {
         // Scoped, because both stores depend on the scoped FHIRBridgeDbContext.
+        // Registered before the definition store, which depends on it to number a newly created workflow.
+        services.AddScoped<IWorkflowNumberGenerator, WorkflowNumberGenerator>();
         services.AddScoped<IWorkflowDefinitionStore, SqlWorkflowDefinitionStore>();
         services.AddScoped<IWorkflowRunStore, SqlWorkflowRunStore>();
         services.AddScoped<IWorkflowNodeResourceHistoryRecorder, EfWorkflowNodeResourceHistoryRecorder>();

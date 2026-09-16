@@ -143,11 +143,67 @@ export interface MappingInstanceSelection {
   aggregate?: 'rows' | 'csv';
 }
 
+/** Reserved @token JsonPath values a 'default' row's targetField can carry instead of a real "$…" source
+ *  path — mirrors JsonMappingEngine.IsSystemToken/its "@default" literal-constant special case exactly, so
+ *  a token picked here means the identical thing at pipeline-run time. '@default' means "always write the
+ *  literal defaultValue text below"; the rest are pipeline/runtime values (JsonMappingEngine's
+ *  systemValues) with no literal to type in. */
+export type DefaultValueToken =
+  | '@default' | '@now' | '@runId' | '@resourceType' | '@sourceResourceId' | '@newGuid'
+  | '@mappingProfileName' | '@mappingProfileId' | '@destinationObject' | '@sourceConnectionId' | '@triggeredBy';
+
+export interface DefaultValuePreset {
+  token: DefaultValueToken;
+  label: string;
+  description: string;
+  /** The MappingValueType this preset always produces — lets checkColumnTypeCompatibility validate a
+   *  default column exactly like a real mapped one. */
+  valueType: string;
+  /** True hides this preset from the "Set default value" picker (see VISIBLE_DEFAULT_VALUE_PRESETS) while
+   *  leaving it fully functional everywhere else — JsonMappingEngine, CreateMappingProfileRequestValidator,
+   *  and any column a profile already has saved with it keep working and keep displaying correctly (see
+   *  field-mapping-list.component.ts's defaultTokenLabel, which always looks up the FULL list). A temporary
+   *  UI curation, not a feature removal — flip back to false to re-offer a preset. */
+  hidden?: boolean;
+}
+
+export const DEFAULT_VALUE_PRESETS: readonly DefaultValuePreset[] = [
+  { token: '@default', label: 'Literal value', description: 'Always write the exact text you type below.', valueType: 'String' },
+  { token: '@now', label: 'Current date/time (UTC)', description: 'The moment this record is written by the pipeline.', valueType: 'DateTime' },
+  { token: '@runId', label: 'Pipeline run ID', description: "This execution's own run id.", valueType: 'String' },
+  { token: '@resourceType', label: 'FHIR resource type', description: 'The resource type being mapped (e.g. "Patient").', valueType: 'String', hidden: true },
+  { token: '@sourceResourceId', label: 'Source resource ID', description: "The source FHIR resource's own id.", valueType: 'String', hidden: true },
+  // A fresh value per RECORD, not per run (unlike every other token above) — see JsonMappingEngine/
+  // ConfiguredPipelineService, which regenerate it inside the per-resource loop. A row fanned out into
+  // multiple destination rows via RepeatParent shares one value across all of them (same limitation @now/
+  // @runId already have), since the token resolves once per source resource, not per fanned-out row.
+  { token: '@newGuid', label: 'New GUID', description: 'A fresh random GUID generated for each record — useful as a surrogate key when no natural id exists.', valueType: 'String' },
+  { token: '@mappingProfileName', label: 'Mapping profile name', description: 'The name of the mapping profile that wrote this row.', valueType: 'String', hidden: true },
+  { token: '@mappingProfileId', label: 'Mapping profile ID', description: 'The GUID of the mapping profile that wrote this row.', valueType: 'String', hidden: true },
+  { token: '@destinationObject', label: 'Destination table/object', description: 'The table or file this profile writes to (e.g. "dbo.Patient").', valueType: 'String', hidden: true },
+  { token: '@sourceConnectionId', label: 'Source connection ID', description: 'The GUID of the source connection this data came from.', valueType: 'String', hidden: true },
+  // Only populated by the Configured Pipeline (ConfiguredPipelineService) — the Runtime Plane's transform
+  // executor has no trigger identity to report, so this resolves to null there (like any absent token).
+  // TriggeredBy is itself nullable at run time (some scheduled/system runs carry none) — see
+  // CreateMappingProfileRequestValidator's NOT NULL check, which does NOT exempt this token the way it does
+  // every other one above.
+  { token: '@triggeredBy', label: 'Triggered by', description: 'Who or what started this run — a user, "scheduled", or "webhook". May be empty for some automated runs.', valueType: 'String', hidden: true },
+];
+
+/** What the "Set default value" picker actually offers — DEFAULT_VALUE_PRESETS minus anything currently
+ *  `hidden`. See DefaultValuePreset.hidden's own doc comment for why this is a UI curation, not a removal. */
+export const VISIBLE_DEFAULT_VALUE_PRESETS: readonly DefaultValuePreset[] =
+  DEFAULT_VALUE_PRESETS.filter(p => !p.hidden);
+
 export interface MappingRow {
   resource: string;
-  /** Ordered; length 1 = simple map, length > 1 = join. Empty when mode === 'childJson'. */
+  /** Ordered; length 1 = simple map, length > 1 = join. Empty when mode is 'childJson' or 'default'. */
   sources: MappingSourceRef[];
-  mode: 'value' | 'childJson';
+  /** 'default' means this column always writes a fixed value (literal or pipeline/runtime @token,
+   *  see defaultToken) instead of anything read from the source payload — mutually exclusive with a real
+   *  source mapping by construction, since a row is wholesale replaced (never merged) whenever its column
+   *  is remapped or re-defaulted (see FieldMappingCanvasComponent.replaceRow/submitDefaultValue). */
+  mode: 'value' | 'childJson' | 'default';
   /** The group's full FmTreeNode id (e.g. "Patient.name"), only when mode === 'childJson'. */
   childNodeId?: string;
   /** Join delimiter; only meaningful when sources.length > 1. */
@@ -159,7 +215,15 @@ export interface MappingRow {
   /** No UI control sets these yet (the wire format hardcodes false/null/null) — present only so a
    *  MappingSnapshot round-trips the full backend field shape once a control exists. */
   isRequired?: boolean;
+  /** Only meaningful when mode === 'default' AND defaultToken === '@default' — the literal text written
+   *  for every record. (Also round-trips a profile-authored fallback-when-missing default on a 'value' row,
+   *  unrelated to this feature — see JsonMappingEngine's resolved.Count === 0 branch.) */
   defaultValue?: string | null;
+  /** Only meaningful when mode === 'default' — which @token this column always resolves to. */
+  defaultToken?: DefaultValueToken;
+  /** Only meaningful when mode === 'default' — the MappingValueType this default column writes, since
+   *  there's no source field to read one from (see effectiveMappingValueType). */
+  defaultValueType?: string;
   format?: string | null;
   /**
    * Set when this field is a FHIR reference (its primary source's fhirPath ends in ".reference", e.g.
@@ -242,6 +306,7 @@ export function serializeRowsFlat(
   childTableRelationsByTable: Record<string, FlatChildTableRelation> = {},
 ): (LegacyMappingRow & {
   arrayPolicy: string; approximated: boolean; isUpsertKey: boolean; isRequired?: boolean;
+  defaultValue?: string | null;
   parentTable?: string; parentKeyColumn?: string; foreignKeyColumn?: string;
   referencesResource?: string;
 })[] {
@@ -299,19 +364,29 @@ export function serializeRowsFlat(
     // (JsonMappingEngine) — it never changes what gets written.
     const targetColumn = targetTable?.columns.find(c => c.name === row.targetName);
     const isRequired = row.isRequired ?? (targetColumn?.isNullable === false ? true : undefined);
+    const isDefault = row.mode === 'default';
     return {
       resource: row.resource,
-      field: primary?.label ?? '',
-      path: primary?.fhirPath ?? row.childNodeId ?? '',
+      // A default column has no real source field — the token itself (e.g. "@now") stands in as both the
+      // human-readable field label and the wire jsonPath, exactly mirroring how a token round-trips through
+      // JsonMappingEngine.IsSystemToken on the backend.
+      field: isDefault ? (row.defaultToken ?? '@default') : (primary?.label ?? ''),
+      path: isDefault ? (row.defaultToken ?? '@default') : (primary?.fhirPath ?? row.childNodeId ?? ''),
       target: targetTableName,
       column: row.targetName,
-      jsonPath: primary?.jsonPath,
-      valueType: arrayPolicy === 'StoreJson' ? 'Json' : primary?.valueType,
+      jsonPath: isDefault ? (row.defaultToken ?? '@default') : primary?.jsonPath,
+      valueType: isDefault ? row.defaultValueType : (arrayPolicy === 'StoreJson' ? 'Json' : primary?.valueType),
       arrays: primary?.arrays,
       arrayPolicy,
       approximated,
       isUpsertKey,
       ...(isRequired ? { isRequired: true } : {}),
+      // Previously dropped here even though MappingRow already carried it (see its own doc comment) — every
+      // caller downstream (workflow-build-assembler.service.ts's MappingFieldRequest.defaultValue,
+      // JsonMappingEngine's literal-fallback and "@default" branches) has always expected this, so a
+      // profile-authored fallback default on an ordinary 'value' row round-trips correctly too, not just a
+      // 'default'-mode row's own literal.
+      ...(row.defaultValue ? { defaultValue: row.defaultValue } : {}),
       ...(genuineRelation ? {
         parentTable: genuineRelation.parentTable,
         parentKeyColumn: genuineRelation.parentColumn,
@@ -321,7 +396,7 @@ export function serializeRowsFlat(
       // resource's own table/id column (MappingFieldRequest.referenceLookupTable/referenceLookupKeyColumn) —
       // without this, the field-mapping-list "which resource does this reference?" picker has no effect at
       // all on what actually gets saved, and a FHIR reference column keeps writing raw "Patient/xyz" strings
-      // (or, worse, NULL into a NOT NULL FK column) forever, no matter what the user picks in that dropdown.
+      // (or, worse, NULL into a NOT NULL FK column) forever, no matter what the user picked in that dropdown.
       ...(row.referencesResource ? { referencesResource: row.referencesResource } : {}),
     };
   });
@@ -342,6 +417,9 @@ export interface ArrayPolicyResolution {
 export function resolveArrayPolicy(row: MappingRow): ArrayPolicyResolution {
   if (row.mode === 'childJson') {
     return { arrayPolicy: 'StoreJson', approximated: false };
+  }
+  if (row.mode === 'default') {
+    return { arrayPolicy: 'Scalar', approximated: false };
   }
 
   const isJoin = row.sources.length > 1;
@@ -385,9 +463,12 @@ export function isApproximated(row: MappingRow): boolean {
 /** The effective, backend-facing ValueType for a mapping row — the same one serializeRowsFlat() actually
  *  sends to the API (see its own `valueType: arrayPolicy === 'StoreJson' ? 'Json' : primary?.valueType`):
  *  'Json' for a childJson row (StoreJson comes exclusively from mode === 'childJson' — see
- *  resolveArrayPolicy), the primary source field's own valueType for a 'value' row. */
+ *  resolveArrayPolicy), the row's own declared defaultValueType for a 'default' row (no source field to
+ *  read one from), the primary source field's own valueType for a 'value' row. */
 export function effectiveMappingValueType(row: MappingRow): string | undefined {
-  return row.mode === 'childJson' ? 'Json' : row.sources[0]?.valueType;
+  if (row.mode === 'childJson') return 'Json';
+  if (row.mode === 'default') return row.defaultValueType;
+  return row.sources[0]?.valueType;
 }
 
 /**

@@ -67,6 +67,7 @@ import {
   qualifyTableName,
   reconcileTargetsForDestTypeSwitch,
   checkColumnTypeCompatibility,
+  DefaultValueToken,
 } from './field-mapping/field-mapping-model';
 import { computePendingTableNames, runQueuedOpsSequentially } from './field-mapping/field-mapping-schema-ops.util';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
@@ -78,6 +79,7 @@ import {
   MappingSummaryDocument,
   ChildTableRelation,
   buildMappingSummaryDocument,
+  tableNameMatches,
   applyMappingSummaryDocument,
   pruneOrphanedMappingRows,
 } from './field-mapping/field-mapping-summary.model';
@@ -724,9 +726,19 @@ export class DestinationWizardComponent implements OnInit {
    * persisted identically — and then closes back to the canvas (see
    * NodeLibraryDialogComponent.onDestWizardSaved). Configuring a second resource means reopening the
    * node, which keeps "Save" unambiguous: it finishes the step rather than half-committing it.
+   *
+   * Flushes the queued schema DDL first, exactly as the Review step's own "Add to Workflow"/"Update"
+   * does (see next()'s final-step branch) — this entry point is the ONLY other place _save() runs, and
+   * without the flush a column added via the canvas's "+ Add column" was never actually created against
+   * the destination: the mapping profile was then saved referencing a column that doesn't exist, and the
+   * backend's own column-existence check (WorkflowEndpoints.ValidateMappedColumnsExistAsync) rejected the
+   * whole save with "field '<name>' does not exist on '<table>'". Same contract as there: on failure the
+   * op stays queued and the save is skipped, so a profile is never persisted against absent schema.
    */
   saveChainNode(): void {
-    this._save();
+    this.flushPendingSchemaOps().subscribe((ok) => {
+      if (ok) this._save();
+    });
   }
 
   /** Maps this wizard's chain-node tab onto the Mapping list's own tab names — that list
@@ -1576,7 +1588,7 @@ export class DestinationWizardComponent implements OnInit {
         // schema probe) for the exact same real table. Without this, the lookup below silently never
         // matches — the column is queued (the toast fires unconditionally) but never actually appears
         // on the canvas, since every table in sqlTables() comes back unchanged.
-        const matches = t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName);
+        const matches = tableNameMatches(t, e.tableName);
         if (!matches) return t;
         const idx = t.columns.findIndex((c) => c.name === column.name);
         const columns =
@@ -1907,6 +1919,7 @@ export class DestinationWizardComponent implements OnInit {
   // Medplum is a FHIR R4 server destination: columnless (writes whole resources), no live schema probe,
   // a single target (the FHIR base URL) and an opaque secret. Its own form/branches, like Mongo.
   readonly isMedplum = computed(() => this.destType() === 'medplum');
+
   /** A FHIR-native repository (Aidbox) — writes whole FHIR resources, so it has no field-mapping canvas of
    *  its own; step 3 offers passthrough vs. per-field transform rules instead. */
   readonly isFhir = computed(() => this.destType() === 'fhir');
@@ -2742,21 +2755,34 @@ export class DestinationWizardComponent implements OnInit {
   /** "Mark as Master" for whichever resource's mapping canvas is currently open — promotes the mapping
    *  profile this Field Mapping node already saved for that resource into a new, independently-named master
    *  template (see MappingProfileService.promoteToMaster). Requires the mapping to have been saved at least
-   *  once already (so a real profile id exists to clone from); the button stays enabled regardless, but this
-   *  guards with a clear toast rather than silently no-op-ing. */
+   *  template, built from whatever is on the canvas right now. No prior save is required: an ordinary save
+   *  writes no MappingProfile at all any more, so there would be nothing to promote. */
   markActiveGroupAsMaster(): void {
     const resource = this.activeMappingGroup();
     if (!resource) return;
 
-    const mappingNode = this.pipelineStore.byId(this.attachNode().id);
-    const existingIds = this._parseExistingMappingProfileIds(
-      mappingNode?.fields ?? {},
-    );
-    const profileId = existingIds[resource];
-    if (!profileId) {
+    // Builds the master from the canvas rows as they stand, rather than promoting a profile a previous save
+    // happened to leave behind. Ordinary saves no longer write any MappingProfile (see _save), so there is
+    // nothing to promote — and this is the honest behaviour anyway: the master is a snapshot of what is on
+    // screen when the button is pressed, not of whatever the last save persisted.
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: this.sourceVendor().toUpperCase(),
+      destType: this.nonFhirDestType(),
+      destLabel: this.destLabel(),
+      mappingRows: this.mappingRows().filter((row) => row.resource === resource),
+      sqlTables: this.sqlTables(),
+      childTableRelationsByTable: this.childTableRelationsByTable(),
+      availableFields: this.availableFieldsFn,
+      sourceConnectionId: this.sourceConnectionId(),
+      destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+      targetByResource: this.targetByResource(),
+      existingMappingProfileIdByResource: {},
+    });
+
+    if (doc.mappings.length === 0) {
       this.toast.show(
-        'Save the mapping first',
-        `Save "${resource}"'s mapping at least once before marking it as a master template.`,
+        'Nothing to save as a master',
+        `Map at least one field for "${resource}" before marking it as a master template.`,
       );
       return;
     }
@@ -2776,7 +2802,31 @@ export class DestinationWizardComponent implements OnInit {
       .afterClosed()
       .subscribe((name) => {
         if (!name) return;
-        this.mappingProfileSvc.promoteToMaster(profileId, name).subscribe({
+        this.createMasterFromDocument(doc, name, resource);
+      });
+  }
+
+  /** Imports one resource's mapping as a named master template, then renames it to what the user typed. */
+  private createMasterFromDocument(
+    doc: MappingSummaryDocument,
+    name: string,
+    resource: string,
+  ): void {
+    this.mappingProfileImportSvc.import(doc).subscribe({
+      next: (result) => {
+        const created = result.profiles.find(
+          (p) => p.resourceType === resource && p.mappingProfileId !== EMPTY_GUID,
+        );
+        if (!created) {
+          this.toast.show(
+            'Master mapping not saved',
+            result.profiles.flatMap((p) => p.warnings).join(' ') ||
+              'The mapping could not be imported.',
+          );
+          return;
+        }
+
+        this.mappingProfileSvc.promoteToMaster(created.mappingProfileId, name).subscribe({
           next: () =>
             this.toast.success(
               'Master mapping saved',
@@ -2796,7 +2846,16 @@ export class DestinationWizardComponent implements OnInit {
             );
           },
         });
-      });
+      },
+      error: (err) => {
+        const msg =
+          err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to save the master mapping.';
+        this.toast.show(
+          'Master mapping not saved',
+          typeof msg === 'string' ? msg : 'Failed to save the master mapping.',
+        );
+      },
+    });
   }
 
   /** MappingProfile.DestinationObject is stored as the bare table name (e.g. "Patient_NewMapped"), but
@@ -2869,6 +2928,26 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     const newRows: MappingRow[] = profile.fields.map((f) => {
+      // A "@token" JsonPath (JsonMappingEngine.IsSystemToken) has no real source at all — reconstructing
+      // it as an ordinary mode: 'value' row (as every field below unconditionally used to) produced a
+      // broken row with a fabricated fhirPath and, worse, silently lost defaultValue/defaultValueType on
+      // the very next save (see field-mapping-summary.model.ts's identical fix for the canonical Mapping
+      // JSON round-trip — this is the same gap in the "Select Existing" profile-picker's own load path).
+      if (f.jsonPath?.startsWith('@')) {
+        return {
+          resource,
+          sources: [],
+          mode: 'default',
+          defaultToken: f.jsonPath as DefaultValueToken,
+          defaultValue: f.defaultValue ?? null,
+          defaultValueType: f.valueType,
+          targetName: f.targetField,
+          tableName: resolvedTarget,
+          isRequired: f.isRequired,
+          format: f.format ?? null,
+          isUpsertKey: f.isUpsertKey ?? false,
+        };
+      }
       const resolved = this._resolveFhirPath(resource, f);
       return {
         resource,
@@ -3942,27 +4021,6 @@ export class DestinationWizardComponent implements OnInit {
     return candidate;
   }
 
-  /** Reads a Field Mapping node's own previously-saved mappingProfileIds map (falling back to the legacy
-   *  singular mappingProfileId, attributed to this node's primary resource, for a node saved before the map
-   *  existed) — mirrors WorkflowBuildAssemblerServiceV2.parseExistingMappingProfileIds so both save paths agree
-   *  on which id belongs to which resource. */
-  private _parseExistingMappingProfileIds(
-    fields: Record<string, string>,
-  ): Record<string, string> {
-    const raw = fields['mappingProfileIds'];
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (parsed && typeof parsed === 'object')
-          return parsed as Record<string, string>;
-      } catch {
-        // fall through to the legacy singular field below
-      }
-    }
-    const legacyId = fields['mappingProfileId'];
-    const primaryResource = this.selectedResources()[0];
-    return legacyId && primaryResource ? { [primaryResource]: legacyId } : {};
-  }
 
   hasSqlTables(): boolean {
     return (
@@ -5005,7 +5063,23 @@ export class DestinationWizardComponent implements OnInit {
       this.sqlTables(),
     );
     if (pruned.length !== this.mappingRows().length) {
+      // Never drop a user's mapping without saying so. This prune is a safety net for a column deleted or
+      // renamed OUT-OF-BAND (directly in the database), which is rare — but it can't tell that apart from a
+      // column this wizard itself just created whose local schema update didn't land (see tableNameMatches:
+      // exactly that bug silently deleted a freshly mapped row on every save, with no error, for a column
+      // that really did exist in the database). Silence is what made that invisible, so name the rows.
+      const keptKeys = new Set(pruned.map((r) => `${r.tableName}.${r.targetName}`));
+      const dropped = this.mappingRows().filter(
+        (r) => !keptKeys.has(`${r.tableName}.${r.targetName}`),
+      );
       this.mappingRows.set(pruned);
+      this.toast.error(
+        `Removed ${dropped.length} mapping${dropped.length === 1 ? '' : 's'} with no matching column`,
+        dropped
+          .map((r) => `"${r.targetName}" on ${r.tableName}`)
+          .join(', ') +
+          ' — the column was not found in the destination schema. Re-add the column, then map it again.',
+      );
     }
 
     const type = this.destType();
@@ -5090,18 +5164,14 @@ export class DestinationWizardComponent implements OnInit {
       ),
     );
     config['dest_mappings_v2'] = JSON.stringify(this.mappingRows());
-    // This wizard's own Field Mapping node's previously-saved profile id per resource (mappingProfileIds,
-    // falling back to the legacy singular mappingProfileId for the primary resource) — passed through so the
-    // import call below updates THOSE exact profiles rather than letting the backend search for "the" profile
-    // matching (resourceType, sourceConnectionId, destinationId), a triple more than one workflow can share.
-    const mappingNodeForIds = this.pipelineStore.byId(this.attachNode().id);
-    const existingMappingProfileIdByResource =
-      this._parseExistingMappingProfileIds(mappingNodeForIds?.fields ?? {});
 
     // The canonical Mapping JSON (see field-mapping-summary.model.ts) — additive alongside the two keys
-    // above; this is what _populateFromNode prefers on reload, and what "Save mapping"/the export
-    // preview modal show. Includes what dest_mappings_v2 alone can't: which extra tables are children
-    // and of what (childTableRelationsByTable). Also what POST mapping-profiles/import sends verbatim below.
+    // above; this is what _populateFromNode prefers on reload, and what "Save mapping"/the export preview
+    // modal show. Includes what dest_mappings_v2 alone can't: which extra tables are children and of what.
+    //
+    // existingMappingProfileIdByResource is deliberately empty: an ordinary save no longer writes any
+    // MappingProfile, so there are no ids to carry forward (plan §2.d). "Mark as Master" builds its own
+    // document when it needs one.
     const doc = buildMappingSummaryDocument({
       sourceVendor: this.sourceVendor().toUpperCase(),
       destType: this.nonFhirDestType(),
@@ -5113,7 +5183,7 @@ export class DestinationWizardComponent implements OnInit {
       sourceConnectionId: this.sourceConnectionId(),
       destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
       targetByResource: this.targetByResource(),
-      existingMappingProfileIdByResource,
+      existingMappingProfileIdByResource: {},
     });
     config['dest_mapping_summary_v1'] = JSON.stringify(doc);
 
@@ -5160,91 +5230,17 @@ export class DestinationWizardComponent implements OnInit {
       });
     };
 
-    // Import the mapping profile(s) now that both real ids exist — skipped when either is still missing
-    // (e.g. no source configured yet) or there's nothing mapped, so this stays a no-op for those cases
-    // exactly like before this endpoint existed. Either way "Add to Pipeline"/"Update" still completes —
-    // a failed import is surfaced as a toast, not a blocker, since the node's own local save (config above)
-    // never depended on it.
-    if (
-      doc.sourceConnectionId &&
-      doc.destinationId &&
-      doc.mappings.length > 0
-    ) {
-      this.savingMappingProfiles.set(true);
-      this.mappingProfileImportSvc.import(doc).subscribe({
-        next: (result) => {
-          this.savingMappingProfiles.set(false);
-          const failed = result.profiles.filter(
-            (p) => p.warnings.length > 0 && p.mappingProfileId === EMPTY_GUID,
-          );
-          if (failed.length) {
-            this.toast.show(
-              'Mapping profile import had issues',
-              failed
-                .map((p) => `${p.resourceType}: ${p.warnings.join(' ')}`)
-                .join(' '),
-            );
-          } else {
-            this.toast.success(
-              'Mapping profile saved',
-              `${result.profiles.length} resource mapping${result.profiles.length === 1 ? '' : 's'} imported.`,
-            );
-          }
-          // Stamp every resource's real, server-assigned mappingProfileId straight onto the Field Mapping node
-          // this wizard is attached to — without this, the ids this call just returned are discarded, the next
-          // save's existingMappingProfileIdByResource comes back empty, and both this endpoint and
-          // /workflows/build would mint fresh, unrelated duplicate profiles instead of reusing these (and, pre-
-          // fix, fall back to searching by (resourceType, sourceConnectionId, destinationId) — the exact search
-          // that let one workflow's save silently overwrite another's profile). Keeps the legacy singular
-          // mappingProfileId in sync too (primary resource only) for anything still reading that older field.
-          const succeeded = result.profiles.filter(
-            (p) => p.mappingProfileId !== EMPTY_GUID,
-          );
-          if (succeeded.length > 0) {
-            const mappingNode = this.pipelineStore.byId(this.attachNode().id);
-            if (mappingNode) {
-              const mappingProfileIds = {
-                ...this._parseExistingMappingProfileIds(
-                  mappingNode.fields ?? {},
-                ),
-                ...Object.fromEntries(
-                  succeeded.map((p) => [p.resourceType, p.mappingProfileId]),
-                ),
-              };
-              const primary =
-                succeeded.find(
-                  (p) => p.resourceType === doc.mappings[0]?.resourceType,
-                ) ?? succeeded[0];
-              this.pipelineStore.updateNode(mappingNode.id, {
-                fields: {
-                  ...mappingNode.fields,
-                  mappingProfileId: primary.mappingProfileId,
-                  mappingProfileIds: JSON.stringify(mappingProfileIds),
-                },
-              });
-            }
-          }
-          emitSaved();
-        },
-        error: (err) => {
-          this.savingMappingProfiles.set(false);
-          const msg =
-            err?.error?.title ??
-            err?.error?.error ??
-            err?.message ??
-            'Failed to import the mapping profile.';
-          this.toast.show(
-            'Mapping profile not saved',
-            typeof msg === 'string'
-              ? msg
-              : 'Failed to import the mapping profile.',
-          );
-          emitSaved();
-        },
-      });
-      return;
-    }
-
+    // A mapping is now saved ON THE NODE and nowhere else (plan §2.d / §3.3): the node's own config above
+    // already carries every row, so an ordinary save writes no MappingProfile at all.
+    //
+    // This used to import one on EVERY save, which is what created the duplicate masters, and left two
+    // sources of truth for the same mapping — the node's rows and the profile's fields — free to diverge.
+    // They did: a node holding 12 fields while its profile held 15 silently dropped the three columns the
+    // workflow's transformation rules targeted, so the rules had nothing to attach to and vanished from the
+    // UI while remaining in the database.
+    //
+    // Master profiles are now created only by an explicit "Mark as Master" (see markActiveGroupAsMaster),
+    // which is what that button always implied.
     emitSaved();
   }
 }

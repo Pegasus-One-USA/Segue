@@ -305,7 +305,9 @@ public sealed class MappingImportService : IMappingImportService
             // hardcoded false here made the two paths disagree about the same field. Tables/columns this import
             // is about to create are always created nullable, so they're correctly absent from this index.
             IsRequired: notNullColumns.Contains(NotNullColumnKey(table.Name, column.Column)),
-            DefaultValue: null,
+            // Only a "default" column carries one — see BuildJsonPathAndFormat's own "default" case, whose
+            // JsonPath IS the @token rather than anything resolved from the source payload.
+            DefaultValue: column.Mode == "default" ? column.DefaultValue : null,
             Format: format,
             ResourceType: mapping.ResourceType,
             DestinationObject: table.Name,
@@ -392,6 +394,11 @@ public sealed class MappingImportService : IMappingImportService
                         ?? throw new InvalidOperationException($"Column '{column.Column}' (wholeNodeAsJson) has no sourceNode."),
                     resourceType, arrayContext),
                 $"wholeNodeAsJson{aggregateSuffix}"),
+
+            // No real source at all — the @token IS the JsonPath (JsonMappingEngine.IsSystemToken /
+            // its "@default" literal-constant branch), never resolved against the payload the way every
+            // other mode above is.
+            "default" => (column.DefaultToken ?? "@default", "default"),
 
             _ => throw new InvalidOperationException($"Unknown column mode '{column.Mode}' for column '{column.Column}'.")
         };
