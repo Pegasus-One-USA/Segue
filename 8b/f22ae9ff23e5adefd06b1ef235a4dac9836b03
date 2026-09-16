@@ -1,0 +1,23 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_c0cbaceb759321::t_84038842959768 1355-1385
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_c0cbaceb759321::t_376ba0a8129664 1205,1224-1225,1277,1335-1345,1347,1357-1407,1448
+portal/src/app/services/workflow-build-assembler-v2.array-wildcard.spec.ts
+  s_c0cbaceb759321::t_959b90891b6888 1-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8bf22ae9ff23e5adefd06b1ef235a4dac9836b03",
+  "prompts": {},
+  "sessions": {
+    "s_c0cbaceb759321": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3843828e-0c67-4668-be57-ce99c6e203f6",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
