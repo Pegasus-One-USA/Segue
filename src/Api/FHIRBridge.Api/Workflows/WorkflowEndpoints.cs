@@ -8,6 +8,7 @@ using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
+using FHIRBridge.Application.Abstractions.Workflows;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Security;
@@ -1019,6 +1020,23 @@ public static class WorkflowEndpoints
         // Module-access gate (workflow.view OR any workflow-node permission) — opening a single workflow to
         // view it, same as the list endpoints above. Row-level vendor visibility is layered on top inside
         // the handler itself (see above) since it depends on this specific workflow's own nodes.
+        }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
+
+        // Downloadable plain-text dump of every configuration table this workflow depends on — the graph tables
+        // plus every source/destination/mapping/route/rule row they reference — each section carrying the SELECT
+        // that produced it and its rows printed one data point per line, for offline analysis and support triage.
+        // Returns text/plain as an attachment rather than JSON: the caller is a human reading a file, not code.
+        // Gated the same as GET /workflows/{id} (this is strictly a read of config the caller can already see);
+        // secret VALUES are excluded by the exporter — only their Key Vault references are written.
+        group.MapGet("/workflows/{workflowId:guid}/configuration-export", async (
+            Guid workflowId,
+            IWorkflowConfigurationExporter exporter,
+            CancellationToken cancellationToken) =>
+        {
+            var export = await exporter.ExportAsync(workflowId, cancellationToken);
+            return export is null
+                ? Results.NotFound()
+                : Results.File(System.Text.Encoding.UTF8.GetBytes(export.Content), "text/plain; charset=utf-8", export.FileName);
         }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
 
         // Low-level upsert-by-id — superseded by /workflows/build for the portal's builder canvas (which also

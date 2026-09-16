@@ -228,6 +228,19 @@
                     <mat-icon>tag</mat-icon> Copy Workflow ID
                   </button>
 
+                  <!-- Read-only dump of every configuration table this workflow touches, for offline analysis.
+                       Available with workflow.view alone, matching the endpoint's own gate. -->
+                  <button
+                    mat-menu-item
+                    type="button"
+                    [disabled]="exportingId() === w.workflowId"
+                    title="Download every configuration table this workflow uses, with the SQL query and data for each, as a text file."
+                    (click)="onDownloadConfiguration(w)"
+                  >
+                    <mat-icon>download</mat-icon>
+                    {{ exportingId() === w.workflowId ? 'Preparing…' : 'Download Configuration' }}
+                  </button>
+
                   @if (canDelete()) {
                     <mat-divider></mat-divider>
 

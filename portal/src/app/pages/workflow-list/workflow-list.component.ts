@@ -1,6 +1,7 @@
 ﻿import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal, computed } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
+import { HttpResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -78,6 +79,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   readonly busyId = signal<string | null>(null);
   /** Workflow id whose enable/disable or delete call is in flight — disables its row controls. */
   readonly rowBusyId = signal<string | null>(null);
+  /** Workflow id whose configuration export is being built server-side. Kept separate from rowBusyId because
+   *  this is a pure read: it must not disable the row's enable/delete controls while it runs. */
+  readonly exportingId = signal<string | null>(null);
 
   readonly launchModal = signal<LaunchModal | null>(null);
   readonly dataModal = signal<DataModal | null>(null);
@@ -633,6 +637,51 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Copies this workflow's raw id straight to the clipboard — no modal, just the id + a toast confirmation. */
   copyWorkflowId(row: WorkflowSummary): void {
     this.copy(row.workflowId, 'Workflow ID');
+  }
+
+  /**
+   * Downloads the workflow's full configuration dump as a text file — every configuration table it touches,
+   * each with the SQL that selected its rows and those rows printed one data point per line.
+   *
+   * The file is built server-side (see the /configuration-export endpoint): the browser only has the summary
+   * row, not the source/destination/mapping/route/rule records the report is mostly made of.
+   */
+  onDownloadConfiguration(row: WorkflowSummary): void {
+    if (this.exportingId()) return;
+    this.exportingId.set(row.workflowId);
+
+    this.api.configurationExport(row.workflowId).subscribe({
+      next: response => {
+        this.exportingId.set(null);
+        const blob = response.body;
+        if (!blob) {
+          this.toast.error('Download', 'The export came back empty.');
+          return;
+        }
+        this.saveBlob(blob, this.fileNameFrom(response, `workflow-config-${row.workflowId}.txt`));
+        this.toast.success('Configuration exported', `The configuration for "${row.name}" was downloaded.`);
+      },
+      error: err => {
+        this.exportingId.set(null);
+        this.toast.error('Download', this.messageOf(err, 'Could not export the workflow configuration.'));
+      },
+    });
+  }
+
+  /** Prefers the server's Content-Disposition filename (it carries the workflow name + a UTC timestamp). */
+  private fileNameFrom(response: HttpResponse<Blob>, fallback: string): string {
+    const header = response.headers.get('Content-Disposition');
+    const match = header?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+    return match?.[1] ? decodeURIComponent(match[1]) : fallback;
+  }
+
+  private saveBlob(blob: Blob, fileName: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    window.URL.revokeObjectURL(url);
   }
 
   /** Deep-links to the Execution History screen pre-filtered to this one workflow's runs (see
