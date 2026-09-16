@@ -43,23 +43,31 @@ apiBaseUrl ??= "http://127.0.0.1:5000/"; // local dev only — matches FHIRBridg
 builder.Services.AddReverseProxy().LoadFromMemory(
     routes:
     [
+        // RequestHeaderOriginalHost preserves the Host header the browser actually sent (the custom domain)
+        // instead of YARP's default of rewriting it to the destination's own address. The Api derives its
+        // OAuth redirect_uri from Request.Host (see OAuthController.BuildCallbackUri), so without this the
+        // eCW/Healow authorize request is built with the Api container's own azurecontainerapps.io hostname
+        // instead of the custom domain the admin registered with the EHR.
         new RouteConfig
         {
             RouteId = "api-route",
             ClusterId = "api-cluster",
-            Match = new RouteMatch { Path = "/api/{**catch-all}" }
+            Match = new RouteMatch { Path = "/api/{**catch-all}" },
+            Transforms = [new Dictionary<string, string> { ["RequestHeaderOriginalHost"] = "true" }]
         },
         new RouteConfig
         {
             RouteId = "swagger-route",
             ClusterId = "api-cluster",
-            Match = new RouteMatch { Path = "/swagger/{**catch-all}" }
+            Match = new RouteMatch { Path = "/swagger/{**catch-all}" },
+            Transforms = [new Dictionary<string, string> { ["RequestHeaderOriginalHost"] = "true" }]
         },
         new RouteConfig
         {
             RouteId = "legal-route",
             ClusterId = "api-cluster",
-            Match = new RouteMatch { Path = "/legal/{**catch-all}" }
+            Match = new RouteMatch { Path = "/legal/{**catch-all}" },
+            Transforms = [new Dictionary<string, string> { ["RequestHeaderOriginalHost"] = "true" }]
         }
     ],
     clusters:
