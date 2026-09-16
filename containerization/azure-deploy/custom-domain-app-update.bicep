@@ -75,7 +75,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
   // `properties.template`/`properties.configuration`, so passing those through unchanged (as this
   // module already does) does NOT preserve it. Omitting this block entirely, as an earlier version
   // of this module did, silently resets identity to `None` on every domain-binding redeploy -
-  // confirmed live: fhirbridgeApp/worker authenticate to the tenant secrets Key Vault via this
+  // confirmed live: segueApp/worker authenticate to the tenant secrets Key Vault via this
   // system-assigned identity (see main.bicep), and losing it here made that authentication hang
   // indefinitely with zero log output, well before Kestrel even started listening - the app looked
   // "stuck," not crashed, and only after a custom domain had just been bound. Matches main.bicep's

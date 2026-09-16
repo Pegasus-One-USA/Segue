@@ -37,8 +37,8 @@ resource "aws_ecs_task_definition" "postgres" {
       # group + private subnets) is the real boundary here, not TLS.
       portMappings = [{ containerPort = var.postgres_port, protocol = "tcp" }]
       environment = [
-        { name = "POSTGRES_DB", value = "FHIRBridge" },
-        { name = "POSTGRES_USER", value = "fhirbridge" },
+        { name = "POSTGRES_DB", value = "Segue" },
+        { name = "POSTGRES_USER", value = "segue" },
         # EFS (like Azure Files) doesn't support the chown/chmod postgres's entrypoint does on
         # PGDATA at first boot ("Operation not permitted") the way a native/NFS filesystem does —
         # pointing PGDATA at a subdirectory postgres creates and owns itself (rather than the
@@ -108,7 +108,7 @@ resource "aws_ecs_task_definition" "redis" {
       # --port 0 disables the plaintext port entirely — --tls-port is the only one Redis listens
       # on. --tls-auth-clients no means server-side TLS + the existing --requirepass password,
       # not mutual TLS (no client certificate required) — matches the ConnectionStrings__Redis
-      # "ssl=true" (no client cert options) on fhirbridge_app/worker below.
+      # "ssl=true" (no client cert options) on segue_app/worker below.
       command = ["sh", "-c", "redis-server --tls-port ${var.redis_port} --port 0 --tls-cert-file /certs/redis.crt --tls-key-file /certs/redis.key --tls-auth-clients no --requirepass \"$REDIS_PASSWORD\""]
       secrets = [
         { name = "REDIS_PASSWORD", valueFrom = aws_secretsmanager_secret.redis_password.arn },
@@ -175,7 +175,7 @@ resource "aws_ecs_task_definition" "seq" {
   ])
 }
 
-resource "aws_ecs_task_definition" "fhirbridge_app" {
+resource "aws_ecs_task_definition" "segue_app" {
   family                   = "${var.name_prefix}-app"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
@@ -185,12 +185,12 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
 
   container_definitions = jsonencode([
     {
-      name         = "fhirbridge-app"
-      image        = "${aws_ecr_repository.fhirbridge_app.repository_url}:${var.image_tag}"
+      name         = "segue-app"
+      image        = "${aws_ecr_repository.segue_app.repository_url}:${var.image_tag}"
       portMappings = [{ containerPort = 80, protocol = "tcp" }]
       environment = concat([
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__FHIRBridgeDb", value = local.fhirbridgedb_connection_string },
+        { name = "ConnectionStrings__FHIRBridgeDb", value = local.seguedb_connection_string },
         { name = "Database__Provider", value = "PostgreSql" },
         { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password},ssl=true" },
         { name = "Redis__TrustedCertificateThumbprint", value = var.redis_trusted_certificate_thumbprint },
@@ -201,7 +201,7 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
         { name = "ApiBaseUrl", value = "http://127.0.0.1:5000/" },
         ],
         # See enable_seq's description in variables.tf. Both Api and Gateway (this same container)
-        # read this key via FhirBridgeLogging.
+        # read this key via SegueLogging.
         var.enable_seq ? [
           { name = "Observability__SeqServerUrl", value = "http://seq.${var.name_prefix}.internal" },
       ] : [])
@@ -211,7 +211,7 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.fhirbridge_app.name
+          "awslogs-group"         = aws_cloudwatch_log_group.segue_app.name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "app"
         }
@@ -234,14 +234,14 @@ resource "aws_ecs_task_definition" "worker" {
       image = "${aws_ecr_repository.worker.repository_url}:${var.image_tag}"
       environment = concat([
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__FHIRBridgeDb", value = local.fhirbridgedb_connection_string },
+        { name = "ConnectionStrings__FHIRBridgeDb", value = local.seguedb_connection_string },
         { name = "Database__Provider", value = "PostgreSql" },
         { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password},ssl=true" },
         { name = "Redis__TrustedCertificateThumbprint", value = var.redis_trusted_certificate_thumbprint },
         { name = "RuntimeWorker__Enabled", value = "true" },
         { name = "Messaging__Provider", value = "InMemory" },
         ],
-        # See enable_seq's description on fhirbridge_app above.
+        # See enable_seq's description on segue_app above.
         var.enable_seq ? [
           { name = "Observability__SeqServerUrl", value = "http://seq.${var.name_prefix}.internal" },
       ] : [])

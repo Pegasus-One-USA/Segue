@@ -45,8 +45,8 @@ try {
 } finally { Pop-Location }
 
 $Sites = @(
-    @{ Name = "fhirbridge-app portal";  Url = "http://localhost:$AppPort/" }
-    @{ Name = "fhirbridge-app swagger"; Url = "http://localhost:$AppPort/swagger/index.html" }
+    @{ Name = "segue-app portal";  Url = "http://localhost:$AppPort/" }
+    @{ Name = "segue-app swagger"; Url = "http://localhost:$AppPort/swagger/index.html" }
 )
 
 Write-Host "==> Waiting for sites to respond (timeout: ${TimeoutSeconds}s each)"

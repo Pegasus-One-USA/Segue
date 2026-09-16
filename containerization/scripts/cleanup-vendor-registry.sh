@@ -40,7 +40,7 @@ RG_NAME="${RG_NAME:-rg-tusharpuri}"
 # it unclear whether cleanup actually worked.
 if command -v az >/dev/null 2>&1; then
   echo "Vendor-registry resources currently in '${RG_NAME}' (before destroy):"
-  az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='${RG_NAME}' && tags.Component=='vendor-registry']" --output table 2>/dev/null \
+  az resource list --tag Project=Segue --query "[?resourceGroup=='${RG_NAME}' && tags.Component=='vendor-registry']" --output table 2>/dev/null \
     || echo "  (couldn't query — not logged in to az, or the group doesn't exist)"
   echo
 fi
@@ -63,7 +63,7 @@ fi
 if command -v az >/dev/null 2>&1; then
   echo
   echo "Vendor-registry resources remaining in '${RG_NAME}' (should be empty):"
-  az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='${RG_NAME}' && tags.Component=='vendor-registry']" --output table 2>/dev/null \
+  az resource list --tag Project=Segue --query "[?resourceGroup=='${RG_NAME}' && tags.Component=='vendor-registry']" --output table 2>/dev/null \
     || echo "  (couldn't query — not logged in to az)"
 fi
 

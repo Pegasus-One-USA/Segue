@@ -18,8 +18,8 @@
 # non-graceful restart — a real cost, accepted here for a demo/test environment specifically).
 FROM postgres:16-alpine
 
-COPY containerization/docker/postgres-local/entrypoint.sh /usr/local/bin/fhirbridge-postgres-entrypoint.sh
-RUN chmod +x /usr/local/bin/fhirbridge-postgres-entrypoint.sh
+COPY containerization/docker/postgres-local/entrypoint.sh /usr/local/bin/segue-postgres-entrypoint.sh
+RUN chmod +x /usr/local/bin/segue-postgres-entrypoint.sh
 
-ENTRYPOINT ["fhirbridge-postgres-entrypoint.sh"]
+ENTRYPOINT ["segue-postgres-entrypoint.sh"]
 CMD ["postgres"]

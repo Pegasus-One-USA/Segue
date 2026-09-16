@@ -12,14 +12,14 @@
     "namePrefix": {
       "type": "string",
       "metadata": {
-        "description": "The same deployment name prefix used for the original FHIRBridge deployment (e.g. segue12). Used to derive the environment name (<prefix>-env) and the app name."
+        "description": "The same deployment name prefix used for the original Segue deployment (e.g. segue12). Used to derive the environment name (<prefix>-env) and the app name."
       }
     },
-    "fhirbridgeAppDomain": {
+    "segueAppDomain": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Custom domain for the FHIRBridge app (e.g. app.example.com). Leave blank to skip this app entirely this run. Its CNAME + asuid TXT records must already be created and propagated BEFORE this deploy - see main.bicep's fhirbridgeAppDomainVerificationId output for the TXT value."
+        "description": "Custom domain for the Segue app (e.g. app.example.com). Leave blank to skip this app entirely this run. Its CNAME + asuid TXT records must already be created and propagated BEFORE this deploy - see main.bicep's segueAppDomainVerificationId output for the TXT value."
       }
     },
     "location": {
@@ -41,9 +41,9 @@
     "environmentName": "[format('{0}-env', parameters('namePrefix'))]",
     "allAppConfigs": [
       {
-        "key": "fhirbridgeApp",
+        "key": "segueApp",
         "name": "[format('{0}-app', parameters('namePrefix'))]",
-        "domain": "[parameters('fhirbridgeAppDomain')]"
+        "domain": "[parameters('segueAppDomain')]"
       }
     ],
     "activeAppConfigs": "[if(parameters('enableFrontDoorWaf'), createArray(), filter(variables('allAppConfigs'), lambda('c', not(empty(lambdaVariables('c').domain)))))]",
@@ -55,12 +55,12 @@
   },
   "resources": [
     {
-      "condition": "[and(parameters('enableFrontDoorWaf'), not(empty(parameters('fhirbridgeAppDomain'))))]",
+      "condition": "[and(parameters('enableFrontDoorWaf'), not(empty(parameters('segueAppDomain'))))]",
       "type": "Microsoft.Cdn/profiles/customDomains",
       "apiVersion": "2024-02-01",
-      "name": "[format('{0}/{1}', variables('frontDoorProfileName'), replace(parameters('fhirbridgeAppDomain'), '.', '-'))]",
+      "name": "[format('{0}/{1}', variables('frontDoorProfileName'), replace(parameters('segueAppDomain'), '.', '-'))]",
       "properties": {
-        "hostName": "[parameters('fhirbridgeAppDomain')]",
+        "hostName": "[parameters('segueAppDomain')]",
         "tlsSettings": {
           "certificateType": "ManagedCertificate"
         }
@@ -376,7 +376,7 @@
       ]
     },
     {
-      "condition": "[and(parameters('enableFrontDoorWaf'), not(empty(parameters('fhirbridgeAppDomain'))))]",
+      "condition": "[and(parameters('enableFrontDoorWaf'), not(empty(parameters('segueAppDomain'))))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "frontdoor-route-waf-customdomain-update",
@@ -399,7 +399,7 @@
             "value": "[variables('frontDoorSecurityPolicyName')]"
           },
           "newCustomDomainId": {
-            "value": "[resourceId('Microsoft.Cdn/profiles/customDomains', variables('frontDoorProfileName'), replace(parameters('fhirbridgeAppDomain'), '.', '-'))]"
+            "value": "[resourceId('Microsoft.Cdn/profiles/customDomains', variables('frontDoorProfileName'), replace(parameters('segueAppDomain'), '.', '-'))]"
           },
           "existingRouteProperties": {
             "value": "[reference(resourceId('Microsoft.Cdn/profiles/afdEndpoints/routes', variables('frontDoorProfileName'), variables('frontDoorEndpointName'), variables('frontDoorRouteName')), '2024-02-01')]"
@@ -489,7 +489,7 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Cdn/profiles/customDomains', variables('frontDoorProfileName'), replace(parameters('fhirbridgeAppDomain'), '.', '-'))]"
+        "[resourceId('Microsoft.Cdn/profiles/customDomains', variables('frontDoorProfileName'), replace(parameters('segueAppDomain'), '.', '-'))]"
       ]
     }
   ],
@@ -511,13 +511,13 @@
     "frontDoorCustomDomainValidationToken": {
       "type": "string",
       "metadata": {
-        "description": "Populated only when enableFrontDoorWaf is true and fhirbridgeAppDomain is set. A Front Door-specific validation token — different from fhirbridgeAppDomainVerificationId's asuid.<domain> mechanism, which only applies to the Container-App-direct path. Add a TXT record at _dnsauth.<your domain> with this value; Azure auto-detects it and issues the managed certificate once found — no further deployment needed."
+        "description": "Populated only when enableFrontDoorWaf is true and segueAppDomain is set. A Front Door-specific validation token — different from segueAppDomainVerificationId's asuid.<domain> mechanism, which only applies to the Container-App-direct path. Add a TXT record at _dnsauth.<your domain> with this value; Azure auto-detects it and issues the managed certificate once found — no further deployment needed."
       },
-      "value": "[if(and(parameters('enableFrontDoorWaf'), not(empty(parameters('fhirbridgeAppDomain')))), reference(resourceId('Microsoft.Cdn/profiles/customDomains', variables('frontDoorProfileName'), replace(parameters('fhirbridgeAppDomain'), '.', '-')), '2024-02-01').validationProperties.validationToken, '')]"
+      "value": "[if(and(parameters('enableFrontDoorWaf'), not(empty(parameters('segueAppDomain')))), reference(resourceId('Microsoft.Cdn/profiles/customDomains', variables('frontDoorProfileName'), replace(parameters('segueAppDomain'), '.', '-')), '2024-02-01').validationProperties.validationToken, '')]"
     },
     "frontDoorCustomDomainUrl": {
       "type": "string",
-      "value": "[if(and(parameters('enableFrontDoorWaf'), not(empty(parameters('fhirbridgeAppDomain')))), format('https://{0}', parameters('fhirbridgeAppDomain')), '')]"
+      "value": "[if(and(parameters('enableFrontDoorWaf'), not(empty(parameters('segueAppDomain')))), format('https://{0}', parameters('segueAppDomain')), '')]"
     }
   }
 }

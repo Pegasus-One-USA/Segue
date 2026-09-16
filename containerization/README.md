@@ -1,6 +1,6 @@
-# FHIRBridge containerization
+# Segue containerization
 
-Packages FHIRBridge into 4 containers and deploys them via Terraform to local Docker, Azure, or
+Packages Segue into 4 containers and deploys them via Terraform to local Docker, Azure, or
 AWS. Everything here is additive: it doesn't touch the repo-root `docker-compose.yml` (a separate
 dev/E2E dependency stack) or the existing Windows Service / GitHub Actions deploy path documented
 in `../deploy/windows/README.md` — this is a new, parallel deployment path.
@@ -9,8 +9,8 @@ in `../deploy/windows/README.md` — this is a new, parallel deployment path.
 
 | # | Container | Runs | Public? |
 |---|---|---|---|
-| 1 | `fhirbridge-app` | `FHIRBridge.Api` (loopback-only) + `FHIRBridge.Gateway` (serves the Angular portal, proxies `/api/**` and `/swagger/**` to the Api) | Yes — port 80 |
-| 2 | `postgres` | `postgres:16-alpine` — hosts the `FHIRBridge` database | No |
+| 1 | `segue-app` | `FHIRBridge.Api` (loopback-only) + `FHIRBridge.Gateway` (serves the Angular portal, proxies `/api/**` and `/swagger/**` to the Api) | Yes — port 80 |
+| 2 | `postgres` | `postgres:16-alpine` — hosts the `Segue` database | No |
 | 3 | `redis` | `redis:7-alpine` — backs `ConnectionStrings:Redis` for the Api + Worker | No |
 | 4 | `worker` | `FHIRBridge.Worker` — background scheduler/pipeline processor, no HTTP endpoint | No |
 
@@ -20,7 +20,7 @@ toggle in that environment's `terraform.tfvars` — see that environment's `vari
 exact flag names. Neither is available for the local Docker environment (no cloud to provision a
 managed service in), which always uses the containerized pair.
 
-`fhirbridge-app` bundles two processes in one image instead of one, because the existing Windows
+`segue-app` bundles two processes in one image instead of one, because the existing Windows
 deploy topology already establishes this exact split (Api never exposed, Gateway is the only public
 entry point) — see `../deploy/windows/README.md`. No nginx or new reverse proxy was introduced;
 `FHIRBridge.Gateway` already does this job. The app already auto-provisions its own schema on
@@ -29,11 +29,11 @@ startup (`Database.Migrate()`), so `postgres` needs no init scripts.
 ## Folder layout
 
 ```
-docker/            Dockerfiles + fhirbridge-app's entrypoint.sh
+docker/            Dockerfiles + segue-app's entrypoint.sh
 compose/            docker-compose.yml + .env.example — fast local path
 scripts/            build-images.sh / .ps1 — builds & (optionally) pushes the custom images
-                    (3 for the Terraform environments; the Bicep path also needs fhirbridge-postgres,
-                    plus fhirbridge-postgres-backup if a client keeps Postgres containerized)
+                    (3 for the Terraform environments; the Bicep path also needs segue-postgres,
+                    plus segue-postgres-backup if a client keeps Postgres containerized)
                     manage-custom-domain.sh / .ps1 — Info/Wait/Add/Bind custom domain + managed SSL
                     cleanup-*.sh / .ps1 — tear down each environment below
 terraform/
@@ -73,7 +73,7 @@ cp .env.example .env   # edit secrets
 docker compose up -d
 ```
 
-`fhirbridge-app` → http://localhost:8080. Or the Terraform path (reproduces the same 4 containers,
+`segue-app` → http://localhost:8080. Or the Terraform path (reproduces the same 4 containers,
 useful for testing the Terraform config itself):
 
 ```bash
@@ -101,8 +101,8 @@ already has a published version:**
 
 - **Recommended (Azure): import an already-published version, no local Docker needed for this
   step** — see section 4 below. `az acr import --name <this ACR's name> --source
-  <vendor_acr_login_server>/fhirbridge-app:v1.2.0 --image fhirbridge-app:v1.2.0` (repeat for
-  `fhirbridge-worker`/`fhirbridge-redis`), then set `image_tag = "v1.2.0"` in `terraform.tfvars`.
+  <vendor_acr_login_server>/segue-app:v1.2.0 --image segue-app:v1.2.0` (repeat for
+  `segue-worker`/`segue-redis`), then set `image_tag = "v1.2.0"` in `terraform.tfvars`.
 - **Direct build (works today for both Azure and AWS, no vendor registry required)** — build with
   local Docker straight into this deployment's own registry:
   `../../../scripts/build-images.sh -r <registry output from the targeted apply> -t <image_tag> -p`.
@@ -114,7 +114,7 @@ already has a published version:**
 terraform apply
 ```
 
-Outputs (`terraform output`) give you `fhirbridge_app_url` (and, on AWS, `ecr_repository_urls`)
+Outputs (`terraform output`) give you `segue_app_url` (and, on AWS, `ecr_repository_urls`)
 once the apply completes.
 
 ## 4. Publish a versioned release, then deploy it to a client
@@ -127,7 +127,7 @@ instead of disposable test images.
 **Set it up once:**
 
 ```bash
-az group create --name rg-fhirbridge-vendor --location eastus   # or reuse an existing group you have access to
+az group create --name rg-segue-vendor --location eastus   # or reuse an existing group you have access to
 cd terraform/vendor-registry
 cp terraform.tfvars.example terraform.tfvars   # set resource_group_name to whichever group you're using
 terraform init
@@ -153,8 +153,8 @@ with a tag that already exists overwrites it, so use a new tag for each real rel
 their deployment at it:
 
 ```bash
-az acr import --name <client-environment's-acr-name> --source <vendor acr_login_server>/fhirbridge-app:v1.2.0 --image fhirbridge-app:v1.2.0
-# repeat for fhirbridge-worker and fhirbridge-redis
+az acr import --name <client-environment's-acr-name> --source <vendor acr_login_server>/segue-app:v1.2.0 --image segue-app:v1.2.0
+# repeat for segue-worker and segue-redis
 ```
 
 Set `image_tag = "v1.2.0"` in that client's `terraform.tfvars` (or `imageTag` for the Bicep path)
@@ -177,7 +177,7 @@ and apply as usual. Tear the vendor registry down (rarely needed — it's meant 
 - **Messaging is `InMemory`** in all 3 environments to keep the container count at exactly 4 —
   adding a RabbitMQ/Azure Service Bus/SQS container or managed queue later just means changing
   `Messaging__Provider` and adding one more container/service definition.
-- **TLS**: Azure Container Apps' public ingress (`fhirbridge-app`) gets automatic, Microsoft-managed
+- **TLS**: Azure Container Apps' public ingress (`segue-app`) gets automatic, Microsoft-managed
   TLS on its `*.azurecontainerapps.io` domain — no extra config needed. AWS's ALB terminates TLS
   using a **self-signed certificate** generated by this config (`main.tf`'s `tls_private_key`/
   `tls_self_signed_cert`/`aws_acm_certificate` resources) — browsers will show a trust warning until

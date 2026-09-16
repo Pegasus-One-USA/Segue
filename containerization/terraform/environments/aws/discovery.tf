@@ -1,6 +1,6 @@
-# AWS Cloud Map private DNS namespace — lets fhirbridge-app/worker reach postgres (when
-# use_rds_postgresql is false) and redis by hostname (postgres.fhirbridge.internal,
-# redis.fhirbridge.internal, etc.) the same way they'd reach a container-name service in Docker
+# AWS Cloud Map private DNS namespace — lets segue-app/worker reach postgres (when
+# use_rds_postgresql is false) and redis by hostname (postgres.segue.internal,
+# redis.segue.internal, etc.) the same way they'd reach a container-name service in Docker
 # Compose, without going through the ALB.
 
 resource "aws_service_discovery_private_dns_namespace" "main" {
@@ -38,7 +38,7 @@ resource "aws_service_discovery_service" "redis" {
   }
 }
 
-# Only needed when var.enable_seq is true — lets fhirbridge_app/worker reach Seq internally by
+# Only needed when var.enable_seq is true — lets segue_app/worker reach Seq internally by
 # hostname (seq.<name_prefix>.internal) to ship logs, the same way they reach postgres/redis.
 # Separate from Seq's own external reachability (a human browsing to it), which goes through the
 # ALB instead — see alb.tf.

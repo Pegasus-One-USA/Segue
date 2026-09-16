@@ -30,7 +30,7 @@ output "azure_cache_primary_access_key" {
 }
 
 output "postgres_mode" {
-  description = "Which Postgres FHIRBridge's own database actually has — \"azure-managed\" or \"container\"."
+  description = "Which Postgres Segue's own database actually has — \"azure-managed\" or \"container\"."
   value       = var.use_azure_postgresql ? "azure-managed" : "container"
 }
 
@@ -54,9 +54,9 @@ output "dataprotection_key_id" {
   value       = var.enable_tenant_secrets_key_vault ? azurerm_key_vault_key.dataprotection[0].id : null
 }
 
-output "fhirbridge_app_principal_id" {
-  description = "System-assigned managed identity principal ID for the fhirbridge_app Container App. Use as --assignee for the manual role-assignment fallback above."
-  value       = azurerm_container_app.fhirbridge_app.identity[0].principal_id
+output "segue_app_principal_id" {
+  description = "System-assigned managed identity principal ID for the segue_app Container App. Use as --assignee for the manual role-assignment fallback above."
+  value       = azurerm_container_app.segue_app.identity[0].principal_id
 }
 
 output "worker_principal_id" {
@@ -69,8 +69,8 @@ output "resource_manifest_download_cmd" {
   value       = "az storage blob download --account-name ${azurerm_storage_account.main.name} --container-name ${azurerm_storage_container.manifest.name} --name ${azurerm_storage_blob.resource_manifest.name} --file resources.txt --auth-mode login"
 }
 
-output "fhirbridge_app_url" {
-  value = "https://${local.fhirbridge_app_name}.${azurerm_container_app_environment.main.default_domain}"
+output "segue_app_url" {
+  value = "https://${local.segue_app_name}.${azurerm_container_app_environment.main.default_domain}"
 }
 
 output "seq_url" {
@@ -78,14 +78,14 @@ output "seq_url" {
   value       = var.enable_seq ? "https://${local.seq_name}.${azurerm_container_app_environment.main.default_domain}" : null
 }
 
-output "fhirbridge_app_domain_verification" {
-  description = "Add CNAME (domain -> fhirbridge_app_url hostname) and TXT asuid.<domain>=this value at your DNS provider to register the hostname. See fhirbridge_app_custom_domain's description for the current SSL-binding limitation (bind_custom_domain_certificates is a no-op until this environment is migrated to azurerm ~> 4.69)."
-  value       = azurerm_container_app.fhirbridge_app.custom_domain_verification_id
+output "segue_app_domain_verification" {
+  description = "Add CNAME (domain -> segue_app_url hostname) and TXT asuid.<domain>=this value at your DNS provider to register the hostname. See segue_app_custom_domain's description for the current SSL-binding limitation (bind_custom_domain_certificates is a no-op until this environment is migrated to azurerm ~> 4.69)."
+  value       = azurerm_container_app.segue_app.custom_domain_verification_id
 }
 
-output "fhirbridge_app_custom_domain_url" {
-  description = "Populated once fhirbridge_app_custom_domain is set; null otherwise."
-  value       = var.fhirbridge_app_custom_domain != "" ? "https://${var.fhirbridge_app_custom_domain}" : null
+output "segue_app_custom_domain_url" {
+  description = "Populated once segue_app_custom_domain is set; null otherwise."
+  value       = var.segue_app_custom_domain != "" ? "https://${var.segue_app_custom_domain}" : null
 }
 
 # Currently always false in effect — see bind_custom_domain_certificates' own description
@@ -95,5 +95,5 @@ output "bind_custom_domain_certificates" {
 }
 
 output "custom_domain_phase" {
-  value = var.fhirbridge_app_custom_domain == "" ? "none" : "hostname-registered-no-managed-ssl-until-azurerm-4.69-migration"
+  value = var.segue_app_custom_domain == "" ? "none" : "hostname-registered-no-managed-ssl-until-azurerm-4.69-migration"
 }

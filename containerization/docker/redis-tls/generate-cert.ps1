@@ -57,7 +57,7 @@ if ((Test-Path $CrtPath) -and (Test-Path $KeyPath) -and -not $Force) {
     & $OpenSsl req -x509 -newkey rsa:2048 -nodes `
         -keyout $KeyPath -out $CrtPath `
         -days 3650 `
-        -subj "/CN=fhirbridge-redis/O=FHIRBridge/OU=containerization" `
+        -subj "/CN=segue-redis/O=Segue/OU=containerization" `
         -addext "subjectAltName=DNS:redis,DNS:*.internal,DNS:localhost"
     if ($LASTEXITCODE -ne 0) { throw "openssl req failed" }
 }
@@ -71,7 +71,7 @@ Write-Info "  - Bicep:                redisTrustedCertificateThumbprint paramete
 Write-Info "  - Terraform (azure/aws/local): redis_trusted_certificate_thumbprint variable"
 Write-Info ""
 Write-Info "Then build/push images as usual (containerization/scripts/build-images.ps1|sh) -"
-Write-Info "the fhirbridge-redis image bakes in whatever redis.crt/redis.key currently sit in this folder."
+Write-Info "the segue-redis image bakes in whatever redis.crt/redis.key currently sit in this folder."
 
 # The one line on the actual success stream (capturable via $x = & generate-cert.ps1 -Quiet, or
 # even without -Quiet since Write-Host output above never reaches this stream anyway) - always

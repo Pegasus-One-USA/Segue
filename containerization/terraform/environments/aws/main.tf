@@ -4,7 +4,7 @@
 #
 #   ../../../scripts/build-images.sh -r <account>.dkr.ecr.<region>.amazonaws.com/<name_prefix> -t <image_tag> -p
 #
-# (bootstrap order: `terraform apply -target=aws_ecr_repository.fhirbridge_app -target=aws_ecr_repository.worker -target=aws_ecr_repository.redis`
+# (bootstrap order: `terraform apply -target=aws_ecr_repository.segue_app -target=aws_ecr_repository.worker -target=aws_ecr_repository.redis`
 # first, then run the build script, then a full `terraform apply`.)
 #
 # All 4 containers run in PRIVATE subnets with no public IP — only the ALB is internet-facing.
@@ -12,7 +12,7 @@
 # subnets still reach ECR/CloudWatch/Secrets Manager/the internet for image pulls. Redis is pinned
 # to a single task (EFS-backed data directories are not safe for concurrent multi-instance
 # processes) and is reachable by the other services via AWS Cloud Map private DNS, never through
-# the ALB. FHIRBridge's own database (Postgres) is either that same containerized/single-task/
+# the ALB. Segue's own database (Postgres) is either that same containerized/single-task/
 # internal-only pattern, or a managed Amazon RDS for PostgreSQL instance — see use_rds_postgresql
 # in variables.tf. The ALB
 # terminates TLS using a self-signed certificate generated at apply time — swap in a real ACM
@@ -41,7 +41,7 @@ provider "aws" {
   # ../../../scripts/cleanup-aws.sh|ps1 and the containerization guide) matches against.
   default_tags {
     tags = {
-      Project     = "FHIRBridge"
+      Project     = "Segue"
       Component   = "containerization"
       Environment = var.name_prefix
       ManagedBy   = "Terraform"
@@ -56,17 +56,17 @@ data "aws_availability_zones" "available" {
 locals {
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 
-  # Single source of truth for both fhirbridge_app's and worker's ConnectionStrings__FHIRBridgeDb
+  # Single source of truth for both segue_app's and worker's ConnectionStrings__FHIRBridgeDb
   # (was duplicated identically in both places before this became a local) — resolves to whichever
   # of the two Postgres resources use_rds_postgresql actually created. Amazon RDS for PostgreSQL
   # requires/strongly recommends SSL and presents an AWS-issued certificate (unlike the
   # containerized path's plain internal-network-only connection, which relies on the ecs_tasks
   # security group + private subnets instead of TLS — matching how the containerized SQL Server
   # container this replaced was itself "network isolation only, no cert pinning needed").
-  fhirbridgedb_connection_string = var.use_rds_postgresql ? (
+  seguedb_connection_string = var.use_rds_postgresql ? (
     "Host=${aws_db_instance.postgresql[0].address};Port=5432;Database=${aws_db_instance.postgresql[0].db_name};Username=${aws_db_instance.postgresql[0].username};Password=${var.postgres_password};Ssl Mode=Require;"
     ) : (
-    "Host=postgres.${var.name_prefix}.internal;Port=${var.postgres_port};Database=FHIRBridge;Username=fhirbridge;Password=${var.postgres_password};"
+    "Host=postgres.${var.name_prefix}.internal;Port=${var.postgres_port};Database=Segue;Username=segue;Password=${var.postgres_password};"
   )
 }
 
@@ -166,9 +166,9 @@ resource "aws_security_group" "alb" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "fhirbridge-app"
-    from_port   = var.fhirbridge_app_port
-    to_port     = var.fhirbridge_app_port
+    description = "segue-app"
+    from_port   = var.segue_app_port
+    to_port     = var.segue_app_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -194,7 +194,7 @@ resource "aws_security_group" "alb" {
 
 resource "aws_security_group" "ecs_tasks" {
   name        = "${var.name_prefix}-ecs-tasks-sg"
-  description = "All 4 ECS services — ALB reaches the public app (fhirbridge-app) here; postgres/redis are only reached by other tasks in this group."
+  description = "All 4 ECS services — ALB reaches the public app (segue-app) here; postgres/redis are only reached by other tasks in this group."
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -223,13 +223,13 @@ resource "aws_security_group" "ecs_tasks" {
 
 # --- ECR (custom images are pushed here by the build script) ---
 
-resource "aws_ecr_repository" "fhirbridge_app" {
-  name                 = "${var.name_prefix}/fhirbridge-app"
+resource "aws_ecr_repository" "segue_app" {
+  name                 = "${var.name_prefix}/segue-app"
   image_tag_mutability = "MUTABLE"
 }
 
 resource "aws_ecr_repository" "worker" {
-  name                 = "${var.name_prefix}/fhirbridge-worker"
+  name                 = "${var.name_prefix}/segue-worker"
   image_tag_mutability = "MUTABLE"
 }
 
@@ -237,7 +237,7 @@ resource "aws_ecr_repository" "worker" {
 # containerization/docker/redis-tls/Dockerfile's own comment for why Redis needs a custom image at
 # all (FHIRBridge.Api/.Worker refuse a plaintext Redis connection outside Development).
 resource "aws_ecr_repository" "redis" {
-  name                 = "${var.name_prefix}/fhirbridge-redis"
+  name                 = "${var.name_prefix}/segue-redis"
   image_tag_mutability = "MUTABLE"
 }
 
@@ -343,8 +343,8 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
 
 # --- Log groups (one per service) ---
 
-resource "aws_cloudwatch_log_group" "fhirbridge_app" {
-  name              = "/ecs/${var.name_prefix}/fhirbridge-app"
+resource "aws_cloudwatch_log_group" "segue_app" {
+  name              = "/ecs/${var.name_prefix}/segue-app"
   retention_in_days = 14
 }
 
@@ -373,7 +373,7 @@ resource "aws_cloudwatch_log_group" "seq" {
   retention_in_days = 14
 }
 
-# --- FHIRBridge's own database: Amazon RDS for PostgreSQL — only when use_rds_postgresql is
+# --- Segue's own database: Amazon RDS for PostgreSQL — only when use_rds_postgresql is
 # true. A standard aws_db_instance (engine = "postgres"), not Aurora — Aurora is a separate, more
 # complex distributed engine and would be overkill for the simple "managed PaaS Postgres" this
 # toggle is meant to provide (the direct AWS equivalent of the Azure environment's Azure Database
@@ -397,7 +397,7 @@ resource "aws_security_group" "rds_postgresql" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "Postgres from ECS tasks (fhirbridge-app/worker)"
+    description     = "Postgres from ECS tasks (segue-app/worker)"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
@@ -419,8 +419,8 @@ resource "aws_db_instance" "postgresql" {
   engine_version         = "16"
   instance_class         = var.rds_postgresql_instance_class
   allocated_storage      = var.rds_postgresql_allocated_storage
-  db_name                = "FHIRBridge"
-  username               = "fhirbridge"
+  db_name                = "Segue"
+  username               = "segue"
   password               = var.postgres_password
   db_subnet_group_name   = aws_db_subnet_group.postgresql[0].name
   vpc_security_group_ids = [aws_security_group.rds_postgresql[0].id]
@@ -450,7 +450,7 @@ resource "tls_self_signed_cert" "alb" {
 
   subject {
     common_name  = "${var.name_prefix}.local"
-    organization = "FHIRBridge"
+    organization = "Segue"
   }
 
   validity_period_hours = 8760 # 1 year — regenerate (terraform apply) to renew

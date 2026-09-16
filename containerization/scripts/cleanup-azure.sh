@@ -50,15 +50,15 @@ fi
 RG_NAME="$(grep -E '^[[:space:]]*resource_group_name[[:space:]]*=' terraform.tfvars 2>/dev/null | sed -E 's/^[^=]*=[[:space:]]*"([^"]*)".*/\1/')"
 RG_NAME="${RG_NAME:-rg-tusharpuri}"
 
-# -n overrides; otherwise read from tfvars, falling back to "fhirbridge".
+# -n overrides; otherwise read from tfvars, falling back to "segue".
 NAME_PREFIX="$(grep -E '^[[:space:]]*name_prefix[[:space:]]*=' terraform.tfvars 2>/dev/null | sed -E 's/^[^=]*=[[:space:]]*"([^"]*)".*/\1/')"
-NAME_PREFIX="${NAME_PREFIX_ARG:-${NAME_PREFIX:-fhirbridge}}"
+NAME_PREFIX="${NAME_PREFIX_ARG:-${NAME_PREFIX:-segue}}"
 echo "Using name prefix '${NAME_PREFIX}' as the preview filter and pre-destroy safety gate (pass -n to override)."
 
 MANIFEST_SHOWN="false"
 if command -v az >/dev/null 2>&1; then
   echo "==> Fetching the resource manifest (resources.txt) before anything is destroyed ..."
-  MANIFEST_LOCAL_FILE="$(mktemp -t fhirbridge-resources-preview.XXXXXX)"
+  MANIFEST_LOCAL_FILE="$(mktemp -t segue-resources-preview.XXXXXX)"
   DOWNLOAD_CMD="$(terraform output -raw resource_manifest_download_cmd 2>/dev/null || true)"
   if [[ -n "$DOWNLOAD_CMD" ]]; then
     CMD_WITH_LOCAL_PATH="$(echo "$DOWNLOAD_CMD" | sed -E "s#--file [^ ]+#--file \"${MANIFEST_LOCAL_FILE}\"#")"
@@ -78,13 +78,13 @@ if command -v az >/dev/null 2>&1; then
     # az CLI rejects combining --tag with --resource-group on `az resource list` ("you cannot use
     # '--tag' with '--resource-group'") — so filter by tag across the subscription instead and
     # narrow to this resource group client-side via --query.
-    echo "Resources tagged Project=FHIRBridge AND named '${NAME_PREFIX}*' in resource group '${RG_NAME}' (before destroy):"
-    az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='${RG_NAME}' && starts_with(name, '${NAME_PREFIX}')]" --output table 2>/dev/null \
+    echo "Resources tagged Project=Segue AND named '${NAME_PREFIX}*' in resource group '${RG_NAME}' (before destroy):"
+    az resource list --tag Project=Segue --query "[?resourceGroup=='${RG_NAME}' && starts_with(name, '${NAME_PREFIX}')]" --output table 2>/dev/null \
       || echo "  (couldn't query — not logged in to az, or the group doesn't exist)"
-    FOREIGN="$(az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='${RG_NAME}' && !starts_with(name, '${NAME_PREFIX}')]" --output table 2>/dev/null || true)"
+    FOREIGN="$(az resource list --tag Project=Segue --query "[?resourceGroup=='${RG_NAME}' && !starts_with(name, '${NAME_PREFIX}')]" --output table 2>/dev/null || true)"
     if [[ -n "$FOREIGN" ]]; then
       echo
-      echo "NOTE: other Project=FHIRBridge resources exist in '${RG_NAME}' but do NOT match prefix '${NAME_PREFIX}' — left untouched (e.g. the persistent vendor registry):"
+      echo "NOTE: other Project=Segue resources exist in '${RG_NAME}' but do NOT match prefix '${NAME_PREFIX}' — left untouched (e.g. the persistent vendor registry):"
       echo "$FOREIGN"
     fi
     echo
@@ -161,7 +161,7 @@ fi
 # that was applied from a different machine/directory (its state never made it here), even though
 # the real Azure resources are still sitting in the resource group. This sweep catches that case:
 # it looks for anything named "${NAME_PREFIX}*" directly in the resource group (NOT a
-# Project=FHIRBridge tag match — this resource group is known to hold unrelated infrastructure
+# Project=Segue tag match — this resource group is known to hold unrelated infrastructure
 # alongside these deployments, e.g. a dev VM, healthcare API workspaces, other storage accounts,
 # even an unrelated second Container Apps deployment — a tag alone isn't tight enough scoping
 # here), shows exactly what it found, and asks before deleting. Deletes in dependency-safe batches

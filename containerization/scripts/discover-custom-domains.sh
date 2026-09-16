@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Read-only discovery helper for the Path A custom-domain flow (custom-domain.bicep - see
 # containerization/azure-deploy/CUSTOM_DOMAIN_SELF_SERVICE.md). Finds the public-facing app for
-# a given name prefix (FHIRBridge app), shows its default URL and
+# a given name prefix (Segue app), shows its default URL and
 # Azure-assigned domain-verification ID, and - once you type in a domain for an app - prints
 # the exact CNAME + TXT records to create at your DNS provider, plus ready-to-run
 # custom-domain.bicep deploy commands for both phases (hostname-only, then certificate-bind).
@@ -27,7 +27,7 @@ fi
 
 # the database container/redis/worker are never eligible - they have no public ingress, so no
 # custom domain is possible for them.
-LABELS=("FHIRBridge app")
+LABELS=("Segue app")
 APP_NAMES=("${NAME_PREFIX}-app")
 
 echo ""

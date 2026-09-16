@@ -2,7 +2,7 @@
 # so the runtime stage uses the plain .NET runtime image (no ASP.NET Core needed). Build from the
 # REPO ROOT as context:
 #
-#   docker build -f containerization/docker/worker/Dockerfile -t fhirbridge-worker:local .
+#   docker build -f containerization/docker/worker/Dockerfile -t segue-worker:local .
 
 # ---- Stage 1: .NET publish ----
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build

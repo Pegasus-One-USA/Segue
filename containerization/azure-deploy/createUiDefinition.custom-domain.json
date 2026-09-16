@@ -31,7 +31,7 @@
     ],
     "steps": [
       {
-        "name": "fhirbridgeAppStep",
+        "name": "segueAppStep",
         "label": "Segue app",
         "elements": [
           {
@@ -73,10 +73,10 @@
           {
             "name": "liveInfo",
             "type": "Microsoft.Common.InfoBox",
-            "visible": "[equals(steps('fhirbridgeAppStep').usesFrontDoorWaf, 'No')]",
+            "visible": "[equals(steps('segueAppStep').usesFrontDoorWaf, 'No')]",
             "options": {
               "icon": "Info",
-              "text": "[concat('Default URL: https://', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', 'Domain verification ID: ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')))]"
+              "text": "[concat('Default URL: https://', first(split(last(split(string(steps('segueAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', 'Domain verification ID: ', first(split(last(split(string(steps('segueAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')))]"
             }
           },
           {
@@ -102,19 +102,19 @@
           {
             "name": "dnsRecords",
             "type": "Microsoft.Common.InfoBox",
-            "visible": "[and(equals(steps('fhirbridgeAppStep').usesFrontDoorWaf, 'No'), not(empty(steps('fhirbridgeAppStep').domain)))]",
+            "visible": "[and(equals(steps('segueAppStep').usesFrontDoorWaf, 'No'), not(empty(steps('segueAppStep').domain)))]",
             "options": {
               "icon": "Info",
-              "text": "[concat('Steps:', '\n', '1. Create these records at your DNS provider:', '\n', '     CNAME   ', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '     TXT     asuid.', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n', '2. Wait for both records to propagate (minutes to hours - check with nslookup/dig).', '\n', '3. Click Review + create, then Create below. This one deployment registers the hostname, creates the certificate, and binds it, all together.', '\n', '4. If DNS was not actually ready yet, this deployment fails cleanly with InvalidCustomHostNameValidation - just wait longer and redeploy once it resolves; redeploying is always safe.', '\n', '5. Once it succeeds, open https://', steps('fhirbridgeAppStep').domain, ' and confirm it loads.')]"
+              "text": "[concat('Steps:', '\n', '1. Create these records at your DNS provider:', '\n', '     CNAME   ', steps('segueAppStep').domain, '   ->   ', first(split(last(split(string(steps('segueAppStep').appDetailsApi), '\"fqdn\":\"')), '\"')), '\n', '     TXT     asuid.', steps('segueAppStep').domain, '   ->   ', first(split(last(split(string(steps('segueAppStep').appDetailsApi), '\"customDomainVerificationId\":\"')), '\"')), '\n', '2. Wait for both records to propagate (minutes to hours - check with nslookup/dig).', '\n', '3. Click Review + create, then Create below. This one deployment registers the hostname, creates the certificate, and binds it, all together.', '\n', '4. If DNS was not actually ready yet, this deployment fails cleanly with InvalidCustomHostNameValidation - just wait longer and redeploy once it resolves; redeploying is always safe.', '\n', '5. Once it succeeds, open https://', steps('segueAppStep').domain, ' and confirm it loads.')]"
             }
           },
           {
             "name": "frontDoorDnsInfo",
             "type": "Microsoft.Common.InfoBox",
-            "visible": "[and(equals(steps('fhirbridgeAppStep').usesFrontDoorWaf, 'Yes'), not(empty(steps('fhirbridgeAppStep').domain)))]",
+            "visible": "[and(equals(steps('segueAppStep').usesFrontDoorWaf, 'Yes'), not(empty(steps('segueAppStep').domain)))]",
             "options": {
               "icon": "Info",
-              "text": "[concat('Steps (this domain routes through Front Door + the WAF, not directly to the app):', '\n', '1. Create this CNAME at your DNS provider now - it can be created before you deploy:', '\n', '     CNAME   ', steps('fhirbridgeAppStep').domain, '   ->   ', first(split(last(split(string(steps('fhirbridgeAppStep').frontDoorEndpointApi), '\"hostName\":\"')), '\"')), '\n', '2. Click Review + create, then Create below to deploy now. The Front Door domain-ownership validation token does not exist yet at this point, so there is nothing else to create until after this deploy finishes.', '\n', '3. After the deployment finishes, open its Outputs tab and copy the value of frontDoorCustomDomainValidationToken.', '\n', '4. Create a TXT record at _dnsauth.', steps('fhirbridgeAppStep').domain, ' with that value at your DNS provider.', '\n', '5. Wait - Azure detects the TXT record and issues the managed certificate automatically in the background. No second deployment is needed for this path.', '\n', '6. Once the certificate finishes issuing (can take several minutes), open https://', steps('fhirbridgeAppStep').domain, ' and confirm it loads through Front Door, not through the containerapps.io address directly.')]"
+              "text": "[concat('Steps (this domain routes through Front Door + the WAF, not directly to the app):', '\n', '1. Create this CNAME at your DNS provider now - it can be created before you deploy:', '\n', '     CNAME   ', steps('segueAppStep').domain, '   ->   ', first(split(last(split(string(steps('segueAppStep').frontDoorEndpointApi), '\"hostName\":\"')), '\"')), '\n', '2. Click Review + create, then Create below to deploy now. The Front Door domain-ownership validation token does not exist yet at this point, so there is nothing else to create until after this deploy finishes.', '\n', '3. After the deployment finishes, open its Outputs tab and copy the value of frontDoorCustomDomainValidationToken.', '\n', '4. Create a TXT record at _dnsauth.', steps('segueAppStep').domain, ' with that value at your DNS provider.', '\n', '5. Wait - Azure detects the TXT record and issues the managed certificate automatically in the background. No second deployment is needed for this path.', '\n', '6. Once the certificate finishes issuing (can take several minutes), open https://', steps('segueAppStep').domain, ' and confirm it loads through Front Door, not through the containerapps.io address directly.')]"
             }
           }
         ]
@@ -122,8 +122,8 @@
     ],
     "outputs": {
       "namePrefix": "[basics('namePrefix')]",
-      "fhirbridgeAppDomain": "[steps('fhirbridgeAppStep').domain]",
-      "enableFrontDoorWaf": "[equals(steps('fhirbridgeAppStep').usesFrontDoorWaf, 'Yes')]"
+      "segueAppDomain": "[steps('segueAppStep').domain]",
+      "enableFrontDoorWaf": "[equals(steps('segueAppStep').usesFrontDoorWaf, 'Yes')]"
     }
   }
 }

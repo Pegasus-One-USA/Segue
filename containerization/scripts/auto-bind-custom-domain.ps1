@@ -5,14 +5,14 @@
 # hostname, creates the certificate, and binds it, all in that one deploy.
 #
 # Usage:
-#   .\auto-bind-custom-domain.ps1 -ResourceGroup rg-tusharpuri -NamePrefix segue13 -FhirbridgeAppDomain segueapp.pegasusone.com
+#   .\auto-bind-custom-domain.ps1 -ResourceGroup rg-tusharpuri -NamePrefix segue13 -SegueAppDomain segueapp.pegasusone.com
 #
 # Safe to re-run: custom-domain.bicep is idempotent either way (a domain that's already bound is
 # just re-affirmed, not disturbed in any lasting way).
 param(
     [Parameter(Mandatory = $true)][string]$ResourceGroup,
     [Parameter(Mandatory = $true)][string]$NamePrefix,
-    [string]$FhirbridgeAppDomain = "",
+    [string]$SegueAppDomain = "",
     [int]$WaitTimeoutMinutes = 30,
     [int]$WaitPollSeconds = 30
 )
@@ -31,11 +31,11 @@ if (-not (Test-Path $BicepFile)) {
 }
 
 $Requested = @(
-    @{ Label = "fhirbridgeApp"; AppName = "$NamePrefix-app"; Domain = $FhirbridgeAppDomain }
+    @{ Label = "segueApp"; AppName = "$NamePrefix-app"; Domain = $SegueAppDomain }
 ) | Where-Object { $_.Domain }
 
 if ($Requested.Count -eq 0) {
-    Write-Error "Set -FhirbridgeAppDomain."
+    Write-Error "Set -SegueAppDomain."
     exit 1
 }
 
@@ -116,7 +116,7 @@ while ($true) {
 Write-Host ""
 Write-Host "==> Deploying custom-domain.bicep (namePrefix=$NamePrefix) ..." -ForegroundColor Cyan
 $paramArgs = @("namePrefix=$NamePrefix")
-if ($FhirbridgeAppDomain) { $paramArgs += "fhirbridgeAppDomain=$FhirbridgeAppDomain" }
+if ($SegueAppDomain) { $paramArgs += "segueAppDomain=$SegueAppDomain" }
 
 $outputJson = az deployment group create `
     --resource-group $ResourceGroup `

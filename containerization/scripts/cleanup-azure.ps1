@@ -48,7 +48,7 @@ try {
     # RgName is purely for the tag-filtered fallback preview below (not used by `terraform destroy`
     # itself, which is state-scoped); NamePrefix additionally drives the safety gate further down.
     $RgName = "rg-tusharpuri"
-    $TfNamePrefix = "fhirbridge"
+    $TfNamePrefix = "segue"
     if (Test-Path "terraform.tfvars") {
         $match = Select-String -Path "terraform.tfvars" -Pattern '^\s*resource_group_name\s*=\s*"([^"]*)"' | Select-Object -First 1
         if ($match) { $RgName = $match.Matches[0].Groups[1].Value }
@@ -63,7 +63,7 @@ try {
 
     if ($azAvailable) {
         Write-Host "==> Fetching the resource manifest (resources.txt) before anything is destroyed ..."
-        $manifestLocalFile = Join-Path $env:TEMP "fhirbridge-resources-preview.txt"
+        $manifestLocalFile = Join-Path $env:TEMP "segue-resources-preview.txt"
         try {
             $downloadCmd = terraform output -raw resource_manifest_download_cmd 2>$null
             if ($downloadCmd -and $downloadCmd.Trim() -ne "") {
@@ -85,13 +85,13 @@ try {
 
         if (-not $manifestShown) {
             Write-Host "Couldn't fetch resources.txt (older deployment, or not logged in to az) - falling back to a tag-based preview instead."
-            Write-Host "Resources tagged Project=FHIRBridge AND named '$NamePrefix*' in resource group '$RgName' (before destroy):"
-            try { az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='$RgName' && starts_with(name, '$NamePrefix')]" --output table } catch { Write-Host "  (couldn't query - not logged in to az, or the group doesn't exist)" }
+            Write-Host "Resources tagged Project=Segue AND named '$NamePrefix*' in resource group '$RgName' (before destroy):"
+            try { az resource list --tag Project=Segue --query "[?resourceGroup=='$RgName' && starts_with(name, '$NamePrefix')]" --output table } catch { Write-Host "  (couldn't query - not logged in to az, or the group doesn't exist)" }
             try {
-                $foreign = az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='$RgName' && !starts_with(name, '$NamePrefix')]" --output table 2>$null
+                $foreign = az resource list --tag Project=Segue --query "[?resourceGroup=='$RgName' && !starts_with(name, '$NamePrefix')]" --output table 2>$null
                 if ($foreign) {
                     Write-Host ""
-                    Write-Host "NOTE: other Project=FHIRBridge resources exist in '$RgName' but do NOT match prefix '$NamePrefix' - left untouched (e.g. the persistent vendor registry):"
+                    Write-Host "NOTE: other Project=Segue resources exist in '$RgName' but do NOT match prefix '$NamePrefix' - left untouched (e.g. the persistent vendor registry):"
                     Write-Host $foreign
                 }
             } catch {}
@@ -185,7 +185,7 @@ if ($DestroyExitCode -eq 0) {
 # that was applied from a different machine/directory (its state never made it here), even though
 # the real Azure resources are still sitting in the resource group. This sweep catches that case:
 # it looks for anything named "$NamePrefix*" directly in the resource group (NOT a Project=
-# FHIRBridge tag match - this resource group is known to hold unrelated infrastructure alongside
+# Segue tag match - this resource group is known to hold unrelated infrastructure alongside
 # these deployments, e.g. a dev VM, healthcare API workspaces, other storage accounts, even an
 # unrelated second Container Apps deployment - a tag alone isn't tight enough scoping here), shows
 # exactly what it found, and asks before deleting. Deletes in dependency-safe batches (managed

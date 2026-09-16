@@ -35,7 +35,7 @@ else
   openssl req -x509 -newkey rsa:2048 -nodes \
     -keyout "$KEY_PATH" -out "$CRT_PATH" \
     -days 3650 \
-    -subj "/CN=fhirbridge-redis/O=FHIRBridge/OU=containerization" \
+    -subj "/CN=segue-redis/O=Segue/OU=containerization" \
     -addext "subjectAltName=DNS:redis,DNS:*.internal,DNS:localhost"
 fi
 
@@ -48,4 +48,4 @@ echo "  - Bicep:                       redisTrustedCertificateThumbprint paramet
 echo "  - Terraform (azure/aws/local): redis_trusted_certificate_thumbprint variable"
 echo
 echo "Then build/push images as usual (containerization/scripts/build-images.sh|ps1) -"
-echo "the fhirbridge-redis image bakes in whatever redis.crt/redis.key currently sit in this folder."
+echo "the segue-redis image bakes in whatever redis.crt/redis.key currently sit in this folder."

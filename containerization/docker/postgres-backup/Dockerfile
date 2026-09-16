@@ -14,7 +14,7 @@ RUN apk add --no-cache bash curl \
     && chmod +x /usr/local/bin/azcopy \
     && rm -rf /tmp/azcopy.tar.gz /tmp/azcopy-extract
 
-COPY containerization/docker/postgres-backup/backup.sh /usr/local/bin/fhirbridge-postgres-backup.sh
-RUN chmod +x /usr/local/bin/fhirbridge-postgres-backup.sh
+COPY containerization/docker/postgres-backup/backup.sh /usr/local/bin/segue-postgres-backup.sh
+RUN chmod +x /usr/local/bin/segue-postgres-backup.sh
 
-ENTRYPOINT ["fhirbridge-postgres-backup.sh"]
+ENTRYPOINT ["segue-postgres-backup.sh"]

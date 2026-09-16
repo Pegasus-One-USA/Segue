@@ -1,4 +1,4 @@
-# Interactive, guided custom-domain setup for an already-deployed FHIRBridge Container Apps
+# Interactive, guided custom-domain setup for an already-deployed Segue Container Apps
 # environment (Bicep or Terraform, any name prefix). This is "step 2" of the recommended flow:
 #
 #   Step 1: deploy WITHOUT any custom domain fields set (they've been removed from the
@@ -11,7 +11,7 @@
 #
 # What it does:
 #   1. Finds which of this name prefix's public-facing apps actually exist in the resource group
-#      (FHIRBridge app - the database container/redis/worker are never eligible, they have no public
+#      (Segue app - the database container/redis/worker are never eligible, they have no public
 #      ingress).
 #   2. Shows each one's default URL and Azure-assigned domain-verification ID.
 #   3. Asks, per app, whether you want a custom domain for it, and if so, what domain.
@@ -52,10 +52,10 @@ if (-not (Test-Path $ManageScript)) {
 $EnvironmentName = "$NamePrefix-env"
 
 # Label -> app name (+ the ingress port to use if this script has to flip internal->external for
-# it). FHIRBridge app is always external by design (main.bicep never gives it an
+# it). Segue app is always external by design (main.bicep never gives it an
 # internal-only mode), so it never needs the enable step below.
 $Candidates = @(
-    @{ Label = "FHIRBridge app"; AppName = "$NamePrefix-app"; Port = 80 }
+    @{ Label = "Segue app"; AppName = "$NamePrefix-app"; Port = 80 }
 )
 
 Write-Host "==> Looking for '$NamePrefix'-prefixed apps in '$ResourceGroup' ..."

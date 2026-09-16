@@ -19,8 +19,8 @@
 # access to the storage account but not the Blob Data Contributor data-plane role).
 #
 # Usage:
-#   .\publish-deploy-artifacts.ps1 -StorageAccount fhirbridgedeploy -ResourceGroup rg-tusharpuri
-#   .\publish-deploy-artifacts.ps1 -StorageAccount fhirbridgedeploy -ResourceGroup rg-tusharpuri -Container deploy
+#   .\publish-deploy-artifacts.ps1 -StorageAccount seguedeploy -ResourceGroup rg-tusharpuri
+#   .\publish-deploy-artifacts.ps1 -StorageAccount seguedeploy -ResourceGroup rg-tusharpuri -Container deploy
 #
 param(
     [Parameter(Mandatory = $true)][string]$StorageAccount,

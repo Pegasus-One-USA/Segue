@@ -52,8 +52,8 @@ export IMAGE_TAG="${TAG}"
 (cd "${COMPOSE_DIR}" && docker compose up -d)
 
 declare -A SITES=(
-  ["fhirbridge-app portal"]="http://localhost:${APP_PORT}/"
-  ["fhirbridge-app swagger"]="http://localhost:${APP_PORT}/swagger/index.html"
+  ["segue-app portal"]="http://localhost:${APP_PORT}/"
+  ["segue-app swagger"]="http://localhost:${APP_PORT}/swagger/index.html"
 )
 
 echo "==> Waiting for sites to respond (timeout: ${TIMEOUT}s each)"

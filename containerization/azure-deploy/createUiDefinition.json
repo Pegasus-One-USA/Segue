@@ -30,7 +30,7 @@
         "name": "namePrefix",
         "type": "Microsoft.Common.TextBox",
         "label": "Deployment name prefix",
-        "defaultValue": "fhirbridge",
+        "defaultValue": "segue",
         "toolTip": "Short name used to build every resource name in this deployment (e.g. <prefix>-app, <prefix>-postgres).",
         "constraints": {
           "required": true,
@@ -41,7 +41,7 @@
     ],
     "steps": [
       {
-        "name": "fhirbridgeSettings",
+        "name": "segueSettings",
         "label": "Segue Settings",
         "elements": [
           {
@@ -71,7 +71,7 @@
               "password": "Postgres password",
               "confirmPassword": "Confirm Postgres password"
             },
-            "toolTip": "Password for Segue's own Postgres database — the 'fhirbridge' role's password when Containerized, or the Flexible Server's administrator password when Managed.",
+            "toolTip": "Password for Segue's own Postgres database — the 'segue' role's password when Containerized, or the Flexible Server's administrator password when Managed.",
             "constraints": {
               "required": true,
               "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
@@ -87,7 +87,7 @@
             "label": "Managed Postgres pricing tier",
             "defaultValue": "Burstable_B1ms",
             "toolTip": "Azure Database for PostgreSQL Flexible Server compute/pricing tier. Only used when Postgres deployment type is Managed.",
-            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
+            "visible": "[equals(steps('segueSettings').postgresMode, 'Managed')]",
             "constraints": {
               "allowedValues": [
                 {
@@ -116,7 +116,7 @@
             "label": "Managed Postgres storage",
             "defaultValue": "32768",
             "toolTip": "Storage can only be scaled up later, not down — don't over-provision speculatively. Only used when Postgres deployment type is Managed.",
-            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
+            "visible": "[equals(steps('segueSettings').postgresMode, 'Managed')]",
             "constraints": {
               "allowedValues": [
                 {
@@ -184,7 +184,7 @@
               "confirmPassword": "Confirm Redis password"
             },
             "toolTip": "Password Redis requires to connect (--requirepass) — defense-in-depth on top of network isolation.",
-            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
+            "visible": "[equals(steps('segueSettings').redisMode, 'Containerized')]",
             "constraints": {
               "required": true,
               "regex": "^.{8,}$",
@@ -198,8 +198,8 @@
             "name": "redisTrustedCertificateThumbprint",
             "type": "Microsoft.Common.TextBox",
             "label": "Redis TLS certificate thumbprint",
-            "toolTip": "SHA-1 thumbprint of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value (e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F). The app refuses the Redis connection if this doesn't match what Redis actually presents.",
-            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
+            "toolTip": "SHA-1 thumbprint of the self-signed certificate baked into the segue-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value (e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F). The app refuses the Redis connection if this doesn't match what Redis actually presents.",
+            "visible": "[equals(steps('segueSettings').redisMode, 'Containerized')]",
             "constraints": {
               "required": true,
               "regex": "^[0-9A-Fa-f]{40}$",
@@ -212,7 +212,7 @@
             "label": "Azure Managed Redis SKU",
             "defaultValue": "Balanced_B0",
             "toolTip": "Balanced offers a healthy memory/compute ratio; Memory Optimized suits larger, less compute-intensive workloads. All sizes include SLA/high availability and TLS. Only used when Redis deployment type is Managed.",
-            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Managed')]",
+            "visible": "[equals(steps('segueSettings').redisMode, 'Managed')]",
             "constraints": {
               "allowedValues": [
                 {
@@ -279,7 +279,7 @@
               "confirmPassword": "Confirm Seq admin password"
             },
             "toolTip": "Password for the Seq web UI (SEQ_FIRSTRUN_ADMINPASSWORD) — the only thing protecting that URL, since no other authentication is configured. Only used when Centralized log viewing is Seq.",
-            "visible": "[equals(steps('fhirbridgeSettings').seqMode, 'Seq')]",
+            "visible": "[equals(steps('segueSettings').seqMode, 'Seq')]",
             "constraints": {
               "required": true,
               "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
@@ -315,7 +315,7 @@
             "label": "WAF policy mode",
             "defaultValue": "Prevention",
             "toolTip": "Prevention (default) actually blocks requests the rate-limit rule flags. Detection only logs/scores them and blocks nothing — a valid choice if you'd rather watch its findings against your own traffic for a while first, but it provides no real protection until switched to Prevention. Only used when Web Application Firewall above is enabled.",
-            "visible": "[equals(steps('fhirbridgeSettings').wafMode, 'Front Door WAF')]",
+            "visible": "[equals(steps('segueSettings').wafMode, 'Front Door WAF')]",
             "constraints": {
               "allowedValues": [
                 {
@@ -362,7 +362,7 @@
             "label": "Postgres size",
             "defaultValue": "Large",
             "toolTip": "Containerized Postgres container size. Only used when Postgres deployment type is Containerized.",
-            "visible": "[equals(steps('fhirbridgeSettings').postgresMode, 'Containerized')]",
+            "visible": "[equals(steps('segueSettings').postgresMode, 'Containerized')]",
             "constraints": {
               "allowedValues": [
                 {
@@ -391,7 +391,7 @@
             "label": "Redis size",
             "defaultValue": "Medium",
             "toolTip": "Redis's own cache/queue memory needs — separate from the data it persists to its file share. Only used when Redis deployment type is Containerized.",
-            "visible": "[equals(steps('fhirbridgeSettings').redisMode, 'Containerized')]",
+            "visible": "[equals(steps('segueSettings').redisMode, 'Containerized')]",
             "constraints": {
               "allowedValues": [
                 {
@@ -415,7 +415,7 @@
             }
           },
           {
-            "name": "fhirbridgeAppSize",
+            "name": "segueAppSize",
             "type": "Microsoft.Common.DropDown",
             "label": "Segue app size",
             "defaultValue": "Medium",
@@ -476,7 +476,7 @@
             "label": "Seq size",
             "defaultValue": "Small",
             "toolTip": "Structured log viewer. Only used when Centralized log viewing is Seq.",
-            "visible": "[equals(steps('fhirbridgeSettings').seqMode, 'Seq')]",
+            "visible": "[equals(steps('segueSettings').seqMode, 'Seq')]",
             "constraints": {
               "allowedValues": [
                 {
@@ -531,7 +531,7 @@
             }
           },
           {
-            "name": "fhirbridgeAppIntendedDomain",
+            "name": "segueAppIntendedDomain",
             "type": "Microsoft.Common.TextBox",
             "label": "Segue app domain (optional, informational only)",
             "defaultValue": "",
@@ -566,27 +566,27 @@
     "outputs": {
       "namePrefix": "[basics('namePrefix')]",
       "location": "[location()]",
-      "useAzurePostgresql": "[equals(steps('fhirbridgeSettings').postgresMode, 'Managed')]",
-      "postgresPassword": "[steps('fhirbridgeSettings').postgresPassword]",
-      "azurePostgresqlSku": "[steps('fhirbridgeSettings').azurePostgresqlSku]",
-      "azurePostgresqlStorageMb": "[int(steps('fhirbridgeSettings').azurePostgresqlStorageMb)]",
-      "jwtSigningKey": "[steps('fhirbridgeSettings').jwtSigningKey]",
-      "useAzureCacheForRedis": "[equals(steps('fhirbridgeSettings').redisMode, 'Managed')]",
-      "redisPassword": "[if(equals(steps('fhirbridgeSettings').redisMode, 'Containerized'), steps('fhirbridgeSettings').redisPassword, '')]",
-      "redisTrustedCertificateThumbprint": "[if(equals(steps('fhirbridgeSettings').redisMode, 'Containerized'), steps('fhirbridgeSettings').redisTrustedCertificateThumbprint, '')]",
-      "azureCacheForRedisTier": "[steps('fhirbridgeSettings').azureCacheForRedisTier]",
-      "enableTenantSecretsKeyVault": "[equals(steps('fhirbridgeSettings').secretsMode, 'Azure Key Vault')]",
-      "enableSeq": "[equals(steps('fhirbridgeSettings').seqMode, 'Seq')]",
-      "seqAdminPassword": "[if(equals(steps('fhirbridgeSettings').seqMode, 'Seq'), steps('fhirbridgeSettings').seqAdminPassword, '')]",
-      "enableFrontDoorWaf": "[equals(steps('fhirbridgeSettings').wafMode, 'Front Door WAF')]",
-      "wafPolicyMode": "[steps('fhirbridgeSettings').wafPolicyMode]",
-      "storageRedundancy": "[steps('fhirbridgeSettings').storageRedundancy]",
+      "useAzurePostgresql": "[equals(steps('segueSettings').postgresMode, 'Managed')]",
+      "postgresPassword": "[steps('segueSettings').postgresPassword]",
+      "azurePostgresqlSku": "[steps('segueSettings').azurePostgresqlSku]",
+      "azurePostgresqlStorageMb": "[int(steps('segueSettings').azurePostgresqlStorageMb)]",
+      "jwtSigningKey": "[steps('segueSettings').jwtSigningKey]",
+      "useAzureCacheForRedis": "[equals(steps('segueSettings').redisMode, 'Managed')]",
+      "redisPassword": "[if(equals(steps('segueSettings').redisMode, 'Containerized'), steps('segueSettings').redisPassword, '')]",
+      "redisTrustedCertificateThumbprint": "[if(equals(steps('segueSettings').redisMode, 'Containerized'), steps('segueSettings').redisTrustedCertificateThumbprint, '')]",
+      "azureCacheForRedisTier": "[steps('segueSettings').azureCacheForRedisTier]",
+      "enableTenantSecretsKeyVault": "[equals(steps('segueSettings').secretsMode, 'Azure Key Vault')]",
+      "enableSeq": "[equals(steps('segueSettings').seqMode, 'Seq')]",
+      "seqAdminPassword": "[if(equals(steps('segueSettings').seqMode, 'Seq'), steps('segueSettings').seqAdminPassword, '')]",
+      "enableFrontDoorWaf": "[equals(steps('segueSettings').wafMode, 'Front Door WAF')]",
+      "wafPolicyMode": "[steps('segueSettings').wafPolicyMode]",
+      "storageRedundancy": "[steps('segueSettings').storageRedundancy]",
       "postgresSize": "[steps('containerSizing').postgresSize]",
       "redisSize": "[steps('containerSizing').redisSize]",
-      "fhirbridgeAppSize": "[steps('containerSizing').fhirbridgeAppSize]",
+      "segueAppSize": "[steps('containerSizing').segueAppSize]",
       "workerSize": "[steps('containerSizing').workerSize]",
       "seqSize": "[steps('containerSizing').seqSize]",
-      "fhirbridgeAppIntendedDomain": "[steps('customDomains').fhirbridgeAppIntendedDomain]",
+      "segueAppIntendedDomain": "[steps('customDomains').segueAppIntendedDomain]",
       "imageTag": "[steps('imageSettings').imageTag]",
       "imageRegistryServer": "seguebuilds.azurecr.io",
       "imageRegistryUsername": "one-click-pull",

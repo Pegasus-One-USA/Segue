@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tears down the local FHIRBridge containerized stack — either the docker-compose path (default)
+# Tears down the local Segue containerized stack — either the docker-compose path (default)
 # or the Terraform local environment (-t), so nothing keeps running/consuming disk after testing.
 #
 # Usage:
@@ -25,7 +25,7 @@ done
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 if [[ "$ASSUME_YES" != "true" ]]; then
-  read -r -p "This removes every FHIRBridge local container (and volumes, unless -k) — continue? [y/N] " reply
+  read -r -p "This removes every Segue local container (and volumes, unless -k) — continue? [y/N] " reply
   [[ "$reply" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
 fi
 
@@ -43,4 +43,4 @@ else
   fi
 fi
 
-echo "Done. Local FHIRBridge stack removed."
+echo "Done. Local Segue stack removed."

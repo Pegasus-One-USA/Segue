@@ -7,7 +7,7 @@
 # create the ACR first with a targeted apply, or push after the first apply and re-apply to update
 # the Container Apps' image references).
 #
-# FHIRBridge's own database (Postgres) and Redis are each either the same
+# Segue's own database (Postgres) and Redis are each either the same
 # containerized/single-replica/internal-only pattern (Azure Files-backed data directories are not
 # safe for concurrent multi-instance processes; reachable by other Container Apps in the same
 # environment via its app name as hostname, Container Apps' built-in internal DNS — never exposed
@@ -92,7 +92,7 @@ locals {
   storage_account_name = "${var.name_prefix}st${local.suffix}"              # Storage account: alnum only, <=24 chars, globally unique
   key_vault_name       = "${var.name_prefix}-kv-${random_id.kv_suffix.hex}" # Key Vault: alnum + hyphens, <=24 chars, globally unique, own random component
   # Deliberately shortened to "tkv" (not "tenant-kv") to stay within Key Vault's 24-char name cap
-  # once name_prefix is longer (e.g. "fhirbridge-tkv-a1b2c3" = 21 chars).
+  # once name_prefix is longer (e.g. "segue-tkv-a1b2c3" = 21 chars).
   tenant_secrets_key_vault_name = "${var.name_prefix}-tkv-${random_id.tenant_kv_suffix.hex}"
 
   # Plain-string app names (not resource attribute lookups) so a Container App can safely compute
@@ -101,11 +101,11 @@ locals {
   # self-reference a resource would otherwise need to read its own computed attributes.
   postgres_name       = "${var.name_prefix}-postgres"
   redis_name          = "${var.name_prefix}-redis"
-  fhirbridge_app_name = "${var.name_prefix}-app"
+  segue_app_name = "${var.name_prefix}-app"
   worker_name         = "${var.name_prefix}-worker"
   seq_name            = "${var.name_prefix}-seq"
 
-  # Single source of truth for both fhirbridge_app's and worker's ConnectionStrings__Redis (was
+  # Single source of truth for both segue_app's and worker's ConnectionStrings__Redis (was
   # duplicated identically in both places before this became a local) — resolves to whichever of
   # the two Redis resources use_azure_cache_for_redis actually created. Azure Cache's own
   # abortConnect=false matches StackExchange.Redis's usual recommended default for a managed
@@ -117,15 +117,15 @@ locals {
     "${local.redis_name}:${var.redis_port},password=${azurerm_key_vault_secret.redis_password[0].value},ssl=true"
   )
 
-  # Single source of truth for both fhirbridge_app's and worker's ConnectionStrings__FHIRBridgeDb.
+  # Single source of truth for both segue_app's and worker's ConnectionStrings__FHIRBridgeDb.
   # Azure Database for PostgreSQL requires SSL by default and presents a real CA-trusted
   # certificate (unlike the containerized path's plain internal-network-only connection, which
   # relies on Container Apps' network isolation instead of TLS — matching how the containerized
   # postgres/redis paths are already "internal only, no external exposure" by design.
-  fhirbridgedb_connection_string = var.use_azure_postgresql ? (
+  seguedb_connection_string = var.use_azure_postgresql ? (
     "Host=${azurerm_postgresql_flexible_server.main[0].fqdn};Port=5432;Database=${azurerm_postgresql_flexible_server_database.main[0].name};Username=${azurerm_postgresql_flexible_server.main[0].administrator_login};Password=${var.postgres_password};Ssl Mode=Require;"
     ) : (
-    "Host=${local.postgres_name};Port=${var.postgres_port};Database=FHIRBridge;Username=fhirbridge;Password=${azurerm_key_vault_secret.postgres_password[0].value};"
+    "Host=${local.postgres_name};Port=${var.postgres_port};Database=Segue;Username=segue;Password=${azurerm_key_vault_secret.postgres_password[0].value};"
   )
 
   # Applied to every resource below that supports `tags` — lets you find/filter/cost-report on
@@ -133,7 +133,7 @@ locals {
   # ../../../azure-deploy/cleanup.sh|ps1's -UseTags mode, and az cli one-liners in the
   # containerization guide) matches against instead of relying on Terraform state alone.
   common_tags = {
-    Project     = "FHIRBridge"
+    Project     = "Segue"
     Component   = "containerization"
     Environment = var.name_prefix
     ManagedBy   = "Terraform"
@@ -384,11 +384,11 @@ resource "azurerm_role_assignment" "tenant_secrets_terraform_applier" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
-resource "azurerm_role_assignment" "tenant_secrets_fhirbridge_app" {
+resource "azurerm_role_assignment" "tenant_secrets_segue_app" {
   count                = var.enable_tenant_secrets_key_vault ? 1 : 0
   scope                = azurerm_key_vault.tenant_secrets[0].id
   role_definition_name = "Key Vault Secrets Officer"
-  principal_id         = azurerm_container_app.fhirbridge_app.identity[0].principal_id
+  principal_id         = azurerm_container_app.segue_app.identity[0].principal_id
 }
 
 resource "azurerm_role_assignment" "tenant_secrets_worker" {
@@ -497,7 +497,7 @@ resource "azurerm_key_vault_secret" "app_phi_encryption_key" {
 #
 # Creating a Key object (not just a Secret) needs Key Vault Crypto OFFICER — a different, broader
 # role than what the app itself needs at runtime (Crypto USER, wrap/unwrap only — granted to
-# fhirbridge_app/worker below).
+# segue_app/worker below).
 resource "azurerm_role_assignment" "tenant_secrets_terraform_applier_crypto" {
   count                = var.enable_tenant_secrets_key_vault ? 1 : 0
   scope                = azurerm_key_vault.tenant_secrets[0].id
@@ -517,11 +517,11 @@ resource "azurerm_key_vault_key" "dataprotection" {
   depends_on = [azurerm_role_assignment.tenant_secrets_terraform_applier_crypto]
 }
 
-resource "azurerm_role_assignment" "tenant_secrets_fhirbridge_app_crypto" {
+resource "azurerm_role_assignment" "tenant_secrets_segue_app_crypto" {
   count                = var.enable_tenant_secrets_key_vault ? 1 : 0
   scope                = azurerm_key_vault.tenant_secrets[0].id
   role_definition_name = "Key Vault Crypto User"
-  principal_id         = azurerm_container_app.fhirbridge_app.identity[0].principal_id
+  principal_id         = azurerm_container_app.segue_app.identity[0].principal_id
 }
 
 resource "azurerm_role_assignment" "tenant_secrets_worker_crypto" {
@@ -531,7 +531,7 @@ resource "azurerm_role_assignment" "tenant_secrets_worker_crypto" {
   principal_id         = azurerm_container_app.worker.identity[0].principal_id
 }
 
-# --- FHIRBridge's own database: containerized Postgres (internal only, single replica) — only
+# --- Segue's own database: containerized Postgres (internal only, single replica) — only
 # when NOT using Azure Database for PostgreSQL. Replaces the SQL Server Express container this
 # deployment used before the app migrated from SQL Server to PostgreSQL. ---
 
@@ -566,11 +566,11 @@ resource "azurerm_container_app" "postgres" {
 
       env {
         name  = "POSTGRES_DB"
-        value = "FHIRBridge"
+        value = "Segue"
       }
       env {
         name  = "POSTGRES_USER"
-        value = "fhirbridge"
+        value = "segue"
       }
       env {
         name        = "POSTGRES_PASSWORD"
@@ -621,7 +621,7 @@ resource "azurerm_container_app" "postgres" {
   }
 }
 
-# --- FHIRBridge's own database: Azure Database for PostgreSQL Flexible Server — only when
+# --- Segue's own database: Azure Database for PostgreSQL Flexible Server — only when
 # use_azure_postgresql is true. No VNet in this deployment (Container Apps here use the platform's
 # own managed networking, not a customer VNet), so this uses public network access + a firewall
 # rule allowing Azure-internal traffic, rather than private VNet integration — the simplest setup
@@ -634,7 +634,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
   resource_group_name    = data.azurerm_resource_group.main.name
   location               = data.azurerm_resource_group.main.location
   version                = "16"
-  administrator_login    = "fhirbridgeadmin"
+  administrator_login    = "segueadmin"
   administrator_password = var.postgres_password
   storage_mb             = var.azure_postgresql_storage_mb
   sku_name               = var.azure_postgresql_sku
@@ -656,7 +656,7 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_service
 
 resource "azurerm_postgresql_flexible_server_database" "main" {
   count     = var.use_azure_postgresql ? 1 : 0
-  name      = "FHIRBridge"
+  name      = "Segue"
   server_id = azurerm_postgresql_flexible_server.main[0].id
   collation = "en_US.utf8"
   charset   = "UTF8"
@@ -698,7 +698,7 @@ resource "azurerm_container_app" "redis" {
       # Custom image (not stock redis:7-alpine): FHIRBridge.Api/.Worker refuse a plaintext Redis
       # connection outside Development (HIPAA #15), and stock Redis has no TLS configured at all.
       # See containerization/docker/redis-tls/Dockerfile.
-      image  = "${azurerm_container_registry.acr.login_server}/fhirbridge-redis:${var.image_tag}"
+      image  = "${azurerm_container_registry.acr.login_server}/segue-redis:${var.image_tag}"
       cpu    = 0.5
       memory = "1Gi"
       # Redis has no env-var port/password override — this command override tells the redis-server
@@ -707,7 +707,7 @@ resource "azurerm_container_app" "redis" {
       # --port 0 disables the plaintext port entirely — --tls-port is the only one Redis listens
       # on. --tls-auth-clients no means server-side TLS + --requirepass, not mutual TLS (no client
       # certificate required) — matches ConnectionStrings__Redis's "ssl=true" (no client cert
-      # options) on fhirbridge_app/worker below.
+      # options) on segue_app/worker below.
       command = [
         "redis-server",
         "--tls-port", tostring(var.redis_port),
@@ -761,7 +761,7 @@ resource "azurerm_redis_cache" "main" {
 
 # --- Seq (structured log viewing) — only when var.enable_seq is true. Public image, no custom
 #     build needed. External ingress deliberately: unlike Postgres/Redis (internal-only, reached
-#     only by fhirbridge_app/worker), Seq exists specifically so a human can browse to it and
+#     only by segue_app/worker), Seq exists specifically so a human can browse to it and
 #     monitor logs — an internal-only Seq would have no way in from outside the Container Apps
 #     environment. ---
 
@@ -822,10 +822,10 @@ resource "azurerm_container_app" "seq" {
   }
 }
 
-# --- FHIRBridge app (Api + Gateway), public ---
+# --- Segue app (Api + Gateway), public ---
 
-resource "azurerm_container_app" "fhirbridge_app" {
-  name                         = local.fhirbridge_app_name
+resource "azurerm_container_app" "segue_app" {
+  name                         = local.segue_app_name
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = data.azurerm_resource_group.main.name
   revision_mode                = "Single"
@@ -834,7 +834,7 @@ resource "azurerm_container_app" "fhirbridge_app" {
   # Redis is reached by its plain (predictable) name rather than a resource attribute in the
   # containerized path, so this dependency has to be spelled out explicitly. The Postgres
   # connection (both containerized and managed) is referenced via a resource attribute inside
-  # local.fhirbridgedb_connection_string instead, so Terraform infers that dependency automatically.
+  # local.seguedb_connection_string instead, so Terraform infers that dependency automatically.
   depends_on = [azurerm_container_app.redis]
 
   # System-assigned so DefaultAzureCredential (AzureKeyVaultSecretProvider/Writer) can authenticate
@@ -865,8 +865,8 @@ resource "azurerm_container_app" "fhirbridge_app" {
     max_replicas = 3
 
     container {
-      name   = "fhirbridge-app"
-      image  = "${azurerm_container_registry.acr.login_server}/fhirbridge-app:${var.image_tag}"
+      name   = "segue-app"
+      image  = "${azurerm_container_registry.acr.login_server}/segue-app:${var.image_tag}"
       cpu    = 0.5
       memory = "1Gi"
 
@@ -876,7 +876,7 @@ resource "azurerm_container_app" "fhirbridge_app" {
       }
       env {
         name  = "ConnectionStrings__FHIRBridgeDb"
-        value = local.fhirbridgedb_connection_string
+        value = local.seguedb_connection_string
       }
       env {
         name  = "Database__Provider"
@@ -944,7 +944,7 @@ resource "azurerm_container_app" "fhirbridge_app" {
         }
       }
       # See enable_seq's description — only emitted when that flag is set. FHIRBridge.Api and
-      # FHIRBridge.Gateway (this same container) both read this key via FhirBridgeLogging.
+      # FHIRBridge.Gateway (this same container) both read this key via SegueLogging.
       dynamic "env" {
         for_each = var.enable_seq ? [1] : []
         content {
@@ -997,10 +997,10 @@ resource "azurerm_container_app" "fhirbridge_app" {
 # separate change — 4.x has its own breaking changes across many other resources in this file, so
 # don't do it just to unblock a custom domain).
 
-resource "azurerm_container_app_custom_domain" "fhirbridge_app" {
-  count            = var.fhirbridge_app_custom_domain != "" ? 1 : 0
-  name             = var.fhirbridge_app_custom_domain
-  container_app_id = azurerm_container_app.fhirbridge_app.id
+resource "azurerm_container_app_custom_domain" "segue_app" {
+  count            = var.segue_app_custom_domain != "" ? 1 : 0
+  name             = var.segue_app_custom_domain
+  container_app_id = azurerm_container_app.segue_app.id
 
   certificate_binding_type                 = "Disabled"
   container_app_environment_certificate_id = null
@@ -1015,15 +1015,15 @@ resource "azurerm_container_app" "worker" {
   revision_mode                = "Single"
   tags                         = local.common_tags
 
-  # fhirbridge_app is a head start, not a guarantee: both it and worker auto-migrate FHIRBridgeDb
+  # segue_app is a head start, not a guarantee: both it and worker auto-migrate FHIRBridgeDb
   # on boot and can race on the initial CREATE DATABASE on a fresh database. Container Apps
   # replaces crashed replicas automatically, which turns a lost race into a self-healing retry.
   # Redis is reached by its plain (predictable) name in the containerized path, so needs an
-  # explicit dependency the same as on fhirbridge_app; the Postgres connection is inferred
-  # automatically via local.fhirbridgedb_connection_string's resource reference.
-  depends_on = [azurerm_container_app.redis, azurerm_container_app.fhirbridge_app]
+  # explicit dependency the same as on segue_app; the Postgres connection is inferred
+  # automatically via local.seguedb_connection_string's resource reference.
+  depends_on = [azurerm_container_app.redis, azurerm_container_app.segue_app]
 
-  # See the identical block on azurerm_container_app.fhirbridge_app for why this exists.
+  # See the identical block on azurerm_container_app.segue_app for why this exists.
   identity {
     type = "SystemAssigned"
   }
@@ -1045,7 +1045,7 @@ resource "azurerm_container_app" "worker" {
 
     container {
       name   = "worker"
-      image  = "${azurerm_container_registry.acr.login_server}/fhirbridge-worker:${var.image_tag}"
+      image  = "${azurerm_container_registry.acr.login_server}/segue-worker:${var.image_tag}"
       cpu    = 0.25
       memory = "0.5Gi"
 
@@ -1055,7 +1055,7 @@ resource "azurerm_container_app" "worker" {
       }
       env {
         name  = "ConnectionStrings__FHIRBridgeDb"
-        value = local.fhirbridgedb_connection_string
+        value = local.seguedb_connection_string
       }
       env {
         name  = "Database__Provider"
@@ -1108,7 +1108,7 @@ resource "azurerm_container_app" "worker" {
           value = azurerm_key_vault_key.dataprotection[0].id
         }
       }
-      # See enable_seq's description on fhirbridge_app above.
+      # See enable_seq's description on segue_app above.
       dynamic "env" {
         for_each = var.enable_seq ? [1] : []
         content {
@@ -1139,7 +1139,7 @@ resource "azurerm_storage_container" "manifest" {
 
 locals {
   resource_manifest_text = join("\n", [
-    "FHIRBridge containerization deployment - resource manifest",
+    "Segue containerization deployment - resource manifest",
     "name_prefix: ${var.name_prefix}",
     "resource_group (pre-existing, NOT managed by this config): ${data.azurerm_resource_group.main.name}",
     "",
@@ -1157,7 +1157,7 @@ locals {
     "azurerm_key_vault.main                                = ${azurerm_key_vault.main.id}",
     "azurerm_key_vault_access_policy.terraform_kv_secrets  = ${azurerm_key_vault_access_policy.terraform_kv_secrets.id}",
     "azurerm_key_vault_secret.jwt_signing_key              = ${azurerm_key_vault_secret.jwt_signing_key.id}",
-    "azurerm_container_app.fhirbridge_app                  = ${azurerm_container_app.fhirbridge_app.id}",
+    "azurerm_container_app.segue_app                  = ${azurerm_container_app.segue_app.id}",
     "azurerm_container_app.worker                          = ${azurerm_container_app.worker.id}",
     "azurerm_storage_container.manifest (this file's own container) = ${azurerm_storage_container.manifest.id}",
   ])

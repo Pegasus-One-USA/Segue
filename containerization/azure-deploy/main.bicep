@@ -1,11 +1,11 @@
-// FHIRBridge — single-deployment Azure Container Apps template.
+// Segue — single-deployment Azure Container Apps template.
 //
 // This is the "easy install" counterpart to ../terraform/environments/azure: same 4-container
-// topology (fhirbridge-app, postgres, redis, worker), same Container Apps Environment
+// topology (segue-app, postgres, redis, worker), same Container Apps Environment
 // design, but expressed as one Bicep template so it can be deployed with a single command or a
 // single "Deploy to Azure" button click, instead of a multi-step `terraform apply`.
 //
-// FHIRBridge's own database (Postgres) is either containerized (default) or a managed Azure
+// Segue's own database (Postgres) is either containerized (default) or a managed Azure
 // Database for PostgreSQL Flexible Server — see the useAzurePostgresql parameter below. Replaces
 // the SQL Server Express container this deployment used before the app migrated from SQL Server to
 // PostgreSQL — there is no SQL Server option anymore. The containerized path runs Postgres on LOCAL
@@ -21,28 +21,28 @@
 // itself.
 //
 // IMPORTANT — image publishing is a prerequisite, not something this template does: a genuinely
-// one-click deploy requires the 4 custom images (fhirbridge-app, fhirbridge-worker,
-// fhirbridge-redis, fhirbridge-postgres) to already exist in a registry the customer's Container
-// Apps can reach BEFORE they click deploy. fhirbridge-redis is stock redis:7-alpine plus a
+// one-click deploy requires the 4 custom images (segue-app, segue-worker,
+// segue-redis, segue-postgres) to already exist in a registry the customer's Container
+// Apps can reach BEFORE they click deploy. segue-redis is stock redis:7-alpine plus a
 // self-signed TLS certificate generated locally (containerization/docker/redis-tls/generate-cert.
 // ps1|sh — run once before building images) — see that Dockerfile for why Redis needs a custom
 // image at all, and this template's redisTrustedCertificateThumbprint parameter for wiring the
-// printed thumbprint in. fhirbridge-postgres is stock postgres:16-alpine plus the backup/restore
+// printed thumbprint in. segue-postgres is stock postgres:16-alpine plus the backup/restore
 // entrypoint described above — see containerization/docker/postgres-local/Dockerfile. Build and
 // push images once (see containerization/scripts/build-images.sh|ps1) to whatever registry you
 // control, then point imageRegistryServer/imageTag at that release. See README.md in this folder
 // for the full publishing + one-click deploy story.
 
 @description('Short name used to build every resource name in this deployment.')
-param namePrefix string = 'fhirbridge'
+param namePrefix string = 'segue'
 
 @description('Azure region for every resource. Defaults to the resource group\'s own region.')
 param location string = resourceGroup().location
 
-@description('Chooses which Postgres FHIRBridge\'s own database (FHIRBridgeDb) gets. true (default, recommended) creates a managed Azure Database for PostgreSQL Flexible Server and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no volume; Azure manages patching, and (the reason this became the default) automated daily backups with point-in-time restore for a configurable window. false instead keeps a containerized Postgres (stock postgres:16-alpine, single replica) — its data lives on the container\'s own local disk and is only copied out to Azure Files on a graceful shutdown (see postgresApp\'s own comment), so a crash can lose recent data with no fixed limit. Choosing false also creates postgresBackupJob below — a scheduled pg_dump-to-Blob-Storage job that meaningfully reduces that risk (bounds data loss to one backup interval instead of "unpredictable"), but it is a compensating control, not parity with Flexible Server\'s point-in-time restore: restoring means manually running psql against the newest dump, not a one-click Azure restore.')
+@description('Chooses which Postgres Segue\'s own database (FHIRBridgeDb) gets. true (default, recommended) creates a managed Azure Database for PostgreSQL Flexible Server and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no volume; Azure manages patching, and (the reason this became the default) automated daily backups with point-in-time restore for a configurable window. false instead keeps a containerized Postgres (stock postgres:16-alpine, single replica) — its data lives on the container\'s own local disk and is only copied out to Azure Files on a graceful shutdown (see postgresApp\'s own comment), so a crash can lose recent data with no fixed limit. Choosing false also creates postgresBackupJob below — a scheduled pg_dump-to-Blob-Storage job that meaningfully reduces that risk (bounds data loss to one backup interval instead of "unpredictable"), but it is a compensating control, not parity with Flexible Server\'s point-in-time restore: restoring means manually running psql against the newest dump, not a one-click Azure restore.')
 param useAzurePostgresql bool = true
 
-@description('Password for FHIRBridge\'s own Postgres database. In the containerized path (useAzurePostgresql = false) this is the \'fhirbridge\' role\'s password; in the managed path (true) this is the Flexible Server\'s administrator password directly. Required either way.')
+@description('Password for Segue\'s own Postgres database. In the containerized path (useAzurePostgresql = false) this is the \'segue\' role\'s password; in the managed path (true) this is the Flexible Server\'s administrator password directly. Required either way.')
 @secure()
 param postgresPassword string
 
@@ -51,7 +51,7 @@ param postgresPassword string
 @minLength(32)
 param jwtSigningKey string
 
-@description('Registry every custom image this deployment references was published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package) — fhirbridge-app/-worker/-redis/-postgres always, plus fhirbridge-postgres-backup too if useAzurePostgresql is false.')
+@description('Registry every custom image this deployment references was published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package) — segue-app/-worker/-redis/-postgres always, plus segue-postgres-backup too if useAzurePostgresql is false.')
 param imageRegistryServer string
 
 @description('Tag every custom image this deployment references was published under.')
@@ -71,24 +71,24 @@ param postgresPort int = 5432
 @description('Port Redis listens on (internal-only). Passed to the container via a redis-server --port override, since Redis has no env-var port setting.')
 param redisPort int = 6379
 
-@description('Chooses which Redis this deployment gets. false (default) keeps the existing containerized Redis — self-signed TLS cert baked into the fhirbridge-redis image, Azure Files-backed persistence, single replica, requires redisPassword/redisTrustedCertificateThumbprint. true creates an Azure Managed Redis cluster instead (Microsoft.Cache/redisEnterprise — classic Microsoft.Cache/redis is being retired and is already blocked for new caches in some subscriptions, see https://aka.ms/AzureCacheForRedisRetirement) and points ConnectionStrings:Redis at it — no container, no volume, no self-signed cert to generate; Azure issues its own CA-trusted certificate, which FHIRBridge.Api/.Worker accept automatically. redisPassword and redisTrustedCertificateThumbprint are both ignored in this mode — Azure Managed Redis manages its own access keys and presents its own trusted certificate.')
+@description('Chooses which Redis this deployment gets. false (default) keeps the existing containerized Redis — self-signed TLS cert baked into the segue-redis image, Azure Files-backed persistence, single replica, requires redisPassword/redisTrustedCertificateThumbprint. true creates an Azure Managed Redis cluster instead (Microsoft.Cache/redisEnterprise — classic Microsoft.Cache/redis is being retired and is already blocked for new caches in some subscriptions, see https://aka.ms/AzureCacheForRedisRetirement) and points ConnectionStrings:Redis at it — no container, no volume, no self-signed cert to generate; Azure issues its own CA-trusted certificate, which FHIRBridge.Api/.Worker accept automatically. redisPassword and redisTrustedCertificateThumbprint are both ignored in this mode — Azure Managed Redis manages its own access keys and presents its own trusted certificate.')
 param useAzureCacheForRedis bool = false
 
 @description('Password the containerized Redis requires (--requirepass) — defense-in-depth on top of network isolation. Passed as a plain container command argument (Redis has no env-var equivalent and Container Apps command arguments have no secretRef option), so it is visible to anyone with read access to this Container App\'s configuration — same exposure level as any other command argument. Required when useAzureCacheForRedis is false; ignored when true (Azure Cache manages its own access keys).')
 @secure()
 param redisPassword string = ''
 
-@description('SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn\'t match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs. Required when useAzureCacheForRedis is false; leave blank when true — Azure Cache presents a normal CA-trusted certificate that needs no pinning.')
+@description('SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the segue-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn\'t match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs. Required when useAzureCacheForRedis is false; leave blank when true — Azure Cache presents a normal CA-trusted certificate that needs no pinning.')
 param redisTrustedCertificateThumbprint string = ''
 
 @description('Azure Managed Redis SKU — a curated subset of the full Microsoft.Cache/redisEnterprise sku.name enum (e.g. also Balanced_B10/B20/..., ComputeOptimized_X5/X10/..., MemoryOptimized_M20/M50/...), which is already a valid raw ARM value so no sku/family/capacity translation is needed (unlike the retired classic Azure Cache for Redis). Only consulted when useAzureCacheForRedis is true.')
 @allowed(['Balanced_B0', 'Balanced_B5', 'MemoryOptimized_M10'])
 param azureCacheForRedisTier string = 'Balanced_B0'
 
-@description('The deployment-time choice between two secret-storage modes (see Documents/KeyVault-Implementation.html): false (default) keeps tenant SourceConnection/DestinationConfiguration secrets and the app\'s own 4 app-level secrets (jwt-signing-key etc.) on the local DataProtection-encrypted ProvisionedSecrets DB table — no Key Vault resource, no extra permission needed. true creates a dedicated RBAC-enabled Key Vault, grants the fhirbridgeApp/worker Container Apps\' system-assigned managed identities (and the identity running this deployment) the Key Vault Secrets Officer role on it, creates an RSA key for DataProtection key-ring wrapping (Crypto User granted to both apps), and points KeyVault:VaultName/KeyVault:UseAzureKeyVault/DataProtection:KeyVaultKeyId at it — the app reads/writes secrets there automatically via CompositeSecretProvider/Writer, with the local DB table remaining as an automatic fallback (KeyVault:AllowConfigurationFallback). Unlike the Terraform azure environment, this template does NOT pre-seed the 4 app-level secrets — AppSecretProvisioner generates and writes them itself on first boot once the RBAC role above is in place, which keeps this template free of any secret-generation logic of its own.')
+@description('The deployment-time choice between two secret-storage modes (see Documents/KeyVault-Implementation.html): false (default) keeps tenant SourceConnection/DestinationConfiguration secrets and the app\'s own 4 app-level secrets (jwt-signing-key etc.) on the local DataProtection-encrypted ProvisionedSecrets DB table — no Key Vault resource, no extra permission needed. true creates a dedicated RBAC-enabled Key Vault, grants the segueApp/worker Container Apps\' system-assigned managed identities (and the identity running this deployment) the Key Vault Secrets Officer role on it, creates an RSA key for DataProtection key-ring wrapping (Crypto User granted to both apps), and points KeyVault:VaultName/KeyVault:UseAzureKeyVault/DataProtection:KeyVaultKeyId at it — the app reads/writes secrets there automatically via CompositeSecretProvider/Writer, with the local DB table remaining as an automatic fallback (KeyVault:AllowConfigurationFallback). Unlike the Terraform azure environment, this template does NOT pre-seed the 4 app-level secrets — AppSecretProvisioner generates and writes them itself on first boot once the RBAC role above is in place, which keeps this template free of any secret-generation logic of its own.')
 param enableTenantSecretsKeyVault bool = false
 
-@description('Chooses whether this deployment includes a Seq container for centralized structured log viewing. false (default) — no Seq container; FHIRBridge.Api/.Gateway/.Worker log to console/Log Analytics only, same as leaving every other toggle at its default. true creates a Seq container app (datalust/seq, public image) with its own external ingress — its own https://<namePrefix>-seq.<environment>.azurecontainerapps.io URL, protected by seqAdminPassword — and points Observability:SeqServerUrl at it on fhirbridgeApp and worker. All three hosts (Api, Gateway, Worker) pick this up automatically since FhirBridgeLogging (FHIRBridge.Observability) reads that same config key on every host that calls it — see src/BuildingBlocks/FHIRBridge.Observability/Logging/FhirBridgeLogging.cs.')
+@description('Chooses whether this deployment includes a Seq container for centralized structured log viewing. false (default) — no Seq container; FHIRBridge.Api/.Gateway/.Worker log to console/Log Analytics only, same as leaving every other toggle at its default. true creates a Seq container app (datalust/seq, public image) with its own external ingress — its own https://<namePrefix>-seq.<environment>.azurecontainerapps.io URL, protected by seqAdminPassword — and points Observability:SeqServerUrl at it on segueApp and worker. All three hosts (Api, Gateway, Worker) pick this up automatically since SegueLogging (FHIRBridge.Observability) reads that same config key on every host that calls it — see src/BuildingBlocks/FHIRBridge.Observability/Logging/SegueLogging.cs.')
 param enableSeq bool = false
 
 @description('Admin password for the Seq web UI (SEQ_FIRSTRUN_ADMINPASSWORD) — required when enableSeq is true. This is the ONLY thing protecting that URL, since no other authentication is configured here. Ignored when enableSeq is false.')
@@ -99,7 +99,7 @@ param seqAdminPassword string = ''
 @allowed(['Small', 'Medium', 'Large', 'XLarge'])
 param seqSize string = 'Small'
 
-@description('false (default) — fhirbridgeApp is reached directly at its *.azurecontainerapps.io URL, with no inspection layer in front of it. true creates an Azure Front Door (Standard tier) profile with a WAF policy in front of fhirbridgeApp — Front Door is both a global HTTP load balancer and a WAF in one resource, so this single toggle gets both. Standard (not Premium) keeps cost down and is enough to start; the one thing it does not close is that fhirbridgeApp\'s own *.azurecontainerapps.io address stays technically reachable directly, bypassing Front Door, since Standard has no Private Link to hide the origin behind — that address is not published anywhere once a custom domain is set, so real-world exposure is low. See wafPolicyMode below for whether the WAF actually blocks anything, and the Front Door resources further down for the full reasoning, including why this can be created in this SAME deployment unlike the custom-domain flow above.')
+@description('false (default) — segueApp is reached directly at its *.azurecontainerapps.io URL, with no inspection layer in front of it. true creates an Azure Front Door (Standard tier) profile with a WAF policy in front of segueApp — Front Door is both a global HTTP load balancer and a WAF in one resource, so this single toggle gets both. Standard (not Premium) keeps cost down and is enough to start; the one thing it does not close is that segueApp\'s own *.azurecontainerapps.io address stays technically reachable directly, bypassing Front Door, since Standard has no Private Link to hide the origin behind — that address is not published anywhere once a custom domain is set, so real-world exposure is low. See wafPolicyMode below for whether the WAF actually blocks anything, and the Front Door resources further down for the full reasoning, including why this can be created in this SAME deployment unlike the custom-domain flow above.')
 param enableFrontDoorWaf bool = false
 
 @description('Only consulted when enableFrontDoorWaf is true. Prevention (default) actually blocks requests the WAF custom rule flags. Detection only logs/scores them — the WAF exists but blocks nothing, which is a real, deliberate choice for a cautious rollout (watch its logs for false positives against this app\'s own traffic before switching), not just a lesser default. Prevention is the default here rather than the more common "start in Detection, graduate later" advice specifically because this template ships to many independent client installs with no central place for anyone to watch logs and decide when it\'s safe to flip each one — left in Detection, it would likely just stay a no-op indefinitely.')
@@ -113,7 +113,7 @@ param wafRateLimitThreshold int = 300
 // Administrator) on the vault/resource group — a Contributor-only account can create the vault
 // itself just fine but will get an authorization error on the role assignments below specifically.
 // If that happens: redeploy with enableTenantSecretsKeyVault left false, then have someone with
-// sufficient rights grant these manually using the fhirbridgeAppPrincipalId/workerPrincipalId
+// sufficient rights grant these manually using the segueAppPrincipalId/workerPrincipalId
 // outputs plus their own account's object ID:
 //   az role assignment create --role "Key Vault Secrets Officer" --assignee <principal-id> --scope <tenantSecretsKeyVaultId output>
 //   az role assignment create --role "Key Vault Crypto User" --assignee <principal-id> --scope <tenantSecretsKeyVaultId output>
@@ -122,8 +122,8 @@ var keyVaultSecretsOfficerRoleId = subscriptionResourceId('Microsoft.Authorizati
 var keyVaultCryptoOfficerRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '14b46e9e-c2b7-41b4-b07b-48a6ebf60603')
 var keyVaultCryptoUserRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '12338af0-0e69-4776-bea7-57ae8d297424')
 
-@description('Custom domain for the FHIRBridge app (e.g. app.customer.com). Leave blank to keep the auto-generated *.azurecontainerapps.io URL. REQUIRED three-deploy flow, not two, to avoid InvalidCustomHostNameValidation/RequireCustomHostnameInEnvironment: (0) first deploy with this LEFT BLANK, so the app is actually created — Azure only assigns its customDomainVerificationId once the app exists, and there is no way to know that ID in advance, so setting a domain on the very first-ever deploy of a given namePrefix always fails with "a TXT record ... was not found"; (1) once deployed, read fhirbridgeAppDomainVerificationId, create CNAME (domain -> fhirbridgeAppUrl hostname) + TXT asuid.<domain> = that id, wait for DNS, THEN redeploy with this domain set and bindCustomDomainCertificates=false — registers the hostname (bindingType Disabled, no cert yet); (2) redeploy again with the SAME domain and bindCustomDomainCertificates=true — creates the managed certificate (hostname already exists) then binds SniEnabled SSL.')
-param fhirbridgeAppCustomDomain string = ''
+@description('Custom domain for the Segue app (e.g. app.customer.com). Leave blank to keep the auto-generated *.azurecontainerapps.io URL. REQUIRED three-deploy flow, not two, to avoid InvalidCustomHostNameValidation/RequireCustomHostnameInEnvironment: (0) first deploy with this LEFT BLANK, so the app is actually created — Azure only assigns its customDomainVerificationId once the app exists, and there is no way to know that ID in advance, so setting a domain on the very first-ever deploy of a given namePrefix always fails with "a TXT record ... was not found"; (1) once deployed, read segueAppDomainVerificationId, create CNAME (domain -> segueAppUrl hostname) + TXT asuid.<domain> = that id, wait for DNS, THEN redeploy with this domain set and bindCustomDomainCertificates=false — registers the hostname (bindingType Disabled, no cert yet); (2) redeploy again with the SAME domain and bindCustomDomainCertificates=true — creates the managed certificate (hostname already exists) then binds SniEnabled SSL.')
+param segueAppCustomDomain string = ''
 
 @description('Phase-2 flag. false (default) = register custom hostnames only (bindingType Disabled), do NOT create managed certificates. true = create managed certificates and bind SniEnabled SSL. Only set true AFTER hostnames were registered in a prior deploy AND DNS CNAME + asuid TXT have propagated. Setting true on first deploy with a new domain causes RequireCustomHostnameInEnvironment.')
 param bindCustomDomainCertificates bool = false
@@ -136,10 +136,10 @@ param bindCustomDomainCertificates bool = false
 // custom-domain.bicep / containerization/azure-deploy/CUSTOM_DOMAIN_SELF_SERVICE.md), which
 // re-asks for the domain and does the real work once this app already exists.
 
-@description('Domain you intend to use for the FHIRBridge app later (e.g. app.customer.com) - purely a reminder, echoed in this deployment\'s outputs. Does not configure anything in Azure by itself; activate it afterward with custom-domain.bicep (Step 2).')
-param fhirbridgeAppIntendedDomain string = ''
+@description('Domain you intend to use for the Segue app later (e.g. app.customer.com) - purely a reminder, echoed in this deployment\'s outputs. Does not configure anything in Azure by itself; activate it afterward with custom-domain.bicep (Step 2).')
+param segueAppIntendedDomain string = ''
 
-// fhirbridge-app has no equivalent parameter: Azure Container Apps external HTTP
+// segue-app has no equivalent parameter: Azure Container Apps external HTTP
 // ingress has no client-configurable port — it's always https://<app>.<domain> with no port
 // number in the URL, regardless of targetPort. That's a genuine Container Apps platform
 // constraint, not something this template can work around.
@@ -172,9 +172,9 @@ var postgresSkuMap = {
 @allowed(['Small', 'Medium', 'Large', 'XLarge'])
 param redisSize string = 'Medium'
 
-@description('FHIRBridge app (Api + Gateway) container size.')
+@description('Segue app (Api + Gateway) container size.')
 @allowed(['Small', 'Medium', 'Large', 'XLarge'])
-param fhirbridgeAppSize string = 'Medium'
+param segueAppSize string = 'Medium'
 
 @description('Worker container size.')
 @allowed(['Small', 'Medium', 'Large', 'XLarge'])
@@ -196,7 +196,7 @@ var containerSizes = {
 // everything this deployment created, and is what cleanup.sh|ps1's tag-based teardown mode
 // matches against (this deployment doesn't have Terraform state to fall back on).
 var commonTags = {
-  Project: 'FHIRBridge'
+  Project: 'Segue'
   Component: 'containerization'
   Environment: namePrefix
   ManagedBy: 'Bicep'
@@ -209,7 +209,7 @@ var uniqueSuffix = uniqueString(resourceGroup().id, namePrefix) // always exactl
 // its first 9 characters here (only for this name - every other resource name below still uses
 // the full namePrefix, since ACR/Container Apps/etc. have far more headroom) keeps this valid
 // regardless of how long a namePrefix is chosen - a bug that surfaced with the default namePrefix
-// ("fhirbridge", 10 characters) alone already being one character too many before this fix.
+// ("segue", 10 characters) alone already being one character too many before this fix.
 var storageAccountName = toLower('${take(namePrefix, 9)}st${uniqueSuffix}')
 
 // Plain-string app names (not resource attribute lookups) so a Container App can compute its OWN
@@ -218,7 +218,7 @@ var storageAccountName = toLower('${take(namePrefix, 9)}st${uniqueSuffix}')
 // on any individual app, so this needs no circular self-reference.
 var postgresName = '${namePrefix}-postgres'
 var redisName = '${namePrefix}-redis'
-var fhirbridgeAppName = '${namePrefix}-app'
+var segueAppName = '${namePrefix}-app'
 var workerName = '${namePrefix}-worker'
 var seqName = '${namePrefix}-seq'
 
@@ -284,7 +284,7 @@ resource tenantSecretsDeployerSecretsOfficer 'Microsoft.Authorization/roleAssign
 }
 
 // Creating a Key object (not just a Secret) needs Key Vault Crypto OFFICER — broader than what the
-// app itself needs at runtime (Crypto USER, wrap/unwrap only — granted to fhirbridgeApp/worker below).
+// app itself needs at runtime (Crypto USER, wrap/unwrap only — granted to segueApp/worker below).
 resource tenantSecretsDeployerCryptoOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
   name: guid(tenantSecretsKeyVaultName, deployer().objectId, 'KeyVaultCryptoOfficer')
   scope: tenantSecretsKeyVault
@@ -311,17 +311,17 @@ resource dataProtectionKey 'Microsoft.KeyVault/vaults/keys@2023-07-01' = if (ena
   dependsOn: [tenantSecretsDeployerCryptoOfficer]
 }
 
-// fhirbridgeApp/worker's system-assigned identities aren't known until those resources are
+// segueApp/worker's system-assigned identities aren't known until those resources are
 // declared below, but Bicep resolves resources by symbolic name regardless of file order, so these
 // can live here alongside the vault they grant access to. principalType 'ServicePrincipal' avoids
 // an Azure AD replication-lag failure (PrincipalNotFound) that can otherwise occur when granting a
 // role to an identity created earlier in this same deployment.
-resource tenantSecretsFhirbridgeAppSecretsOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
-  name: guid(tenantSecretsKeyVaultName, fhirbridgeAppName, 'KeyVaultSecretsOfficer')
+resource tenantSecretsSegueAppSecretsOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
+  name: guid(tenantSecretsKeyVaultName, segueAppName, 'KeyVaultSecretsOfficer')
   scope: tenantSecretsKeyVault
   properties: {
     roleDefinitionId: keyVaultSecretsOfficerRoleId
-    principalId: fhirbridgeApp.identity.principalId
+    principalId: segueApp.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -336,12 +336,12 @@ resource tenantSecretsWorkerSecretsOfficer 'Microsoft.Authorization/roleAssignme
   }
 }
 
-resource tenantSecretsFhirbridgeAppCryptoUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
-  name: guid(tenantSecretsKeyVaultName, fhirbridgeAppName, 'KeyVaultCryptoUser')
+resource tenantSecretsSegueAppCryptoUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableTenantSecretsKeyVault) {
+  name: guid(tenantSecretsKeyVaultName, segueAppName, 'KeyVaultCryptoUser')
   scope: tenantSecretsKeyVault
   properties: {
     roleDefinitionId: keyVaultCryptoUserRoleId
-    principalId: fhirbridgeApp.identity.principalId
+    principalId: segueApp.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -510,7 +510,7 @@ resource seqDataStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' 
 }
 
 
-// --- FHIRBridge's own database: containerized Postgres (internal only, single replica — local
+// --- Segue's own database: containerized Postgres (internal only, single replica — local
 //     ephemeral disk isn't safe for concurrent multi-instance Postgres either way) — only when NOT
 //     using Azure Database for PostgreSQL. Replaces the SQL Server Express container this
 //     deployment used before the app migrated from SQL Server to PostgreSQL. ---
@@ -549,11 +549,11 @@ resource postgresApp 'Microsoft.App/containerApps@2024-03-01' = if (!useAzurePos
           // accepted here since there is no supported way to give Postgres real POSIX permissions
           // on Container Apps' only persistent-storage option (confirmed: azureFile only exposes
           // accountName/accountKey/shareName/accessMode — no mount-options/NFS escape hatch).
-          image: '${imageRegistryServer}/fhirbridge-postgres:${imageTag}'
+          image: '${imageRegistryServer}/segue-postgres:${imageTag}'
           resources: containerSizes[postgresSize]
           env: [
-            { name: 'POSTGRES_DB', value: 'FHIRBridge' }
-            { name: 'POSTGRES_USER', value: 'fhirbridge' }
+            { name: 'POSTGRES_DB', value: 'Segue' }
+            { name: 'POSTGRES_USER', value: 'segue' }
             { name: 'POSTGRES_PASSWORD', secretRef: 'postgres-password' }
             // Where the backup mount (below) is available inside the container — entrypoint.sh
             // restores PGDATA from here on start and saves back here on graceful stop. PGDATA
@@ -643,16 +643,16 @@ resource postgresBackupJob 'Microsoft.App/jobs@2024-03-01' = if (!useAzurePostgr
       containers: [
         {
           name: 'postgres-backup'
-          image: '${imageRegistryServer}/fhirbridge-postgres-backup:${imageTag}'
+          image: '${imageRegistryServer}/segue-postgres-backup:${imageTag}'
           resources: containerSizes.Small
           env: [
             // postgresName is the same predictable internal hostname postgresApp is reached at
-            // elsewhere in this template (see fhirbridgeDbConnectionString) — Container Apps Jobs
+            // elsewhere in this template (see segueDbConnectionString) — Container Apps Jobs
             // share the environment's internal DNS with its Container Apps.
             { name: 'POSTGRES_HOST', value: postgresName }
             { name: 'POSTGRES_PORT', value: string(postgresPort) }
-            { name: 'POSTGRES_USER', value: 'fhirbridge' }
-            { name: 'POSTGRES_DB', value: 'FHIRBridge' }
+            { name: 'POSTGRES_USER', value: 'segue' }
+            { name: 'POSTGRES_DB', value: 'Segue' }
             { name: 'POSTGRES_PASSWORD', secretRef: 'postgres-password' }
             { name: 'BACKUP_CONTAINER_SAS_URL', secretRef: 'backup-container-sas-url' }
           ]
@@ -663,14 +663,14 @@ resource postgresBackupJob 'Microsoft.App/jobs@2024-03-01' = if (!useAzurePostgr
   dependsOn: [postgresApp, postgresBackupsContainer]
 }
 
-// --- FHIRBridge's own database: Azure Database for PostgreSQL Flexible Server — only when
+// --- Segue's own database: Azure Database for PostgreSQL Flexible Server — only when
 //     useAzurePostgresql is true. No VNet in this deployment (Container Apps here use the
 //     platform's own managed networking, not a customer VNet), so this uses public network access
 //     + a firewall rule allowing Azure-internal traffic, rather than private VNet integration —
 //     the simplest setup that still keeps the server unreachable from the public internet by
 //     anything except Azure's own services (and, indirectly, this environment's Container Apps). ---
 
-var postgresManagedAdminLogin = 'fhirbridgeadmin'
+var postgresManagedAdminLogin = 'segueadmin'
 
 resource postgresFlexibleServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = if (useAzurePostgresql) {
   name: '${namePrefix}-pg'
@@ -698,21 +698,21 @@ resource postgresFlexibleServerFirewallRule 'Microsoft.DBforPostgreSQL/flexibleS
 
 resource postgresFlexibleServerDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = if (useAzurePostgresql) {
   parent: postgresFlexibleServer
-  name: 'FHIRBridge'
+  name: 'Segue'
   properties: {
     charset: 'UTF8'
     collation: 'en_US.utf8'
   }
 }
 
-// Single source of truth for both fhirbridgeApp's and workerApp's ConnectionStrings__FHIRBridgeDb.
+// Single source of truth for both segueApp's and workerApp's ConnectionStrings__FHIRBridgeDb.
 // Azure Database for PostgreSQL requires SSL by default and presents a real CA-trusted
 // certificate (unlike the containerized path's plain internal-network-only connection, which
 // relies on Container Apps' network isolation instead of TLS — matching how the containerized
 // postgres/redis paths are already "internal only, no external exposure" by design).
-var fhirbridgeDbConnectionString = useAzurePostgresql
+var segueDbConnectionString = useAzurePostgresql
   ? 'Host=${postgresFlexibleServer.?properties.fullyQualifiedDomainName};Port=5432;Database=${postgresFlexibleServerDatabase.?name};Username=${postgresManagedAdminLogin};Password=${postgresPassword};Ssl Mode=Require;'
-  : 'Host=${postgresName};Port=${postgresPort};Database=FHIRBridge;Username=fhirbridge;Password=${postgresPassword};'
+  : 'Host=${postgresName};Port=${postgresPort};Database=Segue;Username=segue;Password=${postgresPassword};'
 
 // --- Redis: Azure Managed Redis (Microsoft.Cache/redisEnterprise) — only when
 //     useAzureCacheForRedis is true. No container, no Azure Files volume, no self-signed TLS cert
@@ -755,7 +755,7 @@ resource azureManagedRedisDatabase 'Microsoft.Cache/redisEnterprise/databases@20
   }
 }
 
-// Single source of truth for both fhirbridgeApp's and workerApp's ConnectionStrings__Redis —
+// Single source of truth for both segueApp's and workerApp's ConnectionStrings__Redis —
 // resolves to whichever of the two Redis resources useAzureCacheForRedis actually created.
 // abortConnect=false matches StackExchange.Redis's usual recommended default for a managed service
 // (retries instead of failing fast on a transient connect issue); the containerized path doesn't
@@ -791,12 +791,12 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = if (!useAzureCacheF
           // Custom image (not stock redis:7-alpine): FHIRBridge.Api/.Worker refuse a plaintext
           // Redis connection outside Development (HIPAA #15), and stock Redis has no TLS
           // configured at all. See containerization/docker/redis-tls/Dockerfile.
-          image: '${imageRegistryServer}/fhirbridge-redis:${imageTag}'
+          image: '${imageRegistryServer}/segue-redis:${imageTag}'
           resources: containerSizes[redisSize]
           // --port 0 disables the plaintext port entirely — --tls-port is the only one Redis
           // listens on. --tls-auth-clients no means server-side TLS + --requirepass, not mutual
           // TLS (no client certificate required) — matches ConnectionStrings__Redis's "ssl=true"
-          // (no client cert options) on fhirbridgeApp/workerApp below.
+          // (no client cert options) on segueApp/workerApp below.
           command: [
             'redis-server'
             '--tls-port'
@@ -827,7 +827,7 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = if (!useAzureCacheF
 
 // --- Seq (structured log viewing) — only when enableSeq is true. Public image, no custom build
 //     needed. External ingress deliberately: unlike Postgres/Redis (internal-only, reached only by
-//     fhirbridgeApp/worker), Seq exists specifically so a human can browse to it and monitor logs —
+//     segueApp/worker), Seq exists specifically so a human can browse to it and monitor logs —
 //     an internal-only Seq would have no way in from outside the Container Apps environment. ---
 
 resource seqApp 'Microsoft.App/containerApps@2024-03-01' = if (enableSeq) {
@@ -884,20 +884,20 @@ resource seqApp 'Microsoft.App/containerApps@2024-03-01' = if (enableSeq) {
 //
 // NOTE: managedCertificates apiVersion must succeed on a real subscription after Phase 1+DNS.
 
-resource fhirbridgeAppManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(fhirbridgeAppCustomDomain) && bindCustomDomainCertificates) {
+resource segueAppManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (!empty(segueAppCustomDomain) && bindCustomDomainCertificates) {
   parent: containerAppEnv
-  name: '${fhirbridgeAppName}-cert'
+  name: '${segueAppName}-cert'
   location: location
   properties: {
-    subjectName: fhirbridgeAppCustomDomain
+    subjectName: segueAppCustomDomain
     domainControlValidation: 'CNAME'
   }
 }
 
-// --- FHIRBridge app (Api + Gateway in one image), public ---
+// --- Segue app (Api + Gateway in one image), public ---
 
-resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
-  name: fhirbridgeAppName
+resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: segueAppName
   location: location
   tags: commonTags
   // System-assigned so DefaultAzureCredential (CompositeSecretProvider/Writer) can authenticate to
@@ -921,13 +921,13 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
         // Phase 1: Disabled registers the hostname without a cert (required before managed cert).
         // Phase 2: SniEnabled + certificateId after bindCustomDomainCertificates=true.
-        customDomains: !empty(fhirbridgeAppCustomDomain) ? [
+        customDomains: !empty(segueAppCustomDomain) ? [
           bindCustomDomainCertificates ? {
-            name: fhirbridgeAppCustomDomain
-            certificateId: fhirbridgeAppManagedCert.id
+            name: segueAppCustomDomain
+            certificateId: segueAppManagedCert.id
             bindingType: 'SniEnabled'
           } : {
-            name: fhirbridgeAppCustomDomain
+            name: segueAppCustomDomain
             bindingType: 'Disabled'
           }
         ] : []
@@ -936,15 +936,15 @@ resource fhirbridgeApp 'Microsoft.App/containerApps@2024-03-01' = {
     template: {
       containers: [
         {
-          name: 'fhirbridge-app'
-          image: '${imageRegistryServer}/fhirbridge-app:${imageTag}'
-          resources: containerSizes[fhirbridgeAppSize]
+          name: 'segue-app'
+          image: '${imageRegistryServer}/segue-app:${imageTag}'
+          resources: containerSizes[segueAppSize]
           // Redis__TrustedCertificateThumbprint only applies to the containerized path's
           // self-signed cert — Azure Cache for Redis presents a normal CA-trusted certificate,
           // which ValidateRedisServerCertificate accepts on its own when this is left unset.
           env: concat([
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
-            { name: 'ConnectionStrings__FHIRBridgeDb', value: fhirbridgeDbConnectionString }
+            { name: 'ConnectionStrings__FHIRBridgeDb', value: segueDbConnectionString }
             { name: 'Database__Provider', value: 'PostgreSql' }
             { name: 'ConnectionStrings__Redis', value: redisConnectionString }
             { name: 'Authentication__SigningKey', secretRef: 'jwt-signing-key' }
@@ -985,7 +985,7 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: workerName
   location: location
   tags: commonTags
-  // See the identical block on fhirbridgeApp for why this exists.
+  // See the identical block on segueApp for why this exists.
   identity: {
     type: 'SystemAssigned'
   }
@@ -999,11 +999,11 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'worker'
-          image: '${imageRegistryServer}/fhirbridge-worker:${imageTag}'
+          image: '${imageRegistryServer}/segue-worker:${imageTag}'
           resources: containerSizes[workerSize]
           env: concat([
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
-            { name: 'ConnectionStrings__FHIRBridgeDb', value: fhirbridgeDbConnectionString }
+            { name: 'ConnectionStrings__FHIRBridgeDb', value: segueDbConnectionString }
             { name: 'Database__Provider', value: 'PostgreSql' }
             { name: 'ConnectionStrings__Redis', value: redisConnectionString }
             { name: 'RuntimeWorker__Enabled', value: 'true' }
@@ -1020,7 +1020,7 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
           ] : [])
         }
       ]
-      // fhirbridgeApp is a head start, not a guarantee: both it and worker auto-migrate
+      // segueApp is a head start, not a guarantee: both it and worker auto-migrate
       // FHIRBridgeDb on boot and can race on the initial CREATE DATABASE on a fresh database.
       // Container Apps replaces crashed replicas automatically, which turns a lost race into a
       // self-healing retry (see the "migration race" bug writeup in the containerization guide).
@@ -1028,16 +1028,16 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
     }
   }
   dependsOn: !useAzurePostgresql
-    ? (!useAzureCacheForRedis ? [postgresApp, redisApp, fhirbridgeApp] : [postgresApp, fhirbridgeApp])
-    : (!useAzureCacheForRedis ? [redisApp, fhirbridgeApp] : [fhirbridgeApp])
+    ? (!useAzureCacheForRedis ? [postgresApp, redisApp, segueApp] : [postgresApp, segueApp])
+    : (!useAzureCacheForRedis ? [redisApp, segueApp] : [segueApp])
 }
 
-// --- Front Door (Standard) + WAF — only when enableFrontDoorWaf is true. Fronts fhirbridgeApp
+// --- Front Door (Standard) + WAF — only when enableFrontDoorWaf is true. Fronts segueApp
 //     with Microsoft's global HTTP load balancer plus a WAF policy, closing the gap where the
 //     app's public ingress otherwise has no inspection layer in front of it at all — relevant
 //     since this app processes PHI. Unlike the custom-domain flow above, this can be created in
-//     THIS SAME deployment: Front Door only needs fhirbridgeApp's FQDN as a one-way origin
-//     reference, not the circular self-reference that binding a domain to fhirbridgeApp itself
+//     THIS SAME deployment: Front Door only needs segueApp's FQDN as a one-way origin
+//     reference, not the circular self-reference that binding a domain to segueApp itself
 //     would be (see the custom-domain comment above for why THAT one genuinely needs a separate
 //     deployment).
 //
@@ -1050,7 +1050,7 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
 //         protection, not equivalent to Premium's managed rule sets — a client whose compliance
 //         review requires managed WAF rules needs to upgrade both frontDoorProfile and
 //         frontDoorWafPolicy to Premium_AzureFrontDoor.
-//       - Private Link origin support: fhirbridgeApp's own *.azurecontainerapps.io address stays
+//       - Private Link origin support: segueApp's own *.azurecontainerapps.io address stays
 //         technically reachable directly, bypassing Front Door/the WAF, since there's no Private
 //         Link to hide it behind. It isn't published anywhere once a custom domain is set, so
 //         real-world exposure is low — if that gap needs fully closing, the fix is either
@@ -1144,15 +1144,15 @@ resource frontDoorOriginGroup 'Microsoft.Cdn/profiles/originGroups@2024-02-01' =
   }
 }
 
-// hostName/originHostHeader both point at fhirbridgeApp's own FQDN — Container Apps ingress
+// hostName/originHostHeader both point at segueApp's own FQDN — Container Apps ingress
 // validates the Host header against the app's registered hostnames, so these have to match for
 // Front Door's forwarded requests to actually reach it.
 resource frontDoorOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2024-02-01' = if (enableFrontDoorWaf) {
   parent: frontDoorOriginGroup
   name: '${namePrefix}-app-origin'
   properties: {
-    hostName: fhirbridgeApp.properties.configuration.ingress.fqdn
-    originHostHeader: fhirbridgeApp.properties.configuration.ingress.fqdn
+    hostName: segueApp.properties.configuration.ingress.fqdn
+    originHostHeader: segueApp.properties.configuration.ingress.fqdn
     httpPort: 80
     httpsPort: 443
     priority: 1
@@ -1198,9 +1198,9 @@ resource frontDoorSecurityPolicy 'Microsoft.Cdn/profiles/securityPolicies@2024-0
   dependsOn: [frontDoorRoute]
 }
 
-output fhirbridgeAppUrl string = 'https://${fhirbridgeAppName}.${containerAppEnv.properties.defaultDomain}'
+output segueAppUrl string = 'https://${segueAppName}.${containerAppEnv.properties.defaultDomain}'
 
-@description('Populated only when enableFrontDoorWaf is true. The actual public entry point once Front Door + WAF is enabled — send traffic here, not to fhirbridgeAppUrl directly, so the WAF actually inspects it. fhirbridgeAppUrl above still works underneath (Standard tier has no Private Link to hide it) — a documented, accepted tradeoff, see the comment above the Front Door resources.')
+@description('Populated only when enableFrontDoorWaf is true. The actual public entry point once Front Door + WAF is enabled — send traffic here, not to segueAppUrl directly, so the WAF actually inspects it. segueAppUrl above still works underneath (Standard tier has no Private Link to hide it) — a documented, accepted tradeoff, see the comment above the Front Door resources.')
 output frontDoorEndpointUrl string = enableFrontDoorWaf ? 'https://${frontDoorEndpoint.?properties.hostName ?? ''}' : ''
 
 @description('true when the containerized Postgres path is active — meaning postgresBackupJob is running hourly pg_dump backups to the postgres-backups blob container as a compensating control. false means useAzurePostgresql is active instead, which has real automated backups from Azure directly and needs no such job.')
@@ -1226,29 +1226,29 @@ output tenantSecretsKeyVaultUri string = enableTenantSecretsKeyVault ? (tenantSe
 @description('Populated only when enableTenantSecretsKeyVault is true. Same value the app receives as DataProtection:KeyVaultKeyId.')
 output dataProtectionKeyId string = enableTenantSecretsKeyVault ? (dataProtectionKey.?properties.keyUriWithVersion ?? '') : ''
 
-@description('System-assigned managed identity principal ID for the fhirbridgeApp Container App. Use as --assignee for the manual role-assignment fallback above.')
-output fhirbridgeAppPrincipalId string = fhirbridgeApp.identity.principalId
+@description('System-assigned managed identity principal ID for the segueApp Container App. Use as --assignee for the manual role-assignment fallback above.')
+output segueAppPrincipalId string = segueApp.identity.principalId
 
 @description('System-assigned managed identity principal ID for the worker Container App. Use as --assignee for the manual role-assignment fallback above.')
 output workerPrincipalId string = workerApp.identity.principalId
 
-// Always populated regardless of whether fhirbridgeAppCustomDomain is set — add a CNAME (your
-// domain -> fhirbridgeAppUrl's hostname) and a TXT record named asuid.<your domain> with this
+// Always populated regardless of whether segueAppCustomDomain is set — add a CNAME (your
+// domain -> segueAppUrl's hostname) and a TXT record named asuid.<your domain> with this
 // value at your DNS provider. Flow: Phase 1 deploy with domain + bindCustomDomainCertificates=false
 // (hostname registered), create DNS, wait; Phase 2 redeploy with bindCustomDomainCertificates=true.
-output fhirbridgeAppDomainVerificationId string = fhirbridgeApp.properties.customDomainVerificationId
+output segueAppDomainVerificationId string = segueApp.properties.customDomainVerificationId
 
-output fhirbridgeAppCustomDomainUrl string = !empty(fhirbridgeAppCustomDomain) ? 'https://${fhirbridgeAppCustomDomain}' : ''
+output segueAppCustomDomainUrl string = !empty(segueAppCustomDomain) ? 'https://${segueAppCustomDomain}' : ''
 output bindCustomDomainCertificates bool = bindCustomDomainCertificates
-output customDomainPhase string = empty(fhirbridgeAppCustomDomain) ? 'none' : (bindCustomDomainCertificates ? 'ssl-bound-or-binding' : 'hostname-only-set-dns-then-redeploy-with-bind-true')
+output customDomainPhase string = empty(segueAppCustomDomain) ? 'none' : (bindCustomDomainCertificates ? 'ssl-bound-or-binding' : 'hostname-only-set-dns-then-redeploy-with-bind-true')
 
 // Purely a reminder of whatever was typed into the (inert) intended-domain field above - nothing
 // in this deployment acts on this value. Use custom-domain.bicep (Step 2) to actually activate
 // a domain once this deployment has finished.
 output intendedCustomDomains object = {
-  fhirbridgeApp: fhirbridgeAppIntendedDomain
+  segueApp: segueAppIntendedDomain
 }
-output customDomainActivationNote string = empty(fhirbridgeAppIntendedDomain) ? '' : 'Domain names entered above are not yet active - they are recorded here purely for your reference. To actually route traffic to a custom domain, complete Step 2 (custom-domain.bicep) now that this deployment has finished.'
+output customDomainActivationNote string = empty(segueAppIntendedDomain) ? '' : 'Domain names entered above are not yet active - they are recorded here purely for your reference. To actually route traffic to a custom domain, complete Step 2 (custom-domain.bicep) now that this deployment has finished.'
 
 // Whichever Postgres resources actually exist for the active path — firewall rule + database
 // (children) before their parent Flexible Server for the managed path, or just the container app
@@ -1302,7 +1302,7 @@ output resourceManifest array = concat(
   redisManifestItems,
   seqManifestItems,
   [
-    fhirbridgeApp.id
+    segueApp.id
     workerApp.id
   ],
   postgresStorageManifestItems,

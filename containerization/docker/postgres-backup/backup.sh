@@ -17,7 +17,7 @@ set -euo pipefail
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 DUMP_FILE="/tmp/${POSTGRES_DB}-${TIMESTAMP}.sql.gz"
 
-echo "==> fhirbridge-postgres-backup: dumping ${POSTGRES_DB} from ${POSTGRES_HOST}:${POSTGRES_PORT}"
+echo "==> segue-postgres-backup: dumping ${POSTGRES_DB} from ${POSTGRES_HOST}:${POSTGRES_PORT}"
 PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=plain | gzip > "$DUMP_FILE"
 
 # BACKUP_CONTAINER_SAS_URL is "https://<account>.blob.core.windows.net/<container>?<sas-query>" —
@@ -26,8 +26,8 @@ BASE_URL="${BACKUP_CONTAINER_SAS_URL%%\?*}"
 SAS_QUERY="${BACKUP_CONTAINER_SAS_URL#*\?}"
 DEST_URL="${BASE_URL}/$(basename "$DUMP_FILE")?${SAS_QUERY}"
 
-echo "==> fhirbridge-postgres-backup: uploading $(basename "$DUMP_FILE") ($(du -h "$DUMP_FILE" | cut -f1))"
+echo "==> segue-postgres-backup: uploading $(basename "$DUMP_FILE") ($(du -h "$DUMP_FILE" | cut -f1))"
 azcopy copy "$DUMP_FILE" "$DEST_URL" --output-level=essential
 
 rm -f "$DUMP_FILE"
-echo "==> fhirbridge-postgres-backup: done"
+echo "==> segue-postgres-backup: done"

@@ -1,4 +1,4 @@
-# Manage custom domain + Azure-managed SSL for a Segue / FHIRBridge Container App.
+# Manage custom domain + Azure-managed SSL for a Segue / Segue Container App.
 #
 # Supports Mitul's operator path (Info → DNS → Add → Bind) against any already-deployed
 # Container App (Bicep or Terraform). Prefer the Bicep two-phase wizard for clients:

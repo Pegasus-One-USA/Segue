@@ -1,4 +1,4 @@
-# Persistent Container Registry for FHIRBridge release images — lives in the vendor's own Azure
+# Persistent Container Registry for Segue release images — lives in the vendor's own Azure
 # tenant/subscription, entirely separate from any client deployment. Exists so a version, once
 # published, has one durable home versioned with real, manually-assigned semantic-version tags —
 # rather than being rebuilt (and re-pushed to a client's registry) every time someone deploys.
@@ -64,7 +64,7 @@ locals {
   acr_name = var.acr_name_override != "" ? var.acr_name_override : "${var.name_prefix}vendor${random_id.suffix.hex}"
 
   common_tags = {
-    Project     = "FHIRBridge"
+    Project     = "Segue"
     Component   = "vendor-registry"
     Environment = var.name_prefix
     ManagedBy   = "Terraform"

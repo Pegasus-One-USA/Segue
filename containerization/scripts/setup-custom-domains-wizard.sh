@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Interactive, guided custom-domain setup for an already-deployed FHIRBridge Container Apps
+# Interactive, guided custom-domain setup for an already-deployed Segue Container Apps
 # environment (Bicep or Terraform, any name prefix). Bash equivalent of
 # setup-custom-domains-wizard.ps1 — see that file's header for the full "step 2" rationale
 # (domains can never be entered on the very first deploy; Azure only assigns a Container App's
 # customDomainVerificationId once the app already exists).
 #
 # What it does:
-#   1. Finds which of this name prefix's public-facing apps actually exist (FHIRBridge app —
+#   1. Finds which of this name prefix's public-facing apps actually exist (Segue app —
 #      the database container/redis/worker are never eligible for a domain).
 #   2. Shows each one's default URL and Azure-assigned domain-verification ID.
 #   3. Asks, per app, whether you want a custom domain for it, and if so, what domain.
@@ -47,10 +47,10 @@ MANAGE_SCRIPT="${HERE}/manage-custom-domain.sh"
 
 ENVIRONMENT_NAME="${NAME_PREFIX}-env"
 
-# label|app_name|port — FHIRBridge app is always external by design (main.bicep never
+# label|app_name|port — Segue app is always external by design (main.bicep never
 # gives it an internal-only mode).
 CANDIDATES=(
-  "FHIRBridge app|${NAME_PREFIX}-app|80"
+  "Segue app|${NAME_PREFIX}-app|80"
 )
 
 echo "==> Looking for '${NAME_PREFIX}'-prefixed apps in '${RESOURCE_GROUP}' ..."

@@ -1,4 +1,4 @@
-# Segue / FHIRBridge — Custom domain + SSL self-service runbook
+# Segue / Segue — Custom domain + SSL self-service runbook
 
 For clients and operators. Fixes the Marketplace/Deploy-to-Azure gap where a single-shot
 domain+certificate deploy failed with `RequireCustomHostnameInEnvironment`.
@@ -25,7 +25,7 @@ see `backups/2026-08-28-pre-2step-domain-flow`): a Container App's `customDomain
 only exists once the app itself does, so asking for a domain on the very first deploy always fails
 with `InvalidCustomHostNameValidation`/`RequireCustomHostnameInEnvironment`. Domain binding is now a
 **separate template** (`custom-domain.bicep` / compiled `custom-domain.json`), deployed after
-`main.bicep`'s step-1 stack is already up. It handles the FHIRBridge app in ONE deployment — with
+`main.bicep`'s step-1 stack is already up. It handles the Segue app in ONE deployment — with
 its own optional domain field, not required, so you only run it once you want a domain bound. If
 the domain is set, it patches the container app — reading every other property (env vars, volumes,
 registries, existing secrets via `listSecrets`) back from the live resource — so it never requires
@@ -42,7 +42,7 @@ two. `custom-domain.bicep` always does the full sequence — register hostname, 
 bind it — internally ordered via two module calls (`registerHostnames` then `bindCertificates`, the
 second explicitly `dependsOn` the first) so Azure's API only ever sees "certificate created" after
 "hostname added" has actually completed, which is the one ordering constraint Azure enforces. The
-wizard has a name-prefix field in Basics plus one step for the FHIRBridge app (`isWizard: false`, so
+wizard has a name-prefix field in Basics plus one step for the Segue app (`isWizard: false`, so
 Basics and the app step render together on a single page). Azure shows a one-time "Do you trust the
 authors code?" prompt the first time any template using a live API lookup like this is opened —
 expected, not a bug, safe to accept.
@@ -52,7 +52,7 @@ propagated before you run it at all** — Azure validates the `asuid` TXT record
 hostname is registered, not just at certificate-creation, so there is no way to defer that check to
 later within the same deployment. But you don't need a throwaway prior deploy to learn the
 verification ID for that TXT record — `main.bicep`'s own output
-(`fhirbridgeAppDomainVerificationId`) already exposes it unconditionally, the moment the app exists,
+(`segueAppDomainVerificationId`) already exposes it unconditionally, the moment the app exists,
 whether or not any domain was ever set on that deploy.
 
 The step shows, in order: the app's name; the app's live default URL and domain-verification ID (one
@@ -108,7 +108,7 @@ bugs stacked on top of each other — worth reading in order if this area breaks
 The verification ID and default FQDN exist the moment the app does — no need to deploy
 `custom-domain.bicep` at all just to learn them. Any of these work:
 
-- `main.bicep`'s own deployment outputs (`fhirbridgeAppDomainVerificationId`, `fhirbridgeAppUrl`,
+- `main.bicep`'s own deployment outputs (`segueAppDomainVerificationId`, `segueAppUrl`,
   etc.) from Step 1.
 - `az containerapp show --name <prefix>-app --resource-group <rg> --query
   "{fqdn:properties.configuration.ingress.fqdn, verificationId:properties.customDomainVerificationId}"`
@@ -136,7 +136,7 @@ not recreated, and the app stays reachable throughout).
 
 ```bash
 az deployment group create -g <rg> -f custom-domain.bicep \
-  -p namePrefix=segue12 fhirbridgeAppDomain=app.example.com
+  -p namePrefix=segue12 segueAppDomain=app.example.com
 ```
 
 ### Automating the DNS wait
@@ -148,7 +148,7 @@ that), prints the DNS records, polls DNS itself until they resolve, then deploys
 
 ```powershell
 .\containerization\scripts\auto-bind-custom-domain.ps1 -ResourceGroup rg-tusharpuri -NamePrefix segue12 `
-  -FhirbridgeAppDomain app.example.com
+  -SegueAppDomain app.example.com
 ```
 
 Drives `custom-domain.bicep` itself (not raw `az containerapp hostname` commands), so it can't hit
@@ -166,7 +166,7 @@ auto-detected):
 
 ```bash
 az deployment group create -g <rg> -f custom-domain.bicep \
-  -p namePrefix=segue12 fhirbridgeAppDomain=app.example.com enableFrontDoorWaf=true
+  -p namePrefix=segue12 segueAppDomain=app.example.com enableFrontDoorWaf=true
 ```
 
 This binds the domain to Front Door's endpoint instead, and adds it to the WAF security policy's
@@ -195,7 +195,7 @@ manual CLI flow (or the wizard) for the Front Door path until that script is upd
 
 ### main.bicep's own domain parameters (fallback, not recommended)
 
-`main.bicep` still has `fhirbridgeAppCustomDomain`/`bindCustomDomainCertificates` — same 3-deploy
+`main.bicep` still has `segueAppCustomDomain`/`bindCustomDomainCertificates` — same 3-deploy
 flow, but every redeploy resubmits the *entire*
 stack's parameters (all passwords, image tag, etc.), so a stale or
 mistyped value elsewhere in that parameter set can drift other resources. Prefer Path A above;
@@ -221,7 +221,7 @@ parameters on later applies or the next deploy may remove the hostname.
 
 Same two-phase flags in `terraform/environments/azure`:
 
-- `fhirbridge_app_custom_domain`
+- `segue_app_custom_domain`
 - `bind_custom_domain_certificates = false` then `true` after DNS
 
 ## Marketplace / Partner Center (org process — not code)

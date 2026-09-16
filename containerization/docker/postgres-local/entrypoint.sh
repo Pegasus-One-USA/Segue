@@ -30,21 +30,21 @@ PG_BACKUP_DIR="${PG_BACKUP_DIR:-}"
 PGDATA="${PGDATA:-/var/lib/postgresql/data}"
 
 if [ -n "$PG_BACKUP_DIR" ] && [ -f "$PG_BACKUP_DIR/PG_VERSION" ]; then
-  echo "==> fhirbridge-postgres: restoring PGDATA from $PG_BACKUP_DIR (found an existing backup)"
+  echo "==> segue-postgres: restoring PGDATA from $PG_BACKUP_DIR (found an existing backup)"
   mkdir -p "$PGDATA"
   cp -r "$PG_BACKUP_DIR/." "$PGDATA/"
 elif [ -n "$PG_BACKUP_DIR" ]; then
-  echo "==> fhirbridge-postgres: no existing backup at $PG_BACKUP_DIR - starting fresh (initdb will run)"
+  echo "==> segue-postgres: no existing backup at $PG_BACKUP_DIR - starting fresh (initdb will run)"
 else
-  echo "==> fhirbridge-postgres: PG_BACKUP_DIR not set - running fully ephemeral, no backup/restore"
+  echo "==> segue-postgres: PG_BACKUP_DIR not set - running fully ephemeral, no backup/restore"
 fi
 
 backup_out() {
   if [ -n "$PG_BACKUP_DIR" ]; then
-    echo "==> fhirbridge-postgres: backing up PGDATA to $PG_BACKUP_DIR"
+    echo "==> segue-postgres: backing up PGDATA to $PG_BACKUP_DIR"
     mkdir -p "$PG_BACKUP_DIR"
     # Non-fatal: a failed backup shouldn't prevent the container from exiting cleanly on shutdown.
-    cp -r "$PGDATA/." "$PG_BACKUP_DIR/" || echo "==> fhirbridge-postgres: WARNING - backup copy failed, continuing shutdown anyway"
+    cp -r "$PGDATA/." "$PG_BACKUP_DIR/" || echo "==> segue-postgres: WARNING - backup copy failed, continuing shutdown anyway"
   fi
 }
 
@@ -55,7 +55,7 @@ docker-entrypoint.sh "$@" &
 PG_PID=$!
 
 terminate() {
-  echo "==> fhirbridge-postgres: caught termination signal - stopping postgres gracefully first"
+  echo "==> segue-postgres: caught termination signal - stopping postgres gracefully first"
   kill -TERM "$PG_PID" 2>/dev/null || true
   wait "$PG_PID" 2>/dev/null || true
   backup_out

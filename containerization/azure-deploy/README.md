@@ -1,7 +1,7 @@
-# FHIRBridge — easy-install Azure deployment (Bicep)
+# Segue — easy-install Azure deployment (Bicep)
 
 A single-template counterpart to [`../terraform/environments/azure`](../terraform/environments/azure):
-same 4-container topology (`fhirbridge-app`, `postgres`, `redis`, `worker`), same
+same 4-container topology (`segue-app`, `postgres`, `redis`, `worker`), same
 Container Apps design, but expressed as **one Bicep file** so a customer can stand it up with a
 single command or a single button click in their own Azure Portal, instead of running
 `terraform init/apply`. Use whichever of the two fits the audience — this one for "install it like
@@ -10,8 +10,8 @@ a product," the Terraform one for your own CI/CD or repeatable internal environm
 ## The one thing that can't be skipped: publish the images first
 
 A one-click experience is only possible if the 4 custom images
-(`fhirbridge-app`, `fhirbridge-worker`, `fhirbridge-redis`, `fhirbridge-postgres` — plus a 5th,
-`fhirbridge-postgres-backup`, only actually pulled if a customer keeps Postgres containerized
+(`segue-app`, `segue-worker`, `segue-redis`, `segue-postgres` — plus a 5th,
+`segue-postgres-backup`, only actually pulled if a customer keeps Postgres containerized
 instead of the default managed path) **already exist in a registry the customer's Container Apps
 can reach** before they click deploy — there's no version of "single button" where the customer also
 builds Docker images. That's a normal part of shipping software as a product: you (the vendor)
@@ -72,10 +72,10 @@ No hosting, no Marketplace account, nothing to publish anywhere except the image
 
 ```bash
 az login
-az group create --name fhirbridge-rg --location eastus
+az group create --name segue-rg --location eastus
 
 az deployment group create \
-  --resource-group fhirbridge-rg \
+  --resource-group segue-rg \
   --template-file main.bicep \
   --parameters main.parameters.example.json \
   --parameters postgresPassword='<real password>' jwtSigningKey='<real 32+ char key>'
@@ -85,10 +85,10 @@ az deployment group create \
 value inline with `--parameters` as shown.) When it finishes:
 
 ```bash
-az deployment group show --resource-group fhirbridge-rg --name main --query properties.outputs
+az deployment group show --resource-group segue-rg --name main --query properties.outputs
 ```
 
-gives you `fhirbridgeAppUrl`.
+gives you `segueAppUrl`.
 
 ## Tier 2 — an actual "Deploy to Azure" button
 
@@ -113,7 +113,7 @@ password fields) — no createUiDefinition wiring required for this path.
 
 ## Tier 3 — a native, nicely-labeled wizard (Template Specs or Marketplace)
 
-`createUiDefinition.json` in this folder is a ready-to-use custom wizard (grouped steps: FHIRBridge
+`createUiDefinition.json` in this folder is a ready-to-use custom wizard (grouped steps: Segue
 Settings, Container Images) that upgrades the plain auto-generated form into labeled sections with
 tooltips and conditional fields (registry credentials only appear if you pick "Private"). It isn't
 consumed by the plain Tier 2 button — it's meant for either of these two, both of which give the
@@ -145,7 +145,7 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   despite the volume mount on `postgresApp` — Postgres's own startup permission check (`chmod 0700`
   on the data directory, enforced on every start, not just first init) can never pass on Azure
   Files, since it's SMB and Container Apps' `azureFile` storage type exposes no mount-options/NFS
-  alternative. The custom `fhirbridge-postgres` image (`containerization/docker/postgres-local`)
+  alternative. The custom `segue-postgres` image (`containerization/docker/postgres-local`)
   instead runs Postgres on the container's own local (ephemeral) disk, and uses the Azure Files
   mount purely as an at-rest backup target — restored into local storage on container start, saved
   back out only on a **graceful** stop. Anything written since the last graceful shutdown is lost on
@@ -156,7 +156,7 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   it bounds data loss to one hour instead of "unpredictable," but restoring is a manual
   `gunzip | psql` from the newest dump, not a one-click Azure restore. For anything that needs
   guaranteed, one-click-restorable durability, use `useAzurePostgresql=true` (the default) instead.
-- **`fhirbridge-app` and `worker` both auto-migrate `FHIRBridgeDb`** on first boot and can race on
+- **`segue-app` and `worker` both auto-migrate `FHIRBridgeDb`** on first boot and can race on
   the initial `CREATE DATABASE` on a brand-new database; Container Apps replaces crashed replicas
   automatically, turning a lost race into a self-healing retry. See the containerization guide
   (`Documents/Containerization-Multi-Cloud-Guide.html`) for the full writeup.
@@ -167,7 +167,7 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   `RequireCustomHostnameInEnvironment`. Operator fallback: `../scripts/manage-custom-domain.ps1|.sh`.
 - **Secrets are plain Bicep `@secure()` parameters by default**, not Key Vault references. Set
   `enableTenantSecretsKeyVault=true` to create a dedicated RBAC-enabled Key Vault instead — grants
-  the `fhirbridge-app`/`worker` Container Apps' system-assigned identities (and the identity running
+  the `segue-app`/`worker` Container Apps' system-assigned identities (and the identity running
   the deployment) access to it, wraps the DataProtection key ring with a Key Vault-managed RSA key,
   and lets the app read/write tenant + app-level secrets there at runtime (local DB storage remains
   an automatic fallback). Granting that RBAC needs Owner/User Access Administrator on the resource
@@ -184,7 +184,7 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   Not every Azure region supports it; switch to `Standard_LRS` if a deploy fails with a SKU/region
   error on the storage account. Exposed in the wizard as the "Storage redundancy" choice.
 - **No Web Application Firewall by default.** Set `enableFrontDoorWaf=true` to put an Azure Front
-  Door (Standard tier) profile with a WAF policy in front of `fhirbridge-app` — Front Door is both a
+  Door (Standard tier) profile with a WAF policy in front of `segue-app` — Front Door is both a
   WAF and a global load balancer in one resource, so this single toggle gets both. Created in this
   same deployment (unlike custom domains above, Front Door only needs the app's FQDN as a one-way
   origin reference, not a circular self-reference). Standard tier can't host Premium-only managed
@@ -196,8 +196,8 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   Detection, graduate later," specifically because this template ships to many independent client
   installs with no central place to watch each one's logs and decide when it's safe to flip; left
   in Detection, it would likely just stay a no-op indefinitely. Once enabled, use the deployment's
-  `frontDoorEndpointUrl` output as the real entry point instead of `fhirbridgeAppUrl` — traffic sent
-  straight to `fhirbridgeAppUrl` still reaches the app directly, bypassing the WAF entirely, since
+  `frontDoorEndpointUrl` output as the real entry point instead of `segueAppUrl` — traffic sent
+  straight to `segueAppUrl` still reaches the app directly, bypassing the WAF entirely, since
   Standard tier has no Private Link to hide that origin address behind. That gap is low-risk in
   practice (the address isn't published anywhere once a custom domain is set) but not fully closed;
   closing it needs either a Premium-tier Private Link origin (which would also unlock managed rule
@@ -206,7 +206,7 @@ customer a genuinely native "Deploy" experience inside their own Portal:
   `wafRateLimitThreshold` is not currently exposed there and falls back to its 300/min default.
 - **No centralized log viewing by default.** Set `enableSeq=true` to add a Seq container
   (`datalust/seq`, public image) with its own external ingress — `Observability:SeqServerUrl` is
-  automatically pointed at it on `fhirbridge-app` (both the Api and Gateway processes read this same
+  automatically pointed at it on `segue-app` (both the Api and Gateway processes read this same
   config key) and `worker`. Unlike Postgres/Redis, Seq gets a public URL deliberately, since the
   whole point is being able to browse to it and monitor logs; `seqAdminPassword` is the only thing
   protecting that URL. Its `/data` volume uses the same Azure Files pattern as Postgres/Redis — this

@@ -14,7 +14,7 @@ set -euo pipefail
 
 RESOURCE_GROUP=""
 NAME_PREFIX=""
-FHIRBRIDGE_APP_DOMAIN=""
+SEGUE_APP_DOMAIN=""
 WAIT_TIMEOUT_MINUTES=30
 WAIT_POLL_SECONDS=30
 
@@ -22,10 +22,10 @@ while getopts "g:p:a:w:s:" opt; do
     case $opt in
         g) RESOURCE_GROUP="$OPTARG" ;;
         p) NAME_PREFIX="$OPTARG" ;;
-        a) FHIRBRIDGE_APP_DOMAIN="$OPTARG" ;;
+        a) SEGUE_APP_DOMAIN="$OPTARG" ;;
         w) WAIT_TIMEOUT_MINUTES="$OPTARG" ;;
         s) WAIT_POLL_SECONDS="$OPTARG" ;;
-        *) echo "Usage: $0 -g <resource-group> -p <name-prefix> [-a <fhirbridge-app-domain>] [-w <wait-timeout-min>] [-s <poll-interval-sec>]" >&2; exit 1 ;;
+        *) echo "Usage: $0 -g <resource-group> -p <name-prefix> [-a <segue-app-domain>] [-w <wait-timeout-min>] [-s <poll-interval-sec>]" >&2; exit 1 ;;
     esac
 done
 
@@ -35,8 +35,8 @@ BICEP_FILE="$HERE/../azure-deploy/custom-domain.bicep"
 command -v az >/dev/null 2>&1 || { echo "Azure CLI (az) not found. Install it, then run 'az login'." >&2; exit 1; }
 [[ -f "$BICEP_FILE" ]] || { echo "Could not find custom-domain.bicep at $BICEP_FILE" >&2; exit 1; }
 [[ -n "$RESOURCE_GROUP" && -n "$NAME_PREFIX" ]] || { echo "Both -g <resource-group> and -p <name-prefix> are required." >&2; exit 1; }
-if [[ -z "$FHIRBRIDGE_APP_DOMAIN" ]]; then
-    echo "Set -a <fhirbridge-app-domain>." >&2
+if [[ -z "$SEGUE_APP_DOMAIN" ]]; then
+    echo "Set -a <segue-app-domain>." >&2
     exit 1
 fi
 
@@ -69,10 +69,10 @@ pending_domains=()
 pending_fqdns=()
 pending_verification_ids=()
 
-declare -A LABEL_TO_APPNAME=( [fhirbridgeApp]="${NAME_PREFIX}-app" )
-declare -A LABEL_TO_DOMAIN=( [fhirbridgeApp]="$FHIRBRIDGE_APP_DOMAIN" )
+declare -A LABEL_TO_APPNAME=( [segueApp]="${NAME_PREFIX}-app" )
+declare -A LABEL_TO_DOMAIN=( [segueApp]="$SEGUE_APP_DOMAIN" )
 
-for label in fhirbridgeApp; do
+for label in segueApp; do
     domain="${LABEL_TO_DOMAIN[$label]}"
     [[ -z "$domain" ]] && continue
     app_name="${LABEL_TO_APPNAME[$label]}"
@@ -140,7 +140,7 @@ done
 echo ""
 echo "==> Deploying custom-domain.bicep (namePrefix=${NAME_PREFIX}) ..."
 params=("namePrefix=${NAME_PREFIX}")
-[[ -n "$FHIRBRIDGE_APP_DOMAIN" ]] && params+=("fhirbridgeAppDomain=${FHIRBRIDGE_APP_DOMAIN}")
+[[ -n "$SEGUE_APP_DOMAIN" ]] && params+=("segueAppDomain=${SEGUE_APP_DOMAIN}")
 
 results_json=$(az deployment group create \
     --resource-group "$RESOURCE_GROUP" \

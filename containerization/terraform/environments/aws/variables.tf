@@ -1,7 +1,7 @@
 variable "name_prefix" {
   description = "Short name used to build resource names (VPC, cluster, ECR repos, ALB, etc.)."
   type        = string
-  default     = "fhirbridge"
+  default     = "segue"
 }
 
 variable "aws_region" {
@@ -23,13 +23,13 @@ variable "image_tag" {
 }
 
 variable "use_rds_postgresql" {
-  description = "Chooses which Postgres FHIRBridge's own database (FHIRBridgeDb) gets. false (default) keeps a containerized Postgres (aws_ecs_task_definition.postgres — stock postgres:16-alpine, EFS-backed persistence, single task, internal-only via Cloud Map, requires postgres_password). true creates a managed Amazon RDS for PostgreSQL instance instead (aws_db_instance.postgresql — see rds_postgresql_instance_class/rds_postgresql_allocated_storage) and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no EFS volume; AWS manages patching/backups. This is a standard aws_db_instance (engine = \"postgres\"), not Aurora — Aurora is a separate, more complex distributed engine and would be overkill for the simple 'managed PaaS Postgres' this toggle is meant to provide. Replaces the SQL Server Express container this deployment used before the app migrated from SQL Server to PostgreSQL — there is no SQL Server option anymore. The equivalent toggle in the Azure Terraform environment is named use_azure_postgresql (selecting Azure Database for PostgreSQL Flexible Server there) — deliberately NOT reused here, since this environment's managed path is Amazon RDS, not an Azure service."
+  description = "Chooses which Postgres Segue's own database (FHIRBridgeDb) gets. false (default) keeps a containerized Postgres (aws_ecs_task_definition.postgres — stock postgres:16-alpine, EFS-backed persistence, single task, internal-only via Cloud Map, requires postgres_password). true creates a managed Amazon RDS for PostgreSQL instance instead (aws_db_instance.postgresql — see rds_postgresql_instance_class/rds_postgresql_allocated_storage) and points ConnectionStrings:FHIRBridgeDb at it over a required SSL connection — no container, no EFS volume; AWS manages patching/backups. This is a standard aws_db_instance (engine = \"postgres\"), not Aurora — Aurora is a separate, more complex distributed engine and would be overkill for the simple 'managed PaaS Postgres' this toggle is meant to provide. Replaces the SQL Server Express container this deployment used before the app migrated from SQL Server to PostgreSQL — there is no SQL Server option anymore. The equivalent toggle in the Azure Terraform environment is named use_azure_postgresql (selecting Azure Database for PostgreSQL Flexible Server there) — deliberately NOT reused here, since this environment's managed path is Amazon RDS, not an Azure service."
   type        = bool
   default     = false
 }
 
 variable "postgres_password" {
-  description = "Password for FHIRBridge's own Postgres database. In the containerized path (use_rds_postgresql = false) this is the 'fhirbridge' role's password, stored in Secrets Manager and injected into the container as POSTGRES_PASSWORD; in the managed path (true) this is the RDS instance's master password directly. Required either way — Terraform variables without a default must be provided."
+  description = "Password for Segue's own Postgres database. In the containerized path (use_rds_postgresql = false) this is the 'segue' role's password, stored in Secrets Manager and injected into the container as POSTGRES_PASSWORD; in the managed path (true) this is the RDS instance's master password directly. Required either way — Terraform variables without a default must be provided."
   type        = string
   sensitive   = true
 }
@@ -53,7 +53,7 @@ variable "jwt_signing_key" {
 }
 
 # --- Client-configurable ports ---
-# fhirbridge_app_port only changes the ALB listener (what a client types after the ALB's DNS
+# segue_app_port only changes the ALB listener (what a client types after the ALB's DNS
 # name) — the container itself keeps listening on its own fixed internal port (80, baked into the
 # image), so changing this never requires a rebuild.
 #
@@ -66,8 +66,8 @@ variable "jwt_signing_key" {
 # for your own network conventions. postgres_port is meaningless when use_rds_postgresql is
 # true — Amazon RDS for PostgreSQL always uses 5432.
 
-variable "fhirbridge_app_port" {
-  description = "Public port clients use to reach fhirbridge-app through the load balancer."
+variable "segue_app_port" {
+  description = "Public port clients use to reach segue-app through the load balancer."
   type        = number
   default     = 80
 }
@@ -91,12 +91,12 @@ variable "redis_password" {
 }
 
 variable "redis_trusted_certificate_thumbprint" {
-  description = "SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn't match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs."
+  description = "SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the segue-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn't match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs."
   type        = string
 }
 
 variable "enable_seq" {
-  description = "false (default) — no Seq service; fhirbridge_app/worker log to CloudWatch only (via awslogs). true creates a Seq ECS service (datalust/seq, public image) reachable two ways: internally via Cloud Map (seq.<name_prefix>.internal, same as postgres/redis) so fhirbridge_app/worker can ship logs to it, and externally via a dedicated ALB listener on seq_port so a human can browse to it and monitor logs — protected by seq_admin_password, the only thing guarding that URL."
+  description = "false (default) — no Seq service; segue_app/worker log to CloudWatch only (via awslogs). true creates a Seq ECS service (datalust/seq, public image) reachable two ways: internally via Cloud Map (seq.<name_prefix>.internal, same as postgres/redis) so segue_app/worker can ship logs to it, and externally via a dedicated ALB listener on seq_port so a human can browse to it and monitor logs — protected by seq_admin_password, the only thing guarding that URL."
   type        = bool
   default     = false
 }
@@ -109,7 +109,7 @@ variable "seq_admin_password" {
 }
 
 variable "seq_port" {
-  description = "Public port clients use to reach Seq through the load balancer — deliberately a different port from fhirbridge_app_port, since each ALB listener is bound to exactly one port/target group. Only consulted when enable_seq is true."
+  description = "Public port clients use to reach Seq through the load balancer — deliberately a different port from segue_app_port, since each ALB listener is bound to exactly one port/target group. Only consulted when enable_seq is true."
   type        = number
   default     = 8443
 }

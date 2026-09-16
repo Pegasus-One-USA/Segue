@@ -5,7 +5,7 @@ variable "image_tag" {
 }
 
 variable "postgres_password" {
-  description = "Password for the 'fhirbridge' role in FHIRBridge's own containerized Postgres database. Injected as POSTGRES_PASSWORD on the postgres container and used to build both fhirbridge-app's and worker's ConnectionStrings__FHIRBridgeDb. Replaces the former sql_sa_password variable now that this environment has moved off SQL Server."
+  description = "Password for the 'segue' role in Segue's own containerized Postgres database. Injected as POSTGRES_PASSWORD on the postgres container and used to build both segue-app's and worker's ConnectionStrings__FHIRBridgeDb. Replaces the former sql_sa_password variable now that this environment has moved off SQL Server."
   type        = string
   sensitive   = true
 }
@@ -23,18 +23,18 @@ variable "redis_password" {
 }
 
 variable "redis_trusted_certificate_thumbprint" {
-  description = "SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the fhirbridge-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn't match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs."
+  description = "SHA-1 thumbprint (X509Certificate2.Thumbprint format, e.g. 8638036B0BE54FADF44EEDBFCD2CEC1A80BBB37F) of the self-signed certificate baked into the segue-redis image you built — run containerization/docker/redis-tls/generate-cert.ps1|sh once before building images, which prints this value. FHIRBridge.Api/.Worker refuse the Redis connection if this doesn't match what Redis actually presents (fails closed, not open) — see ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs."
   type        = string
 }
 
 variable "portal_build_config" {
-  description = "Angular build configuration baked into the fhirbridge-app image (informational only here — the image is already built by the time Terraform runs)."
+  description = "Angular build configuration baked into the segue-app image (informational only here — the image is already built by the time Terraform runs)."
   type        = string
   default     = "production"
 }
 
 variable "app_host_port" {
-  description = "Host port for fhirbridge-app (Gateway, serves the portal + proxies /api)."
+  description = "Host port for segue-app (Gateway, serves the portal + proxies /api)."
   type        = number
   default     = 8080
 }
@@ -52,7 +52,7 @@ variable "redis_host_port" {
 }
 
 variable "enable_seq" {
-  description = "false (default) — no Seq container; fhirbridge-app/worker log to console only. true creates a Seq container (datalust/seq, public image) that both send structured logs to, for browsing/searching them at http://localhost:<seq_host_port>."
+  description = "false (default) — no Seq container; segue-app/worker log to console only. true creates a Seq container (datalust/seq, public image) that both send structured logs to, for browsing/searching them at http://localhost:<seq_host_port>."
   type        = bool
   default     = false
 }

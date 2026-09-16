@@ -10,12 +10,12 @@
 # (lifecycle.ignore_changes on each azurerm_key_vault_secret). postgres_password is the one
 # exception when use_azure_postgresql is true — see the Postgres block below.
 
-name_prefix         = "fhirbridge"
+name_prefix         = "segue"
 resource_group_name = "rg-tusharpuri"   # must already exist: az group create --name rg-tusharpuri --location eastus
 image_tag           = "v1"
 jwt_signing_key = "replace-with-a-long-random-string-at-least-32-chars"
 
-# Postgres (FHIRBridge's own database): false (default, or simply omit use_azure_postgresql) uses
+# Postgres (Segue's own database): false (default, or simply omit use_azure_postgresql) uses
 # a containerized Postgres — postgres_password is REQUIRED in that mode, seeded into Key Vault.
 # true instead creates a managed Azure Database for PostgreSQL Flexible Server (see
 # azure_postgresql_sku/azure_postgresql_storage_mb in variables.tf) — postgres_password becomes
@@ -48,13 +48,13 @@ redis_trusted_certificate_thumbprint = "replace-with-the-thumbprint-generate-cer
 # postgres_port = 5432
 # redis_port    = 6379
 
-# Note: fhirbridge-app has no equivalent port variable — Azure Container Apps external HTTP
+# Note: segue-app has no equivalent port variable — Azure Container Apps external HTTP
 # ingress has no client-configurable port; it's always https://<app>.<domain> with no port number
 # in the URL. See the AWS environment if a client-chosen public port is required.
 
 # Custom domain — see variables.tf. Registers the hostname (no managed SSL cert yet —
 # bind_custom_domain_certificates is currently a no-op; see its description in variables.tf).
-# fhirbridge_app_custom_domain        = "app.customer.com"
+# segue_app_custom_domain        = "app.customer.com"
 # bind_custom_domain_certificates     = false
 
 # Secret storage: false (default, or simply omit) keeps everything on the local DataProtection-

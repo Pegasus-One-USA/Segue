@@ -10,14 +10,14 @@
 # .gitignore) — run generate-cert.ps1|sh once before building this image, which creates a fresh
 # self-signed pair here and prints its SHA-1 thumbprint. Set that thumbprint as
 # Redis:TrustedCertificateThumbprint (env var Redis__TrustedCertificateThumbprint) on the
-# fhirbridge-app/worker deployments that will connect to THIS built image — see
+# segue-app/worker deployments that will connect to THIS built image — see
 # ValidateRedisServerCertificate in src/FHIRBridge.Infrastructure/DependencyInjection.cs, which
 # fails closed (refuses the connection) if the presented certificate's thumbprint doesn't match
 # whatever value was configured, rather than blindly accepting any self-signed certificate (which
 # would defeat the point of the HIPAA #15 check above).
 #
 # This is intentionally a private, internal-traffic-only certificate — it never faces the
-# internet (Redis itself is always internal-only, reached only by fhirbridge-app/worker within
+# internet (Redis itself is always internal-only, reached only by segue-app/worker within
 # the same private network/environment) — unlike the ALB's own self-signed cert (main.tf, aws
 # environment), which is documented as "swap for a real ACM certificate" specifically because that
 # one fronts real external traffic.
