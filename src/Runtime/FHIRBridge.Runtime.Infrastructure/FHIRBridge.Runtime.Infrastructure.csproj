@@ -36,4 +36,10 @@
     <ProjectReference Include="..\..\BuildingBlocks\FHIRBridge.Governance\FHIRBridge.Governance.csproj" />
   </ItemGroup>
 
+  <!-- Mirrors FHIRBridge.Infrastructure's own entry: lets a unit test exercise an internal pure helper
+       (OrderGroupsByReferenceDependency) directly, rather than widening it to public purely for testing. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="FHIRBridge.Runtime.UnitTests" />
+  </ItemGroup>
+
 </Project>

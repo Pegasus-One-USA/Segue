@@ -314,6 +314,69 @@ public sealed class DestinationNodeExecutorTests
         writtenRecords!.Select(r => r.SourceResourceId).Should().BeEquivalentTo(["p1", "p2", "p3"]);
     }
 
+    /// <summary>
+    /// A writer isolates per-record failures into RecordErrors instead of throwing, so a group that lost every
+    /// one of its records still returns normally — and a LATER group then throws precisely because of it, on an
+    /// FK lookup against rows that never landed. Letting that second exception propagate bare discarded the
+    /// already-collected writeFailureReasons, so the run reported only the downstream symptom ("no row in
+    /// [dbo].[Patient] has [PatientId] = ...") and hid the cause, which is exactly how a redacted token landing
+    /// in a bit column cost a full diagnosis cycle.
+    /// </summary>
+    [Fact]
+    public async Task A_later_groups_exception_carries_the_earlier_groups_write_failures()
+    {
+        var destinationId = Guid.NewGuid();
+        var patientProfile = new MappingProfile(
+            "Patient", "Patient", Guid.NewGuid(), destinationId, "dbo.Patient",
+            [new MappingField("PatientId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
+        var encounterProfile = new MappingProfile(
+            "Encounter", "Encounter", Guid.NewGuid(), destinationId, "dbo.Encounter",
+            [new MappingField("EncounterId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetMappingProfilesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([patientProfile, encounterProfile]);
+
+        const string PatientRecordError = "Conversion failed when converting the nvarchar value '[REDACTED]' to data type bit.";
+        const string EncounterFkFailure = "no row in [dbo].[Patient] has [PatientId] = 'anon-1'";
+        var encounterFailure = new InvalidOperationException(EncounterFkFailure);
+
+        var writer = new Mock<IConfiguredDestinationWriter>();
+        writer.Setup(w => w.WriteAsync(
+                It.IsAny<DestinationConfiguration>(), It.IsAny<MappingProfile>(),
+                It.IsAny<IReadOnlyCollection<MappedDestinationRecord>>(), It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
+            .Returns((DestinationConfiguration _, MappingProfile profile, IReadOnlyCollection<MappedDestinationRecord> records, PipelineWriteContext _, CancellationToken _) =>
+                profile.ResourceType == "Patient"
+                    // Every Patient record failed, but the writer swallowed it — Count 0, nothing thrown.
+                    ? Task.FromResult(new FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult(
+                        0, RecordErrors: [PatientRecordError]))
+                    : Task.FromException<FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult>(encounterFailure));
+
+        var writerFactory = new Mock<IConfiguredDestinationWriterFactory>();
+        writerFactory.Setup(f => f.Create(DestinationType.SqlServer)).Returns(writer.Object);
+
+        var executor = new SqlServerDestinationNodeExecutor(writerFactory.Object, configurationRepository: repository.Object);
+
+        var patientRecord = new MappedDestinationRecord(
+            Guid.NewGuid(), "Patient", "dbo.Patient", "p1", new Dictionary<string, object?> { ["PatientId"] = "anon-1" });
+        // The FK lookup is what orders Patient ahead of Encounter, so the failing group really does run second.
+        var encounterRecord = new MappedDestinationRecord(
+            Guid.NewGuid(), "Encounter", "dbo.Encounter", "e1", new Dictionary<string, object?> { ["EncounterId"] = "e1" },
+            ReferenceLookups: [new MappedReferenceLookup("PatientId", "Patient", "PatientId", "anon-1")]);
+        var upstream = new WorkflowNodeOutput(
+            Guid.NewGuid(), WorkflowNodeTypes.Mapping,
+            new MappedRecordBatch([patientRecord, encounterRecord]), WorkflowDataContract.MappedRecordBatch);
+
+        var act = async () => await executor.ExecuteAsync(
+            CreateContext(), CreateDestinationNode(destinationId), [upstream], CancellationToken.None);
+
+        var thrown = (await act.Should().ThrowAsync<InvalidOperationException>()).Which;
+        thrown.Message.Should().Contain(EncounterFkFailure, "the symptom the operator actually saw must still be reported");
+        thrown.Message.Should().Contain(PatientRecordError, "the earlier failure that caused it is the whole point");
+        thrown.Message.Should().Contain("Patient", "the failing reason names the resource type that lost its records");
+        thrown.InnerException.Should().BeSameAs(encounterFailure, "the original stack trace must not be thrown away");
+    }
+
     private static WorkflowNode CreateMedplumNode(Guid destinationId, string? resourceSelection)
     {
         var config = new Dictionary<string, object>

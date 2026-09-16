@@ -409,3 +409,182 @@ public sealed class SafeHarborReferenceRewriteTests
         SafeHarborDeIdentificationService.TryParseReference("#x", out _, out _, out _, out _).Should().BeFalse();
     }
 }
+
+/// <summary>
+/// A redaction token is a string, so it can only stand in for a string. Writing "[REDACTED]" over a boolean or a
+/// number produced a value nothing downstream could carry: the destination column it maps to is typed
+/// (Patient.active -> a bit column), so every row of that resource failed to insert — and because the SQL writer
+/// isolates per-record failures instead of throwing, the resource silently landed nothing and the run surfaced
+/// only a later resource's FK failure against the rows that never arrived. It is invalid FHIR as well: a
+/// FHIR-native destination rejects "active": "[REDACTED]" outright.
+/// </summary>
+public sealed class SafeHarborRedactTypeSafetyTests
+{
+    private static readonly Guid ProfileId = Guid.NewGuid();
+
+    private const string PatientJson = """
+    {
+      "resourceType": "Patient",
+      "id": "p-1",
+      "active": true,
+      "multipleBirthInteger": 2,
+      "gender": "female"
+    }
+    """;
+
+    private static SafeHarborDeIdentificationService BuildSut(params string[] sourceFields)
+    {
+        var rules = sourceFields.Select(sourceField => new TransformationRule(
+            TransformScope.ResourceType, TransformNodeType.HashingMasking,
+            """{"mode":"redact","token":"[REDACTED]"}""",
+            resourceType: "Patient", sourceField: sourceField,
+            executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId)).ToArray();
+
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository
+            .Setup(x => x.GetPreMappingRulesAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(rules);
+
+        return new SafeHarborDeIdentificationService(repository.Object);
+    }
+
+    private static async Task<JsonObject> RedactAsync(params string[] sourceFields)
+    {
+        var result = await BuildSut(sourceFields).DeIdentifyAsync(
+            new DeIdentificationRequest("Patient", "p-1", PatientJson, [], ProfileId), CancellationToken.None);
+        return (JsonObject)JsonNode.Parse(result.Json)!;
+    }
+
+    [Fact]
+    public async Task Redacting_a_string_still_writes_the_token()
+    {
+        var patient = await RedactAsync("gender");
+
+        patient["gender"]!.GetValue<string>().Should().Be("[REDACTED]");
+    }
+
+    [Theory]
+    [InlineData("active")]                 // boolean -> a bit column
+    [InlineData("multipleBirthInteger")]   // number  -> an int column
+    public async Task Redacting_a_non_string_removes_the_property_rather_than_writing_a_token(string sourceField)
+    {
+        var patient = await RedactAsync(sourceField);
+
+        patient.ContainsKey(sourceField).Should()
+            .BeFalse("a string token in a typed column fails every row of the resource on insert");
+    }
+
+    [Fact]
+    public async Task Untouched_fields_keep_their_original_types()
+    {
+        var patient = await RedactAsync("active");
+
+        patient["multipleBirthInteger"]!.GetValue<int>().Should().Be(2);
+        patient["gender"]!.GetValue<string>().Should().Be("female");
+        patient["id"]!.GetValue<string>().Should().Be("p-1");
+    }
+}
+
+/// <summary>
+/// A rule whose path lands on a REPEATING primitive — name.given, address.line, every other 0..* string element
+/// in FHIR — matched only a single JsonValue and so did nothing at all. The failure was invisible in the worst
+/// way: on one Patient, the mask rule on "$.name[*].family" produced "**pez" while the sibling rule on
+/// "$.name[*].given[*]" left "Camila" and the hash rule on "$.address[*].line[*]" left the street address
+/// verbatim — three rules shown as active on the same screen, one of them working.
+/// </summary>
+public sealed class SafeHarborRepeatingPrimitiveTests
+{
+    private static readonly Guid ProfileId = Guid.NewGuid();
+
+    // Trimmed from the real Epic payload that exposed this.
+    private const string PatientJson = """
+    {
+      "resourceType": "Patient",
+      "id": "erXuFYUfucBZaryVksYEcMg3",
+      "name": [
+        { "use": "official", "family": "Lopez", "given": [ "Camila", "Maria" ] },
+        { "use": "usual", "family": "Lopez", "given": [ "Camila", "Maria" ] }
+      ],
+      "address": [
+        { "line": [ "3268 West Johnson St.", "Apt 117" ], "city": "GARLAND", "postalCode": "75043" }
+      ]
+    }
+    """;
+
+    private static async Task<JsonObject> ApplyAsync(string sourceField, string configJson)
+    {
+        var rule = new TransformationRule(
+            TransformScope.ResourceType, TransformNodeType.HashingMasking, configJson,
+            resourceType: "Patient", sourceField: sourceField,
+            executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId);
+
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository
+            .Setup(x => x.GetPreMappingRulesAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([rule]);
+
+        var result = await new SafeHarborDeIdentificationService(repository.Object).DeIdentifyAsync(
+            new DeIdentificationRequest("Patient", "p1", PatientJson, [], ProfileId), CancellationToken.None);
+
+        return (JsonObject)JsonNode.Parse(result.Json)!;
+    }
+
+    private static string[] GivenNames(JsonObject patient) =>
+        patient["name"]!.AsArray().SelectMany(n => n!["given"]!.AsArray()).Select(g => g!.GetValue<string>()).ToArray();
+
+    private static string[] AddressLines(JsonObject patient) =>
+        patient["address"]!.AsArray().SelectMany(a => a!["line"]!.AsArray()).Select(l => l!.GetValue<string>()).ToArray();
+
+    [Fact]
+    public async Task Mask_applies_to_every_element_of_a_repeating_primitive()
+    {
+        var patient = await ApplyAsync("$.name[*].given[*]", """{"mode":"mask","keepLength":4}""");
+
+        // "Camila" -> 2 stars + "mila"; "Maria" -> 1 star + "aria".
+        GivenNames(patient).Should().Equal("**mila", "*aria", "**mila", "*aria");
+    }
+
+    [Fact]
+    public async Task Hash_applies_to_every_element_of_a_repeating_primitive()
+    {
+        var patient = await ApplyAsync("$.address[*].line[*]", """{"mode":"hash"}""");
+
+        AddressLines(patient).Should().OnlyContain(line => line.StartsWith("anon-"));
+        AddressLines(patient).Should().NotContain("3268 West Johnson St.");
+    }
+
+    [Fact]
+    public async Task Redact_replaces_every_element_of_a_repeating_primitive()
+    {
+        var patient = await ApplyAsync("$.address[*].line[*]", """{"mode":"redact","token":"[REDACTED]"}""");
+
+        AddressLines(patient).Should().OnlyContain(line => line == "[REDACTED]");
+    }
+
+    [Fact]
+    public async Task Remove_still_deletes_the_whole_repeating_element()
+    {
+        var patient = await ApplyAsync("$.name[*].given[*]", """{"mode":"remove"}""");
+
+        patient["name"]!.AsArray().Should().OnlyContain(n => !((JsonObject)n!).ContainsKey("given"));
+    }
+
+    [Fact]
+    public async Task A_single_string_sibling_is_unaffected_by_the_array_handling()
+    {
+        var patient = await ApplyAsync("$.name[*].family", """{"mode":"mask","keepLength":3}""");
+
+        patient["name"]!.AsArray().Select(n => n!["family"]!.GetValue<string>()).Should().OnlyContain(f => f == "**pez");
+        GivenNames(patient).Should().Equal("Camila", "Maria", "Camila", "Maria");
+    }
+
+    /// <summary>An array of OBJECTS has no scalar form — Redact must still drop it wholesale rather than
+    /// silently leaving the objects in place, which is what a blanket "arrays are handled" change would do.</summary>
+    [Fact]
+    public async Task Redacting_an_array_of_objects_still_removes_it()
+    {
+        var patient = await ApplyAsync("$.name", """{"mode":"redact","token":"[REDACTED]"}""");
+
+        patient.ContainsKey("name").Should().BeFalse();
+    }
+}

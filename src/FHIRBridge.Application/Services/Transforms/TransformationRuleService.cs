@@ -93,6 +93,12 @@ public sealed class TransformationRuleService : ITransformationRuleService
             return ToDto(rule);
         }
 
+        // Re-point the rule before rewriting what it does: Update covers only the latter, so without this an
+        // edit that moved a rule to a different resource type or source field was accepted, returned 200, and
+        // persisted nothing but the config — the authoring screens showed the row snapping back unchanged.
+        existing.Retarget(
+            request.Scope, request.DestinationType, request.ResourceType,
+            request.DestinationField, request.SourceSystem, request.SourceField);
         existing.Update(
             configJson, request.Order, request.OnNull, request.ErrorPolicy,
             request.OnNullDefaultValue, request.ArrayMode, request.FhirWriteBackJsonPath,

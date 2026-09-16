@@ -447,8 +447,17 @@ export class FieldMappingListComponent {
       .subscribe({
         next: saved => {
           this.deIdSaving.set(false);
-          this.deIdRules.update(rules =>
-            rules ? [...rules.filter(r => r.id !== saved.id), saved] : [saved]);
+          // Replace in place. Filtering the old row out and appending made an EDITED rule jump to the bottom
+          // of the table, which reads as "my edit did something else" — the row you were looking at vanishes
+          // from where it was. Only a genuinely new rule is appended.
+          this.deIdRules.update(rules => {
+            if (!rules) return [saved];
+            const index = rules.findIndex(r => r.id === saved.id);
+            if (index < 0) return [...rules, saved];
+            const next = [...rules];
+            next[index] = saved;
+            return next;
+          });
           this.cancelDeIdDraft();
         },
         error: () => this.deIdSaving.set(false),

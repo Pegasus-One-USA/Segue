@@ -376,3 +376,94 @@ public sealed class TransformationRuleServiceTests
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
     }
 }
+
+/// <summary>
+/// Saving an EDITED rule (id supplied) rewrote only what the rule does — its config, order and failure
+/// handling — and silently kept the address it was originally authored against. The de-identification editor
+/// made that plainest: resource and source field are nearly all it lets you change, so "Edit" returned 200,
+/// the row came back unchanged, and the edit appeared to do nothing. Retarget is what persists the move.
+/// </summary>
+public sealed class TransformationRuleRetargetOnSaveTests
+{
+    private static readonly Guid ProfileId = Guid.NewGuid();
+
+    private static TransformationRule DeIdRule(string resourceType, string sourceField, string mode) =>
+        new(TransformScope.ResourceType, TransformNodeType.HashingMasking,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["mode"] = mode }),
+            resourceType: resourceType, sourceField: sourceField,
+            executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId);
+
+    private static (TransformationRuleService Service, Mock<ITransformationRuleRepository> Repository) BuildSut(
+        TransformationRule existing)
+    {
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository.Setup(x => x.GetByIdAsync(existing.Id, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
+
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object),
+            new TransformNodeRegistry([new HashingMaskingNode()]), Mock.Of<IConfigurationRepository>());
+
+        return (service, repository);
+    }
+
+    private static SaveTransformationRuleRequest EditTo(
+        TransformationRule existing, string resourceType, string sourceField, string mode) =>
+        new(existing.Id, TransformScope.ResourceType, TransformNodeType.HashingMasking,
+            new Dictionary<string, string> { ["mode"] = mode },
+            ResourceType: resourceType,
+            SourceField: sourceField,
+            ExecutionPhase: TransformExecutionPhase.PreMapping,
+            DeIdentificationProfileId: ProfileId);
+
+    [Fact]
+    public async Task Editing_a_rules_source_field_persists_the_new_field()
+    {
+        var existing = DeIdRule("Patient", "$.gender", "redact");
+        var (service, repository) = BuildSut(existing);
+
+        var saved = await service.SaveRuleAsync(EditTo(existing, "Patient", "$.birthDate", "redact"));
+
+        saved.SourceField.Should().Be("$.birthDate");
+        existing.SourceField.Should().Be("$.birthDate", "the stored entity is what the next run reads");
+        repository.Verify(x => x.UpdateAsync(existing, It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(x => x.AddAsync(It.IsAny<TransformationRule>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Editing_a_rules_resource_type_persists_the_new_resource()
+    {
+        var existing = DeIdRule("Patient", "$.id", "hash");
+        var (service, _) = BuildSut(existing);
+
+        var saved = await service.SaveRuleAsync(EditTo(existing, "Encounter", "$.id", "hash"));
+
+        saved.ResourceType.Should().Be("Encounter");
+        existing.ResourceType.Should().Be("Encounter");
+    }
+
+    [Fact]
+    public async Task Editing_only_the_config_still_leaves_the_address_alone()
+    {
+        var existing = DeIdRule("Patient", "$.gender", "redact");
+        var (service, _) = BuildSut(existing);
+
+        var saved = await service.SaveRuleAsync(EditTo(existing, "Patient", "$.gender", "hash"));
+
+        saved.Config["mode"].Should().Be("hash");
+        existing.ResourceType.Should().Be("Patient");
+        existing.SourceField.Should().Be("$.gender");
+    }
+
+    [Fact]
+    public async Task An_edit_cannot_move_a_pre_mapping_rule_to_a_scope_it_may_not_hold()
+    {
+        // Retarget must enforce the same invariant the constructor does, or an edit becomes a way around it.
+        var existing = DeIdRule("Patient", "$.gender", "redact");
+        var (service, _) = BuildSut(existing);
+
+        var request = EditTo(existing, "Patient", "$.gender", "redact") with { Scope = TransformScope.Field };
+        var act = async () => await service.SaveRuleAsync(request);
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+}

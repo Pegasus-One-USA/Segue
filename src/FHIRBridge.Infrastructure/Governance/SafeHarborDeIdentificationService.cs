@@ -426,14 +426,55 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
             return;
         }
 
-        if (strategy == DeIdentificationStrategy.Redact)
+        // FHIR repeats primitives everywhere — name.given, address.line, and every other 0..* string element —
+        // so the value at a rule's path is often an ARRAY of strings rather than one string. Every element is a
+        // string with a perfectly good masked/hashed form, but the scalar-only check further down matched only
+        // JsonValue and skipped the whole node: a mask rule on "$.name[*].given[*]" did nothing at all while the
+        // sibling rule on "$.name[*].family" worked, so unredacted given names and street lines reached the
+        // destination under a policy the UI showed as active — the silent failure de-identification can least
+        // afford.
+        //
+        // Only arrays that actually carry strings are handled here. An array of OBJECTS (name, identifier, ...)
+        // falls through to the behaviour below, where Redact still removes it wholesale rather than quietly
+        // leaving the objects in place.
+        if (current is JsonArray array && array.Any(element => element is JsonValue v && v.TryGetValue<string>(out _)))
         {
-            parent[property] = TransformScalar(string.Empty, strategy, configJson);
+            for (var i = 0; i < array.Count; i++)
+            {
+                if (array[i] is JsonValue element && element.TryGetValue<string>(out var elementRaw))
+                {
+                    array[i] = TransformScalar(elementRaw, strategy, configJson);
+                }
+            }
+
             return;
         }
 
-        // Every remaining strategy rewrites a string in place; a non-string (number, bool, object, array) has
-        // no meaningful masked/hashed form, so it is left exactly as it was.
+        if (strategy == DeIdentificationStrategy.Redact)
+        {
+            // A replacement token is a STRING, so it can only stand in for a string. Writing "[REDACTED]" over
+            // a boolean or a number produces a value the rest of the pipeline cannot carry: the destination
+            // column it maps to is typed (Patient.active -> a bit column), so every row of that resource fails
+            // to insert — and because the writer isolates per-record failures rather than throwing, the whole
+            // resource silently lands nothing. It is invalid FHIR too: a FHIR-native destination rejects
+            // "active": "[REDACTED]" outright.
+            //
+            // Removing the property instead keeps the intent (the value is gone) and is type-safe everywhere:
+            // the mapped column simply comes through null. Strings are unaffected and still get the token.
+            if (current is JsonValue redactValue && redactValue.TryGetValue<string>(out _))
+            {
+                parent[property] = TransformScalar(string.Empty, strategy, configJson);
+            }
+            else
+            {
+                parent.Remove(property);
+            }
+
+            return;
+        }
+
+        // Every remaining strategy rewrites a string in place. A number, bool, object or array-of-objects has no
+        // meaningful masked/hashed form, so it is left exactly as it was — an array of strings was handled above.
         if (current is JsonValue value && value.TryGetValue<string>(out var raw))
         {
             parent[property] = TransformScalar(raw, strategy, configJson);

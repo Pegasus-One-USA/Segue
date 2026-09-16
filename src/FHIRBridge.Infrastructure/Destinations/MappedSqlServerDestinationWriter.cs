@@ -105,11 +105,11 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         var recordErrors = new List<string>();
         var writtenResourceIds = new List<string?>();
 
-        var resolvedRecords = new List<MappedDestinationRecord>(records.Count);
-        foreach (var record in records)
-        {
-            resolvedRecords.Add(await ResolveReferenceLookupsAsync(connection, record, cancellationToken));
-        }
+        var resolvedRecords = await ResolveReferenceLookupsIsolatedAsync(
+            records,
+            (record, token) => ResolveReferenceLookupsAsync(connection, record, token),
+            recordErrors,
+            cancellationToken);
 
         // Insert/Upsert without child tables can be written as one multi-row statement instead of one round trip
         // per record — the dominant cost for a large resource type (hundreds+ records) is round-trip latency, not
@@ -475,6 +475,44 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
 
         var normalized = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath;
         return string.Equals(normalized, "id", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Resolves every record's reference lookups, keeping a failure on one record from discarding the batch.
+    ///
+    /// This loop used to run unguarded, ahead of the per-record write path — so a single reference that matched
+    /// no row threw straight out of WriteAsync and lost every other record, including whole resource types that
+    /// had nothing wrong with them. That contradicts the isolation this writer promises a few lines above ("each
+    /// record's write stands alone"), and it is the common case rather than an exotic one: a child routinely
+    /// references a parent the source never delivered (an Observation pointing at an Encounter outside the
+    /// fetched set), which is one record's problem, not the batch's.
+    ///
+    /// An unresolved record is skipped rather than written with a null FK: a null would either violate the
+    /// column's own NOT NULL — the same failure, reported less clearly — or quietly persist an orphan row whose
+    /// missing link nobody would notice. Skipping and reporting matches exactly how a constraint violation on a
+    /// record's own data is handled. Only <see cref="InvalidOperationException"/> (what an unresolved lookup
+    /// raises) is isolated; anything else, such as the connection dying, still propagates and fails the route.
+    /// </summary>
+    internal static async Task<List<MappedDestinationRecord>> ResolveReferenceLookupsIsolatedAsync(
+        IReadOnlyCollection<MappedDestinationRecord> records,
+        Func<MappedDestinationRecord, CancellationToken, Task<MappedDestinationRecord>> resolveAsync,
+        ICollection<string> recordErrors,
+        CancellationToken cancellationToken)
+    {
+        var resolved = new List<MappedDestinationRecord>(records.Count);
+        foreach (var record in records)
+        {
+            try
+            {
+                resolved.Add(await resolveAsync(record, cancellationToken));
+            }
+            catch (InvalidOperationException exception)
+            {
+                recordErrors.Add($"{record.ResourceType}/{record.SourceResourceId}: {exception.Message}");
+            }
+        }
+
+        return resolved;
     }
 
     /// <summary>
