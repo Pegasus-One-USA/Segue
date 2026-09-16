@@ -6,7 +6,7 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "Scales an EXISTING Segue install's resources up or down — Container App CPU/memory sizes, Azure Database for PostgreSQL Flexible Server SKU/storage, and Azure Managed Redis tier. This targets the SAME resource group and resources as your original install, it does not create a new environment. Postgres mode, Redis mode, current app/worker sizes, and current version tag are read back from the live install and pre-filled automatically — only change what you actually want to resize. Secrets mode and storage redundancy CANNOT be safely auto-read, so you still confirm those two and re-enter the Postgres password/API signing key (Azure never returns secret parameter values to anything, ever, by design). WAF and Seq are left at main.bicep's own defaults by this limited wizard — if your original install customized those, use the full Segue Deploy-to-Azure wizard instead, or the CLI script containerization/scripts/upgrade-resources.ps1|sh, so nothing gets silently reset.",
+        "description": "Scales an EXISTING Segue install's resources up or down — Container App CPU/memory sizes, Azure Database for PostgreSQL Flexible Server SKU/storage, and Azure Managed Redis tier. This targets the SAME resource group and resources as your original install, it does not create a new environment. Enter the exact same deployment name prefix, Postgres/Redis/secrets mode, storage redundancy, passwords, API signing key, and current version tag you already have running — this wizard changes ONLY the size/SKU fields on later steps. Getting Postgres mode, Redis mode, secrets mode, or storage redundancy wrong doesn't just misconfigure something: it breaks connectivity or makes existing secrets unreachable (or, for storage redundancy, fails the deployment outright). WAF, Seq are left at main.bicep's own defaults by this limited wizard — if your original install customized those, use the full Segue Deploy-to-Azure wizard instead, or the CLI script containerization/scripts/upgrade-resources.ps1|sh, so nothing gets silently reset.",
         "subscription": {
           "resourceProviders": [
             "Microsoft.App",
@@ -45,28 +45,12 @@
         "label": "Current Configuration",
         "elements": [
           {
-            "name": "segueAppInfo",
-            "type": "Microsoft.Solutions.ArmApiControl",
-            "request": {
-              "method": "GET",
-              "path": "[concat(resourceGroup().id, '/providers/Microsoft.App/containerApps/', basics('namePrefix'), '-app?api-version=2024-03-01')]"
-            }
-          },
-          {
-            "name": "workerAppInfo",
-            "type": "Microsoft.Solutions.ArmApiControl",
-            "request": {
-              "method": "GET",
-              "path": "[concat(resourceGroup().id, '/providers/Microsoft.App/containerApps/', basics('namePrefix'), '-worker?api-version=2024-03-01')]"
-            }
-          },
-          {
             "name": "configInfo",
             "type": "Microsoft.Common.InfoBox",
             "visible": true,
             "options": {
               "icon": "Warning",
-              "text": "Postgres mode, Redis mode, current version tag, and app/worker sizes below are pre-filled from your live install — just confirm they're correct, then adjust whichever size you actually came here to change on the next steps. Secrets mode and storage redundancy could NOT be safely auto-filled and still MUST match your original install exactly: getting secrets mode wrong deploys successfully and then the app can't find its secrets (SecretNotConfiguredException at runtime); getting storage redundancy wrong fails the deployment outright (PreflightValidationCheckFailed / StorageAccountTypeConversionNotAllowed)."
+              "text": "Every field below MUST match your original install exactly. Postgres mode, Redis mode, and secrets mode determine which real resource (and which real secret store) the app connects to at runtime — getting any of these wrong doesn't fail the deployment, it deploys successfully and then the app can't find its database, cache, or secrets. Storage redundancy and the version tag are checked/applied at deploy time instead: storage redundancy cannot be changed after the storage account exists at all (picking the wrong one fails the deployment outright: PreflightValidationCheckFailed / StorageAccountTypeConversionNotAllowed), and leaving the version tag wrong would redeploy a different application version as a side effect of resizing."
             }
           },
           {
@@ -87,8 +71,8 @@
             "name": "postgresMode",
             "type": "Microsoft.Common.OptionsGroup",
             "label": "Postgres deployment type",
-            "defaultValue": "[if(contains(steps('currentConfig').segueAppInfo.properties.template.containers[0].env[1].value, concat('Host=', basics('namePrefix'), '-postgres;')), 'Containerized', 'Managed')]",
-            "toolTip": "Auto-detected from the live install's connection string — confirm it's correct. Managed = Azure Database for PostgreSQL Flexible Server. Containerized = a Postgres container in this same environment.",
+            "defaultValue": "Managed",
+            "toolTip": "MUST match your original install. Managed = Azure Database for PostgreSQL Flexible Server. Containerized = a Postgres container in this same environment.",
             "constraints": {
               "allowedValues": [
                 { "label": "Managed — Azure Database for PostgreSQL", "value": "Managed" },
@@ -135,8 +119,8 @@
             "name": "redisMode",
             "type": "Microsoft.Common.OptionsGroup",
             "label": "Redis deployment type",
-            "defaultValue": "[if(contains(steps('currentConfig').segueAppInfo.properties.template.containers[0].env[3].value, concat(basics('namePrefix'), '-redis:')), 'Containerized', 'Managed')]",
-            "toolTip": "Auto-detected from the live install's connection string — confirm it's correct. Containerized = a Redis container in this same environment (self-signed TLS cert). Managed = Azure Managed Redis.",
+            "defaultValue": "Containerized",
+            "toolTip": "MUST match your original install. Containerized = a Redis container in this same environment (self-signed TLS cert). Managed = Azure Managed Redis.",
             "constraints": {
               "allowedValues": [
                 { "label": "Containerized", "value": "Containerized" },
@@ -193,8 +177,8 @@
             "name": "imageTag",
             "type": "Microsoft.Common.DropDown",
             "label": "Currently running version tag",
-            "defaultValue": "[last(split(steps('currentConfig').segueAppInfo.properties.template.containers[0].image, ':'))]",
-            "toolTip": "Pre-filled from the live install's own running image tag — listed newest-first with the date each was pushed, if you need to pick a different one from the list. This wizard does not change it, but it must be supplied so the resize doesn't accidentally roll the app back to an older/default image. NOTE: the dropdown's option list is populated by publish-deploy-artifacts.ps1|sh at publish time (from `az acr repository show-tags`) - these placeholder tokens are only ever uploaded after that substitution runs.",
+            "defaultValue": "__IMAGE_TAG_DEFAULT__",
+            "toolTip": "Pick the version tag your install is CURRENTLY running, listed newest-first with the date each was pushed. This wizard does not change it, but it must be supplied so the resize doesn't accidentally roll the app back to an older/default image. NOTE: this dropdown is populated by publish-deploy-artifacts.ps1|sh at publish time (from `az acr repository show-tags`) - these placeholder tokens are only ever uploaded after that substitution runs.",
             "constraints": {
               "allowedValues": "__IMAGE_TAG_ALLOWED_VALUES__",
               "required": true
@@ -244,8 +228,8 @@
             "name": "segueAppSize",
             "type": "Microsoft.Common.DropDown",
             "label": "Segue app size",
-            "defaultValue": "[if(equals(steps('currentConfig').segueAppInfo.properties.template.containers[0].resources.cpu, json('0.25')), 'Small', if(equals(steps('currentConfig').segueAppInfo.properties.template.containers[0].resources.cpu, json('0.5')), 'Medium', if(equals(steps('currentConfig').segueAppInfo.properties.template.containers[0].resources.cpu, json('1.0')), 'Large', 'XLarge')))]",
-            "toolTip": "Pre-filled with the current size, auto-detected from the live install. Runs both FHIRBridge.Api and FHIRBridge.Gateway in this one container.",
+            "defaultValue": "Medium",
+            "toolTip": "Runs both FHIRBridge.Api and FHIRBridge.Gateway in this one container.",
             "constraints": {
               "allowedValues": [
                 { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
@@ -260,8 +244,8 @@
             "name": "workerSize",
             "type": "Microsoft.Common.DropDown",
             "label": "Worker size",
-            "defaultValue": "[if(equals(steps('currentConfig').workerAppInfo.properties.template.containers[0].resources.cpu, json('0.25')), 'Small', if(equals(steps('currentConfig').workerAppInfo.properties.template.containers[0].resources.cpu, json('0.5')), 'Medium', if(equals(steps('currentConfig').workerAppInfo.properties.template.containers[0].resources.cpu, json('1.0')), 'Large', 'XLarge')))]",
-            "toolTip": "Pre-filled with the current size, auto-detected from the live install. Background scheduler/pipeline processor — no HTTP endpoint.",
+            "defaultValue": "Small",
+            "toolTip": "Background scheduler/pipeline processor — no HTTP endpoint.",
             "constraints": {
               "allowedValues": [
                 { "label": "Small (0.25 CPU / 0.5 GB) — current default", "value": "Small" },
@@ -340,7 +324,7 @@
             "visible": true,
             "options": {
               "icon": "Warning",
-              "text": "Postgres/Redis mode, current version, and app/worker sizes were auto-detected from your live install — double-check them, then change only whichever size you actually came here to resize. Secrets mode and storage redundancy on the earlier step must still match your original install exactly (they could not be auto-filled). WAF and Seq are left at main.bicep's own defaults (both off); if either was enabled on the original install, use the full Deploy-to-Azure wizard instead with the same custom values plus these new sizes, so it isn't silently disabled."
+              "text": "This wizard changes only container/database/cache sizing — every field on the earlier step must match your original install exactly (Postgres/Redis/secrets mode, storage redundancy, passwords/keys, current version). WAF and Seq are left at main.bicep's own defaults (both off); if either was enabled on the original install, use the full Deploy-to-Azure wizard instead with the same custom values plus these new sizes, so it isn't silently disabled."
             }
           }
         ]
