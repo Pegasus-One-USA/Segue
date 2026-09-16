@@ -1,0 +1,275 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "Scales an EXISTING Segue install's resources up or down — Container App CPU/memory sizes, Azure Database for PostgreSQL Flexible Server SKU/storage, and Azure Managed Redis tier. This targets the SAME resource group and resources as your original install, it does not create a new environment. Enter the exact same deployment name prefix, Postgres password, API signing key, storage redundancy, and current version tag you already have running — this wizard changes ONLY the size/SKU fields below. Storage redundancy in particular CANNOT be changed after creation (Azure rejects Standard_LRS <-> Standard_ZRS conversion outright), so picking the wrong one here fails the whole deployment. Every other setting (Postgres/Redis mode, WAF, Seq, Key Vault) is left at main.bicep's own defaults by this limited wizard — if your original install customized any of those, use the full Segue Deploy-to-Azure wizard instead (same values as before, just new sizes), or the CLI script containerization/scripts/upgrade-resources.ps1|sh, so nothing gets silently reset.",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.App",
+            "Microsoft.OperationalInsights",
+            "Microsoft.Storage",
+            "Microsoft.DBforPostgreSQL",
+            "Microsoft.Cache",
+            "Microsoft.KeyVault",
+            "Microsoft.Cdn",
+            "Microsoft.Network"
+          ]
+        },
+        "location": {
+          "label": "Region",
+          "toolTip": "Must match the region your original Segue install already runs in."
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "namePrefix",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Existing deployment name prefix",
+        "defaultValue": "segue",
+        "toolTip": "MUST match the prefix your original install used (e.g. <prefix>-app, <prefix>-postgres) — this is what makes this an in-place resize of the existing resources instead of a brand-new deployment.",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-z][a-z0-9-]{1,20}$",
+          "validationMessage": "Lowercase letters, numbers, and hyphens only, starting with a letter."
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "currentConfig",
+        "label": "Current Configuration",
+        "elements": [
+          {
+            "name": "configInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": true,
+            "options": {
+              "icon": "Info",
+              "text": "Re-enter the same Postgres password, API signing key, storage redundancy, and CURRENTLY RUNNING version tag your install already uses. None of these are changed by this wizard — leaving the version tag at the wrong value would redeploy a different application version as a side effect of resizing, and storage redundancy cannot be changed after the storage account exists at all (picking the wrong one fails the deployment outright: PreflightValidationCheckFailed / StorageAccountTypeConversionNotAllowed)."
+            }
+          },
+          {
+            "name": "storageRedundancy",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Storage redundancy",
+            "defaultValue": "Standard_ZRS",
+            "toolTip": "MUST match what your original install actually has — check the storage account's Redundancy setting in the Portal (or the resourceManifest output from your original deploy) if unsure. This cannot be changed after the storage account exists; picking the wrong value fails this deployment.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Zone-redundant (Standard_ZRS)", "value": "Standard_ZRS" },
+                { "label": "Locally-redundant (Standard_LRS)", "value": "Standard_LRS" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "postgresPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Postgres password",
+              "confirmPassword": "Confirm Postgres password"
+            },
+            "toolTip": "The SAME Postgres password your original install used.",
+            "constraints": {
+              "required": true,
+              "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
+              "validationMessage": "At least 8 characters, including upper case, lower case, and a digit."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "jwtSigningKey",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "API signing key",
+              "confirmPassword": "Confirm API signing key"
+            },
+            "toolTip": "The SAME API signing key your original install used — changing this invalidates every existing login session and refresh token.",
+            "constraints": {
+              "required": true,
+              "regex": "^.{32,}$",
+              "validationMessage": "Must be at least 32 characters."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "imageTag",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Currently running version tag",
+            "defaultValue": "__IMAGE_TAG_DEFAULT__",
+            "toolTip": "Pick the version tag your install is CURRENTLY running, listed newest-first with the date each was pushed. This wizard does not change it, but it must be supplied so the resize doesn't accidentally roll the app back to an older/default image. NOTE: this dropdown is populated by publish-deploy-artifacts.ps1|sh at publish time (from `az acr repository show-tags`) - these placeholder tokens are only ever uploaded after that substitution runs.",
+            "constraints": {
+              "allowedValues": "__IMAGE_TAG_ALLOWED_VALUES__",
+              "required": true
+            }
+          }
+        ]
+      },
+      {
+        "name": "containerSizing",
+        "label": "Container Sizes",
+        "elements": [
+          {
+            "name": "postgresSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Postgres size",
+            "defaultValue": "Large",
+            "toolTip": "Containerized Postgres container size. Only used when your install's Postgres deployment type is Containerized (ignored otherwise).",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
+                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
+                { "label": "Large (1.0 CPU / 2 GB) — current default", "value": "Large" },
+                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "redisSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Redis size",
+            "defaultValue": "Medium",
+            "toolTip": "Only used when your install's Redis deployment type is Containerized (ignored otherwise).",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
+                { "label": "Medium (0.5 CPU / 1 GB) — current default", "value": "Medium" },
+                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
+                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "segueAppSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Segue app size",
+            "defaultValue": "Medium",
+            "toolTip": "Runs both FHIRBridge.Api and FHIRBridge.Gateway in this one container.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Small (0.25 CPU / 0.5 GB)", "value": "Small" },
+                { "label": "Medium (0.5 CPU / 1 GB) — current default", "value": "Medium" },
+                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
+                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "workerSize",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Worker size",
+            "defaultValue": "Small",
+            "toolTip": "Background scheduler/pipeline processor — no HTTP endpoint.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Small (0.25 CPU / 0.5 GB) — current default", "value": "Small" },
+                { "label": "Medium (0.5 CPU / 1 GB)", "value": "Medium" },
+                { "label": "Large (1.0 CPU / 2 GB)", "value": "Large" },
+                { "label": "XLarge (2.0 CPU / 4 GB)", "value": "XLarge" }
+              ],
+              "required": true
+            }
+          }
+        ]
+      },
+      {
+        "name": "dataSizing",
+        "label": "Database & Cache Sizing",
+        "elements": [
+          {
+            "name": "azurePostgresqlSku",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Managed Postgres pricing tier",
+            "defaultValue": "Burstable_B1ms",
+            "toolTip": "Azure Database for PostgreSQL Flexible Server compute/pricing tier. Only used when your install's Postgres deployment type is Managed (ignored otherwise).",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Burstable B1ms (cheapest — dev/test)", "value": "Burstable_B1ms" },
+                { "label": "Burstable B2s", "value": "Burstable_B2s" },
+                { "label": "General Purpose D2s v3 (production-appropriate)", "value": "GeneralPurpose_D2s_v3" },
+                { "label": "General Purpose D4s v3", "value": "GeneralPurpose_D4s_v3" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "azurePostgresqlStorageMb",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Managed Postgres storage",
+            "defaultValue": "32768",
+            "toolTip": "Azure only allows scaling this UP, never down — picking a value smaller than your current storage will fail. Only used when your install's Postgres deployment type is Managed.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "32 GB (platform minimum)", "value": "32768" },
+                { "label": "64 GB", "value": "65536" },
+                { "label": "128 GB", "value": "131072" },
+                { "label": "256 GB", "value": "262144" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "azureCacheForRedisTier",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Azure Managed Redis SKU",
+            "defaultValue": "Balanced_B0",
+            "toolTip": "Only used when your install's Redis deployment type is Managed (ignored otherwise).",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Balanced B0 (1GB, cheapest)", "value": "Balanced_B0" },
+                { "label": "Balanced B5 (6GB)", "value": "Balanced_B5" },
+                { "label": "Memory Optimized M10 (12GB)", "value": "MemoryOptimized_M10" }
+              ],
+              "required": true
+            }
+          }
+        ]
+      },
+      {
+        "name": "reviewInfo",
+        "label": "Review",
+        "elements": [
+          {
+            "name": "reviewNote",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": true,
+            "options": {
+              "icon": "Warning",
+              "text": "This wizard only changes container/database/cache sizing (storage redundancy above must still match your original install exactly). It otherwise assumes every other setting on your original install is still at main.bicep's defaults (Managed Postgres, Containerized Redis, no WAF, no Seq, secrets in the local database). If any of those were customized on the original install, use the full Deploy-to-Azure wizard instead with the same custom values plus these new sizes — otherwise this deployment will reset them back to their defaults."
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "namePrefix": "[basics('namePrefix')]",
+      "location": "[location()]",
+      "postgresPassword": "[steps('currentConfig').postgresPassword]",
+      "jwtSigningKey": "[steps('currentConfig').jwtSigningKey]",
+      "storageRedundancy": "[steps('currentConfig').storageRedundancy]",
+      "imageTag": "[steps('currentConfig').imageTag]",
+      "imageRegistryServer": "seguebuilds.azurecr.io",
+      "imageRegistryUsername": "one-click-pull",
+      "imageRegistryPassword": "401K4t2K0LniPnjsqlSjjXDaUof0VPIzLyDodMHeXgWv2WYgGmn2JQQJ99CHACYeBjFEqg7NAAABAZCREYP3",
+      "postgresSize": "[steps('containerSizing').postgresSize]",
+      "redisSize": "[steps('containerSizing').redisSize]",
+      "segueAppSize": "[steps('containerSizing').segueAppSize]",
+      "workerSize": "[steps('containerSizing').workerSize]",
+      "azurePostgresqlSku": "[steps('dataSizing').azurePostgresqlSku]",
+      "azurePostgresqlStorageMb": "[int(steps('dataSizing').azurePostgresqlStorageMb)]",
+      "azureCacheForRedisTier": "[steps('dataSizing').azureCacheForRedisTier]"
+    }
+  }
+}

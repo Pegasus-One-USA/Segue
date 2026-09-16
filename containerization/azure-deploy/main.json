@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "12800884282119461838"
+      "templateHash": "2257836817322837442"
     }
   },
   "parameters": {
@@ -1098,12 +1098,12 @@
         "[resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default')]",
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "[resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix')))]",
-        "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('segueAppName')))]",
         "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')]",
         "[resourceId('Microsoft.App/containerApps', variables('postgresName'))]",
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix')))]",
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('{0}-pg', parameters('namePrefix')), 'Segue')]",
         "[resourceId('Microsoft.App/containerApps', variables('redisName'))]",
+        "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('segueAppName')))]",
         "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]"
       ]
     },
@@ -1142,11 +1142,11 @@
         "[resourceId('Microsoft.Cache/redisEnterprise/databases', format('{0}-cache', parameters('namePrefix')), 'default')]",
         "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "[resourceId('Microsoft.KeyVault/vaults/keys', variables('tenantSecretsKeyVaultName'), format('{0}-dataprotection-key', parameters('namePrefix')))]",
-        "[resourceId('Microsoft.App/containerApps', variables('segueAppName'))]",
         "[resourceId('Microsoft.App/containerApps', variables('postgresName'))]",
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}-pg', parameters('namePrefix')))]",
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('{0}-pg', parameters('namePrefix')), 'Segue')]",
         "[resourceId('Microsoft.App/containerApps', variables('redisName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('segueAppName'))]",
         "[resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))]"
       ]
     },
@@ -1250,8 +1250,8 @@
         "weight": 1000
       },
       "dependsOn": [
-        "[resourceId('Microsoft.App/containerApps', variables('segueAppName'))]",
-        "[resourceId('Microsoft.Cdn/profiles/originGroups', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')))]"
+        "[resourceId('Microsoft.Cdn/profiles/originGroups', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.App/containerApps', variables('segueAppName'))]"
       ]
     },
     {

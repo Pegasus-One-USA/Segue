@@ -1,0 +1,151 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "Redeploys an EXISTING Segue install onto a new application version — the minimum-steps update path (Container Apps roll a new revision on the new image tag; FHIRBridgeDb migrates automatically on boot). This targets the SAME resource group and resources as your original install, it does not create a new environment. Enter the exact same deployment name prefix, Postgres password, API signing key, and storage redundancy you used originally — storage redundancy in particular CANNOT be changed after creation (Azure rejects Standard_LRS <-> Standard_ZRS conversion outright), so picking the wrong one here fails the whole deployment. Every other setting (Postgres/Redis mode, container sizes, WAF, Seq, Key Vault) is left at main.bicep's own defaults by this limited wizard — if your original install customized any of those, use the full Segue Deploy-to-Azure wizard instead (same values as before, just a new Version), or the CLI script containerization/scripts/update-application.ps1|sh, so nothing gets silently reset.",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.App",
+            "Microsoft.OperationalInsights",
+            "Microsoft.Storage",
+            "Microsoft.DBforPostgreSQL",
+            "Microsoft.Cache",
+            "Microsoft.KeyVault",
+            "Microsoft.Cdn",
+            "Microsoft.Network"
+          ]
+        },
+        "location": {
+          "label": "Region",
+          "toolTip": "Must match the region your original Segue install already runs in."
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "namePrefix",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Existing deployment name prefix",
+        "defaultValue": "segue",
+        "toolTip": "MUST match the prefix your original install used (e.g. <prefix>-app, <prefix>-postgres) — this is what makes this an in-place update of the existing app/worker instead of a brand-new deployment.",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-z][a-z0-9-]{1,20}$",
+          "validationMessage": "Lowercase letters, numbers, and hyphens only, starting with a letter."
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "currentConfig",
+        "label": "Current Configuration",
+        "elements": [
+          {
+            "name": "configInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": true,
+            "options": {
+              "icon": "Info",
+              "text": "Re-enter the same Postgres password, API signing key, and storage redundancy your original install used. Passwords/keys are not stored anywhere Azure can read back for you — supplying the wrong values here will not break the database, but the app will fail to connect until corrected. Storage redundancy is different: Azure does not allow converting an existing storage account between Standard_LRS and Standard_ZRS at all, so picking the wrong one here fails the deployment outright (PreflightValidationCheckFailed / StorageAccountTypeConversionNotAllowed) rather than just misconfiguring something."
+            }
+          },
+          {
+            "name": "storageRedundancy",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Storage redundancy",
+            "defaultValue": "Standard_ZRS",
+            "toolTip": "MUST match what your original install actually has — check the storage account's Redundancy setting in the Portal (or the resourceManifest output from your original deploy) if unsure. This cannot be changed after the storage account exists; picking the wrong value fails this deployment.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Zone-redundant (Standard_ZRS)", "value": "Standard_ZRS" },
+                { "label": "Locally-redundant (Standard_LRS)", "value": "Standard_LRS" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "postgresPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Postgres password",
+              "confirmPassword": "Confirm Postgres password"
+            },
+            "toolTip": "The SAME Postgres password your original install used.",
+            "constraints": {
+              "required": true,
+              "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
+              "validationMessage": "At least 8 characters, including upper case, lower case, and a digit."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "jwtSigningKey",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "API signing key",
+              "confirmPassword": "Confirm API signing key"
+            },
+            "toolTip": "The SAME API signing key your original install used — changing this invalidates every existing login session and refresh token.",
+            "constraints": {
+              "required": true,
+              "regex": "^.{32,}$",
+              "validationMessage": "Must be at least 32 characters."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          }
+        ]
+      },
+      {
+        "name": "versionStep",
+        "label": "New Version",
+        "elements": [
+          {
+            "name": "imageTag",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Version to install",
+            "defaultValue": "__IMAGE_TAG_DEFAULT__",
+            "toolTip": "The published version tag to deploy, listed newest-first with the date each was pushed to the registry. This is the only thing this wizard changes. NOTE: this dropdown is populated by publish-deploy-artifacts.ps1|sh at publish time (from `az acr repository show-tags`) - these placeholder tokens are only ever uploaded after that substitution runs.",
+            "constraints": {
+              "allowedValues": "__IMAGE_TAG_ALLOWED_VALUES__",
+              "required": true
+            }
+          }
+        ]
+      },
+      {
+        "name": "reviewInfo",
+        "label": "Review",
+        "elements": [
+          {
+            "name": "reviewNote",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": true,
+            "options": {
+              "icon": "Warning",
+              "text": "This wizard only changes the application version (storage redundancy above must still match your original install exactly). It otherwise assumes every other setting on your original install is still at main.bicep's defaults (Managed Postgres, Containerized Redis, no WAF, no Seq, secrets in the local database, current default container sizes). If any of those were customized on the original install, use the full Deploy-to-Azure wizard instead with the same custom values plus this new version — otherwise this deployment will reset them back to their defaults."
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "namePrefix": "[basics('namePrefix')]",
+      "location": "[location()]",
+      "postgresPassword": "[steps('currentConfig').postgresPassword]",
+      "jwtSigningKey": "[steps('currentConfig').jwtSigningKey]",
+      "storageRedundancy": "[steps('currentConfig').storageRedundancy]",
+      "imageTag": "[steps('versionStep').imageTag]",
+      "imageRegistryServer": "seguebuilds.azurecr.io",
+      "imageRegistryUsername": "one-click-pull",
+      "imageRegistryPassword": "401K4t2K0LniPnjsqlSjjXDaUof0VPIzLyDodMHeXgWv2WYgGmn2JQQJ99CHACYeBjFEqg7NAAABAZCREYP3"
+    }
+  }
+}
