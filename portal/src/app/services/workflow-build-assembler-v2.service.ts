@@ -1202,7 +1202,7 @@ export class WorkflowBuildAssemblerServiceV2 {
     // fallback match for mapping rows saved before isUpsertKey existed on a node.
     const idRow =
       resourceRows.find((row) => row.isUpsertKey) ??
-      resourceRows.find((row) => (row.jsonPath ?? this.toJsonPath(row.path, resource)) === '$.id');
+      resourceRows.find((row) => (row.jsonPath ?? this.toJsonPath(row.path, resource, row.arrays ?? [])) === '$.id');
 
     let destinationObject = baseDestinationObject;
     const writeMode = destFields['dest_writeMode'];
@@ -1220,8 +1220,9 @@ export class WorkflowBuildAssemblerServiceV2 {
     const fields: MappingFieldRequest[] = resourceRows.map((row) => {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the
       // naive conversion only when the catalog was unavailable.
-      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource);
       const arrays = row.arrays ?? [];
+      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource, arrays);
+      this.assertArrayWildcardsIntact(resource, row.column, jsonPath, arrays);
       const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
       // A row whose own table differs from this resource's baseDestinationObject is a genuine child-table
       // field (e.g. Patient.name.use -> dbo.PatientName) — route it there explicitly via a per-field
@@ -1273,7 +1274,7 @@ export class WorkflowBuildAssemblerServiceV2 {
     // request reflects that, even though server-side enforcement (ValidateMappingParentReferences) checks
     // presence/JsonPath match rather than this flag.
     for (const row of resourceRows.filter((r) => r.isRequiredParentRef)) {
-      const field = fields.find((f) => f.jsonPath === (row.jsonPath ?? this.toJsonPath(row.path, resource)));
+      const field = fields.find((f) => f.jsonPath === (row.jsonPath ?? this.toJsonPath(row.path, resource, row.arrays ?? [])));
       if (field) field.isRequired = true;
     }
 
@@ -1331,10 +1332,19 @@ export class WorkflowBuildAssemblerServiceV2 {
 
   /**
    * Fallback FHIR element path → JSONPath used only when the wizard could not stamp a catalog-derived
-   * path on the row (offline/degraded). Strips the leading "Resource." and prefixes "$."; it does NOT
-   * infer array-ness — the backend catalog is the source of truth for that (see DestMappingRow.jsonPath).
+   * path on the row. Strips the leading "Resource." and prefixes "$.".
+   *
+   * `arrays` carries the row's array-ancestor chain (relative to the resource, e.g. ["name"],
+   * ["code.coding"]) and MUST be applied here: a row reloaded from a saved Mapping document keeps its
+   * arrays (applyMappingSummaryDocument reconstructs them from the column's arrayContext) but NOT its
+   * jsonPath — that field is not part of the summary schema — so every such row lands on this fallback on
+   * the very next save. Without stamping "[*]" back on, "Patient.name.text" (arrays ["name"]) degraded to
+   * "$.name.text", which matches nothing against an array-valued `name`; the Mapping node then skipped the
+   * field entirely — no value, no lineage row, no error, run reports Succeeded — and the destination column
+   * silently went NULL. Each save→reload cycle re-applied the degradation, which is why a field could work
+   * once and then stop the moment any unrelated field was added to the same mapping node.
    */
-  private toJsonPath(path: string, resourceType: string): string {
+  private toJsonPath(path: string, resourceType: string, arrays: readonly string[] = []): string {
     let p = path.trim();
     if (p.startsWith(`${resourceType}.`)) p = p.slice(resourceType.length + 1);
     if (p.startsWith('$')) return p;
@@ -1344,7 +1354,57 @@ export class WorkflowBuildAssemblerServiceV2 {
     // to JsonMappingEngine.ResolveAll; the "$.{p}" fallback below would produce "$.Patient", which resolves
     // to nothing and writes NULL into the target column on every record.
     if (!p || p === resourceType) return '$';
-    return `$.${p}`;
+    return `$.${this.applyArrayWildcards(p, arrays, resourceType)}`;
+  }
+
+  /**
+   * Guards the one invariant that ties a field's jsonPath to its array metadata: every declared array
+   * ancestor must appear wildcarded in the path. A field that declares `name` an array ancestor while its
+   * path reads "$.name.text" addresses nothing at run time, and the Mapping node skips it without writing a
+   * value, a lineage row, or an error — so the destination column silently goes NULL on a run that reports
+   * Succeeded. That failure is invisible from the UI, which is why it is asserted here at build time rather
+   * than left to be discovered by querying the destination. Warn-only: a mapping is never blocked from
+   * saving over this, since the path may legitimately come from a catalog whose conventions differ.
+   */
+  private assertArrayWildcardsIntact(
+    resource: string, column: string, jsonPath: string, arrays: readonly string[],
+  ): void {
+    if (arrays.length === 0 || jsonPath.startsWith('@') || jsonPath === '$') return;
+    const missing = arrays
+      .map(a => (a.startsWith(`${resource}.`) ? a.slice(resource.length + 1) : a))
+      .map(a => a.replace(/\[\*\]/g, '').trim())
+      .filter(a => a.length > 0 && !jsonPath.includes(`${a}[*]`));
+    if (missing.length > 0) {
+      console.warn(
+        `[mapping] ${resource}.${column}: jsonPath "${jsonPath}" does not wildcard its array ancestor(s) ` +
+        `${missing.join(', ')} — this field will resolve to nothing and write NULL.`,
+      );
+    }
+  }
+
+  /**
+   * Stamps "[*]" onto each array ancestor inside a resource-relative element path, so the result addresses
+   * the same elements the backend catalog's own jsonPath would ("name" + "name.text" → "name[*].text").
+   * Ancestors are applied longest-first so a nested chain (["code", "code.coding"]) can't have a shorter
+   * prefix rewritten out from under a longer one. An ancestor that is already wildcarded, or that isn't a
+   * prefix of this path, is left alone.
+   */
+  private applyArrayWildcards(relativePath: string, arrays: readonly string[], resourceType: string): string {
+    if (arrays.length === 0) return relativePath;
+    let out = relativePath;
+    const ancestors = arrays
+      .map(a => (a.startsWith(`${resourceType}.`) ? a.slice(resourceType.length + 1) : a))
+      .map(a => a.replace(/\[\*\]/g, '').trim())
+      .filter(a => a.length > 0)
+      .sort((a, b) => b.length - a.length);
+    for (const ancestor of ancestors) {
+      if (out === ancestor) {
+        out = `${ancestor}[*]`;
+      } else if (out.startsWith(`${ancestor}.`)) {
+        out = `${ancestor}[*]${out.slice(ancestor.length)}`;
+      }
+    }
+    return out;
   }
 
   private valueTypeFor(path: string): string {
@@ -1385,7 +1445,7 @@ export class WorkflowBuildAssemblerServiceV2 {
   ): { referenceLookupTable?: string; referenceLookupKeyColumn?: string } {
     const idRow = rows.find(
       (r) => r.resource === referencedResource
-        && (r.jsonPath ?? this.toJsonPath(r.path, referencedResource)) === '$.id',
+        && (r.jsonPath ?? this.toJsonPath(r.path, referencedResource, r.arrays ?? [])) === '$.id',
     );
     return idRow ? { referenceLookupTable: idRow.target, referenceLookupKeyColumn: idRow.column } : {};
   }
