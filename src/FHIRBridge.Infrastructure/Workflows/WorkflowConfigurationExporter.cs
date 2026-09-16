@@ -197,8 +197,16 @@ public sealed class WorkflowConfigurationExporter : IWorkflowConfigurationExport
 
         // Transformation rules reach this workflow either through a route or through a de-id profile; global
         // rules (no route, no profile) also apply at run time, so they are included and labelled as such.
+        //
+        // TransformationRule.ResourcePipelineRouteId is NOT always a ResourcePipelineRoutes FK. A V2-authored
+        // rule is bound by TransformationRule.AttachToWorkflow, which stores the WORKFLOW DEFINITION id in that
+        // same column (see its doc comment — the resolver matches this id to decide whether a rule applies to a
+        // run), and a V2 pipeline has no ResourcePipelineRoutes row at all. Filtering on route ids alone
+        // therefore matched nothing for a V2 workflow and silently exported an empty TransformationRules
+        // section, even though the rules are live and running. Match this workflow's own id too.
+        var ruleOwnerIds = new HashSet<Guid>(allRouteIds) { workflowId };
         var transformationRules = await _context.TransformationRules.AsNoTracking()
-            .Where(r => (r.ResourcePipelineRouteId != null && allRouteIds.Contains(r.ResourcePipelineRouteId.Value))
+            .Where(r => (r.ResourcePipelineRouteId != null && ruleOwnerIds.Contains(r.ResourcePipelineRouteId.Value))
                      || (r.DeIdentificationProfileId != null && deIdIds.Contains(r.DeIdentificationProfileId.Value))
                      || (r.ResourcePipelineRouteId == null && r.DeIdentificationProfileId == null))
             .OrderBy(r => r.Order)
@@ -206,7 +214,7 @@ public sealed class WorkflowConfigurationExporter : IWorkflowConfigurationExport
         AppendSection(builder, sections, "TransformationRules",
             $"""
              SELECT * FROM {Table<Domain.Entities.TransformationRule>()}
-             WHERE ResourcePipelineRouteId IN ({IdList(allRouteIds)})
+             WHERE ResourcePipelineRouteId IN ({IdList(ruleOwnerIds)})  -- route ids, plus this workflow's own id (V2)
                 OR DeIdentificationProfileId IN ({IdList(deIdIds)})
                 OR (ResourcePipelineRouteId IS NULL AND DeIdentificationProfileId IS NULL)  -- global rules
              ORDER BY [Order];

@@ -216,4 +216,41 @@ public sealed class WorkflowConfigurationExporterTests
 
         export.Should().BeNull();
     }
+
+    /// <summary>
+    /// A V2-authored rule is bound by <see cref="TransformationRule.AttachToWorkflow"/>, which stores the
+    /// WORKFLOW DEFINITION id in ResourcePipelineRouteId — a V2 pipeline has no ResourcePipelineRoutes row at
+    /// all. The export used to filter that column against route ids only, so every rule on a V2 workflow fell
+    /// outside the filter and the TransformationRules section came out empty while the rules were live and
+    /// running — exactly the configuration an analyst downloads this file to read.
+    /// </summary>
+    [Fact]
+    public async Task Export_includes_rules_bound_to_the_workflow_id_rather_than_a_route()
+    {
+        var (workflowId, _, _, _) = await SeedAsync();
+
+        await using (var seed = CreateContext())
+        {
+            var rule = new TransformationRule(
+                TransformScope.Workflow,
+                TransformNodeType.HumanNameParsing,
+                """{"pattern":"FirstLast"}""",
+                resourceType: "Patient",
+                destinationField: "HumanNameParsingGivenName",
+                // No ResourcePipelineRoutes row exists for this id — it is the workflow's own id.
+                resourcePipelineRouteId: workflowId,
+                sourceField: "Patient.name.text");
+            rule.MarkCreated("tests");
+            seed.TransformationRules.Add(rule);
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = CreateContext();
+        var export = await new WorkflowConfigurationExporter(context)
+            .ExportAsync(workflowId, CancellationToken.None);
+
+        export.Should().NotBeNull();
+        export!.Content.Should().Contain("HumanNameParsingGivenName");
+        export.Content.Should().Contain("Patient.name.text");
+    }
 }
