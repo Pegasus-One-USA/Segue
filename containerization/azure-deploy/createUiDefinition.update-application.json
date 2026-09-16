@@ -6,7 +6,7 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "Redeploys an EXISTING Segue install onto a new application version — the minimum-steps update path (Container Apps roll a new revision on the new image tag; FHIRBridgeDb migrates automatically on boot). This targets the SAME resource group and resources as your original install, it does not create a new environment. Enter the exact same deployment name prefix, Postgres/Redis/secrets mode, storage redundancy, passwords, and API signing key you used originally — getting Postgres mode, Redis mode, secrets mode, or storage redundancy wrong doesn't just misconfigure something, it breaks connectivity or makes existing secrets unreachable (or, for storage redundancy, fails the deployment outright). Container/database/cache SIZES are still left at main.bicep's own defaults by this limited wizard (getting those wrong only under/over-provisions, it doesn't break anything) — use Step 4 (upgrade-resources) or the full Deploy-to-Azure wizard if your original install customized those.",
+        "description": "Redeploys an EXISTING Segue install onto a new application version — the minimum-steps update path (Container Apps roll a new revision on the new image tag; FHIRBridgeDb migrates automatically on boot). This targets the SAME resource group and resources as your original install, it does not create a new environment. Postgres mode, Redis mode, and app/worker container sizes are read back from the live install and pre-filled automatically — just confirm they look right. Secrets mode and storage redundancy CANNOT be safely auto-read (Azure never exposes secret-store choice or lets a storage account's redundancy be probed reliably this way), so you still confirm those two and re-enter the Postgres password/API signing key (Azure never returns secret parameter values to anything, ever, by design). Container/database/cache SIZES for Postgres/Redis specifically are left at main.bicep's own defaults by this limited wizard — use Step 4 (upgrade-resources) or the full Deploy-to-Azure wizard if your original install customized those.",
         "subscription": {
           "resourceProviders": [
             "Microsoft.App",
@@ -45,12 +45,28 @@
         "label": "Current Configuration",
         "elements": [
           {
+            "name": "segueAppInfo",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "request": {
+              "method": "GET",
+              "path": "[concat(resourceGroup().id, '/providers/Microsoft.App/containerApps/', basics('namePrefix'), '-app?api-version=2024-03-01')]"
+            }
+          },
+          {
+            "name": "workerAppInfo",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "request": {
+              "method": "GET",
+              "path": "[concat(resourceGroup().id, '/providers/Microsoft.App/containerApps/', basics('namePrefix'), '-worker?api-version=2024-03-01')]"
+            }
+          },
+          {
             "name": "configInfo",
             "type": "Microsoft.Common.InfoBox",
             "visible": true,
             "options": {
               "icon": "Warning",
-              "text": "Every field below MUST match your original install exactly. Postgres mode, Redis mode, and secrets mode determine which real resource (and which real secret store) the app connects to at runtime — getting any of these wrong doesn't fail the deployment, it deploys successfully and then the app can't find its database, cache, or secrets. Storage redundancy is checked at deploy time instead: Azure does not allow converting an existing storage account between Standard_LRS and Standard_ZRS at all, so picking the wrong one here fails the deployment outright (PreflightValidationCheckFailed / StorageAccountTypeConversionNotAllowed). Check the original install's parameters (or the Portal resource list) if you're unsure of any of these."
+              "text": "Postgres mode and Redis mode below are pre-filled from your live install (checking the running app's own connection strings) — just confirm they're correct. Secrets mode and storage redundancy could NOT be safely auto-filled and still MUST match your original install exactly: getting secrets mode wrong deploys successfully and then the app can't find its secrets (SecretNotConfiguredException at runtime); getting storage redundancy wrong fails the deployment outright (PreflightValidationCheckFailed / StorageAccountTypeConversionNotAllowed). Check the original install's parameters (or the Portal resource list) if you're unsure of either."
             }
           },
           {
@@ -71,8 +87,8 @@
             "name": "postgresMode",
             "type": "Microsoft.Common.OptionsGroup",
             "label": "Postgres deployment type",
-            "defaultValue": "Managed",
-            "toolTip": "MUST match your original install. Managed = Azure Database for PostgreSQL Flexible Server. Containerized = a Postgres container in this same environment.",
+            "defaultValue": "[if(contains(steps('currentConfig').segueAppInfo.properties.template.containers[0].env[1].value, concat('Host=', basics('namePrefix'), '-postgres;')), 'Containerized', 'Managed')]",
+            "toolTip": "Auto-detected from the live install's connection string — confirm it's correct. Managed = Azure Database for PostgreSQL Flexible Server. Containerized = a Postgres container in this same environment.",
             "constraints": {
               "allowedValues": [
                 { "label": "Managed — Azure Database for PostgreSQL", "value": "Managed" },
@@ -119,8 +135,8 @@
             "name": "redisMode",
             "type": "Microsoft.Common.OptionsGroup",
             "label": "Redis deployment type",
-            "defaultValue": "Containerized",
-            "toolTip": "MUST match your original install. Containerized = a Redis container in this same environment (self-signed TLS cert). Managed = Azure Managed Redis.",
+            "defaultValue": "[if(contains(steps('currentConfig').segueAppInfo.properties.template.containers[0].env[3].value, concat(basics('namePrefix'), '-redis:')), 'Containerized', 'Managed')]",
+            "toolTip": "Auto-detected from the live install's connection string — confirm it's correct. Containerized = a Redis container in this same environment (self-signed TLS cert). Managed = Azure Managed Redis.",
             "constraints": {
               "allowedValues": [
                 { "label": "Containerized", "value": "Containerized" },
@@ -202,7 +218,7 @@
             "visible": true,
             "options": {
               "icon": "Warning",
-              "text": "This wizard changes only the application version — every field on the previous step must match your original install exactly (Postgres/Redis/secrets mode, storage redundancy, passwords/keys). It leaves container/database/cache SIZES at main.bicep's own defaults; if your original install customized those, use Step 4 (upgrade-resources) or the full Deploy-to-Azure wizard instead, or those will be reset to their defaults on this deploy. WAF and Seq are also left at their defaults (both off) — if either was enabled on the original install, use the full wizard instead so it isn't silently disabled."
+              "text": "This wizard changes only the application version. Postgres/Redis mode and app/worker container sizes were auto-detected from your live install and are preserved as-is; secrets mode and storage redundancy on the previous step must match your original install exactly (confirm them there). Postgres/Redis-specific sizes (their own container size, or the managed SKU/storage/tier) are still left at main.bicep's own defaults — use Step 4 (upgrade-resources) or the full Deploy-to-Azure wizard if your original install customized those. WAF and Seq are also left at their defaults (both off) — if either was enabled on the original install, use the full wizard instead so it isn't silently disabled."
             }
           }
         ]
@@ -219,6 +235,8 @@
       "redisPassword": "[if(equals(steps('currentConfig').redisMode, 'Containerized'), steps('currentConfig').redisPassword, '')]",
       "redisTrustedCertificateThumbprint": "[if(equals(steps('currentConfig').redisMode, 'Containerized'), steps('currentConfig').redisTrustedCertificateThumbprint, '')]",
       "enableTenantSecretsKeyVault": "[equals(steps('currentConfig').secretsMode, 'Azure Key Vault')]",
+      "segueAppSize": "[if(equals(steps('currentConfig').segueAppInfo.properties.template.containers[0].resources.cpu, json('0.25')), 'Small', if(equals(steps('currentConfig').segueAppInfo.properties.template.containers[0].resources.cpu, json('0.5')), 'Medium', if(equals(steps('currentConfig').segueAppInfo.properties.template.containers[0].resources.cpu, json('1.0')), 'Large', 'XLarge')))]",
+      "workerSize": "[if(equals(steps('currentConfig').workerAppInfo.properties.template.containers[0].resources.cpu, json('0.25')), 'Small', if(equals(steps('currentConfig').workerAppInfo.properties.template.containers[0].resources.cpu, json('0.5')), 'Medium', if(equals(steps('currentConfig').workerAppInfo.properties.template.containers[0].resources.cpu, json('1.0')), 'Large', 'XLarge')))]",
       "imageTag": "[steps('versionStep').imageTag]",
       "imageRegistryServer": "seguebuilds.azurecr.io",
       "imageRegistryUsername": "one-click-pull",
