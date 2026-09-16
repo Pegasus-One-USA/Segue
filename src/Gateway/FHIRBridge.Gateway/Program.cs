@@ -23,12 +23,15 @@ builder.Host.UseWindowsService().UseSystemd();
 builder.Host.UseSerilog((context, loggerConfig) =>
     loggerConfig.ConfigureFhirBridge(context.Configuration, "FHIRBridge.Gateway"));
 
-// Routes are fixed (this Gateway only ever proxies these two path patterns to the one Api it
+// Routes are fixed (this Gateway only ever proxies these path patterns to the one Api it
 // fronts) — only the destination address varies per deployment, so that's the one thing pulled
 // from config, as a single flat setting. Every environment (including production) must set this
 // explicitly in its own appsettings.Production.json overlay — there is no shared fallback here:
 // silently defaulting to one environment's Api address risks a misconfigured environment proxying
 // its traffic straight into another one's (e.g. production's).
+// /legal/** must be proxied too (Api's static Content/legal mapping, e.g. terms-and-conditions.html) —
+// otherwise it falls into the SPA static-file branch below and resolves to index.html instead of 404ing,
+// so the portal's Terms & Conditions dialog silently renders the Angular shell instead of the document.
 var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
 if (string.IsNullOrWhiteSpace(apiBaseUrl) && !builder.Environment.IsDevelopment())
 {
@@ -51,6 +54,12 @@ builder.Services.AddReverseProxy().LoadFromMemory(
             RouteId = "swagger-route",
             ClusterId = "api-cluster",
             Match = new RouteMatch { Path = "/swagger/{**catch-all}" }
+        },
+        new RouteConfig
+        {
+            RouteId = "legal-route",
+            ClusterId = "api-cluster",
+            Match = new RouteMatch { Path = "/legal/{**catch-all}" }
         }
     ],
     clusters:
@@ -67,8 +76,8 @@ builder.Services.AddReverseProxy().LoadFromMemory(
 
 var app = builder.Build();
 
-// Serve the portal's production build for everything that isn't proxied to the Api (/api/** and
-// /swagger/**, both mapped below) — this static-file branch owns the rest of the path space.
+// Serve the portal's production build for everything that isn't proxied to the Api (/api/**,
+// /swagger/**, and /legal/**, all mapped above) — this static-file branch owns the rest of the path space.
 // PhysicalFileProvider requires an absolute path; resolve relative config values (used for
 // local dev) against the working directory the same way Path.GetFullPath always would.
 var configuredRoot = builder.Configuration["StaticFiles:RootPath"];
@@ -78,7 +87,9 @@ if (staticRoot is not null && Directory.Exists(staticRoot))
     var fileProvider = new PhysicalFileProvider(staticRoot);
 
     app.UseWhen(
-        context => !context.Request.Path.StartsWithSegments("/api") && !context.Request.Path.StartsWithSegments("/swagger"),
+        context => !context.Request.Path.StartsWithSegments("/api")
+            && !context.Request.Path.StartsWithSegments("/swagger")
+            && !context.Request.Path.StartsWithSegments("/legal"),
         branch =>
         {
             branch.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fileProvider });
