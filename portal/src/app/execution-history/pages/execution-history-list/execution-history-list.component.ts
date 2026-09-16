@@ -58,6 +58,9 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   readonly sortColumn    = signal<SortColumn>('lastRun');
   readonly sortDirection = signal<SortDirection>('desc');
   readonly loading       = signal(false);
+  /** True only while a debounced search-box request is in flight — drives the small in-field spinner
+   *  instead of the app-wide global loader, which dims the screen and inerts the input being typed. */
+  readonly searching     = signal(false);
   readonly result        = signal<PagedResult<RouteExecution>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
   /** Any filter active — drives the two "no results" messages below the table. */
   readonly hasActiveFilters = computed(
@@ -78,7 +81,7 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.search$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(value => {
       this.searchQuery.set(value);
       this.pageIndex.set(0);
-      this.load();
+      this.load(true);
     });
 
     // A Dashboard stat tile links here with ?status=X (e.g. clicking "Failed") — pre-select that
@@ -102,8 +105,10 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.search$.complete();
   }
 
-  load(): void {
+  /** `silent` comes only from the debounced search box — see ExecutionHistoryApiService.list. */
+  load(silent = false): void {
     this.loading.set(true);
+    if (silent) this.searching.set(true);
     this.api.list({
       workflowId: this.workflowIdFilter() || undefined,
       status: this.statusFilter() || undefined,
@@ -114,13 +119,17 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
       pageSize: this.pageSize(),
       sortColumn: this.sortColumn(),
       sortDirection: this.sortDirection(),
-    }).subscribe({
+    }, { silent }).subscribe({
       next: result => {
+        this.searching.set(false);
         this.result.set(result);
         this.availableSources.set(result.availableSourceSystemTypes ?? []);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => {
+        this.searching.set(false);
+        this.loading.set(false);
+      },
     });
   }
 
