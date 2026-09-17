@@ -171,9 +171,11 @@ public sealed class WorkflowNodeRunPayloadEntityTypeConfiguration : IEntityTypeC
         builder.Property(x => x.WorkflowNodeRunId).IsRequired();
         builder.Property(x => x.NodeType).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Contract).HasMaxLength(100).IsRequired();
-        // Encrypted at rest (can carry PHI: raw fetched resources, mapped field values) — see EfWorkflowNodeResourceHistoryRecorder.
-        builder.Property(x => x.PayloadJson).IsRequired();
+        // Metadata only — counts and resource-type names, never resource content. The former PayloadJson column
+        // held whole (encrypted) Epic FHIR resources and was removed; see EfWorkflowNodeResourceHistoryRecorder.
         builder.Property(x => x.ItemCount);
+        builder.Property(x => x.ResourceTypeCountsJson);
+        builder.Property(x => x.DeliveryDetailJson);
         builder.Property(x => x.RecordedAtUtc).IsRequired();
 
         builder.HasIndex(x => x.WorkflowRunId);
@@ -197,8 +199,9 @@ public sealed class FieldLineageEntryEntityTypeConfiguration : IEntityTypeConfig
         builder.Property(x => x.NodeOrder).IsRequired();
         builder.Property(x => x.NodeType).HasMaxLength(100).IsRequired();
         builder.Property(x => x.ConfigJson).IsRequired();
-        builder.Property(x => x.SourceValueJson);
-        builder.Property(x => x.DestinationValueJson);
+        // SourceValueJson/DestinationValueJson removed: they held actual patient field values (encrypted at
+        // rest, but retained PHI is still PHI). The per-node lineage story — which field came from where, through
+        // which node, and whether it succeeded — is fully carried by the columns above and below.
         builder.Property(x => x.Success).IsRequired();
         builder.Property(x => x.ErrorMessage).HasMaxLength(2000);
         builder.Property(x => x.DurationMs);

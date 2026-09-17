@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
 using FHIRBridge.Api.Hubs;
+using FHIRBridge.Application.Services.Terminology;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
@@ -13,6 +14,7 @@ using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Security;
+using FHIRBridge.Infrastructure.Terminology;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Application.Validation;
@@ -263,6 +265,24 @@ if (!string.IsNullOrWhiteSpace(signalRRedisConnectionString))
     });
 }
 builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
+// Backs TerminologyStatusHub — same arrangement, for the Terminology Server table's per-row sync status.
+// Also API-host-only: HapiTerminologyConfigurationService takes this as an optional dependency, so the
+// Worker (where the scheduled syncs run) resolves null and simply records history without a live push.
+builder.Services.AddSingleton<ITerminologyStatusNotifier, SignalRTerminologyStatusNotifier>();
+
+// Closes out import-history rows left at "Running" by a host that stopped mid-import. API-host-only on
+// purpose: its correctness argument ("no import can have survived the restart that just happened") holds
+// only for the process that owns the imports. Registered in shared infrastructure it would also run in the
+// Worker and in every extra API replica, each marking the others' in-flight imports as Interrupted.
+//
+// This does mean a multi-replica API deployment needs revisiting — see the class remarks.
+//
+// This registers after AddFHIRBridgeInfrastructure's drain loop, so the loop's ExecuteAsync starts first.
+// That is harmless rather than merely lucky: the loop immediately parks on an empty channel, and the only
+// things that enqueue a job are user-initiated requests, which cannot arrive before the host finishes
+// starting. The reconciler's StartAsync therefore completes while the loop is still waiting for its first
+// job, so no import it could interrupt has begun.
+builder.Services.AddHostedService<TerminologyImportOrphanReconciler>();
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>
@@ -849,6 +869,10 @@ if (rateLimitingEnabled)
 app.MapControllers();
 app.MapWorkflowEndpoints();
 app.MapHub<RunStatusHub>("/hubs/run-status").RequireAuthorization();
+// The hub class carries [Authorize(SuperAdminOnly)] itself — this RequireAuthorization() is the same
+// belt-and-braces the run-status hub above uses, keeping an unauthenticated connection off the endpoint
+// before it ever reaches the hub's own policy.
+app.MapHub<TerminologyStatusHub>("/hubs/terminology-status").RequireAuthorization();
 
 // Client-side (Angular) routes have no server-side match — fall back to index.html so deep links
 // and refreshes on e.g. /workflows/123 resolve instead of 404ing. No-ops if wwwroot/index.html

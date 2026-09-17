@@ -26,6 +26,9 @@
           [value]="searchQuery()"
           (input)="onSearch($any($event.target).value)"
         />
+        @if (searching()) {
+          <span class="search-spinner" aria-hidden="true"></span>
+        }
       </div>
 
       <!-- Source filter — multi-select over the vendors that actually have runs, same control the Workflows

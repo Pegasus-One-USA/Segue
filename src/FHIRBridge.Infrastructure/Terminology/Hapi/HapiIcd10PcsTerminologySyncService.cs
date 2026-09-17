@@ -65,14 +65,15 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
         var billableCount = concepts.Count(c => c.Billable);
         _logger.LogInformation(
             "Parsed {Total} ICD-10-PCS codes ({Billable} billable) from the official release.", concepts.Count, billableCount);
+        var version = VersionFromZipUrl(zipUrl);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "ICD10PCS", VersionFromZipUrl(zipUrl), concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl, "ICD10PCS", version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
             "ICD-10-PCS loaded into the terminology server: {Total} codes in {Elapsed}.", concepts.Count, stopwatch.Elapsed);
 
-        return new HapiIcd10PcsSyncResult(concepts.Count, billableCount, stopwatch.Elapsed);
+        return new HapiIcd10PcsSyncResult(concepts.Count, billableCount, stopwatch.Elapsed, version);
     }
 
     /// <summary>CMS's fiscal-year zip filename itself as the version identifier — same reasoning as

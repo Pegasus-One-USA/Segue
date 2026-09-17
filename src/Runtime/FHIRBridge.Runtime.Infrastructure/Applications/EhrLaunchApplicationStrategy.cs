@@ -40,7 +40,8 @@ public sealed class EhrLaunchApplicationStrategy : SourceApplicationStrategyBase
         RequiresRedirectUri: true,
         RequiresLaunchToken: true,
         RequiresTrustedIssuerAllowList: true,
-        SupportsRefreshToken: true);
+        SupportsRefreshToken: true,
+        PortalAudienceSlug: "provider-ehr-launch");
 
     public override Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         _interactive.GetAccessTokenAsync(source, cancellationToken);

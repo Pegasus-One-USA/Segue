@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -29,6 +30,32 @@ public sealed class AllowedCorsOriginsController : ControllerBase
         var origins = await _service.GetAllAsync(cancellationToken);
 
         return Ok(origins);
+    }
+
+    /// <summary>Server-side paged/searchable list backing the Allowed Origins screen. The CORS policy
+    /// itself still reads the unpaged list — paging is presentation only and never narrows what the API
+    /// actually allows.</summary>
+    [HttpGet("paged")]
+    [ProducesResponseType(typeof(PagedResult<AllowedCorsOriginDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] string? search,
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        CancellationToken cancellationToken)
+    {
+        // pageSize is clamped at both ends: a caller passing pageSize=1000000 would otherwise materialize the
+        // whole table in one request, which is the denial-of-service shape of an unbounded page parameter.
+        const int defaultPageSize = 10;
+        const int maxPageSize = 200;
+
+        var effectivePageSize = pageSize <= 0
+            ? defaultPageSize
+            : Math.Min(pageSize, maxPageSize);
+
+        var result = await _service.GetPagedAsync(
+            search, page <= 0 ? 1 : page, effectivePageSize, cancellationToken);
+
+        return Ok(result);
     }
 
     [HttpPost]

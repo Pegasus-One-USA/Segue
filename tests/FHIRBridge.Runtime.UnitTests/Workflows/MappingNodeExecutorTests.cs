@@ -624,13 +624,19 @@ public sealed class MappingNodeExecutorTests
     }
 
     /// <summary>
-    /// The feature-flag gate (Settings &gt; System Settings &gt; General, "TransformationRules:Hidden",
-    /// default true): even with a fully wired rule resolver/registry and a resolvable rule, the executor must
-    /// skip applying it while the flag reads hidden — this is what lets the whole rules feature ship dark by
-    /// default without touching any pipeline behavior.
+    /// "TransformationRules:Hidden" (Settings &gt; System Settings &gt; General, default true) gates the
+    /// feature's UI surfaces ONLY — the destination wizard's Rules button and the Settings &gt; Transformation
+    /// Rules screen. It must never gate rule application at runtime: hiding the configuration screen cannot
+    /// silently change what a workflow writes, or an admin tidying up the UI would corrupt output for every
+    /// pipeline with rules already configured.
+    ///
+    /// This test previously asserted the opposite — that the flag suppressed execution — which was the
+    /// behaviour commit a0b1dad4 ("Fix transformation rules silently not applying during workflow execution")
+    /// removed as bug #1 of three. The production contract is stated on TransformationRulesFeatureFlag itself;
+    /// this test now pins that contract so the gate cannot be reintroduced.
     /// </summary>
     [Fact]
-    public async Task Suppresses_rule_application_when_the_feature_flag_reads_hidden()
+    public async Task Applies_rules_even_when_the_feature_flag_reads_hidden()
     {
         var destination = new DestinationConfiguration(
             "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
@@ -676,7 +682,9 @@ public sealed class MappingNodeExecutorTests
 
         var batch = (MappedRecordBatch)output.Payload!;
         var record = (MappedDestinationRecord)batch.Records.Single();
-        record.Values["FamilyName"].Should().Be("roe", "the flag is hidden, so the resolved rule must not be applied");
+        record.Values["FamilyName"].Should().Be(
+            "ROE",
+            "the flag hides the rules UI only — a resolved rule must still be applied during execution");
     }
 
     [Fact]

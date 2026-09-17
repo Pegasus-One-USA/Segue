@@ -38,6 +38,21 @@
     border-radius: 0;
   }
 
+  // The ngComponentOutlet renders the hosted component's element as this panel's LAST flex child.
+  // Without an explicit rule it defaults to flex:0 1 auto / min-height:auto, so it sizes to its own
+  // content and overflows a bounded panel instead of fitting inside it — which is what pushed a
+  // fill/maximized dialog's footer (e.g. the terminology code browser's paginator) below the fold,
+  // reachable only after a maximize toggle forced a re-layout. Claiming the leftover height with
+  // min-height:0 lets the hosted component's own internal scroll areas shrink and do the scrolling.
+  // ::ng-deep is REQUIRED here, not stylistic: the outlet renders a DIFFERENT component, so its host
+  // element never carries this component's _ngcontent attribute — an encapsulated child selector
+  // compiles to `> *[_ngcontent-shell]` and silently matches nothing. :not(.app-dialog-chrome) keeps
+  // it off the absolutely-positioned chrome row.
+  ::ng-deep > *:last-child:not(.app-dialog-chrome) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
   &--maximized {
     // position: fixed (not absolute) is deliberate — same escape-to-true-viewport behavior as the
     // workflow builder's node config panel's own maximize, and for the same reason: this needs to

@@ -34,7 +34,8 @@ public sealed class StandaloneApplicationStrategy : SourceApplicationStrategyBas
         RequiresRedirectUri: true,
         RequiresLaunchToken: false,
         RequiresTrustedIssuerAllowList: false,
-        SupportsRefreshToken: true);
+        SupportsRefreshToken: true,
+        PortalAudienceSlug: "provider-standalone");
 
     public override Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         _interactive.GetAccessTokenAsync(source, cancellationToken);

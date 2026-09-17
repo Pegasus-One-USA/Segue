@@ -11,8 +11,6 @@ public sealed record LineageHopEntryDto(
     int NodeOrder,
     string NodeType,
     string ConfigJson,
-    string? SourceValueJson,
-    string? DestinationValueJson,
     bool Success,
     string? ErrorMessage,
     double? DurationMs,

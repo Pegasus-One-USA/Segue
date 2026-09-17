@@ -2118,15 +2118,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("FetchedAtUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("FetchedJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime?>("MappedAtUtc")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("MappedValuesJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("MasterPatientId")
                         .HasMaxLength(200)
@@ -2134,9 +2127,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("NormalizedAtUtc")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("NormalizedJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ResourceType")
                         .IsRequired()
@@ -4918,9 +4908,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("DestinationValueJson")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<double?>("DurationMs")
                         .HasColumnType("float");
 
@@ -4963,9 +4950,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<string>("SourceSystemType")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("SourceValueJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("Success")
                         .HasColumnType("bit");
@@ -5183,6 +5167,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("DeliveryDetailJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("ItemCount")
                         .HasColumnType("int");
 
@@ -5191,12 +5178,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("PayloadJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTimeOffset>("RecordedAtUtc")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ResourceTypeCountsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid>("WorkflowNodeRunId")
                         .HasColumnType("uniqueidentifier");

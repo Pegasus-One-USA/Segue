@@ -1,0 +1,161 @@
+name: Release
+
+# Cuts a customer-facing release. The TAG is the trigger, not a branch push: a branch moves, so it
+# can never identify what a customer actually has, while a tag is permanent. Everything downstream
+# derives its version from the tag name, so the number is typed exactly once — by whoever runs
+# `git tag`.
+#
+#   git checkout release
+#   git merge main_v2
+#   git tag v1.1.0
+#   git push origin release v1.1.0     <- this fires the workflow
+#
+# See docs/RELEASE.md for the full procedure and UPGRADE.md for what customers do with the result.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, WITHOUT the leading v (e.g. 1.1.0). Dry-run only — never pushes images.'
+        required: true
+        type: string
+
+permissions:
+  contents: write   # create the GitHub Release
+  packages: write   # push images to GHCR
+
+env:
+  # GHCR is the default because GITHUB_TOKEN can already push to it — no extra secret to configure.
+  # To publish to ACR/ECR instead, point REGISTRY at it and swap the login step below for
+  # azure/docker-login (or aws-actions/amazon-ecr-login).
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  release:
+    name: build-and-publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The tag is the single source of the version for this run. Strips the leading 'v' so the
+      # number used everywhere else (image tags, assembly versions, VERSION) is bare: v1.1.0 -> 1.1.0.
+      - name: Resolve version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$VERSION' is not a semantic version (expected 1.2.3 or 1.2.3-rc.1)."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # A pre-release (1.1.0-rc.1) is published but never marked as the latest release, so a
+          # customer following "latest" is never handed a release candidate.
+          if printf '%s' "$VERSION" | grep -q -- '-'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Releasing $VERSION"
+
+      # The tag and the committed VERSION file must agree. If they don't, the assemblies would be
+      # stamped with one number while the images carry another — the exact confusion this whole
+      # single-source setup exists to prevent. Fail loudly rather than publish a mismatched release.
+      - name: Verify VERSION matches the tag
+        run: |
+          FILE_VERSION="$(tr -d '[:space:]' < VERSION)"
+          if [ "$FILE_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "::error::VERSION file says '$FILE_VERSION' but the tag says '${{ steps.version.outputs.version }}'. Update VERSION on the release branch, commit, then re-tag."
+            exit 1
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Build and test
+        run: |
+          dotnet restore FHIRBridge.sln
+          dotnet build FHIRBridge.sln --configuration Release --no-restore \
+            -p:SourceRevisionId=${{ github.sha }}
+          dotnet test FHIRBridge.sln --configuration Release --no-build --verbosity normal
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Images are tagged with the exact version and pushed. The tag is immutable by convention:
+      # a published version is never rebuilt or overwritten — if it is wrong, the fix ships as the
+      # next number. Older tags are never deleted either; a customer who has not upgraded yet still
+      # needs the image their deployment references.
+      - name: Build and push images
+        if: github.event_name == 'push'
+        run: |
+          chmod +x containerization/scripts/build-images.sh
+          ./containerization/scripts/build-images.sh \
+            -r "${REGISTRY}" \
+            -t "${{ steps.version.outputs.version }}" \
+            -p
+
+      - name: Build images (dry run, no push)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          chmod +x containerization/scripts/build-images.sh
+          ./containerization/scripts/build-images.sh -t "${{ steps.version.outputs.version }}"
+
+      # The published ARM template must name its own build, so a customer deploying it gets exactly
+      # this release rather than whatever is newest. Rewritten here (not committed pinned) so the
+      # repo's own default stays whatever the release branch last shipped.
+      - name: Pin deploy template to this version
+        if: github.event_name == 'push'
+        run: |
+          sed -i "s/^param imageTag string = '.*'$/param imageTag string = '${{ steps.version.outputs.version }}'/" \
+            containerization/azure-deploy/main.bicep
+          grep -n "param imageTag" containerization/azure-deploy/main.bicep
+
+      - name: Compile ARM template
+        if: github.event_name == 'push'
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            az bicep build --file containerization/azure-deploy/main.bicep \
+              --outfile containerization/azure-deploy/main.json
+
+      - name: Upload deploy artifacts
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-artifacts-${{ steps.version.outputs.version }}
+          path: |
+            containerization/azure-deploy/main.json
+            containerization/azure-deploy/createUiDefinition.json
+            containerization/azure-deploy/main.bicep
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          files: |
+            containerization/azure-deploy/main.json
+            containerization/azure-deploy/createUiDefinition.json
+          body: |
+            ## Segue v${{ steps.version.outputs.version }}
+
+            **Images** (tag `${{ steps.version.outputs.version }}`):
+            `segue-app` · `segue-worker` · `segue-redis` · `segue-postgres` · `segue-postgres-backup`
+
+            Published to `${{ env.REGISTRY }}`, built from commit ${{ github.sha }}.
+
+            Upgrading an existing deployment: see [UPGRADE.md](../blob/v${{ steps.version.outputs.version }}/docs/UPGRADE.md).
+            **Back up the database before upgrading** — migrations run automatically on startup.
