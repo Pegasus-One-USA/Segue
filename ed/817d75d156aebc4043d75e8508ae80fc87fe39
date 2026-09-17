@@ -1,0 +1,19 @@
+portal/src/app/execution-history/components/field-lineage-panel/field-lineage-panel.component.scss
+  s_dd0107f600e552::t_9feef9a1518ce0 414
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ed817d75d156aebc4043d75e8508ae80fc87fe39",
+  "prompts": {},
+  "sessions": {
+    "s_dd0107f600e552": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "071a7e71-29f9-460a-87ef-3ce9d175dc8a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
