@@ -1,11 +1,11 @@
 import { Injectable, inject, NgZone } from '@angular/core';
-import { Router } from '@angular/router';
 import { catchError, finalize, EMPTY } from 'rxjs';
 import { Session } from '../models/auth-state.model';
 import { AuthStore } from '../store/auth.store';
 import { TokenService } from './token.service';
 import { IAuthService } from './i-auth.service';
 import { MappingSnapshotService } from '../../components/node-library-v2/destination-wizard/field-mapping/mapping-snapshot.service';
+import { SessionExpiredDialogService } from './session-expired-dialog.service';
 
  const IDLE_MS = 30 * 60 * 1000; // 30-minute idle timeout
 // Deliberately excludes 'mousemove' — that fires dozens of times a second while the user's hand merely
@@ -22,10 +22,10 @@ const ACTIVITY_THROTTLE_MS = 60 * 1000;
 export class SessionService {
   private readonly store  = inject(AuthStore);
   private readonly tokens = inject(TokenService);
-  private readonly router = inject(Router);
   private readonly zone   = inject(NgZone);
   private readonly mappingSnapshots = inject(MappingSnapshotService);
   private readonly authApi = inject(IAuthService);
+  private readonly sessionExpiredDialog = inject(SessionExpiredDialogService);
 
   private idleTimer?: ReturnType<typeof setTimeout>;
   private activityListenersActive = false;
@@ -128,7 +128,10 @@ export class SessionService {
       finalize(() => {
         this.end();
         this.store.setError('Your session has expired due to inactivity. Please sign in again.');
-        this.router.navigate(['/auth/login']);
+        // Same global "Session expired" dialog the auth interceptor shows on a 401 — the user stays
+        // on the current page until they click "Log In" rather than being yanked to /auth/login
+        // out from under whatever they were doing.
+        this.sessionExpiredDialog.show('Your session has expired due to inactivity. Please log in again to continue.');
       }),
     ).subscribe();
   }
