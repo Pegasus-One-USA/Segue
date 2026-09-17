@@ -36,6 +36,7 @@ public sealed class InProcessAllowedCorsOriginsCache : IAllowedCorsOriginsCache
     private readonly IReadOnlySet<string> _configuredFloor;
     private readonly IConnectionMultiplexer? _redis;
     private volatile CacheEntry? _cached;
+    private volatile bool _subscribedToInvalidation;
 
     public InProcessAllowedCorsOriginsCache(
         IServiceScopeFactory scopeFactory,
@@ -48,9 +49,36 @@ public sealed class InProcessAllowedCorsOriginsCache : IAllowedCorsOriginsCache
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         _redis = redis;
 
-        // Subscribed unconditionally, including on the replica that itself publishes below — re-clearing
-        // an already-null cache is a harmless no-op, and it's simpler than trying to skip self-notifies.
-        _redis?.GetSubscriber().Subscribe(InvalidationChannel, (_, _) => _cached = null);
+        if (_redis is not null)
+        {
+            // AbortOnConnectFail: false (see DependencyInjection.cs) lets ConnectionMultiplexer.Connect
+            // succeed even while Redis is unreachable — but a synchronous SUBSCRIBE issued against a
+            // multiplexer with no live connection still throws RedisConnectionException, and this
+            // constructor runs on the request path (DynamicPortalCorsPolicyProvider, OAuthController,
+            // etc. all resolve this singleton). Retrying on ConnectionRestored instead of letting that
+            // exception surface means a replica that started during a Redis outage still picks up
+            // cross-replica invalidation once it's back, rather than falling back to MaxAge for the rest
+            // of its life.
+            _redis.ConnectionRestored += (_, _) => TrySubscribeToInvalidation();
+            TrySubscribeToInvalidation();
+        }
+    }
+
+    // Subscribed unconditionally, including on the replica that itself publishes below — re-clearing an
+    // already-null cache is a harmless no-op, and it's simpler than trying to skip self-notifies. Never
+    // lets a connection failure escape — see the constructor's remarks.
+    private void TrySubscribeToInvalidation()
+    {
+        if (_redis is null || _subscribedToInvalidation) return;
+        try
+        {
+            _redis.GetSubscriber().Subscribe(InvalidationChannel, (_, _) => _cached = null);
+            _subscribedToInvalidation = true;
+        }
+        catch (RedisConnectionException)
+        {
+            // Still down — ConnectionRestored will call this again; MaxAge bounds staleness meanwhile.
+        }
     }
 
     public async Task<IReadOnlySet<string>> GetOriginsAsync(CancellationToken cancellationToken)

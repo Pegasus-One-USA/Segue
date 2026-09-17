@@ -1,4 +1,5 @@
 import { Injectable, inject, NgZone } from '@angular/core';
+import { Router } from '@angular/router';
 import { catchError, finalize, EMPTY } from 'rxjs';
 import { Session } from '../models/auth-state.model';
 import { AuthStore } from '../store/auth.store';
@@ -22,6 +23,7 @@ const ACTIVITY_THROTTLE_MS = 60 * 1000;
 export class SessionService {
   private readonly store  = inject(AuthStore);
   private readonly tokens = inject(TokenService);
+  private readonly router = inject(Router);
   private readonly zone   = inject(NgZone);
   private readonly mappingSnapshots = inject(MappingSnapshotService);
   private readonly authApi = inject(IAuthService);
@@ -128,10 +130,16 @@ export class SessionService {
       finalize(() => {
         this.end();
         this.store.setError('Your session has expired due to inactivity. Please sign in again.');
-        // Same global "Session expired" dialog the auth interceptor shows on a 401 — the user stays
-        // on the current page until they click "Log In" rather than being yanked to /auth/login
-        // out from under whatever they were doing.
-        this.sessionExpiredDialog.show('Your session has expired due to inactivity. Please log in again to continue.');
+        // Unlike the interceptor's 401 path (user is actively at the keyboard, so the prompt can sit
+        // over whatever they were looking at), idle timeout exists specifically FOR the unattended
+        // workstation — showing the prompt without navigating first would leave PHI (execution history
+        // rows, field-lineage values, mapping previews) rendered behind the dialog's translucent
+        // backdrop for as long as the browser stays open on a shared clinical machine. Navigate away
+        // first so the routed content is actually gone, then show the same unified prompt over the now-
+        // blank login page.
+        void this.router.navigate(['/auth/login']).then(() => {
+          this.sessionExpiredDialog.show('Your session has expired due to inactivity. Please log in again to continue.');
+        });
       }),
     ).subscribe();
   }

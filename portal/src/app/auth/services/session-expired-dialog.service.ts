@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { catchError, finalize, EMPTY } from 'rxjs';
+import { catchError, finalize, timeout, EMPTY } from 'rxjs';
 import Swal from 'sweetalert2';
 import { ToastService } from '../../services/toast.service';
 import { IAuthService } from './i-auth.service';
@@ -67,6 +67,11 @@ export class SessionExpiredDialogService {
    *  session marker, never the cookies themselves; only POST /auth/logout's response does that). */
   private logOutAndRedirect(): void {
     this.authApi.logout().pipe(
+      // isOpen/toast.suppress() are only ever cleared in the finalize() below — if this call somehow
+      // hung forever (a stalled request with no server-side timeout), every toast in the app would stay
+      // silently swallowed and no later "session expired" prompt could open, for the rest of the page's
+      // life. Bounding it here guarantees finalize() always runs.
+      timeout({ each: 10_000 }),
       // A session that's already gone 401s on its own logout call — swallow it, cleanup below still
       // runs unconditionally via finalize(), same pattern as AuthService.logout()/SessionService.onIdle().
       catchError(() => EMPTY),

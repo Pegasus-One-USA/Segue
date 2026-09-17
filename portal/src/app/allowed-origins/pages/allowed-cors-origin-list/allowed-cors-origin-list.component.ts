@@ -86,7 +86,10 @@ export class AllowedCorsOriginListComponent implements OnInit {
     this.svc.reload().subscribe({
       next: () => {
         this.reloading.set(false);
-        this.toast.success('CORS configuration reloaded on every running instance.');
+        // Deliberately not "reloaded on every instance" — the broadcast is fire-and-forget with no
+        // delivery guarantee (see InProcessAllowedCorsOriginsCache.Invalidate), the same gap MaxAge
+        // exists to cover. This only promises what's actually guaranteed.
+        this.toast.success('Reload requested — every instance will pick it up within seconds, or within 5 minutes at the outside.');
       },
       error: () => {
         this.reloading.set(false);
