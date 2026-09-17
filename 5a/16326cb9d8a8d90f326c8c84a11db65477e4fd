@@ -1,0 +1,27 @@
+portal/scripts/lint-baseline.json
+  s_cf3967cb308c19::t_cfb0e0a4201ffd 2
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineInstanceSelectionTests.cs
+  s_cf3967cb308c19::t_7dbc16a608b39d 1-105
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_cf3967cb308c19::t_e610957b5f4576 140-156,407-434
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_cf3967cb308c19::t_bb930187964622 804-808
+portal/src/app/components/node-library-v2/node-library-dialog.component.html
+  s_cf3967cb308c19::t_bb930187964622 98-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5a16326cb9d8a8d90f326c8c84a11db65477e4fd",
+  "prompts": {},
+  "sessions": {
+    "s_cf3967cb308c19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66d990c3-0cfc-4e6d-af22-3febae2af8ba",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
