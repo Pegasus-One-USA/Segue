@@ -115,6 +115,19 @@ public static class DependencyInjection
                 options.Configuration = redisConnectionString;
                 options.InstanceName = "fhirbridge:";
             });
+
+            // Raw pub/sub connection (distinct from the IDistributedCache one above, and from the
+            // RunStatusHub SignalR backplane's own internal connection in Program.cs — each owns its own
+            // connection so a problem in one can't take another down). Backs cross-replica cache
+            // invalidation broadcasts (see InProcessAllowedCorsOriginsCache) — resolved lazily on first
+            // use, not at startup, and never throws on a down Redis (AbortOnConnectFail: false) since a
+            // Redis outage must degrade a cache's staleness bound, not break the request that touched it.
+            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ =>
+            {
+                var redisOptions = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
+                redisOptions.AbortOnConnectFail = false;
+                return StackExchange.Redis.ConnectionMultiplexer.Connect(redisOptions);
+            });
         }
 
         // Field-level encryptor for the PHI-bearing execution-history columns (fetched/normalized/mapped payloads).

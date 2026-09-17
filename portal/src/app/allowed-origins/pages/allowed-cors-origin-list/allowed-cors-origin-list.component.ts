@@ -35,6 +35,7 @@ export class AllowedCorsOriginListComponent implements OnInit {
   private readonly toast  = inject(ToastService);
 
   readonly loading = signal(true);
+  readonly reloading = signal(false);
   readonly origins  = signal<AllowedCorsOrigin[]>([]);
 
   /** Free-text filter on the Label column. Applied client-side: unlike the other listings this one has no
@@ -75,6 +76,26 @@ export class AllowedCorsOriginListComponent implements OnInit {
 
   reset(): void {
     this.labelFilter.set('');
+  }
+
+  /** Forces every running API replica to pick up the current rows right away — an admin edit already
+   *  does this on its own; this is the explicit "don't want to wait" escape hatch. */
+  reloadNow(): void {
+    if (this.reloading()) return;
+    this.reloading.set(true);
+    this.svc.reload().subscribe({
+      next: () => {
+        this.reloading.set(false);
+        // Deliberately not "reloaded on every instance" — the broadcast is fire-and-forget with no
+        // delivery guarantee (see InProcessAllowedCorsOriginsCache.Invalidate), the same gap MaxAge
+        // exists to cover. This only promises what's actually guaranteed.
+        this.toast.success('Reload requested — every instance will pick it up within seconds, or within 5 minutes at the outside.');
+      },
+      error: () => {
+        this.reloading.set(false);
+        this.toast.error('Could not reload the CORS configuration.');
+      },
+    });
   }
 
   openAdd(): void {
