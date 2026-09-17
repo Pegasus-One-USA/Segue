@@ -1,0 +1,38 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_cf3967cb308c19::t_ce8d918a6cf9c6 117-143,145-150,152-180,182-203,205-206
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_cf3967cb308c19::t_7b82eac7474269 903-906,908-911,913
+  s_cf3967cb308c19::t_f75987086b1113 907
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_cf3967cb308c19::t_c8ea22c2cfe9e1 185-187,207-214
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_cf3967cb308c19::t_cc870ee2dd60ef 2072-2073,2075,2083,4792-4805,4807-4808
+  s_cf3967cb308c19::t_d0040b7a5c2628 1846-1857,3865-3867,4403-4406
+  s_cf3967cb308c19::t_b522423e496efe 5014-5016,5018-5023
+  s_cf3967cb308c19::t_c6e6a885fdabc8 5160-5172
+  s_cf3967cb308c19::t_679cb9a128261d 1840-1842
+  s_cf3967cb308c19::t_7b82eac7474269 2078-2082
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_cf3967cb308c19::t_c1cf5ea6ed8d0e 10,341,471-473,475-479,485,498-499,516-519
+  s_cf3967cb308c19::t_3174e1751d65d7 167-169,359,474
+  s_cf3967cb308c19::t_2254e2dadcbb67 9,11,340,342-358,360-375,469-470,482-484,520
+portal/src/app/services/workflow-graph-mapper-v2.deid-profile.spec.ts
+  s_cf3967cb308c19::t_d1333d8f3f26d8 1,3-17,20-54,57-63,65-68,70-114
+  s_cf3967cb308c19::t_75517151344b51 2,18-19,55-56,64,69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "17eac1596ed4b0aff090331a10a845b78fc2ecb8",
+  "prompts": {},
+  "sessions": {
+    "s_cf3967cb308c19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66d990c3-0cfc-4e6d-af22-3febae2af8ba",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
