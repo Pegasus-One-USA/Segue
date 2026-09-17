@@ -99,6 +99,9 @@ const SUPER_ADMIN_ONLY_GROUPS: readonly string[] = [
   'RateLimiting',
   'AuditChainVerification',
   'Terminology',
+  // A wrong value here breaks every EHR OAuth integration instantly (see OAuthController.PublicOriginAsync)
+  // — same trust level as Allowed Origins, which is also SuperAdmin-only.
+  'OAuth',
 ];
 
 type GroupedRow = SystemSetting | GroupHeaderRow | CodeGroupHeaderRow | GeneralGroupRow | LauncherRow;

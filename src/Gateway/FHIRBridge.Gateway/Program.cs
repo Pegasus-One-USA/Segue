@@ -43,11 +43,13 @@ apiBaseUrl ??= "http://127.0.0.1:5000/"; // local dev only — matches FHIRBridg
 builder.Services.AddReverseProxy().LoadFromMemory(
     routes:
     [
-        // RequestHeaderOriginalHost preserves the Host header the browser actually sent (the custom domain)
-        // instead of YARP's default of rewriting it to the destination's own address. The Api derives its
-        // OAuth redirect_uri from Request.Host (see OAuthController.BuildCallbackUri), so without this the
-        // eCW/Healow authorize request is built with the Api container's own azurecontainerapps.io hostname
-        // instead of the custom domain the admin registered with the EHR.
+        // RequestHeaderOriginalHost preserves the Host header the browser actually sent instead of YARP's
+        // default of rewriting it to the Api destination's own loopback address (127.0.0.1:5000) before
+        // proxying. OAuthController's redirect_uri/launch/authorize/standalone URLs no longer depend on this
+        // (see OAuth:PublicBaseUrl), but several other absolute-URL builders still do: AuthController's SAML
+        // ACS URL, SsoConfigurationsController's metadata/ACS URLs shown to an admin,
+        // PatientStandaloneLaunchController's authorize URL, and WorkflowEndpoints' checkpoint URL. Without
+        // this, every one of those renders as http://127.0.0.1:5000/... instead of the real public host.
         new RouteConfig
         {
             RouteId = "api-route",

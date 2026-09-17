@@ -30,15 +30,22 @@ interface VersionDto {
 export class VersionService {
   private readonly http = inject(HttpClient);
 
-  /** Version of the portal bundle currently executing. Always known — it is compiled in. */
-  readonly portalVersion = APP_VERSION;
+  /** Version of the portal bundle currently executing. Always known — it is compiled in.
+   *  Typed explicitly as `string`, not inferred from APP_VERSION's own literal type — the
+   *  Docker build bakes a real version string ("v1.0.1.5" etc.) over the committed 'local'
+   *  default (see version.ts), and comparing a narrowed literal type against 'local' below would
+   *  make TypeScript flag it as a comparison with no possible overlap (TS2367), failing every
+   *  production build under any tag other than the literal default. */
+  readonly portalVersion: string = APP_VERSION;
 
   /** Version reported by the backend. Null until loaded, and stays null if the call fails. */
   readonly apiVersion = signal<VersionDto | null>(null);
 
   /** True once the API answered and its version differs from this bundle's — a stale cache or a
-   *  partially-completed upgrade. Only meaningful for a real container build: a developer's
-   *  'local' bundle never matches a versioned API and must not raise a false alarm. */
+   *  partially-completed upgrade. Compared on the base version, so a VM environment's
+   *  1.0.1-qa.47 bundle against a 1.0.1 API is a match, not an alarm.
+   *  Only meaningful for a real versioned build: a developer's 'local' bundle never matches
+   *  a versioned API and must not raise a false alarm. */
   readonly isMismatched = signal(false);
 
   load(): void {
@@ -52,7 +59,12 @@ export class VersionService {
         timeout(5000),
         tap(dto => {
           this.apiVersion.set(dto);
-          this.isMismatched.set(this.portalVersion !== 'local' && dto.version !== this.portalVersion);
+          // Compare the BASE version only. A VM-environment build carries an environment
+          // suffix the API never reports (1.0.1-qa.47 vs 1.0.1) -- comparing the full
+          // strings there would flag every QA/Staging/Dev/Working page as mismatched and
+          // train operators to ignore the one warning that matters.
+          const portalBase = this.portalVersion.split('-')[0];
+          this.isMismatched.set(this.portalVersion !== 'local' && dto.version !== portalBase);
         }),
         catchError(() => of(null)),
       )

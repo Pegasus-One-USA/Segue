@@ -28,6 +28,7 @@ public sealed class OAuthController : ControllerBase
     private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
     private readonly IGovernanceLogger _governanceLogger;
     private readonly ILogger<OAuthController> _logger;
+    private readonly IOAuthPublicOriginResolver _publicOriginResolver;
 
     public OAuthController(
         IInteractiveSourceAuthorizationService authorizationService,
@@ -35,7 +36,8 @@ public sealed class OAuthController : ControllerBase
         IEhrEndpointService ehrEndpointService,
         IAllowedCorsOriginsCache allowedCorsOriginsCache,
         IGovernanceLogger governanceLogger,
-        ILogger<OAuthController> logger)
+        ILogger<OAuthController> logger,
+        IOAuthPublicOriginResolver publicOriginResolver)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
@@ -43,6 +45,7 @@ public sealed class OAuthController : ControllerBase
         _allowedCorsOriginsCache = allowedCorsOriginsCache;
         _governanceLogger = governanceLogger;
         _logger = logger;
+        _publicOriginResolver = publicOriginResolver;
     }
 
     /// <summary>
@@ -98,7 +101,7 @@ public sealed class OAuthController : ControllerBase
     public async Task<IActionResult> Authorize(Guid sourceConnectionId, CancellationToken cancellationToken)
     {
         var authorizationUrl = await _authorizationService.StartAsync(
-            sourceConnectionId, BuildCallbackUri(), cancellationToken);
+            sourceConnectionId, await BuildCallbackUriAsync(cancellationToken), cancellationToken);
 
         return Redirect(authorizationUrl.ToString());
     }
@@ -181,7 +184,7 @@ public sealed class OAuthController : ControllerBase
         }
 
         var authorizationUrl = await _authorizationService.StartEhrLaunchAsync(
-            sourceConnectionId, iss, launch, BuildCallbackUri(), cancellationToken);
+            sourceConnectionId, iss, launch, await BuildCallbackUriAsync(cancellationToken), cancellationToken);
 
         return Redirect(authorizationUrl.ToString());
     }
@@ -197,7 +200,7 @@ public sealed class OAuthController : ControllerBase
     {
         var applicationType = await _authorizationService.GetRouteApplicationTypeAsync(routeId, cancellationToken);
         var context = _authorizationService.BuildLaunchContextToken(routeId, ehrEndpointId, callerId);
-        return Ok(BuildLaunchResponse(applicationType, context));
+        return Ok(await BuildLaunchResponseAsync(applicationType, context, sessionId: null, cancellationToken));
     }
 
     /// <summary>
@@ -215,7 +218,7 @@ public sealed class OAuthController : ControllerBase
     {
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
         var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId);
-        return Ok(BuildLaunchResponse(applicationType, context));
+        return Ok(await BuildLaunchResponseAsync(applicationType, context, sessionId: null, cancellationToken));
     }
 
     /// <summary>The EhrEndpoint vendor-sandbox types the Provider Standalone audience may launch against — Epic and
@@ -325,7 +328,7 @@ public sealed class OAuthController : ControllerBase
         // context is the only channel that reaches the callback (see LaunchContext.CorrelationId).
         var context = _authorizationService.BuildWorkflowLaunchContextToken(
             workflowId, overrideEndpointId, callerId, effectiveSessionId, effectiveUserIdentity, AttemptCorrelationId());
-        var response = BuildLaunchResponse(applicationType, context, effectiveSessionId);
+        var response = await BuildLaunchResponseAsync(applicationType, context, effectiveSessionId, cancellationToken);
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url resolved: workflowId={WorkflowId} applicationType={ApplicationType} response={@Response}",
             workflowId, applicationType, response);
@@ -369,7 +372,7 @@ public sealed class OAuthController : ControllerBase
         }
 
         var authorizationUrl = await _authorizationService.StartEhrLaunchFromContextAsync(
-            context, iss, launch, BuildCallbackUri(), cancellationToken, callerId);
+            context, iss, launch, await BuildCallbackUriAsync(cancellationToken), cancellationToken, callerId);
 
         return Redirect(authorizationUrl.ToString());
     }
@@ -385,10 +388,11 @@ public sealed class OAuthController : ControllerBase
     [Authorize]
     [HttpGet("pipelines/{routeId:guid}/standalone-url")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult GetStandaloneUrl(Guid routeId, [FromQuery] Guid? ehrEndpointId, [FromQuery] string? callerId)
+    public async Task<IActionResult> GetStandaloneUrl(
+        Guid routeId, [FromQuery] Guid? ehrEndpointId, [FromQuery] string? callerId, CancellationToken cancellationToken)
     {
         var context = _authorizationService.BuildLaunchContextToken(routeId, ehrEndpointId, callerId);
-        return Ok(new { standaloneUrl = BuildStandaloneUri(context) });
+        return Ok(new { standaloneUrl = await BuildStandaloneUriAsync(context, cancellationToken) });
     }
 
     /// <summary>
@@ -408,7 +412,7 @@ public sealed class OAuthController : ControllerBase
         _logger.LogInformation("[Step 2/6] /oauth/standalone/{{context}} hit — starting StartStandaloneFromContextAsync");
 
         var authorizationUrl = await _authorizationService.StartStandaloneFromContextAsync(
-            context, BuildCallbackUri(), cancellationToken);
+            context, await BuildCallbackUriAsync(cancellationToken), cancellationToken);
 
         _logger.LogInformation(
             "[Step 2/6] /oauth/standalone/{{context}} redirecting browser to EHR authorize URL: {AuthorizationUrl}",
@@ -433,7 +437,7 @@ public sealed class OAuthController : ControllerBase
         _logger.LogInformation("[Step 2/6] /oauth/authorize/{{context}} hit — starting StartInteractiveFromContextAsync");
 
         var authorizationUrl = await _authorizationService.StartInteractiveFromContextAsync(
-            context, BuildCallbackUri(), cancellationToken);
+            context, await BuildCallbackUriAsync(cancellationToken), cancellationToken);
 
         _logger.LogInformation(
             "[Step 2/6] /oauth/authorize/{{context}} redirecting browser to EHR authorize URL: {AuthorizationUrl}",
@@ -560,26 +564,33 @@ public sealed class OAuthController : ControllerBase
         });
     }
 
-    // The absolute callback URL registered with the EHR. Built from the incoming request so it matches the host the
-    // admin is on; a multi-host deployment would instead resolve this from configuration.
-    private string BuildCallbackUri() =>
-        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/callback";
+    // These four builders all delegate their origin to IOAuthPublicOriginResolver (shared with
+    // PatientStandaloneLaunchController, which builds the same kind of URL) — see its own remarks for the full
+    // rationale. Request.PathBase is deliberately never included: this app never configures UsePathBase/
+    // ForwardedHeaders.XForwardedPrefix, so it's always empty in practice, but appending request-derived state
+    // here at all would undercut the point of pinning everything else to a fixed, configured origin.
+    private Task<string> PublicOriginAsync(CancellationToken cancellationToken) =>
+        _publicOriginResolver.ResolveAsync($"{Request.Scheme}://{Request.Host}", cancellationToken);
 
-    private string BuildLaunchUri(string context) =>
-        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/launch/{context}";
+    private async Task<string> BuildCallbackUriAsync(CancellationToken cancellationToken) =>
+        $"{await PublicOriginAsync(cancellationToken)}/api/v1/oauth/callback";
 
-    private string BuildAuthorizeUri(string context) =>
-        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/authorize/{context}";
+    private async Task<string> BuildLaunchUriAsync(string context, CancellationToken cancellationToken) =>
+        $"{await PublicOriginAsync(cancellationToken)}/api/v1/oauth/launch/{context}";
 
-    private string BuildStandaloneUri(string context) =>
-        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/standalone/{context}";
+    private async Task<string> BuildAuthorizeUriAsync(string context, CancellationToken cancellationToken) =>
+        $"{await PublicOriginAsync(cancellationToken)}/api/v1/oauth/authorize/{context}";
+
+    private async Task<string> BuildStandaloneUriAsync(string context, CancellationToken cancellationToken) =>
+        $"{await PublicOriginAsync(cancellationToken)}/api/v1/oauth/standalone/{context}";
 
     /// <summary>
     /// Shapes the launch-URL response by application type. EHR-launch sources get the <c>/oauth/launch</c> entry (the
     /// EHR appends iss + launch and invokes it — it is not opened directly); standalone / patient sources get the
     /// directly-openable <c>/oauth/authorize</c> entry. <c>opensDirectly</c> + <c>mode</c> let the portal label it.
     /// </summary>
-    private object BuildLaunchResponse(ApplicationType? applicationType, string context, string? sessionId = null)
+    private async Task<object> BuildLaunchResponseAsync(
+        ApplicationType? applicationType, string context, string? sessionId, CancellationToken cancellationToken)
     {
         var opensDirectly = applicationType is ApplicationType.Standalone or ApplicationType.Patient;
         var mode = "ehr-launch";
@@ -587,7 +598,9 @@ public sealed class OAuthController : ControllerBase
         else if (applicationType is ApplicationType.Patient) mode = "patient";
         return new
         {
-            launchUrl = opensDirectly ? BuildAuthorizeUri(context) : BuildLaunchUri(context),
+            launchUrl = opensDirectly
+                ? await BuildAuthorizeUriAsync(context, cancellationToken)
+                : await BuildLaunchUriAsync(context, cancellationToken),
             mode,
             opensDirectly,
             applicationType = applicationType?.ToString(),
