@@ -44,6 +44,35 @@ in place; your data, configuration and secrets are untouched.
 Migrations run automatically as the new containers start. A large schema change can add a minute or
 two to first startup.
 
+## Version-specific notes
+
+### Execution history is purged and PHI columns are removed
+
+This release stops storing patient data in execution and lineage history. Previous versions kept
+whole fetched FHIR resources, mapped field values, and per-hop before/after values in the database
+(encrypted at rest, but retained and decryptable). Those columns are dropped.
+
+**Two things to know before you upgrade:**
+
+1. **Existing execution history is deleted, not migrated.** The `FieldLineageEntries`,
+   `WorkflowNodeRunPayloads` and `PipelineRunResourceRecords` tables are truncated. This is
+   observability data rather than a system of record — your workflow configuration, destinations and
+   written data are untouched — but past-run detail does not survive the upgrade. Export anything you
+   need for an audit **before** upgrading.
+
+2. **Your backups and WAL archives still contain the old values.** The migration clears the live
+   database and rewrites the tables so the dropped data is not recoverable from the heap. It cannot
+   reach anything outside that database. Backups taken before this upgrade, point-in-time-restore
+   windows, WAL/transaction-log archives, and any read replicas all still hold the PHI.
+
+   If your reason for upgrading is to stop retaining PHI, treat expiring those as part of the
+   upgrade, not a follow-up: rotate or delete pre-upgrade backups once you are satisfied the new
+   version is healthy, and shorten the retention window if it is longer than you need. Keep at least
+   one backup until then — see "Before you start".
+
+The migration runs `VACUUM FULL` on the three tables, which takes an exclusive lock for its duration.
+On a deployment with a large execution history this can add noticeable time to first startup.
+
 ## Verifying
 
 1. Open the portal and click the version in the footer. It should show the new version for both

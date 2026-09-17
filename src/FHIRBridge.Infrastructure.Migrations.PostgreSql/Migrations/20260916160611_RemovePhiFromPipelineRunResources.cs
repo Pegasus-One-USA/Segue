@@ -10,9 +10,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Purge before dropping, same reasoning as RemovePhiFromExecutionHistory: deleting the rows first
-            // leaves no row version still holding the ciphertext in unreclaimed pages.
-            migrationBuilder.Sql(@"DELETE FROM ""PipelineRunResourceRecords"";");
+            // Purge before dropping, same reasoning as RemovePhiFromExecutionHistory: TRUNCATE discards the
+            // heap outright, where DELETE would leave the full rows recoverable until a VACUUM that does not
+            // overwrite them anyway.
+            migrationBuilder.Sql(@"TRUNCATE TABLE ""PipelineRunResourceRecords"";");
 
             migrationBuilder.DropColumn(
                 name: "FetchedJson",
@@ -25,6 +26,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
             migrationBuilder.DropColumn(
                 name: "NormalizedJson",
                 table: "PipelineRunResourceRecords");
+
+            // Force the table rewrite — DROP COLUMN is metadata-only on PostgreSQL. See the note in
+            // RemovePhiFromExecutionHistory; backups and WAL archives are still the operator's to handle.
+            migrationBuilder.Sql(@"VACUUM FULL ""PipelineRunResourceRecords"";", suppressTransaction: true);
         }
 
         /// <inheritdoc />

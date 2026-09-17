@@ -43,8 +43,17 @@ public sealed class AllowedCorsOriginsController : ControllerBase
         [FromQuery] int pageSize,
         CancellationToken cancellationToken)
     {
+        // pageSize is clamped at both ends: a caller passing pageSize=1000000 would otherwise materialize the
+        // whole table in one request, which is the denial-of-service shape of an unbounded page parameter.
+        const int defaultPageSize = 10;
+        const int maxPageSize = 200;
+
+        var effectivePageSize = pageSize <= 0
+            ? defaultPageSize
+            : Math.Min(pageSize, maxPageSize);
+
         var result = await _service.GetPagedAsync(
-            search, page <= 0 ? 1 : page, pageSize <= 0 ? 10 : pageSize, cancellationToken);
+            search, page <= 0 ? 1 : page, effectivePageSize, cancellationToken);
 
         return Ok(result);
     }

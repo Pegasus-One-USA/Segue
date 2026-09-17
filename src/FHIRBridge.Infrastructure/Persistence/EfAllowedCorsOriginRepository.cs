@@ -23,13 +23,17 @@ public sealed class EfAllowedCorsOriginRepository : IAllowedCorsOriginRepository
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            // Matches the screen's single search box against both columns it displays. EF.Functions.Like
-            // keeps the filter in SQL (a client-side Contains would pull every row back first, defeating
-            // the point of paging) and is case-insensitive on both supported providers.
-            var pattern = $"%{search.Trim()}%";
+            // Matches the screen's single search box against both columns it displays, keeping the filter in
+            // SQL (a client-side Contains would pull every row back first, defeating the point of paging).
+            //
+            // Lowercased on both sides rather than relying on LIKE's own casing: LIKE is case-insensitive
+            // only under a CI collation (SQL Server's default), while on PostgreSQL it is case-sensitive —
+            // there, searching "portal" would not match "Portal". ILike would fix that for Npgsql alone, but
+            // this repository is shared by both providers, and ToLower() translates to LOWER() on each.
+            var pattern = $"%{search.Trim().ToLowerInvariant()}%";
             query = query.Where(x =>
-                EF.Functions.Like(x.OriginUrl, pattern)
-                || (x.Label != null && EF.Functions.Like(x.Label, pattern)));
+                EF.Functions.Like(x.OriginUrl.ToLower(), pattern)
+                || (x.Label != null && EF.Functions.Like(x.Label.ToLower(), pattern)));
         }
 
         // Count before Skip/Take so the paginator reports the size of the FILTERED set, not the page.

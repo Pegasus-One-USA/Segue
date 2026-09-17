@@ -14,6 +14,7 @@ using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Security;
+using FHIRBridge.Infrastructure.Terminology;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Application.Validation;
@@ -235,6 +236,20 @@ builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
 // Also API-host-only: HapiTerminologyConfigurationService takes this as an optional dependency, so the
 // Worker (where the scheduled syncs run) resolves null and simply records history without a live push.
 builder.Services.AddSingleton<ITerminologyStatusNotifier, SignalRTerminologyStatusNotifier>();
+
+// Closes out import-history rows left at "Running" by a host that stopped mid-import. API-host-only on
+// purpose: its correctness argument ("no import can have survived the restart that just happened") holds
+// only for the process that owns the imports. Registered in shared infrastructure it would also run in the
+// Worker and in every extra API replica, each marking the others' in-flight imports as Interrupted.
+//
+// This does mean a multi-replica API deployment needs revisiting — see the class remarks.
+//
+// This registers after AddFHIRBridgeInfrastructure's drain loop, so the loop's ExecuteAsync starts first.
+// That is harmless rather than merely lucky: the loop immediately parks on an empty channel, and the only
+// things that enqueue a job are user-initiated requests, which cannot arrive before the host finishes
+// starting. The reconciler's StartAsync therefore completes while the loop is still waiting for its first
+// job, so no import it could interrupt has begun.
+builder.Services.AddHostedService<TerminologyImportOrphanReconciler>();
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>

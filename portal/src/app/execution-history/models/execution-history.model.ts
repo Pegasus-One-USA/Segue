@@ -83,27 +83,29 @@ export interface ResourceHistoryEntry {
   recordedAtUtc: string;
 }
 
-/** Shape of a DestinationWriteResult-contract node's decrypted payload JSON (PascalCase — serialized straight off
- *  the backend's Runtime.Application.Workflows.Payloads.DestinationWriteResult record, no naming policy applied).
- *  Parsed client-side from NodeRunPayloadDetail.payloadJson so the CSV destination node's Execution History row
- *  can render a download link / email delivery card instead of the raw JSON dump. */
+/** Shape of a destination node's stored delivery SUMMARY (PascalCase — written by
+ *  EfWorkflowNodeResourceHistoryRecorder.SummarizeDelivery), parsed client-side from
+ *  NodeRunPayloadDetail.deliveryDetailJson.
+ *
+ *  Counts and status only, deliberately. The email Subject/Body, the To/Cc addresses, the attachment file names
+ *  and the signed download link are no longer persisted — they carry patient identifiers, and storing them in a
+ *  table this screen reads is exactly what the PHI removal exists to stop. What an operator needs from this card
+ *  is whether the delivery happened and how big it was, which is what remains. */
 export interface DestinationWriteResultPayload {
-  DestinationId: string;
-  RecordsWritten: number;
-  WrittenAt: string;
-  DownloadUrl: string | null;
+  DestinationId: string | null;
+  RecordsWritten: number | null;
+  WrittenAt: string | null;
+  /** Whether a download was produced. The URL itself is not stored. */
+  HasDownload: boolean;
   EmailDelivery: EmailDeliveryDetail | null;
 }
 
 export interface EmailDeliveryDetail {
-  From: string;
-  To: string[];
-  Cc: string[];
-  Subject: string;
-  Body: string;
-  AttachmentNames: string[];
   Status: 'Sent' | 'Failed' | 'Skipped' | string;
   Error: string | null;
+  ToCount: number;
+  CcCount: number;
+  AttachmentCount: number;
 }
 
 export type NodeRunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Cancelled';

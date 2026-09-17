@@ -1,6 +1,4 @@
-using System.Security.Cryptography;
-using System.Text.Json;
-using FHIRBridge.Application.Abstractions.Security;
+﻿using System.Text.Json;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
@@ -10,20 +8,19 @@ namespace FHIRBridge.Infrastructure.Persistence.Workflows;
 
 /// <summary>
 /// SQL-backed <see cref="IWorkflowNodeResourceHistoryRecorder"/>. Persists per-node COUNTS and destination
-/// delivery detail only — a node's actual output (raw fetched FHIR resources, mapped field values) is never
+/// delivery detail only â€” a node's actual output (raw fetched FHIR resources, mapped field values) is never
 /// stored, so there is no PHI here to encrypt or decrypt.
 /// </summary>
 public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourceHistoryRecorder
 {
     private readonly FHIRBridgeDbContext _dbContext;
-    private readonly IPhiFieldEncryptor _encryptor;
     private readonly ILogger<EfWorkflowNodeResourceHistoryRecorder> _logger;
 
+    // No IPhiFieldEncryptor: nothing written here is PHI any more, so there is nothing to encrypt or decrypt.
     public EfWorkflowNodeResourceHistoryRecorder(
-        FHIRBridgeDbContext dbContext, IPhiFieldEncryptor encryptor, ILogger<EfWorkflowNodeResourceHistoryRecorder> logger)
+        FHIRBridgeDbContext dbContext, ILogger<EfWorkflowNodeResourceHistoryRecorder> logger)
     {
         _dbContext = dbContext;
-        _encryptor = encryptor;
         _logger = logger;
     }
 
@@ -35,7 +32,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
         object? payload,
         CancellationToken cancellationToken)
     {
-        // Counts are derived HERE, from the live payload, and only the counts are persisted — the payload itself
+        // Counts are derived HERE, from the live payload, and only the counts are persisted â€” the payload itself
         // is never stored. It previously was (encrypted), which put whole Epic FHIR resources in the database;
         // every screen that read it only needed these numbers.
         //
@@ -45,11 +42,17 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
         // counts by parsing the stored payload back out. CountItems unwraps the wrapper instead.
         var (itemCount, resourceTypeCounts) = SummarizePayload(payload);
 
-        // A destination node's result is delivery metadata (records written, download URL, email envelope), not
-        // resource content, so it is kept verbatim — this is what powers the download link and email card on the
-        // Execution History row. Every other contract stores nothing but the counts above.
+        // A destination node's result is summarised through an explicit ALLOW-LIST, never serialized verbatim.
+        // DestinationWriteResult carries the exported file itself (InlineDownload.Content), the written resource
+        // ids, and the full outbound email envelope including Subject/Body/To/Cc/AttachmentNames â€” all of which
+        // is either PHI outright or routinely carries patient identifiers. Serializing the whole record would
+        // have reintroduced, in plaintext, the very content this change exists to stop storing.
+        //
+        // What survives is the "how much went where" the Execution History card actually renders: counts and
+        // status. Anything that could carry a value, a name, an address or a file stays out by construction â€”
+        // a new field added to DestinationWriteResult is excluded until someone deliberately maps it here.
         var deliveryDetailJson = string.Equals(contract, "DestinationWriteResult", StringComparison.Ordinal)
-            ? JsonSerializer.Serialize(payload)
+            ? SummarizeDelivery(payload)
             : null;
 
         var record = new WorkflowNodeRunPayload(
@@ -73,7 +76,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
     /// for every contract (ResourceBatch.Resources, NormalizedResourceBatch.Resources, MappedRecordBatch.Records)
     /// without this layer having to reference the Runtime payload types or be edited each time one is added.
     ///
-    /// Only ResourceType NAMES are read off the items — never identifiers or content.
+    /// Only ResourceType NAMES are read off the items â€” never identifiers or content.
     /// </summary>
     private static (int? ItemCount, SortedDictionary<string, int>? ResourceTypeCounts) SummarizePayload(object? payload)
     {
@@ -86,10 +89,14 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
         if (items is null || payload is string)
         {
             // A wrapper record (the normal case): find its single enumerable property and count through that.
+            // Matched by NAME, not by reflection order. GetProperties() has no guaranteed ordering, so picking
+            // the first enumerable property silently counted the wrong collection on any contract carrying more
+            // than one (a Records plus an Errors, say) â€” and which one it picked could differ between runtimes.
             var collectionProperty = payload.GetType()
                 .GetProperties()
                 .FirstOrDefault(property =>
-                    typeof(System.Collections.IEnumerable).IsAssignableFrom(property.PropertyType)
+                    KnownItemCollectionNames.Contains(property.Name)
+                    && typeof(System.Collections.IEnumerable).IsAssignableFrom(property.PropertyType)
                     && property.PropertyType != typeof(string));
 
             items = collectionProperty?.GetValue(payload) as System.Collections.IEnumerable;
@@ -97,7 +104,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
 
         if (items is null)
         {
-            // A scalar result (e.g. DestinationWriteResult) — RecordsWritten is already persisted on its own row.
+            // A scalar result (e.g. DestinationWriteResult) â€” RecordsWritten is already persisted on its own row.
             return (null, null);
         }
 
@@ -123,6 +130,69 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
         }
 
         return (count, byType);
+    }
+
+    /// <summary>The collection property that holds a batch contract's items, by name. See the call site for why
+    /// this is matched by name rather than by reflection order.</summary>
+    private static readonly HashSet<string> KnownItemCollectionNames =
+        new(StringComparer.Ordinal) { "Resources", "Records" };
+
+    /// <summary>
+    /// Projects a destination node's result onto the counts-and-status subset that Execution History renders,
+    /// dropping everything that carries content: the email Subject and Body, the To/Cc addresses, the attachment
+    /// FILE NAMES (routinely "smith-john-labs.csv"), and the signed DownloadUrl â€” a bearer link to the exported
+    /// dataset, which is not something to leave sitting in a table the whole Execution History screen reads.
+    ///
+    /// Written by hand rather than by serializing the record so that this stays an allow-list: a field added to
+    /// <c>DestinationWriteResult</c> later is NOT persisted until someone adds it here on purpose.
+    /// </summary>
+    private static string? SummarizeDelivery(object? payload)
+    {
+        if (payload is null)
+        {
+            return null;
+        }
+
+        var type = payload.GetType();
+        var summary = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["DestinationId"] = type.GetProperty("DestinationId")?.GetValue(payload) as string,
+            ["RecordsWritten"] = type.GetProperty("RecordsWritten")?.GetValue(payload) as int?,
+            ["WrittenAt"] = type.GetProperty("WrittenAt")?.GetValue(payload),
+            // Whether a download exists, never the link itself.
+            ["HasDownload"] = type.GetProperty("DownloadUrl")?.GetValue(payload) is string url
+                && !string.IsNullOrWhiteSpace(url),
+        };
+
+        var email = type.GetProperty("EmailDelivery")?.GetValue(payload);
+        if (email is not null)
+        {
+            var emailType = email.GetType();
+            summary["EmailDelivery"] = new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                // Status and Error describe the SEND, not the message, so they are safe and are the whole point
+                // of the card: an operator needs to know a delivery was skipped or bounced.
+                ["Status"] = emailType.GetProperty("Status")?.GetValue(email) as string,
+                ["Error"] = emailType.GetProperty("Error")?.GetValue(email) as string,
+                ["ToCount"] = CountOf(emailType.GetProperty("To")?.GetValue(email)),
+                ["CcCount"] = CountOf(emailType.GetProperty("Cc")?.GetValue(email)),
+                ["AttachmentCount"] = CountOf(emailType.GetProperty("AttachmentNames")?.GetValue(email)),
+            };
+        }
+
+        return JsonSerializer.Serialize(summary);
+    }
+
+    private static int CountOf(object? value)
+    {
+        if (value is System.Collections.ICollection collection)
+        {
+            return collection.Count;
+        }
+
+        return value is System.Collections.IEnumerable enumerable
+            ? enumerable.Cast<object?>().Count()
+            : 0;
     }
 
     public async Task<WorkflowPagedResult<WorkflowNodeRunPayloadDto>> GetPagedAsync(
@@ -178,7 +248,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
             .ToListAsync(cancellationToken);
 
         var nodeRunIds = nodeRuns.Select(x => x.Id).ToList();
-        // Projected rather than loading full entities — these rows are now metadata-only, but the projection
+        // Projected rather than loading full entities â€” these rows are now metadata-only, but the projection
         // still keeps the query narrow and explicit about what the history list needs.
         var payloadsByNodeRunId = await _dbContext.WorkflowNodeRunPayloads
             .AsNoTracking()
@@ -186,7 +256,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
             .Select(p => new { p.WorkflowNodeRunId, p.Contract, p.ItemCount, p.ResourceTypeCountsJson, p.DeliveryDetailJson, p.RecordedAtUtc })
             .ToListAsync(cancellationToken);
 
-        // A node run can, in principle, have recorded more than one payload — take the earliest, matching what
+        // A node run can, in principle, have recorded more than one payload â€” take the earliest, matching what
         // GetPagedAsync would surface first for the same node run.
         var payloadByNodeRunId = payloadsByNodeRunId
             .GroupBy(p => p.WorkflowNodeRunId)
@@ -234,8 +304,8 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
     {
         var entries = await LoadEntriesAsync(workflowRunId, filter, cancellationToken);
 
-        // Grouped in-memory (not via EF GroupBy translation) so a field's hop chain — usually a handful of
-        // rows — is assembled once per chain rather than split across whatever page boundary the raw rows
+        // Grouped in-memory (not via EF GroupBy translation) so a field's hop chain â€” usually a handful of
+        // rows â€” is assembled once per chain rather than split across whatever page boundary the raw rows
         // happened to land on.
         var chains = entries
             .GroupBy(x => (x.ResourceId, x.ResourceType, x.DestinationField, x.SourceField))
@@ -309,7 +379,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
     {
         // Projected to just the five columns the breakdown needs before materialising: a busy run records one
         // lineage row per field per resource (2,393 for a single 307-resource run here), and pulling the full
-        // entities — ConfigJson included — to count them would be needlessly heavy.
+        // entities â€” ConfigJson included â€” to count them would be needlessly heavy.
         var entries = await _dbContext.FieldLineageEntries
             .AsNoTracking()
             .Where(x => x.WorkflowRunId == workflowRunId)
@@ -377,7 +447,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
         }
 
         // ResourcePipelineRouteId carries the WORKFLOW DEFINITION id for V2 rules (they are attached to a
-        // workflow, not to a route row), so this is the correct scope — without it every workflow's rules
+        // workflow, not to a route row), so this is the correct scope â€” without it every workflow's rules
         // would be listed against every run.
         var configuredRules = await _dbContext.TransformationRules
             .AsNoTracking()
@@ -392,7 +462,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
             .ToList();
 
         // Resource types this run actually touched, so a type with no rules configured is still listed (as
-        // zero) rather than silently missing — "nothing is set up for Observation" is information, and its
+        // zero) rather than silently missing â€” "nothing is set up for Observation" is information, and its
         // absence reads as an oversight in the screen rather than in the configuration.
         var resourceTypesInRun = await _dbContext.FieldLineageEntries
             .AsNoTracking()
@@ -605,7 +675,7 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
 
             if (!string.IsNullOrWhiteSpace(filter.Search))
             {
-                // Values are encrypted at rest and can't be searched in SQL — search only spans the plaintext
+                // Values are encrypted at rest and can't be searched in SQL â€” search only spans the plaintext
                 // identifying columns (field/node names, resource id), not SourceValueJson/DestinationValueJson.
                 var search = filter.Search;
                 query = query.Where(x =>
@@ -617,33 +687,5 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
         }
 
         return await query.ToListAsync(cancellationToken);
-    }
-
-    /// <summary>Decrypts a stored PHI value, or null when there's nothing to decrypt. One row's ciphertext
-    /// failing to decrypt (e.g. written under a since-rotated PhiEncryptionKey, or a corrupted/truncated
-    /// payload) must never take down the whole lineage view for every OTHER field in the run — before this,
-    /// GetFieldLineagePagedAsync built its chains inside one .Select(...).ToList(), so a single bad row threw
-    /// an unhandled CryptographicException out of the entire paged query, and the field-filtered request the
-    /// portal issues per column (see FieldLineagePanelComponent.loadChains) came back as a bare HTTP failure
-    /// that the caller quietly rendered as "no rows for this field" — indistinguishable from that field
-    /// genuinely having none, which is exactly the symptom reported (Gender's ValueCodeMapping row existed and
-    /// succeeded, but never appeared in the UI). Catching here lets every other field's hops keep rendering,
-    /// with just this one hop's value shown as a placeholder instead of silently vanishing.</summary>
-    private string? DecryptOrNull(string? ciphertext)
-    {
-        if (ciphertext is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            return _encryptor.Decrypt(ciphertext);
-        }
-        catch (Exception ex) when (ex is CryptographicException or FormatException or ArgumentException or IndexOutOfRangeException)
-        {
-            _logger.LogWarning(ex, "Failed to decrypt a field-lineage/payload value — showing a placeholder instead.");
-            return "[unable to decrypt]";
-        }
     }
 }

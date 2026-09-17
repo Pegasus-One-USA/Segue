@@ -10,15 +10,20 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Purge the rows BEFORE dropping the columns: dropping a column removes it from the live table, but
-            // old values can persist in pages the database has not yet reclaimed. Deleting first leaves no row
-            // version still holding the ciphertext. These tables are execution HISTORY — replayable observability
-            // data, not a system of record — so clearing them costs past-run detail, the accepted trade for
-            // getting PHI out of this database.
-            migrationBuilder.Sql(@"DELETE FROM ""FieldLineageEntries"";");
-            migrationBuilder.Sql(@"DELETE FROM ""WorkflowNodeRunPayloads"";");
+            // Purge the rows BEFORE dropping the columns. These tables are execution HISTORY — replayable
+            // observability data, not a system of record — so clearing them costs past-run detail, the accepted
+            // trade for getting PHI out of this database.
+            //
+            // TRUNCATE, not DELETE. DELETE only marks tuples dead: the full row, PHI included, stays in the heap
+            // until VACUUM, and plain VACUUM reclaims that space for reuse WITHOUT overwriting it. TRUNCATE
+            // discards the underlying files outright, is transactional on PostgreSQL like any other DDL here, and
+            // avoids the WAL churn and table bloat a full-table DELETE causes on a busy install.
+            //
+            // Both tables are leaves — nothing carries a foreign key to them — so no CASCADE is needed.
+            migrationBuilder.Sql(@"TRUNCATE TABLE ""FieldLineageEntries"";");
+            migrationBuilder.Sql(@"TRUNCATE TABLE ""WorkflowNodeRunPayloads"";");
 
-            migrationBuilder.DropColumn(
+            migrationBuilder.DropColumn(
                 name: "PayloadJson",
                 table: "WorkflowNodeRunPayloads");
 
@@ -41,6 +46,16 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 table: "WorkflowNodeRunPayloads",
                 type: "text",
                 nullable: true);
+
+            // ALTER TABLE ... DROP COLUMN on PostgreSQL is metadata-only: the attribute is flagged attisdropped
+            // and existing tuples keep their bytes until the table is rewritten. After a TRUNCATE there should be
+            // no live tuples left, but VACUUM FULL forces the rewrite so the files backing these tables cannot
+            // still hold dropped-column data from before.
+            //
+            // NOTE FOR OPERATORS: this does NOT reach your backups, WAL archives, or replicas. Those still
+            // contain the old values and must be rotated or expired separately — see docs/UPGRADE.md.
+            migrationBuilder.Sql(@"VACUUM FULL ""FieldLineageEntries"";", suppressTransaction: true);
+            migrationBuilder.Sql(@"VACUUM FULL ""WorkflowNodeRunPayloads"";", suppressTransaction: true);
         }
 
         /// <inheritdoc />

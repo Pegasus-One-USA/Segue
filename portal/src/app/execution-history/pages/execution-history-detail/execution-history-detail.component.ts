@@ -298,10 +298,13 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
    *  database destination that could never have produced one. */
   destinationWriteLinesFor(entry: NodeRunHistoryEntry): { label: string; value: string }[] {
     const result = this.destinationWriteResultFor(entry);
-    if (!result || result.DownloadUrl || result.EmailDelivery) return [];
+    if (!result || result.HasDownload || result.EmailDelivery) return [];
 
     const lines: { label: string; value: string }[] = [];
-    lines.push({ label: 'Records written', value: result.RecordsWritten.toLocaleString() });
+    lines.push({
+      label: 'Records written',
+      value: (result.RecordsWritten ?? 0).toLocaleString(),
+    });
     if (result.WrittenAt) {
       lines.push({ label: 'Written at', value: new Date(result.WrittenAt).toLocaleString() });
     }

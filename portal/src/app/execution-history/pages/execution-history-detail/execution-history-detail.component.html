@@ -181,11 +181,13 @@
                 </div>
               } @else {
                 @if (destinationWriteResultFor(entry); as destResult) {
-                  @if (destResult.DownloadUrl) {
+                  <!-- The signed download link is no longer stored with the run: it is a bearer URL to the
+                       exported patient data, and this screen is not the place to keep one. The node still
+                       reports that a file was produced; the file is retrieved from the destination itself. -->
+                  @if (destResult.HasDownload) {
                     <div class="destination-download">
                       <mat-icon>download</mat-icon>
-                      <a [href]="destResult.DownloadUrl" target="_blank" rel="noopener">Download file</a>
-                      <span class="cell-muted">— link expires per this destination's configured expiry window.</span>
+                      <span>File delivered to the configured destination.</span>
                     </div>
                   }
                   <!-- Destinations with no file and no email (SQL Server, Postgres, any plain database
@@ -208,13 +210,13 @@
                         <span>{{ email.Status }}</span>
                         @if (email.Error) { <span class="cell-muted">— {{ email.Error }}</span> }
                       </div>
+                  <!-- Recipients, subject, body and attachment file names are deliberately not recorded —
+                       they carry patient identifiers. What is shown is the delivery outcome and its size,
+                       which is what tells an operator whether the send worked. -->
                       <dl class="email-delivery-card__fields">
-                        <dt>From</dt><dd>{{ email.From }}</dd>
-                        <dt>To</dt><dd>{{ email.To.join(', ') }}</dd>
-                        @if (email.Cc.length) { <dt>Cc</dt><dd>{{ email.Cc.join(', ') }}</dd> }
-                        <dt>Subject</dt><dd>{{ email.Subject }}</dd>
-                        <dt>Body</dt><dd class="email-delivery-card__body">{{ email.Body }}</dd>
-                        @if (email.AttachmentNames.length) { <dt>Attachments</dt><dd>{{ email.AttachmentNames.join(', ') }}</dd> }
+                        <dt>Recipients</dt><dd>{{ email.ToCount }}</dd>
+                        @if (email.CcCount) { <dt>Cc</dt><dd>{{ email.CcCount }}</dd> }
+                        @if (email.AttachmentCount) { <dt>Attachments</dt><dd>{{ email.AttachmentCount }}</dd> }
                       </dl>
                     </div>
                   }

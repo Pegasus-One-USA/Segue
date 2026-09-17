@@ -566,9 +566,12 @@ public static class DependencyInjection
         // Runs LOINC/SNOMED/ICD-10/RxNorm imports off the request thread — see TerminologyImportChannel's
         // remarks for why this stays in-process rather than going through the Worker/MassTransit.
         services.AddSingleton<TerminologyImportChannel>();
-        // Registered BEFORE the drain loop: hosted services start in registration order, so rows stranded by
-        // the previous shutdown are closed out before any new import can begin.
-        services.AddHostedService<TerminologyImportOrphanReconciler>();
+        // NOTE: TerminologyImportOrphanReconciler is deliberately NOT registered here. It marks every
+        // "Running" import row as Interrupted on startup, which is only sound for the single process that
+        // owns those imports — registered in shared infrastructure it would also run in the Worker and in
+        // every additional API replica, where it would mark another live host's in-flight import as dead.
+        // The API host registers it directly (see Api/Program.cs), the same way SignalRTerminologyStatusNotifier
+        // is API-host-only.
         services.AddHostedService<TerminologyImportBackgroundService>();
         // Grouped settings/Run Now/history for the 13 HAPI-terminology-server sync systems — see
         // HapiTerminologyConfigurationController. The registry is stateless (pure lookup + delegate
