@@ -34,11 +34,16 @@ public sealed class SigningKeyGenerationService : ISigningKeyGenerationService
     private const string SigningKeyVaultName = "signing-keys";
 
     private readonly ISecretWriter _secretWriter;
+    private readonly ITenantSecretVaultResolver _vaultResolver;
     private readonly ILogger<SigningKeyGenerationService> _logger;
 
-    public SigningKeyGenerationService(ISecretWriter secretWriter, ILogger<SigningKeyGenerationService> logger)
+    public SigningKeyGenerationService(
+        ISecretWriter secretWriter,
+        ITenantSecretVaultResolver vaultResolver,
+        ILogger<SigningKeyGenerationService> logger)
     {
         _secretWriter = secretWriter;
+        _vaultResolver = vaultResolver;
         _logger = logger;
     }
 
@@ -135,10 +140,17 @@ public sealed class SigningKeyGenerationService : ISigningKeyGenerationService
     {
         var keyId = $"fb-{Guid.NewGuid():N}"[..12];
         var secretName = $"epic-private-key-{Guid.NewGuid():N}";
-        var secretReference = new SecretReference(SigningKeyVaultName, secretName);
+
+        // Resolve to the real vault (e.g. the tenant's Azure Key Vault) before writing, and persist that same
+        // resolved name in the DTO — mirroring ConfigurationService's pattern. CompositeSecretWriter also resolves
+        // internally before it writes, but it doesn't hand the resolved name back, so a caller that skipped this
+        // step would store the unresolved "signing-keys" placeholder while the secret itself lives in the real
+        // vault, making it unfindable on later lookup.
+        var resolvedVaultName = _vaultResolver.ResolveVaultName(SigningKeyVaultName);
+        var secretReference = new SecretReference(resolvedVaultName, secretName);
 
         await _secretWriter.WriteSecretAsync(secretReference, privateKeyPem, cancellationToken);
 
-        return new GeneratedSigningKeyDto(keyId, SigningKeyVaultName, secretName, SigningAlgorithm);
+        return new GeneratedSigningKeyDto(keyId, resolvedVaultName, secretName, SigningAlgorithm);
     }
 }
