@@ -1,0 +1,19 @@
+VERSION
+  s_2a3d3b50493a1f::t_2b9f7a7b20d67d 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fa952185999270817cb74ec753d82f09a8a8486e",
+  "prompts": {},
+  "sessions": {
+    "s_2a3d3b50493a1f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d05e461e-66de-4ded-ab97-247eabfdb3a4",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
