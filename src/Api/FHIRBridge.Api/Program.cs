@@ -228,7 +228,40 @@ builder.Services.AddHostedService<LineageCaptureProcessor>();
 // Workflow List live, instead of those screens only ever finding out on their next REST poll. See IRunStatusNotifier's
 // remarks: only registered in this host, so RankedWorkflowOrchestrator resolves it as null (and simply skips the
 // live push) wherever it isn't — e.g. the Worker process, which has no hub of its own to push into.
-builder.Services.AddSignalR();
+//
+// Multi-instance: SignalRRunStatusNotifier pushes via Clients.All, which — without a backplane — only reaches
+// clients connected to the SAME process instance that made the call. On a deployment that scales this
+// container to multiple replicas (main.bicep: maxReplicas 3), a status change raised on replica A would
+// silently never reach a browser whose hub connection landed on replica B/C (falling back to that screen's own
+// REST poll where one exists, or simply staying stale on Workflow List, which has none). The Redis backplane
+// below — same ConnectionStrings:Redis already used for the token/terminology distributed cache — fans a
+// SendAsync out to every replica's own local clients, closing that gap. No-op (single-process pub/sub only) when
+// Redis isn't configured, same as the distributed cache falling back to AddDistributedMemoryCache.
+var signalRRedisConnectionString = builder.Configuration.GetConnectionString("Redis");
+var signalRBuilder = builder.Services.AddSignalR();
+if (!string.IsNullOrWhiteSpace(signalRRedisConnectionString))
+{
+    // HIPAA #15, same rule as the distributed cache's Redis wiring: refuse a plaintext backplane outside
+    // Development. RunStatusChangedEvent carries no PHI (workflow id/name/status/timestamps only), but the
+    // connection itself is shared with the token/terminology caches, so it's held to the same bar regardless.
+    if (!signalRRedisConnectionString.Contains("ssl=true", StringComparison.OrdinalIgnoreCase) &&
+        !builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "ConnectionStrings:Redis must include 'ssl=true' outside Development — refusing to start with a plaintext Redis SignalR backplane.");
+    }
+
+    signalRBuilder.AddStackExchangeRedis(signalRRedisConnectionString, options =>
+    {
+        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("fhirbridge-signalr");
+        // StackExchange.Redis defaults AbortOnConnectFail to true, which would throw out of the hub's own
+        // connection/reconnect attempts (surfacing as a broken SignalR connection for every client) the moment
+        // Redis is briefly unreachable. false lets it keep retrying in the background instead — a down/flaky
+        // Redis degrades the live push (falls back to each screen's own REST poll, same as "not configured"
+        // above), it does not take the hub, or the rest of the API, down with it.
+        options.Configuration.AbortOnConnectFail = false;
+    });
+}
 builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
