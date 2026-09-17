@@ -900,13 +900,17 @@
         </div>
         <div class="dw-review-card">
           <span class="dw-review-key">De-identification</span>
-          <span class="dw-review-val" [class.dw-review-val--warn]="!selectedDeIdentificationProfileId() || !selectedProfileHasRules()">
-            @if (!selectedDeIdentificationProfileId()) {
-              ⚠ No policy assigned
-            } @else if (!selectedProfileHasRules()) {
-              ⚠ {{ selectedDeIdentificationProfileName() }} (no active rules)
+          <!-- The rule COUNT, not the policy name. The policy is created automatically and named with the
+               workflow id, which tells a reader nothing — and read "None" whenever the freshly created policy
+               had not yet reached the loaded profile list. What matters here is whether anything is actually
+               being redacted, and how much. -->
+          <span class="dw-review-val" [class.dw-review-val--warn]="selectedProfileRuleCount() === 0">
+            @if (selectedProfileRuleCount() === null) {
+              Rule count unavailable
+            } @else if (selectedProfileRuleCount() === 0) {
+              ⚠ No rules
             } @else {
-              {{ selectedDeIdentificationProfileName() }}
+              {{ selectedProfileRuleCount() }} {{ selectedProfileRuleCount() === 1 ? 'rule' : 'rules' }}
             }
           </span>
         </div>

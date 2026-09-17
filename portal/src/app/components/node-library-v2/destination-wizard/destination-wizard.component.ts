@@ -1835,20 +1835,26 @@ export class DestinationWizardComponent implements OnInit {
   // branches and Step 4's review summary.
   readonly deIdentificationProfiles = signal<DeIdentificationProfileDto[]>([]);
   readonly selectedDeIdentificationProfileId = signal<string | null>(null);
-  // What the server currently has, so _save() can PUT the profile only when it actually changed. Without this
-  // baseline every destination save would issue a redundant profile write — and, because that write is
-  // deliberately audit-logged, would file a "policy changed" log entry for saves that changed nothing.
-  private readonly _persistedDeIdentificationProfileId = signal<string | null>(null);
   readonly newProfileName = signal('');
   readonly creatingProfile = signal(false);
-  readonly selectedDeIdentificationProfileName = computed(() => {
-    const id = this.selectedDeIdentificationProfileId();
-    return id ? (this.deIdentificationProfiles().find(p => p.id === id)?.name ?? 'None') : 'None';
-  });
+  // selectedDeIdentificationProfileName used to live here, resolving the policy id to its display name for the
+  // Step 4 Review card. Nothing reads it now: the policy is named with the workflow id, which is an identifier
+  // rather than something worth showing, and the card reports selectedProfileRuleCount instead.
 
   private loadDeIdentificationProfiles(): void {
     this.deIdentificationProfileSvc.list().subscribe({
-      next: profiles => this.deIdentificationProfiles.set(profiles),
+      next: profiles => {
+        this.deIdentificationProfiles.set(profiles);
+        // A policy belongs to a workflow and is named with its id, so this is how a reopened workflow finds
+        // the one it already owns — and why the De-identification tab shows its existing rules again rather
+        // than looking empty until a rule is re-added. Only ever ADOPTS an existing policy: creating one is
+        // FieldMappingListComponent's job, and only when a rule is actually added.
+        const workflowId = this.currentWorkflowId();
+        if (workflowId && !this.selectedDeIdentificationProfileId()) {
+          const owned = profiles.find(p => p.name === workflowId);
+          if (owned) this.selectedDeIdentificationProfileId.set(owned.id);
+        }
+      },
       error: () => this.deIdentificationProfiles.set([]),
     });
   }
@@ -2063,11 +2069,18 @@ export class DestinationWizardComponent implements OnInit {
 
     effect(() => {
       const profileId = this.selectedDeIdentificationProfileId();
+      // No policy yet is a real answer, not a pending one: nothing is redacted. Distinct from null, which
+      // means the count could not be read.
       if (!profileId) {
-        this.selectedProfileHasRules.set(true); // the "no profile selected" case has its own dedicated flag
+        this.selectedProfileRuleCount.set(0);
         return;
       }
-      this.profileHasActiveRules(profileId).subscribe(hasRules => this.selectedProfileHasRules.set(hasRules));
+      // Re-read on every step change, not just when the policy id changes. The policy is created once and then
+      // never changes, so depending on it alone would pin the count to whatever it was when the policy first
+      // appeared — showing 0 on Review after rules had been added on Step 3. Step 4 is the only place this is
+      // rendered, so arriving there is exactly when it needs to be current.
+      this.step();
+      this.profileActiveRuleCount(profileId).subscribe(count => this.selectedProfileRuleCount.set(count));
     });
 
     effect(() => this.stepChange.emit(this.step()));
@@ -3849,11 +3862,9 @@ export class DestinationWizardComponent implements OnInit {
     // this is a no-op for every non-SQL destination.
     this._refreshSqlTablesFromLiveSchema();
 
-    // Reusing an existing connection as-is never calls provisionDestinationConnection's create/update branch,
-    // so _save() persists any change to this via the narrow profile-only endpoint instead — a policy change
-    // must never fork the connection. Baseline recorded alongside so that write only fires on a real change.
-    this.selectedDeIdentificationProfileId.set(selected.deIdentificationProfileId ?? null);
-    this._persistedDeIdentificationProfileId.set(selected.deIdentificationProfileId ?? null);
+    // The de-identification policy is NOT read off the destination any more: it belongs to the workflow, not
+    // to the connection, and a reused connection may already carry another workflow's policy in that column.
+    // loadDeIdentificationProfiles() adopts this workflow's own by name instead.
 
     const metadata = this._parseConnectionMetadata(
       selected.connectionMetadataJson,
@@ -4389,21 +4400,10 @@ export class DestinationWizardComponent implements OnInit {
     // node's own fields don't carry it (it's a destination-level attribute, not a mapping/config one), so
     // without this, re-saving an edited node would silently clear whatever profile was assigned. Applies to
     // every destination type uniformly, including the hand-rolled FHIR/Aidbox branch below.
-    const destinationId = f['destinationId'];
-    if (destinationId) {
-      this.destinationConfigSvc.getById(destinationId).subscribe({
-        next: dto => {
-          this.selectedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null);
-          this._persistedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null);
-        },
-        // Leave the selection alone on a failed read. Resetting it to null here would make a transient list
-        // fetch failure look like "no policy assigned", and the next save would then persist that null over a
-        // policy that is actually set — turning a read blip into real, silent data loss.
-        error: () => {
-          // Intentional no-op: keep the current selection. See the note above.
-        },
-      });
-    }
+    // The destination's own DeIdentificationProfileId used to be read back here to restore the picker. It is
+    // no longer the source of truth: the policy is per workflow (named with the workflow id) and resolved by
+    // loadDeIdentificationProfiles(), so a connection shared with another workflow can no longer drag that
+    // workflow's policy into this one.
     if (this.isFhir()) {
       this.fhirForm.patchValue({
         name: f['dest_name'] || 'Aidbox Production',
@@ -4789,22 +4789,23 @@ export class DestinationWizardComponent implements OnInit {
   // (used as inlineSecret). This replaces per-family inline buildSqlConnectionString/buildSftpUri/
   // buildConnectionMetadata calls that used to live here — each destination-forms/ component now does that
   // assembly itself (see e.g. SqlFamilyDestinationFormComponent.getMetadata()).
-  /** Tracks whether the currently-selected profile actually has active rules — drives the Step 4 Review
-   *  card's read-only de-identification summary. Re-checked whenever the selection changes; defaults true
-   *  (nothing flagged) while a check is in flight or none is selected, since the "no profile at all" case
-   *  is rendered from selectedDeIdentificationProfileId directly. */
-  readonly selectedProfileHasRules = signal(true);
+  /** How many enabled rules the workflow's de-identification policy currently holds — the Step 4 Review
+   *  card reports this COUNT rather than the policy's name. The name is now an internal identifier (the
+   *  workflow id) that means nothing to a reader, and it could read "None" before the freshly created
+   *  policy had made it into the loaded list; the rule count is what actually answers "is anything being
+   *  redacted here". null while a check is in flight or no policy exists yet. */
+  readonly selectedProfileRuleCount = signal<number | null>(null);
 
-  /** Whether the given profile currently has at least one enabled rule under it. Client-side filter over
-   *  the full rule list (the backend's GET has no deIdentificationProfileId query param — this endpoint
-   *  wasn't built to be filtered by profile, only by resource/destination/field) rather than a new
-   *  backend param for what's otherwise a one-off check. Fails OPEN (treated as "has rules") on a
-   *  transient lookup error — same tolerance validateRuleConflictsForSave already uses elsewhere in this
-   *  file — this warning is a nudge, not the only safeguard, and shouldn't block Step 1 on a flaky call. */
-  private profileHasActiveRules(profileId: string): Observable<boolean> {
+  /** How many enabled rules sit under the given profile. Client-side filter over the full rule list (the
+   *  backend's GET has no deIdentificationProfileId query param — this endpoint wasn't built to be filtered
+   *  by profile, only by resource/destination/field) rather than a new backend param for what's otherwise a
+   *  one-off check. Fails to null (reported as "unavailable" rather than as zero) on a transient lookup
+   *  error: claiming "0 rules" when the call simply failed would read as "nothing is redacted", which is the
+   *  more dangerous of the two wrong answers. */
+  private profileActiveRuleCount(profileId: string): Observable<number | null> {
     return this.transformationRulesSvc.list({}).pipe(
-      map(rules => rules.some(r => r.deIdentificationProfileId === profileId && r.isEnabled)),
-      catchError(() => of(true)),
+      map(rules => rules.filter(r => r.deIdentificationProfileId === profileId && r.isEnabled).length),
+      catchError(() => of<number | null>(null)),
     );
   }
 
@@ -5010,48 +5011,17 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
-  /**
-   * Writes the Step 3 de-identification policy selection to the DestinationConfiguration row.
+  /*
+   * _persistDeIdentificationProfile() used to live here, writing the Step 3 policy selection to
+   * DestinationConfiguration.DeIdentificationProfileId via the narrow profile-only endpoint.
    *
-   * Needed because provisionDestinationConnection() — the only other writer — can't cover this case: it
-   * early-returns for reused ("existing") connections, and for new ones it runs on Step 1 → Next, long before
-   * the De-identification tab on Step 3 is even reachable. So a selection made there was simply discarded, the
-   * column stayed NULL, and reopening honestly rendered "None".
-   *
-   * Uses the narrow profile-only endpoint rather than destinationConfigSvc.update(): a full PUT runs the
-   * create-request validator, which demands KeyVaultName/SecretName on every call — values this wizard never
-   * re-displays for a stored secret — and routing a policy change through provisionDestinationConnection would
-   * fork the connection instead of updating it.
-   *
-   * Non-blocking with a toast on failure, matching the mapping-profile import below: the node's own local save
-   * never depended on this, so a failed policy write must not block "Add to Workflow"/"Update".
-   *
-   * Takes the id straight from the config bag _save() just built rather than reading
-   * selectedExistingId()/resolvedDestinationId() itself, because those two are NOT the row this node ends up
-   * pointing at in every mode: when an existing connection was picked and then edited, the save forks a brand-new
-   * connection while selectedExistingId() still holds the ORIGINAL's id. Writing the policy there would mutate a
-   * connection the user deliberately forked away from — and one another workflow may share. config['destinationId']
-   * is set only in the two modes that reuse a real row as-is, which is exactly when this write is safe.
+   * Removed with the policy picker. The policy is now per WORKFLOW, created on demand and carried on the
+   * De-identification node, because a destination can be reused by several workflows and that one column
+   * cannot express a per-workflow policy — whichever workflow saved last won it. The endpoint
+   * (PUT destinations/{id}/deidentification-profile) and DestinationConfigurationService.setDeIdentificationProfile
+   * are left in place: the column is still what V1's ConfiguredPipelineService reads through
+   * IGovernancePolicyService, so it remains meaningful — just not something this wizard writes.
    */
-  private _persistDeIdentificationProfile(destinationId: string | undefined): void {
-    const profileId = this.selectedDeIdentificationProfileId();
-    // No destination row this node actually owns — nothing to attach a policy to. Unchanged means no write, so
-    // a plain re-save neither issues a redundant PUT nor files a spurious "policy changed" audit entry.
-    if (!destinationId || profileId === this._persistedDeIdentificationProfileId()) {
-      return;
-    }
-
-    this.destinationConfigSvc.setDeIdentificationProfile(destinationId, profileId).subscribe({
-      next: () => this._persistedDeIdentificationProfileId.set(profileId),
-      error: (err) => {
-        const msg = err?.error?.title ?? err?.error?.error ?? err?.message;
-        this.toast.show(
-          'De-identification policy not saved',
-          typeof msg === 'string' ? msg : 'Failed to save the de-identification policy for this destination.',
-        );
-      },
-    });
-  }
 
   private _save(): void {
     // Drop any mapping row left behind pointing at a column that's since been renamed/dropped directly in
@@ -5187,18 +5157,23 @@ export class DestinationWizardComponent implements OnInit {
     });
     config['dest_mapping_summary_v1'] = JSON.stringify(doc);
 
-    // The de-identification policy picked on Step 3's "De-identification" tab. Two separate destinations for
-    // it, both previously missing — which is why the picker reset to "None" on every reopen:
-    //  - This node field, which workflow-builder-v2.component.ts reads (its `hasDeIdentification` check) to
-    //    decide whether the graph gets a De-identification chain node. Nothing wrote the key before, so that
-    //    check could never fire.
-    //  - The DestinationConfiguration row itself, via _persistDeIdentificationProfile() below — the node field
-    //    alone is local canvas state and is not what the pipeline reads at run time.
+    // The workflow's de-identification policy, created on demand by the De-identification tab the first time a
+    // rule is added (FieldMappingListComponent.ensureWorkflowProfile$) and named with the workflow id.
+    //
+    // Recorded on this node field only. workflow-builder-v2.component.ts reads it (`hasDeIdentification`) to
+    // decide whether the graph gets a De-identification chain node, and the graph mapper copies it onto that
+    // node as `profileId`, which is what DeIdentificationNodeExecutor.ResolveProfileIdAsync reads at run time.
+    //
+    // Deliberately NOT written to DestinationConfiguration.DeIdentificationProfileId any more. A destination
+    // can be reused by several workflows, so that single column cannot hold a per-workflow policy — whichever
+    // workflow saved last won, and the others silently redacted under someone else's policy. Carrying it on the
+    // node keeps it private to this pipeline. (The V1 ConfiguredPipelineService still reads that column via
+    // IGovernancePolicyService, so a V1 route against the same destination is unaffected by what V2 does here —
+    // and equally is not configured from here.)
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     if (deIdentificationProfileId) {
       config['deIdentificationProfileId'] = deIdentificationProfileId;
     }
-    this._persistDeIdentificationProfile(config['destinationId']);
 
     const emitSaved = () => {
       this.saved.emit({

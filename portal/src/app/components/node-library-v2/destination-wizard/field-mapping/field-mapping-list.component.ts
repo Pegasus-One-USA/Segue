@@ -6,6 +6,9 @@ import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { DestinationTypeV2 as DestinationType, DeIdentificationProfileDto } from '../../../../models/destination-configuration-v2.model';
 import { TransformationRulesService, TransformationRule, TransformNodeSchema, TransformScope } from './transformation-rules.service';
 import { RuleConfigFormComponent, applyNodeDefaults, isConfigFieldVisible } from './rule-config-form/rule-config-form.component';
+import { DeIdentificationProfileService } from '../../../../destination-connections/services/deidentification-profile.service';
+import { ToastService } from '../../../../services/toast.service';
+import { Observable, of, switchMap, tap } from 'rxjs';
 
 interface NewDeIdRuleDraft {
   resource: string;
@@ -161,6 +164,9 @@ export class FieldMappingListComponent {
    *  its rules at Workflow scope, a tier EffectiveRuleResolver only queries when it is given a route id.
    *  Without it this tab resolved the tenant-wide tiers alone and showed "no rule" for every field, while
    *  opening that field's connector (which does pass it) showed the rule right there. */
+  //  Also the NAME of this workflow's de-identification policy: one is created on demand the first time a
+  //  rule is added (ensureWorkflowProfile$), so reopening the workflow finds the same policy rather than
+  //  making a second. Null until the workflow has been saved once.
   readonly workflowId = input<string | null>(null);
 
   /** ruleByRowKey (see rowKey) for every 'value'-mode row currently visible — refetched whenever the
@@ -331,6 +337,42 @@ export class FieldMappingListComponent {
   readonly deIdEditingId = signal<string | null>(null);
   readonly deIdSaving = signal(false);
 
+  private readonly deIdProfileSvc = inject(DeIdentificationProfileService);
+  private readonly toast = inject(ToastService);
+
+  /**
+   * The de-identification policy for THIS workflow, created on demand.
+   *
+   * A policy is no longer something the user picks: it is an implementation detail of "this workflow redacts
+   * something". One is created the first time a rule is added — not when the tab is opened, and not per rule —
+   * and it is named with the workflow id so it is unambiguous which pipeline owns it, and so reopening the
+   * workflow finds the same one again rather than creating a second.
+   *
+   * Scoped to the workflow rather than the destination because a destination can be reused by several
+   * workflows: keying on it meant two pipelines writing to the same warehouse had to share one redaction
+   * policy, and whichever saved last won.
+   */
+  private ensureWorkflowProfile$(): Observable<string | null> {
+    const existing = this.selectedDeIdentificationProfileId();
+    if (existing) return of(existing);
+
+    const workflowId = this.workflowId();
+    // Rules are attached to a policy by id, and the policy is named by workflow id — so until the workflow has
+    // one there is nothing to name it after, and a policy created now could never be found again.
+    if (!workflowId) return of(null);
+
+    const alreadyCreated = this.deIdentificationProfiles().find(p => p.name === workflowId);
+    if (alreadyCreated) {
+      this.selectedDeIdentificationProfileIdChange.emit(alreadyCreated.id);
+      return of(alreadyCreated.id);
+    }
+
+    return this.deIdProfileSvc.create({ name: workflowId }).pipe(
+      tap(profile => this.selectedDeIdentificationProfileIdChange.emit(profile.id)),
+      switchMap(profile => of(profile.id)),
+    );
+  }
+
   onProfileSelectChange(value: string): void {
     this.selectedDeIdentificationProfileIdChange.emit(value || null);
   }
@@ -424,12 +466,23 @@ export class FieldMappingListComponent {
 
   submitDeIdDraft(): void {
     const d = this.deIdDraft();
-    const profileId = this.selectedDeIdentificationProfileId();
-    if (!d || !profileId || !this.canSubmitDeIdDraft()) return;
+    if (!d || !this.canSubmitDeIdDraft()) return;
+
+    // A policy is named after the workflow, so one cannot be created until the workflow has an id. Say so
+    // rather than failing the save with nothing on screen — this is reachable on a brand-new workflow that
+    // has never been saved.
+    if (!this.selectedDeIdentificationProfileId() && !this.workflowId()) {
+      this.toast.show(
+        'Save the workflow first',
+        'A de-identification policy is created per workflow, so the workflow needs to be saved before its first rule can be added.');
+      return;
+    }
 
     this.deIdSaving.set(true);
-    this.rulesService
-      .save({
+    // Resolve-or-create the workflow's policy first: this is the moment a policy is meant to come into
+    // existence, and the rule cannot be written without its id.
+    this.ensureWorkflowProfile$()
+      .pipe(switchMap(profileId => this.rulesService.save({
         id: this.deIdEditingId(),
         scope: 'ResourceType' as TransformScope,
         nodeType: 'HashingMasking',
@@ -442,8 +495,8 @@ export class FieldMappingListComponent {
         isEnabled: true,
         arrayMode: 'Whole',
         executionPhase: 'PreMapping',
-        deIdentificationProfileId: profileId,
-      })
+        deIdentificationProfileId: profileId!,
+      })))
       .subscribe({
         next: saved => {
           this.deIdSaving.set(false);
@@ -460,7 +513,11 @@ export class FieldMappingListComponent {
           });
           this.cancelDeIdDraft();
         },
-        error: () => this.deIdSaving.set(false),
+        error: (err) => {
+          this.deIdSaving.set(false);
+          const msg = err?.error?.title ?? err?.error?.error ?? err?.message;
+          this.toast.show('Rule not saved', typeof msg === 'string' ? msg : 'Failed to save the de-identification rule.');
+        },
       });
   }
 

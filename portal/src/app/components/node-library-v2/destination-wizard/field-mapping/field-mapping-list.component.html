@@ -114,143 +114,96 @@
 
 @if (!collapsed() && activeTab() === 'deidentification' && rulesDestinationType()) {
   <div class="fm-list-body">
-    <div class="fm-deid-card">
-      <div class="fm-deid-card__header">
-        <span class="fm-deid-card__title">De-identification Policy</span>
-      </div>
-
-      <div class="fm-deid-card__row">
-        <label class="fm-deid-policy-field">
-          <span>Policy</span>
-          <select
-            class="fm-deid-select"
-            [value]="selectedDeIdentificationProfileId() ?? ''"
-            (change)="onProfileSelectChange($any($event.target).value)"
-          >
-            <!-- [selected] per option, not just [value] on the <select>: Angular applies the parent's [value]
-                 before the @for below has created any <option>, so the browser silently discards it and falls
-                 back to "None" — which is why the picker read "None" while the label beside it correctly named
-                 the active policy. Binding each option keeps the two in agreement on first render. -->
-            <option value="" [selected]="!selectedDeIdentificationProfileId()">None</option>
-            @for (p of deIdentificationProfiles(); track p.id) {
-              <option [value]="p.id" [selected]="p.id === selectedDeIdentificationProfileId()">{{ p.name }}</option>
-            }
-          </select>
-        </label>
-
-        @if (selectedDeIdentificationProfileId()) {
-          <span class="fm-deid-status">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" aria-hidden="true">
-              <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            {{ selectedProfileName() }} is active for this destination
-          </span>
+    <!-- The "De-identification Policy" card (policy picker, "<name> is active for this destination",
+         "+ New Policy") used to sit here. A policy is no longer chosen per destination: one is created
+         automatically for the workflow the first time a rule is added, named with the workflow id, and
+         carried on the De-identification node so it stays private to this pipeline. Nothing below needs a
+         policy to exist before the rules table is usable, so the table is no longer gated on one either —
+         see submitDeIdDraft() -> ensureWorkflowProfile$(). -->
+    <table class="data-table">
+      <thead class="data-table__header">
+        <tr>
+          <!-- "Resource", not "Scope": the cell below holds a resource type (or "Global"), and the editor
+               row's own picker in this column is labelled Resource. -->
+          <th>Resource</th>
+          <th>Source field</th>
+          <th>Config</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (rule of visibleDeIdRules(); track rule.id) {
+          <tr class="data-table__row">
+            <td>{{ rule.scope === 'Global' ? 'Global' : rule.resourceType }}</td>
+            <td class="fm-mono">{{ rule.sourceField }}</td>
+            <td class="fm-mono">{{ ruleConfigSummary(rule) }}</td>
+            <td>
+              <button type="button" class="fm-list-link" (click)="editDeIdRule(rule)">Edit…</button>
+              <button type="button" class="fm-list-link fm-list-link--danger" (click)="removeDeIdRule(rule)">Remove</button>
+            </td>
+          </tr>
+        }
+        @if (visibleDeIdRules() === undefined) {
+          <tr><td colspan="4" class="fm-list-empty">Loading…</td></tr>
+        } @else if (!visibleDeIdRules()!.length && !deIdDraft()) {
+          <tr><td colspan="4" class="fm-list-empty">No rules on this policy for this resource yet.</td></tr>
         }
 
-        <input
-          type="text" class="fm-deid-name-input" placeholder="New policy name…"
-          [value]="newProfileName()"
-          (input)="onNewProfileNameInput($any($event.target).value)"
-        />
-        <button type="button" class="fm-list-add fm-deid-create-btn" [disabled]="!newProfileName().trim() || creatingProfile()" (click)="requestCreateProfile()">
-          {{ creatingProfile() ? 'Creating…' : '+ New Policy' }}
-        </button>
-      </div>
-
-      @if (!selectedDeIdentificationProfileId()) {
-        <div class="fm-deid-empty">
-          <strong>No de-identification policy selected</strong>
-          <span>Select an existing policy above, or name and create a new one, to configure de-identification for this destination.</span>
-        </div>
-      }
-    </div>
-
-    @if (selectedDeIdentificationProfileId()) {
-      <table class="data-table">
-        <thead class="data-table__header">
-          <tr>
-            <!-- "Resource", not "Scope": the cell below holds a resource type (or "Global"), and the editor
-                 row's own picker in this column is labelled Resource. -->
-            <th>Resource</th>
-            <th>Source field</th>
-            <th>Config</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (rule of visibleDeIdRules(); track rule.id) {
-            <tr class="data-table__row">
-              <td>{{ rule.scope === 'Global' ? 'Global' : rule.resourceType }}</td>
-              <td class="fm-mono">{{ rule.sourceField }}</td>
-              <td class="fm-mono">{{ ruleConfigSummary(rule) }}</td>
-              <td>
-                <button type="button" class="fm-list-link" (click)="editDeIdRule(rule)">Edit…</button>
-                <button type="button" class="fm-list-link fm-list-link--danger" (click)="removeDeIdRule(rule)">Remove</button>
-              </td>
-            </tr>
-          }
-          @if (visibleDeIdRules() === undefined) {
-            <tr><td colspan="4" class="fm-list-empty">Loading…</td></tr>
-          } @else if (!visibleDeIdRules()!.length && !deIdDraft()) {
-            <tr><td colspan="4" class="fm-list-empty">No rules on this policy for this resource yet.</td></tr>
-          }
-
-          <!-- The editor is a row OF the table, not a panel beneath it: each control then sits in the same
-               column as the value it edits (Resource under Scope, the field picker under Source field, mode
-               + its one mode-specific field under Config, the buttons under Actions), which no amount of
-               spacing on a separate block could line up. -->
-          @if (deIdDraft(); as d) {
-            <tr class="data-table__row fm-draft-tr" #deIdDraftForm>
-              <td>
-                <label class="fm-draft-field">
-                  <span>Resource</span>
-                  <select [value]="d.resource" (change)="updateDeIdDraftResource($any($event.target).value)">
-                    @for (r of resources(); track r) { <option [value]="r">{{ r }}</option> }
-                  </select>
-                </label>
-              </td>
-              <td>
-                <!-- Only the fields this resource actually maps — redacting an unmapped field writes nothing
-                     anywhere, so offering the whole payload tree here was ~178 choices that silently do
-                     nothing. See deIdFieldOptions(). -->
-                @let deIdFields = deIdFieldOptions(d.resource, d.sourceField);
-                <label class="fm-draft-field">
-                  <span>Source field</span>
-                  <select [value]="d.sourceField" (change)="updateDeIdDraftSourceField($any($event.target).value)"
-                          [disabled]="!deIdFields.length">
-                    @if (!deIdFields.length) {
-                      <option value="" selected>No mapped fields for {{ d.resource }}</option>
-                    } @else {
-                      <option value="" disabled [selected]="!d.sourceField">Select a field…</option>
-                      @for (field of deIdFields; track field.value) {
-                        <option [value]="field.value" [selected]="field.value === d.sourceField">{{ field.label }}</option>
-                      }
+        <!-- The editor is a row OF the table, not a panel beneath it: each control then sits in the same
+             column as the value it edits (Resource under Scope, the field picker under Source field, mode
+             + its one mode-specific field under Config, the buttons under Actions), which no amount of
+             spacing on a separate block could line up. -->
+        @if (deIdDraft(); as d) {
+          <tr class="data-table__row fm-draft-tr" #deIdDraftForm>
+            <td>
+              <label class="fm-draft-field">
+                <span>Resource</span>
+                <select [value]="d.resource" (change)="updateDeIdDraftResource($any($event.target).value)">
+                  @for (r of resources(); track r) { <option [value]="r">{{ r }}</option> }
+                </select>
+              </label>
+            </td>
+            <td>
+              <!-- Only the fields this resource actually maps — redacting an unmapped field writes nothing
+                   anywhere, so offering the whole payload tree here was ~178 choices that silently do
+                   nothing. See deIdFieldOptions(). -->
+              @let deIdFields = deIdFieldOptions(d.resource, d.sourceField);
+              <label class="fm-draft-field">
+                <span>Source field</span>
+                <select [value]="d.sourceField" (change)="updateDeIdDraftSourceField($any($event.target).value)"
+                        [disabled]="!deIdFields.length">
+                  @if (!deIdFields.length) {
+                    <option value="" selected>No mapped fields for {{ d.resource }}</option>
+                  } @else {
+                    <option value="" disabled [selected]="!d.sourceField">Select a field…</option>
+                    @for (field of deIdFields; track field.value) {
+                      <option [value]="field.value" [selected]="field.value === d.sourceField">{{ field.label }}</option>
                     }
-                  </select>
-                </label>
-              </td>
-              <td>
-                <!-- Inline so mode and its one mode-specific field (End characters to keep visible / Replacement
-                     token) share this cell, matching the single "mode = …, token = …" summary the Config
-                     column shows on a saved row. -->
-                <app-rule-config-form class="fm-draft-config" [schema]="deIdSchema()" [config]="d.config" [inline]="true" />
-              </td>
-              <td>
-                <div class="fm-draft-actions">
-                  <button type="button" class="fm-list-link" (click)="cancelDeIdDraft()">Cancel</button>
-                  <button type="button" class="fm-draft-submit" [disabled]="!canSubmitDeIdDraft() || deIdSaving()" (click)="submitDeIdDraft()">
-                    {{ deIdSaving() ? 'Saving…' : (deIdEditingId() ? 'Update rule' : 'Add rule') }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+                  }
+                </select>
+              </label>
+            </td>
+            <td>
+              <!-- Inline so mode and its one mode-specific field (End characters to keep visible / Replacement
+                   token) share this cell, matching the single "mode = …, token = …" summary the Config
+                   column shows on a saved row. -->
+              <app-rule-config-form class="fm-draft-config" [schema]="deIdSchema()" [config]="d.config" [inline]="true" />
+            </td>
+            <td>
+              <div class="fm-draft-actions">
+                <button type="button" class="fm-list-link" (click)="cancelDeIdDraft()">Cancel</button>
+                <button type="button" class="fm-draft-submit" [disabled]="!canSubmitDeIdDraft() || deIdSaving()" (click)="submitDeIdDraft()">
+                  {{ deIdSaving() ? 'Saving…' : (deIdEditingId() ? 'Update rule' : 'Add rule') }}
+                </button>
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
 
-      @if (!deIdDraft()) {
-        <button type="button" class="fm-list-add" (click)="startDeIdDraft()">+ Add rule</button>
-      }
+    @if (!deIdDraft()) {
+      <button type="button" class="fm-list-add" (click)="startDeIdDraft()">+ Add rule</button>
     }
   </div>
 }
