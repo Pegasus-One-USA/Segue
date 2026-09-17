@@ -10,6 +10,7 @@ import {
   MappingBuildSpec,
   MappingFieldRequest,
   ParentReferenceSpec,
+  SourceAuthenticationRequest,
   SourceBuildSpec,
   SourceRetrievalConfigurationRequest,
   WorkflowBuildRequest,
@@ -70,6 +71,126 @@ function newInlineSecretName(connectionName: string): string {
   const slug = connectionName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'src';
   const suffix = Math.random().toString(36).slice(2, 8);
   return `src-${slug}-${suffix}`;
+}
+
+/** The three client-authentication mechanisms the shared EHR-vendor source form offers, as written into a canvas
+ *  node's field bag under 'Auth method' (see EhrVendorSourceFormComponent's authMethod control). 'public' is
+ *  PKCE — no client credential at all — and is only offered for the interactive audiences. */
+type WizardAuthMethod = 'public' | 'secret' | 'jwt';
+
+/** What the caller must tell {@link buildAuthentication} about the vendor branch it is building for, beyond the
+ *  field bag itself. */
+interface AuthenticationBuildOptions {
+  /** Resolved ApplicationType ('Backend' | 'Standalone' | 'EhrLaunch' | 'Patient'). */
+  applicationType: string;
+  /** Already-resolved OAuth scope list — each vendor derives this differently (destination-mapped resource types
+   *  for athenahealth/eCW, the wizard's own 'Scopes' field for Epic), so it stays the caller's job. */
+  scopes: string[];
+  /** Slug used when minting a fresh vault secret name for a newly typed client secret (e.g. 'athena'). */
+  secretSlug: string;
+  /** Epic's Backend audience is required by ConfigurationService.ValidateEpicSourceConnection to be
+   *  SmartBackendServices regardless of what the form's Auth Method dropdown says — so that one branch pins the
+   *  value rather than deriving it. Every other vendor derives it from the selected auth method. */
+  forceBackendAuthenticationType?: string;
+  /** athenahealth only — the bare practice id sent as ah-practice on every request. */
+  practiceId?: string | null;
+  /** Epic only — scopes actually granted on the last successful Discover token exchange. */
+  discoveredScopes?: string[] | null;
+}
+
+/**
+ * Builds the `authentication` block of a {@link CreateSourceConnectionRequest} from a canvas node's field bag.
+ *
+ * This mirrors WizardServiceV2.save()'s own authentication block (the Settings → Source Connections "master"
+ * path) field for field, so a connection created on the fly from the workflow canvas persists exactly what the
+ * same wizard inputs would have persisted from Settings. It exists because that mapping was previously written
+ * out once per vendor branch inside buildSource() and had drifted three different ways:
+ *
+ *  - athenahealth ignored 'Auth method' entirely and never emitted keyId/privateKey* at all, so a Backend System
+ *    connection registered for private_key_jwt persisted with no key material. At run time
+ *    BackendServicesApplicationStrategy.UsesJwtAssertion() tests PrivateKeyPem, found none, routed to the
+ *    client-secret provider — which had no secret either — and the run failed. (AuthenticationType itself has no
+ *    runtime dispatch role; the missing key reference is what actually broke it.)
+ *  - Epic emitted keyId/privateKey* ungated, so an interactive (PKCE) connection persisted stale key material the
+ *    master path would have nulled, and emitted no client-secret fields at all.
+ *  - eClinicalWorks alone read 'Auth method' and forked correctly — the reference this helper generalizes.
+ *
+ * Deriving every credential field from the one selected auth method (rather than from the vendor or the
+ * application type) is what keeps the two creation paths in agreement, and means a new vendor branch gets the
+ * correct behaviour by calling this rather than by copying a neighbouring block.
+ */
+function buildAuthentication(
+  fields: Record<string, string>,
+  options: AuthenticationBuildOptions,
+): SourceAuthenticationRequest {
+  const isBackend = options.applicationType === 'Backend';
+  // Backend System has no public/PKCE option (no authorization code to protect), so it defaults to a client
+  // secret; the interactive audiences default to public. Matches the form's own defaultAuthMethodFor().
+  const authMethod = (fields['Auth method'] || (isBackend ? 'secret' : 'public')) as WizardAuthMethod;
+  const typedSecret = (fields['Client Secret'] ?? '').trim() || null;
+
+  // Resolved FIRST, because every credential field below gates on THIS rather than on the raw auth method.
+  // The two can legitimately disagree: Epic's Backend audience pins SmartBackendServices (see
+  // forceBackendAuthenticationType) while 'Auth method' may still arrive as 'secret' — the form writes
+  // `v.authMethod ?? 'secret'`, a vendor-agnostic fallback that fires whenever discovery didn't advertise
+  // private_key_jwt. Gating the signing key on the raw method there would persist SmartBackendServices with no
+  // key material AND no client secret — precisely the unrunnable combination this helper exists to prevent:
+  // BackendServicesApplicationStrategy.UsesJwtAssertion() tests PrivateKeyPem, finds none, routes to the
+  // client-secret provider, and that has nothing either. So the invariant is: key material follows the RESOLVED
+  // authentication type, and a client secret is only ever carried by a type that actually sends one.
+  const authenticationType =
+    isBackend && options.forceBackendAuthenticationType
+      ? options.forceBackendAuthenticationType
+      : authMethod === 'jwt'
+        ? 'SmartBackendServices'
+        : authMethod === 'secret'
+          ? 'OAuthClientCredentials'
+          : 'None';
+  const signsJwtAssertion = authenticationType === 'SmartBackendServices';
+  const usesClientSecret = authenticationType === 'OAuthClientCredentials';
+
+  // A non-interactive (client_credentials) app never performs a browser redirect, so it has no authorize
+  // endpoint to store — master gates this on the audience's own showRedirect flag, not on whether the wizard
+  // happened to discover a URL.
+  const authorizationEndpoint = isBackend ? null : fields['Authorize endpoint'] || null;
+
+  return {
+    // Derived from the selected auth method, exactly as the master path's
+    // AUTH_METHOD_TO_AUTHENTICATION_TYPE lookup does — public (PKCE) stores no client credential, so 'None'
+    // (a real AuthenticationType member, value 0).
+    authenticationType,
+    clientId: fields['Client ID'] || fields['Active client ID'] || null,
+    tokenEndpoint: fields['Token endpoint'] || null,
+    authorizationEndpoint,
+    scopes: options.scopes,
+    // Client Secret auth only. A freshly typed secret is provisioned via inlineClientSecret under a brand-new
+    // vault reference; a blank box sends nulls, which ConfigurationService.PreserveSecretsIfBlank reads as
+    // "leave whatever is already stored untouched" rather than as "clear it".
+    clientSecretKeyVaultName: usesClientSecret && typedSecret ? 'workflow-secrets' : null,
+    clientSecretName:
+      usesClientSecret && typedSecret
+        ? newInlineSecretName(fields['__name'] || options.secretSlug)
+        : null,
+    inlineClientSecret: usesClientSecret ? typedSecret : null,
+    // private_key_jwt (SMART Backend Services) only — the signing key is referenced by (Key Vault Name, Secret
+    // Name) and identified by kid. Gated on the RESOLVED type so an interactive connection can't persist stale
+    // key material, and so an audience pinned to SmartBackendServices always carries the key it must sign with.
+    keyId: signsJwtAssertion ? fields['JWT kid'] || null : null,
+    privateKeyKeyVaultName: signsJwtAssertion ? fields['Key vault reference'] || null : null,
+    privateKeySecretName: signsJwtAssertion ? fields['Secret Name'] || null : null,
+    // Informational only (FHIRBridge never fetches it), but eCW requires this URL's host to be allow-listed on
+    // its own servers, so persisting what was really registered is what makes a later bare invalid_client
+    // diagnosable. Previously never sent from this path at all — and since PreserveSecretsIfBlank guards only
+    // ClientSecret/PrivateKey, every workflow rebuild silently nulled it on an existing row.
+    jwksUrl: signsJwtAssertion ? fields['JWKS URL'] || null : null,
+    // Where OAuth2ClientCredentialsTokenProvider places the client id/secret — only meaningful for a type that
+    // actually sends one. Null (a nullable column the backend reads as "post") for every other type.
+    authPlacement: usesClientSecret
+      ? (fields['Auth placement'] as 'post' | 'basic') || 'post'
+      : null,
+    practiceId: options.practiceId ?? null,
+    discoveredScopes: options.discoveredScopes ?? null,
+  };
 }
 
 /**
@@ -286,12 +407,12 @@ export class WorkflowBuildAssemblerServiceV2 {
       };
     }
 
-    // athenahealth — same shared-form field bag as Epic, but Backend audience authenticates via client_credentials
-    // + client secret (not private_key_jwt), and every request needs the Practice ID field's ah-practice scoping.
-    // A freshly typed secret (fields['Client Secret'], non-blank) is provisioned via inlineClientSecret under a
-    // brand-new vault reference — see WizardServiceV2.save()'s identical pattern for entity mode. Canvas mode has
-    // no prior connection to preserve an existing reference from here (this always builds a fresh
-    // CreateSourceConnectionRequest), so a blank secret simply omits it — matching a brand-new "New Source" node.
+    // athenahealth — same shared-form field bag as Epic, and every request needs the Practice ID field's
+    // ah-practice scoping. Its Backend System registrations exist BOTH as client-secret (plain client_credentials)
+    // and as private_key_jwt apps, and the form offers both, so the credential fields are derived from the selected
+    // Auth Method by buildAuthentication() rather than assumed from the vendor. Canvas mode has no prior connection
+    // to preserve an existing secret reference from (this always builds a fresh CreateSourceConnectionRequest), so a
+    // blank secret sends nulls, which ConfigurationService.PreserveSecretsIfBlank keeps rather than clears.
     if (/athenahealth/i.test(connector)) {
       const athenaAppType = this.applicationTypeFor(fields);
       // Resource types (and therefore OAuth scopes) come from what the destination actually maps — see
@@ -308,7 +429,6 @@ export class WorkflowBuildAssemblerServiceV2 {
       const athenaScopes = athenaResourceTypes.length
         ? athenaResourceTypes.map((rt) => `system/${rt}.read`)
         : (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
-      const athenaTypedSecret = (fields['Client Secret'] ?? '').trim() || null;
       const athenaBaseRetrieval = (athenaAppType === 'Backend' || athenaAppType === 'Standalone') ? this.buildRetrieval(fields) : null;
       const athenaRetrieval = athenaBaseRetrieval
         ? { ...athenaBaseRetrieval, resourceTypes: athenaResourceTypes.length ? athenaResourceTypes : athenaBaseRetrieval.resourceTypes }
@@ -317,21 +437,17 @@ export class WorkflowBuildAssemblerServiceV2 {
         name: fields['__name'] || 'Athenahealth',
         sourceSystemType: 'Athenahealth',
         baseUrl: fields['FHIR base URL'] || '',
-        authentication: {
-          authenticationType: athenaAppType === 'Backend' ? 'OAuthClientCredentials' : 'None',
-          clientId: fields['Client ID'] || fields['Active client ID'] || null,
-          tokenEndpoint: fields['Token endpoint'] || null,
-          // Carried through so a canvas-built connection persists the same authorize URL the wizard
-          // discovered, exactly as entity mode does — null for a non-interactive (client_credentials)
-          // app, which has no authorize endpoint at all.
-          authorizationEndpoint: fields['Authorize endpoint'] || null,
+        // Backend System dispatches on the credential the connection actually carries, not on the vendor:
+        // athenahealth registrations exist both as client-secret and as private_key_jwt apps, and the form's Auth
+        // Method dropdown offers both. buildAuthentication() derives every credential field from that choice — the
+        // key material this branch previously never emitted included, which is what left a JWT-registered Backend
+        // connection with no signing key and no secret at run time.
+        authentication: buildAuthentication(fields, {
+          applicationType: athenaAppType,
           scopes: athenaScopes,
+          secretSlug: 'athena',
           practiceId: fields['Practice ID'] || null,
-          clientSecretKeyVaultName: athenaTypedSecret ? 'workflow-secrets' : null,
-          clientSecretName: athenaTypedSecret ? newInlineSecretName(fields['__name'] || 'athena') : null,
-          inlineClientSecret: athenaTypedSecret,
-          authPlacement: (fields['Auth placement'] as 'post' | 'basic') || 'post',
-        },
+        }),
         applicationType: athenaAppType,
         interactive:
           athenaAppType === 'Backend'
@@ -397,46 +513,22 @@ export class WorkflowBuildAssemblerServiceV2 {
         healowScopes.unshift('system/Group.read');
       }
       const healowAppType = this.applicationTypeFor(fields);
-      // Auth-method-driven, mirroring the Athenahealth branch above (same shared form field-bag). The previous
-      // version hardcoded authenticationType:'None' and dropped clientSecret/authPlacement, so a Client-Secret
-      // edit assembled a request byte-identical to the stored row → EF no-op → nothing persisted (ModifiedOnUtc
-      // stayed null). Guarded on 'Auth method' so the Healow Patient/public (PKCE) flow stays byte-identical:
-      // non-'secret' → authenticationType 'None', null secret refs, null placement — exactly as before.
-      const healowAuthMethod = fields['Auth method'] || 'public';
-      const healowTypedSecret = (fields['Client Secret'] ?? '').trim() || null;
       return {
         name: fields['__name'] || 'eCW',
         sourceSystemType: 'Healow',
         baseUrl: fields['FHIR base URL'] || '',
-        authentication: {
-          // Backend System uses SMART Backend Services (private_key_jwt / RS384); Client Secret uses plain OAuth2
-          // client_credentials; Patient/public (PKCE) stores no client credentials at all. The previous version
-          // collapsed everything non-'secret' to 'None', which silently dropped the JWT key material for the
-          // Backend audience (authType None, keyId/privateKey* null) → token acquisition fell back to client-secret
-          // and threw "requires a client id and secret". Mirror the Epic backend branch below.
-          authenticationType:
-            healowAuthMethod === 'jwt'
-              ? 'SmartBackendServices'
-              : healowAuthMethod === 'secret'
-                ? 'OAuthClientCredentials'
-                : 'None',
-          clientId: fields['Client ID'] || fields['Active client ID'] || null,
-          tokenEndpoint: fields['Token endpoint'] || null,
-          // Carried through so a canvas-built connection persists the same authorize URL the wizard
-          // discovered, exactly as entity mode does — null for a non-interactive (client_credentials)
-          // app, which has no authorize endpoint at all.
-          authorizationEndpoint: fields['Authorize endpoint'] || null,
+        // Backend System uses SMART Backend Services (private_key_jwt / RS384); Client Secret uses plain OAuth2
+        // client_credentials; Patient/public (PKCE) stores no client credentials at all. This branch was the first
+        // to be made auth-method-driven (an earlier version collapsed everything non-'secret' to 'None', silently
+        // dropping the Backend audience's JWT key material so token acquisition fell back to client-secret and threw
+        // "requires a client id and secret"); buildAuthentication() now generalizes exactly that behaviour to every
+        // vendor, and additionally persists jwksUrl — whose host eCW requires to be allow-listed on its own servers,
+        // making a later bare invalid_client diagnosable.
+        authentication: buildAuthentication(fields, {
+          applicationType: healowAppType,
           scopes: healowScopes,
-          clientSecretKeyVaultName: healowTypedSecret ? 'workflow-secrets' : null,
-          clientSecretName: healowTypedSecret ? newInlineSecretName(fields['__name'] || 'ecw') : null,
-          inlineClientSecret: healowTypedSecret,
-          authPlacement: healowAuthMethod === 'secret' ? ((fields['Auth placement'] as 'post' | 'basic') || 'post') : null,
-          // Backend Services signs its JWT assertion with a private key referenced by (Key Vault Name, Secret Name)
-          // and identified by kid — same shape as the Epic backend branch. Null for the public/secret flows.
-          keyId: healowAuthMethod === 'jwt' ? (fields['JWT kid'] || null) : null,
-          privateKeyKeyVaultName: healowAuthMethod === 'jwt' ? (fields['Key vault reference'] || null) : null,
-          privateKeySecretName: healowAuthMethod === 'jwt' ? (fields['Secret Name'] || null) : null,
-        },
+          secretSlug: 'ecw',
+        }),
         applicationType: healowAppType,
         // Backend System has no interactive login — mirror the Epic branch (interactive: null for Backend). This is
         // not just cosmetic: EpicSourceConnectionScopeSyncService only rewrites the scopes of connections whose
@@ -495,23 +587,19 @@ export class WorkflowBuildAssemblerServiceV2 {
       name: fields['__name'] || 'Epic',
       sourceSystemType: 'Epic',
       baseUrl: fields['FHIR base URL'] || '',
-      authentication: {
-        authenticationType:
-          appType === 'Backend' ? 'SmartBackendServices' : 'None',
-        clientId: fields['Client ID'] || fields['Active client ID'] || null,
-        tokenEndpoint: fields['Token endpoint'] || null,
-        // Carried through so a canvas-built connection persists the same authorize URL the wizard
-        // discovered, exactly as entity mode does — null for a non-interactive (client_credentials)
-        // app, which has no authorize endpoint at all.
-        authorizationEndpoint: fields['Authorize endpoint'] || null,
+      // Epic's Backend audience is pinned to SmartBackendServices because
+      // ConfigurationService.ValidateEpicSourceConnection rejects anything else outright ("A Backend Services Epic
+      // source connection must use SMART Backend Services authentication") — so the Auth Method dropdown cannot
+      // override it here, and a Client-Secret pick still fails validation exactly as it does from the master path.
+      // Every other credential field is auth-method-driven: previously keyId/privateKey* were emitted ungated, so an
+      // interactive (PKCE) Epic connection persisted stale key material the master path would have nulled.
+      authentication: buildAuthentication(fields, {
+        applicationType: appType,
         scopes,
-        keyId: fields['JWT kid'] || null,
-        // Backend Services signs its JWT assertion with a private key referenced by (Key Vault Name, Secret Name) —
-        // required by ConfigurationService.ValidateEpicSourceConnection for any non-interactive Epic source.
-        privateKeyKeyVaultName: fields['Key vault reference'] || null,
-        privateKeySecretName: fields['Secret Name'] || null,
+        secretSlug: 'epic',
+        forceBackendAuthenticationType: 'SmartBackendServices',
         discoveredScopes: discoveredScopes.length ? discoveredScopes : null,
-      },
+      }),
       applicationType: appType,
       interactive,
       // Provider Standalone gets a curated Search REST subset too (Resource Types/Search Criteria/Max Results/

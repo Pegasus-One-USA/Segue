@@ -3665,7 +3665,13 @@ export class EhrVendorSourceFormComponent
       // athenahealth only — bare numeric practice id; the backend builds the ah-practice reference from it.
       // Empty for every other vendor (showPracticeId() gates both visibility and requiredness).
       'Practice ID': v.practiceId ?? '',
-      'Auth method': v.authMethod ?? 'secret',
+      // Falls back to the vendor+audience default rather than a blanket 'secret': Epic's Backend System audience
+      // is private_key_jwt (SMART Backend Services) and is pinned to that server-side, so a 'secret' fallback here
+      // told the assembler there was no signing key to carry and produced a connection with neither a key nor a
+      // secret. Only reachable when authMethod is genuinely unset (a node saved before this field was captured,
+      // or a clone whose discovery didn't advertise private_key_jwt); a real user selection always wins.
+      'Auth method':
+        v.authMethod ?? defaultAuthMethodFor(this.vendor(), this.audience()),
       // Only meaningful for Backend System + JWT — lets a later "was this key FHIRBridge-provisioned?" check (e.g.
       // WorkflowBuilderComponent auto-filling the real JWKS URL after build assigns a sourceConnectionId) tell a
       // generated/imported key apart from one pointing at an externally-hosted JWKS, without re-deriving it from
