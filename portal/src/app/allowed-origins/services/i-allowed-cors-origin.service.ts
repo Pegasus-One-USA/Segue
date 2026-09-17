@@ -13,4 +13,6 @@ export abstract class IAllowedCorsOriginService {
   abstract create(req: CreateAllowedCorsOriginRequest): Observable<AllowedCorsOrigin>;
   abstract update(id: string, req: UpdateAllowedCorsOriginRequest): Observable<AllowedCorsOrigin>;
   abstract delete(id: string): Observable<void>;
+  /** Forces every running replica to pick up the current rows immediately — see the backend endpoint's remarks. */
+  abstract reload(): Observable<void>;
 }

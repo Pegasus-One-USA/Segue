@@ -43,6 +43,9 @@ export class AllowedCorsOriginListComponent implements OnInit {
   /** True only while a debounced search-box request is in flight — drives the small in-field
    *  spinner that replaces the screen-blocking global loader for search. */
   readonly searching = signal(false);
+  /** True while the explicit "reload every replica now" request is in flight — guards the button
+   *  against a double-click. Separate from `searching`: different control, different request. */
+  readonly reloading = signal(false);
   readonly origins  = signal<AllowedCorsOrigin[]>([]);
 
   /** Free-text search, applied SERVER-side (matches origin URL or label) — the same paged/searchable
@@ -119,6 +122,26 @@ export class AllowedCorsOriginListComponent implements OnInit {
     this.pageIndex.set(e.pageIndex);
     this.pageSize.set(e.pageSize);
     this.loadOrigins();
+  }
+
+  /** Forces every running API replica to pick up the current rows right away — an admin edit already
+   *  does this on its own; this is the explicit "don't want to wait" escape hatch. */
+  reloadNow(): void {
+    if (this.reloading()) return;
+    this.reloading.set(true);
+    this.svc.reload().subscribe({
+      next: () => {
+        this.reloading.set(false);
+        // Deliberately not "reloaded on every instance" — the broadcast is fire-and-forget with no
+        // delivery guarantee (see InProcessAllowedCorsOriginsCache.Invalidate), the same gap MaxAge
+        // exists to cover. This only promises what's actually guaranteed.
+        this.toast.success('Reload requested — every instance will pick it up within seconds, or within 5 minutes at the outside.');
+      },
+      error: () => {
+        this.reloading.set(false);
+        this.toast.error('Could not reload the CORS configuration.');
+      },
+    });
   }
 
   openAdd(): void {

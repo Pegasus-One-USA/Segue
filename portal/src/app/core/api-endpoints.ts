@@ -234,6 +234,7 @@ export const CORS_ORIGINS_ENDPOINTS = {
   list: `${API_V1_BASE}/system/allowed-origins`,
   paged: `${API_V1_BASE}/system/allowed-origins/paged`,
   byId: (id: string) => `${API_V1_BASE}/system/allowed-origins/${id}`,
+  reload: `${API_V1_BASE}/system/allowed-origins/reload`,
 };
 
 // ─── System Settings (SystemSettingsController — api/v1/system/settings) ───────

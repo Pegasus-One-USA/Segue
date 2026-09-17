@@ -6,6 +6,7 @@ import { AuthStore } from '../store/auth.store';
 import { TokenService } from './token.service';
 import { IAuthService } from './i-auth.service';
 import { MappingSnapshotService } from '../../components/node-library-v2/destination-wizard/field-mapping/mapping-snapshot.service';
+import { SessionExpiredDialogService } from './session-expired-dialog.service';
 
  const IDLE_MS = 30 * 60 * 1000; // 30-minute idle timeout
 // Deliberately excludes 'mousemove' — that fires dozens of times a second while the user's hand merely
@@ -26,6 +27,7 @@ export class SessionService {
   private readonly zone   = inject(NgZone);
   private readonly mappingSnapshots = inject(MappingSnapshotService);
   private readonly authApi = inject(IAuthService);
+  private readonly sessionExpiredDialog = inject(SessionExpiredDialogService);
 
   private idleTimer?: ReturnType<typeof setTimeout>;
   private activityListenersActive = false;
@@ -128,7 +130,16 @@ export class SessionService {
       finalize(() => {
         this.end();
         this.store.setError('Your session has expired due to inactivity. Please sign in again.');
-        this.router.navigate(['/auth/login']);
+        // Unlike the interceptor's 401 path (user is actively at the keyboard, so the prompt can sit
+        // over whatever they were looking at), idle timeout exists specifically FOR the unattended
+        // workstation — showing the prompt without navigating first would leave PHI (execution history
+        // rows, field-lineage values, mapping previews) rendered behind the dialog's translucent
+        // backdrop for as long as the browser stays open on a shared clinical machine. Navigate away
+        // first so the routed content is actually gone, then show the same unified prompt over the now-
+        // blank login page.
+        void this.router.navigate(['/auth/login']).then(() => {
+          this.sessionExpiredDialog.show('Your session has expired due to inactivity. Please log in again to continue.');
+        });
       }),
     ).subscribe();
   }

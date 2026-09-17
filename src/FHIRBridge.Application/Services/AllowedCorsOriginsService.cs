@@ -111,6 +111,8 @@ public sealed class AllowedCorsOriginsService : IAllowedCorsOriginsService
         _cache.Invalidate();
     }
 
+    public void Reload() => _cache.Invalidate();
+
     // Origin only — scheme + host + port, no path/query/fragment — so a value here can only ever widen the
     // browser-level CORS allow-list, never smuggle in a path-scoped or query-scoped exception.
     private string ValidateAndNormalize(string originUrl)
