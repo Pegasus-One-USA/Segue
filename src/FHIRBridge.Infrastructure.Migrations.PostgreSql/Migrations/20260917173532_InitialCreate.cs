@@ -92,7 +92,8 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     StatusCode = table.Column<int>(type: "integer", nullable: true),
                     DurationMs = table.Column<long>(type: "bigint", nullable: false),
                     Error = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
-                    CorrelationId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    CorrelationId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    Direction = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false, defaultValue: "Outbound")
                 },
                 constraints: table =>
                 {
@@ -485,8 +486,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     NodeOrder = table.Column<int>(type: "integer", nullable: false),
                     NodeType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     ConfigJson = table.Column<string>(type: "text", nullable: false),
-                    SourceValueJson = table.Column<string>(type: "text", nullable: true),
-                    DestinationValueJson = table.Column<string>(type: "text", nullable: true),
                     Success = table.Column<bool>(type: "boolean", nullable: false),
                     ErrorMessage = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
                     DurationMs = table.Column<double>(type: "double precision", nullable: true),
@@ -500,6 +499,25 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_FieldLineageEntries", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "HapiTerminologyImportHistory",
+                schema: "terminology",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CodeSystem = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Version = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
+                    StartedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CompletedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ImportedConceptCount = table.Column<int>(type: "integer", nullable: false),
+                    Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    ErrorMessage = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HapiTerminologyImportHistory", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -866,7 +884,9 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     Subject = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     Error = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
-                    CorrelationId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    CorrelationId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    Body = table.Column<string>(type: "character varying(8000)", maxLength: 8000, nullable: true),
+                    AttachmentNames = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -925,6 +945,25 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "PipelineRunEvents",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    PipelineRunId = table.Column<Guid>(type: "uuid", nullable: false),
+                    EventType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    StepType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    ResourceType = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    ResourceId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    Message = table.Column<string>(type: "text", nullable: false),
+                    CorrelationId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    OccurredOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PipelineRunEvents", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "PipelineRunResourceRecords",
                 columns: table => new
                 {
@@ -934,15 +973,12 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     SourceResourceId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     Stage = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     ErrorMessage = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
-                    FetchedJson = table.Column<string>(type: "text", nullable: false),
                     FetchedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    NormalizedJson = table.Column<string>(type: "text", nullable: true),
                     AppliedProfiles = table.Column<string>(type: "text", nullable: true),
                     Warnings = table.Column<string>(type: "text", nullable: true),
                     DataQualityScore = table.Column<double>(type: "double precision", nullable: true),
                     MasterPatientId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     NormalizedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    MappedValuesJson = table.Column<string>(type: "text", nullable: true),
                     MappedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     StoredAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     WriteStatus = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true)
@@ -972,11 +1008,35 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     ExtractedCount = table.Column<int>(type: "integer", nullable: false),
                     MappedCount = table.Column<int>(type: "integer", nullable: false),
                     WrittenCount = table.Column<int>(type: "integer", nullable: false),
-                    ErrorMessage = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true)
+                    ErrorMessage = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ErrorReferenceId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_PipelineRunRouteExecutions", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PipelineRuns",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SourceType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    DestinationType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    RequestedResourceTypes = table.Column<string>(type: "text", nullable: false),
+                    TriggeredBy = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    CorrelationId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    ExtractedResourceCount = table.Column<int>(type: "integer", nullable: false),
+                    WrittenResourceCount = table.Column<int>(type: "integer", nullable: false),
+                    FailureMessage = table.Column<string>(type: "text", nullable: true),
+                    ErrorReferenceId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    StartedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CompletedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PipelineRuns", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -1034,6 +1094,7 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     IsSystem = table.Column<bool>(type: "boolean", nullable: false),
                     IsDefault = table.Column<bool>(type: "boolean", nullable: false),
                     IsEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    IsFullAccess = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     CreatedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "timezone('utc', now())"),
                     CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, defaultValue: "system"),
                     ModifiedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -1325,6 +1386,7 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     DiscoveredScopes = table.Column<string>(type: "text", nullable: true),
                     PracticeId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     AuthPlacement = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    AuthorizationEndpoint = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     ApplicationType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
                     RedirectUris = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
                     LaunchUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
@@ -1386,6 +1448,28 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Tenants",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Code = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "timezone('utc', now())"),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, defaultValue: "system"),
+                    ModifiedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ModifiedBy = table.Column<string>(type: "text", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "text", nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "bytea", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Tenants", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TransformationRules",
                 columns: table => new
                 {
@@ -1408,6 +1492,7 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     ExecutionPhase = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValue: "PostMapping"),
                     DeIdentificationProfileId = table.Column<Guid>(type: "uuid", nullable: true),
                     IsEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    ExpectedValueType = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
                     CreatedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "timezone('utc', now())"),
                     CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, defaultValue: "system"),
                     ModifiedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -1420,6 +1505,54 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_TransformationRules", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TRM_CODESYSTEM",
+                schema: "terminology",
+                columns: table => new
+                {
+                    Pid = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    CodeSystemUri = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    CsName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    CurrentVersionPid = table.Column<long>(type: "bigint", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TRM_CODESYSTEM", x => x.Pid);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TRM_CODESYSTEM_VER",
+                schema: "terminology",
+                columns: table => new
+                {
+                    Pid = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    CodeSystemPid = table.Column<long>(type: "bigint", nullable: false),
+                    CsVersionId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    CsDisplay = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TRM_CODESYSTEM_VER", x => x.Pid);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TRM_CONCEPT",
+                schema: "terminology",
+                columns: table => new
+                {
+                    Pid = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    CodeSystemPid = table.Column<long>(type: "bigint", nullable: false),
+                    CodeVal = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Display = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TRM_CONCEPT", x => x.Pid);
                 });
 
             migrationBuilder.CreateTable(
@@ -1477,6 +1610,30 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "UsageLedgerEntries",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SequenceNumber = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ObservedUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    MonotonicTicks = table.Column<long>(type: "bigint", nullable: false),
+                    UserCount = table.Column<int>(type: "integer", nullable: false),
+                    SourceConnectionCount = table.Column<int>(type: "integer", nullable: false),
+                    TenantCount = table.Column<int>(type: "integer", nullable: false),
+                    WorkflowCount = table.Column<int>(type: "integer", nullable: false),
+                    CumulativeConfiguredPipelineRunCount = table.Column<long>(type: "bigint", nullable: false),
+                    CumulativeRuntimeWorkflowRunCount = table.Column<long>(type: "bigint", nullable: false),
+                    ProcessedRecordsThisMonth = table.Column<long>(type: "bigint", nullable: false),
+                    PreviousHash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    EntryHash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UsageLedgerEntries", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "UserFhirContextBindings",
                 columns: table => new
                 {
@@ -1492,56 +1649,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_UserFhirContextBindings", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Users",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ExternalUserId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    Email = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true),
-                    DisplayName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    FirstName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    LastName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    PasswordHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    IsLocalLoginEnabled = table.Column<bool>(type: "boolean", nullable: false),
-                    MustChangePassword = table.Column<bool>(type: "boolean", nullable: false),
-                    PasswordResetTokenHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    PasswordResetTokenExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    MagicLinkTokenHash = table.Column<string>(type: "text", nullable: true),
-                    MagicLinkTokenExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    LoginProvider = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    IsEnabled = table.Column<bool>(type: "boolean", nullable: false),
-                    LastLoginOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    FailedLoginCount = table.Column<int>(type: "integer", nullable: false),
-                    LockoutEndUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastPasswordChangedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    PasswordExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    MfaEnabled = table.Column<bool>(type: "boolean", nullable: false),
-                    MfaSecret = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    MfaBackupCodeHashes = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
-                    MfaEnrolledOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    MfaChallengeTokenHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    MfaChallengeExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    MustSetupMfa = table.Column<bool>(type: "boolean", nullable: false),
-                    InvitationTokenHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    InvitationTokenExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    RefreshTokenHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    RefreshTokenExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    CreatedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "timezone('utc', now())"),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, defaultValue: "system"),
-                    ModifiedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    ModifiedBy = table.Column<string>(type: "text", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    DeletedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "text", nullable: true),
-                    RowVersion = table.Column<byte[]>(type: "bytea", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Users", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -1614,6 +1721,7 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "character varying(400)", maxLength: 400, nullable: false),
+                    Description = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
                     Version = table.Column<int>(type: "integer", nullable: false),
                     IsEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     IsPubliclyLaunchable = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
@@ -1626,7 +1734,8 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     CreatedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "timezone('utc', now())"),
                     CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, defaultValue: "system"),
                     UpdatedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true)
+                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true),
+                    WorkflowNumber = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1642,13 +1751,29 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     WorkflowNodeRunId = table.Column<Guid>(type: "uuid", nullable: false),
                     NodeType = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     Contract = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    PayloadJson = table.Column<string>(type: "text", nullable: false),
                     ItemCount = table.Column<int>(type: "integer", nullable: true),
+                    ResourceTypeCountsJson = table.Column<string>(type: "text", nullable: true),
+                    DeliveryDetailJson = table.Column<string>(type: "text", nullable: true),
                     RecordedAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_WorkflowNodeRunPayloads", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "WorkflowNumberSequences",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    PeriodKey = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    LastValue = table.Column<long>(type: "bigint", nullable: false),
+                    UpdatedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    RowVersion = table.Column<byte[]>(type: "bytea", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WorkflowNumberSequences", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -1662,6 +1787,7 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     CompletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     ErrorMessage = table.Column<string>(type: "text", nullable: true),
+                    ErrorReferenceId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
                     TriggeredBy = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     TriggerType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
                     TargetNodeId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -1700,6 +1826,31 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         principalTable: "PermissionCategories",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PipelineRunSteps",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    PipelineRunId = table.Column<Guid>(type: "uuid", nullable: false),
+                    StepType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    ResourceType = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    ResourceCount = table.Column<int>(type: "integer", nullable: false),
+                    Message = table.Column<string>(type: "text", nullable: true),
+                    StartedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CompletedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PipelineRunSteps", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_PipelineRunSteps_PipelineRuns_PipelineRunId",
+                        column: x => x.PipelineRunId,
+                        principalTable: "PipelineRuns",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -1747,28 +1898,106 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "UserRoles",
+                name: "BrandConfigurations",
                 columns: table => new
                 {
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    RoleId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsEnabled = table.Column<bool>(type: "boolean", nullable: false)
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CompanyName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    PrimaryColor = table.Column<string>(type: "character varying(7)", maxLength: 7, nullable: false),
+                    SecondaryColor = table.Column<string>(type: "character varying(7)", maxLength: 7, nullable: false),
+                    AccentColor = table.Column<string>(type: "character varying(7)", maxLength: 7, nullable: false),
+                    BackgroundColor = table.Column<string>(type: "character varying(7)", maxLength: 7, nullable: false),
+                    FontFamily = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    FooterText = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    SupportEmail = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    SupportPhone = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    Website = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    EmailFooterText = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    DefaultThemeMode = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    LoaderStyle = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    LogoUrl = table.Column<string>(type: "text", nullable: false),
+                    DarkLogoUrl = table.Column<string>(type: "text", nullable: false),
+                    FaviconUrl = table.Column<string>(type: "text", nullable: false),
+                    LoginBackgroundUrl = table.Column<string>(type: "text", nullable: false),
+                    LoginIllustrationUrl = table.Column<string>(type: "text", nullable: false),
+                    EmailLogoUrl = table.Column<string>(type: "text", nullable: false),
+                    CreatedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "timezone('utc', now())"),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, defaultValue: "system"),
+                    ModifiedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ModifiedBy = table.Column<string>(type: "text", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "text", nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "bytea", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_UserRoles", x => new { x.UserId, x.RoleId });
+                    table.PrimaryKey("PK_BrandConfigurations", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_UserRoles_Roles_RoleId",
-                        column: x => x.RoleId,
-                        principalTable: "Roles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_UserRoles_Users_UserId",
-                        column: x => x.UserId,
-                        principalTable: "Users",
+                        name: "FK_BrandConfigurations_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Users",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ExternalUserId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Email = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true),
+                    DisplayName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
+                    FirstName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    LastName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    PasswordHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    IsLocalLoginEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    MustChangePassword = table.Column<bool>(type: "boolean", nullable: false),
+                    PasswordResetTokenHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    PasswordResetTokenExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    MagicLinkTokenHash = table.Column<string>(type: "text", nullable: true),
+                    MagicLinkTokenExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    LoginProvider = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    IsEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    LastLoginOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    FailedLoginCount = table.Column<int>(type: "integer", nullable: false),
+                    LockoutEndUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LastPasswordChangedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PasswordExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    MfaEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    MfaSecret = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    MfaBackupCodeHashes = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
+                    MfaEnrolledOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    MfaChallengeTokenHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    MfaChallengeExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    MustSetupMfa = table.Column<bool>(type: "boolean", nullable: false),
+                    InvitationTokenHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    InvitationTokenExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RefreshTokenHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    RefreshTokenExpiresOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RefreshTokenRememberMe = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    CreatedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "timezone('utc', now())"),
+                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, defaultValue: "system"),
+                    ModifiedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ModifiedBy = table.Column<string>(type: "text", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedOnUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "text", nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "bytea", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Users", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Users_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1919,22 +2148,26 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "WorkflowNodeConfigurations",
+                name: "UserRoles",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    WorkflowNodeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Key = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    Value = table.Column<string>(type: "text", nullable: false),
-                    IsSecret = table.Column<bool>(type: "boolean", nullable: false)
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    RoleId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsEnabled = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_WorkflowNodeConfigurations", x => x.Id);
+                    table.PrimaryKey("PK_UserRoles", x => new { x.UserId, x.RoleId });
                     table.ForeignKey(
-                        name: "FK_WorkflowNodeConfigurations_WorkflowNodes_WorkflowNodeId",
-                        column: x => x.WorkflowNodeId,
-                        principalTable: "WorkflowNodes",
+                        name: "FK_UserRoles_Roles_RoleId",
+                        column: x => x.RoleId,
+                        principalTable: "Roles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_UserRoles_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -2133,6 +2366,11 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 column: "CorrelationId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_ApiRequestLogs_CorrelationId_Direction",
+                table: "ApiRequestLogs",
+                columns: new[] { "CorrelationId", "Direction" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ApiRequestLogs_OccurredOnUtc",
                 table: "ApiRequestLogs",
                 column: "OccurredOnUtc");
@@ -2202,6 +2440,12 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "IX_AuthorizationLogs_UserEmail",
                 table: "AuthorizationLogs",
                 column: "UserEmail");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BrandConfigurations_TenantId",
+                table: "BrandConfigurations",
+                column: "TenantId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_BulkExportJobs_CorrelationId",
@@ -2380,6 +2624,12 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "IX_FieldLineageEntries_WorkflowRunId_ResourceType_ResourceId",
                 table: "FieldLineageEntries",
                 columns: new[] { "WorkflowRunId", "ResourceType", "ResourceId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HapiTerminologyImportHistory_CodeSystem_StartedOnUtc",
+                schema: "terminology",
+                table: "HapiTerminologyImportHistory",
+                columns: new[] { "CodeSystem", "StartedOnUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_HcpcsCodes_IsActive_Code",
@@ -2625,6 +2875,16 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 column: "Name");
 
             migrationBuilder.CreateIndex(
+                name: "IX_PipelineRunEvents_OccurredOnUtc",
+                table: "PipelineRunEvents",
+                column: "OccurredOnUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PipelineRunEvents_PipelineRunId",
+                table: "PipelineRunEvents",
+                column: "PipelineRunId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_PipelineRunResourceRecords_FetchedAtUtc",
                 table: "PipelineRunResourceRecords",
                 column: "FetchedAtUtc");
@@ -2648,6 +2908,26 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "IX_PipelineRunRouteExecutions_Status",
                 table: "PipelineRunRouteExecutions",
                 column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PipelineRuns_CorrelationId",
+                table: "PipelineRuns",
+                column: "CorrelationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PipelineRuns_StartedOnUtc",
+                table: "PipelineRuns",
+                column: "StartedOnUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PipelineRuns_Status",
+                table: "PipelineRuns",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PipelineRunSteps_PipelineRunId",
+                table: "PipelineRunSteps",
+                column: "PipelineRunId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ProvisionedSecrets_KeyVaultName_SecretName",
@@ -2697,7 +2977,8 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "IX_Roles_Name",
                 table: "Roles",
                 column: "Name",
-                unique: true);
+                unique: true,
+                filter: "\"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RxNormConcepts_IsActive_Rxcui",
@@ -2836,9 +3117,20 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 filter: "\"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Tenants_Code",
+                table: "Tenants",
+                column: "Code",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TransformationRules_ExecutionPhase_DeIdentificationProfileI~",
                 table: "TransformationRules",
                 columns: new[] { "ExecutionPhase", "DeIdentificationProfileId", "ResourceType" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TransformationRules_ExecutionPhase_Scope_ResourceType_Sourc~",
+                table: "TransformationRules",
+                columns: new[] { "ExecutionPhase", "Scope", "ResourceType", "SourceField" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_TransformationRules_Scope_DestinationType_DestinationField",
@@ -2854,6 +3146,33 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "IX_TransformationRules_Scope_ResourceType_DestinationField_Sou~",
                 table: "TransformationRules",
                 columns: new[] { "Scope", "ResourceType", "DestinationField", "SourceSystem", "SourceField" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TRM_CODESYSTEM_CodeSystemUri",
+                schema: "terminology",
+                table: "TRM_CODESYSTEM",
+                column: "CodeSystemUri",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TRM_CODESYSTEM_VER_CodeSystemPid_CsVersionId",
+                schema: "terminology",
+                table: "TRM_CODESYSTEM_VER",
+                columns: new[] { "CodeSystemPid", "CsVersionId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TRM_CONCEPT_CodeSystemPid_CodeVal",
+                schema: "terminology",
+                table: "TRM_CONCEPT",
+                columns: new[] { "CodeSystemPid", "CodeVal" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TRM_CONCEPT_CodeVal",
+                schema: "terminology",
+                table: "TRM_CONCEPT",
+                column: "CodeVal");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UcumImportHistory_StartedOnUtc",
@@ -2883,6 +3202,17 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_UsageLedgerEntries_ObservedUtc",
+                table: "UsageLedgerEntries",
+                column: "ObservedUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UsageLedgerEntries_SequenceNumber",
+                table: "UsageLedgerEntries",
+                column: "SequenceNumber",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_UserFhirContextBindings_SourceConnectionId_UserIdentity",
                 table: "UserFhirContextBindings",
                 columns: new[] { "SourceConnectionId", "UserIdentity" },
@@ -2902,7 +3232,8 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "IX_Users_ExternalUserId",
                 table: "Users",
                 column: "ExternalUserId",
-                unique: true);
+                unique: true,
+                filter: "\"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_MfaChallengeTokenHash",
@@ -2913,6 +3244,11 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "IX_Users_RefreshTokenHash",
                 table: "Users",
                 column: "RefreshTokenHash");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Users_TenantId",
+                table: "Users",
+                column: "TenantId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ValidationFailureLogs_CorrelationId",
@@ -2951,14 +3287,16 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 column: "WorkflowRunId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_WorkflowDefinitions_WorkflowNumber",
+                table: "WorkflowDefinitions",
+                column: "WorkflowNumber",
+                unique: true,
+                filter: "\"WorkflowNumber\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_WorkflowEdges_WorkflowDefinitionId",
                 table: "WorkflowEdges",
                 column: "WorkflowDefinitionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_WorkflowNodeConfigurations_WorkflowNodeId",
-                table: "WorkflowNodeConfigurations",
-                column: "WorkflowNodeId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_WorkflowNodeRunPayloads_RecordedAtUtc",
@@ -2979,6 +3317,12 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "IX_WorkflowNodes_WorkflowDefinitionId",
                 table: "WorkflowNodes",
                 column: "WorkflowDefinitionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkflowNumberSequences_PeriodKey",
+                table: "WorkflowNumberSequences",
+                column: "PeriodKey",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_WorkflowRuns_CorrelationId",
@@ -3024,6 +3368,9 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "AuthorizationLogs");
 
             migrationBuilder.DropTable(
+                name: "BrandConfigurations");
+
+            migrationBuilder.DropTable(
                 name: "BulkExportJobs");
 
             migrationBuilder.DropTable(
@@ -3067,6 +3414,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 
             migrationBuilder.DropTable(
                 name: "FieldLineageEntries");
+
+            migrationBuilder.DropTable(
+                name: "HapiTerminologyImportHistory",
+                schema: "terminology");
 
             migrationBuilder.DropTable(
                 name: "HcpcsCodes",
@@ -3157,10 +3508,16 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "PermissionAllocations");
 
             migrationBuilder.DropTable(
+                name: "PipelineRunEvents");
+
+            migrationBuilder.DropTable(
                 name: "PipelineRunResourceRecords");
 
             migrationBuilder.DropTable(
                 name: "PipelineRunRouteExecutions");
+
+            migrationBuilder.DropTable(
+                name: "PipelineRunSteps");
 
             migrationBuilder.DropTable(
                 name: "ProcessedMessages");
@@ -3228,6 +3585,18 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "TransformationRules");
 
             migrationBuilder.DropTable(
+                name: "TRM_CODESYSTEM",
+                schema: "terminology");
+
+            migrationBuilder.DropTable(
+                name: "TRM_CODESYSTEM_VER",
+                schema: "terminology");
+
+            migrationBuilder.DropTable(
+                name: "TRM_CONCEPT",
+                schema: "terminology");
+
+            migrationBuilder.DropTable(
                 name: "UcumImportHistory",
                 schema: "terminology");
 
@@ -3238,6 +3607,9 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
             migrationBuilder.DropTable(
                 name: "UcumVersions",
                 schema: "terminology");
+
+            migrationBuilder.DropTable(
+                name: "UsageLedgerEntries");
 
             migrationBuilder.DropTable(
                 name: "UserFhirContextBindings");
@@ -3255,16 +3627,22 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "WorkflowEdges");
 
             migrationBuilder.DropTable(
-                name: "WorkflowNodeConfigurations");
-
-            migrationBuilder.DropTable(
                 name: "WorkflowNodeRunPayloads");
 
             migrationBuilder.DropTable(
                 name: "WorkflowNodeRuns");
 
             migrationBuilder.DropTable(
+                name: "WorkflowNodes");
+
+            migrationBuilder.DropTable(
+                name: "WorkflowNumberSequences");
+
+            migrationBuilder.DropTable(
                 name: "Permissions");
+
+            migrationBuilder.DropTable(
+                name: "PipelineRuns");
 
             migrationBuilder.DropTable(
                 name: "ResourcePipelineRouteMappings");
@@ -3276,10 +3654,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "Users");
 
             migrationBuilder.DropTable(
-                name: "WorkflowNodes");
+                name: "WorkflowRuns");
 
             migrationBuilder.DropTable(
-                name: "WorkflowRuns");
+                name: "WorkflowDefinitions");
 
             migrationBuilder.DropTable(
                 name: "PermissionGroups");
@@ -3288,7 +3666,7 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                 name: "ResourcePipelineRoutes");
 
             migrationBuilder.DropTable(
-                name: "WorkflowDefinitions");
+                name: "Tenants");
 
             migrationBuilder.DropTable(
                 name: "PermissionCategories");

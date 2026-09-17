@@ -256,6 +256,8 @@ public sealed class FHIRBridgeDbContext : DbContext
                 .HasIndex(x => new { x.Vendor, x.VendorEndpointId }).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<SystemSetting>()
                 .HasIndex(x => x.Key).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<Role>()
+                .HasIndex(x => x.Name).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<User>()
                 .HasIndex(x => x.ExternalUserId).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<ErrorLog>()
