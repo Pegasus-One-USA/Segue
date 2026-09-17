@@ -960,8 +960,10 @@ resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
             // frontDoorOrigin below) or Container Apps ingress present to the app. Only set when a custom
             // domain is actually configured: direct-to-container access with no WAF/Front Door in front has
             // no proxy lying about the Host header, so Request.Scheme/Host is already correct there and the
-            // app's own fallback handles it without this override.
-            { name: 'Oauth__PublicBaseUrl', value: 'https://${segueAppCustomDomain}' }
+            // app's own fallback handles it without this override. This only seeds the INITIAL value
+            // (SystemSettingsSeeder) — an operator can later correct it live from Settings > System
+            // Settings > OAuth (e.g. after moving to a new custom domain) with no redeploy needed.
+            { name: 'OAuth__PublicBaseUrl', value: 'https://${segueAppCustomDomain}' }
           ] : [], !useAzureCacheForRedis ? [
             { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
           ] : [], enableTenantSecretsKeyVault ? [
