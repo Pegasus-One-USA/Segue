@@ -34,8 +34,7 @@ describe('buildIntegrationDetails', () => {
   }
 
   function hintsOf(details: { values: { hint?: string }[] }): string {
-    return details.values.map(v => v.hint ?? '').join('
-');
+    return details.values.map(v => v.hint ?? '').join('\n');
   }
 
   describe('Backend', () => {
@@ -50,7 +49,7 @@ describe('buildIntegrationDetails', () => {
     it('warns that there is no app-to-app credential, so a partner plans for it up front', () => {
       const details = buildIntegrationDetails(row(), ORIGIN, 'Backend Service');
 
-      const signIn = details.checks.find(check => check.label === 'Sign-in required');
+      const signIn = details.checks.find(check => check.label === 'Sign-in required to run');
       expect(signIn?.state).toBe('note');
       expect(signIn?.detail).toContain('no app-to-app');
     });
@@ -141,9 +140,7 @@ describe('buildIntegrationDetails', () => {
         row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch (Provider)');
 
       // The fallback is offered in the hint rather than as its own value, so search both.
-      const everything = details.values.map(v => `${v.value}
-${v.hint ?? ''}`).join('
-');
+      const everything = details.values.map(v => `${v.value}\n${v.hint ?? ''}`).join('\n');
       expect(everything).toContain('/launch-result');
       expect(everything).toContain('/latest-launch-result');
     });
@@ -271,8 +268,7 @@ ${v.hint ?? ''}`).join('
         const labels = details.values.map(value => value.label);
 
         expect(new Set(labels).size).toBe(labels.length);
-        expect(details.values.every(value => !value.value.includes('
-'))).toBeTrue();
+        expect(details.values.every(value => !value.value.includes('\n'))).toBeTrue();
       }
     });
   });
