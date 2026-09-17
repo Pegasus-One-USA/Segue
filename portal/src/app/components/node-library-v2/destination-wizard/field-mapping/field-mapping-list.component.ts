@@ -353,7 +353,12 @@ export class FieldMappingListComponent {
    * policy, and whichever saved last won.
    */
   private ensureWorkflowProfile$(): Observable<string | null> {
-    const existing = this.selectedDeIdentificationProfileId();
+    // The id this component itself created, if it already has. selectedDeIdentificationProfileId is an INPUT:
+    // it only comes back after the emit below has reached the parent and change detection has pushed it down
+    // again. Adding a second rule before that round-trip completed would see a null id and create a second
+    // policy — which the unique index on the name rejects, so the save failed with a 500 rather than a clean
+    // result. Remembering it locally closes that window without depending on the parent's timing.
+    const existing = this.createdProfileId() ?? this.selectedDeIdentificationProfileId();
     if (existing) return of(existing);
 
     const workflowId = this.workflowId();
@@ -363,15 +368,24 @@ export class FieldMappingListComponent {
 
     const alreadyCreated = this.deIdentificationProfiles().find(p => p.name === workflowId);
     if (alreadyCreated) {
+      this.createdProfileId.set(alreadyCreated.id);
       this.selectedDeIdentificationProfileIdChange.emit(alreadyCreated.id);
       return of(alreadyCreated.id);
     }
 
     return this.deIdProfileSvc.create({ name: workflowId }).pipe(
-      tap(profile => this.selectedDeIdentificationProfileIdChange.emit(profile.id)),
+      tap(profile => {
+        this.createdProfileId.set(profile.id);
+        this.selectedDeIdentificationProfileIdChange.emit(profile.id);
+      }),
       switchMap(profile => of(profile.id)),
     );
   }
+
+  /** The policy this component resolved or created in THIS session — see ensureWorkflowProfile$(). Held
+   *  separately from the selectedDeIdentificationProfileId input because an input cannot be read back
+   *  synchronously after emitting its change. */
+  private readonly createdProfileId = signal<string | null>(null);
 
   onProfileSelectChange(value: string): void {
     this.selectedDeIdentificationProfileIdChange.emit(value || null);

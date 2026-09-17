@@ -439,15 +439,31 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         // leaving the objects in place.
         if (current is JsonArray array && array.Any(element => element is JsonValue v && v.TryGetValue<string>(out _)))
         {
-            for (var i = 0; i < array.Count; i++)
+            // A MIXED array — some strings, some not — is the one shape this branch must not half-handle under
+            // Redact. Transforming the strings and returning would leave every non-string element in place, and
+            // an object element carries exactly the identifying text the rule exists to remove: ["Camila",
+            // {"text":"Camila Maria"}] would write the token over the first and pass the second through, under a
+            // policy the UI reports as active. Before arrays were handled at all, Redact removed the whole
+            // property here, so half-handling it would be a straight regression on the one strategy whose
+            // contract is "this value is gone". Fall through to that wholesale removal instead.
+            //
+            // Mask and Hash deliberately do NOT fall through: they have no meaningful form for a non-string (the
+            // same reason the scalar path below leaves numbers, bools and objects alone), and deleting data under
+            // a "mask" rule would be a bigger surprise than leaving it. They transform every string element and
+            // leave the rest — strictly more than the nothing-at-all they did before this branch existed.
+            var hasNonString = array.Any(element => element is not JsonValue v || !v.TryGetValue<string>(out _));
+            if (!(hasNonString && strategy == DeIdentificationStrategy.Redact))
             {
-                if (array[i] is JsonValue element && element.TryGetValue<string>(out var elementRaw))
+                for (var i = 0; i < array.Count; i++)
                 {
-                    array[i] = TransformScalar(elementRaw, strategy, configJson);
+                    if (array[i] is JsonValue element && element.TryGetValue<string>(out var elementRaw))
+                    {
+                        array[i] = TransformScalar(elementRaw, strategy, configJson);
+                    }
                 }
-            }
 
-            return;
+                return;
+            }
         }
 
         if (strategy == DeIdentificationStrategy.Redact)

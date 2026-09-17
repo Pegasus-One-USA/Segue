@@ -516,14 +516,6 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
     }
 
     /// <summary>
-    /// Resolves every <see cref="MappedDestinationRecord.ReferenceLookups"/> entry (e.g. Observation.PatientId,
-    /// sourced from "$.subject.reference") against the table it actually points at, and returns a record whose
-    /// <see cref="MappedDestinationRecord.Values"/> carry the resolved real primary key instead of the raw FHIR
-    /// reference id the mapping engine extracted. Requires the referenced row to already exist — the Runtime-DAG
-    /// destination executor orders resource-type groups so a referenced table's group is written before any
-    /// group that references it, within one destination write.
-    /// </summary>
-    /// <summary>
     /// A resource identifier, shortened for a message that gets retained.
     ///
     /// This message used to exist only as a thrown exception; it is now collected per record into
@@ -545,6 +537,14 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         return referenceId.Length <= KeepLength ? referenceId : referenceId[..KeepLength] + "…";
     }
 
+    /// <summary>
+    /// Resolves every <see cref="MappedDestinationRecord.ReferenceLookups"/> entry (e.g. Observation.PatientId,
+    /// sourced from "$.subject.reference") against the table it actually points at, and returns a record whose
+    /// <see cref="MappedDestinationRecord.Values"/> carry the resolved real primary key instead of the raw FHIR
+    /// reference id the mapping engine extracted. Requires the referenced row to already exist — the Runtime-DAG
+    /// destination executor orders resource-type groups so a referenced table's group is written before any
+    /// group that references it, within one destination write.
+    /// </summary>
     private static async Task<MappedDestinationRecord> ResolveReferenceLookupsAsync(
         SqlConnection connection, MappedDestinationRecord record, CancellationToken cancellationToken)
     {

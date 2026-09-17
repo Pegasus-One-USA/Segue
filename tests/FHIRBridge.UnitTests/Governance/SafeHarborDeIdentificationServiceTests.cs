@@ -588,3 +588,83 @@ public sealed class SafeHarborRepeatingPrimitiveTests
         patient.ContainsKey("name").Should().BeFalse();
     }
 }
+
+/// <summary>
+/// A MIXED array — some string elements, some not — is the shape where "handle arrays of strings" can go wrong.
+/// Transforming only the string elements and returning leaves every other element untouched, and an object
+/// element carries exactly the identifying text a redaction rule exists to remove. Under Redact that would also
+/// be a regression: before arrays were handled at all, Redact removed the whole property.
+/// </summary>
+public sealed class SafeHarborMixedArrayTests
+{
+    private static readonly Guid ProfileId = Guid.NewGuid();
+
+    /// <summary>"Camila" alongside an object still spelling the name out in full.</summary>
+    private const string PatientJson = """
+    {
+      "resourceType": "Patient",
+      "id": "p-1",
+      "alias": [ "Camila", { "text": "Camila Maria Lopez" }, 42 ]
+    }
+    """;
+
+    private static async Task<JsonObject> ApplyAsync(string configJson)
+    {
+        var rule = new TransformationRule(
+            TransformScope.ResourceType, TransformNodeType.HashingMasking, configJson,
+            resourceType: "Patient", sourceField: "$.alias",
+            executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId);
+
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository
+            .Setup(x => x.GetPreMappingRulesAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([rule]);
+
+        var result = await new SafeHarborDeIdentificationService(repository.Object).DeIdentifyAsync(
+            new DeIdentificationRequest("Patient", "p-1", PatientJson, [], ProfileId), CancellationToken.None);
+
+        return (JsonObject)JsonNode.Parse(result.Json)!;
+    }
+
+    [Fact]
+    public async Task Redacting_a_mixed_array_removes_the_whole_property()
+    {
+        var patient = await ApplyAsync("""{"mode":"redact","token":"[REDACTED]"}""");
+
+        patient.ContainsKey("alias").Should()
+            .BeFalse("a non-string element cannot hold a token, and leaving it behind ships the very text the rule removes");
+        patient.ToJsonString().Should().NotContain("Camila Maria Lopez");
+    }
+
+    [Fact]
+    public async Task Masking_a_mixed_array_transforms_the_strings_and_leaves_the_rest()
+    {
+        // Mask has no meaningful form for an object or a number — the same reason the scalar path leaves those
+        // alone — and deleting data under a "mask" rule would surprise more than it protects. Pinned so the
+        // limitation is a decision rather than an accident.
+        var patient = await ApplyAsync("""{"mode":"mask","keepLength":4}""");
+
+        var alias = patient["alias"]!.AsArray();
+        alias[0]!.GetValue<string>().Should().Be("**mila");
+        alias[1]!["text"]!.GetValue<string>().Should().Be("Camila Maria Lopez");
+        alias[2]!.GetValue<int>().Should().Be(42);
+    }
+
+    [Fact]
+    public async Task Hashing_a_mixed_array_transforms_the_strings_and_leaves_the_rest()
+    {
+        var patient = await ApplyAsync("""{"mode":"hash"}""");
+
+        var alias = patient["alias"]!.AsArray();
+        alias[0]!.GetValue<string>().Should().StartWith("anon-");
+        alias[1]!["text"]!.GetValue<string>().Should().Be("Camila Maria Lopez");
+    }
+
+    [Fact]
+    public async Task Removing_a_mixed_array_still_deletes_it_outright()
+    {
+        var patient = await ApplyAsync("""{"mode":"remove"}""");
+
+        patient.ContainsKey("alias").Should().BeFalse();
+    }
+}

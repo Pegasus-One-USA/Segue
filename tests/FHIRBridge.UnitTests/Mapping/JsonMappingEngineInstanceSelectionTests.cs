@@ -103,3 +103,74 @@ public sealed class JsonMappingEngineInstanceSelectionTests
         result.Values["GivenName"].Should().Be("Camila");
     }
 }
+
+/// <summary>
+/// A String column must never receive an array's raw JSON text. ConvertElement fell through to
+/// element.ToString() whenever the format was not "directField", and unconditionally whenever
+/// DeferTypeToTransform was set (which a rule declaring an ExpectedValueType turns on) — so a path resolving to
+/// the array itself, e.g. "$.name[*].given", wrote ["**mila","*aria"] into an nvarchar column, brackets and
+/// quotes included.
+///
+/// The second effect was worse than the cosmetics: the array collapses to ONE value, so a
+/// ConcatenationTemplating rule — the very reason the type was deferred — received a single string instead of
+/// the items and passed it straight through. Joining is what lets that rule see the values at all.
+/// </summary>
+public sealed class JsonMappingEngineArrayTextTests
+{
+    private const string PatientJson = """
+        {
+          "resourceType": "Patient",
+          "name": [ { "family": "Lopez", "given": [ "Camila", "Maria" ] } ]
+        }
+        """;
+
+    private static readonly JsonMappingEngine Sut = new();
+
+    private static MappingFieldDto Field(string? format, bool deferTypeToTransform) => new(
+        TargetField: "GivenName",
+        JsonPath: "$.name[*].given",
+        ValueType: MappingValueType.String,
+        IsRequired: false,
+        DefaultValue: null,
+        Format: format,
+        ResourceType: "Patient",
+        DestinationObject: "dbo.Patient",
+        ArrayPolicy: ArrayPolicy.FirstItem,
+        ArrayAncestors: ["name"],
+        DeferTypeToTransform: deferTypeToTransform);
+
+    private static object? Map(string? format, bool defer) =>
+        Sut.Map(PatientJson, [Field(format, defer)]).Values["GivenName"];
+
+    [Theory]
+    [InlineData("directField", false)]
+    [InlineData("directField", true)]   // a rule declaring an ExpectedValueType sets this
+    [InlineData(null, false)]
+    [InlineData("wholeNodeAsJson", false)]
+    public void An_array_never_reaches_a_string_column_as_json_text(string? format, bool defer)
+    {
+        var value = Map(format, defer)?.ToString();
+
+        value.Should().NotBeNull();
+        value.Should().NotStartWith("[", "a text column holds values, not a JSON document");
+        value.Should().NotContain("\"", "quotes are JSON syntax, not part of the name");
+        value.Should().Contain("Camila").And.Contain("Maria");
+    }
+
+    [Fact]
+    public void A_deferred_array_is_handed_to_the_rule_as_joined_values()
+    {
+        // ValueType Json is the declared way to ask for JSON, and is unaffected.
+        Map("directField", defer: true).Should().Be("Camila, Maria");
+    }
+
+    [Fact]
+    public void A_json_typed_field_still_receives_the_raw_document()
+    {
+        var jsonField = Field("wholeNodeAsJson", deferTypeToTransform: false) with { ValueType = MappingValueType.Json };
+
+        var value = Sut.Map(PatientJson, [jsonField]).Values["GivenName"]?.ToString();
+
+        value.Should().Be("""[ "Camila", "Maria" ]""", "ValueType Json is the explicit way to ask for a document");
+    }
+}

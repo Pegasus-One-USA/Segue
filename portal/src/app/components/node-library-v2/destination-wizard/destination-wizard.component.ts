@@ -2076,11 +2076,16 @@ export class DestinationWizardComponent implements OnInit {
         this.selectedProfileRuleCount.set(0);
         return;
       }
-      // Re-read on every step change, not just when the policy id changes. The policy is created once and then
+      // Re-read on arriving at Review, not just when the policy id changes. The policy is created once and then
       // never changes, so depending on it alone would pin the count to whatever it was when the policy first
-      // appeared — showing 0 on Review after rules had been added on Step 3. Step 4 is the only place this is
-      // rendered, so arriving there is exactly when it needs to be current.
-      this.step();
+      // appeared — showing 0 on Review after rules had been added on Step 3.
+      //
+      // The signal has to be READ to register the dependency, but the fetch is an unfiltered list of the whole
+      // tenant's rules, so firing it on 1->2 and 2->3 as well would be three wasted full-list reads per pass at
+      // no benefit: Step 4 is the only place the count is rendered.
+      if (this.step() !== 4) {
+        return;
+      }
       this.profileActiveRuleCount(profileId).subscribe(count => this.selectedProfileRuleCount.set(count));
     });
 

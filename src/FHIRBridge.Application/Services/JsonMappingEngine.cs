@@ -498,13 +498,6 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
     private static string JoinValues(IEnumerable<object?> values) =>
         string.Join(", ", values.Select(v => v?.ToString() ?? string.Empty));
 
-    /// <summary>True for a plain single-source field ("directField", or "directField;aggregate=csv") — the
-    /// only shape where "the whole array, as one column" is this field's own deliberate choice rather than a
-    /// side effect of some other feature (joinedFields, wholeNodeAsJson) that already has its own, different
-    /// handling for a repeating element.</summary>
-    private static bool IsDirectField(string? format) =>
-        format?.StartsWith("directField", StringComparison.OrdinalIgnoreCase) == true;
-
     /// <summary>Joins a JSON array's own scalar items ("given":["Camila","Maria"]) into one delimited string
     /// ("Camila, Maria") instead of letting element.ToString() fall through to the array's raw JSON text
     /// ("[\"Camila\",\"Maria\"]") — the field's own JsonPath resolved to the whole array (no trailing "[*]"
@@ -644,7 +637,18 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         // MappingFieldDto.DeferTypeToTransform.
         if (deferTypeToTransform)
         {
-            return element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString();
+            return element.ValueKind switch
+            {
+                JsonValueKind.String => element.GetString(),
+                // An ARRAY must not be handed on as its raw JSON text. element.ToString() yields
+                // ["a","b"] — brackets, quotes and all — and that string is what lands in the destination
+                // column when no rule reshapes it, which is never what a text column wants. It also defeats
+                // the rule that was the whole reason for deferring: the array collapses to ONE value, so
+                // ConcatenationTemplating/ArrayListOperations see a single string instead of the items and
+                // pass it through unchanged. Join the elements, exactly as the String branch below does.
+                JsonValueKind.Array => JoinArrayOfStrings(element),
+                _ => element.ToString(),
+            };
         }
 
         var converted = valueType switch
@@ -653,11 +657,16 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                 element.ValueKind switch
                 {
                     JsonValueKind.String => element.GetString(),
-                    // Only a plain directField's own array collapses into a delimited string here — a
-                    // joinedFields sub-path resolving to an array goes through ElementToJoinString instead
-                    // (a distinct, multi-source concern), and wholeNodeAsJson fields never reach this
-                    // String branch at all (their ValueType is Json, handled below).
-                    JsonValueKind.Array when IsDirectField(format) => JoinArrayOfStrings(element),
+                    // An array collapses into a delimited string — never its raw JSON text. A joinedFields
+                    // sub-path resolving to an array goes through ElementToJoinString instead (a distinct,
+                    // multi-source concern) and does not reach here, and wholeNodeAsJson fields never reach
+                    // this String branch at all (their ValueType is Json, handled below).
+                    //
+                    // This used to apply only to a plain directField, so any other format wrote ["a","b"]
+                    // — brackets and quotes — into a text column. Whatever the format, a String column wants
+                    // the values, not a JSON document; a field that genuinely wants JSON declares ValueType
+                    // Json and is handled below.
+                    JsonValueKind.Array => JoinArrayOfStrings(element),
                     _ => element.ToString()
                 },
                 maxLength, targetField, errors),
