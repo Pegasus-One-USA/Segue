@@ -1,6 +1,8 @@
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FHIRBridge.Infrastructure.Persistence;
 
@@ -26,16 +28,38 @@ public sealed class EfSystemSettingRepository : ISystemSettingRepository
         if (existing is not null)
         {
             existing.UpdateValue(value, description);
-        }
-        else
-        {
-            existing = new SystemSetting(key, value, description);
-            await _db.SystemSettings.AddAsync(existing, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+            return existing;
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
-        return existing;
+        var created = new SystemSetting(key, value, description);
+        await _db.SystemSettings.AddAsync(created, cancellationToken);
+
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            return created;
+        }
+        catch (DbUpdateException exception) when (IsUniqueKeyViolation(exception))
+        {
+            // Startup seeding (SystemSettingsSeeder) runs once per API/Worker instance with no distributed
+            // lock, so two replicas can both see the key missing and race to insert it — the loser must not
+            // crash the whole boot. The winner's row is what we want anyway, so just return it.
+            _db.Entry(created).State = EntityState.Detached;
+            return await GetByKeyAsync(key, cancellationToken)
+                ?? throw new InvalidOperationException(
+                    $"SystemSetting '{key}' insert failed on a unique-key violation but no row was found afterward.",
+                    exception);
+        }
     }
+
+    private static bool IsUniqueKeyViolation(DbUpdateException exception) =>
+        exception.InnerException switch
+        {
+            PostgresException postgres => postgres.SqlState == PostgresErrorCodes.UniqueViolation,
+            SqlException sql => sql.Number is 2601 or 2627,
+            _ => false,
+        };
 
     public async Task DeleteAsync(string key, CancellationToken cancellationToken)
     {

@@ -232,9 +232,19 @@ var host = builder.Build();
 
 // Applies pending EF migrations, mirroring the Api host's bootstrap — no-ops on the in-memory path (no
 // ConnectionStrings:FHIRBridgeDb configured, so AddFHIRBridgeInfrastructure never registers FHIRBridgeDbContext).
+// Takes the same DatabaseBootstrapLock the Api host takes before its own Migrate() call: the Worker and Api
+// containers are typically started at the same moment during a deploy, so without a shared lock their two
+// Migrate() calls can race against each other, not just against other Worker replicas.
 using (var scope = host.Services.CreateScope())
 {
-    scope.ServiceProvider.GetService<FHIRBridgeDbContext>()?.Database.Migrate();
+    var workerDbContext = scope.ServiceProvider.GetService<FHIRBridgeDbContext>();
+    if (workerDbContext is not null)
+    {
+        var bootstrapLogger = host.Services.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
+            .CreateLogger("DatabaseBootstrap");
+        using var bootstrapLock = DatabaseBootstrapLock.TryAcquire(workerDbContext, bootstrapLogger);
+        workerDbContext.Database.Migrate();
+    }
 }
 
 // Ensures the download-link signing secret exists (generating it on first boot if needed) — the Worker can
