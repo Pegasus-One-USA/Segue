@@ -1,0 +1,43 @@
+portal/src/app/governance/pages/audit-logs/audit-logs.component.scss
+  s_37057509f377cf::t_b47334857d3d8f 28-29
+  s_37057509f377cf::t_420bda1c8f7c4c 8-11
+portal/src/app/governance/pages/compliance-reports/compliance-reports.component.scss
+  s_37057509f377cf::t_b7eded096032fa 71-78
+portal/src/app/_list-page.scss
+  s_37057509f377cf::t_0c91098273b18e 157-159
+portal/src/app/governance/pages/correlation-search/correlation-search.component.ts
+  s_37057509f377cf::t_9418ee841142c7 225-227
+portal/src/app/governance/pages/correlation-search/correlation-search.component.scss
+  s_37057509f377cf::t_b9f4d51b546bcd 8-10
+  s_37057509f377cf::t_30f6cd909fee99 26
+portal/src/app/governance/pages/authentication-logs/authentication-logs.component.html
+  s_37057509f377cf::t_453c3acbb3fcdf 22,29
+portal/src/app/governance/pages/authentication-logs/authentication-logs.component.scss
+  s_37057509f377cf::t_c7eb878b28b2e6 8-10
+  s_37057509f377cf::t_5e72be99cdceb0 26
+portal/src/app/operations/pages/errors/errors.component.scss
+  s_37057509f377cf::t_f5bb7d16a9f979 8-10
+  s_37057509f377cf::t_139450c012c8ab 27-28
+portal/src/app/governance/pages/audit-logs/audit-logs.component.html
+  s_37057509f377cf::t_a10bae0f9e9dfb 24,31
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_37057509f377cf::t_b5ae6fb34392a2 24,31
+portal/src/app/operations/pages/errors/errors.component.html
+  s_37057509f377cf::t_fe21c593485eb9 37,44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9abffebc1d3b63f39bac8acb167afa00c696b3e3",
+  "prompts": {},
+  "sessions": {
+    "s_37057509f377cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df555302-e040-494d-9944-3e0a128c42b8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

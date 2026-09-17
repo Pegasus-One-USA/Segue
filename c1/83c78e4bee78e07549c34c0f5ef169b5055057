@@ -1,0 +1,24 @@
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_a9df33b2deee15::t_8e3abc305622c8 100-107,111
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_a9df33b2deee15::t_a052c09b423023 340-341
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_a9df33b2deee15::t_45a8efb1c3fb42 2909
+  s_a9df33b2deee15::t_f156b358565523 2854-2894
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c183c78e4bee78e07549c34c0f5ef169b5055057",
+  "prompts": {},
+  "sessions": {
+    "s_a9df33b2deee15": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80766bd2-a6c9-4f93-b173-d8ca90a5ef71",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

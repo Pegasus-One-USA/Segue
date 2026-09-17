@@ -1,0 +1,41 @@
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowDefinition.cs
+  s_a9df33b2deee15::t_c24f4361e61641 128-172
+src/FHIRBridge.Application/Services/Workflows/IWorkflowConfigurationMigrationService.cs
+  s_a9df33b2deee15::t_c437c1db294343 1-20
+src/FHIRBridge.Application/Services/Workflows/WorkflowConfigurationMigrationService.cs
+  s_a9df33b2deee15::t_ec8a2430ad1edb 196
+  s_a9df33b2deee15::t_5d8079805ad949 19-23
+  s_a9df33b2deee15::t_062d6633ef301a 1-18,24-54,57-115,117-125,127-138,140-195,197-210,214,223,226-240,243-244,247-262,264-268
+  s_a9df33b2deee15::t_13001a351c2c2a 126,139
+  s_a9df33b2deee15::t_334a4074dd2253 211-213,215-222,224-225
+  s_a9df33b2deee15::t_ca727414ce3f5f 116
+  s_a9df33b2deee15::t_87ea9b871b4429 55-56
+  s_a9df33b2deee15::t_88d17aa5d641c7 241-242,245-246,263
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_a9df33b2deee15::t_abd5f165448e9c 84
+  s_a9df33b2deee15::t_ffffbc3a875120 10
+tests/FHIRBridge.UnitTests/Workflows/WorkflowConfigurationMigrationServiceTests.cs
+  s_a9df33b2deee15::t_d65964986945cc 5-6
+  s_a9df33b2deee15::t_8e51dca7e7f6b1 64-69,71-72
+  s_a9df33b2deee15::t_fc2e84873b5527 1-4,7-63,70,73-249
+src/Api/FHIRBridge.Api/Controllers/V1/WorkflowConfigurationMigrationController.cs
+  s_a9df33b2deee15::t_29de61989e4543 1-57
+src/FHIRBridge.Application/Services/Workflows/WorkflowConfigurationMigrationModels.cs
+  s_a9df33b2deee15::t_4f213ac76dbc9e 1-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "45eb8cc20771aacea9853a87e072f939cabc335d",
+  "prompts": {},
+  "sessions": {
+    "s_a9df33b2deee15": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80766bd2-a6c9-4f93-b173-d8ca90a5ef71",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

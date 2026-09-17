@@ -1,0 +1,22 @@
+portal/src/app/services/workflow-build-assembler-v2.auth.spec.ts
+  s_f4de9aa335800c::t_4983ba578e9a10 1-242
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_f4de9aa335800c::t_cf7567628e492d 147-150,502
+  s_f4de9aa335800c::t_b54ea3055d1847 13,76-146,151-177,392-397,422-428,430,432,503-510,512-513,572-579,581-582,584
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6d076e99d63ee1fd5f1924bfb6d8dd07c464a968",
+  "prompts": {},
+  "sessions": {
+    "s_f4de9aa335800c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24fedd29-bb95-48ba-8ab1-c057b42ff473",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

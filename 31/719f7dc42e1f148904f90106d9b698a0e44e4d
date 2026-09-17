@@ -1,0 +1,19 @@
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_a9df33b2deee15::t_159b98916b82e2 739-753,757,760-763
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "31719f7dc42e1f148904f90106d9b698a0e44e4d",
+  "prompts": {},
+  "sessions": {
+    "s_a9df33b2deee15": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80766bd2-a6c9-4f93-b173-d8ca90a5ef71",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

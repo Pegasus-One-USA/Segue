@@ -1,0 +1,27 @@
+portal/src/app/services/workflow-api.service.ts
+  s_7ae791f0af3912::t_8954c1e911fa8c 412-416,424-425
+  s_7ae791f0af3912::t_deee5ead2debd4 2,5
+portal/src/app/pages/workflow-list/workflow-list.component.scss
+  s_7ae791f0af3912::t_0cbc8e37db5ca5 83-93
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_7ae791f0af3912::t_b50664ef1c9f30 44-46
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_7ae791f0af3912::t_b72032f5609499 283-285,287,289-301,310,316,321,333
+  s_7ae791f0af3912::t_320c8a0e51f6e6 70-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "565a104f6291fbec0c0d5783d4432e92cfd365ea",
+  "prompts": {},
+  "sessions": {
+    "s_7ae791f0af3912": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d32452de-6d66-42fc-9d5a-66bb4aa95aa7",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "HasnainMachiwalaPegasusOne <hasnain.machiwala@pegasusone.com>"
+    }
+  }
+}

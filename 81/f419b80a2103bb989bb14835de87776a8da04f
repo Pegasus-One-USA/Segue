@@ -1,0 +1,25 @@
+src/FHIRBridge.Infrastructure/Destinations/MappedFhirRepositoryDestinationWriter.cs
+  s_7e0794676ad70a::t_981f5f3c001cb0 148-152,155,157,295,313,549-552,1227-1228,1248,1298,1309,1319-1320,1330,1338,1345,1365,1367,1372-1388,1397-1427
+tests/FHIRBridge.UnitTests/Destinations/MappedFhirRepositoryDestinationWriterTests.cs
+  s_7e0794676ad70a::t_981f5f3c001cb0 31-34,1231-1322
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_7e0794676ad70a::t_981f5f3c001cb0 695-696,702,708,733,739,745-750,760,845,851-852
+src/FHIRBridge.Application/Abstractions/Destinations/PipelineWriteContext.cs
+  s_7e0794676ad70a::t_981f5f3c001cb0 22-28,34-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "81f419b80a2103bb989bb14835de87776a8da04f",
+  "prompts": {},
+  "sessions": {
+    "s_7e0794676ad70a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8decdbab-950e-412a-9c44-1efe472d2215",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
