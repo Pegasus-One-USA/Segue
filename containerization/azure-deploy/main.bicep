@@ -953,7 +953,16 @@ resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ApiBaseUrl', value: 'http://127.0.0.1:5000/' }
             { name: 'AllowedHosts', value: '*' }
             { name: 'Swagger__Enabled', value: 'true' }
-          ], !useAzureCacheForRedis ? [
+          ], !empty(segueAppCustomDomain) ? [
+            // The OAuth redirect_uri (OAuthController.BuildCallbackUri et al.) is registered verbatim with
+            // each EHR — it must be exactly this fixed, known-correct value regardless of what Host/Scheme
+            // Front Door's WAF (which overrides originHostHeader to this app's own default FQDN — see
+            // frontDoorOrigin below) or Container Apps ingress present to the app. Only set when a custom
+            // domain is actually configured: direct-to-container access with no WAF/Front Door in front has
+            // no proxy lying about the Host header, so Request.Scheme/Host is already correct there and the
+            // app's own fallback handles it without this override.
+            { name: 'Oauth__PublicBaseUrl', value: 'https://${segueAppCustomDomain}' }
+          ] : [], !useAzureCacheForRedis ? [
             { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
           ] : [], enableTenantSecretsKeyVault ? [
             { name: 'KeyVault__UseAzureKeyVault', value: 'true' }

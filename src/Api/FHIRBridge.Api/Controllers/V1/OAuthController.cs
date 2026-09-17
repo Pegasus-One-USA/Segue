@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Configuration;
 
 namespace FHIRBridge.Api.Controllers.V1;
 
@@ -28,6 +29,7 @@ public sealed class OAuthController : ControllerBase
     private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
     private readonly IGovernanceLogger _governanceLogger;
     private readonly ILogger<OAuthController> _logger;
+    private readonly IConfiguration _configuration;
 
     public OAuthController(
         IInteractiveSourceAuthorizationService authorizationService,
@@ -35,7 +37,8 @@ public sealed class OAuthController : ControllerBase
         IEhrEndpointService ehrEndpointService,
         IAllowedCorsOriginsCache allowedCorsOriginsCache,
         IGovernanceLogger governanceLogger,
-        ILogger<OAuthController> logger)
+        ILogger<OAuthController> logger,
+        IConfiguration configuration)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
@@ -43,6 +46,7 @@ public sealed class OAuthController : ControllerBase
         _allowedCorsOriginsCache = allowedCorsOriginsCache;
         _governanceLogger = governanceLogger;
         _logger = logger;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -560,19 +564,36 @@ public sealed class OAuthController : ControllerBase
         });
     }
 
-    // The absolute callback URL registered with the EHR. Built from the incoming request so it matches the host the
-    // admin is on; a multi-host deployment would instead resolve this from configuration.
+    // These URLs are registered verbatim with each EHR (eCW, Healow, Epic, ...) and MUST match exactly what the
+    // browser actually ends up hitting — a scheme/host mismatch is a hard rejection at the EHR's authorize
+    // endpoint, not a soft failure. Deriving them from Request.Scheme/Request.Host made that correctness depend
+    // on every intermediary between the browser and this process (WAF, CDN, Container Apps ingress, this app's
+    // own Gateway) correctly forwarding/trusting X-Forwarded-Proto/Host — fragile by construction, since it's an
+    // arbitrary number of hops whose behavior isn't under this app's control and can silently change (see the
+    // Front Door + Container Apps investigation that led here). Oauth:PublicBaseUrl, when set, sidesteps all of
+    // that: it's the one fixed, known-correct value that was registered with the EHR in the first place, so
+    // nothing about the proxy chain in front of this process — present, absent, or misconfigured — can affect
+    // it. Request.Scheme/Host remains the fallback for the genuinely proxy-less case (direct-to-container
+    // access with no WAF/Front Door at all), where it's already accurate on its own.
+    private string PublicOrigin()
+    {
+        var configured = _configuration["Oauth:PublicBaseUrl"];
+        return string.IsNullOrWhiteSpace(configured)
+            ? $"{Request.Scheme}://{Request.Host}"
+            : configured.TrimEnd('/');
+    }
+
     private string BuildCallbackUri() =>
-        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/callback";
+        $"{PublicOrigin()}{Request.PathBase}/api/v1/oauth/callback";
 
     private string BuildLaunchUri(string context) =>
-        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/launch/{context}";
+        $"{PublicOrigin()}{Request.PathBase}/api/v1/oauth/launch/{context}";
 
     private string BuildAuthorizeUri(string context) =>
-        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/authorize/{context}";
+        $"{PublicOrigin()}{Request.PathBase}/api/v1/oauth/authorize/{context}";
 
     private string BuildStandaloneUri(string context) =>
-        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/standalone/{context}";
+        $"{PublicOrigin()}{Request.PathBase}/api/v1/oauth/standalone/{context}";
 
     /// <summary>
     /// Shapes the launch-URL response by application type. EHR-launch sources get the <c>/oauth/launch</c> entry (the
