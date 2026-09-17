@@ -1,0 +1,64 @@
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.ts
+  s_dd0107f600e552::t_9db2a98898e64c 46-47
+  s_dd0107f600e552::t_74e4cb52610514 48
+portal/package-lock.json
+  s_012a949fbb852d::t_48011e7ba53286 26,16403-16412
+portal/package.json
+  s_012a949fbb852d::t_0dba33c4fca480 34
+portal/src/app/allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component.html
+  s_012a949fbb852d::t_1e96364e9d5896 38-54,63-65
+portal/src/app/allowed-origins/services/api-allowed-cors-origin.service.ts
+  s_012a949fbb852d::t_7d03cefc91c278 59-64
+portal/src/app/allowed-origins/services/i-allowed-cors-origin.service.ts
+  s_012a949fbb852d::t_4ecc29818a3a8b 16-17
+portal/src/app/auth/interceptors/auth.interceptor.ts
+  s_012a949fbb852d::t_d443e07a4bd1b1 7,39-42,61-65
+portal/src/app/services/toast.service.ts
+  s_012a949fbb852d::t_dd0da70a2603a3 23-30,33,39-48
+src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj
+  s_012a949fbb852d::t_5f1b88a4d82f35 18
+src/FHIRBridge.Application/Services/AllowedCorsOriginsService.cs
+  s_012a949fbb852d::t_09b9f2911e48b5 114-115
+src/FHIRBridge.Application/Services/IAllowedCorsOriginsService.cs
+  s_012a949fbb852d::t_2ba860defdf8d5 19-25
+src/FHIRBridge.Infrastructure/Caching/InProcessAllowedCorsOriginsCache.cs
+  s_012a949fbb852d::t_013b885ed7d0fa 5,10-24,28-34,37-39,41-44,50-92,98,100,113,117-126
+portal/src/app/auth/services/session-expired-dialog.service.ts
+  s_dd0107f600e552::t_ffd1f6d9d77d2b 1-87
+portal/src/app/auth/services/session.service.ts
+  s_dd0107f600e552::t_6b2402b258eff0 9,30,133-142
+portal/src/app/core/api-endpoints.ts
+  s_dd0107f600e552::t_3c6792c009fd37 237
+portal/src/styles.scss
+  s_dd0107f600e552::t_d6caef99ed7a94 7-8,314-373
+src/Api/FHIRBridge.Api/Controllers/V1/AllowedCorsOriginsController.cs
+  s_dd0107f600e552::t_5f655e913f47b5 93-106
+src/Api/FHIRBridge.Api/Program.cs
+  s_dd0107f600e552::t_33993bbeb66d2b 233-266
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_dd0107f600e552::t_0573e3e77e9119 118-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d3085f74b4164e1ba05dbdd79f3347e6457d01d9",
+  "prompts": {},
+  "sessions": {
+    "s_012a949fbb852d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1899cc87-d26f-4d5f-84d4-4774d4e1a2cb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_dd0107f600e552": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "071a7e71-29f9-460a-87ef-3ce9d175dc8a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
