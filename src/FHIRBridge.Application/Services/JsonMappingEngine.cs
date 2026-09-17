@@ -397,14 +397,6 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
     }
 
     /// <summary>
-    /// Resolves a "joinedFields" field: <see cref="MappingFieldDto.JsonPath"/> is a <c>|</c>-delimited list of
-    /// sub-paths (see <c>MappingImportService.BuildJsonPathAndFormat</c>), each resolved independently and then
-    /// joined per row with the delimiter encoded in <see cref="MappingFieldDto.Format"/> (<c>;delimiter=X</c>).
-    /// Rows are aligned by position across sub-paths — they're expected to share the same array context, so the
-    /// first sub-path that yields any matches determines the row indices; a sub-path with fewer/no matches at a
-    /// given position contributes an empty string for that row rather than dropping the row.
-    /// </summary>
-    /// <summary>
     /// The values belonging to the FIRST instance of the outermost repeating parent — i.e. everything sharing
     /// the first resolved value's leading index. For "Patient.name.given" over two name entries that is
     /// name[0]'s given names alone; for "Patient.address.line" over one address it is every line, unchanged.
@@ -413,7 +405,10 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
     private static IReadOnlyList<object?> TakeFirstInstance(
         List<(object? Value, IReadOnlyList<int> Indices)> resolved, List<object?> values)
     {
-        if (resolved.Count <= 1 || resolved[0].Indices.Count == 0)
+        // `values` is a positional projection of `resolved` (same order, possibly reference-id-normalized), and
+        // the loop below indexes one by the other. That holds today; assert it rather than leave it as an
+        // invariant a future edit could quietly break into an off-by-one that silently redacts the wrong value.
+        if (resolved.Count != values.Count || resolved.Count <= 1 || resolved[0].Indices.Count == 0)
         {
             return values;
         }
@@ -432,6 +427,14 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         return kept.Count > 0 ? kept : values;
     }
 
+    /// <summary>
+    /// Resolves a "joinedFields" field: <see cref="MappingFieldDto.JsonPath"/> is a <c>|</c>-delimited list of
+    /// sub-paths (see <c>MappingImportService.BuildJsonPathAndFormat</c>), each resolved independently and then
+    /// joined per row with the delimiter encoded in <see cref="MappingFieldDto.Format"/> (<c>;delimiter=X</c>).
+    /// Rows are aligned by position across sub-paths — they're expected to share the same array context, so the
+    /// first sub-path that yields any matches determines the row indices; a sub-path with fewer/no matches at a
+    /// given position contributes an empty string for that row rather than dropping the row.
+    /// </summary>
     private static List<(object? Value, IReadOnlyList<int> Indices)> ResolveJoinedFields(JsonElement root, MappingFieldDto field)
     {
         var delimiter = ParseDelimiter(field.Format);

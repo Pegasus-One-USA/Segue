@@ -10,7 +10,6 @@ using FHIRBridge.Application.Mappings;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
-using Microsoft.Extensions.Logging;
 using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Transformations;
 using FHIRBridge.Runtime.Application.Workflows;
@@ -888,7 +887,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             var totalWritten = 0;
             string? firstDownloadUrl = null;
             var groups = records.GroupBy(record => record.ResourceType, StringComparer.OrdinalIgnoreCase).ToList();
-            foreach (var group in OrderGroupsByReferenceDependency(groups, profilesByResourceType, Logger, referenceGaps))
+            foreach (var group in OrderGroupsByReferenceDependency(groups, profilesByResourceType, referenceGaps))
             {
                 var groupRecords = group.ToArray();
                 var profile = profilesByResourceType.TryGetValue(group.Key, out var matched)
@@ -1247,7 +1246,6 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     internal static List<IGrouping<string, MappedDestinationRecord>> OrderGroupsByReferenceDependency(
         List<IGrouping<string, MappedDestinationRecord>> groups,
         IReadOnlyDictionary<string, MappingProfile> profilesByResourceType,
-        ILogger? logger = null,
         ICollection<string>? unresolvedReferences = null)
     {
         // The table a group is ABOUT TO BE WRITTEN TO, which is the profile the write loop resolves — not the
@@ -1308,17 +1306,17 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                     // silently is what made the failure above undiagnosable — the run surfaced only the writer's
                     // "must be written before this one" message, which describes an ordering problem when the
                     // real one is that the prerequisite is not part of this write at all.
-                    // Logger is NullLogger on every destination executor (the base constructor is called without
-                    // a logger factory), so logging alone reported this to nobody. Hand it back to the caller as
-                    // well, so the run itself can state the condition — the writer's own message describes an
-                    // ORDERING problem ("must be written before this one, in the same destination write") when the
-                    // truth is that the prerequisite is not in this write at all, which is a different fix.
-                    var note =
+                    // Reported to the CALLER rather than logged. Every destination executor builds its base with
+                    // no logger factory, so Logger is NullLogger here and a LogWarning would provably reach
+                    // nobody — the returned collection is the only reporting channel that works, and the node's
+                    // own output metadata is where an operator will actually see it. The writer's own message
+                    // describes an ORDERING problem ("must be written before this one, in the same destination
+                    // write") when the truth is that the prerequisite is not in this write at all, which is a
+                    // different fix.
+                    unresolvedReferences?.Add(
                         $"{g.Key} resolves a reference against table '{table}', which no resource type in this "
                         + $"write targets (writing: {string.Join(", ", tableToGroup.Keys)}). The lookup will fail "
-                        + "unless those rows already exist in the destination.";
-                    logger?.LogWarning("Destination write: {ReferenceGap}", note);
-                    unresolvedReferences?.Add(note);
+                        + "unless those rows already exist in the destination.");
                 }
 
                 return resolved;

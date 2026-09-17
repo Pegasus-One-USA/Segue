@@ -523,6 +523,28 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
     /// destination executor orders resource-type groups so a referenced table's group is written before any
     /// group that references it, within one destination write.
     /// </summary>
+    /// <summary>
+    /// A resource identifier, shortened for a message that gets retained.
+    ///
+    /// This message used to exist only as a thrown exception; it is now collected per record into
+    /// <see cref="DestinationWriteResult.RecordErrors"/> and aggregated into the run's output, so the value in
+    /// it is persisted rather than transient. A FHIR reference id identifies a patient's record, and the
+    /// surrounding text (target field, schema, table, key column) already says exactly what failed — the full
+    /// value adds a second retained identifier without adding diagnostic power. A prefix is still enough to
+    /// tell "it is looking for a de-identified id" from "it is looking for a raw one", or to match against a
+    /// row you are looking at, which is what this message is read for.
+    /// </summary>
+    private static string Abbreviate(string? referenceId)
+    {
+        const int KeepLength = 8;
+        if (string.IsNullOrEmpty(referenceId))
+        {
+            return string.Empty;
+        }
+
+        return referenceId.Length <= KeepLength ? referenceId : referenceId[..KeepLength] + "…";
+    }
+
     private static async Task<MappedDestinationRecord> ResolveReferenceLookupsAsync(
         SqlConnection connection, MappedDestinationRecord record, CancellationToken cancellationToken)
     {
@@ -557,8 +579,8 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             {
                 throw new InvalidOperationException(
                     $"Cannot resolve '{lookup.TargetField}': no row in [{schema}].[{table}] has " +
-                    $"[{lookupColumn}] = '{lookup.ReferenceId}'. The referenced resource must be written before " +
-                    "this one, in the same destination write.");
+                    $"[{lookupColumn}] = '{Abbreviate(lookup.ReferenceId)}'. The referenced resource must be " +
+                    "written before this one, in the same destination write.");
             }
 
             resolvedValues[lookup.TargetField] = resolved;

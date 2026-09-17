@@ -133,7 +133,6 @@ public sealed class DestinationGroupOrderingTests
                 ["Patient"] = Profile("Patient", "dbo.Patient;mode=upsert"),
                 ["Observation"] = Profile("Observation", "dbo.Observation;mode=upsert"),
             },
-            logger: null,
             unresolvedReferences: gaps);
 
         gaps.Should().ContainSingle().Which.Should().Contain("Observation").And.Contain("Encounter");
@@ -154,7 +153,6 @@ public sealed class DestinationGroupOrderingTests
                 ["Patient"] = Profile("Patient", "dbo.Patient;mode=upsert"),
                 ["Encounter"] = Profile("Encounter", "dbo.Encounter;mode=upsert"),
             },
-            logger: null,
             unresolvedReferences: gaps);
 
         gaps.Should().BeEmpty("a healthy write must not be flagged");

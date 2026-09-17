@@ -1845,10 +1845,11 @@ export class DestinationWizardComponent implements OnInit {
     this.deIdentificationProfileSvc.list().subscribe({
       next: profiles => {
         this.deIdentificationProfiles.set(profiles);
-        // A policy belongs to a workflow and is named with its id, so this is how a reopened workflow finds
-        // the one it already owns — and why the De-identification tab shows its existing rules again rather
-        // than looking empty until a rule is re-added. Only ever ADOPTS an existing policy: creating one is
-        // FieldMappingListComponent's job, and only when a rule is actually added.
+        // FALLBACK ONLY. The authoritative link is the profile id stamped on the destination node
+        // (_populateFromNode) — matching on the name is matching on a display field, which breaks the moment a
+        // policy is renamed or a workflow is cloned, creating a second empty policy and silently redacting
+        // nothing. This covers just the case where no id was stamped: a node saved before that key existed.
+        // Only ever ADOPTS: creating a policy is FieldMappingListComponent's job, and only when a rule is added.
         const workflowId = this.currentWorkflowId();
         if (workflowId && !this.selectedDeIdentificationProfileId()) {
           const owned = profiles.find(p => p.name === workflowId);
@@ -4396,14 +4397,20 @@ export class DestinationWizardComponent implements OnInit {
     this.resolvedDestinationId.set(f['destinationId'] || null);
     this.resolvedSecretKeyVaultName.set(f['secretKeyVaultName'] || null);
     this.resolvedSecretName.set(f['secretName'] || null);
-    // Restore the de-identification profile picker from the real DestinationConfiguration row — the canvas
-    // node's own fields don't carry it (it's a destination-level attribute, not a mapping/config one), so
-    // without this, re-saving an edited node would silently clear whatever profile was assigned. Applies to
-    // every destination type uniformly, including the hand-rolled FHIR/Aidbox branch below.
-    // The destination's own DeIdentificationProfileId used to be read back here to restore the picker. It is
-    // no longer the source of truth: the policy is per workflow (named with the workflow id) and resolved by
-    // loadDeIdentificationProfiles(), so a connection shared with another workflow can no longer drag that
-    // workflow's policy into this one.
+    // The de-identification policy, restored from the id STAMPED ON THIS NODE — the authoritative record of
+    // which policy this workflow owns.
+    //
+    // Not read from the DestinationConfiguration row any more: the policy belongs to the workflow, not the
+    // connection, and a reused connection may already carry another workflow's policy in that column.
+    //
+    // Not resolved by NAME here either, even though the policy is named with the workflow id. Matching on a
+    // display-name field makes it do foreign-key duty: rename the policy, or clone the workflow, and the
+    // lookup misses, a second empty policy is created, and that workflow silently redacts nothing. The stamped
+    // id survives both. loadDeIdentificationProfiles()'s name lookup remains only as a fallback for a node
+    // saved before this key was written.
+    if (f['deIdentificationProfileId']) {
+      this.selectedDeIdentificationProfileId.set(f['deIdentificationProfileId']);
+    }
     if (this.isFhir()) {
       this.fhirForm.patchValue({
         name: f['dest_name'] || 'Aidbox Production',
