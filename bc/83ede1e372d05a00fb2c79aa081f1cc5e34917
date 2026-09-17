@@ -1,0 +1,77 @@
+src/FHIRBridge.Infrastructure/Persistence/EfAllowedCorsOriginRepository.cs
+  s_dd0107f600e552::t_952d8d5d11ec5d 26-33,35-36
+src/FHIRBridge.Infrastructure/Persistence/Workflows/EfWorkflowNodeResourceHistoryRecorder.cs
+  s_dd0107f600e552::t_d9a03629dedbf6 92-93,98-99
+  s_dd0107f600e552::t_e68a7ac0ef6240 19,21
+  s_dd0107f600e552::t_e0f27a886f672b 1
+  s_dd0107f600e552::t_c62128ec2fbb6b 135-142,144-197
+  s_dd0107f600e552::t_4fa37297bc55fa 45-46,48-51,53,55
+  s_dd0107f600e552::t_10616581ea83a4 47
+  s_dd0107f600e552::t_c0d488a78af2b2 52
+  s_dd0107f600e552::t_b28ec348348733 94
+  s_dd0107f600e552::t_8aaa582b797bde 143
+  s_dd0107f600e552::t_4a06ac6a7d327d 11,35,79,107,251,259,307-308,382,450,465,678
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_dd0107f600e552::t_1a0f38b8d6e12e 86-93,95-99,106-108
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260916155225_RemovePhiFromExecutionHistory.cs
+  s_dd0107f600e552::t_5afb6164347170 13-26,30,34,64,68
+  s_dd0107f600e552::t_ae22d09d803e59 49-58
+  s_dd0107f600e552::t_af1b093962dcf2 10-12
+  s_dd0107f600e552::t_88c3279c67bde0 27-29
+  s_dd0107f600e552::t_0af63153d1f427 31-33
+  s_dd0107f600e552::t_80e8f215e86899 35-37,46-48
+  s_dd0107f600e552::t_e7f6472e4ab32c 59-63
+  s_dd0107f600e552::t_343456004e1190 65-67
+  s_dd0107f600e552::t_ae8934073b2e0a 69-71
+  s_dd0107f600e552::t_bc2b0e77ee63b2 1-9,38-45,72-92
+docs/UPGRADE.md
+  s_dd0107f600e552::t_7454c1ef35c28b 47-75
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_dd0107f600e552::t_5d00d3c0d0b8a4 569-574
+src/Api/FHIRBridge.Api/Controllers/V1/AllowedCorsOriginsController.cs
+  s_dd0107f600e552::t_3898f1cce84c6b 46-54,56
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260916160611_RemovePhiFromPipelineRunResources.cs
+  s_dd0107f600e552::t_9297614351fdbe 29-32
+  s_dd0107f600e552::t_96c97b3bd23132 13-16
+tests/FHIRBridge.UnitTests/Infrastructure/EfWorkflowNodeResourceHistoryRecorderTests.cs
+  s_dd0107f600e552::t_5c1622a6daf114 132-190
+  s_dd0107f600e552::t_7546a591aef012 1,3
+  s_dd0107f600e552::t_5aaa568d7adefa 15,21,48,56,89,103,126
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_dd0107f600e552::t_4e48b0c6d0f6a4 301,304-307
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260917113934_RemovePhiFromExecutionHistorySqlServer.cs
+  s_dd0107f600e552::t_8c4aea6f103093 13-29
+  s_dd0107f600e552::t_fdf1c698522254 65-74
+  s_dd0107f600e552::t_ab2c69055026a4 10-12
+  s_dd0107f600e552::t_a375513eb93d57 30-32,62-64
+  s_dd0107f600e552::t_111777f108a52c 75-77
+  s_dd0107f600e552::t_5c9e580d37042d 1-9,33-61,78-127
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_dd0107f600e552::t_7b4b85d2fed86c 213-215,217-219
+  s_dd0107f600e552::t_6eb42d13bf9854 184-187,190
+src/Api/FHIRBridge.Api/Program.cs
+  s_dd0107f600e552::t_6c42eccda2d5de 246
+  s_dd0107f600e552::t_b29ff568c04a2d 240-245,252-253
+  s_dd0107f600e552::t_52b23e9367acce 17
+  s_dd0107f600e552::t_a182d848e7e668 247-251
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260917113934_RemovePhiFromExecutionHistorySqlServer.Designer.cs
+  s_dd0107f600e552::t_e20b15fd073d31 1-6078
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_dd0107f600e552::t_5a3830ccdfb47d 5170-5172,5184-5186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bc83ede1e372d05a00fb2c79aa081f1cc5e34917",
+  "prompts": {},
+  "sessions": {
+    "s_dd0107f600e552": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "071a7e71-29f9-460a-87ef-3ce9d175dc8a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
