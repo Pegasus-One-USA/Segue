@@ -165,15 +165,57 @@ describe('WorkflowBuildAssemblerServiceV2 - source authentication (V2)', () => {
 
   // -- Epic ------------------------------------------------------------------
   describe('Epic', () => {
-    it('pins Backend System to SMART Backend Services', () => {
+    it('pins Backend System to SMART Backend Services and still carries the key', () => {
       // ConfigurationService.ValidateEpicSourceConnection rejects anything else for a Backend Epic source, so the
       // Auth Method dropdown must not be able to override it here.
+      //
+      // The key material assertions are the point: pinning authenticationType while gating the signing key on the
+      // RAW auth method would persist SmartBackendServices with no key and no secret - the same unrunnable
+      // combination this suite exists to prevent, just reintroduced for Epic. Key material must follow the
+      // RESOLVED authentication type.
       const request = buildSource(
         epicFields({ 'Auth method': 'secret', 'Client Secret': 's3cret' }),
       );
 
       expect(request.authentication.authenticationType).toBe(
         'SmartBackendServices',
+      );
+      expect(request.authentication.keyId).toBe('kid-123');
+      expect(request.authentication.privateKeyKeyVaultName).toBe(
+        'fhirbridge-kv',
+      );
+      expect(request.authentication.privateKeySecretName).toBe('signing-key');
+      expect(request.authentication.jwksUrl).toBe(
+        'https://example.org/jwks.json',
+      );
+      // A type that signs a JWT assertion never sends a client secret, so a secret typed before the audience was
+      // switched must not ride along - OAuth2ClientCredentialsTokenProvider would never be reached to use it.
+      expect(request.authentication.inlineClientSecret).toBeNull();
+      expect(request.authentication.clientSecretKeyVaultName).toBeNull();
+      expect(request.authentication.authPlacement).toBeNull();
+    });
+
+    it('carries the signing key when Auth Method is absent on Backend System', () => {
+      // The symmetric case to athenahealth's "defaults to Client Secret" spec, and the one that actually bites:
+      // the form writes `v.authMethod ?? defaultAuthMethodFor(...)`, but a node saved before that field existed
+      // arrives with no 'Auth method' at all. Epic Backend resolves to SmartBackendServices regardless, so the
+      // key must still be carried rather than nulled by a 'secret' default.
+      const fields = epicFields();
+      delete fields['Auth method'];
+      const request = buildSource(fields);
+
+      expect(request.authentication.authenticationType).toBe(
+        'SmartBackendServices',
+      );
+      expect(request.authentication.keyId).toBe('kid-123');
+      expect(request.authentication.privateKeyKeyVaultName).toBe(
+        'fhirbridge-kv',
+      );
+      expect(request.authentication.privateKeySecretName).toBe('signing-key');
+      // Rebuilding an existing workflow must not clear the stored JWKS URL: PreserveSecretsIfBlank guards only
+      // ClientSecret/PrivateKey, so a null sent here overwrites whatever was persisted.
+      expect(request.authentication.jwksUrl).toBe(
+        'https://example.org/jwks.json',
       );
     });
 

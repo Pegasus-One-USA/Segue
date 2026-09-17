@@ -129,6 +129,26 @@ function buildAuthentication(
   const authMethod = (fields['Auth method'] || (isBackend ? 'secret' : 'public')) as WizardAuthMethod;
   const typedSecret = (fields['Client Secret'] ?? '').trim() || null;
 
+  // Resolved FIRST, because every credential field below gates on THIS rather than on the raw auth method.
+  // The two can legitimately disagree: Epic's Backend audience pins SmartBackendServices (see
+  // forceBackendAuthenticationType) while 'Auth method' may still arrive as 'secret' — the form writes
+  // `v.authMethod ?? 'secret'`, a vendor-agnostic fallback that fires whenever discovery didn't advertise
+  // private_key_jwt. Gating the signing key on the raw method there would persist SmartBackendServices with no
+  // key material AND no client secret — precisely the unrunnable combination this helper exists to prevent:
+  // BackendServicesApplicationStrategy.UsesJwtAssertion() tests PrivateKeyPem, finds none, routes to the
+  // client-secret provider, and that has nothing either. So the invariant is: key material follows the RESOLVED
+  // authentication type, and a client secret is only ever carried by a type that actually sends one.
+  const authenticationType =
+    isBackend && options.forceBackendAuthenticationType
+      ? options.forceBackendAuthenticationType
+      : authMethod === 'jwt'
+        ? 'SmartBackendServices'
+        : authMethod === 'secret'
+          ? 'OAuthClientCredentials'
+          : 'None';
+  const signsJwtAssertion = authenticationType === 'SmartBackendServices';
+  const usesClientSecret = authenticationType === 'OAuthClientCredentials';
+
   // A non-interactive (client_credentials) app never performs a browser redirect, so it has no authorize
   // endpoint to store — master gates this on the audience's own showRedirect flag, not on whether the wizard
   // happened to discover a URL.
@@ -136,16 +156,9 @@ function buildAuthentication(
 
   return {
     // Derived from the selected auth method, exactly as the master path's
-    // AUTH_METHOD_TO_AUTHENTICATION_TYPE lookup does — public (PKCE) stores no client credential, so 'None'.
-    // Epic's Backend audience is the one exception and pins the value (see forceBackendAuthenticationType).
-    authenticationType:
-      isBackend && options.forceBackendAuthenticationType
-        ? options.forceBackendAuthenticationType
-        : authMethod === 'jwt'
-          ? 'SmartBackendServices'
-          : authMethod === 'secret'
-            ? 'OAuthClientCredentials'
-            : 'None',
+    // AUTH_METHOD_TO_AUTHENTICATION_TYPE lookup does — public (PKCE) stores no client credential, so 'None'
+    // (a real AuthenticationType member, value 0).
+    authenticationType,
     clientId: fields['Client ID'] || fields['Active client ID'] || null,
     tokenEndpoint: fields['Token endpoint'] || null,
     authorizationEndpoint,
@@ -153,23 +166,28 @@ function buildAuthentication(
     // Client Secret auth only. A freshly typed secret is provisioned via inlineClientSecret under a brand-new
     // vault reference; a blank box sends nulls, which ConfigurationService.PreserveSecretsIfBlank reads as
     // "leave whatever is already stored untouched" rather than as "clear it".
-    clientSecretKeyVaultName: typedSecret ? 'workflow-secrets' : null,
-    clientSecretName: typedSecret ? newInlineSecretName(fields['__name'] || options.secretSlug) : null,
-    inlineClientSecret: typedSecret,
+    clientSecretKeyVaultName: usesClientSecret && typedSecret ? 'workflow-secrets' : null,
+    clientSecretName:
+      usesClientSecret && typedSecret
+        ? newInlineSecretName(fields['__name'] || options.secretSlug)
+        : null,
+    inlineClientSecret: usesClientSecret ? typedSecret : null,
     // private_key_jwt (SMART Backend Services) only — the signing key is referenced by (Key Vault Name, Secret
-    // Name) and identified by kid. Gated so an interactive connection can't persist stale key material.
-    keyId: authMethod === 'jwt' ? fields['JWT kid'] || null : null,
-    privateKeyKeyVaultName: authMethod === 'jwt' ? fields['Key vault reference'] || null : null,
-    privateKeySecretName: authMethod === 'jwt' ? fields['Secret Name'] || null : null,
+    // Name) and identified by kid. Gated on the RESOLVED type so an interactive connection can't persist stale
+    // key material, and so an audience pinned to SmartBackendServices always carries the key it must sign with.
+    keyId: signsJwtAssertion ? fields['JWT kid'] || null : null,
+    privateKeyKeyVaultName: signsJwtAssertion ? fields['Key vault reference'] || null : null,
+    privateKeySecretName: signsJwtAssertion ? fields['Secret Name'] || null : null,
     // Informational only (FHIRBridge never fetches it), but eCW requires this URL's host to be allow-listed on
     // its own servers, so persisting what was really registered is what makes a later bare invalid_client
     // diagnosable. Previously never sent from this path at all — and since PreserveSecretsIfBlank guards only
     // ClientSecret/PrivateKey, every workflow rebuild silently nulled it on an existing row.
-    jwksUrl: authMethod === 'jwt' ? fields['JWKS URL'] || null : null,
-    // Where OAuth2ClientCredentialsTokenProvider places the client id/secret — only meaningful for Client Secret
-    // auth; null (which the backend reads as "post") for every other method.
-    authPlacement:
-      authMethod === 'secret' ? ((fields['Auth placement'] as 'post' | 'basic') || 'post') : null,
+    jwksUrl: signsJwtAssertion ? fields['JWKS URL'] || null : null,
+    // Where OAuth2ClientCredentialsTokenProvider places the client id/secret — only meaningful for a type that
+    // actually sends one. Null (a nullable column the backend reads as "post") for every other type.
+    authPlacement: usesClientSecret
+      ? (fields['Auth placement'] as 'post' | 'basic') || 'post'
+      : null,
     practiceId: options.practiceId ?? null,
     discoveredScopes: options.discoveredScopes ?? null,
   };
