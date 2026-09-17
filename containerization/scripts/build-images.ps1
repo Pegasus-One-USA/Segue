@@ -25,13 +25,25 @@
 #                         logged in to the registry, e.g. `az acr login` / `aws ecr get-login-password | docker login`)
 param(
     [string]$Registry = "",
-    [string]$Tag = "local",
+    [string]$Tag = "",
     [switch]$Push
 )
 
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "../..")
+
+# Default the tag to the product version in the repo-root VERSION file — the same single source
+# every .NET assembly (Directory.Build.props) and the Angular footer already read. Left empty by
+# the caller, images are tagged with the version this working tree actually IS, so a hand-built
+# image can never silently claim to be some other release. Pass -Tag explicitly to override.
+if ($Tag -eq "") {
+    $VersionFile = Join-Path $RepoRoot "VERSION"
+    if (-not (Test-Path $VersionFile)) { throw "VERSION not found at $VersionFile" }
+    $Tag = (Get-Content $VersionFile -Raw).Trim()
+    if ($Tag -eq "") { throw "VERSION at $VersionFile is empty" }
+    Write-Host "==> Tag not specified; using version $Tag from VERSION"
+}
 $Prefix = if ($Registry -ne "") { "$($Registry.TrimEnd('/'))/" } else { "" }
 
 $Images = @{

@@ -86,3 +86,114 @@
     display: none;
   }
 }
+
+// ─── Version + build-details popover ────────────────────────────────────────────
+// The version is a button, not text: it opens the build details an operator needs when filing a
+// support ticket. Styled to read as part of the footer strip, not as a call to action.
+.af-version-wrap {
+  position: relative;
+  display:  inline-flex;
+}
+
+.af-version {
+  display:         inline-flex;
+  align-items:     center;
+  gap:             4px;
+  padding:         0;
+  border:          none;
+  background:      none;
+  font:            inherit;
+  color:           var(--color-muted);
+  cursor:          pointer;
+  text-decoration: underline dotted transparent;
+  text-underline-offset: 3px;
+
+  &:hover,
+  &:focus-visible {
+    color:               var(--color-primary);
+    text-decoration-color: currentColor;
+  }
+
+  // Version disagreement is a real deployment signal, so it gets a colour — but it is advisory,
+  // not an error the user caused, so it stays a warning tone rather than a destructive one.
+  &--mismatch {
+    color: var(--color-warning);
+  }
+}
+
+.af-version-warn {
+  font-size: 11px;
+  line-height: 1;
+}
+
+// Click-away layer. Sits under the panel but over the page so any outside click closes it.
+.af-about-backdrop {
+  position: fixed;
+  inset:    0;
+  z-index:  40;
+}
+
+.af-about {
+  position:      absolute;
+  bottom:        calc(100% + 8px);
+  left:          50%;
+  transform:     translateX(-50%);
+  z-index:       41;
+  min-width:     240px;
+  padding:       12px 14px;
+  text-align:    left;
+  background:    var(--color-surface);
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  box-shadow:    var(--shadow-md, 0 4px 16px rgba(0, 0, 0, 0.12));
+  cursor:        default;
+
+  // Near the viewport edge on a phone a centred popover would overflow; pin it to the right
+  // instead, which is where the footer's version sits once the strip wraps.
+  @media (max-width: 480px) {
+    left:      auto;
+    right:     0;
+    transform: none;
+    min-width: 200px;
+  }
+}
+
+.af-about-row {
+  display:         flex;
+  align-items:     baseline;
+  justify-content: space-between;
+  gap:             16px;
+  padding:         3px 0;
+}
+
+.af-about-key {
+  color:       var(--color-muted-2);
+  font-size:   11.5px;
+}
+
+.af-about-val {
+  color:       var(--color-ink-2);
+  font-weight: 600;
+  font-size:   12px;
+}
+
+.af-about-mono {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-weight: 500;
+}
+
+.af-about-muted {
+  color:       var(--color-muted-2);
+  font-weight: 500;
+  font-style:  italic;
+}
+
+.af-about-mismatch {
+  margin:      8px 0 0;
+  padding-top: 8px;
+  border-top:  1px solid var(--color-border);
+  color:       var(--color-warning);
+  font-size:   11.5px;
+  line-height: 1.45;
+  max-width:   240px;
+}

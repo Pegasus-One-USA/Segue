@@ -1,10 +1,10 @@
 import { HttpInterceptorFn, HttpErrorResponse, HttpRequest } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { Router } from '@angular/router';
 import { Observable, catchError, switchMap, throwError } from 'rxjs';
 import { TokenService } from '../services/token.service';
 import { AuthService } from '../services/auth.service';
 import { TokenRefreshCoordinator } from '../services/token-refresh-coordinator.service';
+import { SessionExpiredDialogService } from '../services/session-expired-dialog.service';
 
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -36,10 +36,10 @@ function isSafeForCredentials(url: string): boolean {
  *     the refresh-token cookie) before giving up.
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const tokens      = inject(TokenService);
-  const router      = inject(Router);
-  const authService = inject(AuthService);
-  const coordinator = inject(TokenRefreshCoordinator);
+  const tokens        = inject(TokenService);
+  const authService   = inject(AuthService);
+  const coordinator   = inject(TokenRefreshCoordinator);
+  const sessionExpired = inject(SessionExpiredDialogService);
 
   const withCreds = isSafeForCredentials(req.url);
   if (!withCreds) {
@@ -58,7 +58,11 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   const forceLogout = (err: HttpErrorResponse): Observable<never> => {
     tokens.clearTokens();
-    router.navigate(['/auth/login']);
+    // Global, un-dismissable prompt instead of navigating straight to /auth/login — every 401 that
+    // reaches here (silent refresh already failed) now surfaces the same "Session expired" dialog
+    // regardless of which page the user was on, rather than the old per-page toasts that only some
+    // components happened to show.
+    sessionExpired.show();
     return throwError(() => err);
   };
 

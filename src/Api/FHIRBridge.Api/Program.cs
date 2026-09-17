@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
 using FHIRBridge.Api.Hubs;
+using FHIRBridge.Application.Services.Terminology;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
@@ -13,6 +14,7 @@ using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Security;
+using FHIRBridge.Infrastructure.Terminology;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Application.Validation;
@@ -228,8 +230,59 @@ builder.Services.AddHostedService<LineageCaptureProcessor>();
 // Workflow List live, instead of those screens only ever finding out on their next REST poll. See IRunStatusNotifier's
 // remarks: only registered in this host, so RankedWorkflowOrchestrator resolves it as null (and simply skips the
 // live push) wherever it isn't — e.g. the Worker process, which has no hub of its own to push into.
-builder.Services.AddSignalR();
+//
+// Multi-instance: SignalRRunStatusNotifier pushes via Clients.All, which — without a backplane — only reaches
+// clients connected to the SAME process instance that made the call. On a deployment that scales this
+// container to multiple replicas (main.bicep: maxReplicas 3), a status change raised on replica A would
+// silently never reach a browser whose hub connection landed on replica B/C (falling back to that screen's own
+// REST poll where one exists, or simply staying stale on Workflow List, which has none). The Redis backplane
+// below — same ConnectionStrings:Redis already used for the token/terminology distributed cache — fans a
+// SendAsync out to every replica's own local clients, closing that gap. No-op (single-process pub/sub only) when
+// Redis isn't configured, same as the distributed cache falling back to AddDistributedMemoryCache.
+var signalRRedisConnectionString = builder.Configuration.GetConnectionString("Redis");
+var signalRBuilder = builder.Services.AddSignalR();
+if (!string.IsNullOrWhiteSpace(signalRRedisConnectionString))
+{
+    // HIPAA #15, same rule as the distributed cache's Redis wiring: refuse a plaintext backplane outside
+    // Development. RunStatusChangedEvent carries no PHI (workflow id/name/status/timestamps only), but the
+    // connection itself is shared with the token/terminology caches, so it's held to the same bar regardless.
+    if (!signalRRedisConnectionString.Contains("ssl=true", StringComparison.OrdinalIgnoreCase) &&
+        !builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "ConnectionStrings:Redis must include 'ssl=true' outside Development — refusing to start with a plaintext Redis SignalR backplane.");
+    }
+
+    signalRBuilder.AddStackExchangeRedis(signalRRedisConnectionString, options =>
+    {
+        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("fhirbridge-signalr");
+        // StackExchange.Redis defaults AbortOnConnectFail to true, which would throw out of the hub's own
+        // connection/reconnect attempts (surfacing as a broken SignalR connection for every client) the moment
+        // Redis is briefly unreachable. false lets it keep retrying in the background instead — a down/flaky
+        // Redis degrades the live push (falls back to each screen's own REST poll, same as "not configured"
+        // above), it does not take the hub, or the rest of the API, down with it.
+        options.Configuration.AbortOnConnectFail = false;
+    });
+}
 builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
+// Backs TerminologyStatusHub — same arrangement, for the Terminology Server table's per-row sync status.
+// Also API-host-only: HapiTerminologyConfigurationService takes this as an optional dependency, so the
+// Worker (where the scheduled syncs run) resolves null and simply records history without a live push.
+builder.Services.AddSingleton<ITerminologyStatusNotifier, SignalRTerminologyStatusNotifier>();
+
+// Closes out import-history rows left at "Running" by a host that stopped mid-import. API-host-only on
+// purpose: its correctness argument ("no import can have survived the restart that just happened") holds
+// only for the process that owns the imports. Registered in shared infrastructure it would also run in the
+// Worker and in every extra API replica, each marking the others' in-flight imports as Interrupted.
+//
+// This does mean a multi-replica API deployment needs revisiting — see the class remarks.
+//
+// This registers after AddFHIRBridgeInfrastructure's drain loop, so the loop's ExecuteAsync starts first.
+// That is harmless rather than merely lucky: the loop immediately parks on an empty channel, and the only
+// things that enqueue a job are user-initiated requests, which cannot arrive before the host finishes
+// starting. The reconciler's StartAsync therefore completes while the loop is still waiting for its first
+// job, so no import it could interrupt has begun.
+builder.Services.AddHostedService<TerminologyImportOrphanReconciler>();
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>
@@ -816,6 +869,10 @@ if (rateLimitingEnabled)
 app.MapControllers();
 app.MapWorkflowEndpoints();
 app.MapHub<RunStatusHub>("/hubs/run-status").RequireAuthorization();
+// The hub class carries [Authorize(SuperAdminOnly)] itself — this RequireAuthorization() is the same
+// belt-and-braces the run-status hub above uses, keeping an unauthenticated connection off the endpoint
+// before it ever reaches the hub's own policy.
+app.MapHub<TerminologyStatusHub>("/hubs/terminology-status").RequireAuthorization();
 
 // Client-side (Angular) routes have no server-side match — fall back to index.html so deep links
 // and refreshes on e.g. /workflows/123 resolve instead of 404ing. No-ops if wwwroot/index.html

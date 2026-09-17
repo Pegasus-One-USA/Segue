@@ -1,5 +1,12 @@
 <div class="list-page">
 
+  <!-- Header: see EhrEndpointListComponent — this screen is hosted as a dialog off System Settings >
+       General and needs its own title to identify what is being edited. -->
+  <div class="page-header">
+    <h1 class="page-title">Allowed Origins</h1>
+    <p class="page-sub">CORS origins permitted to call the API.</p>
+  </div>
+
   <!-- Filter Bar -->
   <div class="filter-card">
     <div class="filter-row">
@@ -11,10 +18,13 @@
         <input
           type="search"
           class="search-input"
-          placeholder="Filter by label..."
-          [value]="labelFilter()"
-          (input)="onLabelFilterChange($any($event.target).value)"
+          placeholder="Search by origin URL or label..."
+          [value]="searchQuery()"
+          (input)="onSearchChange($any($event.target).value)"
         />
+        @if (searching()) {
+          <span class="search-spinner" aria-hidden="true"></span>
+        }
       </div>
 
       <div class="filter-actions">
@@ -25,6 +35,23 @@
           </svg>
           Reset
         </button>
+        <button
+          class="btn-reset"
+          type="button"
+          [disabled]="reloading()"
+          matTooltip="Force every running instance to pick up the current CORS configuration right away"
+          (click)="reloadNow()"
+        >
+          @if (reloading()) {
+            <mat-spinner diameter="14"></mat-spinner>
+          } @else {
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
+              <path d="M3 3v5h5"></path>
+            </svg>
+          }
+          Reload CORS Config
+        </button>
         <button class="btn-add" type="button" (click)="openAdd()">
           New
         </button>
@@ -33,7 +60,9 @@
   </div>
 
   <p class="filter-note">
-    Browser origins allowed to call the API with credentials. Changes take effect immediately — no restart needed.
+    Browser origins allowed to call the API with credentials. Changes usually reach every running
+    instance within seconds, but a removed origin can still be honored by an instance that missed the
+    update for up to 5 minutes — click "Reload CORS Config" to force it sooner. No restart needed.
   </p>
 
   <!-- Table Card -->
@@ -44,7 +73,7 @@
     } @else {
 
       <div class="table-wrapper">
-        <table mat-table [dataSource]="filteredOrigins()" class="data-table">
+        <table mat-table [dataSource]="origins()" class="data-table">
 
           <!-- Origin URL Column -->
           <ng-container matColumnDef="originUrl">
@@ -103,19 +132,32 @@
       </div>
 
       <!-- Empty State -->
-      @if (filteredOrigins().length === 0) {
+      @if (origins().length === 0) {
         <div class="empty-state">
           <div class="empty-state__icon-wrap">
             <mat-icon>public</mat-icon>
           </div>
-          @if (labelFilter().trim()) {
-            <h3 class="empty-state__title">No origins matched that label</h3>
+          @if (searchQuery().trim()) {
+            <h3 class="empty-state__title">No origins matched that search</h3>
             <p class="empty-state__sub">Try a shorter term, or Reset to see every origin.</p>
           } @else {
             <h3 class="empty-state__title">No allowed origins yet</h3>
             <p class="empty-state__sub">Add the URLs allowed to call the API — e.g. your portal's production domain.</p>
           }
         </div>
+      }
+
+      <!-- Paginator -->
+      @if (totalCount() > pageSize()) {
+        <mat-paginator
+          [length]="totalCount()"
+          [pageSize]="pageSize()"
+          [pageIndex]="pageIndex()"
+          [pageSizeOptions]="[5, 10, 25, 50]"
+          showFirstLastButtons
+          (page)="onPageChange($event)"
+          class="table-paginator"
+        ></mat-paginator>
       }
 
     }
