@@ -1,0 +1,29 @@
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260917173532_InitialCreate.cs
+  s_351d9383fb34c9::t_b08684328fcd2d 1-3687
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260917173532_InitialCreate.Designer.cs
+  s_351d9383fb34c9::t_b08684328fcd2d 1-6042
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_351d9383fb34c9::t_72bb6e0c69a826 259-260
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_351d9383fb34c9::t_b08684328fcd2d 2412
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260917173550_InitialCreate.cs
+  s_351d9383fb34c9::t_696949ab7b0a21 1-3690
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260917173550_InitialCreate.Designer.cs
+  s_351d9383fb34c9::t_696949ab7b0a21 1-6078
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9c8eeac2c7b8ed68d9abe5a6c6fe37e1d6bb5059",
+  "prompts": {},
+  "sessions": {
+    "s_351d9383fb34c9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29e00a7e-8b4d-441e-aeac-eecf0708cd3d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
