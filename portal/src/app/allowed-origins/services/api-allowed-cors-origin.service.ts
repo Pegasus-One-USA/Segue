@@ -33,4 +33,10 @@ export class ApiAllowedCorsOriginService extends IAllowedCorsOriginService {
       catchError(err => throwError(() => err))
     );
   }
+
+  reload(): Observable<void> {
+    return this.http.post<void>(CORS_ORIGINS_ENDPOINTS.reload, {}).pipe(
+      catchError(err => throwError(() => err))
+    );
+  }
 }

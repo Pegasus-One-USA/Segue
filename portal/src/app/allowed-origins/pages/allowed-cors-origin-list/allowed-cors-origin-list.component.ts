@@ -35,6 +35,7 @@ export class AllowedCorsOriginListComponent implements OnInit {
   private readonly toast  = inject(ToastService);
 
   readonly loading = signal(true);
+  readonly reloading = signal(false);
   readonly origins  = signal<AllowedCorsOrigin[]>([]);
 
   /** Free-text filter on the Label column. Applied client-side: unlike the other listings this one has no
@@ -75,6 +76,23 @@ export class AllowedCorsOriginListComponent implements OnInit {
 
   reset(): void {
     this.labelFilter.set('');
+  }
+
+  /** Forces every running API replica to pick up the current rows right away — an admin edit already
+   *  does this on its own; this is the explicit "don't want to wait" escape hatch. */
+  reloadNow(): void {
+    if (this.reloading()) return;
+    this.reloading.set(true);
+    this.svc.reload().subscribe({
+      next: () => {
+        this.reloading.set(false);
+        this.toast.success('CORS configuration reloaded on every running instance.');
+      },
+      error: () => {
+        this.reloading.set(false);
+        this.toast.error('Could not reload the CORS configuration.');
+      },
+    });
   }
 
   openAdd(): void {

@@ -63,4 +63,18 @@ public sealed class AllowedCorsOriginsController : ControllerBase
 
         return NoContent();
     }
+
+    /// <summary>
+    /// Manually forces every running replica to pick up the current allowed-origins rows immediately —
+    /// an explicit "reload now" action, for when an operator doesn't want to wait for the cache's own
+    /// staleness bound. Add/Update/Delete above already do this automatically on save.
+    /// </summary>
+    [HttpPost("reload")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public IActionResult Reload()
+    {
+        _service.Reload();
+
+        return NoContent();
+    }
 }
