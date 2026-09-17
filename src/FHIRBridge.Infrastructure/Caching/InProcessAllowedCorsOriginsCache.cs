@@ -52,32 +52,43 @@ public sealed class InProcessAllowedCorsOriginsCache : IAllowedCorsOriginsCache
         if (_redis is not null)
         {
             // AbortOnConnectFail: false (see DependencyInjection.cs) lets ConnectionMultiplexer.Connect
-            // succeed even while Redis is unreachable — but a synchronous SUBSCRIBE issued against a
-            // multiplexer with no live connection still throws RedisConnectionException, and this
-            // constructor runs on the request path (DynamicPortalCorsPolicyProvider, OAuthController,
-            // etc. all resolve this singleton). Retrying on ConnectionRestored instead of letting that
-            // exception surface means a replica that started during a Redis outage still picks up
-            // cross-replica invalidation once it's back, rather than falling back to MaxAge for the rest
-            // of its life.
+            // succeed even while Redis is unreachable — this constructor runs on the request path
+            // (DynamicPortalCorsPolicyProvider, OAuthController, etc. all resolve this singleton), so a
+            // SUBSCRIBE issued here must never be able to fail this call. Retrying on ConnectionRestored
+            // means a replica that started during an outage still picks up cross-replica invalidation
+            // once Redis is back, rather than falling back to MaxAge for the rest of its life.
             _redis.ConnectionRestored += (_, _) => TrySubscribeToInvalidation();
             TrySubscribeToInvalidation();
         }
     }
 
     // Subscribed unconditionally, including on the replica that itself publishes below — re-clearing an
-    // already-null cache is a harmless no-op, and it's simpler than trying to skip self-notifies. Never
-    // lets a connection failure escape — see the constructor's remarks.
+    // already-null cache is a harmless no-op, and it's simpler than trying to skip self-notifies.
+    //
+    // Fire-and-forget async, not the synchronous Subscribe: Redis being merely SLOW (reachable but
+    // hung) would otherwise block whichever request thread happens to construct this singleton for up
+    // to SyncTimeout (5s default) before a RedisTimeoutException even gets a chance to be caught.
+    // Catching bare Exception (not just RedisConnectionException) is deliberate for the same reason
+    // that timeout throws: RedisTimeoutException derives from TimeoutException, not RedisException, so
+    // a narrower catch lets the exact same "must never surface" failure through a narrower window
+    // (Redis up but slow, instead of down) — the stated invariant is "never," not "never unless it's a
+    // different exception type."
     private void TrySubscribeToInvalidation()
     {
         if (_redis is null || _subscribedToInvalidation) return;
-        try
+        _ = SubscribeAsyncCore();
+
+        async Task SubscribeAsyncCore()
         {
-            _redis.GetSubscriber().Subscribe(InvalidationChannel, (_, _) => _cached = null);
-            _subscribedToInvalidation = true;
-        }
-        catch (RedisConnectionException)
-        {
-            // Still down — ConnectionRestored will call this again; MaxAge bounds staleness meanwhile.
+            try
+            {
+                await _redis.GetSubscriber().SubscribeAsync(InvalidationChannel, (_, _) => _cached = null);
+                _subscribedToInvalidation = true;
+            }
+            catch (Exception)
+            {
+                // Still down/hung — ConnectionRestored will call this again; MaxAge bounds staleness meanwhile.
+            }
         }
     }
 
