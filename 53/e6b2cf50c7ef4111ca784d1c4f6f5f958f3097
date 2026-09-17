@@ -11,6 +11,7 @@ portal/src/app/layout/app-footer/app-footer.component.ts
   s_2a3d3b50493a1f::t_83c0f66671b99a 1,5,26,29-35
   s_2a3d3b50493a1f::t_596d306f9c7a04 2,11
   s_2a3d3b50493a1f::t_c83d3cda77d806 36
+  s_dd0107f600e552::t_39a09c1a45c232 22-25
 src/Api/FHIRBridge.Api/Hubs/TerminologyStatusHub.cs
   s_c0cbaceb759321::t_55d57d1d20ccba 1-24
 src/Runtime/FHIRBridge.Runtime.Infrastructure/Applications/EhrLaunchApplicationStrategy.cs
@@ -278,6 +279,7 @@ src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260916160611_Re
   s_011a26483a5d74::t_63bb5d8daae1c9 13-16
 portal/src/app/version.ts
   s_011a26483a5d74::t_d5fc9d59a2180b 1-13,19-20
+  s_dd0107f600e552::t_3991e1d2e24279 14-18
 src/FHIRBridge.Infrastructure/Messaging/LineageCaptureCommandHandler.cs
   s_011a26483a5d74::t_b3bcc6c13c1bc2 16-18
 portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
@@ -369,6 +371,14 @@ tests/FHIRBridge.UnitTests/Infrastructure/EfWorkflowNodeResourceHistoryRecorderT
       "agent_id": {
         "tool": "claude",
         "id": "3843828e-0c67-4668-be57-ce99c6e203f6",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_dd0107f600e552": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "071a7e71-29f9-460a-87ef-3ce9d175dc8a",
         "model": "claude-opus-5"
       },
       "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
