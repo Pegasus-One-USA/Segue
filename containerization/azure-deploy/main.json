@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "8334220645065540991"
+      "templateHash": "1898697732523293058"
     }
   },
   "parameters": {
@@ -51,9 +51,9 @@
     },
     "imageTag": {
       "type": "string",
-      "defaultValue": "latest",
+      "defaultValue": "1.0.0",
       "metadata": {
-        "description": "Tag every custom image this deployment references was published under."
+        "description": "Tag every custom image this deployment references was published under. Pinned to a released version on purpose — NOT 'latest'. A customer deploying this template months from now must get exactly the build that was tested and published as that version, not whatever happens to be sitting in the registry that day; 'latest' also makes \"which version is broken?\" unanswerable on a support call. The release pipeline (.github/workflows/release.yml) rewrites this default to the version being released, so the published template always names its own build."
       }
     },
     "imageRegistryUsername": {
