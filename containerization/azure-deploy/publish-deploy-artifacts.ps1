@@ -65,11 +65,19 @@ function Get-ImageTagAllowedValuesJson([string]$RegistryName, [string]$Repositor
         Write-Host "  Registry '$RegistryName' has no tags yet for '$Repository' - Version dropdown will only offer 'latest'." -ForegroundColor Yellow
         return @{ AllowedValuesJson = '[{"label":"latest (no tags published yet)","value":"latest"}]'; Default = "latest" }
     }
-    $options = $tags | ForEach-Object {
-        $created = ([DateTimeOffset]::Parse($_.createdTime)).ToUniversalTime().ToString("yyyy-MM-dd HH:mm") + " UTC"
-        [ordered]@{ label = "$($_.name) - created $created"; value = $_.name }
+    # Built as a JSON string by hand (not via ConvertTo-Json) so this works on both Windows
+    # PowerShell 5.1 (no -AsArray parameter, and ConvertTo-Json silently drops the array brackets
+    # for a single-element input without it) and PowerShell 7+.
+    function ConvertTo-JsonStringLiteral([string]$Value) {
+        return '"' + $Value.Replace('\', '\\').Replace('"', '\"') + '"'
     }
-    return @{ AllowedValuesJson = ($options | ConvertTo-Json -AsArray -Depth 5 -Compress); Default = $options[0].value }
+    $entries = $tags | ForEach-Object {
+        $created = ([DateTimeOffset]::Parse($_.createdTime)).ToUniversalTime().ToString("yyyy-MM-dd HH:mm") + " UTC"
+        $label = ConvertTo-JsonStringLiteral "$($_.name) - created $created"
+        $value = ConvertTo-JsonStringLiteral $_.name
+        "{`"label`":$label,`"value`":$value}"
+    }
+    return @{ AllowedValuesJson = "[" + ($entries -join ",") + "]"; Default = $tags[0].name }
 }
 
 # Substitutes the __IMAGE_TAG_ALLOWED_VALUES__/__IMAGE_TAG_DEFAULT__ placeholder tokens in a

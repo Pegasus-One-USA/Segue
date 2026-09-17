@@ -897,6 +897,14 @@ static void BootstrapDatabase(WebApplication app)
     var bootstrapStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
 
     var dbContext = scope.ServiceProvider.GetService<FHIRBridgeDbContext>();
+
+    // Multiple replicas/instances (Azure Container Apps scale-out, a rolling restart overlapping the old
+    // revision, or the Worker host starting at the same moment) can all run migrations/seeding at the same
+    // time against the same database. Every step below — Migrate(), the RBAC bootstrapper, the
+    // endpoint-directory seeders, the system-settings seeder — is written as "check if it's already there,
+    // then insert", which is only safe against one runner at a time. See DatabaseBootstrapLock's remarks.
+    using var bootstrapLock = dbContext is null ? null : DatabaseBootstrapLock.TryAcquire(dbContext, logger);
+
     if (dbContext is not null)
     {
         // Enumerated before migrating so the log names the migrations this boot is about to apply — afterwards
