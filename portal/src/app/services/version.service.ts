@@ -37,8 +37,10 @@ export class VersionService {
   readonly apiVersion = signal<VersionDto | null>(null);
 
   /** True once the API answered and its version differs from this bundle's — a stale cache or a
-   *  partially-completed upgrade. Only meaningful for a real container build: a developer's
-   *  'local' bundle never matches a versioned API and must not raise a false alarm. */
+   *  partially-completed upgrade. Compared on the base version, so a VM environment's
+   *  1.0.1-qa.47 bundle against a 1.0.1 API is a match, not an alarm.
+   *  Only meaningful for a real versioned build: a developer's 'local' bundle never matches
+   *  a versioned API and must not raise a false alarm. */
   readonly isMismatched = signal(false);
 
   load(): void {
@@ -52,7 +54,12 @@ export class VersionService {
         timeout(5000),
         tap(dto => {
           this.apiVersion.set(dto);
-          this.isMismatched.set(this.portalVersion !== 'local' && dto.version !== this.portalVersion);
+          // Compare the BASE version only. A VM-environment build carries an environment
+          // suffix the API never reports (1.0.1-qa.47 vs 1.0.1) -- comparing the full
+          // strings there would flag every QA/Staging/Dev/Working page as mismatched and
+          // train operators to ignore the one warning that matters.
+          const portalBase = this.portalVersion.split('-')[0];
+          this.isMismatched.set(this.portalVersion !== 'local' && dto.version !== portalBase);
         }),
         catchError(() => of(null)),
       )
