@@ -801,14 +801,11 @@
                        of the mapping list for a SQL destination, and opens the payload-tree rules panel
                        for a FHIR one — so a second entry point from this row is redundant. The
                        TransformationRules:Hidden setting (rulesHidden) still gates the rules UI itself. -->
-                  @if (canSelectExistingProfile()) {
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-secondary"
-                      title="Reuse a mapping profile already saved for this source connection, destination, and resource type"
-                      (click)="openExistingProfilePicker(r)"
-                    >Select Existing</button>
-                  }
+                  <!-- "Select Existing" used to sit here, reusing a mapping profile already saved for this
+                       source connection + destination + resource type. Hidden on request, leaving "Map" as
+                       the single way into a data group's mapping. canSelectExistingProfile() and
+                       openExistingProfilePicker() (and ExistingMappingProfileDialogComponent behind them)
+                       are left intact, so restoring it is putting this block back. -->
                 </td>
               </tr>
             }

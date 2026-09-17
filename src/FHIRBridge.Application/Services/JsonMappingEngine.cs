@@ -137,7 +137,23 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                     .ToList();
             }
 
-            rawArrayValues[field.TargetField] = values;
+            // The transform stage deliberately hands a chain LED by ConcatenationTemplating/ArrayListOperations
+            // the full occurrence list rather than the single value an ArrayPolicy collapsed it to, because that
+            // is the only way "join every line of the address" can work (see TransformNodeExecutors). But the
+            // full list spans EVERY instance of the repeating parent, which silently overrode the field's own
+            // Instance Selection: Patient.name.given set to "First" still fed the rule all four values of a
+            // payload carrying the same name twice (use=official and use=usual, as Epic sends), and concat wrote
+            // "Camila Maria Camila Maria". The screen said First and meant nothing.
+            //
+            // Narrow the list to the selected instance instead of abandoning the override. Each resolved value
+            // carries the index path it came from, so name[0].given[*] is separable from name[1].given[*] while
+            // address[0].line[*] — every value under one instance — stays whole and still joins as before.
+            // "All records" (RepeatParent, or FirstItem plus the csv aggregate above) remains the way to span
+            // every instance, so nothing loses the ability to do so.
+            rawArrayValues[field.TargetField] =
+                policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+                    ? TakeFirstInstance(resolved, values)
+                    : values;
 
             // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
             // delimited string on the parent row" — no ArrayPolicy value represents that (see
@@ -388,6 +404,34 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
     /// first sub-path that yields any matches determines the row indices; a sub-path with fewer/no matches at a
     /// given position contributes an empty string for that row rather than dropping the row.
     /// </summary>
+    /// <summary>
+    /// The values belonging to the FIRST instance of the outermost repeating parent — i.e. everything sharing
+    /// the first resolved value's leading index. For "Patient.name.given" over two name entries that is
+    /// name[0]'s given names alone; for "Patient.address.line" over one address it is every line, unchanged.
+    /// Values with no index path (a non-repeating field) are all kept: there is only one instance.
+    /// </summary>
+    private static IReadOnlyList<object?> TakeFirstInstance(
+        List<(object? Value, IReadOnlyList<int> Indices)> resolved, List<object?> values)
+    {
+        if (resolved.Count <= 1 || resolved[0].Indices.Count == 0)
+        {
+            return values;
+        }
+
+        var firstInstance = resolved[0].Indices[0];
+        var kept = new List<object?>(resolved.Count);
+        for (var i = 0; i < resolved.Count; i++)
+        {
+            // `values` rather than resolved[i].Value: the reference-id normalization above rewrote them.
+            if (resolved[i].Indices.Count > 0 && resolved[i].Indices[0] == firstInstance)
+            {
+                kept.Add(values[i]);
+            }
+        }
+
+        return kept.Count > 0 ? kept : values;
+    }
+
     private static List<(object? Value, IReadOnlyList<int> Indices)> ResolveJoinedFields(JsonElement root, MappingFieldDto field)
     {
         var delimiter = ParseDelimiter(field.Format);

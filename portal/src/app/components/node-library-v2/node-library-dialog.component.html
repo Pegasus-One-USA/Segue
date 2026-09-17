@@ -95,7 +95,11 @@
               Clear {{ destSuggestionCount() }} suggestion{{ destSuggestionCount() === 1 ? '' : 's' }}
             </button>
           }
-          <button type="button" class="nld-mapping-tool-btn" (click)="bumpMarkAsMasterTrigger()">★ Mark as Master</button>
+          <!-- "★ Mark as Master" used to sit here, promoting the open resource's mapping into an
+               independently-owned master profile. Hidden on request. The trigger
+               (bumpMarkAsMasterTrigger) and everything it drives in DestinationWizardComponent
+               (markActiveGroupAsMaster, PromoteMappingProfileDialogComponent) are left intact, so
+               restoring it is putting this one button back. -->
         </div>
 
         <!-- Global search across BOTH the payload source tree and every destination table's columns —
