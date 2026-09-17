@@ -333,9 +333,12 @@ html {
   font-family: var(--font-family);
   box-shadow: var(--shadow-xl);
 }
-.se-swal-icon {
-  border-color: var(--color-warning) !important;
-  color: var(--color-warning-strong) !important;
+/* SweetAlert2's own icon-color rule (div:where(.swal2-icon).swal2-warning) uses :where() so it
+   contributes zero specificity — chaining onto its swal2-warning class (rendered alongside
+   se-swal-icon, not replacing it) is enough to win without !important. */
+.se-swal-icon.swal2-warning {
+  border-color: var(--color-warning);
+  color: var(--color-warning-strong);
 }
 .se-swal-title {
   margin: 0.75rem 0 0.25rem;
@@ -353,7 +356,7 @@ html {
   width: 100%;
   min-height: 3.25rem;
   padding: 0 1.75rem;
-  margin-top: 1rem !important;
+  margin-top: 1rem;
   border: none;
   box-sizing: border-box;
   border-radius: var(--radius-base);
