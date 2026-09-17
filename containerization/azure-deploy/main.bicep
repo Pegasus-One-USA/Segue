@@ -54,7 +54,7 @@ param jwtSigningKey string
 @description('Registry every custom image this deployment references was published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package) — segue-app/-worker/-redis/-postgres always, plus segue-postgres-backup too if useAzurePostgresql is false.')
 param imageRegistryServer string
 
-@description('Tag every custom image this deployment references was published under. Pinned to a released version on purpose — NOT 'latest'. A customer deploying this template months from now must get exactly the build that was tested and published as that version, not whatever happens to be sitting in the registry that day; 'latest' also makes "which version is broken?" unanswerable on a support call. The release pipeline (.github/workflows/release.yml) rewrites this default to the version being released, so the published template always names its own build.')
+@description('Tag every custom image this deployment references was published under. Pinned to a released version on purpose — NOT \'latest\'. A customer deploying this template months from now must get exactly the build that was tested and published as that version, not whatever happens to be sitting in the registry that day; \'latest\' also makes "which version is broken?" unanswerable on a support call. The release pipeline (.github/workflows/release.yml) rewrites this default to the version being released, so the published template always names its own build.')
 param imageTag string = '1.0.0'
 
 @description('Registry username. Leave blank if the registry allows anonymous/public pull (e.g. a public GHCR package) — no registry credentials are configured in that case.')
@@ -953,7 +953,18 @@ resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ApiBaseUrl', value: 'http://127.0.0.1:5000/' }
             { name: 'AllowedHosts', value: '*' }
             { name: 'Swagger__Enabled', value: 'true' }
-          ], !useAzureCacheForRedis ? [
+          ], !empty(segueAppCustomDomain) ? [
+            // The OAuth redirect_uri (OAuthController.BuildCallbackUri et al.) is registered verbatim with
+            // each EHR — it must be exactly this fixed, known-correct value regardless of what Host/Scheme
+            // Front Door's WAF (which overrides originHostHeader to this app's own default FQDN — see
+            // frontDoorOrigin below) or Container Apps ingress present to the app. Only set when a custom
+            // domain is actually configured: direct-to-container access with no WAF/Front Door in front has
+            // no proxy lying about the Host header, so Request.Scheme/Host is already correct there and the
+            // app's own fallback handles it without this override. This only seeds the INITIAL value
+            // (SystemSettingsSeeder) — an operator can later correct it live from Settings > System
+            // Settings > OAuth (e.g. after moving to a new custom domain) with no redeploy needed.
+            { name: 'OAuth__PublicBaseUrl', value: 'https://${segueAppCustomDomain}' }
+          ] : [], !useAzureCacheForRedis ? [
             { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
           ] : [], enableTenantSecretsKeyVault ? [
             { name: 'KeyVault__UseAzureKeyVault', value: 'true' }
