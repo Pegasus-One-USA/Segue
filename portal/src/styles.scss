@@ -335,7 +335,7 @@ html {
 }
 /* SweetAlert2's own icon-color rule (div:where(.swal2-icon).swal2-warning) uses :where() so it
    contributes zero specificity — chaining onto its swal2-warning class (rendered alongside
-   se-swal-icon, not replacing it) is enough to win without !important. */
+   se-swal-icon, not replacing it) is enough to win on specificity alone. */
 .se-swal-icon.swal2-warning {
   border-color: var(--color-warning);
   color: var(--color-warning-strong);
