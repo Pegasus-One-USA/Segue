@@ -34,6 +34,7 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
     private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
     private readonly IGovernanceLogger _governanceLogger;
     private readonly ILogger<PatientStandaloneLaunchController> _logger;
+    private readonly IOAuthPublicOriginResolver _publicOriginResolver;
 
     public PatientStandaloneLaunchController(
         IInteractiveSourceAuthorizationService authorizationService,
@@ -41,7 +42,8 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
         IEhrEndpointService ehrEndpointService,
         IAllowedCorsOriginsCache allowedCorsOriginsCache,
         IGovernanceLogger governanceLogger,
-        ILogger<PatientStandaloneLaunchController> logger)
+        ILogger<PatientStandaloneLaunchController> logger,
+        IOAuthPublicOriginResolver publicOriginResolver)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
@@ -49,6 +51,7 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
         _allowedCorsOriginsCache = allowedCorsOriginsCache;
         _governanceLogger = governanceLogger;
         _logger = logger;
+        _publicOriginResolver = publicOriginResolver;
     }
 
     /// <summary>Patient Standalone counterpart of <c>OAuthController.LogRefusedLaunchAsync</c> — see its remarks
@@ -150,23 +153,26 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
             : null;
         var context = _authorizationService.BuildWorkflowLaunchContextToken(
             workflowId, ehrEndpointId, callerId, effectiveSessionId, effectiveUserIdentity, correlationId);
-        return Ok(BuildLaunchResponse(context, effectiveSessionId));
+        return Ok(await BuildLaunchResponseAsync(context, effectiveSessionId, cancellationToken));
     }
 
     // This controller only ever reaches here once applicationType has already been confirmed as Patient above, so
-    // unlike OAuthController's BuildLaunchResponse, there is no other mode/opensDirectly branch to consider — the
-    // shape returned still matches it (launchUrl, mode, opensDirectly, applicationType) for the frontend's benefit,
-    // plus sessionId so a first-time caller can persist and echo it on every later hasValidToken/run/discardToken
-    // call for this same browser session.
-    private object BuildLaunchResponse(string context, string sessionId) => new
+    // unlike OAuthController's BuildLaunchResponseAsync, there is no other mode/opensDirectly branch to consider —
+    // the shape returned still matches it (launchUrl, mode, opensDirectly, applicationType) for the frontend's
+    // benefit, plus sessionId so a first-time caller can persist and echo it on every later
+    // hasValidToken/run/discardToken call for this same browser session.
+    private async Task<object> BuildLaunchResponseAsync(string context, string sessionId, CancellationToken cancellationToken) => new
     {
-        launchUrl = BuildAuthorizeUri(context),
+        launchUrl = await BuildAuthorizeUriAsync(context, cancellationToken),
         mode = "patient",
         opensDirectly = true,
         applicationType = ApplicationType.Patient.ToString(),
         sessionId,
     };
 
-    private string BuildAuthorizeUri(string context) =>
-        $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/oauth/authorize/{context}";
+    // Same IOAuthPublicOriginResolver as OAuthController's identically-shaped builder — this is the same
+    // feature (an OAuth authorize URL), just reached through a different, anonymous entry point. See the
+    // resolver's own remarks for why the origin can't be trusted from Request.Scheme/Host alone behind a WAF.
+    private async Task<string> BuildAuthorizeUriAsync(string context, CancellationToken cancellationToken) =>
+        $"{await _publicOriginResolver.ResolveAsync($"{Request.Scheme}://{Request.Host}", cancellationToken)}/api/v1/oauth/authorize/{context}";
 }

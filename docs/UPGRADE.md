@@ -46,6 +46,33 @@ two to first startup.
 
 ## Version-specific notes
 
+### OAuth redirect URLs now use a fixed configured domain, not the request's Host header
+
+This release stops deriving `redirect_uri` (and the launch/authorize/standalone URLs) from the
+incoming request's `Host`/`Scheme` — a value that a WAF or reverse proxy in front of the app can
+alter before it ever reaches the container. It now reads a fixed **OAuth:PublicBaseUrl** setting
+instead (Settings → System Settings → OAuth in the portal), falling back to the request's own
+Host/Scheme only when that setting is blank.
+
+**If you deploy behind a custom domain (Front Door/WAF), you must set this before your EHR
+integrations work again:**
+
+1. If you deploy this release by **re-running the ARM template** (`main.bicep`/`main.json`) with
+   `segueAppCustomDomain` already set to your domain, this happens automatically — the template
+   seeds `OAuth:PublicBaseUrl` to `https://<your custom domain>` on first startup.
+2. If you instead **swap only the container image** (without re-running the template — e.g. `az
+   containerapp update --image ...`), the setting is **not** set, and it seeds blank on that first
+   startup. Because the seeder only ever inserts a setting that doesn't already exist, a *later*
+   template redeploy will **not** retroactively fill it in — you must set it yourself, once, from
+   Settings → System Settings → OAuth → `OAuth:PublicBaseUrl` (enter `https://<your custom domain>`,
+   no path).
+3. Deploying with **no custom domain configured** (direct-to-container access, no WAF/Front Door)
+   needs no action — the request-derived fallback is already correct in that case.
+
+Verify by triggering an EHR OAuth launch after upgrading and confirming the authorize request's
+`redirect_uri` reads your real domain, not `127.0.0.1:5000` or the container's own
+`*.azurecontainerapps.io` address.
+
 ### Execution history is purged and PHI columns are removed
 
 This release stops storing patient data in execution and lineage history. Previous versions kept

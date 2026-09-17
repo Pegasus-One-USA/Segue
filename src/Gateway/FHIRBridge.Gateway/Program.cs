@@ -43,23 +43,33 @@ apiBaseUrl ??= "http://127.0.0.1:5000/"; // local dev only — matches FHIRBridg
 builder.Services.AddReverseProxy().LoadFromMemory(
     routes:
     [
+        // RequestHeaderOriginalHost preserves the Host header the browser actually sent instead of YARP's
+        // default of rewriting it to the Api destination's own loopback address (127.0.0.1:5000) before
+        // proxying. OAuthController's redirect_uri/launch/authorize/standalone URLs no longer depend on this
+        // (see OAuth:PublicBaseUrl), but several other absolute-URL builders still do: AuthController's SAML
+        // ACS URL, SsoConfigurationsController's metadata/ACS URLs shown to an admin,
+        // PatientStandaloneLaunchController's authorize URL, and WorkflowEndpoints' checkpoint URL. Without
+        // this, every one of those renders as http://127.0.0.1:5000/... instead of the real public host.
         new RouteConfig
         {
             RouteId = "api-route",
             ClusterId = "api-cluster",
-            Match = new RouteMatch { Path = "/api/{**catch-all}" }
+            Match = new RouteMatch { Path = "/api/{**catch-all}" },
+            Transforms = [new Dictionary<string, string> { ["RequestHeaderOriginalHost"] = "true" }]
         },
         new RouteConfig
         {
             RouteId = "swagger-route",
             ClusterId = "api-cluster",
-            Match = new RouteMatch { Path = "/swagger/{**catch-all}" }
+            Match = new RouteMatch { Path = "/swagger/{**catch-all}" },
+            Transforms = [new Dictionary<string, string> { ["RequestHeaderOriginalHost"] = "true" }]
         },
         new RouteConfig
         {
             RouteId = "legal-route",
             ClusterId = "api-cluster",
-            Match = new RouteMatch { Path = "/legal/{**catch-all}" }
+            Match = new RouteMatch { Path = "/legal/{**catch-all}" },
+            Transforms = [new Dictionary<string, string> { ["RequestHeaderOriginalHost"] = "true" }]
         }
     ],
     clusters:

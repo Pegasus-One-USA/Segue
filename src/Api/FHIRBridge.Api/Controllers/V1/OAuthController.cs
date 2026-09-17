@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Configuration;
 
 namespace FHIRBridge.Api.Controllers.V1;
 
@@ -29,8 +28,7 @@ public sealed class OAuthController : ControllerBase
     private readonly IAllowedCorsOriginsCache _allowedCorsOriginsCache;
     private readonly IGovernanceLogger _governanceLogger;
     private readonly ILogger<OAuthController> _logger;
-    private readonly IConfiguration _configuration;
-    private readonly ISystemSettingsCache _settingsCache;
+    private readonly IOAuthPublicOriginResolver _publicOriginResolver;
 
     public OAuthController(
         IInteractiveSourceAuthorizationService authorizationService,
@@ -39,8 +37,7 @@ public sealed class OAuthController : ControllerBase
         IAllowedCorsOriginsCache allowedCorsOriginsCache,
         IGovernanceLogger governanceLogger,
         ILogger<OAuthController> logger,
-        IConfiguration configuration,
-        ISystemSettingsCache settingsCache)
+        IOAuthPublicOriginResolver publicOriginResolver)
     {
         _authorizationService = authorizationService;
         _workflowDefinitionStore = workflowDefinitionStore;
@@ -48,8 +45,7 @@ public sealed class OAuthController : ControllerBase
         _allowedCorsOriginsCache = allowedCorsOriginsCache;
         _governanceLogger = governanceLogger;
         _logger = logger;
-        _settingsCache = settingsCache;
-        _configuration = configuration;
+        _publicOriginResolver = publicOriginResolver;
     }
 
     /// <summary>
@@ -204,7 +200,7 @@ public sealed class OAuthController : ControllerBase
     {
         var applicationType = await _authorizationService.GetRouteApplicationTypeAsync(routeId, cancellationToken);
         var context = _authorizationService.BuildLaunchContextToken(routeId, ehrEndpointId, callerId);
-        return Ok(await BuildLaunchResponseAsync(applicationType, context, cancellationToken));
+        return Ok(await BuildLaunchResponseAsync(applicationType, context, sessionId: null, cancellationToken));
     }
 
     /// <summary>
@@ -222,7 +218,7 @@ public sealed class OAuthController : ControllerBase
     {
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
         var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId);
-        return Ok(await BuildLaunchResponseAsync(applicationType, context, cancellationToken));
+        return Ok(await BuildLaunchResponseAsync(applicationType, context, sessionId: null, cancellationToken));
     }
 
     /// <summary>The EhrEndpoint vendor-sandbox types the Provider Standalone audience may launch against — Epic and
@@ -332,7 +328,7 @@ public sealed class OAuthController : ControllerBase
         // context is the only channel that reaches the callback (see LaunchContext.CorrelationId).
         var context = _authorizationService.BuildWorkflowLaunchContextToken(
             workflowId, overrideEndpointId, callerId, effectiveSessionId, effectiveUserIdentity, AttemptCorrelationId());
-        var response = await BuildLaunchResponseAsync(applicationType, context, cancellationToken, effectiveSessionId);
+        var response = await BuildLaunchResponseAsync(applicationType, context, effectiveSessionId, cancellationToken);
         _logger.LogInformation(
             "[Step 1/6] public-standalone-url resolved: workflowId={WorkflowId} applicationType={ApplicationType} response={@Response}",
             workflowId, applicationType, response);
@@ -568,42 +564,25 @@ public sealed class OAuthController : ControllerBase
         });
     }
 
-    // These URLs are registered verbatim with each EHR (eCW, Healow, Epic, ...) and MUST match exactly what the
-    // browser actually ends up hitting — a scheme/host mismatch is a hard rejection at the EHR's authorize
-    // endpoint, not a soft failure. Deriving them from Request.Scheme/Request.Host made that correctness depend
-    // on every intermediary between the browser and this process (WAF, CDN, Container Apps ingress, this app's
-    // own Gateway) correctly forwarding/trusting X-Forwarded-Proto/Host — fragile by construction, since it's an
-    // arbitrary number of hops whose behavior isn't under this app's control and can silently change (see the
-    // Front Door + Container Apps investigation that led here). OAuth:PublicBaseUrl, when set, sidesteps all of
-    // that: it's the one fixed, known-correct value that was registered with the EHR in the first place, so
-    // nothing about the proxy chain in front of this process — present, absent, or misconfigured — can affect
-    // it. Request.Scheme/Host remains the fallback for the genuinely proxy-less case (direct-to-container
-    // access with no WAF/Front Door at all), where it's already accurate on its own.
-    //
-    // Read through ISystemSettingsCache (DB override, falling back to the OAuth:PublicBaseUrl appsettings/env
-    // value main.bicep sets) rather than raw IConfiguration, so an admin correcting this from Settings > System
-    // Settings > OAuth takes effect on the very next request — no redeploy, matching every other DB-backed
-    // setting on that screen.
-    private async Task<string> PublicOriginAsync(CancellationToken cancellationToken)
-    {
-        var configured = await _settingsCache.GetStringAsync(
-            "OAuth:PublicBaseUrl", _configuration["OAuth:PublicBaseUrl"] ?? string.Empty, cancellationToken);
-        return string.IsNullOrWhiteSpace(configured)
-            ? $"{Request.Scheme}://{Request.Host}"
-            : configured.TrimEnd('/');
-    }
+    // These four builders all delegate their origin to IOAuthPublicOriginResolver (shared with
+    // PatientStandaloneLaunchController, which builds the same kind of URL) — see its own remarks for the full
+    // rationale. Request.PathBase is deliberately never included: this app never configures UsePathBase/
+    // ForwardedHeaders.XForwardedPrefix, so it's always empty in practice, but appending request-derived state
+    // here at all would undercut the point of pinning everything else to a fixed, configured origin.
+    private Task<string> PublicOriginAsync(CancellationToken cancellationToken) =>
+        _publicOriginResolver.ResolveAsync($"{Request.Scheme}://{Request.Host}", cancellationToken);
 
     private async Task<string> BuildCallbackUriAsync(CancellationToken cancellationToken) =>
-        $"{await PublicOriginAsync(cancellationToken)}{Request.PathBase}/api/v1/oauth/callback";
+        $"{await PublicOriginAsync(cancellationToken)}/api/v1/oauth/callback";
 
     private async Task<string> BuildLaunchUriAsync(string context, CancellationToken cancellationToken) =>
-        $"{await PublicOriginAsync(cancellationToken)}{Request.PathBase}/api/v1/oauth/launch/{context}";
+        $"{await PublicOriginAsync(cancellationToken)}/api/v1/oauth/launch/{context}";
 
     private async Task<string> BuildAuthorizeUriAsync(string context, CancellationToken cancellationToken) =>
-        $"{await PublicOriginAsync(cancellationToken)}{Request.PathBase}/api/v1/oauth/authorize/{context}";
+        $"{await PublicOriginAsync(cancellationToken)}/api/v1/oauth/authorize/{context}";
 
     private async Task<string> BuildStandaloneUriAsync(string context, CancellationToken cancellationToken) =>
-        $"{await PublicOriginAsync(cancellationToken)}{Request.PathBase}/api/v1/oauth/standalone/{context}";
+        $"{await PublicOriginAsync(cancellationToken)}/api/v1/oauth/standalone/{context}";
 
     /// <summary>
     /// Shapes the launch-URL response by application type. EHR-launch sources get the <c>/oauth/launch</c> entry (the
@@ -611,7 +590,7 @@ public sealed class OAuthController : ControllerBase
     /// directly-openable <c>/oauth/authorize</c> entry. <c>opensDirectly</c> + <c>mode</c> let the portal label it.
     /// </summary>
     private async Task<object> BuildLaunchResponseAsync(
-        ApplicationType? applicationType, string context, CancellationToken cancellationToken, string? sessionId = null)
+        ApplicationType? applicationType, string context, string? sessionId, CancellationToken cancellationToken)
     {
         var opensDirectly = applicationType is ApplicationType.Standalone or ApplicationType.Patient;
         var mode = "ehr-launch";
