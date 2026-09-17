@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "2257836817322837442"
+      "templateHash": "618945881023977716"
     }
   },
   "parameters": {
@@ -364,7 +364,8 @@
     "seqManifestItems": "[if(parameters('enableSeq'), createArray(resourceId('Microsoft.App/containerApps', variables('seqName'))), createArray())]",
     "seqStorageManifestItems": "[if(parameters('enableSeq'), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'seq-data')), createArray())]",
     "seqShareManifestItems": "[if(parameters('enableSeq'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/seq-data', variables('storageAccountName')), '/')[2])), createArray())]",
-    "frontDoorManifestItems": "[if(parameters('enableFrontDoorWaf'), createArray(resourceId('Microsoft.Cdn/profiles/securityPolicies', format('{0}-afd', parameters('namePrefix')), format('{0}-app-security-policy', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/afdEndpoints/routes', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName'), format('{0}-app-route', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/originGroups/origins', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')), format('{0}-app-origin', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/originGroups', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/afdEndpoints', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName')), resourceId('Microsoft.Cdn/profiles', format('{0}-afd', parameters('namePrefix'))), resourceId('Microsoft.Network/FrontDoorWebApplicationFirewallPolicies', variables('wafPolicyName'))), createArray())]"
+    "frontDoorManifestItems": "[if(parameters('enableFrontDoorWaf'), createArray(resourceId('Microsoft.Cdn/profiles/securityPolicies', format('{0}-afd', parameters('namePrefix')), format('{0}-app-security-policy', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/afdEndpoints/routes', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName'), format('{0}-app-route', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/originGroups/origins', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix')), format('{0}-app-origin', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/originGroups', format('{0}-afd', parameters('namePrefix')), format('{0}-app-origin-group', parameters('namePrefix'))), resourceId('Microsoft.Cdn/profiles/afdEndpoints', format('{0}-afd', parameters('namePrefix')), variables('frontDoorEndpointName')), resourceId('Microsoft.Cdn/profiles', format('{0}-afd', parameters('namePrefix'))), resourceId('Microsoft.Network/FrontDoorWebApplicationFirewallPolicies', variables('wafPolicyName'))), createArray())]",
+    "resourceManifestItems": "[concat(variables('postgresManifestItems'), variables('redisManifestItems'), variables('seqManifestItems'), createArray(resourceId('Microsoft.App/containerApps', variables('segueAppName')), resourceId('Microsoft.App/containerApps', variables('workerName'))), variables('postgresStorageManifestItems'), variables('redisStorageManifestItems'), variables('seqStorageManifestItems'), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')), variables('postgresShareManifestItems'), variables('redisShareManifestItems'), variables('seqShareManifestItems'), variables('postgresBackupManifestItems'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2]), resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix')))), if(parameters('enableTenantSecretsKeyVault'), createArray(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))), createArray()), variables('frontDoorManifestItems'))]"
   },
   "resources": [
     {
@@ -1419,7 +1420,36 @@
     },
     "resourceManifest": {
       "type": "array",
-      "value": "[concat(variables('postgresManifestItems'), variables('redisManifestItems'), variables('seqManifestItems'), createArray(resourceId('Microsoft.App/containerApps', variables('segueAppName')), resourceId('Microsoft.App/containerApps', variables('workerName'))), variables('postgresStorageManifestItems'), variables('redisStorageManifestItems'), variables('seqStorageManifestItems'), createArray(resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('namePrefix')), 'keys-data')), variables('postgresShareManifestItems'), variables('redisShareManifestItems'), variables('seqShareManifestItems'), variables('postgresBackupManifestItems'), createArray(resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[0], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[1], split(format('{0}/default/keys-data', variables('storageAccountName')), '/')[2]), resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix'))), resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('namePrefix')))), if(parameters('enableTenantSecretsKeyVault'), createArray(resourceId('Microsoft.KeyVault/vaults', variables('tenantSecretsKeyVaultName'))), createArray()), variables('frontDoorManifestItems'))]"
+      "value": "[variables('resourceManifestItems')]"
+    },
+    "deploymentManifest": {
+      "type": "object",
+      "metadata": {
+        "description": "Every non-secret setting this deployment was run with, plus the same resourceManifest list above, in one object — read back by containerization/scripts/update-application.ps1|sh and upgrade-resources.ps1|sh (via `az deployment group show --name main --query properties.outputs.deploymentManifest.value`) so a later version update or resize does not need these re-entered and cannot silently drift back to main.bicep's defaults. Deliberately excludes every @secure() parameter (postgresPassword, jwtSigningKey, redisPassword, image registry credentials) — Azure never exposes those back through this or any other mechanism, so those 3 always have to be supplied fresh by whoever runs update-application/upgrade-resources. schemaVersion exists so a future breaking change to this shape (e.g. the planned Managed<->Containerized migration tooling) can detect and handle an older manifest instead of misreading it."
+      },
+      "value": {
+        "schemaVersion": 1,
+        "namePrefix": "[parameters('namePrefix')]",
+        "location": "[parameters('location')]",
+        "imageTag": "[parameters('imageTag')]",
+        "imageRegistryServer": "[parameters('imageRegistryServer')]",
+        "useAzurePostgresql": "[parameters('useAzurePostgresql')]",
+        "azurePostgresqlSku": "[parameters('azurePostgresqlSku')]",
+        "azurePostgresqlStorageMb": "[parameters('azurePostgresqlStorageMb')]",
+        "postgresSize": "[parameters('postgresSize')]",
+        "useAzureCacheForRedis": "[parameters('useAzureCacheForRedis')]",
+        "azureCacheForRedisTier": "[parameters('azureCacheForRedisTier')]",
+        "redisSize": "[parameters('redisSize')]",
+        "segueAppSize": "[parameters('segueAppSize')]",
+        "workerSize": "[parameters('workerSize')]",
+        "enableTenantSecretsKeyVault": "[parameters('enableTenantSecretsKeyVault')]",
+        "storageRedundancy": "[parameters('storageRedundancy')]",
+        "enableSeq": "[parameters('enableSeq')]",
+        "seqSize": "[parameters('seqSize')]",
+        "enableFrontDoorWaf": "[parameters('enableFrontDoorWaf')]",
+        "wafPolicyMode": "[parameters('wafPolicyMode')]",
+        "resources": "[variables('resourceManifestItems')]"
+      }
     }
   }
 }

@@ -1292,12 +1292,11 @@ var frontDoorManifestItems = enableFrontDoorWaf ? [
 ] : []
 
 // Every resource this deployment created, in a dependency-safe DELETION order (children before
-// their parents — e.g. the Container Apps before the environment they run in). Azure keeps this
-// output in the deployment's own history (`az deployment group show --name main --query
-// properties.outputs.resourceManifest.value`) indefinitely, with no extra resource needed to store
-// it — cleanup.sh|ps1 reads this first and deletes exactly these IDs in order, falling back to a
-// tag-based scan only if this deployment record isn't found (e.g. deployment history was purged).
-output resourceManifest array = concat(
+// their parents — e.g. the Container Apps before the environment they run in). Extracted to a var
+// (not left inline in the output below) so deploymentManifest's own "resources" property can reuse
+// the exact same list without duplicating this expression — Bicep outputs can't reference each
+// other directly.
+var resourceManifestItems = concat(
   postgresManifestItems,
   redisManifestItems,
   seqManifestItems,
@@ -1326,3 +1325,35 @@ output resourceManifest array = concat(
   enableTenantSecretsKeyVault ? [tenantSecretsKeyVault.id] : [],
   frontDoorManifestItems
 )
+
+// Azure keeps this output in the deployment's own history (`az deployment group show --name main
+// --query properties.outputs.resourceManifest.value`) indefinitely, with no extra resource needed
+// to store it — cleanup.sh|ps1 reads this first and deletes exactly these IDs in order, falling
+// back to a tag-based scan only if this deployment record isn't found (e.g. deployment history was
+// purged).
+output resourceManifest array = resourceManifestItems
+
+@description('Every non-secret setting this deployment was run with, plus the same resourceManifest list above, in one object — read back by containerization/scripts/update-application.ps1|sh and upgrade-resources.ps1|sh (via `az deployment group show --name main --query properties.outputs.deploymentManifest.value`) so a later version update or resize does not need these re-entered and cannot silently drift back to main.bicep\'s defaults. Deliberately excludes every @secure() parameter (postgresPassword, jwtSigningKey, redisPassword, image registry credentials) — Azure never exposes those back through this or any other mechanism, so those 3 always have to be supplied fresh by whoever runs update-application/upgrade-resources. schemaVersion exists so a future breaking change to this shape (e.g. the planned Managed<->Containerized migration tooling) can detect and handle an older manifest instead of misreading it.')
+output deploymentManifest object = {
+  schemaVersion: 1
+  namePrefix: namePrefix
+  location: location
+  imageTag: imageTag
+  imageRegistryServer: imageRegistryServer
+  useAzurePostgresql: useAzurePostgresql
+  azurePostgresqlSku: azurePostgresqlSku
+  azurePostgresqlStorageMb: azurePostgresqlStorageMb
+  postgresSize: postgresSize
+  useAzureCacheForRedis: useAzureCacheForRedis
+  azureCacheForRedisTier: azureCacheForRedisTier
+  redisSize: redisSize
+  segueAppSize: segueAppSize
+  workerSize: workerSize
+  enableTenantSecretsKeyVault: enableTenantSecretsKeyVault
+  storageRedundancy: storageRedundancy
+  enableSeq: enableSeq
+  seqSize: seqSize
+  enableFrontDoorWaf: enableFrontDoorWaf
+  wafPolicyMode: wafPolicyMode
+  resources: resourceManifestItems
+}
