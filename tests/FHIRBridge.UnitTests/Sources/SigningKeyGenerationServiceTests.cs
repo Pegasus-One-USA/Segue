@@ -12,9 +12,18 @@ namespace FHIRBridge.UnitTests.Sources;
 public sealed class SigningKeyGenerationServiceTests
 {
     private readonly Mock<ISecretWriter> _secretWriter = new();
+    private readonly Mock<ITenantSecretVaultResolver> _vaultResolver = new();
+
+    public SigningKeyGenerationServiceTests()
+    {
+        _vaultResolver
+            .Setup(x => x.ResolveVaultName(It.IsAny<string>()))
+            .Returns<string>(requested => requested);
+    }
 
     private SigningKeyGenerationService Service() => new(
         _secretWriter.Object,
+        _vaultResolver.Object,
         NullLogger<SigningKeyGenerationService>.Instance);
 
     [Fact]
