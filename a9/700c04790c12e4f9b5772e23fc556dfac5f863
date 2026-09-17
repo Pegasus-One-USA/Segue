@@ -1,0 +1,25 @@
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_cf3967cb308c19::t_08766e45b4bdd8 526-547,582-583
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_cf3967cb308c19::t_9492dfec24d33c 890,1309-1316,1319
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_cf3967cb308c19::t_a1eeb4098b87b1 1848-1852,4400-4413
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_cf3967cb308c19::t_0a9a3f47dc9858 408-411,430-437
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a9700c04790c12e4f9b5772e23fc556dfac5f863",
+  "prompts": {},
+  "sessions": {
+    "s_cf3967cb308c19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66d990c3-0cfc-4e6d-af22-3febae2af8ba",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
