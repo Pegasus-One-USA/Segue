@@ -67,7 +67,7 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
         _logger.LogInformation(
             "MeSH loaded into the terminology server: {Total} codes in {Elapsed}.", concepts.Count, stopwatch.Elapsed);
 
-        return new HapiMeshSyncResult(concepts.Count, stopwatch.Elapsed);
+        return new HapiMeshSyncResult(concepts.Count, stopwatch.Elapsed, year);
     }
 
     /// <summary>The published year alone (NLM publishes one descriptor file per year, no finer-grained

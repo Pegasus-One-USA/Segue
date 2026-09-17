@@ -157,7 +157,7 @@
                 }
               </div>
             </div>
-            <span class="cell-muted node-summary-meta">{{ entry.itemCount !== null ? entry.itemCount + ' item(s) · ' : '' }}{{ (entry.completedAt ?? entry.startedAt) | date:'MMM d, h:mm:ss a' }}</span>
+            <span class="cell-muted node-summary-meta">{{ headerItemCountFor(entry) !== null ? headerItemCountFor(entry) + ' item(s) · ' : '' }}{{ (entry.completedAt ?? entry.startedAt) | date:'MMM d, h:mm:ss a' }}</span>
             <mat-icon class="chevron">{{ isExpanded(entry.workflowNodeRunId) ? 'expand_less' : 'expand_more' }}</mat-icon>
           </div>
 
@@ -188,6 +188,19 @@
                       <span class="cell-muted">— link expires per this destination's configured expiry window.</span>
                     </div>
                   }
+                  <!-- Destinations with no file and no email (SQL Server, Postgres, any plain database
+                       writer) still have a result worth showing: what was written, where, and when. -->
+                  @if (destinationWriteLinesFor(entry); as writeLines) {
+                    @if (writeLines.length) {
+                      <div class="node-summary-panel">
+                        <dl class="node-summary-panel__figures">
+                          @for (line of writeLines; track line.label) {
+                            <dt>{{ line.label }}</dt><dd>{{ line.value }}</dd>
+                          }
+                        </dl>
+                      </div>
+                    }
+                  }
                   @if (destResult.EmailDelivery; as email) {
                     <div class="email-delivery-card" [class.email-delivery-card--warn]="email.Status !== 'Sent'">
                       <div class="email-delivery-card__status">
@@ -206,10 +219,79 @@
                     </div>
                   }
                 } @else {
-                  @if (payloadJsonFor(entry.workflowNodeRunId); as payloadJson) {
-                    <pre>{{ formatJson(payloadJson) }}</pre>
-                  } @else if (!entry.errorMessage) {
-                    <p class="no-output-note">This node completed with no recorded output.</p>
+                  <!-- What this node actually did, in its own terms. Every node used to show the same
+                       per-resource-type counts, which for a mapping node hid the only thing worth knowing
+                       about it — the mappings and transformation rules it applied. Nodes that record no
+                       field-level work return no lines and fall through to their counts below. -->
+                  @if (nodeSummaryLinesFor(entry); as summaryLines) {
+                    @if (summaryLines.length) {
+                      <div class="node-summary-panel">
+                        <dl class="node-summary-panel__figures">
+                          @for (line of summaryLines; track line.label) {
+                            <dt>{{ line.label }}</dt><dd>{{ line.value }}</dd>
+                          }
+                        </dl>
+                        <!-- The workflow's CONFIGURED transformation rules, per resource type. Configuration,
+                             not runtime: a rule defined but never triggered in this run still appears. -->
+                        @if (configuredRulesFor(entry); as resourceTypes) {
+                          @if (resourceTypes.length) {
+                            <div class="node-summary-panel__rules">
+                              <span class="node-summary-panel__rules-title">Resource type</span>
+                              @for (type of resourceTypes; track type.resourceType) {
+                                <div class="resource-type-block">
+                                  <div class="resource-type-block__head">
+                                    <span class="resource-type-block__name">{{ type.resourceType }}</span>
+                                    <span class="resource-type-block__count">{{ type.distinctRuleTypes }} Rule{{ type.distinctRuleTypes === 1 ? '' : 's' }}</span>
+                                  </div>
+                                  @if (type.rules.length) {
+                                    <dl class="node-summary-panel__figures resource-type-block__rules">
+                                      @for (rule of type.rules; track rule.nodeType) {
+                                        <dt>{{ rule.nodeType }}</dt><dd>{{ rule.rulesDefined }}</dd>
+                                      }
+                                    </dl>
+                                  } @else {
+                                    <!-- Stated rather than left blank: no rule is configured for this type,
+                                         which is a different thing from a rule having failed to run. -->
+                                    <span class="resource-type-block__none">No transformation rules configured</span>
+                                  }
+                                </div>
+                              }
+                            </div>
+                          }
+                        }
+                      </div>
+                    }
+                  }
+                  <!-- Mapping node: resource type and how many mappings it applied to that type, nothing
+                       else. The rule breakdown lives on the transform node above. -->
+                  @if (nodeResourceTypeCountsFor(entry); as mappingCounts) {
+                    @if (mappingCounts.length) {
+                      <div class="node-summary-panel">
+                        <dl class="node-summary-panel__figures">
+                          @for (type of mappingCounts; track type.resourceType) {
+                            <dt>{{ type.resourceType }}</dt><dd>{{ type.mappings.toLocaleString() }}</dd>
+                          }
+                        </dl>
+                      </div>
+                    }
+                  }
+                  <!-- Only for nodes with neither lineage nor configured rules (a source fetch): their
+                       per-resource-type item counts remain the honest summary. -->
+                  @if (nodeSummaryLinesFor(entry).length === 0 && nodeResourceTypeCountsFor(entry).length === 0 && resourceCountsFor(entry.workflowNodeRunId); as counts) {
+                    @if (counts.length) {
+                      <!-- Counts, not content: a node's output is no longer retained (it was raw Epic FHIR). -->
+                      <div class="node-summary-panel">
+                        <dl class="node-summary-panel__figures">
+                          @for (pair of counts; track pair[0]) {
+                            <dt>{{ pair[0] }}</dt><dd>{{ pair[1] }}</dd>
+                          }
+                        </dl>
+                      </div>
+                    } @else if (entry.itemCount !== null) {
+                      <p class="no-output-note">{{ entry.itemCount }} item{{ entry.itemCount === 1 ? '' : 's' }} produced.</p>
+                    } @else if (!entry.errorMessage) {
+                      <p class="no-output-note">This node completed with no recorded output.</p>
+                    }
                   }
                 }
               }

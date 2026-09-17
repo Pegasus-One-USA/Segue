@@ -9,7 +9,7 @@ import {
 
 export abstract class ISourceConnectionService {
   abstract getAll(): Observable<SourceConnectionModel[]>;
-  abstract getPaged(filter: SourceConnectionFilter): Observable<PagedResult<SourceConnectionModel>>;
+  abstract getPaged(filter: SourceConnectionFilter, silent?: boolean): Observable<PagedResult<SourceConnectionModel>>;
   abstract getById(id: string): Observable<SourceConnectionModel>;
   abstract create(req: SourceConnectionRequest): Observable<SourceConnectionModel>;
   abstract update(id: string, req: SourceConnectionRequest): Observable<SourceConnectionModel>;

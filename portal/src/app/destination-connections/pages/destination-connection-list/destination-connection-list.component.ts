@@ -1,5 +1,7 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { DestroyRef, Component, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
+import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatTableModule } from '@angular/material/table';
@@ -108,6 +110,11 @@ export class DestinationConnectionListComponent implements OnInit {
   readonly pageIndex = signal(0);
   readonly pageSize = signal(10);
   readonly loading = signal(true);
+  /** True only while a debounced search-box request is in flight — drives the small in-field
+   *  spinner that replaces the screen-blocking global loader for search. */
+  readonly searching = signal(false);
+  private readonly searchChanged = new Subject<string>();
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly items = signal<DestinationConfigurationDto[]>([]);
   readonly totalCount = signal(0);
@@ -166,6 +173,17 @@ export class DestinationConnectionListComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Debounced so a server round-trip fires once the user pauses, not per keystroke; resets to
+    // page 1 because the current page index is meaningless against a newly filtered result set.
+    this.searchChanged.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(() => {
+      this.pageIndex.set(0);
+      this.load(true);
+    });
+
     this.load();
     this._loadUsedInWorkflowIds();
   }
@@ -181,8 +199,11 @@ export class DestinationConnectionListComponent implements OnInit {
     return this.usedInWorkflowIds().has(item.id);
   }
 
-  load(): void {
+  /** `silent` comes only from the debounced search box: it swaps the app-wide global loader for
+   *  the small in-field spinner, so the input being typed into is never blurred or made inert. */
+  load(silent = false): void {
     this.loading.set(true);
+    if (silent) this.searching.set(true);
     const actionOnDir = this.actionOnSortDirection();
     this.svc
       .getPaged({
@@ -195,15 +216,17 @@ export class DestinationConnectionListComponent implements OnInit {
         sortOrder: actionOnDir ?? this.sortDirection(),
         page: this.pageIndex() + 1,
         pageSize: this.pageSize(),
-      })
+      }, silent)
       .subscribe({
         next: page => {
+          this.searching.set(false);
           this.items.set(page.items);
           this.totalCount.set(page.totalCount);
           this._loadHistoryFlags(page.items);
           this.loading.set(false);
         },
         error: () => {
+          this.searching.set(false);
           this.loading.set(false);
           this.toast.error('Failed to load destination connections.');
         },
@@ -231,8 +254,7 @@ export class DestinationConnectionListComponent implements OnInit {
 
   onSearch(val: string): void {
     this.searchQuery.set(val);
-    this.pageIndex.set(0);
-    this.load();
+    this.searchChanged.next(val);
   }
 
   onTypeFilterChange(val: string): void {

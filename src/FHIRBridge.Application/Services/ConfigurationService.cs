@@ -556,6 +556,12 @@ public sealed class ConfigurationService : IConfigurationService
 
         var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
 
+        // Same gate as the delete path below: once a destination has actually received pipeline data, its
+        // identity is referenced by existing execution history and audit records, so it becomes view-only.
+        // Editing it in place — repointing it at a different server, table, or secret — would silently
+        // retarget what that history describes.
+        await EnsureDestinationHasNoExecutionHistoryAsync(destinationConfiguration, "edited", cancellationToken);
+
         // Neither the destination list dialog nor the wizard canvas flow ever re-displays a previously stored
         // secret, so KeyVaultName/SecretName on a re-save are not a reliable signal — CreateDestinationConfiguration
         // RequestValidator requires them non-empty on every request (including edits that don't touch the secret

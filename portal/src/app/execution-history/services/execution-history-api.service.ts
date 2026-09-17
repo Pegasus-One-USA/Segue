@@ -16,6 +16,8 @@ import {
   RouteExecutionFilter,
   RouteExecutionPage,
   WorkflowRunStatusCounts,
+  NodeLineageBreakdown,
+  ConfiguredResourceTypeRules,
 } from '../models/execution-history.model';
 
 @Injectable({ providedIn: 'root' })
@@ -99,6 +101,24 @@ export class ExecutionHistoryApiService {
 
   /** Every resource type touched by this run's field lineage, with the destination fields under it — backs
    *  the Lineage panel's resource-tree sidebar. */
+  /** What each node actually applied — field mappings and transformation rules, per node. Backs the per-node
+   *  summary lines in the node list, which otherwise showed every node the same resource-type counts. */
+  lineageNodeBreakdown(id: string): Observable<NodeLineageBreakdown[]> {
+    return this.http.get<NodeLineageBreakdown[]>(EXECUTION_HISTORY_ENDPOINTS.lineageNodeBreakdown(id));
+  }
+
+  /** The transformation rules configured on this run's workflow, grouped by resource type — backs the
+   *  transform node's rule list. Configuration, not runtime: see ConfiguredResourceTypeRules. */
+  configuredRules(id: string): Observable<ConfiguredResourceTypeRules[]> {
+    return this.http.get<ConfiguredResourceTypeRules[]>(EXECUTION_HISTORY_ENDPOINTS.configuredRules(id));
+  }
+
+  /** The de-identification rules configured for this run, grouped by resource type — same shape as
+   *  configuredRules, read from the de-identification profile rather than the workflow's own rules. */
+  configuredDeIdRules(id: string): Observable<ConfiguredResourceTypeRules[]> {
+    return this.http.get<ConfiguredResourceTypeRules[]>(EXECUTION_HISTORY_ENDPOINTS.configuredDeIdRules(id));
+  }
+
   lineageResourceTree(id: string): Observable<ResourceTypeSummary[]> {
     return this.http.get<ResourceTypeSummary[]>(EXECUTION_HISTORY_ENDPOINTS.lineageResourceTree(id));
   }

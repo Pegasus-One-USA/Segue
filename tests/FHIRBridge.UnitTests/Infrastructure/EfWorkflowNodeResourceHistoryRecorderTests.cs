@@ -56,7 +56,8 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
             context.WorkflowNodeRuns.AddRange(succeededNodeRun, failedNodeRun);
             // Only the succeeded node ever gets a payload row — mirrors real RankedWorkflowOrchestrator behavior.
             context.WorkflowNodeRunPayloads.Add(new WorkflowNodeRunPayload(
-                Guid.NewGuid(), workflowRunId, succeededNodeRun.Id, "EpicSourceNode", "ResourceBatch", "{\"count\":1}", 1, DateTimeOffset.UtcNow));
+                Guid.NewGuid(), workflowRunId, succeededNodeRun.Id, "EpicSourceNode", "ResourceBatch",
+                1, "{\"Patient\":1}", null, DateTimeOffset.UtcNow));
             await context.SaveChangesAsync();
         }
 
@@ -69,20 +70,18 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         var failedEntry = result.Items.Single(x => x.WorkflowNodeRunId == failedNodeRun.Id);
         failedEntry.Status.Should().Be("Failed");
         failedEntry.ErrorMessage.Should().Be("Destination write failed: timeout.");
-        failedEntry.PayloadJson.Should().BeNull();
+        failedEntry.ItemCount.Should().BeNull();
 
         var succeededEntry = result.Items.Single(x => x.WorkflowNodeRunId == succeededNodeRun.Id);
         succeededEntry.Status.Should().Be("Succeeded");
         succeededEntry.ErrorMessage.Should().BeNull();
         succeededEntry.Contract.Should().Be("ResourceBatch");
         succeededEntry.ItemCount.Should().Be(1);
-        // The list never decrypts a payload — see WorkflowNodeRunHistoryDto.PayloadJson's remarks. Fetching the
-        // real value is GetNodeRunPayloadAsync's job, covered separately below.
-        succeededEntry.PayloadJson.Should().BeNull();
+        succeededEntry.ResourceTypeCountsJson.Should().Be("{\"Patient\":1}");
     }
 
     [Fact]
-    public async Task GetNodeRunPayloadAsync_returns_the_decrypted_payload_for_one_node_run()
+    public async Task GetNodeRunPayloadAsync_returns_counts_not_content_for_one_node_run()
     {
         var workflowRunId = Guid.NewGuid();
         var nodeRunId = Guid.NewGuid();
@@ -90,7 +89,8 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         await using (var context = CreateContext())
         {
             context.WorkflowNodeRunPayloads.Add(new WorkflowNodeRunPayload(
-                Guid.NewGuid(), workflowRunId, nodeRunId, "EpicSourceNode", "ResourceBatch", "{\"count\":1}", 1, DateTimeOffset.UtcNow));
+                Guid.NewGuid(), workflowRunId, nodeRunId, "EpicSourceNode", "ResourceBatch",
+                1, "{\"Patient\":1}", null, DateTimeOffset.UtcNow));
             await context.SaveChangesAsync();
         }
 
@@ -101,8 +101,8 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
 
         result.Should().NotBeNull();
         result!.Contract.Should().Be("ResourceBatch");
-        result.PayloadJson.Should().Be("{\"count\":1}");
         result.ItemCount.Should().Be(1);
+        result.ResourceTypeCountsJson.Should().Be("{\"Patient\":1}");
     }
 
     [Fact]

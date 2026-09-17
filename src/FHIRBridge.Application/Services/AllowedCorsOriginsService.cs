@@ -42,6 +42,24 @@ public sealed class AllowedCorsOriginsService : IAllowedCorsOriginsService
         }).ToArray();
     }
 
+    public async Task<PagedResult<AllowedCorsOriginDto>> GetPagedAsync(
+        string? search, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var paged = await _repository.GetPagedAsync(search, page, pageSize, cancellationToken);
+        var dtos = paged.Items.Select(AllowedCorsOriginMapper.ToDto).ToArray();
+
+        // Same CreatedBy id -> display-name resolution GetAllAsync does, applied to this page only.
+        var names = await _userDisplayNameResolver.ResolveAsync(
+            dtos.Select(dto => dto.CreatedBy), cancellationToken);
+
+        var resolved = dtos.Select(dto => dto with
+        {
+            CreatedBy = dto.CreatedBy is { } createdBy ? names.GetValueOrDefault(createdBy, createdBy) : null,
+        }).ToArray();
+
+        return new PagedResult<AllowedCorsOriginDto>(resolved, paged.TotalCount, paged.Page, paged.PageSize);
+    }
+
     public async Task<AllowedCorsOriginDto> AddAsync(
         CreateAllowedCorsOriginRequest request, CancellationToken cancellationToken)
     {

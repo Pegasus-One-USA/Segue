@@ -48,12 +48,66 @@
   width: 100%;
 }
 
+/* Loading placeholder: a plain table (not mat-table) laid out to match the real one, so the card keeps its
+   height and the rest of the page does not shift when the rows arrive. */
+.skeleton-table {
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 12px 16px;
+    text-align: left;
+  }
+
+  th {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-muted);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  td {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .skeleton-text {
+    display: block;
+    width: 100%;
+    max-width: 140px;
+  }
+
+  .skeleton-cell-sm {
+    max-width: 16px;
+  }
+}
+
 .status-badge {
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
+}
+
+/* Version cell while that system's own check is still outstanding. */
+.scanning-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+/* The running badge is a flex row so the spinner sits on the text baseline rather than pushing the pill
+   taller than every other badge in the column. */
+.running-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  ::ng-deep circle {
+    // The spinner defaults to the theme's primary colour, which disappears against the info-soft pill.
+    stroke: var(--color-info-strong);
+  }
 }
 
 .status-medium { background: var(--color-info-soft); color: var(--color-info-strong); }

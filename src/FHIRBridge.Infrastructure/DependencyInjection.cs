@@ -1,4 +1,4 @@
-﻿using FHIRBridge.Application.Abstractions.Aggregation;
+using FHIRBridge.Application.Abstractions.Aggregation;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
@@ -566,6 +566,9 @@ public static class DependencyInjection
         // Runs LOINC/SNOMED/ICD-10/RxNorm imports off the request thread — see TerminologyImportChannel's
         // remarks for why this stays in-process rather than going through the Worker/MassTransit.
         services.AddSingleton<TerminologyImportChannel>();
+        // Registered BEFORE the drain loop: hosted services start in registration order, so rows stranded by
+        // the previous shutdown are closed out before any new import can begin.
+        services.AddHostedService<TerminologyImportOrphanReconciler>();
         services.AddHostedService<TerminologyImportBackgroundService>();
         // Grouped settings/Run Now/history for the 13 HAPI-terminology-server sync systems — see
         // HapiTerminologyConfigurationController. The registry is stateless (pure lookup + delegate

@@ -40,7 +40,8 @@ public sealed class BackendServicesApplicationStrategy : SourceApplicationStrate
         RequiresRedirectUri: false,
         RequiresLaunchToken: false,
         RequiresTrustedIssuerAllowList: false,
-        SupportsRefreshToken: false);
+        SupportsRefreshToken: false,
+        PortalAudienceSlug: "backend-system");
 
     public override Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         UsesJwtAssertion(source)

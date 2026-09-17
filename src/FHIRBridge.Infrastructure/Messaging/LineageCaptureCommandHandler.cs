@@ -13,10 +13,9 @@ namespace FHIRBridge.Infrastructure.Messaging;
 /// waits on this call; it only waits on <see cref="ILineageCaptureDispatcher.EnqueueAsync"/> handing the batch to
 /// the transport. Deduplicates by <see cref="LineageCaptureCommand.MessageId"/> like every other message handler
 /// in this codebase (see <see cref="PipelineRunCommandHandler"/>) since a redelivered message must not double-insert.
-/// A hop's before/after value can carry raw PHI (birthdates, names, clinical values), so both are encrypted at
-/// rest with the same <see cref="IPhiFieldEncryptor"/> used for <c>WorkflowNodeRunPayload.PayloadJson</c>
-/// (<c>EfWorkflowNodeResourceHistoryRecorder</c>) — <see cref="ConfigJson"/> stays plaintext since it only ever
-/// carries rule configuration (format strings, target types), never a patient value.
+/// A hop's before/after value is raw PHI (birthdates, names, clinical values) and is therefore NOT captured at
+/// all. <c>ConfigJson</c> is kept: it only ever carries rule configuration (format strings, target types),
+/// never a patient value.
 /// </summary>
 public sealed class LineageCaptureCommandHandler : ILineageCaptureCommandHandler
 {
@@ -57,8 +56,6 @@ public sealed class LineageCaptureCommandHandler : ILineageCaptureCommandHandler
             entry.NodeOrder,
             entry.NodeType,
             entry.ConfigJson,
-            EncryptOrNull(entry.SourceValueJson),
-            EncryptOrNull(entry.DestinationValueJson),
             entry.Success,
             entry.ErrorMessage,
             entry.DurationMs,

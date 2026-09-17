@@ -1,5 +1,12 @@
 <div class="list-page">
 
+  <!-- Header: this screen is reached as a dialog off System Settings > General, where the launcher row
+       it came from is no longer visible — without its own title the dialog reads as untitled. -->
+  <div class="page-header">
+    <h1 class="page-title">EHR Endpoints</h1>
+    <p class="page-sub">Vendor endpoints workflows connect through.</p>
+  </div>
+
   <!-- Filter Bar -->
   <div class="filter-card">
     <div class="filter-row">
@@ -16,6 +23,9 @@
           [value]="searchQuery()"
           (input)="onSearch($any($event.target).value)"
         />
+        @if (searching()) {
+          <span class="search-spinner" aria-hidden="true"></span>
+        }
       </div>
 
       <div class="type-filter-wrap">

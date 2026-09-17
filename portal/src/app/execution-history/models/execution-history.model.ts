@@ -110,10 +110,12 @@ export type NodeRunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Cancelled';
 
 /** Matches the backend's WorkflowNodeRunHistoryDto — one row per node that actually started this run, with
  *  its real outcome (success, failure, or cancellation) always present, unlike ResourceHistoryEntry which
- *  only ever reflects the success path. payloadJson is always null here — the list never decrypts a node's
- *  output; fetch it on demand via ExecutionHistoryApiService.nodeRunPayload() once a row is expanded. */
+ *  only ever reflects the success path. Metadata only: node output is no longer retained anywhere, so a row
+ *  reports HOW MUCH a node produced (itemCount, resourceTypeCountsJson), never the data itself. */
 export interface NodeRunHistoryEntry {
   workflowNodeRunId: string;
+  /** The definition node this run executed — field lineage is recorded against this, not the run id. */
+  workflowNodeId: string;
   nodeType: string;
   rank: number;
   subRank: number;
@@ -122,27 +124,30 @@ export interface NodeRunHistoryEntry {
   startedAt: string;
   completedAt: string | null;
   contract: string | null;
-  payloadJson: string | null;
   itemCount: number | null;
+  /** Destination delivery metadata as JSON (records written, download URL, email envelope). Null otherwise. */
+  deliveryDetailJson: string | null;
+  /** Per-resource-type counts as JSON, e.g. {"Patient":1,"Observation":42} — type names and totals only. */
+  resourceTypeCountsJson: string | null;
 }
 
-/** Matches the backend's WorkflowNodeRunPayloadDetailDto — one node run's decrypted output, fetched only when
- *  its row is expanded (see ExecutionHistoryApiService.nodeRunPayload()). */
+/** Matches the backend's WorkflowNodeRunPayloadDetailDto — one node run's output SUMMARY, fetched when its
+ *  row is expanded (see ExecutionHistoryApiService.nodeRunPayload()). Counts only; output is not retained. */
 export interface NodeRunPayloadDetail {
   workflowNodeRunId: string;
   contract: string | null;
-  payloadJson: string | null;
   itemCount: number | null;
+  resourceTypeCountsJson: string | null;
+  deliveryDetailJson: string | null;
 }
 
-/** Matches the backend's FieldLineageHopDto — one transform node's before/after value for a destination field.
- *  sourceValueJson/destinationValueJson arrive here already decrypted server-side. */
+/** Matches the backend's FieldLineageHopDto — one transform node applied to a destination field. Describes the
+ *  TRANSFORMATION (which node, what config, did it succeed, how long) — the field's before/after values are no
+ *  longer captured, since those are raw patient data. */
 export interface FieldLineageHop {
   nodeOrder: number;
   nodeType: string;
   configJson: string;
-  sourceValueJson: string | null;
-  destinationValueJson: string | null;
   success: boolean;
   errorMessage: string | null;
   durationMs: number | null;
@@ -179,6 +184,50 @@ export interface LineageSummary {
   fieldsTransformed: number;
   transformationNodesExecuted: number;
   successRate: number;
+}
+
+/** Matches the backend's LineageRuleCountDto — one rule type a node applied, and how many times. */
+export interface LineageRuleCount {
+  nodeType: string;
+  applications: number;
+  failedApplications: number;
+}
+
+/** Matches the backend's ConfiguredRuleCountDto — one rule type and how many of it the workflow defines. */
+export interface ConfiguredRuleCount {
+  nodeType: string;
+  rulesDefined: number;
+}
+
+/** Matches the backend's ConfiguredResourceTypeRulesDto — the transformation rules CONFIGURED for one
+ *  resource type on this run's workflow. Distinct from what executed: a rule defined but never triggered
+ *  still appears, which is the point of showing configuration rather than runtime lineage. */
+export interface ConfiguredResourceTypeRules {
+  resourceType: string;
+  distinctRuleTypes: number;
+  rules: ConfiguredRuleCount[];
+}
+
+/** Matches the backend's LineageResourceTypeCountDto — one resource type's share of a node's work. */
+export interface LineageResourceTypeCount {
+  resourceType: string;
+  mappings: number;
+  resources: number;
+  fields: number;
+  /** Transformation rules applied to THIS resource type. Often empty — rules are configured per resource
+   *  type, so a type that is only copied field-for-field genuinely has none. */
+  rules: LineageRuleCount[];
+}
+
+/** Matches the backend's NodeLineageBreakdownDto — what one node actually applied to the data. Nodes that
+ *  record no field-level work (source fetches, whole-resource normalization) are absent from the response. */
+export interface NodeLineageBreakdown {
+  workflowNodeId: string;
+  totalApplications: number;
+  distinctFields: number;
+  distinctResources: number;
+  rules: LineageRuleCount[];
+  resourceTypes: LineageResourceTypeCount[];
 }
 
 /** Matches the backend's FieldSummaryDto — one destination field's footprint within a resource type. */

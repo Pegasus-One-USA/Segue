@@ -37,14 +37,12 @@ public sealed class PipelineRunResourceRecord : Entity<Guid>
         Guid routeExecutionId,
         string resourceType,
         string? sourceResourceId,
-        string fetchedJson,
         DateTime fetchedAtUtc)
     {
         Id = id;
         RouteExecutionId = routeExecutionId;
         ResourceType = resourceType;
         SourceResourceId = sourceResourceId;
-        FetchedJson = fetchedJson;
         FetchedAtUtc = fetchedAtUtc;
         Stage = PipelineResourceStage.Fetched;
     }
@@ -55,31 +53,30 @@ public sealed class PipelineRunResourceRecord : Entity<Guid>
     public string Stage { get; private set; } = default!;
     public string? ErrorMessage { get; private set; }
 
-    public string FetchedJson { get; private set; } = default!;
+    // FetchedJson/NormalizedJson/MappedValuesJson removed: they held whole fetched FHIR resources and mapped
+    // field values. Encrypting them at rest did not stop them being retained, decryptable PHI. What remains
+    // below is the stage/quality/timing story — which resource reached which stage, when, and how well — which
+    // is what this record exists to answer.
     public DateTime FetchedAtUtc { get; private set; }
 
-    public string? NormalizedJson { get; private set; }
     public string? AppliedProfiles { get; private set; }
     public string? Warnings { get; private set; }
     public double? DataQualityScore { get; private set; }
     public string? MasterPatientId { get; private set; }
     public DateTime? NormalizedAtUtc { get; private set; }
 
-    public string? MappedValuesJson { get; private set; }
     public DateTime? MappedAtUtc { get; private set; }
 
     public DateTime? StoredAtUtc { get; private set; }
     public string? WriteStatus { get; private set; }
 
     public void MarkNormalized(
-        string normalizedJson,
         string appliedProfilesJson,
         string warningsJson,
         double? dataQualityScore,
         string? masterPatientId,
         DateTime normalizedAtUtc)
     {
-        NormalizedJson = normalizedJson;
         AppliedProfiles = appliedProfilesJson;
         Warnings = warningsJson;
         DataQualityScore = dataQualityScore;
@@ -88,9 +85,8 @@ public sealed class PipelineRunResourceRecord : Entity<Guid>
         Stage = PipelineResourceStage.Normalized;
     }
 
-    public void MarkMapped(string mappedValuesJson, DateTime mappedAtUtc)
+    public void MarkMapped(DateTime mappedAtUtc)
     {
-        MappedValuesJson = mappedValuesJson;
         MappedAtUtc = mappedAtUtc;
         Stage = PipelineResourceStage.Mapped;
     }

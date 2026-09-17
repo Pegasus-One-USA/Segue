@@ -16,6 +16,9 @@
           [value]="searchQuery()"
           (input)="onSearch($any($event.target).value)"
         />
+        @if (searching()) {
+          <span class="search-spinner" aria-hidden="true"></span>
+        }
       </div>
 
       <div class="type-filter-wrap">

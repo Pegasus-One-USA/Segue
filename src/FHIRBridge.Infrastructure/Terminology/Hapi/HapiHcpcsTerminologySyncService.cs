@@ -69,14 +69,15 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
 
         var concepts = await DownloadAndParseAsync(downloadClient, zipUrl, cancellationToken);
         _logger.LogInformation("Parsed {Total} HCPCS codes from the official release.", concepts.Count);
+        var version = VersionFromZipUrl(zipUrl);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "HCPCS", VersionFromZipUrl(zipUrl), concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl, "HCPCS", version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
             "HCPCS loaded into the terminology server: {Total} codes in {Elapsed}.", concepts.Count, stopwatch.Elapsed);
 
-        return new HapiHcpcsSyncResult(concepts.Count, stopwatch.Elapsed);
+        return new HapiHcpcsSyncResult(concepts.Count, stopwatch.Elapsed, version);
     }
 
     /// <summary>CMS's quarterly zip filename itself (e.g. "october-2026-alpha-numeric-hcpcs-file.zip")

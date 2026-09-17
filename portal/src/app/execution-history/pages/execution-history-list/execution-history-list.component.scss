@@ -24,7 +24,7 @@
 
 .cell-name { display: flex; align-items: center; gap: 12px; }
 
-.mono { font-family: monospace; font-size: 12px; }
+.mono { font-family: var(--font-mono); font-size: 12px; }
 
 .link { color: var(--color-primary); text-decoration: none; }
 .link:hover { text-decoration: underline; }

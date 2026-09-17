@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
 using FHIRBridge.Api.Hubs;
+using FHIRBridge.Application.Services.Terminology;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
@@ -230,6 +231,10 @@ builder.Services.AddHostedService<LineageCaptureProcessor>();
 // live push) wherever it isn't — e.g. the Worker process, which has no hub of its own to push into.
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
+// Backs TerminologyStatusHub — same arrangement, for the Terminology Server table's per-row sync status.
+// Also API-host-only: HapiTerminologyConfigurationService takes this as an optional dependency, so the
+// Worker (where the scheduled syncs run) resolves null and simply records history without a live push.
+builder.Services.AddSingleton<ITerminologyStatusNotifier, SignalRTerminologyStatusNotifier>();
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>
@@ -816,6 +821,10 @@ if (rateLimitingEnabled)
 app.MapControllers();
 app.MapWorkflowEndpoints();
 app.MapHub<RunStatusHub>("/hubs/run-status").RequireAuthorization();
+// The hub class carries [Authorize(SuperAdminOnly)] itself — this RequireAuthorization() is the same
+// belt-and-braces the run-status hub above uses, keeping an unauthenticated connection off the endpoint
+// before it ever reaches the hub's own policy.
+app.MapHub<TerminologyStatusHub>("/hubs/terminology-status").RequireAuthorization();
 
 // Client-side (Angular) routes have no server-side match — fall back to index.html so deep links
 // and refreshes on e.g. /workflows/123 resolve instead of 404ing. No-ops if wwwroot/index.html
