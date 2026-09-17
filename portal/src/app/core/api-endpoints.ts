@@ -55,6 +55,11 @@ export const BRANDING_ENDPOINTS = {
   update: `${API_V1_BASE}/branding`,
 };
 
+// ─── Version (VersionController — api/v1/version) ───────────────────────────────
+export const VERSION_ENDPOINTS = {
+  get: `${API_V1_BASE}/version`,
+};
+
 // ─── MFA (MfaController — api/v1/auth/mfa) ──────────────────────────────────────
 export const MFA_ENDPOINTS = {
   status:  `${API_V1_BASE}/auth/mfa/status`,
@@ -227,7 +232,9 @@ export const TRANSFORMATION_RULES_ENDPOINTS = {
 // SuperAdmin-only: widens which browser origins the API's Portal CORS policy allows.
 export const CORS_ORIGINS_ENDPOINTS = {
   list: `${API_V1_BASE}/system/allowed-origins`,
+  paged: `${API_V1_BASE}/system/allowed-origins/paged`,
   byId: (id: string) => `${API_V1_BASE}/system/allowed-origins/${id}`,
+  reload: `${API_V1_BASE}/system/allowed-origins/reload`,
 };
 
 // ─── System Settings (SystemSettingsController — api/v1/system/settings) ───────
@@ -395,6 +402,9 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   fieldLineage: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/field-lineage`,
   lineageSummary: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/summary`,
   lineageResourceTree: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/resource-tree`,
+  lineageNodeBreakdown: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/node-breakdown`,
+  configuredRules: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/configured-rules`,
+  configuredDeIdRules: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/configured-deid-rules`,
   statusCounts: `${API_V1_BASE}/workflow-runs/stats`,
 };
 
@@ -474,6 +484,7 @@ export const WORKFLOW_ENDPOINTS = {
   copy:            (id: string) => `${API_V1_BASE}/workflows/${id}/copy`,
   launchUrl:       (id: string) => `${API_V1_BASE}/workflows/${id}/launch-url`,
   destinationData: (id: string) => `${API_V1_BASE}/workflows/${id}/destination-data`,
+  configurationExport: (id: string) => `${API_V1_BASE}/workflows/${id}/configuration-export`,
   checkpointUrl:    (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}/checkpoint-url`,
   checkpointResult: (workflowRunId: string) => `${API_V1_BASE}/workflows/runs/${workflowRunId}/checkpoint-result`,
   runStatus:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/status`,

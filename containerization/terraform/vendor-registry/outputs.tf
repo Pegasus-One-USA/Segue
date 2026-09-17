@@ -4,6 +4,6 @@ output "acr_name" {
 }
 
 output "acr_login_server" {
-  description = "Full registry hostname. Use as: (1) the -Registry value for build-images.ps1|sh when publishing a new version from a local build, and (2) the --source prefix when importing a published version into a client deployment's own registry, e.g.: az acr import --name <client-acr> --source <this>/fhirbridge-app:v1.2.0 --image fhirbridge-app:v1.2.0"
+  description = "Full registry hostname. Use as: (1) the -Registry value for build-images.ps1|sh when publishing a new version from a local build, and (2) the --source prefix when importing a published version into a client deployment's own registry, e.g.: az acr import --name <client-acr> --source <this>/segue-app:v1.2.0 --image segue-app:v1.2.0"
   value       = azurerm_container_registry.vendor.login_server
 }

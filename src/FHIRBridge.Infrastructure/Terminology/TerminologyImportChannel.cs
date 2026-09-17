@@ -9,6 +9,11 @@ namespace FHIRBridge.Infrastructure.Terminology;
 /// <see cref="Messaging.InMemoryMessageChannel{TMessage}"/>, but deliberately kept in-process only (rather
 /// than routed through the Worker via MassTransit): the uploaded release file lives on the API host's own
 /// disk, and there is no guarantee the Worker process shares that filesystem.
+///
+/// <see cref="TerminologyImportBackgroundService"/> runs several dequeued jobs concurrently, but there is
+/// still exactly one thing READING this channel (that service's own drain loop), which is what
+/// <c>SingleReader</c> below asserts — it constrains who may call <c>ReadAsync</c>, not how many jobs may be
+/// in flight once read.
 /// </summary>
 public sealed class TerminologyImportChannel
 {

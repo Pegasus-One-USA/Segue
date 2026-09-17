@@ -1,4 +1,4 @@
-# Tears down the local FHIRBridge containerized stack — either the docker-compose path (default)
+# Tears down the local Segue containerized stack — either the docker-compose path (default)
 # or the Terraform local environment (-Terraform), so nothing keeps running/consuming disk after
 # testing.
 #
@@ -17,7 +17,7 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "../..")
 
 if (-not $Yes) {
-    $reply = Read-Host "This removes every FHIRBridge local container (and volumes, unless -KeepVolumes) - continue? [y/N]"
+    $reply = Read-Host "This removes every Segue local container (and volumes, unless -KeepVolumes) - continue? [y/N]"
     if ($reply -notmatch '^[Yy]$') { Write-Host "Aborted."; exit 1 }
 }
 
@@ -38,4 +38,4 @@ if ($Terraform) {
     } finally { Pop-Location }
 }
 
-Write-Host "Done. Local FHIRBridge stack removed."
+Write-Host "Done. Local Segue stack removed."

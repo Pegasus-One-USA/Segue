@@ -1,6 +1,7 @@
 ﻿import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal, computed } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
+import { HttpResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,7 +18,13 @@ import {
 import { ToastService } from '../../services/toast.service';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
 import { PermissionService } from '../../auth/services/permission.service';
+import { AuthStore } from '../../auth/store/auth.store';
 import { sourceSystemDisplayName } from '../../data/source-system-display-names.data';
+import {
+  IntegrationDetails,
+  buildIntegrationDetails,
+  integrationDetailsAsText,
+} from './integration-details.util';
 
 /** Debounce before a search-box keystroke triggers a server round-trip (see onSearch). */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -56,6 +63,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly runStatusHub = inject(RunStatusHubService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly permissions = inject(PermissionService);
+  private readonly authStore = inject(AuthStore);
 
   // ── RBAC: workflow.view (the route guard already reached here) only grants VIEW access — these four
   // are what actually gate each action-specific button/menu-item below, kept independent of one another
@@ -64,6 +72,13 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   protected readonly canEdit   = computed(() => this.permissions.hasPermission('workflow.edit'));
   protected readonly canDelete = computed(() => this.permissions.hasPermission('workflow.delete'));
   protected readonly canRun    = computed(() => this.permissions.hasPermission('workflow.run'));
+
+  /** Gates the two overflow-menu items that expose the workflow's own wiring rather than act on it:
+   *  "Integration Details" (the URLs, ids and headers a third party needs to drive this workflow) and
+   *  "Download Configuration" (every configuration table it touches, dumped for offline analysis).
+   *  Both are disclosure, not action, so they are restricted to SuperAdmin rather than to any
+   *  workflow.* permission — deliberately NOT authStore.isAdmin(), which also admits a plain Admin. */
+  protected readonly canViewConfiguration = computed(() => this.authStore.hasRole('SuperAdmin'));
 
   readonly summaries = signal<WorkflowSummary[]>([]);
   readonly loading = signal(true);
@@ -78,6 +93,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   readonly busyId = signal<string | null>(null);
   /** Workflow id whose enable/disable or delete call is in flight — disables its row controls. */
   readonly rowBusyId = signal<string | null>(null);
+  /** Workflow id whose configuration export is being built server-side. Kept separate from rowBusyId because
+   *  this is a pure read: it must not disable the row's enable/delete controls while it runs. */
+  readonly exportingId = signal<string | null>(null);
 
   readonly launchModal = signal<LaunchModal | null>(null);
   readonly dataModal = signal<DataModal | null>(null);
@@ -633,6 +651,85 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Copies this workflow's raw id straight to the clipboard — no modal, just the id + a toast confirmation. */
   copyWorkflowId(row: WorkflowSummary): void {
     this.copy(row.workflowId, 'Workflow ID');
+  }
+
+  // ── Integration details (third-party self-serve) ──────────────────────────
+  //
+  // Everything a partner app needs to drive THIS workflow from their own product, assembled from the summary row
+  // the list already holds — no extra round-trip. The contents differ per audience because the four audiences are
+  // executed in genuinely different ways: Backend is a server-to-server call, while the three interactive ones
+  // cannot be started from a server at all (the run happens as a side effect of a real person completing an
+  // EHR/patient sign-in), so for those the deliverable is a URL to send the user to, not an endpoint to call.
+  readonly integrationModal = signal<IntegrationDetails | null>(null);
+
+  openIntegrationDetails(row: WorkflowSummary): void {
+    this.integrationModal.set(
+      buildIntegrationDetails(row, this.apiOrigin(), this.audienceLabel(row.applicationType)));
+  }
+
+  closeIntegrationDetails(): void {
+    this.integrationModal.set(null);
+  }
+
+  /** Absolute origin of this API, so the values shown are real URLs a partner can paste, not relative paths. */
+  /** Absolute origin of this API, so the values shown are real URLs a partner can paste, not relative paths. */
+  private apiOrigin(): string {
+    return window.location.origin;
+  }
+
+  /** True when any readiness check is blocking — drives the panel's warning banner. */
+  hasBlockingChecks(modal: IntegrationDetails): boolean {
+    return modal.checks.some(check => check.state === 'blocked');
+  }
+
+  /** Copies the whole panel as plain text, so an admin can paste it straight into an email to the partner. */
+  copyIntegrationDetails(modal: IntegrationDetails): void {
+    this.copy(integrationDetailsAsText(modal), 'Integration details');
+  }
+
+  /**
+   * Downloads the workflow's full configuration dump as a text file — every configuration table it touches,
+   * each with the SQL that selected its rows and those rows printed one data point per line.
+   *
+   * The file is built server-side (see the /configuration-export endpoint): the browser only has the summary
+   * row, not the source/destination/mapping/route/rule records the report is mostly made of.
+   */
+  onDownloadConfiguration(row: WorkflowSummary): void {
+    if (this.exportingId()) return;
+    this.exportingId.set(row.workflowId);
+
+    this.api.configurationExport(row.workflowId).subscribe({
+      next: response => {
+        this.exportingId.set(null);
+        const blob = response.body;
+        if (!blob) {
+          this.toast.error('Download', 'The export came back empty.');
+          return;
+        }
+        this.saveBlob(blob, this.fileNameFrom(response, `workflow-config-${row.workflowId}.txt`));
+        this.toast.success('Configuration exported', `The configuration for "${row.name}" was downloaded.`);
+      },
+      error: err => {
+        this.exportingId.set(null);
+        this.toast.error('Download', this.messageOf(err, 'Could not export the workflow configuration.'));
+      },
+    });
+  }
+
+  /** Prefers the server's Content-Disposition filename (it carries the workflow name + a UTC timestamp). */
+  private fileNameFrom(response: HttpResponse<Blob>, fallback: string): string {
+    const header = response.headers.get('Content-Disposition');
+    const match = header?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+    return match?.[1] ? decodeURIComponent(match[1]) : fallback;
+  }
+
+  private saveBlob(blob: Blob, fileName: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    window.URL.revokeObjectURL(url);
   }
 
   /** Deep-links to the Execution History screen pre-filtered to this one workflow's runs (see

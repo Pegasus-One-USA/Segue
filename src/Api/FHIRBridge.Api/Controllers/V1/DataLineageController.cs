@@ -11,8 +11,8 @@ namespace FHIRBridge.Api.Controllers.V1;
 /// <summary>
 /// Data Lineage: source field → mapping rule → destination column → export. The tree structure
 /// (<see cref="GetLineage"/>) is PHI-free metadata, gated by the same governance.read permission as every other
-/// governance screen. Revealing an actual field's decrypted value (<see cref="RevealFieldValue"/>) requires the
-/// stricter payload.view permission and writes its own DataAccessLog entry per view — never a silent decrypt.
+/// governance screen. There is no longer any endpoint that returns a field's actual value: the resource content
+/// those values came from is not retained at all, so there is nothing to reveal.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -36,25 +36,5 @@ public sealed class DataLineageController : ControllerBase
     {
         var result = await _dataLineageService.GetLineageAsync(resourceRecordId, cancellationToken);
         return result is null ? NotFound() : Ok(result);
-    }
-
-    /// <summary>Decrypts and returns exactly one mapped field's actual value — the only endpoint in Data
-    /// Lineage that touches PHI. Every call writes its own DataAccessLog entry.</summary>
-    [HttpGet("{resourceRecordId:guid}/fields/{targetField}/reveal")]
-    [StandardPermission(PermissionGroupCode.Payload, PermissionActionCode.View, description: "Reveal an actual (decrypted) field value in Data Lineage.")]
-    [ProducesResponseType(typeof(LineageFieldValueDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> RevealFieldValue(Guid resourceRecordId, string targetField, CancellationToken cancellationToken)
-    {
-        var result = await _dataLineageService.RevealFieldValueAsync(resourceRecordId, targetField, cancellationToken);
-
-        await _governanceLogger.LogDataAccessAsync(
-            new DataAccessEntry(
-                "DataLineageField",
-                resourceRecordId.ToString(),
-                "Revealed",
-                Purpose: $"Field: {targetField}"),
-            cancellationToken);
-
-        return Ok(result);
     }
 }

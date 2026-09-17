@@ -39,7 +39,7 @@ try {
     $azAvailable = [bool](Get-Command az -ErrorAction SilentlyContinue)
     if ($azAvailable) {
         Write-Host "Vendor-registry resources currently in '$RgName' (before destroy):"
-        try { az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='$RgName' && tags.Component=='vendor-registry']" --output table } catch { Write-Host "  (couldn't query - not logged in to az, or the group doesn't exist)" }
+        try { az resource list --tag Project=Segue --query "[?resourceGroup=='$RgName' && tags.Component=='vendor-registry']" --output table } catch { Write-Host "  (couldn't query - not logged in to az, or the group doesn't exist)" }
         Write-Host ""
     }
 
@@ -66,7 +66,7 @@ if ($DestroyExitCode -eq 0) {
 if ($azAvailable) {
     Write-Host ""
     Write-Host "Vendor-registry resources remaining in '$RgName' (should be empty):"
-    try { az resource list --tag Project=FHIRBridge --query "[?resourceGroup=='$RgName' && tags.Component=='vendor-registry']" --output table } catch { Write-Host "  (couldn't query - not logged in to az)" }
+    try { az resource list --tag Project=Segue --query "[?resourceGroup=='$RgName' && tags.Component=='vendor-registry']" --output table } catch { Write-Host "  (couldn't query - not logged in to az)" }
 }
 
 exit $DestroyExitCode

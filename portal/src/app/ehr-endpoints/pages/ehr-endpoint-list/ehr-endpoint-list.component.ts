@@ -67,6 +67,9 @@ export class EhrEndpointListComponent implements OnInit {
   readonly pageIndex    = signal(0);
   readonly pageSize     = signal(10);
   readonly loading      = signal(true);
+  /** True only while a debounced search-box request is in flight — drives the small in-field
+   *  spinner that replaces the screen-blocking global loader for search. */
+  readonly searching = signal(false);
   readonly totalCount   = signal(0);
 
   readonly endpoints = signal<EhrEndpoint[]>([]);
@@ -113,14 +116,17 @@ export class EhrEndpointListComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef),
     ).subscribe(() => {
       this.pageIndex.set(0);
-      this.loadEndpoints();
+      this.loadEndpoints(true);
     });
 
     this.loadEndpoints();
   }
 
-  loadEndpoints(): void {
+  /** `silent` comes only from the debounced search box: it swaps the app-wide global loader for
+   *  the small in-field spinner, so the input being typed into is never blurred or made inert. */
+  loadEndpoints(silent = false): void {
     this.loading.set(true);
+    if (silent) this.searching.set(true);
     const direction = this.actionOnSortDirection();
     this.svc.getPaged({
       search: this.searchQuery().trim() || undefined,
@@ -129,14 +135,16 @@ export class EhrEndpointListComponent implements OnInit {
       sortDescending: direction ? direction === 'desc' : undefined,
       page: this.pageIndex() + 1,
       pageSize: this.pageSize(),
-    }).subscribe({
+    }, silent).subscribe({
       next: result => {
+        this.searching.set(false);
         this.endpoints.set(result.items);
         this.totalCount.set(result.totalCount);
         this.availableVendors.set(result.availableVendors ?? []);
         this.loading.set(false);
       },
       error: () => {
+        this.searching.set(false);
         this.loading.set(false);
         this.toast.error('Failed to load EHR endpoints.');
       },

@@ -10,4 +10,7 @@ public interface IHapiMeshTerminologySyncService
     Task<HapiMeshSyncResult> SyncAsync(CancellationToken cancellationToken);
 }
 
-public sealed record HapiMeshSyncResult(int TotalConceptCount, TimeSpan Duration);
+/// <summary><paramref name="Version"/> is the MeSH release year actually synced — the same value the
+/// version check reports, so the two compare directly. It must reach the import-history row or the
+/// "new version available" banner never clears. See <see cref="HapiHcpcsSyncResult"/>.</summary>
+public sealed record HapiMeshSyncResult(int TotalConceptCount, TimeSpan Duration, string Version);

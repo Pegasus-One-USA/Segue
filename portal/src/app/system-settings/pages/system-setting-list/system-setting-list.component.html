@@ -48,13 +48,15 @@
   <!-- Terminology Servers: grouped settings, Run Now, and History for the 13 HAPI-terminology-server
        sync systems — replaces the flat "Terminology:*Hapi:*" rows that used to render below.
 
-       Gated on TERMINOLOGY_FEATURE_ENABLED as well as elevation. The table fetches
-       GET /api/v1/terminology/hapi from its own ngOnInit, so without the flag check it issued that
-       request on every load of this page even though the Terminology feature is switched off (the flag
-       already hides the Terminology Codes tab and blocks its routes via featureFlagGuard) — work for a
-       feature nobody can reach. Elevation still applies on top: these carry external download
-       credentials and endpoint URLs, matching Terminology's place in SUPER_ADMIN_ONLY_GROUPS. -->
-  @if (terminologyFeatureEnabled && isElevated()) {
+       Gated on TERMINOLOGY_SERVER_TABLE_ENABLED as well as elevation. The table fetches
+       GET /api/v1/terminology/hapi from its own ngOnInit, so without a flag check it would issue that
+       request on every load of this page even when this table is switched off — work for a feature
+       nobody can reach. That flag is deliberately NOT TERMINOLOGY_FEATURE_ENABLED, which governs the
+       separate, newer Terminology Codes tab: gating this table on that flag too took this screen down
+       as a side effect when Terminology Codes was switched off. Elevation still applies on top: these
+       carry external download credentials and endpoint URLs, matching Terminology's place in
+       SUPER_ADMIN_ONLY_GROUPS. -->
+  @if (terminologyServerTableEnabled && isElevated()) {
     <app-hapi-terminology-table [searchTerm]="search()"></app-hapi-terminology-table>
   }
 

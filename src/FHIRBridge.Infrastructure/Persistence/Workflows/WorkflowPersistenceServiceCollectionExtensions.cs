@@ -1,4 +1,5 @@
 ﻿using FHIRBridge.Infrastructure.Persistence.Pipeline;
+using FHIRBridge.Application.Abstractions.Workflows;
 using FHIRBridge.Application.Services.Workflows.Numbering;
 using FHIRBridge.Infrastructure.Workflows;
 using FHIRBridge.Infrastructure.Workflows.Numbering;
@@ -34,6 +35,11 @@ public static class WorkflowPersistenceServiceCollectionExtensions
         services.AddScoped<IWorkflowNodeResourceHistoryRecorder, EfWorkflowNodeResourceHistoryRecorder>();
         // HIPAA #4: durable, append-only workflow audit trail — overrides AddWorkflowCore()'s in-memory default.
         services.AddScoped<IWorkflowAuditRecorder, EfWorkflowAuditRecorder>();
+
+        // Downloadable configuration dump for a single workflow. Registered here (rather than in the general
+        // Infrastructure DI) because it reads the FHIRBridgeDbContext model directly, so it is only meaningful
+        // behind the same DbContext-availability gate as the stores above.
+        services.AddScoped<IWorkflowConfigurationExporter, WorkflowConfigurationExporter>();
 
         // Runtime DAG plane (bulk-export/PipelineOrchestrator, a separate execution path from the ranked-workflow
         // graph engine above) — overrides AddRuntimeInfrastructure()'s in-memory IPipelineRunStore default. Lives

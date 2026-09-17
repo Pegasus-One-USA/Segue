@@ -1,0 +1,228 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "Redeploys an EXISTING Segue install onto a new application version — the minimum-steps update path (Container Apps roll a new revision on the new image tag; FHIRBridgeDb migrates automatically on boot). This targets the SAME resource group and resources as your original install, it does not create a new environment. Enter the exact same deployment name prefix, Postgres/Redis/secrets mode, storage redundancy, passwords, and API signing key you used originally — getting Postgres mode, Redis mode, secrets mode, or storage redundancy wrong doesn't just misconfigure something, it breaks connectivity or makes existing secrets unreachable (or, for storage redundancy, fails the deployment outright). Container/database/cache SIZES are still left at main.bicep's own defaults by this limited wizard (getting those wrong only under/over-provisions, it doesn't break anything) — use Step 4 (upgrade-resources) or the full Deploy-to-Azure wizard if your original install customized those.",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.App",
+            "Microsoft.OperationalInsights",
+            "Microsoft.Storage",
+            "Microsoft.DBforPostgreSQL",
+            "Microsoft.Cache",
+            "Microsoft.KeyVault",
+            "Microsoft.Cdn",
+            "Microsoft.Network"
+          ]
+        },
+        "location": {
+          "label": "Region",
+          "toolTip": "Must match the region your original Segue install already runs in."
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "namePrefix",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Existing deployment name prefix",
+        "defaultValue": "segue",
+        "toolTip": "MUST match the prefix your original install used (e.g. <prefix>-app, <prefix>-postgres) — this is what makes this an in-place update of the existing app/worker instead of a brand-new deployment.",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-z][a-z0-9-]{1,20}$",
+          "validationMessage": "Lowercase letters, numbers, and hyphens only, starting with a letter."
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "currentConfig",
+        "label": "Current Configuration",
+        "elements": [
+          {
+            "name": "configInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": true,
+            "options": {
+              "icon": "Warning",
+              "text": "Every field below MUST match your original install exactly. Postgres mode, Redis mode, and secrets mode determine which real resource (and which real secret store) the app connects to at runtime — getting any of these wrong doesn't fail the deployment, it deploys successfully and then the app can't find its database, cache, or secrets. Storage redundancy is checked at deploy time instead: Azure does not allow converting an existing storage account between Standard_LRS and Standard_ZRS at all, so picking the wrong one here fails the deployment outright (PreflightValidationCheckFailed / StorageAccountTypeConversionNotAllowed). Check the original install's parameters (or the Portal resource list) if you're unsure of any of these."
+            }
+          },
+          {
+            "name": "storageRedundancy",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Storage redundancy",
+            "defaultValue": "Standard_ZRS",
+            "toolTip": "MUST match what your original install actually has — check the storage account's Redundancy setting in the Portal (or the resourceManifest output from your original deploy) if unsure. This cannot be changed after the storage account exists; picking the wrong value fails this deployment.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Zone-redundant (Standard_ZRS)", "value": "Standard_ZRS" },
+                { "label": "Locally-redundant (Standard_LRS)", "value": "Standard_LRS" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "postgresMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Postgres deployment type",
+            "defaultValue": "Managed",
+            "toolTip": "MUST match your original install. Managed = Azure Database for PostgreSQL Flexible Server. Containerized = a Postgres container in this same environment.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Managed — Azure Database for PostgreSQL", "value": "Managed" },
+                { "label": "Containerized", "value": "Containerized" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "postgresPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Postgres password",
+              "confirmPassword": "Confirm Postgres password"
+            },
+            "toolTip": "The SAME Postgres password your original install used.",
+            "constraints": {
+              "required": true,
+              "regex": "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$",
+              "validationMessage": "At least 8 characters, including upper case, lower case, and a digit."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "jwtSigningKey",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "API signing key",
+              "confirmPassword": "Confirm API signing key"
+            },
+            "toolTip": "The SAME API signing key your original install used — changing this invalidates every existing login session and refresh token.",
+            "constraints": {
+              "required": true,
+              "regex": "^.{32,}$",
+              "validationMessage": "Must be at least 32 characters."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "redisMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Redis deployment type",
+            "defaultValue": "Containerized",
+            "toolTip": "MUST match your original install. Containerized = a Redis container in this same environment (self-signed TLS cert). Managed = Azure Managed Redis.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Containerized", "value": "Containerized" },
+                { "label": "Managed — Azure Managed Redis", "value": "Managed" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "redisPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Redis password",
+              "confirmPassword": "Confirm Redis password"
+            },
+            "toolTip": "The SAME Redis password your original install used.",
+            "visible": "[equals(steps('currentConfig').redisMode, 'Containerized')]",
+            "constraints": {
+              "required": true,
+              "regex": "^.{8,}$",
+              "validationMessage": "At least 8 characters."
+            },
+            "options": {
+              "hideConfirmation": false
+            }
+          },
+          {
+            "name": "redisTrustedCertificateThumbprint",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Redis TLS certificate thumbprint",
+            "toolTip": "The SAME thumbprint your original install used (see generate-cert.ps1|sh).",
+            "visible": "[equals(steps('currentConfig').redisMode, 'Containerized')]",
+            "constraints": {
+              "required": true,
+              "regex": "^[0-9A-Fa-f]{40}$",
+              "validationMessage": "A 40-character SHA-1 thumbprint (hex characters only)."
+            }
+          },
+          {
+            "name": "secretsMode",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Tenant/app secret storage",
+            "defaultValue": "Local database",
+            "toolTip": "MUST match your original install. If your original install used Azure Key Vault, picking Local database here will make the app unable to find secrets that only exist in that vault (SecretNotConfiguredException at runtime) — and vice versa.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Local database", "value": "Local database" },
+                { "label": "Azure Key Vault", "value": "Azure Key Vault" }
+              ],
+              "required": true
+            }
+          }
+        ]
+      },
+      {
+        "name": "versionStep",
+        "label": "New Version",
+        "elements": [
+          {
+            "name": "imageTag",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Version to install",
+            "defaultValue": "__IMAGE_TAG_DEFAULT__",
+            "toolTip": "The published version tag to deploy, listed newest-first with the date each was pushed to the registry. This is the only thing this wizard changes. NOTE: this dropdown is populated by publish-deploy-artifacts.ps1|sh at publish time (from `az acr repository show-tags`) - these placeholder tokens are only ever uploaded after that substitution runs.",
+            "constraints": {
+              "allowedValues": "__IMAGE_TAG_ALLOWED_VALUES__",
+              "required": true
+            }
+          }
+        ]
+      },
+      {
+        "name": "reviewInfo",
+        "label": "Review",
+        "elements": [
+          {
+            "name": "reviewNote",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": true,
+            "options": {
+              "icon": "Warning",
+              "text": "This wizard changes only the application version — every field on the previous step must match your original install exactly (Postgres/Redis/secrets mode, storage redundancy, passwords/keys). It leaves container/database/cache SIZES at main.bicep's own defaults; if your original install customized those, use Step 4 (upgrade-resources) or the full Deploy-to-Azure wizard instead, or those will be reset to their defaults on this deploy. WAF and Seq are also left at their defaults (both off) — if either was enabled on the original install, use the full wizard instead so it isn't silently disabled."
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "namePrefix": "[basics('namePrefix')]",
+      "location": "[location()]",
+      "storageRedundancy": "[steps('currentConfig').storageRedundancy]",
+      "useAzurePostgresql": "[equals(steps('currentConfig').postgresMode, 'Managed')]",
+      "postgresPassword": "[steps('currentConfig').postgresPassword]",
+      "jwtSigningKey": "[steps('currentConfig').jwtSigningKey]",
+      "useAzureCacheForRedis": "[equals(steps('currentConfig').redisMode, 'Managed')]",
+      "redisPassword": "[if(equals(steps('currentConfig').redisMode, 'Containerized'), steps('currentConfig').redisPassword, '')]",
+      "redisTrustedCertificateThumbprint": "[if(equals(steps('currentConfig').redisMode, 'Containerized'), steps('currentConfig').redisTrustedCertificateThumbprint, '')]",
+      "enableTenantSecretsKeyVault": "[equals(steps('currentConfig').secretsMode, 'Azure Key Vault')]",
+      "imageTag": "[steps('versionStep').imageTag]",
+      "imageRegistryServer": "seguebuilds.azurecr.io",
+      "imageRegistryUsername": "one-click-pull",
+      "imageRegistryPassword": "401K4t2K0LniPnjsqlSjjXDaUof0VPIzLyDodMHeXgWv2WYgGmn2JQQJ99CHACYeBjFEqg7NAAABAZCREYP3"
+    }
+  }
+}

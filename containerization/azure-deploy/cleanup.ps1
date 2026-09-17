@@ -11,7 +11,7 @@
 # The tag-based mode filters on BOTH Environment=<value> AND ManagedBy=Bicep, not Environment
 # alone: a shared resource group can easily also hold a Terraform-managed deployment (../terraform
 # environments, ../terraform/vendor-registry) using the SAME Environment tag value (both default to
-# "fhirbridge") — those are tagged ManagedBy=Terraform, not Bicep, so this second condition is what
+# "segue") — those are tagged ManagedBy=Terraform, not Bicep, so this second condition is what
 # actually keeps this script from also deleting them.
 #
 # Interactive selection only applies to the TAG-BASED fallback below, where there's genuine
@@ -23,10 +23,10 @@
 # -Yes skips any prompt/picker entirely and deletes everything found, for unattended use.
 #
 # Usage:
-#   ./cleanup.ps1 -ResourceGroup fhirbridge-rg -WhatIf   # preview only - prints the checklist, deletes nothing, ever
-#   ./cleanup.ps1 -ResourceGroup fhirbridge-rg           # opens the picker on whatever's found
-#   ./cleanup.ps1 -EnvironmentTag fhirbridge             # tag-based: picker over Environment=<value> AND ManagedBy=Bicep resources
-#   ./cleanup.ps1 -ResourceGroup fhirbridge-rg -DeploymentName main -Yes   # unattended, deletes everything found
+#   ./cleanup.ps1 -ResourceGroup segue-rg -WhatIf   # preview only - prints the checklist, deletes nothing, ever
+#   ./cleanup.ps1 -ResourceGroup segue-rg           # opens the picker on whatever's found
+#   ./cleanup.ps1 -EnvironmentTag segue             # tag-based: picker over Environment=<value> AND ManagedBy=Bicep resources
+#   ./cleanup.ps1 -ResourceGroup segue-rg -DeploymentName main -Yes   # unattended, deletes everything found
 param(
     [string]$ResourceGroup = "",
     [string]$DeploymentName = "main",

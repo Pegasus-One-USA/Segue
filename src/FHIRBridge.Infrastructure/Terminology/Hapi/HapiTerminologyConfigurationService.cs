@@ -23,6 +23,7 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
     private readonly FHIRBridgeDbContext _db;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<HapiTerminologyConfigurationService> _logger;
+    private readonly ITerminologyStatusNotifier? _statusNotifier;
 
     public HapiTerminologyConfigurationService(
         HapiTerminologySystemRegistry registry,
@@ -32,7 +33,10 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         IAppSecretMetadataProvider metadataProvider,
         FHIRBridgeDbContext db,
         IServiceProvider serviceProvider,
-        ILogger<HapiTerminologyConfigurationService> logger)
+        ILogger<HapiTerminologyConfigurationService> logger,
+        // Nullable by design — only the API host registers one (it owns the hub). The Worker, where the
+        // scheduled syncs run, resolves null here and skips the push; see ITerminologyStatusNotifier.
+        ITerminologyStatusNotifier? statusNotifier = null)
     {
         _registry = registry;
         _settings = settings;
@@ -42,8 +46,23 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         _db = db;
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _statusNotifier = statusNotifier;
     }
 
+    /// <summary>
+    /// Builds all 13 rows, strictly one at a time.
+    ///
+    /// Do NOT parallelise this. It is tempting, because the slow part on a machine that cannot reach Key
+    /// Vault is <see cref="BuildCredentialFieldsAsync"/> paying its own connect-and-retry timeout thirteen
+    /// times over. But those lookups are not DbContext-free: the secret provider is a composite whose
+    /// <c>DbSecretStore</c> leg reads app-provisioned secrets through this same scoped
+    /// <see cref="FHIRBridgeDbContext"/>, so overlapping them throws "A second operation was started on this
+    /// context instance" and the whole endpoint 500s. Tried, reverted; the settings reads in
+    /// <see cref="BuildDtoAsync"/> share the context too.
+    ///
+    /// Making this genuinely concurrent needs each lookup to own its DbContext — a scope per descriptor via
+    /// <c>IServiceScopeFactory</c> — rather than a <c>Task.WhenAll</c> over the shared one.
+    /// </summary>
     public async Task<IReadOnlyList<HapiTerminologyConfigurationDto>> GetAllAsync(CancellationToken cancellationToken)
     {
         var result = new List<HapiTerminologyConfigurationDto>(_registry.All.Count);
@@ -106,6 +125,7 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         _db.HapiTerminologyImportHistory.Add(history);
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("RunAndRecordHistoryAsync starting for {Code} (history {HistoryId}).", code, history.Id);
+        await NotifyStatusAsync(new TerminologyStatusChangedEvent(descriptor.Code, "Running", DateTimeOffset.UtcNow));
 
         try
         {
@@ -135,6 +155,40 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         {
             await _db.SaveChangesAsync(CancellationToken.None);
             _logger.LogInformation("RunAndRecordHistoryAsync finished for {Code} (history {HistoryId}), final status {Status}.", code, history.Id, history.Status);
+
+            // In the finally block, not at the end of each branch: this is the client's ONLY signal that the
+            // sync ended now that the history poll is gone, so it has to fire on the failure path too — and
+            // the catch above deliberately swallows the exception, so both paths converge here. A row whose
+            // terminal event never arrives is stuck showing "Running" until the page is reloaded.
+            await NotifyStatusAsync(new TerminologyStatusChangedEvent(
+                descriptor.Code,
+                history.Status,
+                DateTimeOffset.UtcNow,
+                history.ImportedConceptCount,
+                history.Version,
+                history.ErrorMessage));
+        }
+    }
+
+    /// <summary>Fire-and-forget by intent: a push that fails (no hub registered, client gone, transport
+    /// down) must never fail the import that just succeeded, so this swallows and logs rather than
+    /// propagating. Called from a finally block, where throwing would also mask the original exception.</summary>
+    private async Task NotifyStatusAsync(TerminologyStatusChangedEvent statusEvent)
+    {
+        if (_statusNotifier is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _statusNotifier.NotifyAsync(statusEvent, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception,
+                "Failed to push {Status} status for {Code}; the import itself was unaffected.",
+                statusEvent.Status, statusEvent.Code);
         }
     }
 
@@ -163,8 +217,26 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         try
         {
             var latestVersion = await descriptor.CheckLatestVersionAsync(_serviceProvider, cancellationToken);
+
+            // Compare like with like. storedVersion came out of a varchar(32) column and has therefore
+            // already been clipped, while latestVersion is whatever the publisher serves — CMS's is a
+            // 41-character release filename. Comparing the raw upstream value against the clipped stored one
+            // never matches, so updateAvailable stays true forever and the portal's auto-sync re-downloads
+            // and re-imports the entire code system on every page load.
+            var comparableLatest = HapiTerminologyImportHistory.ClipVersion(latestVersion);
             var updateAvailable = latestVersion is not null
-                && !string.Equals(latestVersion, storedVersion, StringComparison.OrdinalIgnoreCase);
+                && !string.Equals(comparableLatest, storedVersion, StringComparison.OrdinalIgnoreCase);
+
+            // "Up to date" is a claim about the CONCEPTS, but storedVersion is read from the import-history
+            // table — two separate sources of truth that can disagree. A succeeded history row whose concepts
+            // were later cleared (or whose import wrote history but no data) would otherwise report no update
+            // available and never auto-sync, leaving the system permanently empty and silently claiming to be
+            // current. Treat "nothing actually stored" as needing a sync regardless of what history says.
+            if (!updateAvailable && storedVersion is not null && !await HasStoredConceptsAsync(descriptor, cancellationToken))
+            {
+                updateAvailable = true;
+            }
+
             return new HapiTerminologyVersionCheckResultDto(descriptor.Code, true, storedVersion, latestVersion, updateAvailable, null);
         }
         catch (Exception exception)
@@ -185,6 +257,31 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         }
 
         return results;
+    }
+
+    /// <summary>True when this system actually has concepts loaded. Deliberately a COUNT-free existence
+    /// check: TRM_CONCEPT holds hundreds of thousands of rows and all we need to know is "any at all".</summary>
+    private async Task<bool> HasStoredConceptsAsync(HapiTerminologySystemDescriptor descriptor, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(descriptor.CodeSystemUri))
+        {
+            // No URI recorded for this system, so concept presence cannot be established. Say "yes" rather
+            // than "no": a false negative here would auto-start a full re-import on every page load.
+            return true;
+        }
+
+        // Joined by hand rather than through a navigation property, because TrmConcept has none — and
+        // because HAPI's schema has a trap here: TrmConcept.CodeSystemPid points at the VERSION row
+        // (TrmCodeSystemVer), not at TrmCodeSystem. Matching it straight against TrmCodeSystem.Pid would
+        // compare two unrelated identifier spaces and quietly return the wrong answer.
+        var versionPids = _db.TrmCodeSystemVers
+            .Where(v => _db.TrmCodeSystems
+                .Where(cs => cs.CodeSystemUri == descriptor.CodeSystemUri)
+                .Select(cs => cs.Pid)
+                .Contains(v.CodeSystemPid))
+            .Select(v => v.Pid);
+
+        return await _db.TrmConcepts.AnyAsync(c => versionPids.Contains(c.CodeSystemPid), cancellationToken);
     }
 
     private async Task<string?> GetStoredVersionAsync(HapiTerminologySystemDescriptor descriptor, CancellationToken cancellationToken) =>

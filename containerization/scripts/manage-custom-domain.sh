@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Same behaviour as manage-custom-domain.ps1 — Segue/FHIRBridge custom domain + managed SSL.
+# Same behaviour as manage-custom-domain.ps1 — Segue/Segue custom domain + managed SSL.
 # See that file's header for Mitul's Info → DNS → Add → Bind flow and Bicep two-phase notes.
 set -euo pipefail
 

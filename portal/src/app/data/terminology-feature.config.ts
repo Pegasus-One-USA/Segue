@@ -34,3 +34,18 @@ export const TERMINOLOGY_PERMISSION_CODES: string[] = [
  *  Role & Permissions view to filter these groups out the same way node-permission-visibility.util
  *  already filters phase-hidden connector groups. */
 export const TERMINOLOGY_PERMISSION_PREFIXES: ReadonlySet<string> = new Set(['loinc', 'snomedct', 'rxnorm', 'icd10']);
+
+/** Separate on/off switch for the OLDER "Terminology Server" table on System Settings > General
+ *  (HapiTerminologyTableComponent — the 13 HAPI-synced code systems with Edit / Run Now / View
+ *  History / View Codes per row). This is a DIFFERENT feature from the Terminology Codes tab that
+ *  TERMINOLOGY_FEATURE_ENABLED above governs, and the two are independently switchable: the older
+ *  table is the one in use, the newer per-vocabulary import screens stay off.
+ *
+ *  It has its own constant rather than reusing TERMINOLOGY_FEATURE_ENABLED because that flag was
+ *  switched off for the newer feature only; gating this table on it as well took a live screen down
+ *  as a side effect. Keep the gate (rather than dropping it entirely) so turning this table off in
+ *  future also suppresses its ngOnInit call to GET /api/v1/terminology/hapi.
+ *
+ *  Elevation still applies on top of this flag — see SystemSettingListComponent.isElevated(); these
+ *  rows carry external download credentials and endpoint URLs. */
+export const TERMINOLOGY_SERVER_TABLE_ENABLED = true;

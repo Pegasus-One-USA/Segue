@@ -1,0 +1,5 @@
+# Generated locally by generate-cert.ps1|sh, deliberately never committed — see that script's own
+# header comment and DependencyInjection.cs's ValidateRedisServerCertificate for why: each
+# deployment gets its own cert+key pair rather than one shared, source-controlled pair.
+redis.crt
+redis.key

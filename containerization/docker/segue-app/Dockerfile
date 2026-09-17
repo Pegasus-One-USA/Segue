@@ -3,7 +3,7 @@
 # as two processes, mirroring the existing Windows Service deploy topology described in
 # deploy/windows/README.md. Build from the REPO ROOT as context:
 #
-#   docker build -f containerization/docker/fhirbridge-app/Dockerfile -t fhirbridge-app:local .
+#   docker build -f containerization/docker/segue-app/Dockerfile -t segue-app:local .
 #
 # Optional build arg PORTAL_CONFIG selects the Angular build configuration (angular.json):
 # production (default) | staging | qa | dev | working.
@@ -40,7 +40,7 @@ WORKDIR /app
 COPY --from=dotnet-build /app/publish/api ./api
 COPY --from=dotnet-build /app/publish/gateway ./gateway
 COPY --from=portal-build /src/portal/dist/fhirbridge-ui/browser ./portal
-COPY containerization/docker/fhirbridge-app/entrypoint.sh ./entrypoint.sh
+COPY containerization/docker/segue-app/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
 # The Api never listens outside this container (127.0.0.1 only, set in entrypoint.sh) — only the

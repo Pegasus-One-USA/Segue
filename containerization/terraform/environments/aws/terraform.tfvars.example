@@ -8,19 +8,34 @@
 # Documents/Containerization-Multi-Cloud-Guide.html. A single NAT Gateway is used (not one per AZ),
 # which is cheaper but is a single point of failure for outbound traffic if that AZ has an issue.
 
-name_prefix     = "fhirbridge"
-aws_region      = "us-east-1"
-image_tag       = "v1"
-sql_sa_password = "Ch4ngeMe!Str0ng"
-jwt_signing_key = "replace-with-a-long-random-string-at-least-32-chars"
-redis_password  = "replace-with-a-strong-redis-password"
+name_prefix       = "segue"
+aws_region        = "us-east-1"
+image_tag         = "v1"
+postgres_password = "Ch4ngeMe!Str0ng"
+jwt_signing_key   = "replace-with-a-long-random-string-at-least-32-chars"
+redis_password    = "replace-with-a-strong-redis-password"
 
-# Optional — public ports clients use to reach each app through the load balancer. Uncomment to
-# override; defaults shown below match the values baked into the container images.
-# fhirbridge_app_port = 80
-# demo_app_port       = 5500
+# Optional — public port clients use to reach the app through the load balancer. Uncomment to
+# override; default shown below matches the value baked into the container image.
+# segue_app_port = 80
 
-# Optional — internal-only ports for SQL Server / Redis (reached via Cloud Map, never by an
-# external client). Uncomment to override.
-# sql_port   = 1433
+# Optional — internal-only port for the containerized Postgres (reached via Cloud Map, never by
+# an external client). Meaningless when use_rds_postgresql is true. Uncomment to override.
+# postgres_port = 5432
+
+# Optional — internal-only port for Redis (reached via Cloud Map, never by an external client).
+# Uncomment to override.
 # redis_port = 6379
+
+# Optional — set true to use a managed Amazon RDS for PostgreSQL instance instead of the
+# containerized Postgres. See rds_postgresql_instance_class/rds_postgresql_allocated_storage in
+# variables.tf to size it.
+# use_rds_postgresql = false
+
+# Centralized log viewing: false (default, or simply omit) — no Seq service. true creates a Seq
+# ECS service with its own ALB listener/port that Api/Gateway/Worker all send structured logs to —
+# see enable_seq's description in variables.tf. seq_admin_password is required whenever this is
+# true; seq_port defaults to 8443 (distinct from segue_app_port).
+# enable_seq          = true
+# seq_admin_password  = "change-me-strong-seq-password"
+# seq_port            = 8443

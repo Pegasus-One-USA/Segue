@@ -354,7 +354,8 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
         var entries = result.Hops
             .Select(hop => new LineageHopEntryDto(
                 hop.WriteBackPath, hop.SourceField, hop.NodeOrder, hop.NodeType.ToString(), hop.ConfigJson,
-                hop.Before, hop.After, hop.Success, hop.Error, hop.DurationMs, hop.ExecutedAtUtc))
+                // hop.Before/hop.After deliberately NOT captured: those are the field's actual patient values.
+                hop.Success, hop.Error, hop.DurationMs, hop.ExecutedAtUtc))
             .ToList();
 
         try
@@ -1183,8 +1184,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                         nodeOrder++,
                         "DeIdentification:" + hop.Strategy,
                         hop.ConfigJson,
-                        hop.BeforeValueJson,
-                        hop.AfterValueJson,
+                        // Before/After values deliberately NOT captured: they are the field's actual patient data.
                         hop.Success,
                         hop.ErrorMessage,
                         null,
@@ -1215,8 +1215,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     nodeOrder,
                     "DirectMapping",
                     "{}",
-                    SerializeLineageValue(value),
-                    SerializeLineageValue(value),
+                    // Before/After values deliberately NOT captured: they are the field's actual patient data.
                     true,
                     null,
                     null,
@@ -1309,8 +1308,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     result.ResolvedSystemOverride is null
                         ? rule.ConfigJson
                         : WithResolvedSystemOverride(rule.ConfigJson, result.ResolvedSystemOverride),
-                    SerializeLineageValue(hopInput),
-                    result.Success ? SerializeLineageValue(result.Value) : null,
+                    // Before/After values deliberately NOT captured: they are the field's actual patient data.
                     result.Success,
                     result.Success ? null : result.Error,
                     hopStopwatch?.Elapsed.TotalMilliseconds,
@@ -1350,6 +1348,36 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             transformed[destinationField] = currentValue is System.Text.Json.Nodes.JsonNode jsonNode
                 ? jsonNode.ToJsonString()
                 : currentValue;
+        }
+
+        // A configured field whose source path matched nothing in this resource never reaches `row` at all, so
+        // the loop above cannot see it and it would otherwise leave NO trace anywhere: no value, no lineage row,
+        // no error, and a run that still reports Succeeded while the destination column silently holds NULL.
+        // That silence is what makes an addressing mistake (e.g. a jsonPath that lost its "[*]" and so no longer
+        // matches an array-valued element) practically undiagnosable from the product — the only way to notice
+        // was to query the destination and find the column empty. Record an explicit unsuccessful hop instead,
+        // so "the field resolved to nothing" is visible in lineage exactly like any other failure.
+        if (lineageEntries is not null)
+        {
+            foreach (var (destinationField, sourceField) in sourceFieldByTarget)
+            {
+                if (row.ContainsKey(destinationField))
+                {
+                    continue;
+                }
+
+                lineageEntries.Add(new LineageHopEntryDto(
+                    destinationField,
+                    sourceField,
+                    0,
+                    "SkippedNoMatch",
+                    "{}",
+                    // Before/After values deliberately NOT captured: they are the field's actual patient data.
+                    false,
+                    $"Source path '{sourceField}' matched no value in this {resourceType} — the destination column was left unwritten.",
+                    null,
+                    DateTimeOffset.UtcNow));
+            }
         }
 
         return (transformed ?? row, fhirWriteBackPatches, lineageEntries);

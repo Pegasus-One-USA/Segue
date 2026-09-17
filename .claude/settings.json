@@ -1,5 +1,9 @@
 {
   "permissions": {
+    "_comment_deny": "Agent tool is blocked project-wide: subagents launched with isolation:\"worktree\" were left as stale full-repo checkouts under .claude/worktrees/ (grew to ~24MB, doubling/tripling file-search scope and inflating token usage across the team). Blocked here until an isolation:worktree-specific PreToolUse hook replaces this blanket rule.",
+    "deny": [
+      "Agent"
+    ],
     "allow": [
       "Skill(run)",
       "Skill(run:*)",

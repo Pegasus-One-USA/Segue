@@ -1,7 +1,14 @@
-# 5 Fargate task definitions. cpu/memory pairs are valid Fargate combinations; adjust per load.
+# 4 Fargate task definitions (when using the containerized Postgres path — 3 when
+# use_rds_postgresql routes FHIRBridgeDb to Amazon RDS instead). cpu/memory pairs are valid
+# Fargate combinations; adjust per load.
 
-resource "aws_ecs_task_definition" "sqlserver" {
-  family                   = "${var.name_prefix}-sqlserver"
+# Only created for the containerized Postgres path — Amazon RDS for PostgreSQL (aws_db_instance.
+# postgresql in main.tf) needs no ECS task/service of its own. Gated the same as every other
+# postgres-specific resource (its Cloud Map entry, EFS access point, Secrets Manager secret, log
+# group, and the aws_ecs_service.postgres in services.tf).
+resource "aws_ecs_task_definition" "postgres" {
+  count                    = var.use_rds_postgresql ? 0 : 1
+  family                   = "${var.name_prefix}-postgres"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "1024"
@@ -9,12 +16,12 @@ resource "aws_ecs_task_definition" "sqlserver" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
 
   volume {
-    name = "sql-data"
+    name = "postgres-data"
     efs_volume_configuration {
       file_system_id     = aws_efs_file_system.main.id
       transit_encryption = "ENABLED"
       authorization_config {
-        access_point_id = aws_efs_access_point.sql_data.id
+        access_point_id = aws_efs_access_point.postgres_data[0].id
         iam             = "DISABLED"
       }
     }
@@ -22,28 +29,40 @@ resource "aws_ecs_task_definition" "sqlserver" {
 
   container_definitions = jsonencode([
     {
-      name         = "sqlserver"
-      image        = "mcr.microsoft.com/mssql/server:2022-latest"
-      portMappings = [{ containerPort = var.sql_port, protocol = "tcp" }]
+      name  = "postgres"
+      image = "postgres:16-alpine"
+      # Stock image, no custom Dockerfile/ECR build needed — unlike Redis (see the redis task
+      # below), the C# app enforces no TLS/cert-pinning on the database connection, so this mirrors
+      # the SQL Server container it replaces: VPC/security-group isolation (ecs_tasks security
+      # group + private subnets) is the real boundary here, not TLS.
+      portMappings = [{ containerPort = var.postgres_port, protocol = "tcp" }]
       environment = [
-        { name = "ACCEPT_EULA", value = "Y" },
-        { name = "MSSQL_PID", value = "Express" },
-        # Fargate's awsvpc networking has no host-level port remapping — SQL Server itself must be
-        # told to listen on var.sql_port, not just the portMappings entry above.
-        { name = "MSSQL_TCP_PORT", value = tostring(var.sql_port) },
+        { name = "POSTGRES_DB", value = "Segue" },
+        { name = "POSTGRES_USER", value = "segue" },
+        # EFS (like Azure Files) doesn't support the chown/chmod postgres's entrypoint does on
+        # PGDATA at first boot ("Operation not permitted") the way a native/NFS filesystem does —
+        # pointing PGDATA at a subdirectory postgres creates and owns itself (rather than the
+        # mount root, which is externally provisioned by the EFS access point above) works around
+        # it. Proven previously in this same environment for the (now-removed) HAPI terminology
+        # Postgres container.
+        { name = "PGDATA", value = "/var/lib/postgresql/data/pgdata" },
       ]
+      # Fargate's awsvpc networking has no host-level port remapping — postgres itself must be
+      # told to listen on var.postgres_port, not just the portMappings entry above. The image has
+      # no env-var port override, so this is passed as a command override instead.
+      command = ["postgres", "-p", tostring(var.postgres_port)]
       secrets = [
-        { name = "MSSQL_SA_PASSWORD", valueFrom = aws_secretsmanager_secret.sql_sa_password.arn },
+        { name = "POSTGRES_PASSWORD", valueFrom = aws_secretsmanager_secret.postgres_password[0].arn },
       ]
       mountPoints = [
-        { sourceVolume = "sql-data", containerPath = "/var/opt/mssql", readOnly = false },
+        { sourceVolume = "postgres-data", containerPath = "/var/lib/postgresql/data", readOnly = false },
       ]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.sqlserver.name
+          "awslogs-group"         = aws_cloudwatch_log_group.postgres[0].name
           "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "sqlserver"
+          "awslogs-stream-prefix" = "postgres"
         }
       }
     }
@@ -72,18 +91,25 @@ resource "aws_ecs_task_definition" "redis" {
 
   container_definitions = jsonencode([
     {
-      name         = "redis"
-      image        = "redis:7-alpine"
+      name = "redis"
+      # Custom image (not stock redis:7-alpine): FHIRBridge.Api/.Worker refuse a plaintext Redis
+      # connection outside Development (HIPAA #15), and stock Redis has no TLS configured at all.
+      # See containerization/docker/redis-tls/Dockerfile.
+      image        = "${aws_ecr_repository.redis.repository_url}:${var.image_tag}"
       portMappings = [{ containerPort = var.redis_port, protocol = "tcp" }]
-      # Redis has no env-var port/password setting — same awsvpc constraint as SQL Server above
-      # for the port. The password is deliberately resolved from $REDIS_PASSWORD inside a shell
+      # Redis has no env-var port/password setting — same awsvpc constraint as the containerized
+      # Postgres task above for the port. The password is deliberately resolved from $REDIS_PASSWORD inside a shell
       # wrapper rather than passed as a plain --requirepass argument, so the actual value is never
       # written into this task definition in plaintext (unlike the port, which isn't secret) —
       # only the Secrets Manager ARN reference below is. Trade-off: this bypasses the image's
       # entrypoint privilege-drop-to-non-root step, so redis-server runs as root inside its own
       # isolated Fargate task; acceptable here since Fargate isolates at the task/microVM level
       # regardless of in-container UID, and it keeps the secret out of the task definition.
-      command = ["sh", "-c", "redis-server --port ${var.redis_port} --requirepass \"$REDIS_PASSWORD\""]
+      # --port 0 disables the plaintext port entirely — --tls-port is the only one Redis listens
+      # on. --tls-auth-clients no means server-side TLS + the existing --requirepass password,
+      # not mutual TLS (no client certificate required) — matches the ConnectionStrings__Redis
+      # "ssl=true" (no client cert options) on segue_app/worker below.
+      command = ["sh", "-c", "redis-server --tls-port ${var.redis_port} --port 0 --tls-cert-file /certs/redis.crt --tls-key-file /certs/redis.key --tls-auth-clients no --requirepass \"$REDIS_PASSWORD\""]
       secrets = [
         { name = "REDIS_PASSWORD", valueFrom = aws_secretsmanager_secret.redis_password.arn },
       ]
@@ -102,7 +128,54 @@ resource "aws_ecs_task_definition" "redis" {
   ])
 }
 
-resource "aws_ecs_task_definition" "fhirbridge_app" {
+resource "aws_ecs_task_definition" "seq" {
+  count                    = var.enable_seq ? 1 : 0
+  family                   = "${var.name_prefix}-seq"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+
+  volume {
+    name = "seq-data"
+    efs_volume_configuration {
+      file_system_id     = aws_efs_file_system.main.id
+      transit_encryption = "ENABLED"
+      authorization_config {
+        access_point_id = aws_efs_access_point.seq_data[0].id
+        iam             = "DISABLED"
+      }
+    }
+  }
+
+  container_definitions = jsonencode([
+    {
+      name         = "seq"
+      image        = "datalust/seq:latest"
+      portMappings = [{ containerPort = 80, protocol = "tcp" }]
+      environment = [
+        { name = "ACCEPT_EULA", value = "Y" },
+      ]
+      secrets = [
+        { name = "SEQ_FIRSTRUN_ADMINPASSWORD", valueFrom = aws_secretsmanager_secret.seq_admin_password[0].arn },
+      ]
+      mountPoints = [
+        { sourceVolume = "seq-data", containerPath = "/data", readOnly = false },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.seq[0].name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "seq"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_task_definition" "segue_app" {
   family                   = "${var.name_prefix}-app"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
@@ -112,61 +185,35 @@ resource "aws_ecs_task_definition" "fhirbridge_app" {
 
   container_definitions = jsonencode([
     {
-      name         = "fhirbridge-app"
-      image        = "${aws_ecr_repository.fhirbridge_app.repository_url}:${var.image_tag}"
+      name         = "segue-app"
+      image        = "${aws_ecr_repository.segue_app.repository_url}:${var.image_tag}"
       portMappings = [{ containerPort = 80, protocol = "tcp" }]
-      environment = [
+      environment = concat([
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__FHIRBridgeDb", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
-        { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password}" },
+        { name = "ConnectionStrings__FHIRBridgeDb", value = local.seguedb_connection_string },
+        { name = "Database__Provider", value = "PostgreSql" },
+        { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password},ssl=true" },
+        { name = "Redis__TrustedCertificateThumbprint", value = var.redis_trusted_certificate_thumbprint },
         { name = "DataProtection__KeyRingPath", value = "/app/keys" },
-        # The demo app is a separate origin whose frontend calls this API cross-origin — the ALB's
-        # DNS name is known from this same apply (a different resource, not a self-reference).
-        { name = "Portal__AllowedOrigins__0", value = "https://${aws_lb.main.dns_name}:${var.demo_app_port}" },
         { name = "AllowedHosts", value = "*" },
         # Api and Gateway are sibling processes in one container (entrypoint.sh) - Api binds
         # loopback-only on 5000, and Gateway throws at startup outside Development without this.
         { name = "ApiBaseUrl", value = "http://127.0.0.1:5000/" },
-      ]
+        ],
+        # See enable_seq's description in variables.tf. Both Api and Gateway (this same container)
+        # read this key via SegueLogging.
+        var.enable_seq ? [
+          { name = "Observability__SeqServerUrl", value = "http://seq.${var.name_prefix}.internal" },
+      ] : [])
       secrets = [
         { name = "Authentication__SigningKey", valueFrom = aws_secretsmanager_secret.jwt_signing_key.arn },
       ]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.fhirbridge_app.name
+          "awslogs-group"         = aws_cloudwatch_log_group.segue_app.name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "app"
-        }
-      }
-    }
-  ])
-}
-
-resource "aws_ecs_task_definition" "demo_app" {
-  family                   = "${var.name_prefix}-demo-app"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-
-  container_definitions = jsonencode([
-    {
-      name         = "demo-app"
-      image        = "${aws_ecr_repository.demo_app.repository_url}:${var.image_tag}"
-      portMappings = [{ containerPort = 5500, protocol = "tcp" }]
-      environment = [
-        { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__Default", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=HealthAppDb;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
-        { name = "AllowedFrontendOrigin", value = "https://${aws_lb.main.dns_name}:${var.demo_app_port}" },
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.demo_app.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "demo-app"
         }
       }
     }
@@ -185,13 +232,19 @@ resource "aws_ecs_task_definition" "worker" {
     {
       name  = "worker"
       image = "${aws_ecr_repository.worker.repository_url}:${var.image_tag}"
-      environment = [
+      environment = concat([
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
-        { name = "ConnectionStrings__FHIRBridgeDb", value = "Server=sqlserver.${var.name_prefix}.internal,${var.sql_port};Database=FHIRBridge;User Id=sa;Password=${var.sql_sa_password};Encrypt=True;TrustServerCertificate=True" },
-        { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password}" },
+        { name = "ConnectionStrings__FHIRBridgeDb", value = local.seguedb_connection_string },
+        { name = "Database__Provider", value = "PostgreSql" },
+        { name = "ConnectionStrings__Redis", value = "redis.${var.name_prefix}.internal:${var.redis_port},password=${var.redis_password},ssl=true" },
+        { name = "Redis__TrustedCertificateThumbprint", value = var.redis_trusted_certificate_thumbprint },
         { name = "RuntimeWorker__Enabled", value = "true" },
         { name = "Messaging__Provider", value = "InMemory" },
-      ]
+        ],
+        # See enable_seq's description on segue_app above.
+        var.enable_seq ? [
+          { name = "Observability__SeqServerUrl", value = "http://seq.${var.name_prefix}.internal" },
+      ] : [])
       logConfiguration = {
         logDriver = "awslogs"
         options = {

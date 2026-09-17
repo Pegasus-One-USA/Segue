@@ -11,7 +11,7 @@ import { HapiTerminologyConfigurationService, TerminologyConcept } from '../../s
 import { HapiTerminologyCodeDialogComponent, HapiTerminologyCodeDialogData } from '../hapi-terminology-code-dialog/hapi-terminology-code-dialog.component';
 import { ConfirmDialogComponent } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ToastService } from '../../../services/toast.service';
-import { DialogService, DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
+import { DialogService, DIALOG_DATA } from '../../../core/services/dialog.service';
 
 export interface HapiTerminologyCodesDialogData {
   systemCode: string;
@@ -41,7 +41,6 @@ export class HapiTerminologyCodesDialogComponent implements OnInit {
   private readonly toast     = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly dialogRef = inject<DialogRef<void>>(DialogRef);
   readonly data: HapiTerminologyCodesDialogData = inject(DIALOG_DATA) as HapiTerminologyCodesDialogData;
 
   readonly searchQuery = signal('');
@@ -49,6 +48,9 @@ export class HapiTerminologyCodesDialogComponent implements OnInit {
   readonly pageSize    = signal(25);
   readonly totalCount  = signal(0);
   readonly loading     = signal(true);
+  /** True only while a debounced search request is in flight — drives the small in-field spinner
+   *  instead of the screen-blocking global loader. */
+  readonly searching   = signal(false);
   readonly concepts    = signal<TerminologyConcept[]>([]);
 
   readonly displayedCols = ['index', 'code', 'display', 'actions'];
@@ -70,22 +72,26 @@ export class HapiTerminologyCodesDialogComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef),
     ).subscribe(() => {
       this.pageIndex.set(0);
-      this.load();
+      this.load(true);
     });
 
     this.load();
   }
 
-  load(): void {
+  /** `silent` comes only from the debounced search box — see getCodes. */
+  load(silent = false): void {
     this.loading.set(true);
-    this.svc.getCodes(this.data.systemCode, this.searchQuery().trim() || undefined, this.pageIndex() + 1, this.pageSize())
+    if (silent) this.searching.set(true);
+    this.svc.getCodes(this.data.systemCode, this.searchQuery().trim() || undefined, this.pageIndex() + 1, this.pageSize(), silent)
       .subscribe({
         next: result => {
+          this.searching.set(false);
           this.concepts.set(result.items);
           this.totalCount.set(result.totalCount);
           this.loading.set(false);
         },
         error: () => {
+          this.searching.set(false);
           this.loading.set(false);
           this.toast.error(`Failed to load ${this.data.displayName} codes.`);
         },
