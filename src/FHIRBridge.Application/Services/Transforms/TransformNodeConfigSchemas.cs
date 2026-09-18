@@ -293,7 +293,7 @@ public static class TransformNodeConfigSchemas
                 // Each applies to exactly one mode — hashing has nothing to keep visible, and only redact
                 // substitutes a token. Scoped rather than merely marked advanced so a hash rule's stored
                 // config says "mode = hash" and nothing else.
-                Number("keepLength", "Characters to keep visible", "4", advanced: true,
+                Number("keepLength", "End characters to keep visible", "4", advanced: true,
                     visibleWhen: OnlyWhen("mode", "mask")),
                 Text("token", "Replacement token", placeholder: "e.g. [REDACTED]", advanced: true,
                     visibleWhen: OnlyWhen("mode", "redact")),

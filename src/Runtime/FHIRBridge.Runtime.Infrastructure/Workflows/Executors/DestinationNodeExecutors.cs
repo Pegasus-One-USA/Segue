@@ -866,6 +866,11 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         // aggregation and its ExpectedFailure/"PartialSuccess" audit-log capture, rather than inventing a second
         // parallel reporting path.
         var writeFailureReasons = new List<string>();
+        // Kept separate from writeFailureReasons on purpose: a reference whose table is absent from this write is
+        // not itself a failed record, and an incremental load whose prerequisite rows landed on an EARLIER run
+        // resolves it perfectly well. Flagging it as a write failure would turn those healthy runs into
+        // PartialSuccess. It only earns its place in the output when the write actually goes wrong.
+        var referenceGaps = new List<string>();
 
         if (explicitProfile is null && MultiTableRelationalDestinationTypes.Contains(_destinationType))
         {
@@ -882,7 +887,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             var totalWritten = 0;
             string? firstDownloadUrl = null;
             var groups = records.GroupBy(record => record.ResourceType, StringComparer.OrdinalIgnoreCase).ToList();
-            foreach (var group in OrderGroupsByReferenceDependency(groups))
+            foreach (var group in OrderGroupsByReferenceDependency(groups, profilesByResourceType, referenceGaps))
             {
                 var groupRecords = group.ToArray();
                 var profile = profilesByResourceType.TryGetValue(group.Key, out var matched)
@@ -898,7 +903,32 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 var effectiveProfile = WriteModeSuffixIsMeaningless(_destinationType)
                     ? profile
                     : ApplyWriteModeSuffix(profile, writeModeSuffix);
-                var groupResult = await writer.WriteAsync(destination, effectiveProfile, groupRecords, writeContext, cancellationToken);
+                // A writer isolates per-record failures instead of throwing, so an EARLIER group can have lost
+                // every one of its records (a redacted token into a bit column, a NOT NULL violation, ...) and
+                // still return normally — and a LATER group then throws precisely because of it, most often on
+                // an FK lookup against the rows that never landed. Letting that second exception propagate bare
+                // discards writeFailureReasons entirely, so the run reports only the downstream symptom
+                // ("no row in [dbo].[X] has [Y] = ...") and hides the failure that actually caused it.
+                FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult groupResult;
+                try
+                {
+                    groupResult = await writer.WriteAsync(destination, effectiveProfile, groupRecords, writeContext, cancellationToken);
+                }
+                // Cancellation is not a write failure and must not be re-labelled as one. referenceGaps is
+                // populated BEFORE the first write, so on an incremental load — where a reference routinely
+                // points at rows from an earlier run — this filter is true almost every time, and a cancelled
+                // run would be recorded as Failed with a fabricated "consequence of earlier problems" cause.
+                // Every other blanket catch in this layer already excludes it.
+                catch (Exception exception) when (exception is not OperationCanceledException
+                    && (writeFailureReasons.Count > 0 || referenceGaps.Count > 0))
+                {
+                    throw new InvalidOperationException(
+                        $"Writing '{group.Key}' failed: {exception.Message} This is likely a consequence of "
+                        + $"earlier problems in the same write — "
+                        + string.Join(" | ", writeFailureReasons.Concat(referenceGaps)),
+                        exception);
+                }
+
                 totalWritten += groupResult.Count;
                 firstDownloadUrl ??= groupResult.DownloadUrl;
                 writeResult = groupResult;
@@ -984,7 +1014,11 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 ["skippedResourceTypes"] = writeFailureReasons.Count > 0 ? writeFailureReasons.ToArray() : null,
                 // Resource types the source delivered but this destination wasn't configured to write, dropped before
                 // the write (see the ReadSelectedResourceTypes filter above). Null when nothing was filtered out.
-                ["filteredOutResourceTypes"] = filteredOutResourceTypes
+                ["filteredOutResourceTypes"] = filteredOutResourceTypes,
+                // A reference whose target table this write does not contain. Reported even on a successful run:
+                // it succeeded because the rows happened to already exist, which is worth knowing before they
+                // don't. Null when every reference resolved against a table in this write.
+                ["unresolvedReferenceTables"] = referenceGaps.Count > 0 ? referenceGaps.ToArray() : null
             });
     }
 
@@ -1215,32 +1249,84 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     /// topological sort (Kahn/DFS style); any cycle (which shouldn't occur for real FHIR reference graphs) just
     /// falls back to the original grouping order for whichever groups are involved in it, rather than looping.
     /// </summary>
-    private static List<IGrouping<string, MappedDestinationRecord>> OrderGroupsByReferenceDependency(
-        List<IGrouping<string, MappedDestinationRecord>> groups)
+    internal static List<IGrouping<string, MappedDestinationRecord>> OrderGroupsByReferenceDependency(
+        List<IGrouping<string, MappedDestinationRecord>> groups,
+        IReadOnlyDictionary<string, MappingProfile> profilesByResourceType,
+        ICollection<string>? unresolvedReferences = null)
     {
-        // Keyed on the bare table name (schema prefix and any ";mode=..." write-mode suffix stripped). A
-        // group's own DestinationObject carries both — it's the full profile-level value (e.g.
-        // "dbo.Encounter;mode=upsert") — while a reference lookup's LookupTable is just the bare name a mapped
-        // field's own row targets (e.g. "Encounter", matching DestMappingRow.target's convention). Comparing the
-        // two as-is never matches, which silently disabled this entire topological sort for any real (non-
-        // legacy) MappingProfile — a resource referencing another via ReferenceLookupTable/ReferenceLookupKeyColumn
-        // could land in either write order, failing "no row in [table] has [column] = ..." whenever the
-        // referenced resource's own group happened to be written second.
+        // The table a group is ABOUT TO BE WRITTEN TO, which is the profile the write loop resolves — not the
+        // DestinationObject stamped on the records.
+        //
+        // Those two have different sources and drift apart: MappingNodeExecutor stamps each record from the
+        // MappingProfiles row its mappingProfileIds pins, while the write here uses CreateMappingProfiles(node),
+        // read from the destination node's own resourceMappings config. Renaming a resource's table updates the
+        // node config immediately but leaves the MappingProfiles row on the old name, so records kept saying
+        // "dbo.Patient" while both the write AND the referencing group's LookupTable had moved to
+        // "dbo.Patient_NewMapped". Indexing on the stale value meant the lookup below matched nothing, the
+        // dependency was dropped, and the referencing group could be written first — failing with
+        // "no row in [dbo].[Patient_NewMapped] has [PatientId] = ..." against a table its own prerequisite had
+        // not been written to yet.
+        //
+        // Keyed on the bare table name (schema prefix and any ";mode=..." write-mode suffix stripped): a
+        // profile-level DestinationObject carries both (e.g. "dbo.Encounter;mode=upsert"), while a reference
+        // lookup's LookupTable is just the bare name a mapped field's own row targets (e.g. "Encounter",
+        // matching DestMappingRow.target's convention). Comparing the two as-is never matches.
+        string? TableFor(IGrouping<string, MappedDestinationRecord> group) =>
+            profilesByResourceType.TryGetValue(group.Key, out var profile)
+                && !string.IsNullOrWhiteSpace(profile.DestinationObject)
+                    ? profile.DestinationObject
+                    // No node-config profile for this resource type (the legacy single-profile path, resolved
+                    // later by ResolveMappingProfileAsync) — the record's own stamp is all there is.
+                    : group.Select(r => r.DestinationObject).FirstOrDefault();
+
         var tableToGroup = groups
-            .Select(g => (Table: g.Select(r => r.DestinationObject).FirstOrDefault(), Group: g))
+            .Select(g => (Table: TableFor(g), Group: g))
             .Where(x => x.Table is not null)
             .GroupBy(x => NormalizeTableName(x.Table!), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First().Group, StringComparer.OrdinalIgnoreCase);
 
         var dependencies = groups.ToDictionary(
             g => g,
-            g => g
-                .SelectMany(r => r.ReferenceLookups ?? [])
-                .Select(l => NormalizeTableName(l.LookupTable))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Where(table => tableToGroup.ContainsKey(table) && !ReferenceEquals(tableToGroup[table], g))
-                .Select(table => tableToGroup[table])
-                .ToList());
+            g =>
+            {
+                var resolved = new List<IGrouping<string, MappedDestinationRecord>>();
+                var lookupTables = g
+                    .SelectMany(r => r.ReferenceLookups ?? [])
+                    .Select(l => NormalizeTableName(l.LookupTable))
+                    .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var table in lookupTables)
+                {
+                    if (tableToGroup.TryGetValue(table, out var target))
+                    {
+                        if (!ReferenceEquals(target, g))
+                        {
+                            resolved.Add(target);
+                        }
+
+                        continue;
+                    }
+
+                    // Nothing in this write targets the table this group's FK resolves against, so there is no
+                    // ordering constraint to enforce and the write will fail on the lookup instead. Dropping it
+                    // silently is what made the failure above undiagnosable — the run surfaced only the writer's
+                    // "must be written before this one" message, which describes an ordering problem when the
+                    // real one is that the prerequisite is not part of this write at all.
+                    // Reported to the CALLER rather than logged. Every destination executor builds its base with
+                    // no logger factory, so Logger is NullLogger here and a LogWarning would provably reach
+                    // nobody — the returned collection is the only reporting channel that works, and the node's
+                    // own output metadata is where an operator will actually see it. The writer's own message
+                    // describes an ORDERING problem ("must be written before this one, in the same destination
+                    // write") when the truth is that the prerequisite is not in this write at all, which is a
+                    // different fix.
+                    unresolvedReferences?.Add(
+                        $"{g.Key} resolves a reference against table '{table}', which no resource type in this "
+                        + $"write targets (writing: {string.Join(", ", tableToGroup.Keys)}). The lookup will fail "
+                        + "unless those rows already exist in the destination.");
+                }
+
+                return resolved;
+            });
 
         var ordered = new List<IGrouping<string, MappedDestinationRecord>>();
         var visited = new HashSet<IGrouping<string, MappedDestinationRecord>>();
