@@ -1027,6 +1027,14 @@ export class WorkflowBuildAssemblerServiceV2 {
             'dest_fabricEndpointSuffix',
             'dest_fabricAuthorityHost',
             'dest_fabricAccountUrl',
+            // Warehouse landing mode. Allowlist, so a missing key is silently dropped before the save — which
+            // made the server reject the request for the very fields the form had just posted.
+            'dest_fabricWarehouseSqlEndpoint',
+            'dest_fabricWarehouseStagingLakehouse',
+            'dest_fabricWarehouseTable',
+            'dest_fabricWarehouseSchema',
+            'dest_fabricWarehouseWriteMode',
+            'dest_fabricWarehouseStagingPath',
           ]
         : kind === 'sql'
         ? [

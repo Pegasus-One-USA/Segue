@@ -58,6 +58,49 @@ public sealed class WarehouseTableLandingStrategyTests
         act.Should().Throw<InvalidOperationException>().WithMessage(expectedMessage);
     }
 
+    /// <summary>
+    /// Fabric's own UI shows a bare SERVER NAME, so that is what a user pastes. Handing it straight to
+    /// SqlConnection fails with "Format of the initialization string does not conform to specification starting
+    /// at index 0", which names neither the field nor the expected shape — so a value with no '=' is treated as
+    /// a host and wrapped into a real connection string instead of rejected.
+    /// </summary>
+    [Fact]
+    public void A_bare_server_name_is_wrapped_into_a_connection_string()
+    {
+        var metadata = System.Text.Json.Nodes.JsonNode.Parse(WarehouseMetadata)!.AsObject();
+        metadata["dest_fabricWarehouseSqlEndpoint"] = "abc123.datawarehouse.fabric.microsoft.com";
+
+        var settings = FabricDestinationSettings.Parse(Destination(metadata.ToJsonString()));
+
+        settings.WarehouseConnectionString.Should()
+            .StartWith("Server=abc123.datawarehouse.fabric.microsoft.com;")
+            .And.Contain("Database=ClinicalWh", "the warehouse item name is the database");
+    }
+
+    [Fact]
+    public void A_full_connection_string_is_passed_through_untouched()
+    {
+        var metadata = System.Text.Json.Nodes.JsonNode.Parse(WarehouseMetadata)!.AsObject();
+        metadata["dest_fabricWarehouseSqlEndpoint"] = "Server=x.datawarehouse.fabric.microsoft.com;Database=Other";
+
+        var settings = FabricDestinationSettings.Parse(Destination(metadata.ToJsonString()));
+
+        settings.WarehouseConnectionString.Should()
+            .Be("Server=x.datawarehouse.fabric.microsoft.com;Database=Other");
+    }
+
+    /// <summary>A connection string that names a server but no database still needs one to connect.</summary>
+    [Fact]
+    public void A_connection_string_without_a_database_gets_the_warehouse_item_name()
+    {
+        var metadata = System.Text.Json.Nodes.JsonNode.Parse(WarehouseMetadata)!.AsObject();
+        metadata["dest_fabricWarehouseSqlEndpoint"] = "Server=x.datawarehouse.fabric.microsoft.com";
+
+        var settings = FabricDestinationSettings.Parse(Destination(metadata.ToJsonString()));
+
+        settings.WarehouseConnectionString.Should().EndWith(";Database=ClinicalWh");
+    }
+
     [Fact]
     public void Staging_path_lands_under_the_staging_lakehouses_Files_area()
     {

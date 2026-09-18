@@ -108,11 +108,11 @@
       <div class="dw-field dw-field--full" [class.dw-field--error]="fabricForm.get('warehouseSqlEndpoint')!.invalid && fabricForm.get('warehouseSqlEndpoint')!.touched">
         <label class="dw-label" for="dw-fab-whEndpoint">Warehouse SQL connection string <span class="dw-req">*</span></label>
         <input id="dw-fab-whEndpoint" class="dw-input" formControlName="warehouseSqlEndpoint"
-          placeholder="Server=xxx.datawarehouse.fabric.microsoft.com;Database=MyWarehouse" />
+          placeholder="xxx.datawarehouse.fabric.microsoft.com" />
         @if (fabricForm.get('warehouseSqlEndpoint')!.hasError('required') && fabricForm.get('warehouseSqlEndpoint')!.touched) {
           <span class="dw-error">Warehouse SQL connection string is required.</span>
         } @else {
-          <span class="dw-hint">Copy it from the Warehouse's settings in Fabric. Leave credentials out — the identity chosen below is used. This is a different endpoint from OneLake, so it cannot be derived from the workspace.</span>
+          <span class="dw-hint">Paste the SQL connection string exactly as Fabric shows it (Warehouse → Settings → SQL connection string) — the server name on its own is enough. Leave credentials out; the identity chosen below is used. This is a different endpoint from OneLake, so it cannot be derived from the workspace.</span>
         }
       </div>
 

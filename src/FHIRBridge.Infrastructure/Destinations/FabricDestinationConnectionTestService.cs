@@ -191,7 +191,28 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
         {
             var token = await credential.GetTokenAsync(new TokenRequestContext([SqlScope]), probeToken);
 
-            await using var connection = new SqlConnection(request.WarehouseSqlEndpoint)
+            // Normalized through the same WarehouseConnectionString the writer uses, so a bare server name (what
+            // Fabric's UI actually shows) is accepted here exactly as it is at write time. Testing the raw value
+            // instead would reintroduce the probe/write divergence that made an empty account URL pass this test
+            // and then fail the real write.
+            var connectionString = new FabricDestinationSettings(
+                Mode: FabricLandingMode.WarehouseTable,
+                AuthMode: FabricAuthMode.ManagedIdentity,
+                Workspace: request.Workspace,
+                ItemName: request.ItemName,
+                ItemType: "Warehouse",
+                BasePath: string.Empty,
+                FileFormat: FabricFileFormat.Parquet,
+                Partitioning: FabricPartitionScheme.None,
+                TenantId: null,
+                ClientId: null,
+                ManagedIdentityClientId: null,
+                AuthorityHost: null,
+                EndpointSuffix: "fabric.microsoft.com",
+                AccountUrlOverride: null,
+                WarehouseSqlEndpoint: request.WarehouseSqlEndpoint).WarehouseConnectionString;
+
+            await using var connection = new SqlConnection(connectionString)
             {
                 AccessToken = token.Token,
             };
@@ -211,6 +232,19 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
         catch (SqlException exception) when (exception.Number is 18456 or 4060 or 40615)
         {
             return (false, exception.Message, WarehousePermissionHint());
+        }
+        catch (ArgumentException exception)
+        {
+            // "Format of the initialization string does not conform to specification" — SqlConnection could not
+            // parse the value. WarehouseConnectionString already wraps a bare server name, so reaching here means
+            // the value looks like a connection string but is malformed; say what a valid one looks like rather
+            // than passing through a message that names neither the field nor the expected shape.
+            return (false,
+                exception.Message
+                    + " Expected either the server name on its own (xxx.datawarehouse.fabric.microsoft.com) or a"
+                    + " full connection string such as"
+                    + " 'Server=xxx.datawarehouse.fabric.microsoft.com;Database=MyWarehouse'.",
+                null);
         }
         catch (Exception exception)
         {

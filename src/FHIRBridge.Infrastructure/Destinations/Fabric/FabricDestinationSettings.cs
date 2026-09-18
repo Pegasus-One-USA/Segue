@@ -75,6 +75,42 @@ public sealed record FabricDestinationSettings(
     public string QualifiedWarehouseTable(string fallbackTableName)
         => $"[{WarehouseSchema}].[{(string.IsNullOrWhiteSpace(WarehouseTable) ? fallbackTableName : WarehouseTable)}]";
 
+    /// <summary>
+    /// The Warehouse TDS connection string, built from whatever the user supplied.
+    ///
+    /// <para>Fabric's own UI shows a bare SERVER NAME ("xxx.datawarehouse.fabric.microsoft.com"), so pasting
+    /// exactly what Fabric displays is the natural thing to do — and handing that to SqlConnection fails with
+    /// "Format of the initialization string does not conform to specification starting at index 0", which says
+    /// nothing about what to fix. A value with no '=' in it is therefore treated as a host and wrapped into a
+    /// real connection string here, rather than rejected. A full connection string is passed through untouched,
+    /// with the database defaulted to the Warehouse item name when it omits one.</para>
+    /// </summary>
+    public string WarehouseConnectionString
+    {
+        get
+        {
+            var configured = (WarehouseSqlEndpoint ?? string.Empty).Trim();
+            if (configured.Length == 0)
+            {
+                return configured;
+            }
+
+            // No key=value pair anywhere means this is a host, not a connection string.
+            if (!configured.Contains('=', StringComparison.Ordinal))
+            {
+                var host = configured
+                    .Replace("tcp:", string.Empty, StringComparison.OrdinalIgnoreCase)
+                    .TrimEnd('/');
+                return $"Server={host};Database={ItemName};Encrypt=True;TrustServerCertificate=False";
+            }
+
+            return configured.Contains("Database=", StringComparison.OrdinalIgnoreCase)
+                || configured.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase)
+                    ? configured
+                    : $"{configured.TrimEnd(';')};Database={ItemName}";
+        }
+    }
+
     /// <summary>Only service-principal mode has credential material in Key Vault to resolve.</summary>
     public bool RequiresSecret => AuthMode == FabricAuthMode.ServicePrincipal;
 

@@ -54,7 +54,8 @@ internal sealed class FabricWarehouseConnectionFactory : IFabricWarehouseConnect
             settings.AuthMode,
             settings.ItemName);
 
-        var connection = new SqlConnection(settings.WarehouseSqlEndpoint) { AccessToken = token.Token };
+        // WarehouseConnectionString, not the raw setting: it tolerates the bare server name Fabric's UI shows.
+        var connection = new SqlConnection(settings.WarehouseConnectionString) { AccessToken = token.Token };
         await connection.OpenAsync(cancellationToken);
 
         return connection;
