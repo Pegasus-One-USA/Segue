@@ -78,9 +78,13 @@ const PHASE_1_CONFIG: PhaseConfig = {
     //   'dest-restapi', 'dest-inmemory'
   ],
 
-  // Warehouse (COPY INTO) is implemented and unit-tested but UNVERIFIED against a live Fabric tenant. Add
-  // 'warehouseTable' here once a real write has been confirmed end to end.
-  enabledFabricModes: ['oneLakeFiles'],
+  // OneLake Files is verified end to end against a live Fabric tenant. Warehouse (staged Parquet + COPY INTO,
+  // MERGE on upsert) is listed alongside it but has NOT had a live write confirmed yet — its shape is the
+  // documented one, and the three things most likely to need adjusting on first contact are the COPY INTO
+  // credential clause, the abfss staging URL form, and whether the identity needs grants on the staging
+  // Lakehouse separately from the Warehouse. Note it also requires a pre-created target table: FHIRBridge
+  // never creates or alters destination schema.
+  enabledFabricModes: ['oneLakeFiles', 'warehouseTable'],
 
   hiddenRanks: [],
 };

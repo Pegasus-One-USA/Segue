@@ -406,6 +406,9 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   lineageNodeBreakdown: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/node-breakdown`,
   configuredRules: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/configured-rules`,
   configuredDeIdRules: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/configured-deid-rules`,
+  // Live read of the run's FHIR Bulk Data $export job, proxied server-side (the source's bearer token never
+  // reaches the browser) — backs the Status column's "Bulk Data Status Request" popup.
+  bulkExportStatus: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/bulk-export-status`,
   statusCounts: `${API_V1_BASE}/workflow-runs/stats`,
 };
 

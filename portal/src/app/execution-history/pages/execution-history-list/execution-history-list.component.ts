@@ -6,8 +6,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
-import { PagedResult, RouteExecution } from '../../models/execution-history.model';
+import { BulkExportStatus, PagedResult, RouteExecution } from '../../models/execution-history.model';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
+import { ModalOverlayComponent } from '../../../components/shared/modal-overlay/modal-overlay.component';
 import { sourceSystemDisplayName } from '../../../data/source-system-display-names.data';
 
 type SortColumn = 'pipeline' | 'source' | 'status' | 'duration' | 'lastRun' | 'triggeredBy';
@@ -29,6 +30,7 @@ type SortDirection = 'asc' | 'desc';
     MatButtonModule,
     MatIconModule,
     PaginationBarComponent,
+    ModalOverlayComponent,
   ],
   templateUrl: './execution-history-list.component.html',
   styleUrls: ['./execution-history-list.component.scss'],
@@ -75,7 +77,19 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.workflowIdFilter() ? (this.result().items[0]?.pipelineName ?? 'this workflow') : null,
   );
 
-  readonly displayedCols = ['name', 'source', 'status', 'duration', 'lastRun', 'triggeredBy', 'correlationId'];
+  readonly displayedCols = ['name', 'source', 'status', 'bulkRequestId', 'duration', 'lastRun', 'triggeredBy', 'correlationId'];
+
+  // ── Bulk Data Status Request popup ────────────────────────────────────────────────────────────────
+  // Opened from the info icon beside a still-running bulk export's Status badge. Each open is a fresh
+  // server-proxied read of the source's status URL, so the progress shown is current rather than whatever
+  // the poller last happened to see.
+  readonly bulkStatusOpen    = signal(false);
+  readonly bulkStatus        = signal<BulkExportStatus | null>(null);
+  readonly bulkStatusLoading = signal(false);
+  readonly bulkStatusError   = signal<string | null>(null);
+  /** The row the popup was opened from — its bulkRequestId is shown while the live read is still in flight,
+   *  so the header isn't empty for the duration of the request. */
+  readonly bulkStatusRun     = signal<RouteExecution | null>(null);
 
   ngOnInit(): void {
     this.search$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(value => {
@@ -209,6 +223,71 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
 
   openDetail(execution: RouteExecution): void {
     this.router.navigate(['/execution-history', execution.id]);
+  }
+
+  /** The info icon shows only while the export is actually in flight — that's when the live progress read
+   *  has something to say. A finished run keeps its Bulk Request ID in its own column (useful for looking
+   *  the job up on the vendor's side), just without the icon. */
+  showBulkInfoIcon(execution: RouteExecution): boolean {
+    return !!execution.bulkRequestId
+      && (execution.status === 'AwaitingBulkExport' || execution.status === 'Running');
+  }
+
+  openBulkStatus(execution: RouteExecution, event: MouseEvent): void {
+    // Rows navigate to the detail page on click (see openDetail) — without this the popup would open and
+    // the route would change out from under it. Same guard the errorReferenceId link uses.
+    event.stopPropagation();
+
+    this.bulkStatusRun.set(execution);
+    this.bulkStatus.set(null);
+    this.bulkStatusError.set(null);
+    this.bulkStatusLoading.set(true);
+    this.bulkStatusOpen.set(true);
+
+    this.api.bulkExportStatus(execution.id).subscribe({
+      next: status => {
+        this.bulkStatusLoading.set(false);
+        if (status) {
+          this.bulkStatus.set(status);
+        } else {
+          // 404 → the run has no bulk-export job, or one with no status URL yet. Expected, not an error.
+          this.bulkStatusError.set(
+            'No bulk export job is recorded for this run yet. If it was just started, try again in a moment.');
+        }
+      },
+      error: () => {
+        this.bulkStatusLoading.set(false);
+        // The source server is the thing that failed here, and its own message is deliberately not
+        // surfaced (it can be a full HTML error page). An expired or purged job is the common case.
+        this.bulkStatusError.set(
+          'Could not read the export status from the source system. The job may have expired or been '
+          + 'removed by the source server.');
+      },
+    });
+  }
+
+  closeBulkStatus(): void {
+    this.bulkStatusOpen.set(false);
+    this.bulkStatus.set(null);
+    this.bulkStatusRun.set(null);
+    this.bulkStatusError.set(null);
+  }
+
+  /** Badge class for the popup's live status, reusing the same badge vocabulary the Status column uses. */
+  bulkStatusClass(status: string): string {
+    return {
+      InProgress: 'badge-running',
+      Completed: 'badge-completed',
+      Failed: 'badge-failed',
+    }[status] ?? 'badge-inactive';
+  }
+
+  /** How long the export has been running, from kick-off to now — context the X-Progress line alone
+   *  doesn't give ("Searched 0 of 2 patients" reads very differently at 30s than at 90 minutes). */
+  bulkElapsed(kickedOffOnUtc: string): string {
+    const started = new Date(kickedOffOnUtc).getTime();
+    if (Number.isNaN(started)) return '—';
+    return this.formatDuration(Date.now() - started);
   }
 
   statusLabel(status: string): string {
