@@ -225,11 +225,20 @@ public sealed class ConfigurationService : IConfigurationService
     // so a re-save with blank Client Secret / Private Key fields is ambiguous between "nothing changed" and
     // "clear it" — and every caller today means the former. Only an explicit new InlineClientSecret or key-vault
     // reference in the request should actually replace what's stored; a blank field on update preserves it.
+    //
+    // The one exception is PrivateKey when the request's AuthenticationType isn't SmartBackendServices: carrying
+    // that reference forward across a switch to, say, OAuthClientCredentials left a signing-key reference this
+    // connection no longer uses (and that a later restore into a different Key Vault might never even contain)
+    // still wired into Authentication — and SourceConnectionRuntimeResolver used to resolve any non-null PrivateKey
+    // regardless of auth type, failing runs over a secret the connection's actual auth method never needed. Only
+    // PrivateKey gets this treatment; ClientSecret has no equivalent "wrong auth type" hazard today.
     private static SourceAuthenticationConfiguration PreserveSecretsIfBlank(
         SourceAuthenticationConfiguration requested, SourceAuthenticationConfiguration existing)
     {
         var clientSecret = requested.ClientSecret ?? existing.ClientSecret;
-        var privateKey = requested.PrivateKey ?? existing.PrivateKey;
+        var privateKey = requested.AuthenticationType == AuthenticationType.SmartBackendServices
+            ? requested.PrivateKey ?? existing.PrivateKey
+            : null;
         if (ReferenceEquals(clientSecret, requested.ClientSecret) && ReferenceEquals(privateKey, requested.PrivateKey))
         {
             return requested;

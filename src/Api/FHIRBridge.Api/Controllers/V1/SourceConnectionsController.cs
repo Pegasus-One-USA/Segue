@@ -58,9 +58,10 @@ public sealed class SourceConnectionsController : ControllerBase
     [HttpPost("generate-signing-key")]
     [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.Edit, description: "Generate a SMART Backend Services signing key for a source connection.")]
     [ProducesResponseType(typeof(GeneratedSigningKeyDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GenerateSigningKey(CancellationToken cancellationToken)
+    public async Task<IActionResult> GenerateSigningKey(
+        [FromQuery] SourceSystemType sourceSystemType, CancellationToken cancellationToken)
     {
-        var key = await _signingKeyGenerationService.GenerateAsync(cancellationToken);
+        var key = await _signingKeyGenerationService.GenerateAsync(sourceSystemType, cancellationToken);
         return Ok(key);
     }
 
@@ -79,7 +80,7 @@ public sealed class SourceConnectionsController : ControllerBase
         [FromBody] ImportSigningKeyRequest request,
         CancellationToken cancellationToken)
     {
-        var key = await _signingKeyGenerationService.ImportAsync(request.PrivateKeyPem, cancellationToken);
+        var key = await _signingKeyGenerationService.ImportAsync(request.PrivateKeyPem, request.SourceSystemType, cancellationToken);
         return Ok(key);
     }
 
