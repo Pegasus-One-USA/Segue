@@ -19,6 +19,16 @@ export interface PhaseConfig {
    * Rank 2=Validation, 3=Normalize, 4=Terminology, 5=De-identify.
    */
   hiddenRanks: number[];
+
+  /**
+   * Fabric landing modes offered in the Microsoft Fabric destination form.
+   *
+   * Separate from enabledTransformIds because this gates a CHOICE INSIDE one destination, not the destination
+   * itself: OneLake Files is verified and shipping, while the Warehouse COPY INTO path is complete but has never
+   * been run against a real Fabric tenant. Listing only the verified mode keeps the unverified one out of users'
+   * hands without holding back the whole destination.
+   */
+  enabledFabricModes: string[];
 }
 
 // ── Phase 1 ───────────────────────────────────────────────────────────────────
@@ -62,6 +72,10 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // Phase 2+ analytics: 'hedis', 'anomaly', 'patient-agg'
   ],
 
+  // Warehouse (COPY INTO) is implemented and unit-tested but UNVERIFIED against a live Fabric tenant. Add
+  // 'warehouseTable' here once a real write has been confirmed end to end.
+  enabledFabricModes: ['oneLakeFiles'],
+
   hiddenRanks: [
     2,   // Validation
     3,   // Normalize
@@ -87,6 +101,11 @@ export class PhaseConfigService {
   /** True if the given transform/destination ID is visible in the current phase. */
   isTransformEnabled(id: string): boolean {
     return this._config().enabledTransformIds.includes(id);
+  }
+
+  /** True if the given Fabric landing mode is offered in the current phase. */
+  isFabricModeEnabled(mode: string): boolean {
+    return this._config().enabledFabricModes.includes(mode);
   }
 
   /** True if an entire rank-level category should be hidden. */
