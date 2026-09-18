@@ -130,4 +130,55 @@ public sealed class SourceConnectionAuthMethodSwitchTests
         updated.Authentication.PrivateKeyKeyVaultName.Should().Be("signing-keys");
         updated.Authentication.PrivateKeySecretName.Should().Be("athenahealth-private-key-abc123");
     }
+
+    [Fact]
+    public async Task A_no_op_save_on_an_interactive_connection_that_never_used_SmartBackendServices_does_not_wipe_its_private_key()
+    {
+        // AuthenticationType.None is the real, legitimate value an interactive (non-Backend) connection's
+        // confidential asymmetric client resolves to — SMART App Launch permits private_key_jwt outside Backend
+        // Services too. Gating the clear on "existing WAS SmartBackendServices, requested is not" (rather than on
+        // the requested type alone) must never touch a connection like this one, which was never
+        // SmartBackendServices in the first place, even though its resolved AuthenticationType is None both
+        // before and after this save.
+        var confidentialInteractiveAuth = new SourceAuthenticationDto(
+            AuthenticationType.None,
+            ClientId: "client-1",
+            TokenEndpoint: "https://auth.example.com/token",
+            Scopes: ["launch/patient", "patient/Patient.read"],
+            ClientSecretKeyVaultName: null,
+            ClientSecretName: null,
+            PrivateKeyKeyVaultName: "signing-keys",
+            PrivateKeySecretName: "athenahealth-private-key-confidential-abc",
+            KeyId: "key-1",
+            AuthorizationEndpoint: "https://auth.example.com/authorize");
+        var interactive = new SourceInteractiveConfigurationDto(
+            RedirectUris: ["https://portal.example.com/callback"], LaunchUrl: null, TrustedIssuers: []);
+
+        var created = await _sut.AddSourceConnectionAsync(
+            new CreateSourceConnectionRequest(
+                $"Connection {Guid.NewGuid():N}", SourceSystemType.Athenahealth,
+                "https://api.athenahealth.com/fhir/r4", confidentialInteractiveAuth, ApplicationType.Patient,
+                interactive),
+            CancellationToken.None);
+
+        // Same shape a no-op re-save takes: still resolves to None, private-key fields come back blank because
+        // the form never re-displays a previously stored secret reference.
+        var resavedWithBlankKeyFields = confidentialInteractiveAuth with
+        {
+            PrivateKeyKeyVaultName = null,
+            PrivateKeySecretName = null,
+            KeyId = null,
+        };
+
+        var updated = await _sut.UpdateSourceConnectionAsync(
+            created.Id,
+            new CreateSourceConnectionRequest(
+                created.Name, SourceSystemType.Athenahealth, created.BaseUrl,
+                resavedWithBlankKeyFields, ApplicationType.Patient, interactive),
+            CancellationToken.None);
+
+        updated.Authentication.AuthenticationType.Should().Be(AuthenticationType.None);
+        updated.Authentication.PrivateKeyKeyVaultName.Should().Be("signing-keys");
+        updated.Authentication.PrivateKeySecretName.Should().Be("athenahealth-private-key-confidential-abc");
+    }
 }

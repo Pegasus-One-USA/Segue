@@ -68,7 +68,7 @@ public sealed class SourceConnectionsController : ControllerBase
         // vendor the caller actually meant, exactly the mislabeling this naming scheme exists to prevent.
         if (sourceSystemType is null)
         {
-            return BadRequest("sourceSystemType is required.");
+            return BadRequest(new { error = "invalid_request", error_description = "sourceSystemType is required." });
         }
 
         var key = await _signingKeyGenerationService.GenerateAsync(sourceSystemType.Value, cancellationToken);
@@ -94,7 +94,7 @@ public sealed class SourceConnectionsController : ControllerBase
         // property would otherwise silently deserialize to Sample instead of failing.
         if (request.SourceSystemType is null)
         {
-            return BadRequest("sourceSystemType is required.");
+            return BadRequest(new { error = "invalid_request", error_description = "sourceSystemType is required." });
         }
 
         var key = await _signingKeyGenerationService.ImportAsync(request.PrivateKeyPem, request.SourceSystemType.Value, cancellationToken);
