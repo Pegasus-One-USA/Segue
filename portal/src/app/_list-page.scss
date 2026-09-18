@@ -6,10 +6,12 @@
 // into every list page — is what keeps the repo's !important ratchet (scripts/check-tokens.mjs) from
 // climbing every time a new list page is added.
 
+// No padding and no max-width here on purpose: the page's edge inset comes from the single
+// `.shell-content > *` rule in styles.scss (--page-gutter-x/y), and pages run edge-to-edge
+// rather than being capped and centred — a centred 1400px column left ~150px of dead space
+// on each flank of a wide table. A 12-column table still degrades gracefully via
+// .table-wrapper's overflow-x below, not by shrinking its columns.
 .list-page {
-  padding: 32px;
-  max-width: 1400px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -23,7 +25,7 @@
 // tall table grow the page PAST the viewport, pushing the pagination footer below the fold — reachable
 // only by scrolling down or zooming out. Constraining the page and scrolling .table-wrapper internally
 // keeps the filter bar and the paginator on screen at any zoom level.
-//
+// --
 // Scoped with :has() rather than applied to every .list-page on purpose: pages WITHOUT a .table-card
 // (Compliance Reports, Correlation Search, Data Lineage) are free-flowing content with no internal
 // scroll region of their own — bounding those would clip them with no way to scroll.

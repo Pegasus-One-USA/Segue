@@ -910,6 +910,11 @@ resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: containerAppEnv.id
     configuration: {
+      // Required for stickySessions below — Container Apps rejects sticky-session affinity outright
+      // (ContainerAppInvalidIngressStickySessionRevisionMode) under the platform default 'Multiple'
+      // revisions mode. This app has no multi-revision traffic-splitting use case, so pinning to
+      // 'Single' costs nothing here.
+      activeRevisionsMode: 'Single'
       secrets: concat([
         { name: 'postgres-password', value: postgresPassword }
         { name: 'jwt-signing-key', value: jwtSigningKey }
@@ -919,6 +924,15 @@ resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
         external: true
         targetPort: 80
         transport: 'auto'
+        // segueApp scales to multiple replicas (see scale below); without this, Container Apps' own
+        // ingress load-balances each request independently, so a SignalR negotiate on one replica
+        // followed by its connect/long-poll landing on another fails with "No Connection with that ID"
+        // on every transport — the replica that took the connect has never heard of that connection.
+        // The Redis SignalR backplane (FHIRBridge.Api's Program.cs) fans messages out across replicas but
+        // doesn't fix this: it's the connection itself, not just messages, that only replica A knows about.
+        stickySessions: {
+          affinity: 'sticky'
+        }
         // Phase 1: Disabled registers the hostname without a cert (required before managed cert).
         // Phase 2: SniEnabled + certificateId after bindCustomDomainCertificates=true.
         customDomains: !empty(segueAppCustomDomain) ? [

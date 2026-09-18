@@ -1113,8 +1113,18 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             clientSecret = await _secretProvider.GetSecretAsync(sourceConnection.Authentication.ClientSecret, cancellationToken);
         }
 
+        // Gated on AuthenticationType, matching SourceConnectionRuntimeResolver's identical guard for the
+        // Backend/refresh path — every save path (wizard, entity-mode edit, workflow rebuild) only ever
+        // populates PrivateKey when AuthenticationType is SmartBackendServices (SMART App Launch's confidential
+        // asymmetric client, valid for interactive audiences too, not just Backend Services), so this can't
+        // reject a legitimate confidential client. Without it, a connection whose auth method moved away from
+        // SmartBackendServices but still carries a leftover PrivateKey reference (PreserveSecretsIfBlank only
+        // clears it on that exact transition) would sign the initial authorization_code exchange with a stale
+        // key while the refresh leg (through the now-gated runtime resolver) does not — the two legs disagreeing
+        // about how this client authenticates, surfacing later as a refresh-only invalid_client.
         string? privateKeyPem = null;
-        if (sourceConnection.Authentication.PrivateKey is not null)
+        if (sourceConnection.Authentication.AuthenticationType == AuthenticationType.SmartBackendServices &&
+            sourceConnection.Authentication.PrivateKey is not null)
         {
             privateKeyPem = await _secretProvider.GetSecretAsync(sourceConnection.Authentication.PrivateKey, cancellationToken);
         }

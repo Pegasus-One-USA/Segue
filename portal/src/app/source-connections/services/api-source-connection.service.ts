@@ -74,16 +74,17 @@ export class ApiSourceConnectionService extends ISourceConnectionService {
     );
   }
 
-  generateSigningKey(): Observable<GeneratedSigningKeyModel> {
-    return this.http.post<GeneratedSigningKeyModel>(SOURCE_CONNECTIONS_ENDPOINTS.generateSigningKey, {}).pipe(
+  generateSigningKey(sourceSystemType: string): Observable<GeneratedSigningKeyModel> {
+    const params = new HttpParams().set('sourceSystemType', sourceSystemType);
+    return this.http.post<GeneratedSigningKeyModel>(SOURCE_CONNECTIONS_ENDPOINTS.generateSigningKey, {}, { params }).pipe(
       catchError(err => throwError(() => err))
     );
   }
 
-  importSigningKey(privateKeyPem: string): Observable<GeneratedSigningKeyModel> {
+  importSigningKey(privateKeyPem: string, sourceSystemType: string): Observable<GeneratedSigningKeyModel> {
     return this.http.post<GeneratedSigningKeyModel>(
       SOURCE_CONNECTIONS_ENDPOINTS.importSigningKey,
-      { privateKeyPem }
+      { privateKeyPem, sourceSystemType }
     ).pipe(
       catchError(err => throwError(() => err))
     );

@@ -1063,6 +1063,9 @@
             "external": true,
             "targetPort": 80,
             "transport": "auto",
+            "stickySessions": {
+              "affinity": "sticky"
+            },
             "customDomains": "[if(not(empty(parameters('segueAppCustomDomain'))), createArray(if(parameters('bindCustomDomainCertificates'), createObject('name', parameters('segueAppCustomDomain'), 'certificateId', resourceId('Microsoft.App/managedEnvironments/managedCertificates', format('{0}-env', parameters('namePrefix')), format('{0}-cert', variables('segueAppName'))), 'bindingType', 'SniEnabled'), createObject('name', parameters('segueAppCustomDomain'), 'bindingType', 'Disabled'))), createArray())]"
           }
         },
