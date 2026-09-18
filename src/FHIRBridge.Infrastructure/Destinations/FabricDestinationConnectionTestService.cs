@@ -5,6 +5,7 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Infrastructure.Destinations.Fabric;
 using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Data.SqlClient;
 
@@ -128,10 +129,26 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
     {
         try
         {
-            var endpointSuffix = Blank(request.EndpointSuffix) ? "fabric.microsoft.com" : request.EndpointSuffix!;
-            var accountUrl = Blank(request.AccountUrl)
-                ? $"https://onelake.blob.{endpointSuffix}"
-                : request.AccountUrl!;
+            // Derived through FabricDestinationSettings.AccountUrl rather than rebuilt here, so the probe can only
+            // ever target the URL a real write would use. These were two separate expressions once, and they drifted:
+            // this one blank-checked the override while the settings record only null-checked it, so a destination
+            // saved with an untouched (empty-string) override tested Connected and then failed the actual write with
+            // "The URI is empty". One derivation means that class of divergence cannot recur.
+            var accountUrl = new FabricDestinationSettings(
+                Mode: FabricLandingMode.OneLakeFiles,
+                AuthMode: FabricAuthMode.ManagedIdentity,
+                Workspace: request.Workspace,
+                ItemName: request.ItemName,
+                ItemType: "Lakehouse",
+                BasePath: string.Empty,
+                FileFormat: FabricFileFormat.Ndjson,
+                Partitioning: FabricPartitionScheme.None,
+                TenantId: null,
+                ClientId: null,
+                ManagedIdentityClientId: null,
+                AuthorityHost: null,
+                EndpointSuffix: Blank(request.EndpointSuffix) ? "fabric.microsoft.com" : request.EndpointSuffix!.Trim(),
+                AccountUrlOverride: Blank(request.AccountUrl) ? null : request.AccountUrl!.Trim()).AccountUrl;
 
             // The workspace is the container. ExistsAsync is a real authenticated round-trip and returns false
             // rather than throwing when the target is simply absent, so reaching it at all proves credentials

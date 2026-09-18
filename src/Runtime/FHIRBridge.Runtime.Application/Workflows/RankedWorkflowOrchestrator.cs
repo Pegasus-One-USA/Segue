@@ -313,13 +313,22 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                                 deferredJobId, SerializePriorNodeOutputs(outputsByNodeId), cancellationToken);
                         }
 
+                        // The source vendor's own id for that job (Epic: the BulkRequest/{id} segment of its status
+                        // URL). Optional — a status URL that yields nothing parseable still pauses the run normally,
+                        // it just leaves the run without an operator-facing id to look up.
+                        var bulkRequestId =
+                            output.Metadata.TryGetValue(WorkflowNodeOutputMetadataKeys.BulkExportRequestId, out var bulkRequestIdValue)
+                                ? bulkRequestIdValue as string
+                                : null;
+
                         _logger.LogInformation(
                             LogEvents.WorkflowRunAwaitingBulkExport,
                             "Workflow run {WorkflowRunId} paused at node {NodeType} ({NodeId}) awaiting bulk export job " +
-                            "{BulkExportJobId}; BulkExportPollWorker resumes it once the job completes.",
-                            workflowRun.Id, node.NodeType, node.Id, deferredJobId);
+                            "{BulkExportJobId} (vendor bulk request {BulkRequestId}); BulkExportPollWorker resumes it " +
+                            "once the job completes.",
+                            workflowRun.Id, node.NodeType, node.Id, deferredJobId, bulkRequestId);
 
-                        workflowRun.AwaitBulkExport();
+                        workflowRun.AwaitBulkExport(bulkRequestId);
                         await _auditRecorder.RecordAsync(new(
                             WorkflowAuditEventType.WorkflowRunAwaitingBulkExport,
                             workflowDefinition.Id,

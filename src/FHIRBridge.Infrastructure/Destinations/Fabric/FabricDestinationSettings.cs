@@ -82,7 +82,16 @@ public sealed record FabricDestinationSettings(
     /// The OneLake blob-protocol account URL. The blob endpoint (not <c>dfs</c>) is deliberate: it is what the
     /// <c>Azure.Storage.Blobs</c> client speaks, and OneLake serves both.
     /// </summary>
-    public string AccountUrl => AccountUrlOverride ?? $"https://onelake.blob.{EndpointSuffix}";
+    /// <remarks>
+    /// Blank-checked, not just null-checked: the wizard posts every optional field it renders, so an untouched
+    /// override arrives as "" rather than being absent. A plain <c>??</c> therefore accepted the empty string and
+    /// produced an empty account URL, which failed only at write time (UriFormatException, "The URI is empty")
+    /// while Test Connection — which builds its own URL — still reported Connected. Same reasoning applies to
+    /// every other optional string parsed from the metadata bag.
+    /// </remarks>
+    public string AccountUrl => string.IsNullOrWhiteSpace(AccountUrlOverride)
+        ? $"https://onelake.blob.{EndpointSuffix}"
+        : AccountUrlOverride;
 
     /// <summary>The item's own path prefix inside the workspace container, e.g. <c>Sales.Lakehouse</c>.</summary>
     public string ItemPathSegment => $"{ItemName}.{ItemType}";
@@ -207,14 +216,19 @@ public sealed record FabricDestinationSettings(
                 ConnectionMetadataReader.GetString(json, "dest_fabricPartitionBy"), FabricPartitionScheme.ResourceType),
             TenantId: tenantId,
             ClientId: clientId,
-            ManagedIdentityClientId: ConnectionMetadataReader.GetString(json, "dest_fabricManagedIdentityClientId"),
-            AuthorityHost: ConnectionMetadataReader.GetString(json, "dest_fabricAuthorityHost"),
-            EndpointSuffix: ConnectionMetadataReader.GetString(json, "dest_fabricEndpointSuffix") ?? "fabric.microsoft.com",
-            AccountUrlOverride: ConnectionMetadataReader.GetString(json, "dest_fabricAccountUrl"),
+            // NullIfBlank on every optional string: the wizard posts each field it renders, so an untouched
+            // one arrives as "" rather than absent. Normalising here means no downstream consumer has to
+            // remember the difference — the bug this fixes was an empty override producing an empty account URL.
+            ManagedIdentityClientId: NullIfBlank(
+                ConnectionMetadataReader.GetString(json, "dest_fabricManagedIdentityClientId")),
+            AuthorityHost: NullIfBlank(ConnectionMetadataReader.GetString(json, "dest_fabricAuthorityHost")),
+            EndpointSuffix: FirstNonBlank(
+                ConnectionMetadataReader.GetString(json, "dest_fabricEndpointSuffix"), "fabric.microsoft.com")!,
+            AccountUrlOverride: NullIfBlank(ConnectionMetadataReader.GetString(json, "dest_fabricAccountUrl")),
             WarehouseSqlEndpoint: warehouseSqlEndpoint,
             WarehouseSchema: FirstNonBlank(
                 ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseSchema"), "dbo")!.Trim(),
-            WarehouseTable: ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseTable")?.Trim(),
+            WarehouseTable: NullIfBlank(ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseTable")),
             WarehouseWriteMode: ParseEnum(
                 ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseWriteMode"),
                 FabricTableWriteMode.Append),
@@ -304,6 +318,10 @@ public sealed record FabricDestinationSettings(
 
         return path;
     }
+
+    /// <summary>Treats a blank optional field as absent. See the remarks on <see cref="AccountUrl"/>.</summary>
+    private static string? NullIfBlank(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static void RequireName(string? value, string label, string destinationName)
     {

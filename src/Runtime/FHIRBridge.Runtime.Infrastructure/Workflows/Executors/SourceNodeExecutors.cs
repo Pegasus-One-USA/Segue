@@ -563,6 +563,10 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                     new Dictionary<string, object?>
                     {
                         [WorkflowNodeOutputMetadataKeys.BulkExportDeferredJobId] = job.Id.ToString(),
+                        // The vendor's own id for this job (Epic: the BulkRequest/{id} segment), carried to the
+                        // orchestrator so it lands on the paused WorkflowRun row. Null when unparseable — the
+                        // orchestrator treats that the same as absent and pauses the run as normal.
+                        [WorkflowNodeOutputMetadataKeys.BulkExportRequestId] = BulkRequestIds.FromStatusUrl(statusUrl),
                     });
             }
 

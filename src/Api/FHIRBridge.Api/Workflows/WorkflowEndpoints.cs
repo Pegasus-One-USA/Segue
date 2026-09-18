@@ -18,7 +18,9 @@ using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Abstractions.Applications;
+using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
+using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -2091,7 +2093,8 @@ public static class WorkflowEndpoints
                     run.ErrorMessage,
                     run.WorkflowDefinitionVersion,
                     run.CorrelationId,
-                    run.ErrorReferenceId));
+                    run.ErrorReferenceId,
+                    run.BulkRequestId));
             }
 
             if (workflowId is { } wfId)
@@ -2231,8 +2234,86 @@ public static class WorkflowEndpoints
                 run.ErrorMessage,
                 run.WorkflowDefinitionVersion,
                 run.CorrelationId,
-                run.ErrorReferenceId));
+                run.ErrorReferenceId,
+                run.BulkRequestId));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // Live read of this run's FHIR Bulk Data $export job, proxied from the source server — backs the Execution
+        // History row's "Bulk Data Status Request" popup. Proxied rather than fetched from the browser because the
+        // status URL requires the source's bearer token, which must never leave the server; and read live rather
+        // than served from the last poll tick so an operator watching a long export sees current progress.
+        //
+        // Gated on workflow.view, not UnifiedAdmin like /summary above: anyone who can see the run in the list
+        // should be able to see WHY it is still running.
+        group.MapGet("/workflow-runs/{runId:guid}/bulk-export-status", async (
+            Guid runId,
+            IWorkflowRunStore runStore,
+            IBulkExportJobRepository bulkExportJobRepository,
+            IFhirBulkExportClient bulkExportClient,
+            ISourceConnectionRuntimeResolver sourceResolver,
+            CancellationToken cancellationToken) =>
+        {
+            var run = await runStore.GetAsync(runId, cancellationToken);
+            if (run is null)
+            {
+                return Results.NotFound();
+            }
+
+            var job = await bulkExportJobRepository.GetLatestByWorkflowRunAsync(runId, cancellationToken);
+            if (job is null || string.IsNullOrWhiteSpace(job.StatusUrl))
+            {
+                // No export job, or one kicked off but not yet assigned a status URL — nothing to look up yet.
+                // 404 rather than an empty body, so the portal can distinguish "no bulk export here" from "here is
+                // an export with nothing in it".
+                return Results.NotFound();
+            }
+
+            // The resource types this node actually asked for. While the job runs this is the ONLY source of a
+            // per-type list — a Bulk Data server answers an in-flight job with 202 and no body — so without it the
+            // popup's table would be empty for the whole duration of the export, which is exactly when it is opened.
+            var requestedResourceTypes = ParseRequestedResourceTypes(job.RequestedResourceTypesJson);
+
+            var source = await sourceResolver.ResolveAsync(
+                job.SourceConnectionId, searchParameters: null, targetPatientId: null, cancellationToken);
+            if (source is null)
+            {
+                // The source connection was deleted out from under an in-flight job. Report what is known locally
+                // rather than failing outright — the id and timings are still useful.
+                return Results.Ok(new BulkExportStatusDto(
+                    run.BulkRequestId ?? BulkRequestIds.FromStatusUrl(job.StatusUrl),
+                    job.Status,
+                    Progress: null,
+                    job.KickedOffOnUtc,
+                    job.NextPollNotBeforeUtc,
+                    job.PollAttemptCount,
+                    TransactionTime: null,
+                    Request: null,
+                    RequiresAccessToken: null,
+                    BuildPendingResourceTypes(requestedResourceTypes),
+                    Errors: [],
+                    RetryAfterSeconds: null,
+                    ErrorMessage: "The source connection for this export no longer exists, so its live status "
+                        + "cannot be read."));
+            }
+
+            var snapshot = await bulkExportClient.GetStatusAsync(job.StatusUrl, source, cancellationToken);
+
+            return Results.Ok(new BulkExportStatusDto(
+                run.BulkRequestId ?? BulkRequestIds.FromStatusUrl(job.StatusUrl),
+                snapshot.Status.ToString(),
+                snapshot.Progress,
+                job.KickedOffOnUtc,
+                job.NextPollNotBeforeUtc,
+                job.PollAttemptCount,
+                snapshot.TransactionTime,
+                snapshot.Request,
+                snapshot.RequiresAccessToken,
+                BuildResourceTypeStatuses(snapshot, requestedResourceTypes),
+                BuildManifestErrors(snapshot),
+                snapshot.RetryAfter is { } retryAfter ? (int)retryAfter.TotalSeconds : null,
+                snapshot.ErrorMessage));
+        }).RequireAuthorization(AuthorizationPolicies.HasPermission(
+            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
 
         // Drill-down into what each node actually fetched/transformed/wrote. Returns decrypted PHI payloads.
         group.MapGet("/workflow-runs/{runId:guid}/resources", async (
@@ -3009,6 +3090,97 @@ public static class WorkflowEndpoints
             "actionOn" => Order(summary => (summary.ModifiedOnUtc ?? summary.CreatedOnUtc)?.Ticks ?? -1),
             _          => Order(summary => summary.Name.ToLowerInvariant()),
         };
+    }
+
+    /// <summary>The resource types a deferred bulk-export node asked for, as persisted on the job row. Returns
+    /// empty (never throws) for null/blank/malformed JSON — the popup degrades to whatever the manifest provides
+    /// rather than failing on a bad row.</summary>
+    private static IReadOnlyList<string> ParseRequestedResourceTypes(string? requestedResourceTypesJson)
+    {
+        if (string.IsNullOrWhiteSpace(requestedResourceTypesJson))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(requestedResourceTypesJson) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static IReadOnlyList<BulkExportResourceTypeStatusDto> BuildPendingResourceTypes(
+        IReadOnlyList<string> requestedResourceTypes)
+        => requestedResourceTypes
+            .Select(resourceType => new BulkExportResourceTypeStatusDto(resourceType, FileCount: null, State: "Pending"))
+            .ToList();
+
+    /// <summary>
+    /// Projects a status read onto ONE per-type list the portal renders identically in both states.
+    ///
+    /// <para>In flight, the server has returned 202 with no manifest, so every requested type is reported
+    /// <c>Pending</c> with no count — this is what keeps the popup's table populated while the export runs, which
+    /// is when an operator actually opens it.</para>
+    ///
+    /// <para>On completion, the manifest's <c>output</c> entries are grouped by type into FILE counts (never record
+    /// counts — see <see cref="BulkExportResourceTypeStatusDto"/>). A requested type the manifest never mentions is
+    /// still emitted, as <c>Pending</c> with 0, so a type the server quietly dropped stays visible instead of
+    /// vanishing from the list.</para>
+    ///
+    /// <para>The manifest's signed <c>url</c> values are deliberately discarded here: they are directly downloadable
+    /// NDJSON of bulk PHI, and this projection is what keeps them off the wire.</para>
+    /// </summary>
+    private static IReadOnlyList<BulkExportResourceTypeStatusDto> BuildResourceTypeStatuses(
+        BulkExportStatusSnapshot snapshot,
+        IReadOnlyList<string> requestedResourceTypes)
+    {
+        if (snapshot.Files is not { Count: > 0 })
+        {
+            return BuildPendingResourceTypes(requestedResourceTypes);
+        }
+
+        var fileCountsByType = snapshot.Files
+            .GroupBy(file => file.ResourceType, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+
+        var statuses = fileCountsByType
+            .Select(entry => new BulkExportResourceTypeStatusDto(entry.Key, entry.Value, State: "Ready"))
+            .ToList();
+
+        statuses.AddRange(requestedResourceTypes
+            .Where(resourceType => !fileCountsByType.ContainsKey(resourceType))
+            .Select(resourceType => new BulkExportResourceTypeStatusDto(resourceType, FileCount: 0, State: "Pending")));
+
+        return statuses
+            .OrderBy(status => status.ResourceType, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>The manifest's <c>error</c> array surfaced as plain text. Only the file's resource-type label is
+    /// available without downloading each OperationOutcome, which this deliberately does not do — the popup is a
+    /// cheap status read, and those files are fetched (and their issues parsed) by the poller's own completion path.</summary>
+    private static IReadOnlyList<string> BuildManifestErrors(BulkExportStatusSnapshot snapshot)
+    {
+        var errors = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(snapshot.ErrorMessage))
+        {
+            errors.Add(snapshot.ErrorMessage);
+        }
+
+        if (snapshot.ErrorFiles is { Count: > 0 })
+        {
+            errors.AddRange(snapshot.ErrorFiles
+                .GroupBy(file => file.ResourceType, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Count() == 1
+                    ? $"The source server reported an issue for {group.Key}."
+                    : $"The source server reported {group.Count()} issues for {group.Key}."));
+        }
+
+        return errors;
     }
 
     // Defaults to newest-first by start time — matches this endpoint's pre-sorting behavior before

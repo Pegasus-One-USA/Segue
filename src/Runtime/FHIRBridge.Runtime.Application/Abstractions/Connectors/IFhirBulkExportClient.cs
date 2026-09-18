@@ -30,6 +30,18 @@ public interface IFhirBulkExportClient
         FhirSourceConfiguration source,
         CancellationToken cancellationToken);
 
+    /// <summary>One GET against <paramref name="statusUrl"/> for OPERATOR DISPLAY, preserving what
+    /// <see cref="PollOnceAsync"/> deliberately drops: the <c>X-Progress</c> header and the manifest's
+    /// <c>transactionTime</c>/<c>request</c>. Kept separate from <see cref="PollOnceAsync"/> so the poller's own
+    /// decision path — which needs none of that — stays untouched by a presentation concern.
+    ///
+    /// <para>Returns rather than throws on an unexpected status, same as <see cref="PollOnceAsync"/>, so a caller
+    /// rendering this in a UI can show the failure instead of surfacing an exception.</para></summary>
+    Task<BulkExportStatusSnapshot> GetStatusAsync(
+        string statusUrl,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken);
+
     /// <summary>Downloads and parses the NDJSON output files from a completed export's manifest.</summary>
     Task<IReadOnlyList<ResourceEnvelope>> DownloadResultsAsync(
         IReadOnlyList<BulkExportFile> files,

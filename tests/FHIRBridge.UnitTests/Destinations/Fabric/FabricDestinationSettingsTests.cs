@@ -171,6 +171,41 @@ public sealed class FabricDestinationSettingsTests
         act.Should().Throw<InvalidOperationException>().WithMessage(expectedReason);
     }
 
+    /// <summary>
+    /// Regression: the wizard posts every optional field it renders, so an untouched override arrives as "" and
+    /// not as an absent key. AccountUrl used a plain null-coalesce, so the empty string won and produced an empty
+    /// account URL — which threw UriFormatException ("The URI is empty") deep inside the write, while Test
+    /// Connection (which blank-checked correctly) still reported Connected. Blank optional fields are now
+    /// normalized to null at parse time so no consumer has to remember the difference.
+    /// </summary>
+    [Fact]
+    public void Blank_optional_overrides_fall_back_to_their_defaults_rather_than_winning()
+    {
+        var settings = FabricDestinationSettings.Parse(Destination(
+            null,
+            """
+            {"dest_fabricWorkspace":"Analytics","dest_fabricItemName":"ClinicalLake",
+             "dest_fabricAccountUrl":"","dest_fabricEndpointSuffix":"",
+             "dest_fabricAuthorityHost":"","dest_fabricManagedIdentityClientId":""}
+            """));
+
+        settings.AccountUrlOverride.Should().BeNull("a blank override is absent, not a value");
+        settings.AccountUrl.Should().Be("https://onelake.blob.fabric.microsoft.com");
+        settings.EndpointSuffix.Should().Be("fabric.microsoft.com");
+        settings.AuthorityHost.Should().BeNull();
+        settings.ManagedIdentityClientId.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_real_account_url_override_still_wins()
+    {
+        var settings = FabricDestinationSettings.Parse(Destination(
+            null,
+            """{"dest_fabricWorkspace":"A","dest_fabricItemName":"L","dest_fabricAccountUrl":"https://mystorage.blob.core.windows.net"}"""));
+
+        settings.AccountUrl.Should().Be("https://mystorage.blob.core.windows.net");
+    }
+
     // ---------------------------------------------------------------- path normalization
 
     [Theory]
