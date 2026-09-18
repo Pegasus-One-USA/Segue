@@ -81,3 +81,18 @@ public enum FabricPartitionScheme
     /// <summary>Both, resource type outermost — the layout a Spark reader partition-prunes best.</summary>
     ResourceTypeAndIngestDate = 3,
 }
+
+/// <summary>How rows are applied to a Fabric table destination (Warehouse or Lakehouse Delta).</summary>
+public enum FabricTableWriteMode
+{
+    /// <summary>Every batch appends. No key needed, and duplicates are the caller's problem downstream.</summary>
+    Append = 0,
+
+    /// <summary>
+    /// Match on the mapping field flagged <c>IsUpsertKey</c> (falling back to <c>SourceResourceId</c>, the same
+    /// convention the SQL Server writer uses) and update in place, else insert. The reason a table surface can
+    /// offer this at all and <see cref="FabricLandingMode.OneLakeFiles"/> cannot: a file drop has nothing to
+    /// match against.
+    /// </summary>
+    Upsert = 1,
+}

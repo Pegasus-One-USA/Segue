@@ -30,8 +30,51 @@ public sealed record FabricDestinationSettings(
     string? ManagedIdentityClientId,
     string? AuthorityHost,
     string EndpointSuffix,
-    string? AccountUrlOverride)
+    string? AccountUrlOverride,
+
+    // ---- Warehouse landing (FabricLandingMode.WarehouseTable) only; null/default otherwise ----
+
+    /// <summary>
+    /// The Warehouse's SQL connection string (TDS). A separate endpoint from <see cref="AccountUrl"/> — OneLake
+    /// and the Warehouse are different services — so it is configured rather than derived. No credentials belong
+    /// in it: the same Entra identity that reaches OneLake is attached as an access token at connection time.
+    /// </summary>
+    string? WarehouseSqlEndpoint = null,
+
+    /// <summary>Target schema. Defaults to <c>dbo</c>, as in a Warehouse created through the Fabric UI.</summary>
+    string WarehouseSchema = "dbo",
+
+    /// <summary>
+    /// Target table. Defaults to the mapping profile's destination object when blank, so one destination can
+    /// serve many resource types — the same defaulting the relational writers do.
+    /// </summary>
+    string? WarehouseTable = null,
+
+    /// <summary>Append (default) or Upsert. See <see cref="FabricTableWriteMode"/>.</summary>
+    FabricTableWriteMode WarehouseWriteMode = FabricTableWriteMode.Append,
+
+    /// <summary>
+    /// Lakehouse that holds the staging Parquet a COPY INTO reads from. A Warehouse has no Files area of its own,
+    /// so a load must stage somewhere addressable by both — which in Fabric means a Lakehouse in the same
+    /// workspace. Required for Warehouse mode; there is no sensible default, because guessing a Lakehouse name
+    /// would fail at load time rather than at save time.
+    /// </summary>
+    string? WarehouseStagingLakehouse = null,
+
+    /// <summary>Folder under the staging Lakehouse's Files area. Cleaned up after each load.</summary>
+    string WarehouseStagingPath = "_staging")
 {
+    /// <summary>
+    /// OneLake path prefix of the staging Lakehouse's Files area, e.g. <c>Stage.Lakehouse/Files/_staging</c>.
+    /// Warehouse mode only.
+    /// </summary>
+    public string WarehouseStagingRootPath =>
+        $"{WarehouseStagingLakehouse}.Lakehouse/Files/{WarehouseStagingPath}".TrimEnd('/');
+
+    /// <summary>The fully-qualified target table for a Warehouse load, with the schema applied.</summary>
+    public string QualifiedWarehouseTable(string fallbackTableName)
+        => $"[{WarehouseSchema}].[{(string.IsNullOrWhiteSpace(WarehouseTable) ? fallbackTableName : WarehouseTable)}]";
+
     /// <summary>Only service-principal mode has credential material in Key Vault to resolve.</summary>
     public bool RequiresSecret => AuthMode == FabricAuthMode.ServicePrincipal;
 
@@ -132,6 +175,24 @@ public sealed record FabricDestinationSettings(
             RequireName(clientId, "client id (dest_fabricClientId)", destination.Name);
         }
 
+        // Warehouse mode needs two things OneLake mode does not, and neither can be defaulted: the TDS endpoint
+        // (a different service from OneLake, so not derivable from the workspace) and the Lakehouse the COPY INTO
+        // stages through (a Warehouse has no Files area of its own). Both are required here so a missing one is a
+        // configuration error rather than a failure partway through a load.
+        var warehouseSqlEndpoint = ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseSqlEndpoint")?.Trim();
+        var stagingLakehouse = ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseStagingLakehouse");
+        if (mode == FabricLandingMode.WarehouseTable)
+        {
+            RequireName(
+                warehouseSqlEndpoint,
+                "Warehouse SQL endpoint (dest_fabricWarehouseSqlEndpoint)",
+                destination.Name);
+            RequireName(
+                stagingLakehouse,
+                "staging lakehouse (dest_fabricWarehouseStagingLakehouse)",
+                destination.Name);
+        }
+
         return new FabricDestinationSettings(
             Mode: mode,
             AuthMode: authMode,
@@ -149,7 +210,17 @@ public sealed record FabricDestinationSettings(
             ManagedIdentityClientId: ConnectionMetadataReader.GetString(json, "dest_fabricManagedIdentityClientId"),
             AuthorityHost: ConnectionMetadataReader.GetString(json, "dest_fabricAuthorityHost"),
             EndpointSuffix: ConnectionMetadataReader.GetString(json, "dest_fabricEndpointSuffix") ?? "fabric.microsoft.com",
-            AccountUrlOverride: ConnectionMetadataReader.GetString(json, "dest_fabricAccountUrl"));
+            AccountUrlOverride: ConnectionMetadataReader.GetString(json, "dest_fabricAccountUrl"),
+            WarehouseSqlEndpoint: warehouseSqlEndpoint,
+            WarehouseSchema: FirstNonBlank(
+                ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseSchema"), "dbo")!.Trim(),
+            WarehouseTable: ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseTable")?.Trim(),
+            WarehouseWriteMode: ParseEnum(
+                ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseWriteMode"),
+                FabricTableWriteMode.Append),
+            WarehouseStagingLakehouse: stagingLakehouse?.Trim(),
+            WarehouseStagingPath: NormalizeStagingPath(
+                ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseStagingPath")));
     }
 
     /// <summary>
@@ -165,6 +236,27 @@ public sealed record FabricDestinationSettings(
     /// address the item twice, which would nest a second item folder inside the first.</description></item>
     /// </list>
     /// </summary>
+    /// <summary>
+    /// Staging folder under the staging Lakehouse's Files area. Looser than <see cref="NormalizeBasePath"/> —
+    /// nothing user-facing reads these files, they are deleted after each load — but still relative-only, so a
+    /// pasted URL cannot retarget the staging write.
+    /// </summary>
+    internal static string NormalizeStagingPath(string? configuredPath)
+    {
+        var path = (configuredPath ?? string.Empty).Trim().Replace('\\', '/').Trim('/');
+        if (path.Length == 0 || path.Contains("://", StringComparison.Ordinal))
+        {
+            return "_staging";
+        }
+
+        if (path.StartsWith("Files/", StringComparison.OrdinalIgnoreCase))
+        {
+            path = path["Files/".Length..].Trim('/');
+        }
+
+        return path.Length == 0 ? "_staging" : path;
+    }
+
     internal static string NormalizeBasePath(string? configuredPath, string destinationName)
     {
         var path = (configuredPath ?? string.Empty).Trim().Replace('\\', '/').Trim('/');

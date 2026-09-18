@@ -113,9 +113,16 @@ public sealed class FabricDestinationSettingsTests
     public void Table_landing_modes_parse_and_leave_implementation_to_the_strategy_registry(
         string configured, FabricLandingMode expected)
     {
+        // Warehouse mode's own two required settings are supplied here so this case tests mode parsing rather than
+        // re-testing those checks — WarehouseTableLandingStrategyTests covers their absence.
         var settings = FabricDestinationSettings.Parse(Destination(
             null,
-            $$"""{"dest_fabricWorkspace":"Analytics","dest_fabricItemName":"L","dest_fabricItemType":"Warehouse","dest_fabricMode":"{{configured}}"}"""));
+            $$"""
+              {"dest_fabricWorkspace":"Analytics","dest_fabricItemName":"L","dest_fabricItemType":"Warehouse",
+               "dest_fabricMode":"{{configured}}",
+               "dest_fabricWarehouseSqlEndpoint":"Server=x;Database=y",
+               "dest_fabricWarehouseStagingLakehouse":"Stage"}
+              """));
 
         settings.Mode.Should().Be(expected);
     }

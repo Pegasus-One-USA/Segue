@@ -489,6 +489,8 @@ public static class DependencyInjection
         // nothing else. Eventstream is deliberately absent: it is authenticated HTTP, already served by the Data
         // Lake Webhook destination, and FabricDestinationSettings.Parse redirects to it by name.
         services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.OneLakeFilesLandingStrategy>();
+        services.AddScoped<Destinations.Fabric.IFabricWarehouseConnectionFactory, Destinations.Fabric.FabricWarehouseConnectionFactory>();
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.WarehouseTableLandingStrategy>();
         services.AddScoped<Destinations.Fabric.IFabricLandingStrategyRegistry, Destinations.Fabric.FabricLandingStrategyRegistry>();
         services.AddScoped<MappedDataFabricDestinationWriter>();
         services.AddScoped<MappedMongoDestinationWriter>();

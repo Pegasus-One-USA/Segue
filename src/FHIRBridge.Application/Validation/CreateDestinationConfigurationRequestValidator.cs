@@ -174,6 +174,7 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
     private static readonly string[] SupportedFabricItemTypes = ["Lakehouse", "Warehouse"];
     private static readonly string[] SupportedFabricFileFormats = ["ndjson", "parquet", "csv"];
     private static readonly string[] SupportedFabricAuthModes = ["managedIdentity", "servicePrincipal"];
+    private static readonly string[] SupportedFabricTableWriteModes = ["append", "upsert"];
     private static readonly string[] SupportedFabricPartitionSchemes =
         ["none", "resourceType", "ingestDate", "resourceTypeAndIngestDate"];
 
@@ -209,14 +210,6 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
             return;
         }
 
-        if (!string.Equals(mode, "oneLakeFiles", StringComparison.OrdinalIgnoreCase))
-        {
-            context.AddFailure(
-                "dest_fabricMode",
-                $"Fabric landing mode '{mode}' is not implemented yet. Use OneLake Files, and promote to a table "
-                    + "with a Fabric shortcut, notebook or pipeline.");
-            return;
-        }
 
         if (string.IsNullOrWhiteSpace(
                 FirstNonBlank(metadata.GetValueOrDefault("dest_fabricWorkspace"), request.Target)))
@@ -237,6 +230,37 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         {
             RequireField(context, metadata, "dest_fabricTenantId", "Tenant ID is required.");
             RequireField(context, metadata, "dest_fabricClientId", "Client ID is required.");
+        }
+
+        // Warehouse mode needs a TDS endpoint (a different service from OneLake, so not derivable) and the
+        // Lakehouse a COPY INTO stages through (a Warehouse has no Files area). Mirrors the same two checks in
+        // FabricDestinationSettings.Parse so the failure lands at save time, not mid-load.
+        if (string.Equals(mode, "warehouseTable", StringComparison.OrdinalIgnoreCase))
+        {
+            RequireField(
+                context,
+                metadata,
+                "dest_fabricWarehouseSqlEndpoint",
+                "Warehouse SQL connection string is required.");
+            RequireField(
+                context,
+                metadata,
+                "dest_fabricWarehouseStagingLakehouse",
+                "Staging lakehouse is required — a Warehouse has no Files area, so COPY INTO stages through a "
+                    + "Lakehouse in the same workspace.");
+            RequireOneOf(
+                context, metadata, "dest_fabricWarehouseWriteMode", SupportedFabricTableWriteModes, "write mode");
+
+            if (string.Equals(
+                    metadata.GetValueOrDefault("dest_fabricItemType"),
+                    "Lakehouse",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                context.AddFailure(
+                    "dest_fabricItemType",
+                    "Warehouse landing mode needs item type Warehouse. A Lakehouse's SQL analytics endpoint looks "
+                        + "similar but is read-only, so COPY INTO against it fails.");
+            }
         }
 
         ValidateFabricPath(context, metadata);
