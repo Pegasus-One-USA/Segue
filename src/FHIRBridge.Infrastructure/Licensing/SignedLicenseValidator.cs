@@ -34,8 +34,19 @@ public static class SignedLicenseValidator
     private const string ExpectedIssuer = "pegasusone";
 
     /// <summary>Small allowance for clock drift between the machine that minted the token and the one
-    /// validating it, applied to both the <c>nbf</c> and <c>exp</c> checks below.</summary>
+    /// validating it, applied to both the <c>nbf</c> and <c>exp</c> checks below. 5 minutes is generous on
+    /// purpose: a real license's <c>nbf</c>/<c>exp</c> span months or years, so padding either end by a few
+    /// minutes has no practical effect on when the product actually considers it not-yet-valid or
+    /// expired.</summary>
     private static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(5);
+
+    /// <summary>Separate, much smaller allowance for the <c>activateByUtc</c> check specifically — reusing
+    /// <see cref="ClockSkew"/> here would silently turn every activation window into "window + 5 minutes"
+    /// (e.g. a 1-minute window not actually rejecting until 6 minutes had passed), which defeats the point
+    /// of a short window at all. 30 seconds is still enough to absorb real clock drift between the
+    /// LicenseServer that minted the token and the customer's API host, without meaningfully padding a
+    /// deadline that's meant to be minutes-scale and tight.</summary>
+    private static readonly TimeSpan ActivationWindowClockSkew = TimeSpan.FromSeconds(30);
 
     /// <summary>Lazily-imported, never-disposed ECDsa for <see cref="LicensePublicKey.PublicKeyBase64"/> —
     /// see this class's remarks for why it's long-lived rather than per-call. A malformed embedded key
@@ -156,7 +167,7 @@ public static class SignedLicenseValidator
         if (enforceActivationWindow)
         {
             var activateByUtc = GetUnixTimeClaim(jsonWebToken, "activateByUtc");
-            if (activateByUtc.HasValue && nowUtc > activateByUtc.Value + ClockSkew)
+            if (activateByUtc.HasValue && nowUtc > activateByUtc.Value + ActivationWindowClockSkew)
             {
                 return Invalid(
                     "This license key's activation window has expired — it must be applied within the " +

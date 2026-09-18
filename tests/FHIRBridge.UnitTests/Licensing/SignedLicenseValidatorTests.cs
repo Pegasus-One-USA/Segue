@@ -299,6 +299,25 @@ public sealed class SignedLicenseValidatorTests
     }
 
     [Fact]
+    public void Activation_window_uses_a_short_tolerance_not_the_5_minute_nbf_exp_skew()
+    {
+        // Regression test for a real observed bug: a 1-minute window minted, applied 3 minutes later,
+        // incorrectly reported Active because the activation check originally reused the 5-minute
+        // nbf/exp ClockSkew — turning every window into "window + 5 minutes". A deadline 3 minutes in
+        // the past must be enforced (Invalid), not tolerated.
+        var key = LoadDevPrivateKey();
+        var token = MintToken(
+            key,
+            DateTime.UtcNow.AddMinutes(-4),
+            DateTime.UtcNow.AddYears(1),
+            activateByUtc: DateTime.UtcNow.AddMinutes(-3));
+
+        var status = SignedLicenseValidator.Validate(token, enforceActivationWindow: true);
+
+        status.State.Should().Be(LicenseState.Invalid);
+    }
+
+    [Fact]
     public void Activation_window_enforced_and_still_open_reports_Active()
     {
         // Deliberately not disposed here: see the repeated remark on the tests above.
