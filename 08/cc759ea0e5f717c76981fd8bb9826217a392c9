@@ -1,0 +1,45 @@
+tests/FHIRBridge.UnitTests/Destinations/Fabric/FabricDestinationSettingsTests.cs
+  s_d8c85374db9f6f::t_a00592a0e94b1b 116-117,120-125
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricDestinationSettings.cs
+  s_d8c85374db9f6f::t_0c1f1b00086751 246
+  s_d8c85374db9f6f::t_2043f6e644d88c 178-195,213-223,239-242,244-245,247-259
+  s_d8c85374db9f6f::t_15a8ac941a9120 33-65,67-77,243
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d8c85374db9f6f::t_92bf26f38c715d 492-493
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricWarehouseConnectionFactory.cs
+  s_d8c85374db9f6f::t_7e6b8895624d20 1-87
+src/FHIRBridge.Infrastructure/Destinations/Fabric/IFabricWarehouseConnectionFactory.cs
+  s_d8c85374db9f6f::t_60a842a83a7e09 1-22
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricEnums.cs
+  s_d8c85374db9f6f::t_4d4b487059aa18 84-98
+src/FHIRBridge.Infrastructure/Destinations/Fabric/WarehouseTableLandingStrategy.cs
+  s_d8c85374db9f6f::t_1b61ce2d9bc312 244
+  s_d8c85374db9f6f::t_e86476b043ae03 21-25
+  s_d8c85374db9f6f::t_277b20f73af94b 92
+  s_d8c85374db9f6f::t_8bedb3fb37bea6 158-164,173-174,176-177
+  s_d8c85374db9f6f::t_cfe72d79094ed6 287-299
+  s_d8c85374db9f6f::t_8f3fa505f95008 132-138,140,145-147,149-155
+  s_d8c85374db9f6f::t_f79b858cc65ca3 203-208
+  s_d8c85374db9f6f::t_7e38db186ca65b 1-20,26-91,93-131,139,141-144,148,156-157,165-172,175,178-202,209-243,245-286,300-346
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_d8c85374db9f6f::t_6876a16a7e4762 177,235-265
+tests/FHIRBridge.UnitTests/Destinations/Fabric/WarehouseTableLandingStrategyTests.cs
+  s_d8c85374db9f6f::t_95a2faa78e12cd 1-136,173
+  s_d8c85374db9f6f::t_c633ed7ad9c551 137-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "08cc759ea0e5f717c76981fd8bb9826217a392c9",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

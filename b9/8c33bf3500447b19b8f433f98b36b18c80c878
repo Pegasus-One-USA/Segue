@@ -1,0 +1,37 @@
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.scss
+  s_d8c85374db9f6f::t_bcb1f5bf995b1c 1278-1344
+portal/src/app/services/phase-config.service.ts
+  s_d8c85374db9f6f::t_48c11a2f574d25 22-31,75-78,106-110
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.scss
+  s_d8c85374db9f6f::t_bcb1f5bf995b1c 1289-1355
+portal/src/app/services/phase-config-v2.service.ts
+  s_d8c85374db9f6f::t_48c11a2f574d25 25-34,81-84,106-110
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_d8c85374db9f6f::t_1a05e9cb1aa0d1 4-22,42,51-53,56-57,208
+  s_d8c85374db9f6f::t_cf7bb58ee84802 107-117,119-127,129-133,135-161,164-207,209-251
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_d8c85374db9f6f::t_cf7bb58ee84802 107-117,119-127,129-133,135-161,164-207,209-251
+  s_d8c85374db9f6f::t_1a05e9cb1aa0d1 4-22,42,51-53,56-57,208
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_440b83d0153f17 43,51,55,60-61,101-112,127-150,198-201,216-221,252-258,261-262,271-273,276-278
+  s_d8c85374db9f6f::t_280ca836473eec 1,4,26-42,44-50,52-54,56-59,62-67
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_440b83d0153f17 43,51,55,60-61,101-112,127-150,198-201,216-221,252-258,261-262,271-273,276-278
+  s_d8c85374db9f6f::t_f498ca6b2421c2 1,4,26-42,44-50,52-54,56-59,62-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b98c33bf3500447b19b8f433f98b36b18c80c878",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

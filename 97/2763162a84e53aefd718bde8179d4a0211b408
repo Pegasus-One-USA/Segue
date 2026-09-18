@@ -1,0 +1,37 @@
+src/FHIRBridge.Infrastructure/Destinations/Fabric/IFabricLandingStrategyRegistry.cs
+  s_d8c85374db9f6f::t_bf8a95a02119a6 1-14
+src/FHIRBridge.Infrastructure/Destinations/MappedDataFabricDestinationWriter.cs
+  s_d8c85374db9f6f::t_f02fa65629a73c 9-12,14-16,20,22,24,40,42,44-47,50-51
+tests/FHIRBridge.UnitTests/Destinations/Fabric/FabricDestinationSettingsTests.cs
+  s_d8c85374db9f6f::t_099141ad211fd3 105-114,116,118,120
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricLandingStrategyRegistry.cs
+  s_d8c85374db9f6f::t_577ff6f2b6f2b1 1-47
+src/FHIRBridge.Infrastructure/Destinations/Fabric/OneLakeFilesLandingStrategy.cs
+  s_d8c85374db9f6f::t_ea9d4e0ed125ee 1-200
+src/FHIRBridge.Infrastructure/Destinations/Fabric/IFabricLandingStrategy.cs
+  s_d8c85374db9f6f::t_089bbef376211d 1-34
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d8c85374db9f6f::t_4f16bc43fee1f0 486-492
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricDestinationSettings.cs
+  s_d8c85374db9f6f::t_f858dc488f04e6 87,89-92,94-96
+tests/FHIRBridge.UnitTests/Destinations/Fabric/MappedDataFabricDestinationWriterTests.cs
+  s_d8c85374db9f6f::t_b00c146101c938 85-94,225,237,248
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricEnums.cs
+  s_d8c85374db9f6f::t_dd4227b068210f 19-21,32-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "972763162a84e53aefd718bde8179d4a0211b408",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
