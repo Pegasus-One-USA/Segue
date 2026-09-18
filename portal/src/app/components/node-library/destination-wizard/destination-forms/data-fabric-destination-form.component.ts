@@ -2,6 +2,7 @@ import { Component, computed, effect, inject, input, signal, untracked } from '@
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { PhaseConfigService } from '../../../../services/phase-config.service';
+import { DestinationSchemaService } from '../../../../services/destination-schema.service';
 import { WizardDestinationFormApi } from './destination-form-api';
 
 /**
@@ -23,6 +24,7 @@ import { WizardDestinationFormApi } from './destination-form-api';
 })
 export class DataFabricDestinationFormComponent implements WizardDestinationFormApi {
   private readonly fb = inject(FormBuilder);
+  private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly phase = inject(PhaseConfigService);
 
   /** Landing modes this phase offers. Warehouse stays out until a real Fabric write has been confirmed. */
@@ -262,6 +264,80 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
     this._syncModeValidators(this.fabricForm.value.mode ?? null);
   }
 
+  /** Mirrors the other destination forms' probeState/probeError pair. */
+  readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  readonly probeError = signal<string | null>(null);
+  /** Set when the identity authenticated but was refused — surfaced separately from the raw error
+   *  because it names the fix (a Fabric workspace role), which the raw 403 does not. */
+  readonly probePermissionHint = signal<string | null>(null);
+  /** Which half succeeded, so a Warehouse failure can say OneLake was fine. */
+  readonly probeOneLakeOk = signal<boolean>(false);
+
+  /** The saved destination id when reusing one unchanged — lets the backend resolve the stored secret,
+   *  which the form never repopulates. Without this, testing a reused connection would be impossible. */
+  readonly existingDestinationId = input<string | null>(null);
+
+  /** Workspace and item are always needed; a service principal additionally needs tenant, client and
+   *  either a typed secret or a stored one to fall back to. Warehouse mode also needs its endpoint. */
+  canTestConnection(): boolean {
+    const v = this.fabricForm.value;
+    if (!v.workspace || !v.itemName) return false;
+    if (this.isWarehouse() && !v.warehouseSqlEndpoint) return false;
+    if (v.authMode === 'servicePrincipal') {
+      return !!(v.tenantId && v.clientId
+        && (v.secretValue || (this.reusingExisting() && this.existingDestinationId())));
+    }
+    return true;
+  }
+
+  /** Tests with the form's CURRENT (not-yet-saved) values. Backed by POST /destinations/fabric-test. */
+  testConnection(): void {
+    if (!this.canTestConnection()) return;
+    const v = this.fabricForm.value;
+    this.probeState.set('testing');
+    this.probeError.set(null);
+    this.probePermissionHint.set(null);
+    this.probeOneLakeOk.set(false);
+
+    this.schemaSvc
+      .testFabric({
+        mode: v.mode ?? 'oneLakeFiles',
+        authMode: v.authMode ?? 'managedIdentity',
+        workspace: v.workspace ?? '',
+        itemName: v.itemName ?? '',
+        itemType: v.itemType ?? undefined,
+        secret: v.authMode === 'servicePrincipal' ? (v.secretValue ?? undefined) : undefined,
+        tenantId: v.authMode === 'servicePrincipal' ? (v.tenantId ?? undefined) : undefined,
+        clientId: v.authMode === 'servicePrincipal' ? (v.clientId ?? undefined) : undefined,
+        managedIdentityClientId: v.authMode === 'managedIdentity'
+          ? (v.managedIdentityClientId ?? undefined) : undefined,
+        endpointSuffix: v.endpointSuffix || undefined,
+        authorityHost: v.authorityHost || undefined,
+        accountUrl: v.accountUrl || undefined,
+        warehouseSqlEndpoint: this.isWarehouse() ? (v.warehouseSqlEndpoint ?? undefined) : undefined,
+        warehouseStagingLakehouse: this.isWarehouse()
+          ? (v.warehouseStagingLakehouse ?? undefined) : undefined,
+        destinationId: this.reusingExisting() ? (this.existingDestinationId() ?? undefined) : undefined,
+      })
+      .subscribe({
+        next: res => {
+          this.probeOneLakeOk.set(res.oneLakeReachable);
+          if (!res.connected) {
+            this.probeState.set('error');
+            this.probeError.set(res.error ?? 'Connection failed.');
+            this.probePermissionHint.set(res.permissionHint ?? null);
+            return;
+          }
+          this.probeState.set('ok');
+        },
+        error: err => {
+          this.probeState.set('error');
+          this.probeError.set(
+            typeof err?.error?.error === 'string' ? err.error.error : 'Connection failed.');
+        },
+      });
+  }
+
   reset(): void {
     this.fabricForm.reset({
       name: 'Microsoft Fabric Lakehouse', workspace: '', itemName: '', itemType: 'Lakehouse',
@@ -276,5 +352,8 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
     this.modeValue.set('oneLakeFiles');
     this._syncModeValidators('oneLakeFiles');
     this.advancedOpen.set(false);
+    this.probeState.set('idle');
+    this.probeError.set(null);
+    this.probePermissionHint.set(null);
   }
 }

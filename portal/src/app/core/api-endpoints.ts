@@ -150,6 +150,7 @@ export const DESTINATION_ENDPOINTS = {
   medplumTest:         `${API_V1_BASE}/destinations/medplum-test`,
   mongoTest:           `${API_V1_BASE}/destinations/mongo-test`,
   blobTest:            `${API_V1_BASE}/destinations/blob-test`,
+  fabricTest:          `${API_V1_BASE}/destinations/fabric-test`,
   // WorkflowEndpoints, not ConfigurationsController — same reasoning as SOURCE_CONNECTIONS_ENDPOINTS.usage: the
   // usage check has to walk every workflow's Destination nodes, which only the Runtime workflow store can answer.
   usage:               `${API_V1_BASE}/workflows/destination-usage`,

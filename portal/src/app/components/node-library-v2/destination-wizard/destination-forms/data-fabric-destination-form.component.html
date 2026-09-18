@@ -145,6 +145,23 @@
         }
       </div>
     }
+    <!-- Test Connection sits with the credentials it exercises, not at the foot of the form: the failure it
+         reports is almost always an auth or permission problem, and the fix is in the fields just above. -->
+    <div class="dw-field dw-field--full">
+      <button type="button" class="dw-btn"
+        [disabled]="!canTestConnection() || probeState() === 'testing'" (click)="testConnection()">
+        @if (probeState() === 'testing') { Testing… } @else { Test Connection }
+      </button>
+      @if (probeState() === 'ok') {
+        <span class="dw-hint">Connected.{{ isWarehouse() ? ' OneLake and the Warehouse endpoint both responded.' : '' }}</span>
+      }
+      @if (probeState() === 'error') {
+        <span class="dw-error">{{ probeError() }}</span>
+        @if (probePermissionHint()) {
+          <span class="dw-hint">{{ probePermissionHint() }}</span>
+        }
+      }
+    </div>
     <!-- Everything below has a working default, so it stays collapsed until asked for. It force-opens when one
          of its own controls is invalid — otherwise a pattern violation in here would block Save with the
          offending field hidden and no visible reason why. -->

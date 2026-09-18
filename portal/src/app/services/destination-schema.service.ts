@@ -204,6 +204,39 @@ export interface BlobConnectionTestRequest {
   destinationId?: string;
 }
 
+export interface FabricConnectionTestRequest {
+  /** "oneLakeFiles" or "warehouseTable" — decides which endpoints the backend probes. */
+  mode: string;
+  authMode: string;
+  workspace: string;
+  itemName: string;
+  itemType?: string;
+  secret?: string;
+  tenantId?: string;
+  clientId?: string;
+  managedIdentityClientId?: string;
+  endpointSuffix?: string;
+  authorityHost?: string;
+  accountUrl?: string;
+  warehouseSqlEndpoint?: string;
+  warehouseStagingLakehouse?: string;
+  /** When re-testing an already-saved destination without retyping its secret, carries the destination's id so
+   *  the backend can resolve the stored one instead. */
+  destinationId?: string;
+}
+
+/**
+ * Fabric test result. Reports OneLake and the Warehouse endpoint separately because they authenticate against
+ * different token audiences and fail independently — a single pass/fail hides which half is misconfigured.
+ */
+export interface FabricConnectionTestResult extends ConnectionTestResult {
+  oneLakeReachable: boolean;
+  /** Null when the landing mode never touches the Warehouse endpoint. */
+  warehouseReachable: boolean | null;
+  /** Set when the identity authenticated but was refused — names the Fabric workspace role to grant. */
+  permissionHint: string | null;
+}
+
 /** FHIR-specific test result — adds the discovered token endpoint so the wizard can persist it into the
  *  (now-hidden) tokenEndpoint form control exactly as if the user had typed it in. */
 export interface FhirConnectionTestResult extends ConnectionTestResult {
@@ -272,5 +305,14 @@ export class DestinationSchemaService {
    *  client for the auth mode and does a reachability round-trip server-side. */
   testBlob(request: BlobConnectionTestRequest): Observable<ConnectionTestResult> {
     return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.blobTest, request);
+  }
+
+  /**
+   * Tests a Microsoft Fabric connection. The result is richer than the shared ConnectionTestResult because
+   * Fabric has two endpoints that fail independently (OneLake, and a Warehouse TDS endpoint) using different
+   * token audiences — reporting them apart is what makes a failure actionable.
+   */
+  testFabric(request: FabricConnectionTestRequest): Observable<FabricConnectionTestResult> {
+    return this.http.post<FabricConnectionTestResult>(DESTINATION_ENDPOINTS.fabricTest, request);
   }
 }
