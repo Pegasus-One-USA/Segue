@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using FHIRBridge.Application.Abstractions.Security;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Sources;
 using FHIRBridge.SharedKernel.Exceptions;
@@ -40,12 +41,13 @@ public sealed class SigningKeyGenerationServiceTests
             })
             .Returns(Task.CompletedTask);
 
-        var result = await Service().GenerateAsync(CancellationToken.None);
+        var result = await Service().GenerateAsync(SourceSystemType.Epic, CancellationToken.None);
 
         result.Algorithm.Should().Be("RS384");
         result.KeyId.Should().NotBeNullOrWhiteSpace();
         result.KeyVaultName.Should().NotBeNullOrWhiteSpace();
         result.SecretName.Should().NotBeNullOrWhiteSpace();
+        result.SecretName.Should().StartWith("epic-private-key-");
 
         writtenReference.Should().NotBeNull();
         writtenReference!.KeyVaultName.Should().Be(result.KeyVaultName);
@@ -71,11 +73,23 @@ public sealed class SigningKeyGenerationServiceTests
             .Setup(x => x.WriteSecretAsync(It.IsAny<SecretReference>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var first = await Service().GenerateAsync(CancellationToken.None);
-        var second = await Service().GenerateAsync(CancellationToken.None);
+        var first = await Service().GenerateAsync(SourceSystemType.Epic, CancellationToken.None);
+        var second = await Service().GenerateAsync(SourceSystemType.Epic, CancellationToken.None);
 
         first.SecretName.Should().NotBe(second.SecretName);
         first.KeyId.Should().NotBe(second.KeyId);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_names_the_secret_after_the_actual_vendor_not_always_epic()
+    {
+        _secretWriter
+            .Setup(x => x.WriteSecretAsync(It.IsAny<SecretReference>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await Service().GenerateAsync(SourceSystemType.Athenahealth, CancellationToken.None);
+
+        result.SecretName.Should().StartWith("athenahealth-private-key-");
     }
 
     [Fact]
@@ -90,7 +104,7 @@ public sealed class SigningKeyGenerationServiceTests
             .Callback<SecretReference, string, CancellationToken>((_, value, _) => writtenPrivateKeyPem = value)
             .Returns(Task.CompletedTask);
 
-        var result = await Service().ImportAsync(pkcs8Pem, CancellationToken.None);
+        var result = await Service().ImportAsync(pkcs8Pem, SourceSystemType.Epic, CancellationToken.None);
 
         result.Algorithm.Should().Be("RS384");
         writtenPrivateKeyPem.Should().NotBeNullOrWhiteSpace();
@@ -108,7 +122,7 @@ public sealed class SigningKeyGenerationServiceTests
             .Setup(x => x.WriteSecretAsync(It.IsAny<SecretReference>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var result = await Service().ImportAsync(pkcs1Pem, CancellationToken.None);
+        var result = await Service().ImportAsync(pkcs1Pem, SourceSystemType.Epic, CancellationToken.None);
 
         result.Algorithm.Should().Be("RS384");
     }
@@ -116,7 +130,7 @@ public sealed class SigningKeyGenerationServiceTests
     [Fact]
     public async Task ImportAsync_rejects_garbage_input_with_a_business_rule_exception()
     {
-        var act = () => Service().ImportAsync("not a real key", CancellationToken.None);
+        var act = () => Service().ImportAsync("not a real key", SourceSystemType.Epic, CancellationToken.None);
 
         await act.Should().ThrowAsync<BusinessRuleException>();
         _secretWriter.Verify(
@@ -127,7 +141,7 @@ public sealed class SigningKeyGenerationServiceTests
     [Fact]
     public async Task ImportAsync_rejects_a_blank_value()
     {
-        var act = () => Service().ImportAsync("   ", CancellationToken.None);
+        var act = () => Service().ImportAsync("   ", SourceSystemType.Epic, CancellationToken.None);
 
         await act.Should().ThrowAsync<BusinessRuleException>();
     }
@@ -138,7 +152,7 @@ public sealed class SigningKeyGenerationServiceTests
         using var rsa = RSA.Create(2048);
         var publicKeyPem = rsa.ExportSubjectPublicKeyInfoPem();
 
-        var act = () => Service().ImportAsync(publicKeyPem, CancellationToken.None);
+        var act = () => Service().ImportAsync(publicKeyPem, SourceSystemType.Epic, CancellationToken.None);
 
         await act.Should().ThrowAsync<BusinessRuleException>();
     }
@@ -149,7 +163,7 @@ public sealed class SigningKeyGenerationServiceTests
         using var ecdsa = ECDsa.Create();
         var ecPkcs8Pem = ecdsa.ExportPkcs8PrivateKeyPem();
 
-        var act = () => Service().ImportAsync(ecPkcs8Pem, CancellationToken.None);
+        var act = () => Service().ImportAsync(ecPkcs8Pem, SourceSystemType.Epic, CancellationToken.None);
 
         await act.Should().ThrowAsync<BusinessRuleException>();
     }
@@ -160,7 +174,7 @@ public sealed class SigningKeyGenerationServiceTests
         using var rsa = RSA.Create(1024);
         var weakPem = rsa.ExportPkcs8PrivateKeyPem();
 
-        var act = () => Service().ImportAsync(weakPem, CancellationToken.None);
+        var act = () => Service().ImportAsync(weakPem, SourceSystemType.Epic, CancellationToken.None);
 
         await act.Should().ThrowAsync<BusinessRuleException>().WithMessage("*below the minimum required*");
     }
@@ -173,7 +187,7 @@ public sealed class SigningKeyGenerationServiceTests
             "correct horse battery staple",
             new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 100_000));
 
-        var act = () => Service().ImportAsync(encryptedPem, CancellationToken.None);
+        var act = () => Service().ImportAsync(encryptedPem, SourceSystemType.Epic, CancellationToken.None);
 
         await act.Should().ThrowAsync<BusinessRuleException>();
     }
@@ -187,8 +201,8 @@ public sealed class SigningKeyGenerationServiceTests
         using var rsaA = RSA.Create(2048);
         using var rsaB = RSA.Create(2048);
 
-        var first = await Service().ImportAsync(rsaA.ExportPkcs8PrivateKeyPem(), CancellationToken.None);
-        var second = await Service().ImportAsync(rsaB.ExportPkcs8PrivateKeyPem(), CancellationToken.None);
+        var first = await Service().ImportAsync(rsaA.ExportPkcs8PrivateKeyPem(), SourceSystemType.Epic, CancellationToken.None);
+        var second = await Service().ImportAsync(rsaB.ExportPkcs8PrivateKeyPem(), SourceSystemType.Epic, CancellationToken.None);
 
         first.SecretName.Should().NotBe(second.SecretName);
         first.KeyId.Should().NotBe(second.KeyId);

@@ -2934,7 +2934,7 @@ export class EhrVendorSourceFormComponent
    *  casing for how the key was provisioned. */
   protected generateKeyPair(): void {
     this.keyGenStatus.set('generating');
-    this.sourceConnectionSvc.generateSigningKey().subscribe({
+    this.sourceConnectionSvc.generateSigningKey(this.vendor()).subscribe({
       next: (key) => {
         this.form.patchValue({
           jwtKid: key.keyId,
@@ -2996,7 +2996,7 @@ export class EhrVendorSourceFormComponent
 
     this.keyGenStatus.set('generating');
     this.sourceConnectionSvc
-      .importSigningKey(this.pendingPrivateKeyPem)
+      .importSigningKey(this.pendingPrivateKeyPem, this.vendor())
       .subscribe({
         next: (key) => {
           this.form.patchValue({

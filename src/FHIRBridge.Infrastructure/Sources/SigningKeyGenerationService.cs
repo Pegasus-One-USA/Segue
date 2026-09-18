@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Extensions.Logging;
@@ -47,12 +48,12 @@ public sealed class SigningKeyGenerationService : ISigningKeyGenerationService
         _logger = logger;
     }
 
-    public async Task<GeneratedSigningKeyDto> GenerateAsync(CancellationToken cancellationToken)
+    public async Task<GeneratedSigningKeyDto> GenerateAsync(SourceSystemType sourceSystemType, CancellationToken cancellationToken)
     {
         using var rsa = RSA.Create(GeneratedKeySizeBits);
         var privateKeyPem = rsa.ExportPkcs8PrivateKeyPem();
 
-        var result = await StoreAsync(privateKeyPem, cancellationToken);
+        var result = await StoreAsync(privateKeyPem, sourceSystemType, cancellationToken);
 
         _logger.LogInformation(
             "Generated a new {Algorithm}/{KeySizeBits}-bit signing key pair (kid {KeyId}); private key stored as " +
@@ -66,7 +67,7 @@ public sealed class SigningKeyGenerationService : ISigningKeyGenerationService
         return result;
     }
 
-    public async Task<GeneratedSigningKeyDto> ImportAsync(string privateKeyPem, CancellationToken cancellationToken)
+    public async Task<GeneratedSigningKeyDto> ImportAsync(string privateKeyPem, SourceSystemType sourceSystemType, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(privateKeyPem))
         {
@@ -75,7 +76,7 @@ public sealed class SigningKeyGenerationService : ISigningKeyGenerationService
 
         var normalizedPem = ValidateAndNormalize(privateKeyPem);
 
-        var result = await StoreAsync(normalizedPem, cancellationToken);
+        var result = await StoreAsync(normalizedPem, sourceSystemType, cancellationToken);
 
         _logger.LogInformation(
             "Imported a customer-supplied {Algorithm} signing key (kid {KeyId}); private key stored as " +
@@ -136,10 +137,15 @@ public sealed class SigningKeyGenerationService : ISigningKeyGenerationService
         return normalizedPem;
     }
 
-    private async Task<GeneratedSigningKeyDto> StoreAsync(string privateKeyPem, CancellationToken cancellationToken)
+    private async Task<GeneratedSigningKeyDto> StoreAsync(
+        string privateKeyPem, SourceSystemType sourceSystemType, CancellationToken cancellationToken)
     {
         var keyId = $"fb-{Guid.NewGuid():N}"[..12];
-        var secretName = $"epic-private-key-{Guid.NewGuid():N}";
+        // Named after the actual vendor being configured (e.g. "athenahealth-private-key-...") rather than always
+        // "epic-private-key-..." — the prefix used to be hardcoded from when Epic was the only SMART Backend
+        // Services vendor this wizard supported, which left every other vendor's key misleadingly Epic-branded.
+        var vendorSlug = sourceSystemType.ToString().ToLowerInvariant();
+        var secretName = $"{vendorSlug}-private-key-{Guid.NewGuid():N}";
 
         // Resolve to the real vault (e.g. the tenant's Azure Key Vault) before writing, and persist that same
         // resolved name in the DTO — mirroring ConfigurationService's pattern. CompositeSecretWriter also resolves
