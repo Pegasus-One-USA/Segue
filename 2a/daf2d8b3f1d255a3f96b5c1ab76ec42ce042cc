@@ -1,0 +1,29 @@
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_cf3967cb308c19::t_7c3ab63597362d 1324-1330
+  s_cf3967cb308c19::t_e6693856b85334 1317-1323,1338,1340
+  s_cf3967cb308c19::t_2567e0d6a3e654 1331-1337,1339
+tests/FHIRBridge.UnitTests/Destinations/MappedSqlServerDestinationWriterTests.cs
+  s_cf3967cb308c19::t_6259c6cb9d6e36 224-235,239-240,242-245,247-248,262,270-272,274,276-277
+  s_cf3967cb308c19::t_58cf950fee5aac 236-238,241,246,249-261,263-269,273,275
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_cf3967cb308c19::t_58cf950fee5aac 564
+  s_cf3967cb308c19::t_3af1a0c1766678 572-582
+src/FHIRBridge.Infrastructure/Governance/SafeHarborDeIdentificationService.cs
+  s_cf3967cb308c19::t_3af1a0c1766678 523-531
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2adaf2d8b3f1d255a3f96b5c1ab76ec42ce042cc",
+  "prompts": {},
+  "sessions": {
+    "s_cf3967cb308c19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66d990c3-0cfc-4e6d-af22-3febae2af8ba",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
