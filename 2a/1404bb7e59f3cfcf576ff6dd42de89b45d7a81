@@ -1,0 +1,76 @@
+src/FHIRBridge.Application/Abstractions/Persistence/IBulkExportJobRepository.cs
+  s_93f79809fe4a39::t_2cfa9944c48b6e 22-27
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirBulkExportModels.cs
+  s_93f79809fe4a39::t_7e9f2507a67c2f 50-77
+  s_93f79809fe4a39::t_083ba7ff88c1b5 139-176
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_93f79809fe4a39::t_a232275c6efce5 114-118,121-127
+  s_93f79809fe4a39::t_dfdeb17734fc3d 56-64
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_93f79809fe4a39::t_fa3693ad9f2573 5172-5175
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_93f79809fe4a39::t_157c63bb3be10b 5208-5211
+src/Api/FHIRBridge.Api/Workflows/WorkflowRunHistoryDto.cs
+  s_93f79809fe4a39::t_4016212915c65e 44-86
+  s_93f79809fe4a39::t_1d1f2beebc5ef1 23-24
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260918164250_AddWorkflowRunBulkRequestId.cs
+  s_93f79809fe4a39::t_157c63bb3be10b 1-29
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_93f79809fe4a39::t_ef167801651fa2 566-569
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260918164324_AddWorkflowRunBulkRequestId.Designer.cs
+  s_93f79809fe4a39::t_fa3693ad9f2573 1-6046
+src/FHIRBridge.Infrastructure/Destinations/FabricDestinationConnectionTestService.cs
+  s_d8c85374db9f6f::t_0a6217c85c0aab 132-151
+  s_d8c85374db9f6f::t_55b7793bca3dea 8
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260918164250_AddWorkflowRunBulkRequestId.Designer.cs
+  s_93f79809fe4a39::t_157c63bb3be10b 1-6082
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Connectors/IFhirBulkExportClient.cs
+  s_93f79809fe4a39::t_c1b41b3fbc869f 33-44
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_93f79809fe4a39::t_3d06d1059d0457 316-323,327-329,331
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricDestinationSettings.cs
+  s_d8c85374db9f6f::t_2263382c0c75e1 219-227,231,322-324
+  s_d8c85374db9f6f::t_14411ffb5152f4 85-94,325
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_93f79809fe4a39::t_443eb32a82c417 144-146
+tests/FHIRBridge.UnitTests/Destinations/Fabric/FabricDestinationSettingsTests.cs
+  s_d8c85374db9f6f::t_cecba0920ee696 174-208
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirRestBulkExportClient.cs
+  s_93f79809fe4a39::t_9ad9f2cc3fa20d 131-219
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_93f79809fe4a39::t_4ff0a9eb234522 2241-2317
+  s_93f79809fe4a39::t_f24da6522649d5 2096-2097
+  s_93f79809fe4a39::t_ca5a5dcda400cf 3095-3185
+  s_93f79809fe4a39::t_9a2c38809add6a 2237-2238
+  s_93f79809fe4a39::t_8a0f81beae36f6 21,23
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowNodeOutput.cs
+  s_93f79809fe4a39::t_a8219a8bebc254 39-44
+src/FHIRBridge.Infrastructure/Persistence/EfBulkExportJobRepository.cs
+  s_93f79809fe4a39::t_8d0500e3e60775 51-59
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260918164324_AddWorkflowRunBulkRequestId.cs
+  s_93f79809fe4a39::t_fa3693ad9f2573 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2a1404bb7e59f3cfcf576ff6dd42de89b45d7a81",
+  "prompts": {},
+  "sessions": {
+    "s_93f79809fe4a39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "16c788f7-a266-4b72-8a2c-60374e6e1e92",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
