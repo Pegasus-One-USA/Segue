@@ -174,3 +174,74 @@ public sealed class JsonMappingEngineArrayTextTests
         value.Should().Be("""[ "Camila", "Maria" ]""", "ValueType Json is the explicit way to ask for a document");
     }
 }
+
+/// <summary>
+/// JoinArrayOfStrings keeps scalars and DROPS objects and nested arrays. Routing every array through it — which
+/// is what removing the old directField guard did — turned "telecom":[{...},{...}] into an empty string: every
+/// item dropped, column blank, run green. Silent data loss is worse than the bracketed JSON the join exists to
+/// avoid, so only a scalar array may be joined.
+/// </summary>
+public sealed class JsonMappingEngineObjectArrayTests
+{
+    private const string PatientJson = """
+        {
+          "resourceType": "Patient",
+          "telecom": [
+            { "system": "phone", "value": "+1 469-888-8888", "use": "work" },
+            { "system": "email", "value": "knixontestemail2@epic.com" }
+          ],
+          "given": [ "Camila", "Maria" ],
+          "mixed": [ "Camila", { "text": "Camila Maria" } ]
+        }
+        """;
+
+    private static readonly JsonMappingEngine Sut = new();
+
+    private static MappingFieldDto Field(string path, bool defer, MappingValueType type = MappingValueType.String) => new(
+        TargetField: "Col", JsonPath: path, ValueType: type,
+        IsRequired: false, DefaultValue: null, Format: "directField",
+        ResourceType: "Patient", DestinationObject: "dbo.Patient",
+        ArrayPolicy: ArrayPolicy.FirstItem, ArrayAncestors: [], DeferTypeToTransform: defer);
+
+    private static string? Map(string path, bool defer = false, MappingValueType type = MappingValueType.String) =>
+        Sut.Map(PatientJson, [Field(path, defer, type)]).Values["Col"]?.ToString();
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]   // the deferred path had the same defect
+    public void An_array_of_objects_is_never_silently_emptied(bool defer)
+    {
+        var value = Map("$.telecom", defer);
+
+        value.Should().NotBeNullOrEmpty("dropping every item writes a blank column while the run reports success");
+        value.Should().Contain("469-888-8888", "the phone number is the data this column exists to carry");
+        value.Should().Contain("knixontestemail2@epic.com");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_mixed_array_keeps_its_object_items_too(bool defer)
+    {
+        // "Camila" alone would be a silent half-loss — the object item carries data as well.
+        Map("$.mixed", defer).Should().Contain("Camila Maria");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_scalar_array_still_joins_without_json_punctuation(bool defer)
+    {
+        var value = Map("$.given", defer);
+
+        value.Should().Be("Camila, Maria");
+        value.Should().NotStartWith("[").And.NotContain("\"");
+    }
+
+    [Fact]
+    public void A_json_typed_column_still_receives_the_document_verbatim()
+    {
+        Map("$.telecom", defer: false, type: MappingValueType.Json)
+            .Should().StartWith("[", "ValueType Json is the explicit way to ask for a document");
+    }
+}

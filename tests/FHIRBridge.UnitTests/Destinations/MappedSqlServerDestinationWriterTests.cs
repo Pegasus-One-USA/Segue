@@ -169,3 +169,55 @@ public sealed class ReferenceLookupIsolationTests
         errors.Should().BeEmpty();
     }
 }
+
+/// <summary>
+/// A reference target (table + key column) comes from the mapping PROFILE, so a typo in one breaks every record
+/// identically — a configuration fault, not a data fault. Validated inside the per-record loop it was caught by
+/// that loop's isolation and reported as "N of N records failed to write", which reads as bad data and sends the
+/// operator looking in the wrong place. It has to fail before the loop, with its own message.
+/// </summary>
+public sealed class ReferenceLookupTargetValidationTests
+{
+    private static MappedDestinationRecord Record(params MappedReferenceLookup[] lookups) =>
+        new(Guid.NewGuid(), "Observation", "dbo.Observation", "o1", new Dictionary<string, object?>(),
+            ReferenceLookups: lookups);
+
+    [Fact]
+    public void A_malformed_key_column_fails_before_any_record_is_processed()
+    {
+        var act = () => MappedSqlServerDestinationWriter.ValidateReferenceLookupTargets(
+            [Record(new MappedReferenceLookup("PatientId", "Patient", "Patient Id; DROP TABLE x", "p-1"))]);
+
+        act.Should().Throw<Exception>("a broken profile must fail the route, not be isolated as a record error");
+    }
+
+    [Fact]
+    public void A_well_formed_batch_passes()
+    {
+        var act = () => MappedSqlServerDestinationWriter.ValidateReferenceLookupTargets(
+        [
+            Record(new MappedReferenceLookup("PatientId", "dbo.Patient", "PatientId", "p-1")),
+            Record(new MappedReferenceLookup("EncounterId", "Encounter", "EncounterId", "e-1")),
+        ]);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void A_lookup_with_no_reference_id_is_not_validated()
+    {
+        // Nothing to resolve, so the target is never used — validating it would fail a batch that works.
+        var act = () => MappedSqlServerDestinationWriter.ValidateReferenceLookupTargets(
+            [Record(new MappedReferenceLookup("PatientId", "Patient", "bad column!", null))]);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Records_with_no_lookups_at_all_pass()
+    {
+        var act = () => MappedSqlServerDestinationWriter.ValidateReferenceLookupTargets([Record()]);
+
+        act.Should().NotThrow();
+    }
+}

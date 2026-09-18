@@ -914,7 +914,13 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 {
                     groupResult = await writer.WriteAsync(destination, effectiveProfile, groupRecords, writeContext, cancellationToken);
                 }
-                catch (Exception exception) when (writeFailureReasons.Count > 0 || referenceGaps.Count > 0)
+                // Cancellation is not a write failure and must not be re-labelled as one. referenceGaps is
+                // populated BEFORE the first write, so on an incremental load — where a reference routinely
+                // points at rows from an earlier run — this filter is true almost every time, and a cancelled
+                // run would be recorded as Failed with a fabricated "consequence of earlier problems" cause.
+                // Every other blanket catch in this layer already excludes it.
+                catch (Exception exception) when (exception is not OperationCanceledException
+                    && (writeFailureReasons.Count > 0 || referenceGaps.Count > 0))
                 {
                     throw new InvalidOperationException(
                         $"Writing '{group.Key}' failed: {exception.Message} This is likely a consequence of "

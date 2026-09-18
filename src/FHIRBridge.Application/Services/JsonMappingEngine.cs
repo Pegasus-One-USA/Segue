@@ -504,6 +504,27 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
     /// to fan it out into separate rows/columns), so this is the only representation a single String/Json
     /// column can hold. Nested objects/arrays inside the array are skipped rather than stringified, since
     /// there's no sensible flat-text form for those.</summary>
+    /// <summary>
+    /// True when every item is a scalar, so <see cref="JoinArrayOfStrings"/> can represent the whole array.
+    ///
+    /// That join keeps only strings/numbers/booleans and DROPS objects and nested arrays, which is correct for
+    /// "given":["Camila","Maria"] and catastrophic for "telecom":[{...},{...}] — every item is dropped and the
+    /// column receives an empty string while the run reports success. An array holding anything non-scalar has
+    /// no faithful single-column text form, so it keeps its raw JSON rather than being silently emptied.
+    /// </summary>
+    private static bool IsScalarArray(JsonElement array)
+    {
+        foreach (var item in array.EnumerateArray())
+        {
+            if (item.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private static string JoinArrayOfStrings(JsonElement array)
     {
         var parts = new List<string>();
@@ -646,7 +667,9 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                 // the rule that was the whole reason for deferring: the array collapses to ONE value, so
                 // ConcatenationTemplating/ArrayListOperations see a single string instead of the items and
                 // pass it through unchanged. Join the elements, exactly as the String branch below does.
-                JsonValueKind.Array => JoinArrayOfStrings(element),
+                // Only a scalar array can be joined — see IsScalarArray. Anything else keeps its raw JSON,
+                // which is lossy for a text column but not DESTRUCTIVE, and is what this path produced before.
+                JsonValueKind.Array => IsScalarArray(element) ? JoinArrayOfStrings(element) : element.ToString(),
                 _ => element.ToString(),
             };
         }
@@ -666,7 +689,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                     // — brackets and quotes — into a text column. Whatever the format, a String column wants
                     // the values, not a JSON document; a field that genuinely wants JSON declares ValueType
                     // Json and is handled below.
-                    JsonValueKind.Array => JoinArrayOfStrings(element),
+                    JsonValueKind.Array when IsScalarArray(element) => JoinArrayOfStrings(element),
                     _ => element.ToString()
                 },
                 maxLength, targetField, errors),

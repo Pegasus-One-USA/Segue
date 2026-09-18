@@ -369,17 +369,26 @@ export class FieldMappingListComponent {
     const alreadyCreated = this.deIdentificationProfiles().find(p => p.name === workflowId);
     if (alreadyCreated) {
       this.createdProfileId.set(alreadyCreated.id);
-      this.selectedDeIdentificationProfileIdChange.emit(alreadyCreated.id);
       return of(alreadyCreated.id);
     }
 
+    // Deliberately does NOT publish the id to the parent yet — publishAfterFirstRule() does, once the rule is
+    // actually saved. Emitting here set the parent's signal, which drives the effect that re-fetches this
+    // profile's rules; that fetch left before the rule existed, came back without it, and overwrote the local
+    // list the save had just added it to. The rule was stored correctly and simply vanished from the table.
     return this.deIdProfileSvc.create({ name: workflowId }).pipe(
-      tap(profile => {
-        this.createdProfileId.set(profile.id);
-        this.selectedDeIdentificationProfileIdChange.emit(profile.id);
-      }),
+      tap(profile => this.createdProfileId.set(profile.id)),
       switchMap(profile => of(profile.id)),
     );
+  }
+
+  /** Publishes the workflow's policy id upward, AFTER its first rule is stored — see ensureWorkflowProfile$().
+   *  Idempotent: once the parent holds it, later saves have nothing to announce. */
+  private publishAfterFirstRule(): void {
+    const created = this.createdProfileId();
+    if (created && created !== this.selectedDeIdentificationProfileId()) {
+      this.selectedDeIdentificationProfileIdChange.emit(created);
+    }
   }
 
   /** The policy this component resolved or created in THIS session — see ensureWorkflowProfile$(). Held
@@ -525,6 +534,8 @@ export class FieldMappingListComponent {
             next[index] = saved;
             return next;
           });
+          // Only now — any re-fetch this triggers will find the rule already stored.
+          this.publishAfterFirstRule();
           this.cancelDeIdDraft();
         },
         error: (err) => {

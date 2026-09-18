@@ -105,6 +105,14 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         var recordErrors = new List<string>();
         var writtenResourceIds = new List<string?>();
 
+        // Validate the reference TARGETS (table + key column) once, up front and outside the per-record
+        // isolation below. These come from the mapping profile, not from a record's data: a typo in one is a
+        // broken configuration affecting every record identically, and letting it reach the per-record catch
+        // reported "N of N records failed — partial success" for what is really "this profile cannot run".
+        // Failing here propagates an accurate message and also stops re-validating the same identifiers once
+        // per record.
+        ValidateReferenceLookupTargets(records);
+
         var resolvedRecords = await ResolveReferenceLookupsIsolatedAsync(
             records,
             (record, token) => ResolveReferenceLookupsAsync(connection, record, token),
@@ -475,6 +483,33 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
 
         var normalized = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath;
         return string.Equals(normalized, "id", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks every distinct reference target in the batch — the table and key column each lookup resolves
+    /// against — before any record is processed.
+    ///
+    /// These identifiers come from the mapping profile, so a bad one is a configuration fault, not a data fault:
+    /// it fails identically for every record. Validated inside the per-record loop it was caught by that loop's
+    /// isolation and reported as "every record failed to write", which reads as a data problem and sends the
+    /// operator to the wrong place entirely. Raised here it propagates with its own message and fails the route.
+    /// </summary>
+    internal static void ValidateReferenceLookupTargets(IReadOnlyCollection<MappedDestinationRecord> records)
+    {
+        var seen = new HashSet<(string Table, string Column)>();
+        foreach (var record in records)
+        {
+            foreach (var lookup in record.ReferenceLookups ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(lookup.ReferenceId) || !seen.Add((lookup.LookupTable, lookup.LookupKeyColumn)))
+                {
+                    continue;
+                }
+
+                ParseDestinationObject(lookup.LookupTable);
+                ValidateIdentifier(lookup.LookupKeyColumn);
+            }
+        }
     }
 
     /// <summary>

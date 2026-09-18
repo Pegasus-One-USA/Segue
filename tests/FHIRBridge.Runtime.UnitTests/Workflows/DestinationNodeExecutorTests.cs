@@ -377,6 +377,51 @@ public sealed class DestinationNodeExecutorTests
         thrown.InnerException.Should().BeSameAs(encounterFailure, "the original stack trace must not be thrown away");
     }
 
+    /// <summary>
+    /// A cancelled run is not a failed write. The wrapping filter also matches on referenceGaps, which is filled
+    /// BEFORE the first write — so on an incremental load, where references routinely resolve against rows an
+    /// earlier run wrote, it is true nearly every time. Without excluding cancellation, cancelling such a run
+    /// recorded it as Failed with a fabricated "consequence of earlier problems" explanation.
+    /// </summary>
+    [Fact]
+    public async Task A_cancelled_write_is_not_rewritten_as_a_failure()
+    {
+        var destinationId = Guid.NewGuid();
+        var patientProfile = new MappingProfile(
+            "Patient", "Patient", Guid.NewGuid(), destinationId, "dbo.Patient",
+            [new MappingField("PatientId", "$.id", MappingValueType.String, IsRequired: false, DefaultValue: null, Format: "directField")]);
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetMappingProfilesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([patientProfile]);
+
+        var writer = new Mock<IConfiguredDestinationWriter>();
+        writer.Setup(w => w.WriteAsync(
+                It.IsAny<DestinationConfiguration>(), It.IsAny<MappingProfile>(),
+                It.IsAny<IReadOnlyCollection<MappedDestinationRecord>>(), It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException());
+
+        var writerFactory = new Mock<IConfiguredDestinationWriterFactory>();
+        writerFactory.Setup(f => f.Create(DestinationType.SqlServer)).Returns(writer.Object);
+
+        var executor = new SqlServerDestinationNodeExecutor(writerFactory.Object, configurationRepository: repository.Object);
+
+        // A reference to a table this write does not contain — the incremental-load shape that fills referenceGaps
+        // before anything is written, making the wrapping filter true.
+        var patientRecord = new MappedDestinationRecord(
+            Guid.NewGuid(), "Patient", "dbo.Patient", "p1", new Dictionary<string, object?> { ["PatientId"] = "p1" },
+            ReferenceLookups: [new MappedReferenceLookup("OrgId", "Organization", "OrgId", "o-1")]);
+        var upstream = new WorkflowNodeOutput(
+            Guid.NewGuid(), WorkflowNodeTypes.Mapping,
+            new MappedRecordBatch([patientRecord]), WorkflowDataContract.MappedRecordBatch);
+
+        var act = async () => await executor.ExecuteAsync(
+            CreateContext(), CreateDestinationNode(destinationId), [upstream], CancellationToken.None);
+
+        await act.Should().ThrowAsync<OperationCanceledException>(
+            "cancellation must surface as cancellation, not as an InvalidOperationException blaming earlier writes");
+    }
+
     private static WorkflowNode CreateMedplumNode(Guid destinationId, string? resourceSelection)
     {
         var config = new Dictionary<string, object>
