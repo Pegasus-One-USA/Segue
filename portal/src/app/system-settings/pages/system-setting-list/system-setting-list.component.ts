@@ -401,7 +401,7 @@ export class SystemSettingListComponent implements OnInit {
   toggleCode(code: string): void {
     this.collapsedCodes.update(set => {
       const next = new Set(set);
-      next.has(code) ? next.delete(code) : next.add(code);
+      if (next.has(code)) { next.delete(code); } else { next.add(code); }
       return next;
     });
   }
