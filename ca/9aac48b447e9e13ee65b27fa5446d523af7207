@@ -1,0 +1,19 @@
+Demo_TestApp/frontend/src/environments/environment.ts
+  s_174e16661bf66d::t_eaf1080693ee63 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ca9aac48b447e9e13ee65b27fa5446d523af7207",
+  "prompts": {},
+  "sessions": {
+    "s_174e16661bf66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a051edf-3c44-4555-8dea-ae48ca7f4ff9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
