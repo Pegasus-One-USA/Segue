@@ -162,9 +162,22 @@ export class WizardService {
   // Trusted issuers for EHR-launch (iss validation). Mandatory server-side for EHR launch; captured in the Data step.
   readonly trustedIssuers = signal('');
 
-  readonly scopeString = computed(() =>
-    this.scopeBuilder.buildScopes(this.currentApp(), this.resources())
-  );
+  // Set from the form's "Group bulk export" checkbox (entity/Settings mode has no Export Scope field of its
+  // own to derive this from — see ehr-vendor-source-form's groupBulkExport control remarks). ScopeBuilderService
+  // knows nothing about vendor-specific scopes or Group's special-cased exclusion, so the injection happens
+  // here instead, gated on the one condition that actually matters: a Backend/system-scoped eCW (Healow)
+  // connection meant for Group $export.
+  readonly groupBulkExport = signal(false);
+
+  readonly scopeString = computed(() => {
+    const built = this.scopeBuilder.buildScopes(this.currentApp(), this.resources());
+    const needsGroupRead =
+      this.groupBulkExport() &&
+      this.ehrType() === 'Healow' &&
+      this.currentApp().scopePrefix === 'system/' &&
+      !built.split(' ').includes('system/Group.read');
+    return needsGroupRead ? `system/Group.read ${built}`.trim() : built;
+  });
 
   // ── ingestion ─────────────────────────────────────────────────────────────
   readonly mode = signal('export');
@@ -287,6 +300,11 @@ export class WizardService {
       dto?.retrieval?.resourceTypes?.length
         ? [...dto.retrieval.resourceTypes]
         : [...FHIR_RESOURCES]
+    );
+    // Reflects back whatever scopeString() actually produced on the last save — entity mode has no exportScope
+    // to derive this from (see scopeString's own remarks), so the saved Scopes list is the only source of truth.
+    this.groupBulkExport.set(
+      !!dto?.authentication?.scopes?.includes('system/Group.read'),
     );
     const gate = EPIC_INGESTION[this.currentApp().context];
     this.setMode(gate?.default || 'search');
