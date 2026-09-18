@@ -58,10 +58,20 @@ public sealed class SourceConnectionsController : ControllerBase
     [HttpPost("generate-signing-key")]
     [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.Edit, description: "Generate a SMART Backend Services signing key for a source connection.")]
     [ProducesResponseType(typeof(GeneratedSigningKeyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GenerateSigningKey(
-        [FromQuery] SourceSystemType sourceSystemType, CancellationToken cancellationToken)
+        [FromQuery] SourceSystemType? sourceSystemType, CancellationToken cancellationToken)
     {
-        var key = await _signingKeyGenerationService.GenerateAsync(sourceSystemType, cancellationToken);
+        // Nullable, not a plain SourceSystemType: SourceSystemType.Sample is 0, so an omitted query parameter
+        // (an older cached portal bundle, a direct API call) would otherwise silently bind to Sample instead of
+        // failing — storing the generated key under a misleading "sample-private-key-..." name for whatever
+        // vendor the caller actually meant, exactly the mislabeling this naming scheme exists to prevent.
+        if (sourceSystemType is null)
+        {
+            return BadRequest("sourceSystemType is required.");
+        }
+
+        var key = await _signingKeyGenerationService.GenerateAsync(sourceSystemType.Value, cancellationToken);
         return Ok(key);
     }
 
@@ -80,7 +90,14 @@ public sealed class SourceConnectionsController : ControllerBase
         [FromBody] ImportSigningKeyRequest request,
         CancellationToken cancellationToken)
     {
-        var key = await _signingKeyGenerationService.ImportAsync(request.PrivateKeyPem, request.SourceSystemType, cancellationToken);
+        // See GenerateSigningKey's identical check: SourceSystemType.Sample is 0, so a missing/omitted JSON
+        // property would otherwise silently deserialize to Sample instead of failing.
+        if (request.SourceSystemType is null)
+        {
+            return BadRequest("sourceSystemType is required.");
+        }
+
+        var key = await _signingKeyGenerationService.ImportAsync(request.PrivateKeyPem, request.SourceSystemType.Value, cancellationToken);
         return Ok(key);
     }
 
