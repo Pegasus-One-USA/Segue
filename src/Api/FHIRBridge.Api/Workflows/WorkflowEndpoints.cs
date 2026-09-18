@@ -1505,6 +1505,35 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
+            // Which credential is this caller presenting? The portal sends the session cookie (and is subject to
+            // the full RBAC below); a third-party standalone app sends neither cookie nor bearer token and is
+            // instead gated on the workflow's own public-launch opt-in. Deciding this ONCE here keeps the two
+            // paths from drifting apart, and makes the anonymous path's narrower checks explicit rather than
+            // implied by a policy that silently never ran.
+            var isAuthenticatedCaller = httpContext.User.Identity?.IsAuthenticated == true;
+
+            if (isAuthenticatedCaller)
+            {
+                // Unchanged portal behaviour: the workflow-module action gate that used to sit on the route as
+                // RequireAuthorization(HasPermission(workflow.run)). Moved in-handler (not weakened) so the route
+                // can stay anonymous for the standalone caller below.
+                var runPermission = PermissionTaxonomy.BuildPermissionCode(
+                    PermissionGroupCode.Workflow, PermissionActionCode.Run);
+                var runAuthorization = await authorizationService.AuthorizeAsync(
+                    httpContext.User, AuthorizationPolicies.HasPermission(runPermission));
+                if (!runAuthorization.Succeeded)
+                {
+                    return Results.StatusCode(StatusCodes.Status403Forbidden);
+                }
+            }
+            else if (!workflow.IsPubliclyLaunchable)
+            {
+                // Same refusal shape and reasoning as /latest-launch-result: an un-opted-in workflow is reported
+                // as absent rather than forbidden, so the workflow id alone can't be used to probe which ids
+                // exist. The id is not a credential — it travels through URLs, configs and support tickets.
+                return Results.NotFound();
+            }
+
             // This is the Runtime plane's real run-trigger point (IRankedWorkflowOrchestrator.ExecuteAsync below,
             // both the sync and fire-and-forget-async branches) — checked once here, before either branch starts,
             // never mid-run. Blocks a truly expired license or an exhausted monthly processed-records cap; never
@@ -1537,12 +1566,20 @@ public static class WorkflowEndpoints
                     continue;
                 }
 
-                if (!await ControllerAuthorizationExtensions.HasPermissionAsync(
+                // Per-vendor RBAC applies to a USER's permissions, so it is meaningful only for the
+                // cookie-authenticated portal caller. For the anonymous standalone caller there is no principal to
+                // check — its authorization is the IsPubliclyLaunchable opt-in above plus its callerId, the same
+                // trust model /workflows/checkpoint/{token} uses (which likewise runs the license checks below
+                // while having no user permissions to test).
+                if (isAuthenticatedCaller
+                    && !await ControllerAuthorizationExtensions.HasPermissionAsync(
                         authorizationService, httpContext.User, source.SourceSystemType, PermissionActionCode.Execute))
                 {
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
                 }
 
+                // Deliberately OUTSIDE the isAuthenticatedCaller guard: the license allow-list is a property of
+                // the deployment, not of the caller, so a standalone run must satisfy it too.
                 await licenseQuotaGuard.EnsureSourceConnectionStillAllowedAsync(
                     source.SourceSystemType, source.BaseUrl, cancellationToken);
             }
@@ -1560,7 +1597,10 @@ public static class WorkflowEndpoints
                     continue;
                 }
 
-                if (!await ControllerAuthorizationExtensions.HasPermissionAsync(
+                // Same split as the source loop above: user-permission check for the portal caller only, license
+                // allow-list for every caller.
+                if (isAuthenticatedCaller
+                    && !await ControllerAuthorizationExtensions.HasPermissionAsync(
                         authorizationService, httpContext.User, destination.DestinationType, PermissionActionCode.Execute))
                 {
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
@@ -1659,11 +1699,14 @@ public static class WorkflowEndpoints
                 // `using` then disposes the same instance, which is harmless (Dispose is idempotent).
                 runTracker.MarkComplete(workflowRunId);
             }
-        // Workflow-module gate: an interactive/manual run triggered from the portal (the anonymous EHR-launch
-        // flow this endpoint is distinct from resolves via its own /launch-url path, not here) — requires
-        // workflow.run specifically, independent of view/create/edit, per the module's action-level RBAC.
-        }).RequireAuthorization(AuthorizationPolicies.HasPermission(
-            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.Run)));
+        // Anonymous at the ROUTE level, authorized inside the handler instead — this endpoint serves two
+        // callers with two different credentials. A portal run is cookie-authenticated and still requires
+        // workflow.run plus per-vendor Execute (enforced at the top of the handler); a third-party standalone
+        // run (Demo_TestApp) presents no cookie and is gated on the workflow's IsPubliclyLaunchable opt-in and
+        // its unguessable callerId, exactly like /latest-launch-result and /workflows/checkpoint/{token}.
+        // A blanket RequireAuthorization here would 401 that second caller before the handler ever ran.
+        // [CsrfExempt] because the surviving credential is never the session cookie: see CsrfExemptAttribute.
+        }).AllowAnonymous().WithMetadata(new CsrfExemptAttribute());
 
         // Lightweight poll target for an async /run — cheap enough to hit every second or two without pulling the
         // full node timeline. "Running" comes from IWorkflowRunTracker (the run hasn't reached a terminal state

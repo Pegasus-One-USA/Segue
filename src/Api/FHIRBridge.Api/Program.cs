@@ -736,9 +736,17 @@ app.Use(async (context, next) =>
     // never have. CSRF only protects cookie-AUTHENTICATED state-changing requests — authenticated endpoints
     // (e.g. internal/change-password) keep the check. GetEndpoint is populated here because WebApplication
     // auto-inserts UseRouting ahead of user middleware once endpoints are mapped.
-    var isAnonymousEndpoint = context.GetEndpoint()?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
+    var endpoint = context.GetEndpoint();
+    var isAnonymousEndpoint = endpoint?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
 
-    if (isStateChanging && !isAnonymousEndpoint &&
+    // Explicitly-declared exemption, for an endpoint that IS authorized but not by the session cookie — it
+    // carries its own non-cookie credential (e.g. /workflows/{id}/run's unguessable callerId token-cache key)
+    // and so has nothing for a cross-site form to silently ride along on, yet cannot be [AllowAnonymous]
+    // because a portal-triggered call must still satisfy workflow.run. See CsrfExemptAttribute for why the
+    // IAllowAnonymous check alone silently missed exactly that case.
+    var isCsrfExemptEndpoint = endpoint?.Metadata.GetMetadata<CsrfExemptAttribute>() is not null;
+
+    if (isStateChanging && !isAnonymousEndpoint && !isCsrfExemptEndpoint &&
         context.Request.Path.StartsWithSegments("/api/v1") &&
         context.Request.Cookies.ContainsKey("fhirbridge_access_token"))
     {
