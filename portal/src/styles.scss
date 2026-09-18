@@ -273,6 +273,23 @@ html {
   --space-11: 28px;
   --space-12: 32px;
 
+  /* ── Page gutter ─────────────────────────────────────────────────────
+     The ONE place the routed-page edge inset is defined. Every page in the
+     right-hand content area gets its padding from these tokens via the
+     `.shell-content > *` rule further down — pages must NOT declare their own
+     page-level padding, or changing the app's gutter stops being a one-line edit.
+     Deliberately hairline: 8px is the floor that still clears the cards' 12px
+     border-radius, so a card reads as a card floating on the background rather
+     than as a clipped rendering artifact. No responsive override — already at
+     the floor, there is nothing left to shrink on a small screen. */
+  --page-gutter-x: var(--space-4);
+  --page-gutter-y: var(--space-4);
+
+  /* Routed pages are uncapped (edge-to-edge) by design; only text-heavy FORM pages
+     keep a reading measure, since a form spanning a 1900px monitor is hard to scan.
+     Tables do not use this — they degrade to .table-wrapper's overflow-x instead. */
+  --page-max-width-form: 1280px;
+
   /* ── Shadows ── */
   --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.04);
   --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -1430,14 +1447,51 @@ input:-webkit-autofill:active {
   border-left-color: var(--color-primary);
 }
 
+/* ─── Routed page gutter ─────────────────────────────────────────────────────── */
+/* The single source of truth for the inset between a page's content and the edges of the
+   right-hand content area. Every routed page is a custom element child of .shell-content
+   (<app-workflow-list>, <app-audit-logs>, …), so one rule here reaches all ~87 of them —
+   individual page stylesheets deliberately no longer declare page-level padding. Retuning
+   the app's gutter is editing --page-gutter-x/y in :root, nothing else.
+
+   $page-bleed is every child of .shell-content that must stay edge-to-edge:
+     • app-modal-overlay / app-dialog-outlet — their backdrop is position:absolute; inset:0,
+       which resolves against .shell-content's PADDING box, so padding here would leave an
+       unfaded border all around every modal.
+     • app-workflow-builder-v2 — owns its own viewport (height:100% + overflow:hidden); a
+       padded parent shrinks its box and clips the canvas.
+     • the four feature shells that render a full-width .shell-tabs strip above their own
+       <router-outlet> — an inset strip would leave a gap either side of its border-bottom.
+       They stay full-bleed here and re-apply the gutter one level deeper, below.
+   app-system-settings-shell is NOT in this list: it has no tab strip (it renders its child
+   route directly), so it takes the gutter like any other page and its child inherits it. */
+$page-bleed: 'app-modal-overlay, app-dialog-outlet, app-workflow-builder-v2, app-governance-shell, app-operations-shell, app-settings-shell, app-terminology-configurations-shell, app-workflow-configurations-shell';
+
+.shell-content > *:not(#{$page-bleed}) {
+  display: block;
+  padding: var(--page-gutter-y) var(--page-gutter-x);
+}
+
+/* A tab-strip shell is full-bleed so its strip can span edge to edge, so the gutter is applied
+   one level deeper instead — to whichever page its <router-outlet> renders. The outlet element
+   itself renders nothing and its component is inserted as its NEXT sibling, hence
+   `router-outlet + *`. app-workflow-builder-v2 is excluded again: it is routed INSIDE
+   app-workflow-configurations-shell and must stay full-bleed at this level too. */
+.shell-content > * > router-outlet + *:not(#{$page-bleed}) {
+  display: block;
+  padding: var(--page-gutter-y) var(--page-gutter-x);
+}
+
 // Shared icon-chip tab grid for feature shells with many child screens (Operations, Governance,
 // Settings). Each screen is a small rounded chip (icon + label) rather than a plain text link —
 // reads as a cohesive grid and wraps cleanly onto additional rows instead of a ragged text list.
+// Horizontal padding is --page-gutter-x, not its own value, so the chips share a left edge with
+// the cards on the page below them.
 .shell-tabs {
   display:       flex;
   flex-wrap:     wrap;
   gap:           var(--space-2);
-  padding:       var(--space-8) var(--space-10);
+  padding:       var(--space-4) var(--page-gutter-x);
   border-bottom: 1px solid var(--color-border);
   background:    var(--color-surface);
 }
