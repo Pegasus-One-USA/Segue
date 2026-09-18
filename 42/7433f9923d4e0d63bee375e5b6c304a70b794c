@@ -1,0 +1,23 @@
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_d8c85374db9f6f::t_0e35ff02834a58 170-174
+tests/FHIRBridge.UnitTests/Destinations/Fabric/FabricDestinationSettingsTests.cs
+  s_d8c85374db9f6f::t_8f7ca4613f32df 141-158
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricDestinationSettings.cs
+  s_d8c85374db9f6f::t_6ad5ff4323efe1 71-80,115-119,122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "427433f9923d4e0d63bee375e5b6c304a70b794c",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
