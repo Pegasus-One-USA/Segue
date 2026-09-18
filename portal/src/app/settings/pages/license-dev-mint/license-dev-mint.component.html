@@ -74,6 +74,12 @@
           <input id="dm-max-successful-executions" type="number" min="-1" formControlName="maxSuccessfulWorkflowExecutionsPerMonth" placeholder="Blank or -1 = unlimited" />
         </div>
 
+        <div class="form-field">
+          <label for="dm-activation-window">Activation Window (minutes)</label>
+          <input id="dm-activation-window" type="number" min="1" formControlName="activationWindowMinutes" placeholder="Blank = no deadline" />
+          <p class="field-hint">Once minted, this token must be applied within this many minutes or it's rejected as expired. Never affects an already-applied, currently-running license.</p>
+        </div>
+
         <div class="form-field form-field--full">
           <label for="dm-features">Features</label>
           <input id="dm-features" type="text" formControlName="features" placeholder="hl7-mllp, deid, runtime-plane" />

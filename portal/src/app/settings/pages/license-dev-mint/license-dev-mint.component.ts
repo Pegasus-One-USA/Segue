@@ -104,6 +104,7 @@ export class LicenseDevMintComponent implements OnInit {
     maxProcessedRecordsPerMonth: [''],
     maxSuccessfulWorkflowExecutionsPerMonth: [''],
     features:                    [''],
+    activationWindowMinutes:     [''],
   });
 
   // ── Allowed Source Types checklist ──────────────────────────────────────────────────────────
@@ -211,6 +212,7 @@ export class LicenseDevMintComponent implements OnInit {
         .map((h) => ({ vendor: h.vendor, baseUrl: h.fhirBaseUrl, displayName: h.name })),
       allowedResourceTypes:    Array.from(this.selectedResourceTypes()),
       allowedDestinationTypes: Array.from(this.selectedDestinationTypes()),
+      activationWindowMinutes: parseNullableInt(raw.activationWindowMinutes),
     }).subscribe({
       next: (res) => {
         this.minting.set(false);
@@ -265,6 +267,15 @@ function parseIntOrUnlimited(value: string): number {
   if (!trimmed) return LICENSE_UNLIMITED;
   const parsed = Number.parseInt(trimmed, 10);
   return Number.isNaN(parsed) ? LICENSE_UNLIMITED : parsed;
+}
+
+/** Blank input means no activation deadline (`null`) — unlike `parseIntOrUnlimited`, there's no "-1 means
+ *  unlimited" convention here, since an unenforced window and an infinite one are the same thing. */
+function parseNullableInt(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 function parseFeatures(value: string): string[] {

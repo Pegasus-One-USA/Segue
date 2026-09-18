@@ -73,7 +73,8 @@ public sealed class DevLicenseMintingController : ControllerBase
             request.MaxProcessedRecordsPerMonth,
             request.AllowedResourceTypes,
             request.AllowedDestinationTypes,
-            request.MaxSuccessfulWorkflowExecutionsPerMonth));
+            request.MaxSuccessfulWorkflowExecutionsPerMonth,
+            request.ActivationWindowMinutes));
 
         return Ok(new DevLicenseMintResponse(token));
     }
@@ -99,7 +100,8 @@ public sealed record DevLicenseMintRequestDto(
     int MaxProcessedRecordsPerMonth = FHIRBridge.Application.Abstractions.Licensing.LicenseLimits.Unlimited,
     IReadOnlyList<string>? AllowedResourceTypes = null,
     IReadOnlyList<string>? AllowedDestinationTypes = null,
-    int MaxSuccessfulWorkflowExecutionsPerMonth = FHIRBridge.Application.Abstractions.Licensing.LicenseLimits.Unlimited);
+    int MaxSuccessfulWorkflowExecutionsPerMonth = FHIRBridge.Application.Abstractions.Licensing.LicenseLimits.Unlimited,
+    int? ActivationWindowMinutes = null);
 
 /// <summary>Response of the temporary <c>POST /api/v1/dev/license-mint</c> endpoint.</summary>
 public sealed record DevLicenseMintResponse(string Token);

@@ -55,4 +55,8 @@ public sealed record DevLicenseMintRequest(
     IReadOnlyList<string>? AllowedDestinationTypes = null,
     /// <summary>Hard cap on successful pipeline/workflow executions (both planes combined) per calendar
     /// month. <see cref="LicenseLimits.Unlimited"/> means unlimited.</summary>
-    int MaxSuccessfulWorkflowExecutionsPerMonth = LicenseLimits.Unlimited);
+    int MaxSuccessfulWorkflowExecutionsPerMonth = LicenseLimits.Unlimited,
+    /// <summary>Minutes after minting this token must be applied (<c>POST /api/v1/license</c>) within, or
+    /// it's rejected as expired — mirrors <c>tools/FHIRBridge.LicenseMinter</c>'s
+    /// <c>--activation-window-minutes</c>. <c>null</c> means no activation deadline.</summary>
+    int? ActivationWindowMinutes = null);

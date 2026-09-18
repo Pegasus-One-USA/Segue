@@ -156,6 +156,51 @@ public sealed class DevLicenseMintingServiceTests
     }
 
     [Fact]
+    public void ActivationWindowMinutes_mints_a_token_the_validator_enforces_once_elapsed()
+    {
+        var request = new DevLicenseMintRequest(
+            CustomerId: "cust-activation-window",
+            CustomerName: "Activation Window Co",
+            Edition: "standard",
+            ExpiresUtc: DateTime.UtcNow.AddYears(1),
+            MaxUsers: LicenseLimits.Unlimited,
+            MaxWorkflows: LicenseLimits.Unlimited,
+            MaxSourceConnections: LicenseLimits.Unlimited,
+            Features: null,
+            // Negative window: activateByUtc lands well in the past relative to nbf (mint time) — past
+            // SignedLicenseValidator's 5-minute clock-skew allowance too, so the deadline has already
+            // elapsed by the time this assertion runs.
+            ActivationWindowMinutes: -10);
+
+        var token = _sut.Mint(request);
+
+        SignedLicenseValidator.Validate(token).State.Should().Be(LicenseState.Active,
+            "re-resolving an already-applied license must never enforce this claim");
+        var enforced = SignedLicenseValidator.Validate(token, enforceActivationWindow: true);
+        enforced.State.Should().Be(LicenseState.Invalid);
+        enforced.InvalidReason.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void Omitted_ActivationWindowMinutes_never_gets_rejected_even_when_enforced()
+    {
+        var request = new DevLicenseMintRequest(
+            CustomerId: "cust-no-window",
+            CustomerName: "No Window Co",
+            Edition: "standard",
+            ExpiresUtc: DateTime.UtcNow.AddYears(1),
+            MaxUsers: LicenseLimits.Unlimited,
+            MaxWorkflows: LicenseLimits.Unlimited,
+            MaxSourceConnections: LicenseLimits.Unlimited,
+            Features: null);
+
+        var token = _sut.Mint(request);
+        var status = SignedLicenseValidator.Validate(token, enforceActivationWindow: true);
+
+        status.State.Should().Be(LicenseState.Active);
+    }
+
+    [Fact]
     public void Expired_expiry_mints_a_token_that_the_validator_reports_as_Expired()
     {
         var request = new DevLicenseMintRequest(

@@ -263,6 +263,69 @@ public sealed class SignedLicenseValidatorTests
         status.InvalidReason.Should().NotBeNullOrWhiteSpace();
     }
 
+    [Fact]
+    public void Activation_window_is_ignored_by_default_even_when_long_passed()
+    {
+        // Deliberately not disposed here: see the repeated remark on the tests above.
+        var key = LoadDevPrivateKey();
+        var token = MintToken(
+            key,
+            DateTime.UtcNow.AddDays(-30),
+            DateTime.UtcNow.AddYears(1),
+            activateByUtc: DateTime.UtcNow.AddDays(-29));
+
+        // The single-arg overload (what ReloadAsync uses on every process restart) must never enforce
+        // this claim — an already-applied, currently-running license can't be allowed to brick itself
+        // just because real time passed its original activation deadline.
+        var status = SignedLicenseValidator.Validate(token);
+
+        status.State.Should().Be(LicenseState.Active);
+    }
+
+    [Fact]
+    public void Activation_window_enforced_and_expired_reports_Invalid()
+    {
+        var key = LoadDevPrivateKey();
+        var token = MintToken(
+            key,
+            DateTime.UtcNow.AddHours(-2),
+            DateTime.UtcNow.AddYears(1),
+            activateByUtc: DateTime.UtcNow.AddHours(-1));
+
+        var status = SignedLicenseValidator.Validate(token, enforceActivationWindow: true);
+
+        status.State.Should().Be(LicenseState.Invalid);
+        status.InvalidReason.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void Activation_window_enforced_and_still_open_reports_Active()
+    {
+        // Deliberately not disposed here: see the repeated remark on the tests above.
+        var key = LoadDevPrivateKey();
+        var token = MintToken(
+            key,
+            DateTime.UtcNow.AddMinutes(-10),
+            DateTime.UtcNow.AddYears(1),
+            activateByUtc: DateTime.UtcNow.AddMinutes(50));
+
+        var status = SignedLicenseValidator.Validate(token, enforceActivationWindow: true);
+
+        status.State.Should().Be(LicenseState.Active);
+    }
+
+    [Fact]
+    public void Activation_window_enforced_but_absent_claim_never_blocks()
+    {
+        // Deliberately not disposed here: see the repeated remark on the tests above.
+        var key = LoadDevPrivateKey();
+        var token = MintToken(key, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1));
+
+        var status = SignedLicenseValidator.Validate(token, enforceActivationWindow: true);
+
+        status.State.Should().Be(LicenseState.Active);
+    }
+
     private static ECDsa LoadDevPrivateKey()
     {
         var ecdsa = ECDsa.Create();
@@ -286,7 +349,8 @@ public sealed class SignedLicenseValidatorTests
         object[]? allowedHospitals = null,
         int? maxProcessedRecordsPerMonth = null,
         string[]? allowedResourceTypes = null,
-        string[]? allowedDestinationTypes = null)
+        string[]? allowedDestinationTypes = null,
+        DateTime? activateByUtc = null)
     {
         features ??= new[] { "hl7-mllp", "deid", "runtime-plane" };
 
@@ -307,6 +371,7 @@ public sealed class SignedLicenseValidatorTests
             maxProcessedRecordsPerMonth,
             allowedResourceTypes,
             allowedDestinationTypes,
+            activateByUtc = activateByUtc.HasValue ? ToUnixSeconds(activateByUtc.Value) : (long?)null,
         });
 
         var credentials = new SigningCredentials(new ECDsaSecurityKey(signingKey), SecurityAlgorithms.EcdsaSha256);

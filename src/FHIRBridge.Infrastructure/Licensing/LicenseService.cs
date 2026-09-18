@@ -48,7 +48,10 @@ public sealed class LicenseService : ILicenseService
 
     public async Task<LicenseApplyResult> ApplyAsync(string licenseToken, CancellationToken cancellationToken)
     {
-        var status = SignedLicenseValidator.Validate(licenseToken);
+        // enforceActivationWindow: true — this IS the "apply a freshly generated key" path (as opposed to
+        // ReloadAsync re-resolving an already-applied token on every process restart, which must never
+        // re-check this same deadline). See SignedLicenseValidator.Validate's remarks for why.
+        var status = SignedLicenseValidator.Validate(licenseToken, enforceActivationWindow: true);
         if (status.State == LicenseState.Invalid)
         {
             // Rejected at the door: nothing is written and Current is left exactly as it was, so a bad

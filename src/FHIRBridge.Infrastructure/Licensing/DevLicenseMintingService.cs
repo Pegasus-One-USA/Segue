@@ -53,14 +53,21 @@ public sealed class DevLicenseMintingService : IDevLicenseMintingService
         var allowedResourceTypes = request.AllowedResourceTypes is { Count: > 0 } ? request.AllowedResourceTypes : null;
         var allowedDestinationTypes = request.AllowedDestinationTypes is { Count: > 0 } ? request.AllowedDestinationTypes : null;
 
+        var nowUtc = DateTime.UtcNow;
+
         var payloadJson = JsonSerializer.Serialize(new
         {
             iss = Issuer,
             sub = request.CustomerId,
             customerName,
             edition,
-            nbf = ToUnixSeconds(DateTime.UtcNow),
+            nbf = ToUnixSeconds(nowUtc),
             exp = ToUnixSeconds(request.ExpiresUtc),
+            // Absent when ActivationWindowMinutes is null — SignedLicenseValidator only enforces this claim
+            // when present, so an unset window means "no activation deadline".
+            activateByUtc = request.ActivationWindowMinutes.HasValue
+                ? ToUnixSeconds(nowUtc.AddMinutes(request.ActivationWindowMinutes.Value))
+                : (long?)null,
             maxUsers = request.MaxUsers,
             maxWorkflows = request.MaxWorkflows,
             maxSourceConnections = request.MaxSourceConnections,

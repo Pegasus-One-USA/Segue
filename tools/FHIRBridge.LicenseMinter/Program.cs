@@ -63,6 +63,9 @@ internal static class Program
             var allowedHospitals = ParseAllowedHospitals(options, "allowed-hospitals");
             var allowedResourceTypes = ParseNullableStringList(options, "allowed-resource-types");
             var allowedDestinationTypes = ParseNullableStringList(options, "allowed-destination-types");
+            var activationWindowMinutes = ParseNullableInt(options, "activation-window-minutes");
+
+            var nowUtc = DateTime.UtcNow;
 
             var payloadJson = JsonSerializer.Serialize(new
             {
@@ -70,8 +73,14 @@ internal static class Program
                 sub = customerId,
                 customerName,
                 edition,
-                nbf = ToUnixSeconds(DateTime.UtcNow),
+                nbf = ToUnixSeconds(nowUtc),
                 exp = ToUnixSeconds(expiresUtc),
+                // Absent when --activation-window-minutes is omitted — SignedLicenseValidator only enforces
+                // this claim when present, so an unset window means "no activation deadline", same as every
+                // other optional claim in this payload.
+                activateByUtc = activationWindowMinutes.HasValue
+                    ? ToUnixSeconds(nowUtc.AddMinutes(activationWindowMinutes.Value))
+                    : (long?)null,
                 maxUsers = ParseIntOrUnlimited(options, "max-users"),
                 maxWorkflows = ParseIntOrUnlimited(options, "max-workflows"),
                 maxSourceConnections = ParseIntOrUnlimited(options, "max-source-connections"),
@@ -171,6 +180,19 @@ internal static class Program
         return int.Parse(raw, CultureInfo.InvariantCulture);
     }
 
+    /// <summary>Absent/blank option means null (no activation deadline) — unlike
+    /// <see cref="ParseIntOrUnlimited"/>, there's no "-1 means unlimited" convention here, since an
+    /// unenforced activation window and an infinite one are the same thing.</summary>
+    private static int? ParseNullableInt(Dictionary<string, string> options, string key)
+    {
+        if (!options.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        return int.Parse(raw, CultureInfo.InvariantCulture);
+    }
+
     /// <summary>Parses a comma-separated list option (e.g. <c>--allowed-source-types epic,healow</c>) into
     /// a string array, or <c>null</c> when the option is absent/blank — same "absent means unrestricted"
     /// convention as the four numeric limits above, rather than <c>--features</c>'s "absent means empty".</summary>
@@ -238,8 +260,14 @@ internal static class Program
             "[--max-processed-records-per-month <n>] " +
             "[--allowed-resource-types Patient,Observation] [--allowed-destination-types SqlServer,Sftp] " +
             "[--max-successful-workflow-executions-per-month <n>] " +
+            "[--activation-window-minutes <n>] " +
             "(--dev-key | --private-key-file <path>)");
         Console.Error.WriteLine();
+        Console.Error.WriteLine("  --activation-window-minutes  Once generated, this key must be applied (POST /api/v1/license)");
+        Console.Error.WriteLine("                          within this many minutes or it's rejected as expired — a freshly");
+        Console.Error.WriteLine("                          issued key that's never installed can't sit around indefinitely.");
+        Console.Error.WriteLine("                          Omit for no activation deadline. Does NOT affect an already-applied,");
+        Console.Error.WriteLine("                          currently-running license — see SignedLicenseValidator's remarks.");
         Console.Error.WriteLine("  --max-users / --max-workflows / --max-source-connections / --max-processed-records-per-month /");
         Console.Error.WriteLine("  --max-successful-workflow-executions-per-month");
         Console.Error.WriteLine("                          Omit, or pass -1 explicitly, for unlimited.");

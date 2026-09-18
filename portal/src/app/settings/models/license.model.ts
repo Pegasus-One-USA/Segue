@@ -96,6 +96,9 @@ export interface DevLicenseMintRequest {
   allowedResourceTypes: string[];
   allowedDestinationTypes: string[];
   maxSuccessfulWorkflowExecutionsPerMonth: number;
+  /** Minutes after minting this token must be applied within, or it's rejected as expired. `null` means no
+   *  activation deadline. Never affects an already-applied, currently-running license. */
+  activationWindowMinutes: number | null;
 }
 
 /** Response of the temporary `POST /api/v1/dev/license-mint` endpoint. */

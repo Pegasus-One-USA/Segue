@@ -52,8 +52,29 @@ public static class SignedLicenseValidator
     /// <summary>
     /// Never throws — any failure (malformed input, bad/tampered signature, wrong issuer, garbage string)
     /// comes back as <see cref="LicenseState.Invalid"/> with <see cref="LicenseStatus.InvalidReason"/> set.
+    /// Equivalent to <c>Validate(licenseToken, enforceActivationWindow: false)</c> — see that overload's
+    /// remarks for why re-validating an already-applied license (every process restart) must never enforce
+    /// the activation window.
     /// </summary>
-    public static LicenseStatus Validate(string? licenseToken)
+    public static LicenseStatus Validate(string? licenseToken) => Validate(licenseToken, enforceActivationWindow: false);
+
+    /// <summary>
+    /// Same as <see cref="Validate(string?)"/>, plus one more check when <paramref name="enforceActivationWindow"/>
+    /// is true: a token carrying an <c>activateByUtc</c> claim (see <c>tools/FHIRBridge.LicenseMinter</c>'s
+    /// <c>--activation-window-minutes</c>) is reported <see cref="LicenseState.Invalid"/> if the current time
+    /// is past that deadline — the license key was generated but never applied within its allotted window.
+    /// A token with no <c>activateByUtc</c> claim at all is never affected by this check (older licenses, or
+    /// ones minted without a window, keep working exactly as before).
+    ///
+    /// Pass <c>true</c> ONLY from the "apply a new license" path (<c>LicenseService.ApplyAsync</c>) — NEVER
+    /// from the "re-resolve the already-applied license on process startup" path
+    /// (<c>LicenseService.ReloadAsync</c>). The activation window is a one-time gate on getting a freshly
+    /// minted key installed in the first place; once a license is active and stored, re-checking this same
+    /// deadline on every future restart would eventually and permanently brick an otherwise perfectly valid,
+    /// already-running license the moment enough real time passed — which is not what an "activation window"
+    /// is supposed to mean.
+    /// </summary>
+    public static LicenseStatus Validate(string? licenseToken, bool enforceActivationWindow)
     {
         if (string.IsNullOrWhiteSpace(licenseToken))
         {
@@ -108,7 +129,7 @@ public static class SignedLicenseValidator
 
         try
         {
-            return BuildStatus(jsonWebToken);
+            return BuildStatus(jsonWebToken, enforceActivationWindow);
         }
         catch (Exception ex)
         {
@@ -119,7 +140,7 @@ public static class SignedLicenseValidator
         }
     }
 
-    private static LicenseStatus BuildStatus(JsonWebToken jsonWebToken)
+    private static LicenseStatus BuildStatus(JsonWebToken jsonWebToken, bool enforceActivationWindow)
     {
         var nowUtc = DateTime.UtcNow;
         // The claims shape carries "nbf" (not-before) but no separate "iat" — nbf doubles as the
@@ -130,6 +151,17 @@ public static class SignedLicenseValidator
         if (issuedUtc.HasValue && nowUtc < issuedUtc.Value - ClockSkew)
         {
             return Invalid("License is not valid yet (nbf is in the future).");
+        }
+
+        if (enforceActivationWindow)
+        {
+            var activateByUtc = GetUnixTimeClaim(jsonWebToken, "activateByUtc");
+            if (activateByUtc.HasValue && nowUtc > activateByUtc.Value + ClockSkew)
+            {
+                return Invalid(
+                    "This license key's activation window has expired — it must be applied within the " +
+                    "allotted time of being generated. Request a new license key.");
+            }
         }
 
         var limits = new LicenseLimits(
