@@ -910,6 +910,11 @@ resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: containerAppEnv.id
     configuration: {
+      // Required for stickySessions below — Container Apps rejects sticky-session affinity outright
+      // (ContainerAppInvalidIngressStickySessionRevisionMode) under the platform default 'Multiple'
+      // revisions mode. This app has no multi-revision traffic-splitting use case, so pinning to
+      // 'Single' costs nothing here.
+      activeRevisionsMode: 'Single'
       secrets: concat([
         { name: 'postgres-password', value: postgresPassword }
         { name: 'jwt-signing-key', value: jwtSigningKey }
