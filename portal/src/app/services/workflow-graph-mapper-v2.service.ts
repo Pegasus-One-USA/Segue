@@ -182,6 +182,9 @@ export class WorkflowGraphMapperServiceV2 {
     // silently, with the run still reporting success.
     for (const destinationNode of nodes.filter(node => this.isDestination(node))) {
       const destinationId = destinationNode.fields['destinationId'];
+      // The workflow's de-identification policy, recorded on the destination node by the wizard. Copied onto
+      // the De-identification chain node below as `profileId` — see the patch loop.
+      const deIdentificationProfileId = destinationNode.fields['deIdentificationProfileId'];
       if (!destinationId) continue;
 
       // Walk back along the emitted (execution-order) edges for as long as each predecessor is a chain node.
@@ -200,6 +203,14 @@ export class WorkflowGraphMapperServiceV2 {
         // for, and a workflow-scoped rule can never match.
         if (workflowId && !config['resourcePipelineRouteId']) {
           patch['resourcePipelineRouteId'] = workflowId;
+        }
+        // The de-identification policy this workflow owns. DeIdentificationNodeExecutor.ResolveProfileIdAsync
+        // reads `profileId` first and only then falls back to the destination's own column, so stamping it here
+        // is what keeps the policy private to this pipeline: two workflows writing to the same destination each
+        // redact under their own. Without it the node falls back to that shared column — or, when it is unset,
+        // to the seeded Safe Harbor default, silently applying a policy nobody chose.
+        if (deIdentificationProfileId && request.nodeType === 'DeIdentificationNode' && !config['profileId']) {
+          patch['profileId'] = deIdentificationProfileId;
         }
         if (Object.keys(patch).length > 0) {
           request.configurationJson = JSON.stringify({ ...config, ...patch });

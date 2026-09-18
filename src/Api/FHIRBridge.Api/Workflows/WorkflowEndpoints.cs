@@ -1314,6 +1314,30 @@ public static class WorkflowEndpoints
                             config["secretName"] = clonedDestination.SecretName;
                         }
 
+                        // A de-identification policy belongs to ONE workflow — that is the whole reason it moved
+                        // off the destination. Carried over verbatim, the copy would point at the original's
+                        // policy and every rule added on the copy would change what the ORIGINAL redacts, with
+                        // nothing on either screen saying so. Dropped rather than cloned: the copy's own
+                        // De-identification tab mints a fresh policy the first time a rule is added there (see
+                        // FieldMappingListComponent.ensureWorkflowProfile$), named after the copy's own id.
+                        //
+                        // What the copy then redacts under: the cloned DestinationConfiguration carries no policy
+                        // either (CreateDestinationConfigurationRequest has no such field), so a copied
+                        // De-identification node falls all the way through ResolveProfileIdAsync to the seeded
+                        // Safe Harbor default. So the copy is NOT unredacted — it redacts under the default
+                        // rather than under the original's policy, until rules are authored on it. That is the
+                        // right failure for a copy: sharing would silently change what a workflow the user never
+                        // opened redacts, and passing PHI through unredacted would be worse than either.
+                        //
+                        // BOTH keys, because they live on different nodes and only one of them is what actually
+                        // runs: the destination node carries "deIdentificationProfileId" (authoring state), while
+                        // the De-identification node carries "profileId", which is what
+                        // DeIdentificationNodeExecutor.ResolveProfileIdAsync reads. Clearing only the first would
+                        // leave the copy still redacting under the original's policy at run time while every
+                        // screen showed it as having none.
+                        config.Remove("deIdentificationProfileId");
+                        config.Remove("profileId");
+
                         if (config["mappingProfileId"]?.ToString() is { } rawMappingId
                             && Guid.TryParse(rawMappingId, out var originalMappingId)
                             && clonedMappingProfileIds.TryGetValue(originalMappingId, out var newMappingId))

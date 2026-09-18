@@ -34,8 +34,7 @@ describe('buildIntegrationDetails', () => {
   }
 
   function hintsOf(details: { values: { hint?: string }[] }): string {
-    return details.values.map(v => v.hint ?? '').join('
-');
+    return details.values.map(v => v.hint ?? '').join('\n');
   }
 
   describe('Backend', () => {
@@ -71,7 +70,7 @@ describe('buildIntegrationDetails', () => {
         const details = buildIntegrationDetails(
           row({ action: 'Launch', applicationType }), ORIGIN, applicationType);
 
-        expect(valuesOf(details)).not.toMatch(/\/workflows\/[^/\s]+\/run/);
+        expect(valuesOf(details)).not.toMatch(/\/workflows\/[^/\s]+\/run\b/);
         expect(valuesOf(details)).not.toContain('POST');
       }
     });
@@ -98,7 +97,7 @@ describe('buildIntegrationDetails', () => {
         expect(values).toContain('/token-status');
         expect(values).toContain('/validate-run');
         expect(values).toContain('/discard-token');
-        expect(values).toMatch(/\/workflows\/[^/\s]+\/run/);
+        expect(values).toMatch(/\/workflows\/[^/\s]+\/run\b/);
       }
     });
 
@@ -142,8 +141,7 @@ describe('buildIntegrationDetails', () => {
 
       // The fallback is offered in the hint rather than as its own value, so search both.
       const everything = details.values.map(v => `${v.value}
-${v.hint ?? ''}`).join('
-');
+${v.hint ?? ''}`).join('\n');
       expect(everything).toContain('/launch-result');
       expect(everything).toContain('/latest-launch-result');
     });
@@ -271,8 +269,7 @@ ${v.hint ?? ''}`).join('
         const labels = details.values.map(value => value.label);
 
         expect(new Set(labels).size).toBe(labels.length);
-        expect(details.values.every(value => !value.value.includes('
-'))).toBeTrue();
+        expect(details.values.every(value => !value.value.includes('\n'))).toBeTrue();
       }
     });
   });
