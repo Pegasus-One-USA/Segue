@@ -25,7 +25,7 @@
 // tall table grow the page PAST the viewport, pushing the pagination footer below the fold — reachable
 // only by scrolling down or zooming out. Constraining the page and scrolling .table-wrapper internally
 // keeps the filter bar and the paginator on screen at any zoom level.
-//
+// --
 // Scoped with :has() rather than applied to every .list-page on purpose: pages WITHOUT a .table-card
 // (Compliance Reports, Correlation Search, Data Lineage) are free-flowing content with no internal
 // scroll region of their own — bounding those would clip them with no way to scroll.

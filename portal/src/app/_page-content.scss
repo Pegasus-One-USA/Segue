@@ -2,11 +2,11 @@
 // screens, and the dashboard. It was previously copy-pasted verbatim into ~18 stylesheets, each
 // carrying its own `padding: 24px 28px`, which is why Settings pages used to sit a few px inboard of
 // Governance pages.
-//
+// --
 // There is deliberately NO padding here: a page's edge inset comes from the single
 // `.shell-content > *` rule in styles.scss (--page-gutter-x/y). Keep it that way — re-adding padding
 // to this partial reintroduces exactly the per-page drift it exists to remove.
-//
+// --
 // Pull in with `@use '../../../_page-content' as *;` (adjust depth to suit).
 
 .dash-content {
