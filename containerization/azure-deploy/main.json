@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.45.15.27210",
-      "templateHash": "1898697732523293058"
+      "templateHash": "11569485454373132921"
     }
   },
   "parameters": {
@@ -1057,6 +1057,7 @@
       "properties": {
         "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('namePrefix')))]",
         "configuration": {
+          "activeRevisionsMode": "Single",
           "secrets": "[concat(createArray(createObject('name', 'postgres-password', 'value', parameters('postgresPassword')), createObject('name', 'jwt-signing-key', 'value', parameters('jwtSigningKey'))), variables('registrySecret'))]",
           "registries": "[variables('registryConfig')]",
           "ingress": {
