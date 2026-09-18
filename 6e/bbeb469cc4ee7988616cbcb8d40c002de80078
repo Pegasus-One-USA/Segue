@@ -1,0 +1,47 @@
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_93f79809fe4a39::t_ecff9bba19ac46 31-74
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_93f79809fe4a39::t_ebbc830e8269af 33
+  s_93f79809fe4a39::t_a11b91fec8c146 228-291
+  s_93f79809fe4a39::t_a49eb8cbc75fb1 80-92
+  s_93f79809fe4a39::t_77af7d3e36589e 9,11
+  s_93f79809fe4a39::t_69522f78379cef 292
+portal/src/app/core/api-endpoints.ts
+  s_93f79809fe4a39::t_c36784254ca4a2 409-411
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_93f79809fe4a39::t_a1af952e58da5d 170-180,193-205,299-426
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_93f79809fe4a39::t_444118f3e443f2 98-108
+  s_93f79809fe4a39::t_0378c69aaa058c 7
+  s_93f79809fe4a39::t_809b3c2ab2d6c3 109-110
+portal/src/app/services/phase-config-v2.service.ts
+  s_d8c85374db9f6f::t_c8fc04a832c857 81-87
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.scss
+  s_93f79809fe4a39::t_a1af952e58da5d 53-279
+portal/src/app/services/phase-config.service.ts
+  s_d8c85374db9f6f::t_c8fc04a832c857 75-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6ebbeb469cc4ee7988616cbcb8d40c002de80078",
+  "prompts": {},
+  "sessions": {
+    "s_93f79809fe4a39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "16c788f7-a266-4b72-8a2c-60374e6e1e92",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
