@@ -33,6 +33,11 @@ describe('buildIntegrationDetails', () => {
     return details.values.map(v => v.value).join('\n');
   }
 
+  function hintsOf(details: { values: { hint?: string }[] }): string {
+    return details.values.map(v => v.hint ?? '').join('
+');
+  }
+
   describe('Backend', () => {
     it('gives the run endpoint, because a server can start this audience directly', () => {
       const details = buildIntegrationDetails(row(), ORIGIN, 'Backend Service');
@@ -59,12 +64,15 @@ describe('buildIntegrationDetails', () => {
   });
 
   describe('Interactive audiences', () => {
+    // Matches the run endpoint specifically rather than the bare substring '/run': every interactive audience
+    // legitimately cites /workflows/runs/{id}/launch-result to read what a completed launch retrieved.
     it('never offers the run endpoint — these cannot be started from a server', () => {
       for (const applicationType of ['Standalone', 'Patient', 'EhrLaunch']) {
         const details = buildIntegrationDetails(
           row({ action: 'Launch', applicationType }), ORIGIN, applicationType);
 
-        expect(valuesOf(details)).not.toContain('/run');
+        expect(valuesOf(details)).not.toMatch(/\/workflows\/[^/\s]+\/run/);
+        expect(valuesOf(details)).not.toContain('POST');
       }
     });
 
@@ -75,6 +83,23 @@ describe('buildIntegrationDetails', () => {
       expect(details.kind).toBe('standalone');
       expect(valuesOf(details)).toContain('endpointType=Epic');
       expect(valuesOf(details)).toContain('/public-standalone-url');
+    });
+
+    // The panel long claimed a standalone partner "cannot start the run on their behalf". The reference client
+    // (Demo_TestApp's Provider Standalone page) shows otherwise: the sign-in is one-time, and afterwards the app
+    // calls /run directly and repeatedly against the cached token. Omitting that made the audience look far more
+    // restrictive than it is, and left token-status/validate-run/discard-token entirely undocumented.
+    it('documents the standalone run-after-sign-in cycle, not just the sign-in', () => {
+      for (const applicationType of ['Standalone', 'Patient']) {
+        const details = buildIntegrationDetails(
+          row({ action: 'Launch', applicationType }), ORIGIN, applicationType);
+        const values = valuesOf(details);
+
+        expect(values).toContain('/token-status');
+        expect(values).toContain('/validate-run');
+        expect(values).toContain('/discard-token');
+        expect(values).toMatch(/\/workflows\/[^/\s]+\/run/);
+      }
     });
 
     // Passing endpointType=Epic for a Patient workflow is refused as a bare 404, so this is exactly the mistake
@@ -89,14 +114,38 @@ describe('buildIntegrationDetails', () => {
       expect(valuesOf(details)).not.toContain('endpointType=Epic');
     });
 
-    it('gives EHR Launch the two URLs the hospital registers, not a link to open', () => {
+    it('walks EHR Launch through the mint-then-redirect handoff, not a link to open', () => {
       const details = buildIntegrationDetails(
         row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch (Provider)');
 
       expect(details.kind).toBe('ehr-launch');
-      expect(valuesOf(details)).toContain('/oauth/launch');
+      expect(valuesOf(details)).toContain('/public-launch-context');
+      expect(valuesOf(details)).toContain('/api/v1/oauth/launch/{context}');
       expect(valuesOf(details)).toContain(`${ORIGIN}/api/v1/oauth/callback`);
       expect(valuesOf(details)).not.toContain('public-standalone-url');
+    });
+
+    // The launch URL a hospital registers is the PARTNER'S page, never a Segue URL, and the workflow is named by
+    // an encrypted context rather than a source connection id. Offering the old per-source-connection entry sent
+    // hospitals to a URL that never reaches the partner's app.
+    it('never hands EHR Launch the retired per-source-connection entry point', () => {
+      const details = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch (Provider)');
+
+      expect(valuesOf(details)).not.toContain('/source-connections/');
+      expect(details.values.some(value => value.label === 'Source connection ID')).toBeFalse();
+    });
+
+    it('tells EHR Launch how to read the result both with and without a run id', () => {
+      const details = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch (Provider)');
+
+      // The fallback is offered in the hint rather than as its own value, so search both.
+      const everything = details.values.map(v => `${v.value}
+${v.hint ?? ''}`).join('
+');
+      expect(everything).toContain('/launch-result');
+      expect(everything).toContain('/latest-launch-result');
     });
 
     it('tells the partner their own address must be registered', () => {
@@ -130,6 +179,101 @@ describe('buildIntegrationDetails', () => {
         row({ action: 'Launch', applicationType: 'Standalone' }), ORIGIN, 'Provider Standalone');
 
       expect(details.checks.filter(c => c.state === 'blocked')).toEqual([]);
+    });
+  });
+
+  // A partner gets none of this from the endpoint URLs alone, and each omission fails silently rather than
+  // loudly: no cookies is a refusal, no CSRF header is a confusing 403, and the wrong identity value quietly
+  // reuses somebody else's cached sign-in.
+  // Per-vendor divergence, taken from the reference client: which directory applies, and whether there is a
+  // directory at all. Getting endpointType wrong is refused as a bare 404 with nothing to distinguish it from
+  // "no such workflow", so the panel has to be specific about which values each audience may send.
+  describe('Vendor differences', () => {
+    // Provider Standalone launches against vendor-sandbox rows, and Segue accepts BOTH Epic and Ecw for it
+    // (OAuthController's ProviderStandaloneEndpointTypes). Naming only Epic made the eCW half look unsupported.
+    it('offers Provider Standalone both vendor directories, and Patient only MyChart', () => {
+      const provider = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'Standalone' }), ORIGIN, 'Provider Standalone');
+      expect(valuesOf(provider)).toContain('endpointType=Epic');
+      expect(hintsOf(provider)).toContain('endpointType=Ecw');
+
+      const patient = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'Patient' }), ORIGIN, 'Patient Standalone');
+      expect(valuesOf(patient)).toContain('endpointType=MyChart');
+      expect(hintsOf(patient)).not.toContain('endpointType=Ecw');
+    });
+
+    // A single-practice provider source has one fixed address and no directory, so the picker step does not
+    // apply at all — but a patient always signs in to a named hospital, so for them it always does.
+    it('says when the site picker can be skipped, and when it cannot', () => {
+      const provider = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'Standalone' }), ORIGIN, 'Provider Standalone');
+      expect(valuesOf(provider)).toContain('ehrEndpointId is optional');
+
+      const patient = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'Patient' }), ORIGIN, 'Patient Standalone');
+      expect(valuesOf(patient)).toContain('ehrEndpointId is required');
+    });
+
+    // One registered page serves every vendor; iss is the only thing distinguishing them.
+    it('tells EHR Launch to route on iss and to cope with being framed', () => {
+      const details = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch');
+
+      expect(valuesOf(details)).toContain('Read iss to decide which workflow to launch');
+      expect(valuesOf(details)).toContain('Redirect the top-level window');
+    });
+
+    // Backend has no person, so borrowing an interactive sign-in is exactly the anti-pattern to warn against.
+    it('tells Backend not to use the interactive identity values at all', () => {
+      const details = buildIntegrationDetails(row(), ORIGIN, 'Backend Service');
+
+      expect(valuesOf(details)).toContain('Do not send callerId, sessionId or userIdentity');
+    });
+  });
+
+  describe('Headers and identity', () => {
+    const AUDIENCES: [string, Partial<WorkflowSummary>][] = [
+      ['Backend Service', {}],
+      ['Provider Standalone', { action: 'Launch', applicationType: 'Standalone' }],
+      ['Patient Standalone', { action: 'Launch', applicationType: 'Patient' }],
+      ['EHR Launch', { action: 'Launch', applicationType: 'EhrLaunch' }],
+    ];
+
+    it('spells out the cookie, CSRF and correlation requirements for every audience', () => {
+      for (const [label, overrides] of AUDIENCES) {
+        const details = buildIntegrationDetails(row(overrides), ORIGIN, label);
+        const values = valuesOf(details);
+
+        expect(values).toContain('X-CSRF-Token');
+        expect(values).toContain('X-Correlation-Id');
+        expect(values.toLowerCase()).toContain('cookies');
+        expect(details.checks.some(check => check.label === 'Sign-in required to run')).toBeTrue();
+      }
+    });
+
+    // callerId / sessionId / userIdentity are three different things that all look like "an id for the caller".
+    it('distinguishes the three identity values on the interactive audiences only', () => {
+      for (const [label, overrides] of AUDIENCES.slice(1)) {
+        const details = buildIntegrationDetails(row(overrides), ORIGIN, label);
+        expect(valuesOf(details)).toContain('callerId  ·  sessionId  ·  userIdentity');
+      }
+
+      const backend = buildIntegrationDetails(row(), ORIGIN, 'Backend Service');
+      expect(valuesOf(backend)).not.toContain('callerId  ·  sessionId  ·  userIdentity');
+    });
+
+    // Each value gets its own Copy button and the template tracks by label, so duplicates would both break
+    // rendering and hand the partner an unusable copy.
+    it('gives every value a unique, individually copyable label', () => {
+      for (const [label, overrides] of AUDIENCES) {
+        const details = buildIntegrationDetails(row(overrides), ORIGIN, label);
+        const labels = details.values.map(value => value.label);
+
+        expect(new Set(labels).size).toBe(labels.length);
+        expect(details.values.every(value => !value.value.includes('
+'))).toBeTrue();
+      }
     });
   });
 

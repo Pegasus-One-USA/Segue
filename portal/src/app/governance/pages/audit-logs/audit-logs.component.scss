@@ -4,11 +4,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 24px;
-  // The shared _list-page partial's own .list-page caps width at 1400px and centers it; these
-  // shell-embedded tabs run full-bleed (as they did before, and as compliance-reports still does),
-  // so all five Logs & Compliance tabs stay the same width when switching between them.
-  max-width: none;
 }
 
 .page-header h1 {

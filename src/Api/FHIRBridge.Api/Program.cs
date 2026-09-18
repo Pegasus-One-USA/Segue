@@ -736,9 +736,17 @@ app.Use(async (context, next) =>
     // never have. CSRF only protects cookie-AUTHENTICATED state-changing requests — authenticated endpoints
     // (e.g. internal/change-password) keep the check. GetEndpoint is populated here because WebApplication
     // auto-inserts UseRouting ahead of user middleware once endpoints are mapped.
-    var isAnonymousEndpoint = context.GetEndpoint()?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
+    var endpoint = context.GetEndpoint();
+    var isAnonymousEndpoint = endpoint?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
 
-    if (isStateChanging && !isAnonymousEndpoint &&
+    // Explicitly-declared exemption, for an endpoint that IS authorized but not by the session cookie — it
+    // carries its own non-cookie credential (e.g. /workflows/{id}/run's unguessable callerId token-cache key)
+    // and so has nothing for a cross-site form to silently ride along on, yet cannot be [AllowAnonymous]
+    // because a portal-triggered call must still satisfy workflow.run. See CsrfExemptAttribute for why the
+    // IAllowAnonymous check alone silently missed exactly that case.
+    var isCsrfExemptEndpoint = endpoint?.Metadata.GetMetadata<CsrfExemptAttribute>() is not null;
+
+    if (isStateChanging && !isAnonymousEndpoint && !isCsrfExemptEndpoint &&
         context.Request.Path.StartsWithSegments("/api/v1") &&
         context.Request.Cookies.ContainsKey("fhirbridge_access_token"))
     {
@@ -897,6 +905,14 @@ static void BootstrapDatabase(WebApplication app)
     var bootstrapStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
 
     var dbContext = scope.ServiceProvider.GetService<FHIRBridgeDbContext>();
+
+    // Multiple replicas/instances (Azure Container Apps scale-out, a rolling restart overlapping the old
+    // revision, or the Worker host starting at the same moment) can all run migrations/seeding at the same
+    // time against the same database. Every step below — Migrate(), the RBAC bootstrapper, the
+    // endpoint-directory seeders, the system-settings seeder — is written as "check if it's already there,
+    // then insert", which is only safe against one runner at a time. See DatabaseBootstrapLock's remarks.
+    using var bootstrapLock = dbContext is null ? null : DatabaseBootstrapLock.TryAcquire(dbContext, logger);
+
     if (dbContext is not null)
     {
         // Enumerated before migrating so the log names the migrations this boot is about to apply — afterwards

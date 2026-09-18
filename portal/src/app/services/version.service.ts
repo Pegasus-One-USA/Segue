@@ -30,8 +30,13 @@ interface VersionDto {
 export class VersionService {
   private readonly http = inject(HttpClient);
 
-  /** Version of the portal bundle currently executing. Always known — it is compiled in. */
-  readonly portalVersion = APP_VERSION;
+  /** Version of the portal bundle currently executing. Always known — it is compiled in.
+   *  Typed explicitly as `string`, not inferred from APP_VERSION's own literal type — the
+   *  Docker build bakes a real version string ("v1.0.1.5" etc.) over the committed 'local'
+   *  default (see version.ts), and comparing a narrowed literal type against 'local' below would
+   *  make TypeScript flag it as a comparison with no possible overlap (TS2367), failing every
+   *  production build under any tag other than the literal default. */
+  readonly portalVersion: string = APP_VERSION;
 
   /** Version reported by the backend. Null until loaded, and stays null if the call fails. */
   readonly apiVersion = signal<VersionDto | null>(null);

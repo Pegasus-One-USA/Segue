@@ -212,6 +212,10 @@ public static class DependencyInjection
         // rows via the two services registered just above, so saves take effect without a restart.
         services.AddScoped<ISsoConfigurationsService, SsoConfigurationsService>();
 
+        // Shared by every controller that builds an absolute OAuth redirect_uri/launch/authorize/standalone
+        // URL (OAuthController, PatientStandaloneLaunchController) — see its own remarks.
+        services.AddScoped<IOAuthPublicOriginResolver, OAuthPublicOriginResolver>();
+
         // Registered unconditionally — resolves against IUserAccessRepository, so it works identically whether
         // that's the in-memory or EF-backed implementation registered below.
         services.AddScoped<IUserDisplayNameResolver, UserDisplayNameResolver>();
