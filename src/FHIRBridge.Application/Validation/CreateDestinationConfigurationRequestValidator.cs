@@ -167,8 +167,11 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
     }
 
     private static readonly string[] SupportedFabricModes = ["oneLakeFiles", "warehouseTable", "eventstream"];
-    private static readonly string[] SupportedFabricItemTypes =
-        ["Lakehouse", "Warehouse", "KQLDatabase", "MirroredDatabase"];
+    // Only the item types a Fabric landing strategy can actually write to. KQLDatabase (Kusto ingestion, no
+    // Files area) and MirroredDatabase (a read-only replica of an external source) used to be accepted here and
+    // then failed mid-pipeline at run time; they are refused at save time instead. Mirrors
+    // FabricDestinationSettings.SupportedItemTypes, which enforces the same list again at write time.
+    private static readonly string[] SupportedFabricItemTypes = ["Lakehouse", "Warehouse"];
     private static readonly string[] SupportedFabricFileFormats = ["ndjson", "parquet", "csv"];
     private static readonly string[] SupportedFabricAuthModes = ["managedIdentity", "servicePrincipal"];
     private static readonly string[] SupportedFabricPartitionSchemes =

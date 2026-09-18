@@ -68,7 +68,16 @@ public sealed record FabricDestinationSettings(
     // the write at a different item, and control characters.
     private static readonly Regex UnsafeNameCharacters = new(@"[/\\\x00-\x1F\x7F]", RegexOptions.Compiled);
 
-    private static readonly string[] SupportedItemTypes = ["Lakehouse", "Warehouse", "KQLDatabase", "MirroredDatabase"];
+    /// <summary>
+    /// Item types this destination can actually write to. Deliberately NOT the full set of Fabric item types:
+    /// a <c>KQLDatabase</c> takes Kusto ingest calls and a <c>MirroredDatabase</c> is read-only (it is a managed
+    /// replica of an external source), so neither has a <c>Files/</c> area to land a file in. Both used to be
+    /// accepted here and then failed at run time, mid-pipeline; they are refused at configuration-parse time
+    /// instead. <c>Warehouse</c> stays listed because it is addressable for staging even though
+    /// <see cref="FabricLandingMode.WarehouseTable"/> itself is not implemented yet — the mode check above is
+    /// what refuses that combination, with a message about the mode rather than the item type.
+    /// </summary>
+    private static readonly string[] SupportedItemTypes = ["Lakehouse", "Warehouse"];
 
     public static FabricDestinationSettings Parse(DestinationConfiguration destination)
     {
@@ -103,9 +112,14 @@ public sealed record FabricDestinationSettings(
             supported => string.Equals(supported, itemType, StringComparison.OrdinalIgnoreCase));
         if (canonicalItemType is null)
         {
+            var reason = string.Equals(itemType, "KQLDatabase", StringComparison.OrdinalIgnoreCase)
+                ? " A KQL Database is written through Kusto ingestion, not file drops, so it has no Files area."
+                : string.Equals(itemType, "MirroredDatabase", StringComparison.OrdinalIgnoreCase)
+                    ? " A Mirrored Database is a read-only replica — write to the source database it mirrors instead."
+                    : string.Empty;
             throw new InvalidOperationException(
                 $"Destination '{destination.Name}' has unsupported Fabric item type '{itemType}'. Supported: "
-                    + string.Join(", ", SupportedItemTypes) + ".");
+                    + string.Join(", ", SupportedItemTypes) + "." + reason);
         }
 
         var authMode = ParseEnum(

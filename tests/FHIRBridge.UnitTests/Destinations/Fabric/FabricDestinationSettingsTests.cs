@@ -138,6 +138,24 @@ public sealed class FabricDestinationSettingsTests
         act.Should().Throw<InvalidOperationException>().WithMessage("*unsupported Fabric item type*");
     }
 
+    /// <summary>
+    /// Both of these used to parse successfully and then fail at write time, mid-pipeline, because neither item
+    /// type has a Files area to land a blob in. The rejection moved to parse time, and each carries the reason
+    /// rather than only the supported list — a bare "unsupported" leaves the user retrying the same thing.
+    /// </summary>
+    [Theory]
+    [InlineData("KQLDatabase", "*Kusto ingestion*")]
+    [InlineData("MirroredDatabase", "*read-only replica*")]
+    public void Item_types_with_no_writable_Files_area_are_rejected_at_parse_time(
+        string itemType, string expectedReason)
+    {
+        var act = () => FabricDestinationSettings.Parse(Destination(
+            null,
+            $$"""{"dest_fabricWorkspace":"A","dest_fabricItemName":"L","dest_fabricItemType":"{{itemType}}"}"""));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage(expectedReason);
+    }
+
     // ---------------------------------------------------------------- path normalization
 
     [Theory]
