@@ -102,14 +102,22 @@ public sealed class FabricDestinationSettingsTests
         act.Should().Throw<NotSupportedException>().WithMessage("*Data Lake Webhook destination*");
     }
 
-    [Fact]
-    public void Warehouse_mode_fails_fast_rather_than_half_writing()
+    /// <summary>
+    /// Parsing no longer decides which modes are implemented — that is the landing-strategy registry's job, and
+    /// an unregistered mode fails there. Parse only still refuses Eventstream (above), because that one is not
+    /// unbuilt but served elsewhere. So a Warehouse configuration must now parse cleanly.
+    /// </summary>
+    [Theory]
+    [InlineData("warehouseTable", FabricLandingMode.WarehouseTable)]
+    [InlineData("lakehouseTable", FabricLandingMode.LakehouseTable)]
+    public void Table_landing_modes_parse_and_leave_implementation_to_the_strategy_registry(
+        string configured, FabricLandingMode expected)
     {
-        var act = () => FabricDestinationSettings.Parse(Destination(
+        var settings = FabricDestinationSettings.Parse(Destination(
             null,
-            """{"dest_fabricWorkspace":"Analytics","dest_fabricItemName":"L","dest_fabricMode":"warehouseTable"}"""));
+            $$"""{"dest_fabricWorkspace":"Analytics","dest_fabricItemName":"L","dest_fabricItemType":"Warehouse","dest_fabricMode":"{{configured}}"}"""));
 
-        act.Should().Throw<NotSupportedException>().WithMessage("*not implemented yet*");
+        settings.Mode.Should().Be(expected);
     }
 
     [Theory]

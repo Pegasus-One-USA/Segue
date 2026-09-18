@@ -483,6 +483,13 @@ public static class DependencyInjection
         // Microsoft Fabric / OneLake: reuses the singleton BlobContainerClientCache registered above (OneLake
         // speaks the blob protocol), with its own Entra-only credential dispatch.
         services.AddScoped<Destinations.Fabric.IOneLakeClientFactory, Destinations.Fabric.OneLakeClientFactory>();
+
+        // One strategy per Fabric landing surface, resolved by FabricLandingMode. MappedDataFabricDestinationWriter
+        // dispatches through the registry rather than branching, so a new surface is a registration here and
+        // nothing else. Eventstream is deliberately absent: it is authenticated HTTP, already served by the Data
+        // Lake Webhook destination, and FabricDestinationSettings.Parse redirects to it by name.
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.OneLakeFilesLandingStrategy>();
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategyRegistry, Destinations.Fabric.FabricLandingStrategyRegistry>();
         services.AddScoped<MappedDataFabricDestinationWriter>();
         services.AddScoped<MappedMongoDestinationWriter>();
         services.AddHttpClient(nameof(MedplumTokenProvider));

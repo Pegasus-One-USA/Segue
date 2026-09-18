@@ -84,17 +84,16 @@ public sealed record FabricDestinationSettings(
         var json = destination.ConnectionMetadataJson;
 
         var mode = ParseEnum(ConnectionMetadataReader.GetString(json, "dest_fabricMode"), FabricLandingMode.OneLakeFiles);
-        if (mode != FabricLandingMode.OneLakeFiles)
+        if (mode == FabricLandingMode.Eventstream)
         {
-            // Fail at configuration-parse time with the actual reason and the actual alternative, rather than
-            // accepting the destination and writing nothing (or writing files a Warehouse will never read).
+            // The one mode that is refused here rather than by a missing strategy registration, because it is not
+            // "unbuilt" — it is deliberately served elsewhere, and the user needs pointing there. An Eventstream
+            // custom endpoint is plain authenticated HTTP, which the Data Lake Webhook destination already speaks;
+            // a second, thinner implementation of the same wire protocol would be worse than the redirect.
             throw new NotSupportedException(
-                mode == FabricLandingMode.Eventstream
-                    ? $"Destination '{destination.Name}': Fabric Eventstream is not implemented as a Fabric landing "
-                        + "mode. An Eventstream custom endpoint is authenticated HTTP — use the Data Lake Webhook "
-                        + "destination with that endpoint URL instead."
-                    : $"Destination '{destination.Name}': Fabric landing mode '{mode}' is not implemented yet. Use "
-                        + "OneLake Files, and promote to a table with a Fabric shortcut, notebook or pipeline.");
+                $"Destination '{destination.Name}': Fabric Eventstream is not implemented as a Fabric landing "
+                    + "mode. An Eventstream custom endpoint is authenticated HTTP — use the Data Lake Webhook "
+                    + "destination with that endpoint URL instead.");
         }
 
         // Workspace comes from metadata, or from Target for a row created through the "existing connection" path —
