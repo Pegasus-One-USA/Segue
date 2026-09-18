@@ -49,10 +49,9 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // Lake destinations — backend writers, Step 1 forms and canvas wizard families are all in place
     // (see MappedDataLakeWebhookDestinationWriter / MappedDataFabricDestinationWriter).
     'dest-datalake-webhook',
-    // Microsoft Fabric is hidden from the UI until a Fabric tenant is available to verify a live write
-    // against. Everything behind it is complete and registered — writer, node executor, catalog entry,
-    // Step 1 form, wizard family — so re-listing this one id is the only change needed to bring it back.
-    // 'dest-fabric',
+    // Microsoft Fabric (OneLake Files) — writer, node executor, catalog entry, Step 1 form and wizard
+    // family are all in place and registered (see MappedDataFabricDestinationWriter).
+    'dest-fabric',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
     // Phase 2+ destinations: 'dest-azuresql',
