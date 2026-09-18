@@ -1,0 +1,44 @@
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_cf3967cb308c19::t_a1dc8696e75e14 143-147,151-158
+  s_cf3967cb308c19::t_e87aa7768992a0 101-102,160-170
+  s_cf3967cb308c19::t_c5ece3e14090be 96-100,105,109-110,159,171
+  s_cf3967cb308c19::t_77e5c96b16ff80 103-104,106-108,126-142,148-150
+tests/FHIRBridge.UnitTests/Transforms/TransformationRuleServiceTests.cs
+  s_cf3967cb308c19::t_c5ece3e14090be 463-493,555-578
+  s_cf3967cb308c19::t_c1bf43621d654d 494-523
+  s_cf3967cb308c19::t_a1dc8696e75e14 524-554
+  s_cf3967cb308c19::t_31fc8ac6e98004 401-406
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_cf3967cb308c19::t_cf62752528c209 4408-4409,4425-4429
+  s_cf3967cb308c19::t_a9a204fea82ad9 4418-4424,4430-4439
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_cf3967cb308c19::t_d31d9d14919e68 507-527,670-672,692
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_cf3967cb308c19::t_e37d91bdc1dd1b 375-378,380,385-393,537-538
+tests/FHIRBridge.Runtime.UnitTests/Workflows/DestinationNodeExecutorTests.cs
+  s_cf3967cb308c19::t_414b6c9b5f098f 380-424
+tests/FHIRBridge.UnitTests/Destinations/MappedSqlServerDestinationWriterTests.cs
+  s_cf3967cb308c19::t_42e2d416d21f83 172-223
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineInstanceSelectionTests.cs
+  s_cf3967cb308c19::t_a5a47a9710c0c4 177-247
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_cf3967cb308c19::t_414b6c9b5f098f 917-923
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_cf3967cb308c19::t_8d80d438df947b 108-115,488-514
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "292900ad30e0503eea05e8b14a3dc2b58a226b3e",
+  "prompts": {},
+  "sessions": {
+    "s_cf3967cb308c19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66d990c3-0cfc-4e6d-af22-3febae2af8ba",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
