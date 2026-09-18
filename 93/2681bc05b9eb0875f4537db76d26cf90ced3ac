@@ -1,0 +1,30 @@
+portal/src/app/core/api-endpoints.ts
+  s_d8c85374db9f6f::t_d86cfa3d9cd184 153
+portal/src/app/services/destination-schema.service.ts
+  s_d8c85374db9f6f::t_61ad80a6590dfc 207-239
+  s_d8c85374db9f6f::t_d86cfa3d9cd184 309-317
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_d8c85374db9f6f::t_a00f3eca95ebe3 148-164
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_26883fe81ae7df 5,27,267-340,355-357
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_26883fe81ae7df 5,27,267-340,355-357
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_d8c85374db9f6f::t_a00f3eca95ebe3 148-164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "932681bc05b9eb0875f4537db76d26cf90ced3ac",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
