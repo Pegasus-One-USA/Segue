@@ -270,12 +270,6 @@ export const APP_SECRETS_ENDPOINTS = {
 export const LICENSE_ENDPOINTS = {
   get:   `${API_V1_BASE}/license`,
   apply: `${API_V1_BASE}/license`,
-  // ⚠ TEMPORARY / DEV-ONLY — backs the "Dev: Mint a test license" page
-  // (settings/license/mint-dev). The backend controller behind this URL 404s itself on any host
-  // that isn't running in the Development environment (see DevLicenseMintingController's remarks) —
-  // that server-side gate is the actual security boundary, not this URL being hard to find. Delete
-  // this entry alongside the license-dev-mint page once minting moves to its own separate internal tool.
-  devMint: `${API_V1_BASE}/dev/license-mint`,
 };
 
 export const LOINC_ENDPOINTS = {

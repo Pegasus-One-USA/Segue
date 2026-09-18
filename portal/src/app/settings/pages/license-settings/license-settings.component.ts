@@ -2,7 +2,6 @@ import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { LicenseService } from '../../services/license.service';
 import { LicenseStatus, LICENSE_UNLIMITED } from '../../models/license.model';
 import { ToastService } from '../../../services/toast.service';
@@ -19,7 +18,7 @@ function hasUsableLicense(status: LicenseStatus): boolean {
 @Component({
   selector:    'app-license-settings',
   standalone:  true,
-  imports:     [ReactiveFormsModule, DatePipe, DecimalPipe, RouterLink],
+  imports:     [ReactiveFormsModule, DatePipe, DecimalPipe],
   templateUrl: './license-settings.component.html',
   styleUrl:    './license-settings.component.scss',
 })

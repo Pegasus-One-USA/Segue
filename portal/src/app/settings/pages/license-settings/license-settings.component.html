@@ -4,10 +4,6 @@
     <p class="page-sub">View Segue's current license and activate or renew it.</p>
   </div>
 
-  <!-- ⚠ TEMPORARY / DEV-ONLY link — the page it opens 404s itself outside a Development-hosted API.
-       Delete this link alongside license-dev-mint.component.* once minting moves to its own tool. -->
-  <a class="dev-mint-link" routerLink="/settings/license/mint-dev">Dev: Mint a test license →</a>
-
   @if (loading()) {
     <section class="settings-card">
       <p class="card-sub">Loading…</p>

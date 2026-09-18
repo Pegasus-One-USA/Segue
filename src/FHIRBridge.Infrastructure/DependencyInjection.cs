@@ -192,15 +192,6 @@ public static class DependencyInjection
         // (DB or in-memory) since it doesn't touch the repository until Program.cs calls ReloadAsync.
         services.AddSingleton<Application.Abstractions.Licensing.ILicenseService, LicenseService>();
 
-        // ⚠ TEMPORARY / DEV-ONLY — signs throwaway test license tokens for the portal's temporary
-        // "Dev: Mint a test license" page. Backed by DevLicenseMintingController, which is hard-gated to
-        // IHostEnvironment.IsDevelopment() (returns 404 everywhere else) — see DevLicenseSigningKey's
-        // remarks. Registering this singleton unconditionally is safe: nothing outside that
-        // Development-only controller ever calls it. DELETE this registration alongside
-        // DevLicenseSigningKey/IDevLicenseMintingService/DevLicenseMintingService/DevLicenseMintingController
-        // once license minting moves to its own separate internal tool.
-        services.AddSingleton<IDevLicenseMintingService, DevLicenseMintingService>();
-
         // Resolves a user's effective permission codes per request (DB-backed, short-lived cache) —
         // replaces embedding them as JWT claims, which overflowed the browser's access-token cookie once
         // a role's permission count grew into the hundreds (dynamically-discovered per-vendor/per-

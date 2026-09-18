@@ -54,10 +54,6 @@ export class AppShellComponent implements OnInit {
   protected readonly licenseActive = this.appInit.licenseActive;
   protected readonly licenseState  = this.appInit.licenseState;
 
-  // Suppresses the working-area overlay on the License Settings page itself — otherwise an inactive
-  // license would make the one screen that lets an admin fix it unreachable too.
-  protected readonly onLicenseSettingsPage = signal(false);
-
   protected isAdminUser(): boolean {
     return this.auth.isAdmin();
   }
@@ -83,10 +79,6 @@ export class AppShellComponent implements OnInit {
 
   private updateTitle(url: string): void {
     const cleanUrl = url.split('?')[0];
-    // Still the dev-mint page specifically: License itself is now a dialog (see openLicenseDialog), which
-    // renders above the lock overlay anyway, but /settings/license/mint-dev is a real route that must stay
-    // reachable while the app is locked — that page is how a license gets applied in a dev environment.
-    this.onLicenseSettingsPage.set(cleanUrl.startsWith('/settings/license/mint-dev'));
 
     if (PAGE_TITLES[cleanUrl]) {
       this.pageTitle.set(PAGE_TITLES[cleanUrl]);

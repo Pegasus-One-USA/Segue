@@ -11,8 +11,8 @@ export interface AllowedHospital {
   displayName: string | null;
 }
 
-/** Sentinel used by every numeric field on `LicenseLimits`/`DevLicenseMintRequest` to mean "unlimited for
- *  that dimension" — mirrors the backend's `LicenseLimits.Unlimited`. */
+/** Sentinel used by every numeric field on `LicenseLimits` to mean "unlimited for that dimension" —
+ *  mirrors the backend's `LicenseLimits.Unlimited`. */
 export const LICENSE_UNLIMITED = -1;
 
 /** Mirrors LicenseLimitsDto — every numeric field uses `LICENSE_UNLIMITED` (-1) to mean unlimited for that
@@ -70,38 +70,5 @@ export interface LicenseStatus {
 
 /** Body of `POST /api/v1/license`. */
 export interface ApplyLicenseRequest {
-  token: string;
-}
-
-// ─── ⚠ TEMPORARY / DEV-ONLY — backs the "Dev: Mint a test license" page (settings/license/mint-dev) ───
-// Delete these two types alongside that page, LicenseService.mintDev(), and LICENSE_ENDPOINTS.devMint
-// once license minting moves to its own separate internal tool. Mirrors the backend's
-// DevLicenseMintRequestDto/DevLicenseMintResponse (DevLicenseMintingController) field for field.
-
-/** Body of the temporary `POST /api/v1/dev/license-mint` endpoint. Every numeric limit uses
- *  `LICENSE_UNLIMITED` (-1) for unlimited; an empty `features`/`allowedSourceTypes`/`allowedHospitals` list
- *  means no extra features / unrestricted for that dimension. */
-export interface DevLicenseMintRequest {
-  customerId: string;
-  customerName: string | null;
-  edition: string | null;
-  expiresUtc: string;
-  maxUsers: number;
-  maxWorkflows: number;
-  maxSourceConnections: number;
-  features: string[];
-  allowedSourceTypes: string[];
-  allowedHospitals: AllowedHospital[];
-  maxProcessedRecordsPerMonth: number | null;
-  allowedResourceTypes: string[];
-  allowedDestinationTypes: string[];
-  maxSuccessfulWorkflowExecutionsPerMonth: number;
-  /** Minutes after minting this token must be applied within, or it's rejected as expired. `null` means no
-   *  activation deadline. Never affects an already-applied, currently-running license. */
-  activationWindowMinutes: number | null;
-}
-
-/** Response of the temporary `POST /api/v1/dev/license-mint` endpoint. */
-export interface DevLicenseMintResponse {
   token: string;
 }
