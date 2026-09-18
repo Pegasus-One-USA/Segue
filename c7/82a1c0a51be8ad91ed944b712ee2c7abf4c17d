@@ -1,0 +1,39 @@
+src/FHIRBridge.Infrastructure/Destinations/FabricDestinationConnectionTestService.cs
+  s_d8c85374db9f6f::t_4a77a104ba8a96 1-286
+tests/FHIRBridge.UnitTests/Infrastructure/AuditLogDeleteCoverageTests.cs
+  s_2a1abf6ca2b0e6::t_a15252073eb712 1-115
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d8c85374db9f6f::t_c34e6721367f50 546
+tests/FHIRBridge.UnitTests/Destinations/Fabric/FabricDestinationConnectionTestServiceTests.cs
+  s_d8c85374db9f6f::t_d05c99bbd0fd43 1-119
+src/FHIRBridge.Application/DTOs/FabricConnectionTestRequest.cs
+  s_d8c85374db9f6f::t_00806a7b0455c6 1-48
+src/FHIRBridge.Application/Abstractions/Destinations/IFabricDestinationConnectionTestService.cs
+  s_d8c85374db9f6f::t_54e57383278368 1-16
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  s_d8c85374db9f6f::t_50ff4eca5c2317 25,33-34,42,187-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c782a1c0a51be8ad91ed944b712ee2c7abf4c17d",
+  "prompts": {},
+  "sessions": {
+    "s_2a1abf6ca2b0e6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c438430-15cd-4a28-a8eb-e7677b5b97bc",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
