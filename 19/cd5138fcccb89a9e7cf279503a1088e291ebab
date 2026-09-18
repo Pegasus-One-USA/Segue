@@ -1,0 +1,23 @@
+portal/src/app/services/phase-config.service.ts
+  s_d8c85374db9f6f::t_e1a72ce73d0528 52-54
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_d8c85374db9f6f::t_ef32f79db841b1 44-47
+portal/src/app/services/phase-config-v2.service.ts
+  s_d8c85374db9f6f::t_e1a72ce73d0528 55-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "19cd5138fcccb89a9e7cf279503a1088e291ebab",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

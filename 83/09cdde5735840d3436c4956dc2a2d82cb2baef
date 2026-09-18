@@ -1,0 +1,14 @@
+Demo_TestApp/backend/appsettings.json
+  h_44b3eb0c92b6da 29-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8309cdde5735840d3436c4956dc2a2d82cb2baef",
+  "prompts": {},
+  "humans": {
+    "h_44b3eb0c92b6da": {
+      "author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
