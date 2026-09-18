@@ -520,7 +520,15 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
     };
 
     private static string Hash(string value)
-        => "anon-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..16].ToLowerInvariant();
+        => PseudonymPrefix + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..16].ToLowerInvariant();
+
+    /// <summary>
+    /// Marks a value as a pseudonym rather than a real identifier. Constant, so anything that shortens one of
+    /// these for display has to keep it whole and spend its budget on the hash that follows — see
+    /// <c>MappedSqlServerDestinationWriter.Abbreviate</c>, where counting this against the limit left three
+    /// varying characters and made every de-identified id look alike.
+    /// </summary>
+    internal const string PseudonymPrefix = "anon-";
 
     private static string Mask(string value, int keepLength)
         => value.Length <= keepLength ? value : new string('*', value.Length - keepLength) + value[^keepLength..];

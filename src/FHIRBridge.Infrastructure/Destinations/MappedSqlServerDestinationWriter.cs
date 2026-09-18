@@ -561,7 +561,7 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
     /// tell "it is looking for a de-identified id" from "it is looking for a raw one", or to match against a
     /// row you are looking at, which is what this message is read for.
     /// </summary>
-    private static string Abbreviate(string? referenceId)
+    internal static string Abbreviate(string? referenceId)
     {
         const int KeepLength = 8;
         if (string.IsNullOrEmpty(referenceId))
@@ -569,7 +569,17 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             return string.Empty;
         }
 
-        return referenceId.Length <= KeepLength ? referenceId : referenceId[..KeepLength] + "…";
+        // A pseudonymised id is a CONSTANT marker followed by the only part that varies. Counting the marker
+        // against the budget left three hex digits — 4096 possible values — so every unresolved reference for
+        // de-identified data rendered as the same handful of strings, destroying the one discrimination this
+        // message is kept for. Keep the marker whole and spend the budget on what actually distinguishes one id
+        // from another; a raw id has no marker and is still cut to KeepLength exactly as before.
+        var prefix = referenceId.StartsWith(Governance.SafeHarborDeIdentificationService.PseudonymPrefix, StringComparison.Ordinal)
+            ? Governance.SafeHarborDeIdentificationService.PseudonymPrefix
+            : string.Empty;
+        var body = referenceId[prefix.Length..];
+
+        return body.Length <= KeepLength ? referenceId : prefix + body[..KeepLength] + "…";
     }
 
     /// <summary>

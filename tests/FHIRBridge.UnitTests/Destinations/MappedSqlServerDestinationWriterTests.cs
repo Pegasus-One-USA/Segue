@@ -221,3 +221,57 @@ public sealed class ReferenceLookupTargetValidationTests
         act.Should().NotThrow();
     }
 }
+
+/// <summary>
+/// The unresolved-reference message shortens the id it could not find, because that message is now retained in
+/// the run's output rather than being a transient exception. Shortening must not destroy the discrimination the
+/// message exists for: a pseudonymised id is a constant marker plus a hash, so counting the marker against the
+/// budget left three varying characters — 4096 possible strings — and every de-identified id rendered alike.
+/// </summary>
+public sealed class ReferenceIdAbbreviationTests
+{
+    [Fact]
+    public void Two_different_pseudonyms_do_not_render_identically()
+    {
+        // The 16-hex shape SafeHarborDeIdentificationService.Hash produces, differing only after the marker.
+        var first = MappedSqlServerDestinationWriter.Abbreviate("anon-20c5269a14d38c60");
+        var second = MappedSqlServerDestinationWriter.Abbreviate("anon-625e79d324a4ff7b");
+
+        first.Should().NotBe(second, "telling one missing reference from another is the whole point");
+        first.Should().StartWith("anon-", "the marker says this is de-identified data, not a raw id");
+        first.Should().Contain("20c5269a", "the varying part is what identifies which row is missing");
+    }
+
+    [Fact]
+    public void A_raw_id_is_still_cut_to_the_same_budget()
+    {
+        // No marker to preserve, so nothing changes for a real identifier — the privacy-relevant case.
+        var value = MappedSqlServerDestinationWriter.Abbreviate("e63wRTbPfr1p8UW81d8Seiw3");
+
+        value.Should().StartWith("e63wRTbP");
+        value.Should().NotContain("1d8Seiw3", "a raw identifier must not be reproduced in full");
+        value.Should().HaveLength(9, "eight characters plus the ellipsis");
+    }
+
+    [Fact]
+    public void A_pseudonym_never_reproduces_its_whole_hash()
+    {
+        MappedSqlServerDestinationWriter.Abbreviate("anon-20c5269a14d38c60")
+            .Should().NotContain("14d38c60", "the marker is free, the hash still is not");
+    }
+
+    [Theory]
+    [InlineData("p-1")]
+    [InlineData("anon-1234")]
+    [InlineData("")]
+    public void A_value_no_longer_than_the_budget_is_left_alone(string referenceId)
+    {
+        MappedSqlServerDestinationWriter.Abbreviate(referenceId).Should().Be(referenceId);
+    }
+
+    [Fact]
+    public void A_null_id_renders_as_nothing_rather_than_throwing()
+    {
+        MappedSqlServerDestinationWriter.Abbreviate(null).Should().BeEmpty();
+    }
+}
