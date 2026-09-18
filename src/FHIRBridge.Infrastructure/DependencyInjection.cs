@@ -543,6 +543,7 @@ public static class DependencyInjection
 
         services.AddScoped<IMongoDestinationConnectionTestService, Destinations.MongoDestinationConnectionTestService>();
         services.AddScoped<IBlobDestinationConnectionTestService, Destinations.BlobDestinationConnectionTestService>();
+        services.AddScoped<IFabricDestinationConnectionTestService, Destinations.FabricDestinationConnectionTestService>();
 
         foreach (var registration in MappingSchemaProviderFactory.DefaultRegistrations)
         {
