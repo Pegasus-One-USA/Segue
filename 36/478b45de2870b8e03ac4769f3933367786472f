@@ -1,0 +1,47 @@
+portal/src/app/services/wizard.service.ts
+  s_174e16661bf66d::t_1eeaad9384f238 165-180
+  s_174e16661bf66d::t_5867de5950c515 304-308
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_174e16661bf66d::t_823736d174835e 514-529
+  s_174e16661bf66d::t_c3ecb7fbc5e39e 530
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_174e16661bf66d::t_cf002340243508 504-520
+.claude/skills/runsegue/SKILL.md
+  s_174e16661bf66d::t_83c52a5edd140b 103-110
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_174e16661bf66d::t_724393ab921c81 2514-2517
+  s_174e16661bf66d::t_72d2abdae38fc5 1198-1203
+  s_174e16661bf66d::t_e25fb4b5d4fe3c 1135-1139
+  s_174e16661bf66d::t_674e0ef6cad300 3240-3244
+  s_174e16661bf66d::t_b469047d613d2d 1794-1805,1809-1813
+  s_174e16661bf66d::t_f6b74c208bba77 1185-1197,1204
+  s_174e16661bf66d::t_17bd8b7b83ea2b 1806-1808
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_174e16661bf66d::t_c1d1bb5c373227 1199-1204
+  s_174e16661bf66d::t_6f5132b8950f08 1833-1852
+  s_174e16661bf66d::t_ae2c02001684e1 2553-2556
+  s_174e16661bf66d::t_174a1d6e8967bc 3201-3205
+  s_174e16661bf66d::t_406de4df3bc942 3876-3878
+  s_174e16661bf66d::t_bdaec509daccbc 1186-1198,1205
+  s_174e16661bf66d::t_ee51d55a1fda84 1136-1140
+.claude/skills/runsegue/scripts/runsegue.ps1
+  s_174e16661bf66d::t_8d6b9f050c161a 302-306,308
+docs/reference/ecw-fhir-developer-documentation.md
+  s_174e16661bf66d::t_009fa7fd76c82c 1-539
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "36478b45de2870b8e03ac4769f3933367786472f",
+  "prompts": {},
+  "sessions": {
+    "s_174e16661bf66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a051edf-3c44-4555-8dea-ae48ca7f4ff9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
