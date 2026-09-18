@@ -105,11 +105,19 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
         var recordErrors = new List<string>();
         var writtenResourceIds = new List<string?>();
 
-        var resolvedRecords = new List<MappedDestinationRecord>(records.Count);
-        foreach (var record in records)
-        {
-            resolvedRecords.Add(await ResolveReferenceLookupsAsync(connection, record, cancellationToken));
-        }
+        // Validate the reference TARGETS (table + key column) once, up front and outside the per-record
+        // isolation below. These come from the mapping profile, not from a record's data: a typo in one is a
+        // broken configuration affecting every record identically, and letting it reach the per-record catch
+        // reported "N of N records failed — partial success" for what is really "this profile cannot run".
+        // Failing here propagates an accurate message and also stops re-validating the same identifiers once
+        // per record.
+        ValidateReferenceLookupTargets(records);
+
+        var resolvedRecords = await ResolveReferenceLookupsIsolatedAsync(
+            records,
+            (record, token) => ResolveReferenceLookupsAsync(connection, record, token),
+            recordErrors,
+            cancellationToken);
 
         // Insert/Upsert without child tables can be written as one multi-row statement instead of one round trip
         // per record — the dominant cost for a large resource type (hundreds+ records) is round-trip latency, not
@@ -478,6 +486,103 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
     }
 
     /// <summary>
+    /// Checks every distinct reference target in the batch — the table and key column each lookup resolves
+    /// against — before any record is processed.
+    ///
+    /// These identifiers come from the mapping profile, so a bad one is a configuration fault, not a data fault:
+    /// it fails identically for every record. Validated inside the per-record loop it was caught by that loop's
+    /// isolation and reported as "every record failed to write", which reads as a data problem and sends the
+    /// operator to the wrong place entirely. Raised here it propagates with its own message and fails the route.
+    /// </summary>
+    internal static void ValidateReferenceLookupTargets(IReadOnlyCollection<MappedDestinationRecord> records)
+    {
+        var seen = new HashSet<(string Table, string Column)>();
+        foreach (var record in records)
+        {
+            foreach (var lookup in record.ReferenceLookups ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(lookup.ReferenceId) || !seen.Add((lookup.LookupTable, lookup.LookupKeyColumn)))
+                {
+                    continue;
+                }
+
+                ParseDestinationObject(lookup.LookupTable);
+                ValidateIdentifier(lookup.LookupKeyColumn);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Resolves every record's reference lookups, keeping a failure on one record from discarding the batch.
+    ///
+    /// This loop used to run unguarded, ahead of the per-record write path — so a single reference that matched
+    /// no row threw straight out of WriteAsync and lost every other record, including whole resource types that
+    /// had nothing wrong with them. That contradicts the isolation this writer promises a few lines above ("each
+    /// record's write stands alone"), and it is the common case rather than an exotic one: a child routinely
+    /// references a parent the source never delivered (an Observation pointing at an Encounter outside the
+    /// fetched set), which is one record's problem, not the batch's.
+    ///
+    /// An unresolved record is skipped rather than written with a null FK: a null would either violate the
+    /// column's own NOT NULL — the same failure, reported less clearly — or quietly persist an orphan row whose
+    /// missing link nobody would notice. Skipping and reporting matches exactly how a constraint violation on a
+    /// record's own data is handled. Only <see cref="InvalidOperationException"/> (what an unresolved lookup
+    /// raises) is isolated; anything else, such as the connection dying, still propagates and fails the route.
+    /// </summary>
+    internal static async Task<List<MappedDestinationRecord>> ResolveReferenceLookupsIsolatedAsync(
+        IReadOnlyCollection<MappedDestinationRecord> records,
+        Func<MappedDestinationRecord, CancellationToken, Task<MappedDestinationRecord>> resolveAsync,
+        ICollection<string> recordErrors,
+        CancellationToken cancellationToken)
+    {
+        var resolved = new List<MappedDestinationRecord>(records.Count);
+        foreach (var record in records)
+        {
+            try
+            {
+                resolved.Add(await resolveAsync(record, cancellationToken));
+            }
+            catch (InvalidOperationException exception)
+            {
+                recordErrors.Add($"{record.ResourceType}/{record.SourceResourceId}: {exception.Message}");
+            }
+        }
+
+        return resolved;
+    }
+
+    /// <summary>
+    /// A resource identifier, shortened for a message that gets retained.
+    ///
+    /// This message used to exist only as a thrown exception; it is now collected per record into
+    /// <see cref="DestinationWriteResult.RecordErrors"/> and aggregated into the run's output, so the value in
+    /// it is persisted rather than transient. A FHIR reference id identifies a patient's record, and the
+    /// surrounding text (target field, schema, table, key column) already says exactly what failed — the full
+    /// value adds a second retained identifier without adding diagnostic power. A prefix is still enough to
+    /// tell "it is looking for a de-identified id" from "it is looking for a raw one", or to match against a
+    /// row you are looking at, which is what this message is read for.
+    /// </summary>
+    internal static string Abbreviate(string? referenceId)
+    {
+        const int KeepLength = 8;
+        if (string.IsNullOrEmpty(referenceId))
+        {
+            return string.Empty;
+        }
+
+        // A pseudonymised id is a CONSTANT marker followed by the only part that varies. Counting the marker
+        // against the budget left three hex digits — 4096 possible values — so every unresolved reference for
+        // de-identified data rendered as the same handful of strings, destroying the one discrimination this
+        // message is kept for. Keep the marker whole and spend the budget on what actually distinguishes one id
+        // from another; a raw id has no marker and is still cut to KeepLength exactly as before.
+        var prefix = referenceId.StartsWith(Governance.SafeHarborDeIdentificationService.PseudonymPrefix, StringComparison.Ordinal)
+            ? Governance.SafeHarborDeIdentificationService.PseudonymPrefix
+            : string.Empty;
+        var body = referenceId[prefix.Length..];
+
+        return body.Length <= KeepLength ? referenceId : prefix + body[..KeepLength] + "…";
+    }
+
+    /// <summary>
     /// Resolves every <see cref="MappedDestinationRecord.ReferenceLookups"/> entry (e.g. Observation.PatientId,
     /// sourced from "$.subject.reference") against the table it actually points at, and returns a record whose
     /// <see cref="MappedDestinationRecord.Values"/> carry the resolved real primary key instead of the raw FHIR
@@ -519,8 +624,8 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             {
                 throw new InvalidOperationException(
                     $"Cannot resolve '{lookup.TargetField}': no row in [{schema}].[{table}] has " +
-                    $"[{lookupColumn}] = '{lookup.ReferenceId}'. The referenced resource must be written before " +
-                    "this one, in the same destination write.");
+                    $"[{lookupColumn}] = '{Abbreviate(lookup.ReferenceId)}'. The referenced resource must be " +
+                    "written before this one, in the same destination write.");
             }
 
             resolvedValues[lookup.TargetField] = resolved;
