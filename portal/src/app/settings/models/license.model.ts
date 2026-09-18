@@ -72,3 +72,46 @@ export interface LicenseStatus {
 export interface ApplyLicenseRequest {
   token: string;
 }
+
+/** Mirrors LicenseHistoryEntryDto, one row from `GET /api/v1/license/history` — every license this
+ *  install has ever successfully applied, newest first. */
+export interface LicenseHistoryEntry {
+  appliedUtc: string;
+  customerName: string | null;
+  edition: string | null;
+  state: string;
+  expiresUtc: string | null;
+  /** True for exactly one row — whichever token matches the currently-active license. */
+  isCurrent: boolean;
+}
+
+/** Lifecycle of this install's own outbound license request — mirrors the backend's
+ *  `LicenseRequestStatus` enum. */
+export type LicenseRequestState = 'Pending' | 'Submitted' | 'Failed';
+
+/** Mirrors LicenseRequestStatusResult, the wire shape returned by GET/POST api/v1/license-request. */
+export interface LicenseRequestStatus {
+  exists: boolean;
+  clientName: string | null;
+  email: string | null;
+  companyName: string | null;
+  address: string | null;
+  phoneNumber: string | null;
+  status: LicenseRequestState | null;
+  createdUtc: string | null;
+  lastAttemptUtc: string | null;
+  submissionError: string | null;
+  /** Populated only when `status` is 'Failed' — a single copy-pasteable string to share with the
+   *  licensor manually instead of the direct API call that didn't succeed. */
+  encodedPayload: string | null;
+}
+
+/** Body of `POST /api/v1/license-request` — the blank first-time request form. Never re-collected on a
+ *  renewal (`POST /api/v1/license-request/resubmit` takes no body). */
+export interface CreateLicenseRequestRequest {
+  clientName: string;
+  email: string;
+  companyName: string | null;
+  address: string | null;
+  phoneNumber: string;
+}

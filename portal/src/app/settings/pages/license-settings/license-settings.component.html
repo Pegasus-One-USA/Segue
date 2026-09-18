@@ -198,4 +198,153 @@
       </section>
     }
   }
+
+  <!-- ── License Request: this install's own outbound request to the licensor ─────────────────── -->
+  @if (!requestLoading()) {
+    <section class="settings-card">
+      @if (!request()?.exists) {
+        <h2 class="card-title">Request a License</h2>
+        <p class="card-sub">Submit your details and we'll follow up with a license for Segue.</p>
+
+        <form [formGroup]="requestForm" (ngSubmit)="submitRequest()">
+          <div class="form-field">
+            <label for="req-name">Client Name <span class="req">*</span></label>
+            <input id="req-name" type="text" formControlName="clientName" />
+            @if (requestForm.controls.clientName.touched && requestForm.controls.clientName.invalid) {
+              <p class="field-error">Client name is required.</p>
+            }
+          </div>
+          <div class="form-field">
+            <label for="req-email">Email Address <span class="req">*</span></label>
+            <input id="req-email" type="email" formControlName="email" />
+            @if (requestForm.controls.email.touched && requestForm.controls.email.invalid) {
+              <p class="field-error">A valid email address is required.</p>
+            }
+          </div>
+          <div class="form-field">
+            <label for="req-company">Company Name</label>
+            <input id="req-company" type="text" formControlName="companyName" />
+          </div>
+          <div class="form-field">
+            <label for="req-phone">Phone Number <span class="req">*</span></label>
+            <input id="req-phone" type="tel" formControlName="phoneNumber" />
+            @if (requestForm.controls.phoneNumber.touched && requestForm.controls.phoneNumber.invalid) {
+              <p class="field-error">A phone number is required.</p>
+            }
+          </div>
+          <div class="form-field form-field--full">
+            <label for="req-address">Address</label>
+            <input id="req-address" type="text" formControlName="address" />
+          </div>
+
+          @if (requestError()) {
+            <p class="field-error">{{ requestError() }}</p>
+          }
+
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" [disabled]="submittingRequest()">
+              {{ submittingRequest() ? 'Submitting…' : 'Request License' }}
+            </button>
+          </div>
+        </form>
+      } @else if (request()) {
+        @if (request(); as r) {
+        <div class="card-row">
+          <div>
+            <h2 class="card-title">License Request</h2>
+            <p class="card-sub">Submitted {{ r.createdUtc ? (r.createdUtc | date: 'medium') : '—' }}</p>
+          </div>
+          <span class="badge"
+                [class.badge-active]="r.status === 'Submitted'"
+                [class.badge-suspended]="r.status === 'Failed'">
+            {{ r.status }}
+          </span>
+        </div>
+
+        <div class="license-grid">
+          <div class="stat-field">
+            <span class="stat-label">Client Name</span>
+            <span class="stat-value">{{ r.clientName }}</span>
+          </div>
+          <div class="stat-field">
+            <span class="stat-label">Email</span>
+            <span class="stat-value">{{ r.email }}</span>
+          </div>
+          @if (r.companyName) {
+            <div class="stat-field">
+              <span class="stat-label">Company</span>
+              <span class="stat-value">{{ r.companyName }}</span>
+            </div>
+          }
+          <div class="stat-field">
+            <span class="stat-label">Phone</span>
+            <span class="stat-value">{{ r.phoneNumber }}</span>
+          </div>
+          @if (r.address) {
+            <div class="stat-field">
+              <span class="stat-label">Address</span>
+              <span class="stat-value">{{ r.address }}</span>
+            </div>
+          }
+        </div>
+
+        @if (r.status === 'Failed') {
+          <div class="form-field form-field--full">
+            <p class="field-error">
+              We couldn't reach the licensor directly{{ r.submissionError ? ': ' + r.submissionError : '.' }}
+              Copy the code below and share it with them another way (email, support ticket).
+            </p>
+            <textarea id="req-encoded" rows="4" readonly (click)="$any($event.target).select()">{{ r.encodedPayload }}</textarea>
+            <div class="form-actions">
+              <button type="button" class="btn-outline" (click)="copyEncodedPayload()">Copy Code</button>
+            </div>
+          </div>
+        }
+
+        <div class="form-actions">
+          <button type="button" class="btn-outline" [disabled]="submittingRequest()" (click)="resendRequest()">
+            {{ submittingRequest() ? 'Resending…' : 'Resend Request' }}
+          </button>
+        </div>
+        }
+      }
+    </section>
+  }
+
+  <!-- ── License History ─────────────────────────────────────────────────────────────────────── -->
+  @if (!historyLoading() && history().length) {
+    <section class="settings-card">
+      <h2 class="card-title">License History</h2>
+      <p class="card-sub">Every license this install has applied — the current one is marked below.</p>
+
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Applied</th>
+            <th>Customer</th>
+            <th>Edition</th>
+            <th>State</th>
+            <th>Expires</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of history(); track entry.appliedUtc) {
+            <tr [class.history-row--current]="entry.isCurrent">
+              <td>{{ entry.appliedUtc | date: 'medium' }}</td>
+              <td>{{ entry.customerName || '—' }}</td>
+              <td>{{ entry.edition || '—' }}</td>
+              <td>{{ entry.state }}</td>
+              <td>{{ entry.expiresUtc ? (entry.expiresUtc | date: 'mediumDate') : '—' }}</td>
+              <td>
+                @if (entry.isCurrent) {
+                  <span class="badge badge-active">Current</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
 </div>

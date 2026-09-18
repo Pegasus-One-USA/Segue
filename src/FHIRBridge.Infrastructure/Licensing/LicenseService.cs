@@ -2,6 +2,7 @@ using System.Data.Common;
 using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Entities.Licensing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Infrastructure.Licensing;
@@ -63,9 +64,37 @@ public sealed class LicenseService : ILicenseService
 
         using (var scope = _scopeFactory.CreateScope())
         {
+            // A license minted against a specific LicenseRequest (requestKey claim present) must match
+            // THIS install's own stored request key, proving it was minted for this install's request and
+            // not one copied from a different customer. A token with no requestKey claim at all skips this
+            // entirely — every license minted before this feature existed, or one deliberately minted
+            // without a request tied to it, keeps working unchanged.
+            if (!string.IsNullOrEmpty(status.RequestKey))
+            {
+                var requestRepository = scope.ServiceProvider.GetRequiredService<ILicenseRequestRepository>();
+                var ourRequest = await requestRepository.GetAsync(cancellationToken);
+                if (ourRequest is null || !string.Equals(ourRequest.UniqueKey, status.RequestKey, StringComparison.Ordinal))
+                {
+                    return new LicenseApplyResult(
+                        false,
+                        "This license was minted for a different license request than this install's own — "
+                        + "it can't be applied here.",
+                        null);
+                }
+            }
+
             var repository = scope.ServiceProvider.GetRequiredService<ISystemSettingRepository>();
             await repository.UpsertAsync(
                 LicenseTokenSettingKey, licenseToken, "Signed product license token.", cancellationToken);
+
+            // Audit trail of every license ever successfully applied — Current/CurrentRawToken (and the
+            // SystemSetting row above) always reflect only the most recent one; this table keeps the rest.
+            var historyRepository = scope.ServiceProvider.GetRequiredService<ILicenseHistoryRepository>();
+            await historyRepository.AddAsync(
+                new LicenseHistoryEntry(
+                    Guid.NewGuid(), licenseToken, DateTime.UtcNow, status.CustomerName, status.Edition,
+                    status.State.ToString(), status.ExpiresUtc),
+                cancellationToken);
         }
 
         lock (_lock)

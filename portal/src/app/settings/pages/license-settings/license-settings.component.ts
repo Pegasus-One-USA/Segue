@@ -3,7 +3,9 @@ import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { LicenseService } from '../../services/license.service';
-import { LicenseStatus, LICENSE_UNLIMITED } from '../../models/license.model';
+import {
+  LicenseHistoryEntry, LicenseRequestStatus, LicenseStatus, LICENSE_UNLIMITED,
+} from '../../models/license.model';
 import { ToastService } from '../../../services/toast.service';
 import { AppInitService } from '../../../onboarding/services/app-init.service';
 
@@ -59,8 +61,28 @@ export class LicenseSettingsComponent implements OnInit {
     token: ['', Validators.required],
   });
 
+  // ── License request (this install's own outbound request to the licensor) ─────────────────────
+  protected readonly requestLoading = signal(true);
+  protected readonly request = signal<LicenseRequestStatus | null>(null);
+  protected readonly submittingRequest = signal(false);
+  protected readonly requestError = signal<string | null>(null);
+
+  protected readonly requestForm = this.fb.nonNullable.group({
+    clientName:  ['', Validators.required],
+    email:       ['', [Validators.required, Validators.email]],
+    companyName: [''],
+    address:     [''],
+    phoneNumber: ['', Validators.required],
+  });
+
+  // ── License history ─────────────────────────────────────────────────────────────────────────
+  protected readonly historyLoading = signal(true);
+  protected readonly history = signal<LicenseHistoryEntry[]>([]);
+
   ngOnInit(): void {
     this.load();
+    this.loadRequest();
+    this.loadHistory();
   }
 
   private load(): void {
@@ -76,6 +98,94 @@ export class LicenseSettingsComponent implements OnInit {
         this.toast.error('Failed to load license status');
       },
     });
+  }
+
+  private loadRequest(): void {
+    this.requestLoading.set(true);
+    this.licenseSvc.getRequest().subscribe({
+      next: (r) => {
+        this.request.set(r);
+        this.requestLoading.set(false);
+      },
+      error: () => {
+        this.requestLoading.set(false);
+        this.toast.error('Failed to load license request status');
+      },
+    });
+  }
+
+  private loadHistory(): void {
+    this.historyLoading.set(true);
+    this.licenseSvc.getHistory().subscribe({
+      next: (h) => {
+        this.history.set(h);
+        this.historyLoading.set(false);
+      },
+      error: () => {
+        this.historyLoading.set(false);
+        // Non-critical — the status card above already shows the current license; a failed history
+        // fetch just leaves that section empty rather than blocking the rest of the page.
+      },
+    });
+  }
+
+  protected submitRequest(): void {
+    if (this.requestForm.invalid) { this.requestForm.markAllAsTouched(); return; }
+    this.requestError.set(null);
+    this.submittingRequest.set(true);
+
+    const raw = this.requestForm.getRawValue();
+    this.licenseSvc.createRequest({
+      clientName:  raw.clientName.trim(),
+      email:       raw.email.trim(),
+      companyName: raw.companyName.trim() || null,
+      address:     raw.address.trim() || null,
+      phoneNumber: raw.phoneNumber.trim(),
+    }).subscribe({
+      next: (r) => {
+        this.submittingRequest.set(false);
+        this.request.set(r);
+        this.toast.success(
+          r.status === 'Submitted' ? 'License request sent' : 'License request saved',
+          r.status === 'Submitted'
+            ? "We'll be in touch once it's ready."
+            : 'Could not reach the licensor directly — share the code below with them instead.'
+        );
+      },
+      error: (err: HttpErrorResponse) => {
+        this.submittingRequest.set(false);
+        this.requestError.set(err.error?.error_description ?? 'Failed to submit the license request.');
+      },
+    });
+  }
+
+  protected resendRequest(): void {
+    this.submittingRequest.set(true);
+    this.licenseSvc.resubmitRequest().subscribe({
+      next: (r) => {
+        this.submittingRequest.set(false);
+        this.request.set(r);
+        this.toast.success(
+          r.status === 'Submitted' ? 'License request re-sent' : 'License request saved',
+          r.status === 'Submitted'
+            ? "We'll be in touch once it's ready."
+            : 'Could not reach the licensor directly — share the code below with them instead.'
+        );
+      },
+      error: (err: HttpErrorResponse) => {
+        this.submittingRequest.set(false);
+        this.toast.error(err.error?.error_description ?? 'Failed to resend the license request.');
+      },
+    });
+  }
+
+  protected copyEncodedPayload(): void {
+    const payload = this.request()?.encodedPayload;
+    if (!payload) return;
+    navigator.clipboard?.writeText(payload).then(
+      () => this.toast.success('Copied to clipboard'),
+      () => this.toast.error('Could not copy. Select and copy manually.'),
+    );
   }
 
   protected toggleUpdateSection(): void {

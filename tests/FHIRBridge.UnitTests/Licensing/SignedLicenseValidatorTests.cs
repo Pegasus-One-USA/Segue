@@ -345,6 +345,29 @@ public sealed class SignedLicenseValidatorTests
         status.State.Should().Be(LicenseState.Active);
     }
 
+    [Fact]
+    public void RequestKey_claim_round_trips_when_present()
+    {
+        var key = LoadDevPrivateKey();
+        var token = MintToken(
+            key, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1), requestKey: "abc123uniquekey");
+
+        var status = SignedLicenseValidator.Validate(token);
+
+        status.RequestKey.Should().Be("abc123uniquekey");
+    }
+
+    [Fact]
+    public void RequestKey_is_null_when_absent()
+    {
+        var key = LoadDevPrivateKey();
+        var token = MintToken(key, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1));
+
+        var status = SignedLicenseValidator.Validate(token);
+
+        status.RequestKey.Should().BeNull();
+    }
+
     private static ECDsa LoadDevPrivateKey()
     {
         var ecdsa = ECDsa.Create();
@@ -369,7 +392,8 @@ public sealed class SignedLicenseValidatorTests
         int? maxProcessedRecordsPerMonth = null,
         string[]? allowedResourceTypes = null,
         string[]? allowedDestinationTypes = null,
-        DateTime? activateByUtc = null)
+        DateTime? activateByUtc = null,
+        string? requestKey = null)
     {
         features ??= new[] { "hl7-mllp", "deid", "runtime-plane" };
 
@@ -391,6 +415,7 @@ public sealed class SignedLicenseValidatorTests
             allowedResourceTypes,
             allowedDestinationTypes,
             activateByUtc = activateByUtc.HasValue ? ToUnixSeconds(activateByUtc.Value) : (long?)null,
+            requestKey,
         });
 
         var credentials = new SigningCredentials(new ECDsaSecurityKey(signingKey), SecurityAlgorithms.EcdsaSha256);

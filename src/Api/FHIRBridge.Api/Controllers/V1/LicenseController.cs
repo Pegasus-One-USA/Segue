@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Licensing;
+using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Security;
@@ -19,15 +20,18 @@ public sealed class LicenseController : ControllerBase
     private readonly ILicenseService _licenseService;
     private readonly ILicenseUsageCountsProvider _licenseUsageCountsProvider;
     private readonly ILicenseUsageExecutionStatsProvider _licenseUsageExecutionStatsProvider;
+    private readonly ILicenseHistoryRepository _licenseHistoryRepository;
 
     public LicenseController(
         ILicenseService licenseService,
         ILicenseUsageCountsProvider licenseUsageCountsProvider,
-        ILicenseUsageExecutionStatsProvider licenseUsageExecutionStatsProvider)
+        ILicenseUsageExecutionStatsProvider licenseUsageExecutionStatsProvider,
+        ILicenseHistoryRepository licenseHistoryRepository)
     {
         _licenseService = licenseService;
         _licenseUsageCountsProvider = licenseUsageCountsProvider;
         _licenseUsageExecutionStatsProvider = licenseUsageExecutionStatsProvider;
+        _licenseHistoryRepository = licenseHistoryRepository;
     }
 
     [HttpGet]
@@ -64,5 +68,20 @@ public sealed class LicenseController : ControllerBase
         var usageCounts = await _licenseUsageCountsProvider.GetCurrentCountsAsync(cancellationToken);
         var executionStats = await _licenseUsageExecutionStatsProvider.GetCurrentStatsAsync(cancellationToken);
         return Ok(LicenseStatusMapper.ToDto(result.Status, usageCounts, executionStats));
+    }
+
+    /// <summary>Every license this install has ever successfully applied, newest first — the current one
+    /// (same token <see cref="ILicenseService.CurrentRawToken"/> holds) is flagged
+    /// <see cref="LicenseHistoryEntryDto.IsCurrent"/>.</summary>
+    [HttpGet("history")]
+    [ProducesResponseType(typeof(IReadOnlyList<LicenseHistoryEntryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetHistory(CancellationToken cancellationToken)
+    {
+        var entries = await _licenseHistoryRepository.GetAllAsync(cancellationToken);
+        var currentToken = _licenseService.CurrentRawToken;
+
+        return Ok(entries.Select(e => new LicenseHistoryEntryDto(
+            e.AppliedUtc, e.CustomerName, e.Edition, e.State, e.ExpiresUtc,
+            currentToken is not null && e.Token == currentToken)));
     }
 }

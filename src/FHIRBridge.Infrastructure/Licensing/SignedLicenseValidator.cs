@@ -198,7 +198,8 @@ public static class SignedLicenseValidator
             expiresUtc,
             limits,
             GetStringArray(jsonWebToken, "features"),
-            null);
+            null,
+            GetString(jsonWebToken, "requestKey"));
     }
 
     private static LicenseStatus Invalid(string reason) =>

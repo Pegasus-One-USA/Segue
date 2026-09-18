@@ -268,8 +268,18 @@ export const APP_SECRETS_ENDPOINTS = {
 // UnifiedAdmin-only (SuperAdmin or Admin): reports the product's current signed license and lets an
 // admin apply a new token. Verification/reporting only — no enforcement lives behind this yet.
 export const LICENSE_ENDPOINTS = {
-  get:   `${API_V1_BASE}/license`,
-  apply: `${API_V1_BASE}/license`,
+  get:     `${API_V1_BASE}/license`,
+  apply:   `${API_V1_BASE}/license`,
+  history: `${API_V1_BASE}/license/history`,
+};
+
+// ─── License Request (LicenseRequestController — api/v1/license-request) ────
+// UnifiedAdmin-only: this install's own outbound request for a license from the licensor. One request per
+// install, ever — resubmit re-sends the same stored details rather than creating a new one.
+export const LICENSE_REQUEST_ENDPOINTS = {
+  get:      `${API_V1_BASE}/license-request`,
+  create:   `${API_V1_BASE}/license-request`,
+  resubmit: `${API_V1_BASE}/license-request/resubmit`,
 };
 
 export const LOINC_ENDPOINTS = {

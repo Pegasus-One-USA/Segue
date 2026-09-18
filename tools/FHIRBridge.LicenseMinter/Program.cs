@@ -91,6 +91,11 @@ internal static class Program
                 allowedResourceTypes,
                 allowedDestinationTypes,
                 maxSuccessfulWorkflowExecutionsPerMonth = ParseIntOrUnlimited(options, "max-successful-workflow-executions-per-month"),
+                // Absent when --request-key is omitted — SignedLicenseValidator/LicenseService.ApplyAsync
+                // only checks this claim against the applying install's own LicenseRequest.UniqueKey when
+                // it's present, so an unset key means "not tied to a specific request" (every license
+                // minted before this feature existed keeps working unchanged).
+                requestKey = options.GetValueOrDefault("request-key"),
             });
 
             var credentials = new SigningCredentials(new ECDsaSecurityKey(ecdsa), SecurityAlgorithms.EcdsaSha256);
@@ -260,7 +265,7 @@ internal static class Program
             "[--max-processed-records-per-month <n>] " +
             "[--allowed-resource-types Patient,Observation] [--allowed-destination-types SqlServer,Sftp] " +
             "[--max-successful-workflow-executions-per-month <n>] " +
-            "[--activation-window-minutes <n>] " +
+            "[--activation-window-minutes <n>] [--request-key <key>] " +
             "(--dev-key | --private-key-file <path>)");
         Console.Error.WriteLine();
         Console.Error.WriteLine("  --activation-window-minutes  Once generated, this key must be applied (POST /api/v1/license)");
@@ -268,6 +273,11 @@ internal static class Program
         Console.Error.WriteLine("                          issued key that's never installed can't sit around indefinitely.");
         Console.Error.WriteLine("                          Omit for no activation deadline. Does NOT affect an already-applied,");
         Console.Error.WriteLine("                          currently-running license — see SignedLicenseValidator's remarks.");
+        Console.Error.WriteLine("  --request-key           The customer's LicenseRequest.UniqueKey, from their license");
+        Console.Error.WriteLine("                          request submission (direct API call or the manual encoded blob).");
+        Console.Error.WriteLine("                          Ties this license to that specific request: LicenseService.ApplyAsync");
+        Console.Error.WriteLine("                          refuses to apply it on any install whose own stored key differs. Omit");
+        Console.Error.WriteLine("                          if this license wasn't minted against a customer's request.");
         Console.Error.WriteLine("  --max-users / --max-workflows / --max-source-connections / --max-processed-records-per-month /");
         Console.Error.WriteLine("  --max-successful-workflow-executions-per-month");
         Console.Error.WriteLine("                          Omit, or pass -1 explicitly, for unlimited.");

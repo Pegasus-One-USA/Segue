@@ -191,6 +191,8 @@ public static class DependencyInjection
         // ISystemSettingsCache/ICurrentTenantResolver above — works against either repository registration
         // (DB or in-memory) since it doesn't touch the repository until Program.cs calls ReloadAsync.
         services.AddSingleton<Application.Abstractions.Licensing.ILicenseService, LicenseService>();
+        services.AddHttpClient(nameof(LicenseRequestService));
+        services.AddScoped<Application.Abstractions.Licensing.ILicenseRequestService, LicenseRequestService>();
 
         // Resolves a user's effective permission codes per request (DB-backed, short-lived cache) —
         // replaces embedding them as JWT claims, which overflowed the browser's access-token cookie once
@@ -225,6 +227,8 @@ public static class DependencyInjection
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
+            services.AddSingleton<ILicenseRequestRepository, InMemoryLicenseRequestRepository>();
+            services.AddSingleton<ILicenseHistoryRepository, InMemoryLicenseHistoryRepository>();
             services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
             services.AddSingleton<IBrandConfigurationRepository, InMemoryBrandConfigurationRepository>();
             services.AddSingleton<ITenantRepository, InMemoryTenantRepository>();
@@ -310,6 +314,8 @@ public static class DependencyInjection
             services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
             services.AddScoped<IUserFhirContextBindingRepository, EfUserFhirContextBindingRepository>();
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
+            services.AddScoped<ILicenseRequestRepository, EfLicenseRequestRepository>();
+            services.AddScoped<ILicenseHistoryRepository, EfLicenseHistoryRepository>();
             services.AddScoped<ISystemSettingsSeeder, SystemSettingsSeeder>();
             services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();
             services.AddScoped<IBrandConfigurationRepository, EfBrandConfigurationRepository>();
