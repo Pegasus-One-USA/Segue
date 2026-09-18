@@ -176,6 +176,13 @@ public sealed class SystemSettingsSeeder : ISystemSettingsSeeder
                 "The public HTTPS origin (e.g. https://your-domain.example.com) OAuth redirect/callback/launch URLs "
                 + "are built from — must exactly match what's registered with each EHR. Leave blank to derive it "
                 + "from the incoming request instead, which is only reliable with no WAF/reverse proxy in front."),
+
+            (
+                "License:LicensorApplicationUrl",
+                _configuration.GetValue("License:LicensorApplicationUrl", string.Empty),
+                "Base URL of the licensor's application — this install's License Request screen posts to "
+                + "{this}/api/license-requests. Change it only if the licensor's server moves to a different "
+                + "domain."),
         };
 
         foreach (var (key, value, description) in defaults)

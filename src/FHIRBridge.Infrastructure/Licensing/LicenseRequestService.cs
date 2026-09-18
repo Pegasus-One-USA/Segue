@@ -100,9 +100,14 @@ public sealed class LicenseRequestService : ILicenseRequestService
     private async Task AttemptSubmitAsync(LicenseRequest request, CancellationToken cancellationToken)
     {
         var attemptedUtc = DateTime.UtcNow;
+        // Resolved (and its host extracted for the error message) before the try/catch below — a bad/
+        // missing configuration is a setup problem the caller should see immediately, not something the
+        // manual-fallback blob exists for, so InvalidOperationException here is deliberately left to
+        // propagate rather than being caught alongside network failures.
+        var baseUrl = await ResolveLicensorApplicationUrlAsync(cancellationToken);
+        var host = DisplayHostOf(baseUrl);
         try
         {
-            var baseUrl = await ResolveLicensorApplicationUrlAsync(cancellationToken);
             var client = _httpClientFactory.CreateClient(nameof(LicenseRequestService));
             var response = await client.PostAsJsonAsync(
                 $"{baseUrl}{IntakePath}",
@@ -117,7 +122,7 @@ public sealed class LicenseRequestService : ILicenseRequestService
             }
             else
             {
-                request.MarkFailed(attemptedUtc, $"Licensor responded with {(int)response.StatusCode}.");
+                request.MarkFailed(attemptedUtc, $"Licensor at {host} responded with {(int)response.StatusCode}.");
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
@@ -128,7 +133,7 @@ public sealed class LicenseRequestService : ILicenseRequestService
             _logger.LogWarning(
                 ex, "Direct license request submission failed; falling back to manual sharing for request {RequestId}.",
                 request.Id);
-            request.MarkFailed(attemptedUtc, "Could not reach the licensor's application directly.");
+            request.MarkFailed(attemptedUtc, $"Could not reach the licensor's application at {host}.");
         }
 
         await _repository.SaveAsync(request, cancellationToken);
@@ -149,6 +154,14 @@ public sealed class LicenseRequestService : ILicenseRequestService
 
         return configured.TrimEnd('/');
     }
+
+    /// <summary>Just the host (e.g. "license.pegasusone.com") for a submission-failure message — shorter
+    /// and more readable than the full URL, and still enough for an operator to recognize whether
+    /// License:LicensorApplicationUrl is pointed at the wrong place. Falls back to the raw value if it
+    /// somehow isn't a well-formed absolute URI (SystemSettingsService validates this on save, but a
+    /// value written directly to the database could still bypass that).</summary>
+    private static string DisplayHostOf(string baseUrl) =>
+        Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) ? uri.Host : baseUrl;
 
     private static LicenseRequestStatusResult ToResult(LicenseRequest? request)
     {

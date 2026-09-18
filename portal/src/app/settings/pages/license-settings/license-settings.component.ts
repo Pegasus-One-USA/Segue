@@ -8,6 +8,11 @@ import {
 } from '../../models/license.model';
 import { ToastService } from '../../../services/toast.service';
 import { AppInitService } from '../../../onboarding/services/app-init.service';
+import { ISystemSettingsService } from '../../../system-settings/services/i-system-settings.service';
+
+/** SystemSetting key for the licensor's base URL — mirrors LicenseRequestService's own constant on the
+ *  backend (src/FHIRBridge.Infrastructure/Licensing/LicenseRequestService.cs). */
+const LICENSOR_APPLICATION_URL_KEY = 'License:LicensorApplicationUrl';
 
 /** Whether to show the full status card (Active/Grace/Expired) vs. the "No license activated"
  *  activation-only view. Deliberately NOT the same grouping as the backend's `IsPresent` (which is
@@ -29,6 +34,7 @@ export class LicenseSettingsComponent implements OnInit {
   private readonly licenseSvc = inject(LicenseService);
   private readonly toast = inject(ToastService);
   private readonly appInit = inject(AppInitService);
+  private readonly systemSettingsSvc = inject(ISystemSettingsService);
 
   /** Exposed for the template's `@if` checks against a numeric limit field — every such field uses this
    *  sentinel to mean "unlimited" rather than `null` (see `LicenseLimits` in license.model.ts). */
@@ -43,17 +49,16 @@ export class LicenseSettingsComponent implements OnInit {
   protected readonly activating = signal(false);
   protected readonly status = signal<LicenseStatus | null>(null);
 
+  /** Which of the four tabs is showing — a plain signal, not derived, since it's purely a user-driven
+   *  view choice with no other state it needs to stay in sync with. */
+  protected readonly activeTab = signal<'status' | 'update' | 'request' | 'history'>('status');
+
   /** True once a license has ever been applied (Active/Grace/Expired) — drives which top section
    *  (activation prompt vs. status card) renders. Derived from `status`, never set directly. */
   protected readonly hasLicense = computed(() => {
     const s = this.status();
     return s !== null && hasUsableLicense(s);
   });
-
-  /** The "Update License" section starts collapsed once a license is already active/present, so the
-   *  status card is what the admin sees first — matches the spec's "collapsible" requirement. Manually
-   *  toggled after that (see toggleUpdateSection), so it stays a plain signal rather than a computed. */
-  protected readonly showUpdateSection = signal(false);
 
   protected readonly applyError = signal<string | null>(null);
 
@@ -75,6 +80,20 @@ export class LicenseSettingsComponent implements OnInit {
     phoneNumber: ['', Validators.required],
   });
 
+  // Base URL this install posts license requests to — a runtime SystemSetting (License:
+  // LicensorApplicationUrl), editable here since it's the one detail a self-hosted deployment may need
+  // to change (e.g. the licensor moving to a new domain) without digging through generic System Settings.
+  protected readonly licensorUrlLoading = signal(true);
+  protected readonly licensorUrlSaving = signal(false);
+  protected readonly licensorUrlDescription = signal<string | null>(null);
+  // A bare <form [formGroup]> (rather than a lone FormControl bound with [formControl]) is what makes
+  // Angular's FormGroupDirective intercept the native submit event and call preventDefault() — without
+  // it, (ngSubmit) still fires, but the browser also does its own full-page GET/POST navigation right
+  // alongside it.
+  protected readonly licensorUrlForm = this.fb.nonNullable.group({
+    url: ['', Validators.required],
+  });
+
   // ── License history ─────────────────────────────────────────────────────────────────────────
   protected readonly historyLoading = signal(true);
   protected readonly history = signal<LicenseHistoryEntry[]>([]);
@@ -82,7 +101,47 @@ export class LicenseSettingsComponent implements OnInit {
   ngOnInit(): void {
     this.load();
     this.loadRequest();
+    this.loadLicensorUrl();
     this.loadHistory();
+  }
+
+  private loadLicensorUrl(): void {
+    this.licensorUrlLoading.set(true);
+    this.systemSettingsSvc.getAll().subscribe({
+      next: (settings) => {
+        const setting = settings.find((s) => s.key === LICENSOR_APPLICATION_URL_KEY);
+        this.licensorUrlForm.setValue({ url: setting?.value ?? '' });
+        this.licensorUrlForm.markAsPristine();
+        this.licensorUrlDescription.set(setting?.description ?? null);
+        this.licensorUrlLoading.set(false);
+      },
+      error: () => {
+        this.licensorUrlLoading.set(false);
+        // Non-critical — a SuperAdmin who can't load this can still submit a request against whatever
+        // the server already has configured; only editing it here is blocked.
+      },
+    });
+  }
+
+  protected saveLicensorUrl(): void {
+    if (this.licensorUrlForm.invalid) { this.licensorUrlForm.markAllAsTouched(); return; }
+    this.licensorUrlSaving.set(true);
+
+    this.systemSettingsSvc.set(LICENSOR_APPLICATION_URL_KEY, {
+      value: this.licensorUrlForm.getRawValue().url.trim(),
+      description: this.licensorUrlDescription(),
+    }).subscribe({
+      next: (setting) => {
+        this.licensorUrlSaving.set(false);
+        this.licensorUrlForm.setValue({ url: setting.value });
+        this.licensorUrlForm.markAsPristine();
+        this.toast.success('Licensor application URL saved');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.licensorUrlSaving.set(false);
+        this.toast.error(err.error?.error_description ?? 'Failed to save the licensor application URL.');
+      },
+    });
   }
 
   private load(): void {
@@ -90,7 +149,6 @@ export class LicenseSettingsComponent implements OnInit {
     this.licenseSvc.get().subscribe({
       next: (s) => {
         this.status.set(s);
-        this.showUpdateSection.set(!hasUsableLicense(s));
         this.loading.set(false);
       },
       error: () => {
@@ -188,10 +246,6 @@ export class LicenseSettingsComponent implements OnInit {
     );
   }
 
-  protected toggleUpdateSection(): void {
-    this.showUpdateSection.update((v) => !v);
-  }
-
   protected activate(): void {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
     this.applyError.set(null);
@@ -202,8 +256,8 @@ export class LicenseSettingsComponent implements OnInit {
       next: (s) => {
         this.activating.set(false);
         this.status.set(s);
-        this.showUpdateSection.set(!hasUsableLicense(s));
         this.form.reset({ token: '' });
+        this.activeTab.set('status');
         this.toast.success('License activated');
         this.appInit.refreshLicenseGate();
       },
