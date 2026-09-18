@@ -68,6 +68,80 @@ interface FhirExtension {
   extension?: FhirExtension[];
 }
 
+/** One row of Demo_TestApp's GET /api/pipeline-runs/{runId}/patients — a Patient_NewMapped row, i.e. what a
+ *  FHIRBridge run actually LANDED in HealthAppDb, as opposed to the raw FHIR resource it fetched from the EHR.
+ *  Every field is nullable because the destination's mapping profile decides which columns it targets; anything
+ *  it didn't map stays NULL in the table and renders blank in the UI rather than being guessed at. */
+interface MappedPatientRow {
+  patientId: string;
+  identifier: string | null;
+  mrn: string | null;
+  familyName: string | null;
+  givenName: string | null;
+  middleName: string | null;
+  fullName: string | null;
+  gender: string | null;
+  birthDate: string | null;
+  deceased: boolean | null;
+  maritalStatus: string | null;
+  phone: string | null;
+  email: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
+  pipelineRunId: string | null;
+}
+
+interface PipelineRunPatientsResponse {
+  pipelineRunId: string;
+  count: number;
+  patients: MappedPatientRow[];
+}
+
+/** The mapping engine has no array-collapsing step, so a column its profile targeted from a repeating FHIR
+ *  element can land as a raw JSON array literal — observed in the live table as a WHOLE value
+ *  (GivenName = '["deana","b"]', AddressLine1 = '["3523 Maple Street"]') and EMBEDDED inside one
+ *  (FullName = '["deana","b"] ALLERGY', where the mapping composed a name from an already-array given name).
+ *  Both are unwrapped here, at the read boundary, so the UI never shows brackets and quotes to a clinician.
+ *  A plain scalar passes through untouched, and a bracketed run that isn't valid JSON is left exactly as
+ *  stored rather than mangled — better to show the raw value than to guess at it. */
+function unwrapMappedValue(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  // Rewrite every [...] run in place, which covers the embedded case; a value that is ENTIRELY one array
+  // literal is just the special case where the single match spans the whole string.
+  const unwrapped = value.replace(/\[[^\[\]]*\]/g, (literal) => {
+    try {
+      const parsed: unknown = JSON.parse(literal);
+      if (!Array.isArray(parsed)) {
+        return literal;
+      }
+      return parsed
+        .filter((entry) => entry !== null && entry !== undefined && entry !== '')
+        .map((entry) => String(entry).trim())
+        .filter((entry) => entry.length > 0)
+        .join(' ');
+    } catch {
+      return literal;
+    }
+  });
+
+  // Collapse whitespace left behind by an array that unwrapped to nothing (e.g. '[] ALLERGY' -> 'ALLERGY').
+  const collapsed = unwrapped.replace(/\s+/g, ' ').trim();
+  return collapsed.length > 0 ? collapsed : null;
+}
+
+/** Blank-not-null normalizer: the table's NULLs and the UI's "no value" are the same thing here, and the
+ *  template renders a null/empty field as truly empty (see LaunchProviderInAppComponent.displayValue). */
+function textOrEmpty(value: string | null): string {
+  return unwrapMappedValue(value) ?? '';
+}
+
 @Injectable({ providedIn: 'root' })
 export class PatientService {
   private readonly http = inject(HttpClient);
@@ -114,6 +188,99 @@ export class PatientService {
         ),
       ),
     );
+  }
+
+  /**
+   * The bound patient AS LANDED by the run, read from HealthAppDb's own Patient_NewMapped table via
+   * Demo_TestApp's GET /api/pipeline-runs/{runId}/patients — not from FHIRBridge's launch-result (which returns
+   * the raw FHIR resource fetched from the EHR, pre-mapping). Same run id either way: the PipelineRunId stamped
+   * on each written row IS the WorkflowRunId that arrives as ?workflowRunId= on the post-launch redirect (see
+   * MappedDestinationRecord construction in the Runtime node executors), so the launch param needs no translation.
+   *
+   * Resolves to null when the run wrote no Patient row — a real outcome (a workflow can target other resource
+   * types), which the caller surfaces as "nothing landed for this run" rather than as a failure.
+   */
+  getMappedPatient(workflowRunId: string): Observable<Patient | null> {
+    return this.http
+      .get<PipelineRunPatientsResponse>(
+        `${HEALTHAPP_BACKEND_BASE_URL}/api/pipeline-runs/${encodeURIComponent(workflowRunId)}/patients`,
+        { withCredentials: true },
+      )
+      .pipe(
+        // One row per patient per run; this screen shows a single patient context, so the first row is it.
+        map((response) => (response.patients.length > 0 ? this.toPatientFromMappedRow(response.patients[0]) : null)),
+        catchError((error: unknown) => {
+          const detail =
+            error instanceof HttpErrorResponse
+              ? `${error.status || 'network error'} calling HealthApp backend`
+              : error instanceof Error
+                ? error.message
+                : 'unknown error';
+          return throwError(() => new Error(`Failed to load this run's mapped patient data (${detail}).`));
+        }),
+      );
+  }
+
+  /**
+   * Binds a Patient_NewMapped row onto the Patient shape the template already renders. Only the columns that
+   * table actually has are populated; fields with no corresponding column (legalSex, sexForClinicalUse,
+   * pronouns, race, ethnicity, language, managingOrganization) are left blank rather than carried over from a
+   * previous FHIR-sourced binding — the table is the single source of truth for this screen, so showing a value
+   * it doesn't hold would be inventing data.
+   */
+  private toPatientFromMappedRow(row: MappedPatientRow): Patient {
+    const given = textOrEmpty(row.givenName);
+    const middle = textOrEmpty(row.middleName);
+    const family = textOrEmpty(row.familyName);
+    // Prefer the mapped FullName column, but fall back to composing the parts when it's NULL/unmapped.
+    const composed = [given, middle, family].filter((part) => part.length > 0).join(' ');
+
+    // AddressLine1 and AddressLine2 are separate columns that the live data shows can hold the SAME value
+    // (both '["3523 Maple Street"]' for the seeded row) — de-duplicate so the street doesn't render twice.
+    const line1 = textOrEmpty(row.addressLine1);
+    const line2 = textOrEmpty(row.addressLine2);
+    const street = [line1, line2 === line1 ? '' : line2].filter((part) => part.length > 0).join(', ');
+
+    return {
+      fullName: textOrEmpty(row.fullName) || composed,
+      firstName: given,
+      lastName: family,
+      gender: textOrEmpty(row.gender),
+      // No Patient_NewMapped columns for these — blank, not inferred from gender (legal sex and clinical sex
+      // are deliberately distinct concepts from administrative gender).
+      legalSex: '',
+      sexForClinicalUse: '',
+      pronouns: '',
+      dateOfBirth: textOrEmpty(row.birthDate),
+      maritalStatus: textOrEmpty(row.maritalStatus),
+      // The table has no Active column, so "Status" can't be sourced from it. A landed row says nothing about
+      // administrative active-ness; true keeps the existing display behavior for the common case.
+      active: true,
+      deceased: row.deceased ?? false,
+      contact: {
+        email: unwrapMappedValue(row.email),
+        phone: unwrapMappedValue(row.phone),
+      },
+      address: {
+        street: street.length > 0 ? street : null,
+        city: unwrapMappedValue(row.city),
+        state: unwrapMappedValue(row.state),
+        stateAbbreviation: null,
+        zip: unwrapMappedValue(row.postalCode),
+        country: unwrapMappedValue(row.country),
+        // No period/valid-since column on the table.
+        validSince: null,
+      },
+      languagePreference: {
+        language: null,
+        mode: null,
+      },
+      demographics: {
+        race: null,
+        ethnicity: null,
+      },
+      managingOrganization: '',
+    };
   }
 
   // Admin-editable via the unified Admin Settings screen (see AdminSettingsComponent) — persisted on

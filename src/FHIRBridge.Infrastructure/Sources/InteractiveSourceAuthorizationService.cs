@@ -173,7 +173,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
             return await StartEhrLaunchCoreAsync(
                 workflowSource, issuer, launch, redirectUri, routeId: null, workflowId: workflowId,
-                callerId: effectiveCallerId, cancellationToken, userIdentity: context.UserIdentity);
+                callerId: effectiveCallerId, cancellationToken, userIdentity: context.UserIdentity,
+                correlationId: context.CorrelationId);
         }
 
         if (context.RouteId is { } contextRouteId)
@@ -181,7 +182,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
             return await StartEhrLaunchCoreAsync(
                 sourceConnection, issuer, launch, redirectUri, routeId, workflowId: null,
-                callerId: effectiveCallerId, cancellationToken, userIdentity: context.UserIdentity);
+                callerId: effectiveCallerId, cancellationToken, userIdentity: context.UserIdentity,
+                correlationId: context.CorrelationId);
         }
 
         throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
@@ -368,7 +370,13 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         Guid? workflowId,
         string? callerId,
         CancellationToken cancellationToken,
-        string? userIdentity = null)
+        string? userIdentity = null,
+        // The attempt-scoped correlation id minted by validate-run and carried across the EHR redirect inside the
+        // encrypted launch context. Threaded through to the pending authorization so /oauth/callback can restore it
+        // and the resulting run CONTINUES validate-run's own Execution History row instead of opening a second one.
+        // The standalone path (StartStandaloneCoreAsync) has always passed this; EHR launch silently dropped it,
+        // which is why an EHR launch produced an orphaned Validated row plus a separate executed row.
+        string? correlationId = null)
     {
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(launch))
         {
@@ -406,7 +414,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch, routeId, workflowId, requestedRedirectUri: redirectUri,
-            callerId: callerId, cancellationToken, userIdentity: userIdentity);
+            callerId: callerId, cancellationToken, userIdentity: userIdentity, correlationId: correlationId);
 
         return authorizationUrl;
     }
