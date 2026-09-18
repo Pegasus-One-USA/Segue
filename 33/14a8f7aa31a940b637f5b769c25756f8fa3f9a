@@ -1,0 +1,21 @@
+portal/src/app/_page-content.scss
+  s_56b7808a3ee7e7::t_88f575ab82a829 5,9
+portal/src/app/_list-page.scss
+  s_56b7808a3ee7e7::t_88f575ab82a829 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "3314a8f7aa31a940b637f5b769c25756f8fa3f9a",
+  "prompts": {},
+  "sessions": {
+    "s_56b7808a3ee7e7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3630ecaf-7bba-42d3-a230-cf9dee45ef1f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
