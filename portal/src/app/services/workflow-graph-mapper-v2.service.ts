@@ -79,6 +79,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'dest-blob': 'BlobDestinationNode',
   'dest-datalake-webhook': 'DataLakeWebhookDestinationNode',
   'dest-fabric': 'DataFabricAzureDestinationNode',
+  'dest-fabric-warehouse': 'DataFabricWarehouseDestinationNode',
   'dest-csv': 'CsvDestinationNode',
   'audit-lineage': 'AuditLineageNode',
   hedis: 'HedisMeasureReportNode',

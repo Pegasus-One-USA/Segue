@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Infrastructure.Destinations.Fabric;
 
@@ -62,7 +63,22 @@ public sealed record FabricDestinationSettings(
     string? WarehouseStagingLakehouse = null,
 
     /// <summary>Folder under the staging Lakehouse's Files area. Cleaned up after each load.</summary>
-    string WarehouseStagingPath = "_staging")
+    string WarehouseStagingPath = "_staging",
+
+    /// <summary>
+    /// Whether COPY INTO should impersonate the Fabric WORKSPACE IDENTITY when reading the staged Parquet,
+    /// rather than reading it as the executing (connection) identity.
+    ///
+    /// <para>Default false, which matches the documented default: "The executing user's Microsoft Entra identity
+    /// is the default credential for source access. No credential needs to be specified." That works when the
+    /// connecting identity itself holds Contributor on the workspace holding the staging Lakehouse.</para>
+    ///
+    /// <para>Set true when it does not — the workspace identity then authorizes the source read instead, and the
+    /// executing identity needs no direct permission on the staged file. Requires a provisioned workspace
+    /// identity, and the executing identity must hold at least the Viewer workspace role to impersonate it
+    /// (item permissions alone are not enough).</para>
+    /// </summary>
+    bool WarehouseUseWorkspaceIdentity = false)
 {
     /// <summary>
     /// OneLake path prefix of the staging Lakehouse's Files area, e.g. <c>Stage.Lakehouse/Files/_staging</c>.
@@ -71,9 +87,23 @@ public sealed record FabricDestinationSettings(
     public string WarehouseStagingRootPath =>
         $"{WarehouseStagingLakehouse}.Lakehouse/Files/{WarehouseStagingPath}".TrimEnd('/');
 
-    /// <summary>The fully-qualified target table for a Warehouse load, with the schema applied.</summary>
-    public string QualifiedWarehouseTable(string fallbackTableName)
-        => $"[{WarehouseSchema}].[{(string.IsNullOrWhiteSpace(WarehouseTable) ? fallbackTableName : WarehouseTable)}]";
+    /// <summary>
+    /// The fully-qualified target table for a Warehouse load.
+    ///
+    /// <para><paramref name="fallbackSchemaName"/> is the schema the MAPPING named (a profile's
+    /// DestinationObject is normally "dbo.Patient" — see WarehouseTableLandingStrategy.FallbackTableName,
+    /// which splits it). It wins over <see cref="WarehouseSchema"/> because it is the more specific
+    /// statement of intent: the destination-level schema is a default for names that carry none. Null when
+    /// the mapping named a bare table, in which case the destination's own schema applies as before.</para>
+    ///
+    /// <para>An explicitly configured <see cref="WarehouseTable"/> still overrides the mapping's table name
+    /// entirely, and is paired with <see cref="WarehouseSchema"/> — a destination-level override is a
+    /// destination-level statement, so it does not inherit the mapping's schema.</para>
+    /// </summary>
+    public string QualifiedWarehouseTable(string fallbackTableName, string? fallbackSchemaName = null)
+        => string.IsNullOrWhiteSpace(WarehouseTable)
+            ? $"[{(string.IsNullOrWhiteSpace(fallbackSchemaName) ? WarehouseSchema : fallbackSchemaName)}].[{fallbackTableName}]"
+            : $"[{WarehouseSchema}].[{WarehouseTable}]";
 
     /// <summary>
     /// The Warehouse TDS connection string, built from whatever the user supplied.
@@ -171,7 +201,14 @@ public sealed record FabricDestinationSettings(
     {
         var json = destination.ConnectionMetadataJson;
 
-        var mode = ParseEnum(ConnectionMetadataReader.GetString(json, "dest_fabricMode"), FabricLandingMode.OneLakeFiles);
+        // DataFabricWarehouse IS the Warehouse surface — the type carries that fact, so the mode is derived from it
+        // rather than read back out of connection metadata. This is the whole point of splitting the type (see
+        // DestinationType.DataFabricWarehouse): every caller that needs to know "is this a Warehouse?" asks the
+        // type, and a stale or absent dest_fabricMode can no longer contradict it. DataFabricAzure keeps reading
+        // the metadata exactly as before, defaulting to OneLakeFiles — so nothing about a Files destination moves.
+        var mode = destination.DestinationType == DestinationType.DataFabricWarehouse
+            ? FabricLandingMode.WarehouseTable
+            : ParseEnum(ConnectionMetadataReader.GetString(json, "dest_fabricMode"), FabricLandingMode.OneLakeFiles);
         if (mode == FabricLandingMode.Eventstream)
         {
             // The one mode that is refused here rather than by a missing strategy registration, because it is not
@@ -269,6 +306,10 @@ public sealed record FabricDestinationSettings(
                 ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseWriteMode"),
                 FabricTableWriteMode.Append),
             WarehouseStagingLakehouse: stagingLakehouse?.Trim(),
+            WarehouseUseWorkspaceIdentity: string.Equals(
+                ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseUseWorkspaceIdentity"),
+                "true",
+                StringComparison.OrdinalIgnoreCase),
             WarehouseStagingPath: NormalizeStagingPath(
                 ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseStagingPath")));
     }

@@ -61,7 +61,11 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-datalake-webhook',
     // Microsoft Fabric (OneLake Files) — writer, node executor, catalog entry, Step 1 form and wizard
     // family are all in place and registered (see MappedDataFabricDestinationWriter).
+    // The vendor heading must be enabled too, not just its surfaces: it is filtered by the same
+    // allowlist, and a filtered-out heading takes its children with it (see filteredCategories).
+    'dest-fabric-group',
     'dest-fabric',
+    'dest-fabric-warehouse',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
     // Phase 2+ destinations: 'dest-azuresql',

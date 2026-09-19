@@ -73,7 +73,8 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
                     + "there is nothing to load into the Warehouse.");
         }
 
-        var table = settings.QualifiedWarehouseTable(FallbackTableName(mappingProfile));
+        var (fallbackSchema, fallbackTable) = FallbackTableName(mappingProfile);
+        var table = settings.QualifiedWarehouseTable(fallbackTable, fallbackSchema);
         var stagingBlobPath = BuildStagingBlobPath(settings, mappingProfile, DateTime.UtcNow);
 
         var workspace = await _clientFactory.GetWorkspaceAsync(destination, settings, cancellationToken);
@@ -94,7 +95,8 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
             var stagingUrl = BuildStagingUrl(settings, stagingBlobPath);
             var loaded = settings.WarehouseWriteMode == FabricTableWriteMode.Upsert
                 ? await CopyThenMergeAsync(connection, settings, table, columns, mappingProfile, stagingUrl, cancellationToken)
-                : await CopyIntoAsync(connection, table, columns, stagingUrl, cancellationToken);
+                : await CopyIntoAsync(
+                    connection, table, columns, stagingUrl, settings.WarehouseUseWorkspaceIdentity, cancellationToken);
 
             _logger.LogInformation(
                 "Loaded {RecordCount} {ResourceType} record(s) into Fabric Warehouse {Table} ({WriteMode}) for "
@@ -167,10 +169,12 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
         string qualifiedTable,
         IReadOnlyList<string> columns,
         string stagingUrl,
+        bool useWorkspaceIdentity,
         CancellationToken cancellationToken)
     {
         await using var command = new SqlCommand(
-            BuildCopyInto(qualifiedTable, columns, stagingUrl) + Environment.NewLine + "SELECT @@ROWCOUNT;",
+            BuildCopyInto(qualifiedTable, columns, stagingUrl, useWorkspaceIdentity)
+                + Environment.NewLine + "SELECT @@ROWCOUNT;",
             connection);
 
         var loaded = await command.ExecuteScalarAsync(cancellationToken);
@@ -218,7 +222,8 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
         try
         {
             await using (var copy = new SqlCommand(
-                BuildCopyInto(stagingTable, columns, stagingUrl), connection))
+                BuildCopyInto(stagingTable, columns, stagingUrl, settings.WarehouseUseWorkspaceIdentity),
+                connection))
             {
                 await copy.ExecuteNonQueryAsync(cancellationToken);
             }
@@ -252,19 +257,48 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
     /// deliberate: the destination already carries one Entra identity, and naming a second credential here would
     /// create a configuration that authenticates to the Warehouse as one principal and reads staging as another.
     /// </summary>
-    private static string BuildCopyInto(string qualifiedTable, IReadOnlyList<string> columns, string stagingUrl)
-        => $"""
+    /// <summary>
+    /// The COPY INTO for one staged Parquet file.
+    ///
+    /// <para>With <paramref name="useWorkspaceIdentity"/> false (the default) no CREDENTIAL clause is emitted,
+    /// which is the documented default: the executing identity's own Entra token authorizes the source read. It
+    /// therefore needs Contributor on the workspace holding the staging Lakehouse. With it true, COPY INTO
+    /// impersonates the workspace identity for the source read only — the statement still runs in the caller's
+    /// SQL security context — so the caller needs no direct permission on the staged file.</para>
+    ///
+    /// <para>No SECRET is ever emitted: the two credential forms that take one (SAS, Storage Account Key) do not
+    /// apply to a OneLake source, which supports only Microsoft Entra ID and Workspace Identity.</para>
+    /// </summary>
+    internal static string BuildCopyInto(
+        string qualifiedTable,
+        IReadOnlyList<string> columns,
+        string stagingUrl,
+        bool useWorkspaceIdentity)
+    {
+        var credential = useWorkspaceIdentity
+            ? ", CREDENTIAL = (IDENTITY = 'Workspace Identity')"
+            : string.Empty;
+
+        return $"""
             COPY INTO {qualifiedTable} ({string.Join(", ", columns.Select(column => $"[{Escape(column)}]"))})
             FROM '{stagingUrl.Replace("'", "''")}'
-            WITH (FILE_TYPE = 'PARQUET');
+            WITH (FILE_TYPE = 'PARQUET'{credential});
             """;
+    }
 
     /// <summary>
-    /// The ABFSS form of the staged blob, which is what COPY INTO accepts — the blob endpoint used to upload it is
-    /// not interchangeable here.
+    /// The staged file's location in the form COPY INTO accepts for a OneLake source:
+    /// <c>https://onelake.dfs.&lt;suffix&gt;/&lt;workspace&gt;/&lt;item&gt;.Lakehouse/Files/...</c>.
+    ///
+    /// <para>Deliberately NOT the <c>abfss://</c> form. The docs give the OneLake external location as an
+    /// https URL (see "Use COPY INTO with OneLake" in the COPY INTO T-SQL reference), and the abfss form this
+    /// used to emit failed against a live tenant with "Access token couldn't be fetched for storage path ... as
+    /// it's an unsupported URL or cause of a transient error" — the engine reporting the scheme back as https
+    /// while refusing it. The upload still uses the blob endpoint (that is the Azure.Storage.Blobs client's own
+    /// protocol); only what COPY INTO is handed changes here.</para>
     /// </summary>
     internal static string BuildStagingUrl(FabricDestinationSettings settings, string stagingBlobPath)
-        => $"abfss://{settings.Workspace}@onelake.dfs.{settings.EndpointSuffix}/{stagingBlobPath}";
+        => $"https://onelake.dfs.{settings.EndpointSuffix}/{settings.Workspace}/{stagingBlobPath}";
 
     /// <summary>
     /// Staging path is per-load unique (guid), so two concurrent runs of the same route cannot read each other's
@@ -312,17 +346,38 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
                 + $"columns were: {string.Join(", ", columns)}.");
     }
 
-    private static string FallbackTableName(MappingProfile mappingProfile)
+    /// <summary>
+    /// The target table a mapping profile names, split into schema and table.
+    ///
+    /// <para>The profile's DestinationObject is normally SCHEMA-QUALIFIED ("dbo.Patient"), exactly as the
+    /// mapping canvas writes it and as MappedSqlServerDestinationWriter.ParseDestinationObject reads it. This
+    /// used to run the whole string through <see cref="Sanitize"/>, which turns every non-alphanumeric
+    /// character — the dot included — into an underscore, producing "dbo_Patient" and then, once
+    /// QualifiedWarehouseTable applied the schema again, the table "[dbo].[dbo_Patient]" that no warehouse
+    /// has. Splitting first (same rule the SQL Server writer uses) is what makes the name the writer looks
+    /// for the same name the canvas created.</para>
+    ///
+    /// <para>Sanitizing still happens, but PER PART, so the injection boundary is unchanged.</para>
+    /// </summary>
+    private static (string? SchemaName, string TableName) FallbackTableName(MappingProfile mappingProfile)
     {
         var stem = mappingProfile.DestinationObject;
+
+        // "dbo.Patient;mode=upsert" — the write-mode suffix is not part of the name.
         var suffixIndex = stem.IndexOf(';', StringComparison.Ordinal);
         if (suffixIndex >= 0)
         {
             stem = stem[..suffixIndex];
         }
 
-        stem = Sanitize(stem);
-        return stem.Length == 0 ? Sanitize(mappingProfile.ResourceType) : stem;
+        var parts = stem.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var (schemaPart, tablePart) = parts.Length >= 2
+            ? (Sanitize(parts[^2]), Sanitize(parts[^1]))
+            : (null, Sanitize(parts.Length == 1 ? parts[0] : string.Empty));
+
+        return tablePart.Length == 0
+            ? (schemaPart, Sanitize(mappingProfile.ResourceType))
+            : (schemaPart, tablePart);
     }
 
     /// <summary>

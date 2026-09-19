@@ -19,4 +19,16 @@ public interface IFabricWarehouseConnectionFactory
         DestinationConfiguration destination,
         FabricDestinationSettings settings,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Opens a Warehouse connection from AD-HOC settings that have no saved <see cref="DestinationConfiguration"/>
+    /// behind them — the destination wizard's table picker and its schema-authoring actions, which run
+    /// before anything is provisioned (the SQL-family destinations have always worked that way; see
+    /// SqlDestinationSchemaService's probe path). The secret, when the identity is a service principal, is passed
+    /// directly rather than resolved from Key Vault, because there is no stored secret reference yet.
+    /// </summary>
+    Task<SqlConnection> OpenAdHocAsync(
+        FabricDestinationSettings settings,
+        string? secret,
+        CancellationToken cancellationToken);
 }

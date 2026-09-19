@@ -451,6 +451,16 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   onAction(row: WorkflowSummary, mode: 'sync' | 'async' = 'sync'): void {
     if (this.busyId() || !this.canRun()) return;
 
+    // Only a Ready workflow is runnable — a Draft has no destination to write to and a Disabled one is
+    // paused. The menu item is already disabled for both (see the row menu's Run item), so this is a
+    // defensive guard for a row whose status went stale between render and click, e.g. after a Disable
+    // toggle elsewhere in the session. Launch is deliberately exempt: an interactive launch produces a URL
+    // and does not depend on a configured destination.
+    if (row.action === 'Run' && row.status !== 'Ready') {
+      this.toast.error(this.statusHint(row.status));
+      return;
+    }
+
     if (row.action === 'Launch') {
       this.busyId.set(row.workflowId);
       this.api.launchUrl(row.workflowId).subscribe({
@@ -840,6 +850,20 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       Ready: 'Source and destination are configured — this workflow will run.',
       Disabled: 'Deliberately paused. Enable it from the row menu to make it runnable again.',
     }[status];
+  }
+
+  /** Tooltip for the row menu's Run item. Only a Ready workflow can run — a Draft has no destination wired
+   *  up and a Disabled one is deliberately paused — so when Run is disabled this explains WHICH of the two
+   *  it is (and how to fix it) rather than leaving a greyed-out item with no reason. Reuses statusHint so the
+   *  explanation matches the one on the status badge itself instead of drifting into a second wording. */
+  runDisabledHint(row: WorkflowSummary): string {
+    if (row.status !== 'Ready') {
+      return this.statusHint(row.status);
+    }
+
+    return this.busyId() === row.workflowId
+      ? 'This workflow is already running.'
+      : 'Run this workflow in the background.';
   }
 
   /** Deliberately mirrors ExecutionHistoryListComponent's statusClass so the same run never renders as two

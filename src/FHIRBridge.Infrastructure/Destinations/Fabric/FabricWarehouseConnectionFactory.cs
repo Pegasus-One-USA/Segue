@@ -61,6 +61,24 @@ internal sealed class FabricWarehouseConnectionFactory : IFabricWarehouseConnect
         return connection;
     }
 
+    /// <inheritdoc />
+    public async Task<SqlConnection> OpenAdHocAsync(
+        FabricDestinationSettings settings,
+        string? secret,
+        CancellationToken cancellationToken)
+    {
+        // Identical to OpenAsync below the secret: same credential dispatch, same SQL-audience token, same
+        // connection string normalization. Only where the secret comes from differs — here it is whatever the
+        // user just typed into the form, because no Key Vault reference exists for an unsaved destination.
+        var credential = BuildCredential(settings, secret);
+        var token = await credential.GetTokenAsync(new TokenRequestContext([SqlScope]), cancellationToken);
+
+        var connection = new SqlConnection(settings.WarehouseConnectionString) { AccessToken = token.Token };
+        await connection.OpenAsync(cancellationToken);
+
+        return connection;
+    }
+
     /// <summary>
     /// Same two-mode Entra dispatch <see cref="OneLakeClientFactory"/> performs, kept in step with it deliberately:
     /// one destination configures one identity, and it must reach both OneLake and the Warehouse.

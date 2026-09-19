@@ -764,11 +764,18 @@ export class WorkflowBuildAssemblerServiceV2 {
     const isDataLake =
       node.nodeType.includes('DataLakeWebhook') ||
       (fields['__transformId'] ?? '') === 'dest-datalake-webhook';
+    // Tested BEFORE isFabric, and isFabric excludes it: the Warehouse node type also contains "DataFabric",
+    // so an unguarded includes() check would classify a Warehouse node as the file-landing type and write it
+    // away as DataFabricAzure — the exact mis-routing splitting the type was meant to make impossible.
+    const isFabricWarehouse =
+      node.nodeType.includes('DataFabricWarehouse') ||
+      (fields['__transformId'] ?? '') === 'dest-fabric-warehouse';
     const isFabric =
-      node.nodeType.includes('DataFabric') ||
-      (fields['__transformId'] ?? '') === 'dest-fabric';
+      !isFabricWarehouse &&
+      (node.nodeType.includes('DataFabric') ||
+        (fields['__transformId'] ?? '') === 'dest-fabric');
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : isDataLake ? 'Data Lake Webhook Destination' : isFabric ? 'Microsoft Fabric Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : isDataLake ? 'Data Lake Webhook Destination' : isFabricWarehouse ? 'Microsoft Fabric Warehouse Destination' : isFabric ? 'Microsoft Fabric Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -933,6 +940,23 @@ export class WorkflowBuildAssemblerServiceV2 {
               ? null
               : fields['dest_dlwSecret'] || '',
         connectionMetadataJson: this.buildConnectionMetadata(fields, 'datalake'),
+      };
+    }
+
+    // Shares every field with the Files branch below — same workspace/item/Entra-auth shape — differing only
+    // in the destination type, which is what carries "this is the Warehouse surface" from here on.
+    if (isFabricWarehouse) {
+      return {
+        name,
+        destinationType: 'DataFabricWarehouse',
+        keyVaultName,
+        secretName,
+        target: fields['dest_fabricWorkspace'] || null,
+        inlineSecret:
+          fields['dest_fabricAuthMode'] !== 'servicePrincipal'
+            ? null
+            : (fields['dest_fabricSecret'] || null),
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'fabric'),
       };
     }
 

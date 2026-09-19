@@ -42,6 +42,38 @@ public sealed class WarehouseTableLandingStrategyTests
     }
 
     /// <summary>
+    /// The documented default for a OneLake source is NO credential clause: "The executing user's Microsoft Entra
+    /// identity is the default credential for source access." Emitting one unconditionally would demand a
+    /// provisioned workspace identity that most tenants do not have.
+    /// </summary>
+    [Fact]
+    public void Copy_into_emits_no_credential_clause_by_default()
+    {
+        var sql = WarehouseTableLandingStrategy.BuildCopyInto(
+            "[dbo].[Patient]", ["Id", "FamilyName"], "https://onelake.dfs.fabric.microsoft.com/ws/L.Lakehouse/Files/x.parquet",
+            useWorkspaceIdentity: false);
+
+        sql.Should().Contain("FILE_TYPE = 'PARQUET'");
+        sql.Should().NotContain("CREDENTIAL");
+    }
+
+    /// <summary>
+    /// Opt-in path for a tenant where the connecting identity cannot read the staging Lakehouse itself: COPY INTO
+    /// impersonates the workspace identity for the SOURCE READ only. No SECRET is emitted — the two credential
+    /// forms that take one (SAS, Storage Account Key) do not apply to a OneLake source.
+    /// </summary>
+    [Fact]
+    public void Copy_into_can_impersonate_the_workspace_identity()
+    {
+        var sql = WarehouseTableLandingStrategy.BuildCopyInto(
+            "[dbo].[Patient]", ["Id"], "https://onelake.dfs.fabric.microsoft.com/ws/L.Lakehouse/Files/x.parquet",
+            useWorkspaceIdentity: true);
+
+        sql.Should().Contain("CREDENTIAL = (IDENTITY = 'Workspace Identity')");
+        sql.Should().NotContain("SECRET");
+    }
+
+    /// <summary>
     /// Neither can be defaulted — the TDS endpoint is a different service from OneLake, and a Warehouse has no
     /// Files area to stage in — so both are refused at parse time rather than failing partway through a load.
     /// </summary>
@@ -110,17 +142,25 @@ public sealed class WarehouseTableLandingStrategyTests
     }
 
     /// <summary>
-    /// COPY INTO reads the abfss/dfs form, not the blob endpoint the upload used. Getting this wrong produces an
-    /// authentication-shaped error rather than an obvious "wrong URL", so it is worth pinning.
+    /// COPY INTO reads the https/dfs form documented for a OneLake source
+    /// (https://onelake.dfs.&lt;suffix&gt;/&lt;workspace&gt;/&lt;item&gt;/Files/...), not the abfss form and not the
+    /// blob endpoint the upload used.
+    ///
+    /// <para>Regression: the abfss form was rejected by a live tenant with "Access token couldn't be fetched for
+    /// storage path ... as it's an unsupported URL or cause of a transient error" — an authentication-shaped
+    /// message for what is really a URL-shape problem, which is exactly why this is worth pinning.</para>
     /// </summary>
     [Fact]
-    public void Staging_url_uses_the_dfs_endpoint_that_COPY_INTO_reads()
+    public void Staging_url_uses_the_https_dfs_form_that_COPY_INTO_reads()
     {
         var settings = FabricDestinationSettings.Parse(Destination(WarehouseMetadata));
         var path = WarehouseTableLandingStrategy.BuildStagingBlobPath(settings, Mapping(), DateTime.UtcNow);
 
-        WarehouseTableLandingStrategy.BuildStagingUrl(settings, path)
-            .Should().StartWith("abfss://Analytics@onelake.dfs.fabric.microsoft.com/Stage.Lakehouse/Files/_staging/");
+        var url = WarehouseTableLandingStrategy.BuildStagingUrl(settings, path);
+
+        url.Should().StartWith(
+            "https://onelake.dfs.fabric.microsoft.com/Analytics/Stage.Lakehouse/Files/_staging/");
+        url.Should().NotStartWith("abfss://");
     }
 
     /// <summary>
@@ -146,6 +186,45 @@ public sealed class WarehouseTableLandingStrategyTests
         var settings = FabricDestinationSettings.Parse(Destination(WarehouseMetadata));
 
         settings.QualifiedWarehouseTable("Patients").Should().Be("[dbo].[Patients]");
+    }
+
+    /// <summary>
+    /// Regression: a mapping profile names its target SCHEMA-QUALIFIED ("dbo.Patient_NewMapped"), exactly as
+    /// the mapping canvas writes it. The schema part must be recognised as a schema, not folded into the table
+    /// name — doing the latter produced "[dbo].[dbo_Patient_NewMapped]", a table no warehouse has, and the run
+    /// failed with "Destination table ... does not exist" against a table the user had just created.
+    /// </summary>
+    [Fact]
+    public void A_schema_qualified_mapping_target_is_split_not_flattened()
+    {
+        var settings = FabricDestinationSettings.Parse(Destination(WarehouseMetadata));
+
+        settings.QualifiedWarehouseTable("Patient_NewMapped", "dbo")
+            .Should().Be("[dbo].[Patient_NewMapped]");
+    }
+
+    /// <summary>The mapping's own schema is more specific than the destination-level default, so it wins.</summary>
+    [Fact]
+    public void A_mapping_schema_overrides_the_destination_default_schema()
+    {
+        var metadata = System.Text.Json.Nodes.JsonNode.Parse(WarehouseMetadata)!.AsObject();
+        metadata["dest_fabricWarehouseSchema"] = "staging";
+
+        var settings = FabricDestinationSettings.Parse(Destination(metadata.ToJsonString()));
+
+        settings.QualifiedWarehouseTable("Patients", "clinical").Should().Be("[clinical].[Patients]");
+    }
+
+    /// <summary>A bare table name carries no schema, so the destination's own schema still applies.</summary>
+    [Fact]
+    public void A_bare_mapping_target_keeps_the_destination_schema()
+    {
+        var metadata = System.Text.Json.Nodes.JsonNode.Parse(WarehouseMetadata)!.AsObject();
+        metadata["dest_fabricWarehouseSchema"] = "staging";
+
+        var settings = FabricDestinationSettings.Parse(Destination(metadata.ToJsonString()));
+
+        settings.QualifiedWarehouseTable("Patients", null).Should().Be("[staging].[Patients]");
     }
 
     [Fact]

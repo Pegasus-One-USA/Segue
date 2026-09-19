@@ -99,26 +99,31 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
         if (!oneLakeOk)
         {
             return new FabricConnectionTestResultDto(
-                false, oneLakeError, false, isWarehouse ? false : null, oneLakePermissionHint);
+                false, oneLakeError, false, isWarehouse ? false : null, oneLakePermissionHint, []);
         }
 
         if (!isWarehouse)
         {
-            return new FabricConnectionTestResultDto(true, null, true, null, null);
+            // A file surface has no tables to list.
+            return new FabricConnectionTestResultDto(true, null, true, null, null, []);
         }
 
         // ── Warehouse (TDS) ────────────────────────────────────────────────────────────────────────────────
-        var (warehouseOk, warehouseError, warehousePermissionHint) =
+        var (warehouseOk, warehouseError, warehousePermissionHint, tables) =
             await ProbeWarehouseAsync(request, credential, timeoutCts.Token, cancellationToken);
 
         return warehouseOk
-            ? new FabricConnectionTestResultDto(true, null, true, true, null)
+            // warehouseError is non-null on a SUCCESSFUL probe only when the schema read failed — a connected
+            // warehouse whose table list could not be read. Carried through so the UI can say so instead of
+            // showing an empty picker with no explanation.
+            ? new FabricConnectionTestResultDto(true, warehouseError, true, true, null, tables)
             : new FabricConnectionTestResultDto(
                 false,
                 $"OneLake is reachable, but the Warehouse endpoint is not: {warehouseError}",
                 true,
                 false,
-                warehousePermissionHint);
+                warehousePermissionHint,
+                []);
     }
 
     private static async Task<(bool Ok, string? Error, string? PermissionHint)> ProbeOneLakeAsync(
@@ -181,7 +186,14 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
         }
     }
 
-    private static async Task<(bool Ok, string? Error, string? PermissionHint)> ProbeWarehouseAsync(
+    /// <summary>
+    /// Probes the Warehouse TDS endpoint and, on success, reads its table/column schema on the same connection.
+    /// The schema read is part of the TEST because the mapping canvas needs real tables before the destination
+    /// is provisioned — the SQL-family probe has always worked that way (DestinationSchemaProbeDto.Tables).
+    /// A schema read that fails does NOT fail the test: reachability is what the test asserts, and an empty
+    /// table list is a legitimate answer for a brand-new Warehouse.
+    /// </summary>
+    private static async Task<(bool Ok, string? Error, string? PermissionHint, IReadOnlyList<DestinationTableSchemaDto> Tables)> ProbeWarehouseAsync(
         FabricConnectionTestRequest request,
         TokenCredential credential,
         CancellationToken probeToken,
@@ -223,15 +235,30 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
             await using var command = new SqlCommand("SELECT 1;", connection);
             await command.ExecuteScalarAsync(probeToken);
 
-            return (true, null, null);
+            IReadOnlyList<DestinationTableSchemaDto> tables;
+            try
+            {
+                tables = await SqlDestinationSchemaService.ReadFabricWarehouseSchemaAsync(connection, probeToken);
+            }
+            catch (Exception schemaException)
+            {
+                // The connection is proven, so this stays a SUCCESSFUL test — but the failure is reported rather
+                // than swallowed. Returning an empty list silently made a broken schema read indistinguishable
+                // from an empty warehouse: Test Connection said "connected", the mapping canvas showed no tables,
+                // and nothing anywhere said why. Whatever the cause (a permission that covers writing but not
+                // INFORMATION_SCHEMA, a view Fabric does not expose), the user needs to see it.
+                return (true, $"Connected, but the table list could not be read: {schemaException.Message}", null, []);
+            }
+
+            return (true, null, null, tables);
         }
         catch (OperationCanceledException) when (!callerToken.IsCancellationRequested)
         {
-            return (false, $"timed out after {ProbeTimeout.TotalSeconds:0}s.", null);
+            return (false, $"timed out after {ProbeTimeout.TotalSeconds:0}s.", null, []);
         }
         catch (SqlException exception) when (exception.Number is 18456 or 4060 or 40615)
         {
-            return (false, exception.Message, WarehousePermissionHint());
+            return (false, exception.Message, WarehousePermissionHint(), []);
         }
         catch (ArgumentException exception)
         {
@@ -244,11 +271,12 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
                     + " Expected either the server name on its own (xxx.datawarehouse.fabric.microsoft.com) or a"
                     + " full connection string such as"
                     + " 'Server=xxx.datawarehouse.fabric.microsoft.com;Database=MyWarehouse'.",
-                null);
+                null,
+                []);
         }
         catch (Exception exception)
         {
-            return (false, exception.Message, null);
+            return (false, exception.Message, null, []);
         }
     }
 
@@ -328,7 +356,7 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
     }
 
     private static FabricConnectionTestResultDto Failure(string error)
-        => new(false, error, false, null, null);
+        => new(false, error, false, null, null, []);
 
     private static bool Blank(string? value) => string.IsNullOrWhiteSpace(value);
 

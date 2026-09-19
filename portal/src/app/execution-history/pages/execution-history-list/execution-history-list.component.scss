@@ -216,7 +216,10 @@
   }
 
   // The count is files, not records — right-aligned so a column of numbers reads as one.
-  &__files-col { text-align: right !important; }
+  // Qualified with th/td rather than forcing the override: the `th, td { text-align: left }` rule above
+  // is (0,0,1,1) and outranks a bare class, so the element qualifier is what actually wins here.
+  th#{&}__files-col,
+  td#{&}__files-col { text-align: right; }
 
   &__errors {
     margin-top: var(--space-8);

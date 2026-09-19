@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, ElementRef, HostListener, ViewChild, computed, input, output, signal } from '@angular/core';
-import { FM_ADD_COLUMN_DATA_TYPES } from './field-mapping-add-column-modal.component';
+import { addColumnDataTypesFor } from './field-mapping-add-column-modal.component';
 
 export interface FmCreateTableColumnDraft {
   name: string;
@@ -42,7 +42,9 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
   readonly submitted = output<FmCreateTableSubmit>();
   readonly cancelled = output<void>();
 
-  readonly dataTypes = FM_ADD_COLUMN_DATA_TYPES;
+  /** See FieldMappingAddColumnModalComponent.destType — same dialect-aware type list. */
+  readonly destType = input<string>('sql');
+  readonly dataTypes = computed(() => addColumnDataTypesFor(this.destType()));
 
   readonly tableName = signal('');
   readonly relation = signal<'standalone' | 'child'>('standalone');
@@ -154,7 +156,8 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
   onFkColumnNameInput(value: string): void { this.fkColumnName.set(value); }
 
   addColumn(): void {
-    this.columns.update(list => [...list, { name: '', dataType: this.dataTypes[2] }]);
+    const types = this.dataTypes();
+    this.columns.update(list => [...list, { name: '', dataType: types[2] ?? types[0] }]);
   }
 
   removeColumn(index: number): void {

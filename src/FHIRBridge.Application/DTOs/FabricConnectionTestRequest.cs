@@ -45,4 +45,14 @@ public sealed record FabricConnectionTestResultDto(
     /// first failure for a new Fabric setup: OneLake authorizes through Fabric's own workspace permissions, not
     /// Azure RBAC, so a storage-account role assignment does nothing and the user needs telling that plainly.
     /// </summary>
-    string? PermissionHint);
+    string? PermissionHint,
+    /// <summary>
+    /// The Warehouse's live table/column schema, read on the same TDS connection this test already opened.
+    /// Empty for OneLake Files mode (a file surface has no tables) and whenever the Warehouse probe failed.
+    ///
+    /// <para>Returned from the TEST rather than only from a saved destination's schema endpoint because the
+    /// mapping canvas needs real tables before anything is provisioned — exactly as the SQL-family probe
+    /// already does (see DestinationSchemaProbeDto.Tables). Without this, a brand-new Fabric Warehouse node
+    /// reached Map fields with an empty table list and no way to fill it.</para>
+    /// </summary>
+    IReadOnlyList<DestinationTableSchemaDto> Tables);

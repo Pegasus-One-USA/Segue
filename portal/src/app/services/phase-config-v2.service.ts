@@ -64,7 +64,11 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-datalake-webhook',
     // Microsoft Fabric (OneLake Files) — writer, node executor, catalog entry, Step 1 form and wizard
     // family are all in place and registered (see MappedDataFabricDestinationWriter).
+    // The vendor heading must be enabled too, not just its surfaces: it is filtered by the same
+    // allowlist, and a filtered-out heading takes its children with it (see filteredCategories).
+    'dest-fabric-group',
     'dest-fabric',
+    'dest-fabric-warehouse',
     // V2's chain steps — all three are the point of this builder, so none is phase-gated. (In V1 these
     // were 'field-mapping' plus the granular normalize/terminology/deid-* ids, all held back to a later
     // phase; V2 collapses them into these two consolidated steps — see transforms-v2.data.ts.)

@@ -45,6 +45,9 @@ const CREATE_TYPES: DestinationType[] = [
   // permission only, NOT by isTransformEnabled, so this entry — not the phase config — is what puts the
   // New Connection card on screen here.
   'DataFabricAzure',
+  // The Warehouse surface is its own destination type, so it is its own card here — same reasoning as the
+  // Node Library tile split (see DestinationType.DataFabricWarehouse).
+  'DataFabricWarehouse',
 ];
 
 /** Types whose connection secret can be replaced from the Edit flow (their form loads here). Superset of

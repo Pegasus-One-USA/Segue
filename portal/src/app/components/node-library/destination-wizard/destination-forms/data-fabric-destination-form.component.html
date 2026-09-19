@@ -22,7 +22,7 @@
     }
     <div class="dw-field" [class.dw-field--error]="fabricForm.get('name')!.invalid && fabricForm.get('name')!.touched">
       <label class="dw-label" for="dw-fab-name">Destination name <span class="dw-req">*</span></label>
-      <input id="dw-fab-name" class="dw-input" formControlName="name" placeholder="e.g. Clinical Lakehouse" />
+      <input id="dw-fab-name" class="dw-input" formControlName="name" [attr.placeholder]="isWarehouse() ? 'e.g. Clinical Warehouse' : 'e.g. Clinical Lakehouse'" />
       @if (fabricForm.get('name')!.invalid && fabricForm.get('name')!.touched) {
         <span class="dw-error">Destination name is required.</span>
       }
@@ -40,9 +40,9 @@
 
     <div class="dw-field" [class.dw-field--error]="fabricForm.get('itemName')!.invalid && fabricForm.get('itemName')!.touched">
       <label class="dw-label" for="dw-fab-itemName">{{ isWarehouse() ? 'Warehouse name' : 'Lakehouse name' }} <span class="dw-req">*</span></label>
-      <input id="dw-fab-itemName" class="dw-input" formControlName="itemName" placeholder="e.g. ClinicalLake" />
+      <input id="dw-fab-itemName" class="dw-input" formControlName="itemName" [attr.placeholder]="isWarehouse() ? 'e.g. ClinicalWarehouse' : 'e.g. ClinicalLake'" />
       @if (fabricForm.get('itemName')!.hasError('required') && fabricForm.get('itemName')!.touched) {
-        <span class="dw-error">Lakehouse name is required.</span>
+        <span class="dw-error">{{ isWarehouse() ? 'Warehouse name' : 'Lakehouse name' }} is required.</span>
       } @else if (fabricForm.get('itemName')!.hasError('pattern') && fabricForm.get('itemName')!.touched) {
         <span class="dw-error">Cannot contain a slash or control characters — the name only, without the ".Lakehouse" suffix.</span>
       }
@@ -54,7 +54,7 @@
     <div class="dw-field">
       <label class="dw-label" for="dw-fab-itemType">Item type</label>
       <input id="dw-fab-itemType" class="dw-input" formControlName="itemType" readonly />
-      <span class="dw-hint">Set by the landing mode.</span>
+      <span class="dw-hint">Fixed by the destination type — a Warehouse load needs a Warehouse item, and a file drop needs a Lakehouse.</span>
     </div>
 
     <div class="dw-field">
@@ -126,11 +126,6 @@
         }
       </div>
 
-      <div class="dw-field">
-        <label class="dw-label" for="dw-fab-whTable">Target table</label>
-        <input id="dw-fab-whTable" class="dw-input" formControlName="warehouseTable" placeholder="Default: the mapping's destination object" />
-        <span class="dw-hint">Must already exist — FHIRBridge writes only into columns you mapped, and never creates or alters the table.</span>
-      </div>
 
       <div class="dw-field">
         <label class="dw-label" for="dw-fab-whWriteMode">Write mode</label>

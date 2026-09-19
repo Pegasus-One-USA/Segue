@@ -55,6 +55,21 @@ export interface DestinationProbeRequest {
   // Set when forking from an already-saved destination with the password left blank — lets the backend
   // inherit that destination's stored password (see DestinationConnectionProbeRequest.ExistingDestinationId).
   existingDestinationId?: string | null;
+  // ── Fabric Warehouse only ──────────────────────────────────────────────────────────────────────────────
+  // A Fabric Warehouse is relational but has no server/database/username/password: it authenticates with an
+  // Entra token against a TDS endpoint. These carry what that connection needs, so the same probe and DDL
+  // endpoints serve it — which is what lets Create table / Add column work on a not-yet-saved Warehouse node
+  // exactly as they already do for SQL Server, PostgreSQL and MySQL.
+  fabricWorkspace?: string;
+  fabricItemName?: string;
+  fabricWarehouseSqlEndpoint?: string;
+  fabricAuthMode?: string;
+  fabricTenantId?: string;
+  fabricClientId?: string;
+  fabricManagedIdentityClientId?: string;
+  fabricSecret?: string;
+  fabricEndpointSuffix?: string;
+  fabricAuthorityHost?: string;
 }
 
 export interface SchemaMutationResult {
@@ -235,6 +250,10 @@ export interface FabricConnectionTestResult extends ConnectionTestResult {
   warehouseReachable: boolean | null;
   /** Set when the identity authenticated but was refused — names the Fabric workspace role to grant. */
   permissionHint: string | null;
+  /** The Warehouse's live tables, read on the same TDS connection the test opened. Empty for OneLake Files
+   *  (no tables) and whenever the Warehouse probe failed. Mirrors DestinationSchemaProbeDto.tables, and is
+   *  what lets a brand-new Warehouse node show a real table picker before it is provisioned. */
+  tables: DestinationTable[];
 }
 
 /** FHIR-specific test result — adds the discovered token endpoint so the wizard can persist it into the

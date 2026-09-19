@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, ElementRef, OnInit, ViewChild, computed, input, output, signal } from '@angular/core';
-import { FM_ADD_COLUMN_DATA_TYPES } from './field-mapping-add-column-modal.component';
+import { FM_ADD_COLUMN_DATA_TYPES, addColumnDataTypesFor } from './field-mapping-add-column-modal.component';
 
 export interface FmEditColumnSubmit {
   newColumnName: string;
@@ -45,11 +45,14 @@ export class FieldMappingEditColumnModalComponent implements OnInit, AfterViewIn
    *  option instead of the real current value, making an untouched save look like a type change.
    *  computed() is safe here (unlike the field initializers above) because its callback only runs when
    *  first read, which happens during change detection — well after inputs are set. */
+  /** See FieldMappingAddColumnModalComponent.destType — same dialect-aware type list. */
+  readonly destType = input<string>('sql');
   readonly dataTypes = computed(() => {
+    const offered = addColumnDataTypesFor(this.destType());
     const current = this.currentDataType();
-    return current && !FM_ADD_COLUMN_DATA_TYPES.includes(current)
-      ? [current, ...FM_ADD_COLUMN_DATA_TYPES]
-      : FM_ADD_COLUMN_DATA_TYPES;
+    return current && !offered.includes(current)
+      ? [current, ...offered]
+      : offered;
   });
 
   canSubmit(): boolean {

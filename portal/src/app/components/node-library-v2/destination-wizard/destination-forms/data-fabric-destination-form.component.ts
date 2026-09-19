@@ -2,7 +2,7 @@ import { Component, computed, effect, inject, input, signal, untracked } from '@
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { PhaseConfigServiceV2 } from '../../../../services/phase-config-v2.service';
-import { DestinationSchemaService } from '../../../../services/destination-schema.service';
+import { DestinationSchemaService, DestinationTable, DestinationProbeRequest } from '../../../../services/destination-schema.service';
 import { WizardDestinationFormApi } from './destination-form-api';
 
 /**
@@ -27,11 +27,27 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
   private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly phase = inject(PhaseConfigServiceV2);
 
-  /** Landing modes this phase offers. Warehouse stays out until a real Fabric write has been confirmed. */
-  readonly availableModes = computed(() =>
-    ([{ value: 'oneLakeFiles', label: 'Lakehouse files (OneLake)' },
+  /** The concrete destination type this form instance is serving (see DestinationWizardComponent
+   *  .activeFormInputs). One form backs both Fabric types, and the type is what decides the landing surface:
+   *  DataFabricWarehouse IS the Warehouse surface. Defaults to the file type so any caller that does not pass
+   *  it behaves exactly as before. */
+  readonly destinationType = input<string | null>(null);
+
+  /** True when this form was opened as the dedicated Warehouse destination type, rather than as the file type
+   *  with a mode chosen inside it. */
+  readonly isWarehouseType = computed(() => this.destinationType() === 'DataFabricWarehouse');
+
+  /** Landing modes this phase offers. Warehouse stays out until a real Fabric write has been confirmed.
+   *  When the TYPE already fixes the surface there is no choice to offer, so the list collapses to that one
+   *  mode — which also makes showModeSelector() below false. */
+  readonly availableModes = computed(() => {
+    if (this.isWarehouseType()) {
+      return [{ value: 'warehouseTable', label: 'Warehouse table (COPY INTO)' }];
+    }
+    return ([{ value: 'oneLakeFiles', label: 'Lakehouse files (OneLake)' },
       { value: 'warehouseTable', label: 'Warehouse table (COPY INTO)' }])
-      .filter(mode => this.phase.isFabricModeEnabled(mode.value)));
+      .filter(mode => this.phase.isFabricModeEnabled(mode.value));
+  });
 
   /** Only worth showing the selector when there is a choice to make. */
   readonly showModeSelector = computed(() => this.availableModes().length > 1);
@@ -131,6 +147,18 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
     this.fabricForm.controls.mode.valueChanges.subscribe(mode => {
       this.modeValue.set(mode ?? 'oneLakeFiles');
       this._syncModeValidators(mode);
+    });
+
+    // When the TYPE fixes the surface, the mode control follows it rather than its own default. Without this
+    // the Warehouse destination opened on 'oneLakeFiles' — the form built its default before any input was
+    // bound — so it collected Lakehouse fields and saved a Warehouse destination that pointed at files.
+    // An effect (not a one-shot) because the input arrives after construction.
+    effect(() => {
+      if (!this.isWarehouseType()) return;
+      untracked(() => {
+        if (this.fabricForm.controls.mode.value === 'warehouseTable') return;
+        this.fabricForm.controls.mode.setValue('warehouseTable');
+      });
     });
   }
 
@@ -266,6 +294,45 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
 
   /** Mirrors the other destination forms' probeState/probeError pair. */
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
+
+  /** Tables the last successful Warehouse test returned, in the same shape (and under the same name) the
+   *  SQL-family forms expose — that is what lets DestinationWizardComponent hand them to the mapping canvas
+   *  through its existing sqlTables() plumbing rather than a Fabric-specific path. Always empty for the
+   *  OneLake Files surface, which has no tables. */
+  private readonly _sqlTables = signal<DestinationTable[]>([]);
+  sqlTables(): DestinationTable[] {
+    return this._sqlTables();
+  }
+
+  /**
+   * Ad-hoc connection details for the mapping canvas's live schema probe and its real CREATE TABLE /
+   * ALTER TABLE calls — the Fabric equivalent of the SQL-family forms method of the same name.
+   *
+   * Carries no server/database/password because a Warehouse has none: the backend opens this with an Entra
+   * token instead (see SqlDestinationSchemaService.OpenForProbeAsync). Deliberately NOT named alongside
+   * getProbeRequest on the SqlFamilyFormApi interface — isSqlFamilyForm() must keep rejecting this form, or
+   * the wizard would route it through the SQL probe-then-advance branch it cannot satisfy.
+   */
+  getFabricProbeRequest(): DestinationProbeRequest {
+    const v = this.fabricForm.value;
+    return {
+      destinationType: 'DataFabricWarehouse',
+      fabricWorkspace: v.workspace ?? '',
+      fabricItemName: v.itemName ?? '',
+      fabricWarehouseSqlEndpoint: v.warehouseSqlEndpoint ?? '',
+      fabricAuthMode: v.authMode ?? 'managedIdentity',
+      fabricTenantId: v.authMode === 'servicePrincipal' ? (v.tenantId ?? undefined) : undefined,
+      fabricClientId: v.authMode === 'servicePrincipal' ? (v.clientId ?? undefined) : undefined,
+      fabricSecret: v.authMode === 'servicePrincipal' ? (v.secretValue ?? undefined) : undefined,
+      fabricManagedIdentityClientId:
+        v.authMode === 'managedIdentity' ? (v.managedIdentityClientId ?? undefined) : undefined,
+      fabricEndpointSuffix: v.endpointSuffix || undefined,
+      fabricAuthorityHost: v.authorityHost || undefined,
+      // Lets the backend fall back to the saved secret when the form left it blank, the same way a SQL
+      // password is inherited (see DestinationConnectionProbeRequest.ExistingDestinationId).
+      existingDestinationId: this.existingDestinationId() ?? undefined,
+    };
+  }
   readonly probeError = signal<string | null>(null);
   /** Set when the identity authenticated but was refused — surfaced separately from the raw error
    *  because it names the fix (a Fabric workspace role), which the raw 403 does not. */
@@ -328,6 +395,9 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
             this.probePermissionHint.set(res.permissionHint ?? null);
             return;
           }
+          // Carried straight off the probe so a not-yet-provisioned Warehouse can populate the mapping
+          // canvas's table picker, exactly as the SQL-family forms do with their own probe result.
+          this._sqlTables.set(res.tables ?? []);
           this.probeState.set('ok');
         },
         error: err => {

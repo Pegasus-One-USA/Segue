@@ -27,13 +27,24 @@ export type DestinationTypeV2 =
   | 'Medplum'
   | 'AzureFhirService'
   | 'DataLakeWebhook'
-  | 'DataFabricAzure';
+  | 'DataFabricAzure'
+  /** Microsoft Fabric WAREHOUSE — rows into a Warehouse table over TDS. Deliberately a separate type from
+   *  'DataFabricAzure' (the file-landing surface), mirroring the backend DestinationType split: a Warehouse has a
+   *  live queryable schema and takes field mapping, while OneLake Files has neither. Keeping them as one type
+   *  meant every gate below had to re-derive the landing mode from connection metadata to answer a question the
+   *  type itself should answer. See DestinationType.DataFabricWarehouse for the full reasoning. */
+  | 'DataFabricWarehouse';
 
 /** SQL-family destinations are the only ones Mapping applies to in the V2 chain (Source → Destination →
  *  [Mapping →] Transformation → De-identification). "NoSQL" in the product spec maps to Mongo — the only
- *  NoSQL-shaped destination type today. */
+ *  NoSQL-shaped destination type today.
+ *
+ *  DataFabricWarehouse belongs here and DataFabricAzure deliberately does NOT: a Fabric Warehouse is a SQL
+ *  Server over TDS with a real table/column schema, so mapping applies to it exactly as it does to Azure SQL.
+ *  OneLake Files has no tables at all — adding the Fabric type wholesale would have offered a Mapping node to
+ *  file-landing destinations, which is precisely what splitting the type avoids. */
 export const SQL_FAMILY_DESTINATION_TYPES: ReadonlySet<DestinationTypeV2> = new Set<DestinationTypeV2>([
-  'SqlServer', 'AzureSql', 'PostgreSql', 'MySql', 'Mongo',
+  'SqlServer', 'AzureSql', 'PostgreSql', 'MySql', 'Mongo', 'DataFabricWarehouse',
 ]);
 
 export type ArtifactDeliveryMode = 'download' | 'email' | 'sftp' | 'downloadUrl';

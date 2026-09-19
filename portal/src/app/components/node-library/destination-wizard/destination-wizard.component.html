@@ -770,7 +770,7 @@
           [hasSqlTables]="hasSqlTables()"
           [sqlTableOptions]="sqlTableOptions()"
           [sqlTableNames]="sqlTableBareNames()"
-          [schemaAuthoringEnabled]="isSql()"
+          [schemaAuthoringEnabled]="hasLiveRelationalSchema()"
           [schemaLoadState]="schemaLoadState()"
           [csvDelimiterKey]="activeFormConfig()['dest_delimiter'] ?? 'comma'"
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
