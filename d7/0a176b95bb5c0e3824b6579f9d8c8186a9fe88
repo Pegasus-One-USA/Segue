@@ -1,0 +1,228 @@
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/destination-form.registry.ts
+  s_8456d737a0ba1a::t_8afbe07d71dbaf 64-66
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_8456d737a0ba1a::t_3e10fce275af82 86,264,292,320-321
+portal/src/app/components/node-library-v2/destination-wizard/mapping-profile-form.component.ts
+  s_8456d737a0ba1a::t_b57e8832f02a23 4,182
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricWarehouseConnectionFactory.cs
+  s_8456d737a0ba1a::t_13ff03cfa70d2d 64-81
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_8456d737a0ba1a::t_73816f24d52953 25,43,45
+  s_8456d737a0ba1a::t_9158506019d9aa 57
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form-api.ts
+  s_8456d737a0ba1a::t_c3db95b6efa607 84-93,97-105
+  s_8456d737a0ba1a::t_1964f31272a616 94-96
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_8456d737a0ba1a::t_c73c82e1a52951 5307-5311
+  s_8456d737a0ba1a::t_c4b87267b26646 2588-2596
+  s_8456d737a0ba1a::t_db13326e084f3b 2936-2938,3829,4091-4094,4096
+  s_8456d737a0ba1a::t_087dd1e530ad00 828-831
+  s_8456d737a0ba1a::t_e4360730eeb75c 56
+  s_8456d737a0ba1a::t_f3a9a3049dfe43 1555-1561
+  s_8456d737a0ba1a::t_89f12d78445138 1942-1953,4698
+  s_8456d737a0ba1a::t_573f10e088aa2a 1926,1932-1935
+  s_8456d737a0ba1a::t_fded3fe19c45ed 2013-2015
+  s_8456d737a0ba1a::t_5ab527d57b4218 787-788,1975-1977,2698
+  s_8456d737a0ba1a::t_5c3da195262118 4425-4427
+  s_8456d737a0ba1a::t_258ba62907f4e1 5050-5064
+  s_8456d737a0ba1a::t_a23c8228d4a8ec 4918,4937-4939
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_8456d737a0ba1a::t_a0c0d3d57ddc52 767-772,774-776,778,946-959
+  s_8456d737a0ba1a::t_70f876249ade52 960-962
+src/FHIRBridge.Domain/Enums/DestinationType.cs
+  s_8456d737a0ba1a::t_6e3ab0c9166b61 42-49,51-70
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-preview-drawer.component.ts
+  s_8456d737a0ba1a::t_694354b5b3712a 2
+  s_8456d737a0ba1a::t_bd0f16c9dc4288 36-38
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.ts
+  s_8456d737a0ba1a::t_ac6d00da101c86 9,80-82
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_8456d737a0ba1a::t_90d86191b84b47 57
+  s_8456d737a0ba1a::t_35379275c77678 33-38
+  s_8456d737a0ba1a::t_681c7e3c881119 68-70
+portal/src/app/services/phase-config-v2.service.ts
+  s_8456d737a0ba1a::t_cbc327069b8b1a 67-69
+  s_8456d737a0ba1a::t_d5a2cf8543effe 71
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.html
+  s_8456d737a0ba1a::t_d40be26d129415 773
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog-v2/mapping-profile-dialog-v2.component.ts
+  s_8456d737a0ba1a::t_b85655268c219f 12,345
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_8456d737a0ba1a::t_f3f649ad90a4ac 60
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.ts
+  s_8456d737a0ba1a::t_e531abd9fb2b0d 2,48-49,51,53-55
+portal/src/app/models/transform-v2.model.ts
+  s_8456d737a0ba1a::t_f5986002c82cc1 25-33
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_8456d737a0ba1a::t_bd0f16c9dc4288 67-69
+  s_8456d737a0ba1a::t_694354b5b3712a 4
+portal/src/app/components/node-library/destination-wizard/mapping-profile-form.component.ts
+  s_8456d737a0ba1a::t_b57e8832f02a23 4,182
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  s_8456d737a0ba1a::t_b85655268c219f 15,365
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_8456d737a0ba1a::t_af4c9a206b30ea 1130-1142
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_8456d737a0ba1a::t_d40be26d129415 843
+portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form.registry.ts
+  s_8456d737a0ba1a::t_8afbe07d71dbaf 64-66
+src/FHIRBridge.Infrastructure/Destinations/Fabric/WarehouseTableLandingStrategy.cs
+  s_8456d737a0ba1a::t_dfd9c13ea50ee2 290-298,301
+  s_8456d737a0ba1a::t_c4440a9dc53b41 76-77
+  s_8456d737a0ba1a::t_e50eb158bce954 98-99,172,176-177,225-226
+  s_8456d737a0ba1a::t_91763b990334df 260-271,273-282,285,287
+  s_8456d737a0ba1a::t_2a5330e73ec83d 272
+  s_8456d737a0ba1a::t_dad8b6d5b79c02 349-362,365-366,373-380
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts
+  s_8456d737a0ba1a::t_90d86191b84b47 57
+  s_8456d737a0ba1a::t_35379275c77678 33-38
+  s_8456d737a0ba1a::t_681c7e3c881119 68-70
+portal/src/app/models/destination-configuration-v2.model.ts
+  s_8456d737a0ba1a::t_7caf697a7e78c8 30-36,40-45,47
+portal/src/app/components/node-library/node-library-dialog.component.ts
+  s_8456d737a0ba1a::t_a5377d61d858aa 98-100
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.component.html
+  s_8456d737a0ba1a::t_fd7302698456fd 157
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_8456d737a0ba1a::t_94cb9ebf2761b1 30-47,49-50
+  s_8456d737a0ba1a::t_2db0e1682ceb7d 5,305-334
+  s_8456d737a0ba1a::t_80a57509677e1b 151-162
+  s_8456d737a0ba1a::t_75b291e5b807ed 297-304,335,398-400
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_8456d737a0ba1a::t_a675c5aa2a8f7c 2,45-47
+  s_8456d737a0ba1a::t_18d57e37cee5e0 159-160
+portal/src/app/data/transforms-v2.data.ts
+  s_8456d737a0ba1a::t_9a81017c6caccd 28-37
+portal/src/app/services/destination-schema.service.ts
+  s_8456d737a0ba1a::t_0e61002fa2dbba 58-72
+  s_8456d737a0ba1a::t_b9c74ed409c8d5 253-256
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_8456d737a0ba1a::t_b30ab25d305e44 301,313,335
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_8456d737a0ba1a::t_b30ab25d305e44 297,309,320
+portal/src/app/components/node-library-v2/node-library-dialog.component.ts
+  s_8456d737a0ba1a::t_a5377d61d858aa 107-109
+  s_8456d737a0ba1a::t_16f7147acd692c 555-560,569
+  s_8456d737a0ba1a::t_a4851082c7488d 450,725
+  s_8456d737a0ba1a::t_c5d5cd3a6ea422 629-642,646-648,650-663,665,670,672-674
+  s_8456d737a0ba1a::t_55f74d8bdaf920 280,412,726-727,747,868,886,890,898,925-926
+  s_8456d737a0ba1a::t_243b196e4ddb4b 664,666-669,671
+  s_8456d737a0ba1a::t_3225f485ebe88c 72-76,581-584
+  s_8456d737a0ba1a::t_8ab11c33e86c8d 748-750
+  s_8456d737a0ba1a::t_68ffd64cf90a05 699-705
+portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts
+  s_8456d737a0ba1a::t_f3a9a3049dfe43 1457-1463
+  s_8456d737a0ba1a::t_087dd1e530ad00 730-733
+  s_8456d737a0ba1a::t_cf03de226bb27f 1864-1865
+  s_8456d737a0ba1a::t_5c3da195262118 4188-4190
+  s_8456d737a0ba1a::t_a23c8228d4a8ec 4663,4682-4684
+  s_8456d737a0ba1a::t_c73c82e1a52951 5065-5069
+  s_8456d737a0ba1a::t_258ba62907f4e1 4795-4809
+  s_8456d737a0ba1a::t_db13326e084f3b 2702-2704,3572,3854-3857,3859
+  s_8456d737a0ba1a::t_e4360730eeb75c 56
+  s_8456d737a0ba1a::t_89f12d78445138 1832-1843,4444
+  s_8456d737a0ba1a::t_c4b87267b26646 2441-2449
+  s_8456d737a0ba1a::t_ae0e7f13e95f62 2551
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-add-column-modal.component.html
+  s_8456d737a0ba1a::t_fd7302698456fd 34
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.ts
+  s_8456d737a0ba1a::t_4c8b86d3a71fc5 1,58-61,64-70
+  s_8456d737a0ba1a::t_c38fe27b78e6b7 19-29,31-34
+  s_8456d737a0ba1a::t_5a3d31cc3a7d31 30
+portal/src/app/services/phase-config.service.ts
+  s_8456d737a0ba1a::t_cbc327069b8b1a 64-66
+  s_8456d737a0ba1a::t_d5a2cf8543effe 68
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_8456d737a0ba1a::t_9158506019d9aa 57
+  s_8456d737a0ba1a::t_73816f24d52953 25,43,45
+src/FHIRBridge.Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs
+  s_8456d737a0ba1a::t_3782c0d778c15f 77-81
+portal/src/app/components/node-library-v2/node-library-dialog.component.html
+  s_8456d737a0ba1a::t_d4fc737cd8be4a 172,176-179,210-212,214
+tests/FHIRBridge.UnitTests/Infrastructure/FabricDestinationSchemaGatingTests.cs
+  s_8456d737a0ba1a::t_735b7da2cdd868 1-146
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_8456d737a0ba1a::t_84276a2a7625dc 82
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_8456d737a0ba1a::t_694354b5b3712a 4
+  s_8456d737a0ba1a::t_bd0f16c9dc4288 67-69
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricDestinationSettings.cs
+  s_8456d737a0ba1a::t_00bdc2a31760eb 309-312
+  s_8456d737a0ba1a::t_ae6b34d1155368 66-81
+  s_8456d737a0ba1a::t_fd2971a11e6b97 3,90-106,204-211
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_8456d737a0ba1a::t_bb7b2d816ff621 6,8,91-93,98-99,104-131,146-147,164-166,256,309,349,362-365,382-385,430-438,462-468,485-490,507,526,558,588,769-772,806-833,835-916,919,925,1189-1195,1197-1207
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_8456d737a0ba1a::t_041158ce647a6a 80,82-84
+  s_8456d737a0ba1a::t_71964ca7b217cc 192-234
+  s_8456d737a0ba1a::t_c87c0b05626f39 240-248
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_8456d737a0ba1a::t_75b291e5b807ed 297-304,335,398-400
+  s_8456d737a0ba1a::t_94cb9ebf2761b1 30-47,49-50
+  s_8456d737a0ba1a::t_2db0e1682ceb7d 5,305-334
+  s_8456d737a0ba1a::t_80a57509677e1b 151-162
+src/FHIRBridge.Application/DTOs/FabricConnectionTestRequest.cs
+  s_8456d737a0ba1a::t_bd5381da830047 48-58
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/destination-form-api.ts
+  s_8456d737a0ba1a::t_1964f31272a616 94-96
+  s_8456d737a0ba1a::t_c3db95b6efa607 84-93,97-105
+src/FHIRBridge.Application/DTOs/DestinationSchemaDto.cs
+  s_8456d737a0ba1a::t_23b43dea78b979 33-50
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.ts
+  s_8456d737a0ba1a::t_e531abd9fb2b0d 2,48-49,51,53-55
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_8456d737a0ba1a::t_5624924da2f6e0 48-50
+src/FHIRBridge.Infrastructure/Destinations/Fabric/IFabricWarehouseConnectionFactory.cs
+  s_8456d737a0ba1a::t_35cc2f4d6bdb1e 22-24,26-33
+  s_8456d737a0ba1a::t_e4a12fc60c9e2b 25
+src/FHIRBridge.Infrastructure/Destinations/FabricDestinationConnectionTestService.cs
+  s_8456d737a0ba1a::t_80f70836cd80a9 116-119
+  s_8456d737a0ba1a::t_2dc09e1d79bce0 102,107-108,112,125-126,189-196,238-253,257,261,274-275,279,359
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs
+  s_8456d737a0ba1a::t_1f7515a1052890 70-74
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-add-column-modal.component.ts
+  s_8456d737a0ba1a::t_4c8b86d3a71fc5 1,58-61,64-70
+  s_8456d737a0ba1a::t_5a3d31cc3a7d31 30
+  s_8456d737a0ba1a::t_c38fe27b78e6b7 19-29,31-34
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.html
+  s_8456d737a0ba1a::t_fd7302698456fd 34
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.html
+  s_8456d737a0ba1a::t_fd7302698456fd 157
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_8456d737a0ba1a::t_af4c9a206b30ea 1120-1132
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_8456d737a0ba1a::t_1b1acf16dc9478 223-239,651,1237
+tests/FHIRBridge.UnitTests/Destinations/Fabric/WarehouseTableLandingStrategyTests.cs
+  s_8456d737a0ba1a::t_2a5330e73ec83d 45-75
+  s_8456d737a0ba1a::t_ae0549249fcd53 145-151,154,159-163
+  s_8456d737a0ba1a::t_589f7b7223ee3c 44,191-229
+portal/src/app/components/node-library-v2/node-library-dialog.component.scss
+  s_8456d737a0ba1a::t_9811c5e8ca0a27 414-447
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-preview-drawer.component.ts
+  s_8456d737a0ba1a::t_694354b5b3712a 2
+  s_8456d737a0ba1a::t_bd0f16c9dc4288 36-38
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_8456d737a0ba1a::t_a675c5aa2a8f7c 2,45-47
+  s_8456d737a0ba1a::t_18d57e37cee5e0 159-160
+src/FHIRBridge.Infrastructure/Destinations/FabricWarehouseDdlTypeValidator.cs
+  s_8456d737a0ba1a::t_6ff721d07128c9 30-31
+  s_8456d737a0ba1a::t_71f07fa5b63ad9 1-29,32-112
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_8456d737a0ba1a::t_31c0dc0a786153 30-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d70a176b95bb5c0e3824b6579f9d8c8186a9fe88",
+  "prompts": {},
+  "sessions": {
+    "s_8456d737a0ba1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ff13a48-3ca8-4aaf-ab78-1c910a123765",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
