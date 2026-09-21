@@ -1,0 +1,35 @@
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_4f5d1619e405a5::t_729631d324e2d2 16-18,47-50,52-56,58-72,248
+  s_4f5d1619e405a5::t_98412066e2922f 127,130-132,135
+  s_4f5d1619e405a5::t_a6a9200c6f65be 92,128-129
+  s_4f5d1619e405a5::t_274f1c17f65a3d 191-247,250-252,258-261,265-285,288-289,298-299
+  s_4f5d1619e405a5::t_e0e85258777afd 93-95,159-162,174-177,307-310
+  s_4f5d1619e405a5::t_bed45877034e9e 249
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_4f5d1619e405a5::t_69f5ec7a1a775c 18-23,95-102,114-119
+src/Api/FHIRBridge.Api/Workflows/WorkflowRunHistoryDto.cs
+  s_4f5d1619e405a5::t_c5a01e476a21fd 1,24-33,51-61
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_4f5d1619e405a5::t_f25a21d6172b15 40-43
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_4f5d1619e405a5::t_726a56beda4bb7 2126-2131,2147-2194,2222-2225
+  s_4f5d1619e405a5::t_f0baf26b57b1b1 2243-2257,2287-2321,2345-2346
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_4f5d1619e405a5::t_631cda30ef32d8 1,34-46,48-51,53-84,86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1e505fbc07c8eeaab358d17d75330115df04b442",
+  "prompts": {},
+  "sessions": {
+    "s_4f5d1619e405a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d72fff9d-b9df-409d-a882-e47a118b52ea",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
