@@ -62,13 +62,16 @@ public sealed class LicenseService : ILicenseService
                 false, status.InvalidReason ?? "The license token failed verification.", null);
         }
 
-        // Re-applying the exact same token as the one already active — a back-to-back double-submit, or a
-        // renewal screen the admin resubmits without changing anything — is a no-op: nothing is
+        // Re-applying the exact same token as the one already current — a back-to-back double-submit,
+        // or a renewal screen the admin resubmits without changing anything — is a no-op: nothing is
         // re-persisted and no new LicenseHistoryEntry row is added, so the history table doesn't
-        // accumulate duplicate rows for a license that never actually changed.
+        // accumulate duplicate rows for a license that never actually changed. Deliberately NOT
+        // restricted to State == Active: CurrentRawToken is non-null for Grace and Expired too (see
+        // ReloadAsync), and re-applying the same token while it's sitting in Grace/Expired is at least
+        // as likely as while Active, so it gets the same no-op treatment.
         lock (_lock)
         {
-            if (Current.State == LicenseState.Active && CurrentRawToken == licenseToken)
+            if (CurrentRawToken is not null && CurrentRawToken == licenseToken)
             {
                 return new LicenseApplyResult(true, null, Current, true);
             }

@@ -191,7 +191,10 @@ public static class DependencyInjection
         // ISystemSettingsCache/ICurrentTenantResolver above — works against either repository registration
         // (DB or in-memory) since it doesn't touch the repository until Program.cs calls ReloadAsync.
         services.AddSingleton<Application.Abstractions.Licensing.ILicenseService, LicenseService>();
-        services.AddHttpClient(nameof(LicenseRequestService));
+        // A short, explicit timeout (default HttpClient timeout is 100s) — a silently-dropping
+        // licensor host would otherwise block the admin's POST for the whole default before the
+        // manual-fallback path (AttemptSubmitAsync's catch) is even reached.
+        services.AddHttpClient(nameof(LicenseRequestService), client => client.Timeout = TimeSpan.FromSeconds(15));
         services.AddScoped<Application.Abstractions.Licensing.ILicenseRequestService, LicenseRequestService>();
 
         // Resolves a user's effective permission codes per request (DB-backed, short-lived cache) —

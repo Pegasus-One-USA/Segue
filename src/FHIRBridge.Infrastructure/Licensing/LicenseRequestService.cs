@@ -102,11 +102,27 @@ public sealed class LicenseRequestService : ILicenseRequestService
     private async Task AttemptSubmitAsync(LicenseRequest request, CancellationToken cancellationToken)
     {
         var attemptedUtc = DateTime.UtcNow;
-        // Resolved (and its host extracted for the error message) before the try/catch below — a bad/
-        // missing configuration is a setup problem the caller should see immediately, not something the
-        // manual-fallback blob exists for, so InvalidOperationException here is deliberately left to
-        // propagate rather than being caught alongside network failures.
-        var baseUrl = await ResolveLicensorApplicationUrlAsync(cancellationToken);
+        string baseUrl;
+        try
+        {
+            baseUrl = await ResolveLicensorApplicationUrlAsync(cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // No licensor URL configured yet — a normal, recoverable setup state, not a network/DNS
+            // failure, but it still has to land in Failed (with the fallback blob) rather than
+            // propagating: AddAsync already committed this request row by the time we get here, and
+            // this table holds at most one row per install, so letting this throw would leave that
+            // row stuck Pending forever with no fallback blob and no way to recover — a fresh
+            // CreateAndSubmitAsync is refused (a request already exists), and Resubmit would just hit
+            // this same exception again. Marking Failed here instead means: fallback blob available
+            // immediately, and once an admin sets the URL, Resubmit resolves it and proceeds normally.
+            _logger.LogWarning(ex, "License request {RequestId} could not be submitted: {Message}", request.Id, ex.Message);
+            request.MarkFailed(attemptedUtc, ex.Message);
+            await _repository.SaveAsync(request, cancellationToken);
+            return;
+        }
+
         var host = DisplayHostOf(baseUrl);
         try
         {

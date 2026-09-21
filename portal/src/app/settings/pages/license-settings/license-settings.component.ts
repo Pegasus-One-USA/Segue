@@ -262,6 +262,9 @@ export class LicenseSettingsComponent implements OnInit {
           s.alreadyActive ? 'This license is already active' : 'License activated',
         );
         this.appInit.refreshLicenseGate();
+        // Refresh so a freshly-applied license shows up (and is flagged Current) without the admin
+        // having to leave and re-enter the History tab.
+        this.loadHistory();
       },
       error: (err: HttpErrorResponse) => {
         this.activating.set(false);
