@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Enums;
 using PhoneNumbers;
@@ -130,30 +130,84 @@ public sealed class IdentifierFormattingNode : ITransformNode
     }
 }
 
-/// <summary>12. HumanName Parsing &amp; Formatting.</summary>
+/// <summary>12. HumanName Parsing &amp; Formatting — bidirectional.
+/// <para>String → HumanName: recognized prefix/suffix tokens are stripped first (consistently, in every
+/// pattern), then the remaining tokens are assigned by the configured positional <c>pattern</c>.</para>
+/// <para>HumanName → string: when the incoming value is already a structured name (a JsonObject, or JSON
+/// object text), the node composes a display string from the configured <c>format</c> token order instead
+/// of parsing. That makes the node round-trippable without a second node type: the direction follows the
+/// shape of the input, so a chain that parses then formats needs no extra configuration.</para></summary>
 public sealed class HumanNameParsingNode : ITransformNode
 {
+    /// <summary>The <c>format</c> tokens recognized when composing a display string, lower-cased for lookup.
+    /// "Middle" maps to the given names after the first, which is where a parsed middle name lands.</summary>
+    private static readonly string[] FormatTokens = ["prefix", "first", "middle", "given", "last", "family", "suffix"];
+
+    /// <summary>The <c>pattern</c> value selecting the one-rule parse-then-format mode.</summary>
+    private const string RoundTripPattern = "RoundTrip";
+
     public TransformNodeType NodeType => TransformNodeType.HumanNameParsing;
 
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
     {
-        var raw = value?.ToString()?.Trim();
+        if (value is null)
+        {
+            return TransformResult.Ok(null);
+        }
+
+        // Direction follows the shape of the input: an already-structured name formats, a plain string parses.
+        // TryReadStructuredName also accepts JSON object *text*, because an upstream node's JsonObject is
+        // serialized to its JSON string on the way to a destination field (see TransformNodeExecutors), so a
+        // re-read structured name arrives here as text rather than as a live node.
+        if (TryReadStructuredName(value, out var structured))
+        {
+            return Format(structured!, config);
+        }
+
+        var raw = value.ToString()?.Trim();
         if (string.IsNullOrWhiteSpace(raw))
         {
             return TransformResult.Ok(null);
         }
 
+        // The RoundTrip pattern does both halves in ONE rule: parse the display string into a HumanName, then
+        // immediately compose it back out via `format`. It exists because a destination column carries a single
+        // rule fed by a single (string) source path, so the format direction is otherwise unreachable from the
+        // product — chaining a second rule to do it is not something an end user can express in the mapping UI.
+        // `roundTripPattern` names the parse order to use, keeping `pattern` free to select RoundTrip itself.
+        if (config.Get("pattern", "FirstLast") == RoundTripPattern)
+        {
+            var parseConfig = new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase)
+            {
+                ["pattern"] = config.Get("roundTripPattern", "FirstLast"),
+            };
+
+            var parsed = Parse(raw, parseConfig);
+            return parsed.Success && parsed.Value is JsonObject parsedName
+                ? Format(parsedName, config)
+                : parsed;
+        }
+
+        return Parse(raw, config);
+    }
+
+    private static TransformResult Parse(string raw, IReadOnlyDictionary<string, string> config)
+    {
         var prefixTokens = config.Get("prefixTokens", "Dr,Mr,Mrs,Ms,Miss")
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var suffixTokens = config.Get("suffixTokens", "Jr,Sr,II,III,IV,MD,PhD")
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+        var pattern = config.Get("pattern", "FirstLast");
 
         string family;
         List<string> given;
         string? prefix = null;
         string? suffix = null;
 
-        if (config.Get("pattern", "FirstLast") == "LastFirstMiddle" || raw.Contains(','))
+        // "Last, First Middle" is self-describing: the comma states the order outright, so it still wins over
+        // a positional pattern that assumed there would not be one.
+        if (pattern == "LastFirstMiddle" || raw.Contains(','))
         {
             var parts = raw.Split(',', 2, StringSplitOptions.TrimEntries);
             family = parts[0];
@@ -162,6 +216,9 @@ public sealed class HumanNameParsingNode : ITransformNode
         else
         {
             var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+
+            // Affixes come off before any positional assignment, and in every pattern — otherwise a trailing
+            // "III" occupies a name position and shifts every remaining token by one.
             if (parts.Count > 0 && prefixTokens.Contains(parts[0].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
             {
                 prefix = parts[0];
@@ -174,8 +231,26 @@ public sealed class HumanNameParsingNode : ITransformNode
                 parts.RemoveAt(parts.Count - 1);
             }
 
-            family = parts.Count > 0 ? parts[^1] : raw;
-            given = parts.Count > 1 ? parts[..^1] : [];
+            if (pattern == "FirstLastMiddle" && parts.Count > 1)
+            {
+                // Positional: token 1 = first (given), token 2 = last (family), tokens 3+ = middle (given).
+                // A source that emits this order puts the surname in the *second* position, so the trailing
+                // tokens are further given names rather than a continuation of the family name.
+                family = parts[1];
+                given = [parts[0]];
+                if (parts.Count > 2)
+                {
+                    given.AddRange(parts[2..]);
+                }
+            }
+            else
+            {
+                // FirstLast: the first token is the given name and everything after it is the family name, so
+                // a multi-word surname ("James McGinnis") survives intact instead of being split at the space.
+                // A lone token is a surname, not a given name — the same fallback FirstLastMiddle drops to.
+                family = parts.Count > 1 ? string.Join(' ', parts[1..]) : parts.Count > 0 ? parts[0] : raw;
+                given = parts.Count > 1 ? [parts[0]] : [];
+            }
         }
 
         var name = new JsonObject { ["family"] = family, ["given"] = new JsonArray(given.Select(g => (JsonNode)g).ToArray()) };
@@ -202,6 +277,88 @@ public sealed class HumanNameParsingNode : ITransformNode
 
         return TransformResult.Ok(name);
     }
+
+    /// <summary>Composes a display string from a structured name, in the token order given by <c>format</c>
+    /// (e.g. "First Middle Last Suffix"). A token the name has no value for is dropped rather than leaving a
+    /// double space behind, so a name with no middle name or suffix still formats cleanly.</summary>
+    private static TransformResult Format(JsonObject name, IReadOnlyDictionary<string, string> config)
+    {
+        var format = config.Get("format", "First Middle Last Suffix");
+        var tokens = format.Split([' ', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0)
+        {
+            return TransformResult.Fail("'format' must name at least one HumanName part (e.g. \"First Middle Last Suffix\").");
+        }
+
+        var unknown = tokens.FirstOrDefault(t => !FormatTokens.Contains(t.ToLowerInvariant()));
+        if (unknown is not null)
+        {
+            return TransformResult.Fail($"'{unknown}' is not a recognized name part — use any of: {string.Join(", ", FormatTokens)}.");
+        }
+
+        var givenNames = ReadStrings(name["given"]);
+        var pieces = new List<string>();
+        foreach (var token in tokens)
+        {
+            var piece = token.ToLowerInvariant() switch
+            {
+                "prefix" => string.Join(' ', ReadStrings(name["prefix"])),
+                "first" => givenNames.Count > 0 ? givenNames[0] : string.Empty,
+                "middle" => givenNames.Count > 1 ? string.Join(' ', givenNames[1..]) : string.Empty,
+                "given" => string.Join(' ', givenNames),
+                "last" or "family" => ReadString(name["family"]),
+                _ => string.Join(' ', ReadStrings(name["suffix"])),
+            };
+
+            if (!string.IsNullOrWhiteSpace(piece))
+            {
+                pieces.Add(piece.Trim());
+            }
+        }
+
+        return TransformResult.Ok(string.Join(' ', pieces));
+    }
+
+    /// <summary>Recognizes an already-structured HumanName: a live JsonObject from an upstream node, or the
+    /// JSON object text one was serialized to. Anything else — a plain display string, a number — is not a
+    /// structured name and is left to the parsing direction.</summary>
+    private static bool TryReadStructuredName(object value, out JsonObject? name)
+    {
+        name = null;
+        if (value is JsonObject jsonObject)
+        {
+            name = jsonObject;
+            return true;
+        }
+
+        // Only a string can carry JSON object text; a JsonValue/JsonArray or any other CLR value cannot.
+        if (value is not string text || !text.TrimStart().StartsWith('{'))
+        {
+            return false;
+        }
+
+        try
+        {
+            name = JsonNode.Parse(text) as JsonObject;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+
+        return name is not null;
+    }
+
+    private static string ReadString(JsonNode? node) => node is null ? string.Empty : node.ToString();
+
+    /// <summary>Reads a HumanName string-array part (given/prefix/suffix), tolerating a bare string where the
+    /// array is expected — hand-authored and round-tripped payloads both turn up in practice.</summary>
+    private static List<string> ReadStrings(JsonNode? node) => node switch
+    {
+        JsonArray array => [.. array.Where(n => n is not null).Select(n => n!.ToString()).Where(s => !string.IsNullOrWhiteSpace(s))],
+        JsonValue value => string.IsNullOrWhiteSpace(value.ToString()) ? [] : [value.ToString()],
+        _ => [],
+    };
 }
 
 /// <summary>13. Address Parsing &amp; Normalization — a comma/newline-delimited parser
