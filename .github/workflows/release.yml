@@ -86,7 +86,7 @@ jobs:
           dotnet test FHIRBridge.sln --configuration Release --no-build --verbosity normal
 
       - name: Log in to registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
