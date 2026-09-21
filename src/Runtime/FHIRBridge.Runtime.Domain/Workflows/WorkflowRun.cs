@@ -53,6 +53,15 @@ public sealed class WorkflowRun
     /// never a placeholder, so the portal only ever offers a reference id that Operations → Errors can resolve.</summary>
     public string? ErrorReferenceId { get; private set; }
 
+    /// <summary>The source vendor's OWN id for the Bulk Data <c>$export</c> job this run deferred to — the last
+    /// path segment of the job's status URL (Epic: <c>.../api/FHIR/BulkRequest/0000000000176E6DC7DB51C0082DA988</c>).
+    /// Set by <see cref="AwaitBulkExport"/>, null for every run that never deferred to an async export. Kept on the
+    /// run itself (rather than read back through <c>BulkExportJob</c>) so Execution History can show it as a plain
+    /// column, and so it survives the job row being cleaned up. Not the job's identity as far as this system is
+    /// concerned — <c>BulkExportJob.StatusUrl</c> remains that; this is for operator lookups and for correlating a
+    /// run against the vendor's own logs.</summary>
+    public string? BulkRequestId { get; private set; }
+
     /// <summary>Who/what launched the run (user audit name, scheduler, or interactive-launch source).</summary>
     public string? TriggeredBy { get; }
 
@@ -102,10 +111,20 @@ public sealed class WorkflowRun
 
     /// <summary>Pauses the run at a source node that deferred to an async bulk-export job — deliberately does not
     /// set <see cref="CompletedAt"/>, since this is not a terminal state; <see cref="Succeed"/>/<see cref="Fail"/>
-    /// are still called once the poller resumes execution and the run actually finishes.</summary>
-    public void AwaitBulkExport()
+    /// are still called once the poller resumes execution and the run actually finishes.
+    /// <paramref name="bulkRequestId"/> is the vendor's own export-job id (see <see cref="BulkRequestId"/>); it is
+    /// optional because a status URL a vendor shapes differently may not yield one, and a run that paused is still
+    /// correctly paused either way — only the operator-facing lookup is unavailable.</summary>
+    public void AwaitBulkExport(string? bulkRequestId = null)
     {
         Status = WorkflowRunStatus.AwaitingBulkExport;
+
+        // Only ever set, never cleared: a resumed run that defers a second time keeps the first id if the second
+        // kick-off couldn't produce one, which is strictly more useful than blanking it.
+        if (!string.IsNullOrWhiteSpace(bulkRequestId))
+        {
+            BulkRequestId = bulkRequestId;
+        }
     }
 
     public void Succeed(DateTimeOffset completedAt)

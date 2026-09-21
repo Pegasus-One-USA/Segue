@@ -32,7 +32,20 @@ public sealed record WorkflowSummaryDto(
     /// <summary>Human-quotable sequential id (e.g. <c>WLW-150926-0042</c>), assigned at creation and stable
     /// for the workflow's life. Null for workflows created before numbering existed, or while numbering is
     /// switched off. Unlike <see cref="Name"/>, this is unique — it is what the UI quotes in confirmations.</summary>
-    string? WorkflowNumber = null);
+    string? WorkflowNumber = null,
+    /// <summary>Every distinct destination type this workflow writes to, as <see cref="FHIRBridge.Domain.Enums.DestinationType"/>
+    /// names. A workflow can fan out to several destinations, so this is a list rather than the single value the
+    /// Source columns carry — the Destination filter matches a row when ANY of its destinations is selected.
+    /// Empty for a Draft whose destination node isn't wired to a destination record yet.</summary>
+    IReadOnlyList<string>? DestinationTypes = null,
+    /// <summary>Every distinct FHIR resource type this workflow's source nodes are configured to retrieve, read off
+    /// the stored node configuration (never from what a past run happened to fetch). Empty when the source node
+    /// derives its types implicitly — from granted SMART scopes or from its destinations — rather than naming
+    /// them, which is why the Resource Type filter can legitimately not match every workflow.</summary>
+    IReadOnlyList<string>? ResourceTypes = null,
+    /// <summary>The run status of the most recent run, if any — same value as <see cref="LastRun"/>, restated here
+    /// only so the facet contract reads symmetrically with the filter that consumes it.</summary>
+    string? LastRunStatus = null);
 
 /// <summary>One server-side page of the workflow-list screen — <see cref="Items"/> is just this page's rows;
 /// <see cref="TotalCount"/> is the count across every row matching the active search/filters (before paging), for
@@ -44,4 +57,13 @@ public sealed record WorkflowSummaryPageDto(
     int TotalCount,
     IReadOnlyList<string> AvailableStatuses,
     IReadOnlyList<string> AvailableApplicationTypes,
-    IReadOnlyList<string> AvailableSourceSystemTypes);
+    IReadOnlyList<string> AvailableSourceSystemTypes,
+    /// <summary>Every destination type that is CONFIGURED in this tenant, from the destination catalog the workflow
+    /// builder itself offers — not merely the ones some workflow already writes to. A destination the user just
+    /// configured is therefore filterable immediately, before any workflow uses it.</summary>
+    IReadOnlyList<string> AvailableDestinationTypes,
+    /// <summary>Every <see cref="FHIRBridge.SharedKernel.Enums.ApplicationType"/> value, not just those in use, so
+    /// the Audience filter offers the same fixed roster the builder's audience picker does.</summary>
+    IReadOnlyList<string> AvailableLastRunStatuses,
+    /// <summary>Every FHIR resource type named by any source node's stored configuration across the tenant.</summary>
+    IReadOnlyList<string> AvailableResourceTypes);

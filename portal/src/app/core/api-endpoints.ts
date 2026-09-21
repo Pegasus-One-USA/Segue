@@ -150,6 +150,7 @@ export const DESTINATION_ENDPOINTS = {
   medplumTest:         `${API_V1_BASE}/destinations/medplum-test`,
   mongoTest:           `${API_V1_BASE}/destinations/mongo-test`,
   blobTest:            `${API_V1_BASE}/destinations/blob-test`,
+  fabricTest:          `${API_V1_BASE}/destinations/fabric-test`,
   // WorkflowEndpoints, not ConfigurationsController — same reasoning as SOURCE_CONNECTIONS_ENDPOINTS.usage: the
   // usage check has to walk every workflow's Destination nodes, which only the Runtime workflow store can answer.
   usage:               `${API_V1_BASE}/workflows/destination-usage`,
@@ -412,6 +413,9 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   lineageNodeBreakdown: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/node-breakdown`,
   configuredRules: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/configured-rules`,
   configuredDeIdRules: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/configured-deid-rules`,
+  // Live read of the run's FHIR Bulk Data $export job, proxied server-side (the source's bearer token never
+  // reaches the browser) — backs the Status column's "Bulk Data Status Request" popup.
+  bulkExportStatus: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/bulk-export-status`,
   statusCounts: `${API_V1_BASE}/workflow-runs/stats`,
 };
 

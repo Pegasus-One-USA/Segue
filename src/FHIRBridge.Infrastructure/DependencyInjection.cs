@@ -333,6 +333,13 @@ public static class DependencyInjection
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
             services.AddScoped<IBulkExportJobRepository, EfBulkExportJobRepository>();
             services.Configure<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>(configuration.GetSection("BulkExport"));
+            // Off unless a host explicitly turns it on (Development only) — see EhrDataDumpOptions: the dump holds
+            // raw, unmasked FHIR resources.
+            services.Configure<FHIRBridge.Runtime.Application.Workflows.EhrDataDumpOptions>(
+                configuration.GetSection(FHIRBridge.Runtime.Application.Workflows.EhrDataDumpOptions.SectionName));
+            // Resolved by both extraction paths: SourceNodeExecutor (search-REST, in the Api) and
+            // RankedWorkflowOrchestrator.ResumeAfterBulkExportAsync (bulk export, in the Worker).
+            services.AddSingleton<FHIRBridge.Runtime.Application.Workflows.EhrDataDumpWriter>();
             services.AddScoped<FHIRBridge.Runtime.Application.Workflows.Storage.IBulkExportPauseRecorder, FHIRBridge.Infrastructure.Workflows.BulkExportPauseRecorder>();
             services.AddScoped<IPipelineRunRouteExecutionRepository, EfPipelineRunRouteExecutionRepository>();
             services.AddScoped<EfExecutionResourceHistoryRecorder>();
@@ -483,6 +490,15 @@ public static class DependencyInjection
         // Microsoft Fabric / OneLake: reuses the singleton BlobContainerClientCache registered above (OneLake
         // speaks the blob protocol), with its own Entra-only credential dispatch.
         services.AddScoped<Destinations.Fabric.IOneLakeClientFactory, Destinations.Fabric.OneLakeClientFactory>();
+
+        // One strategy per Fabric landing surface, resolved by FabricLandingMode. MappedDataFabricDestinationWriter
+        // dispatches through the registry rather than branching, so a new surface is a registration here and
+        // nothing else. Eventstream is deliberately absent: it is authenticated HTTP, already served by the Data
+        // Lake Webhook destination, and FabricDestinationSettings.Parse redirects to it by name.
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.OneLakeFilesLandingStrategy>();
+        services.AddScoped<Destinations.Fabric.IFabricWarehouseConnectionFactory, Destinations.Fabric.FabricWarehouseConnectionFactory>();
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.WarehouseTableLandingStrategy>();
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategyRegistry, Destinations.Fabric.FabricLandingStrategyRegistry>();
         services.AddScoped<MappedDataFabricDestinationWriter>();
         services.AddScoped<MappedMongoDestinationWriter>();
         services.AddHttpClient(nameof(MedplumTokenProvider));
@@ -534,6 +550,7 @@ public static class DependencyInjection
 
         services.AddScoped<IMongoDestinationConnectionTestService, Destinations.MongoDestinationConnectionTestService>();
         services.AddScoped<IBlobDestinationConnectionTestService, Destinations.BlobDestinationConnectionTestService>();
+        services.AddScoped<IFabricDestinationConnectionTestService, Destinations.FabricDestinationConnectionTestService>();
 
         foreach (var registration in MappingSchemaProviderFactory.DefaultRegistrations)
         {

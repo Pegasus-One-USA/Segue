@@ -15,6 +15,12 @@ export interface RouteExecution {
   sourceName: string | null;
   sourceSystemType: string | null;
   status: ExecutionStatus;
+  /** Destination types the run's workflow writes to — a list, since a workflow can fan out. */
+  destinationTypes?: string[] | null;
+  /** FHIR resource types the run's workflow names in its source-node configuration. */
+  resourceTypes?: string[] | null;
+  /** The audience of the workflow's source connection. */
+  applicationType?: string | null;
   startedAt: string;
   completedAt: string | null;
   durationMs: number | null;
@@ -28,6 +34,50 @@ export interface RouteExecution {
    *  persisted to ErrorLogs — null if capture never ran or failed to persist (never a placeholder). Link
    *  straight to /operations/errors?errorReferenceId=... rather than asking the user to search by execution id. */
   errorReferenceId: string | null;
+  /** The source vendor's own id for the Bulk Data $export job this run deferred to — Epic's
+   *  `BulkRequest/{id}` segment, e.g. 0000000000176E6DC7DB51C0082DA988. Null for every run that
+   *  never deferred to an async export. Shown as its own column, and keyed on by the Status cell's
+   *  info icon (see ExecutionHistoryListComponent.showBulkInfoIcon). */
+  bulkRequestId: string | null;
+}
+
+/** Matches the backend's BulkExportResourceTypeStatusDto — one resource type's state within an export.
+ *  `fileCount` is NDJSON FILES, never records: one file may hold a single resource or fifty thousand, and
+ *  the real total is knowable only after download. Null while the type is still pending. */
+export interface BulkExportResourceTypeStatus {
+  resourceType: string;
+  fileCount: number | null;
+  state: 'Pending' | 'Ready';
+}
+
+/** Matches the backend's BulkExportStatusDto — a live, server-proxied read of one run's $export job.
+ *
+ *  Two states, one shape. While the job runs the source server answers 202 with no body at all, so
+ *  `resourceTypes` is built from what the run REQUESTED (every entry Pending, no count) and `progress` —
+ *  the server's free-text X-Progress header — is the only live detail on offer. Once it completes, the
+ *  same list is rebuilt from the manifest with real file counts. The template binds one table either way.
+ *
+ *  Carries no output URLs by design: the manifest's signed links are directly downloadable NDJSON of bulk
+ *  PHI, and the server groups them into counts so they never reach the browser. */
+export interface BulkExportStatus {
+  bulkRequestId: string | null;
+  status: 'InProgress' | 'Completed' | 'Failed';
+  /** e.g. "Searched 0 of 2 patients". Null on servers that don't send X-Progress (it is optional in the
+   *  Bulk Data spec — Epic populates it reliably, others may not) and on a completed job. */
+  progress: string | null;
+  kickedOffOnUtc: string;
+  nextPollNotBeforeUtc: string | null;
+  pollAttemptCount: number;
+  transactionTime: string | null;
+  /** The kick-off URL the server echoes back in its manifest. Completed jobs only. */
+  request: string | null;
+  requiresAccessToken: boolean | null;
+  resourceTypes: BulkExportResourceTypeStatus[];
+  /** Free-text issues from the manifest's `error` array — where a server reports resource types it tried
+   *  and refused even though the job as a whole succeeded. */
+  errors: string[];
+  retryAfterSeconds: number | null;
+  errorMessage: string | null;
 }
 
 export interface PagedResult<T> {
@@ -42,6 +92,14 @@ export interface PagedResult<T> {
  *  Workflows list already uses). */
 export interface RouteExecutionPage extends PagedResult<RouteExecution> {
   availableSourceSystemTypes: string[];
+  /** Destination types configured in this tenant (the same catalog the workflow builder offers). */
+  availableDestinationTypes: string[];
+  /** Every WorkflowRunStatus value, not only those a run has reached. */
+  availableStatuses: string[];
+  /** Every ApplicationType value. */
+  availableApplicationTypes: string[];
+  /** Resource types named by the source-node configuration of the workflows behind these runs. */
+  availableResourceTypes: string[];
 }
 
 export interface RouteExecutionFilter {
@@ -53,6 +111,12 @@ export interface RouteExecutionFilter {
   /** Multi-select Source filter — sent as repeated `sources` params. `source` above stays for single-value
    *  callers (Dashboard links). */
   sources?: string[];
+  /** Multi-select Status filter — repeated `statuses` params. `status` above stays for the single-value
+   *  Dashboard tile links that deep-link straight here. */
+  statuses?: string[];
+  destinationTypes?: string[];
+  applicationTypes?: string[];
+  resourceTypes?: string[];
   triggeredBy?: string;
   search?: string;
   page: number;

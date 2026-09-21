@@ -5309,6 +5309,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("BulkRequestId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset");
 
