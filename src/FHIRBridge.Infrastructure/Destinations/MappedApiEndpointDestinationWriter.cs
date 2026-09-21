@@ -202,6 +202,17 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
         if (template is not null)
         {
             var instance = template.DeepClone();
+
+            // SubstituteInPlace only recurses into a JsonObject's/JsonArray's CHILD values — a template whose
+            // ROOT is itself a bare JSON string (e.g. the whole template is just "{{sourceResourceId}}", valid
+            // JSON and accepted by both the backend parse check and the frontend's jsonValidator) has no parent
+            // container for that walk to ever reach, so it needs its own substitution pass here instead of
+            // silently shipping the literal "{{...}}" text to the endpoint.
+            if (instance is JsonValue rootValue && rootValue.TryGetValue(out string? rootText))
+            {
+                return SubstituteString(rootText, record)?.ToJsonString(PayloadJsonOptions) ?? "null";
+            }
+
             SubstituteInPlace(instance, record);
             return instance.ToJsonString(PayloadJsonOptions);
         }

@@ -22,12 +22,19 @@ namespace FHIRBridge.Infrastructure.Destinations.ApiEndpoint;
 /// and 5xx are retried — a 4xx other than 408/429 means the endpoint is telling us this exact request is
 /// unacceptable, and retrying just burns the budget. 429's <c>Retry-After</c> is honored when present.
 /// </summary>
-public sealed class ApiEndpointSender : IApiEndpointSender
+public sealed class ApiEndpointSender : IApiEndpointSender, IDisposable
 {
     private readonly ISecretProvider _secretProvider;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IFhirDestinationTokenProvider _tokenProvider;
     private readonly ILogger<ApiEndpointSender> _logger;
+
+    // Client-certificate (mTLS) handlers, cached per destination for the lifetime of this sender instance
+    // rather than rebuilt on every batch — see GetOrCreateCertificateHttpClient. This class is registered
+    // Scoped (one instance per pipeline-run scope), so the cache's lifetime is exactly "one run", and is
+    // torn down in Dispose() below when that scope ends.
+    private readonly Dictionary<Guid, HttpClient> _certificateClients = new();
+    private readonly object _certificateClientsLock = new();
 
     public ApiEndpointSender(
         ISecretProvider secretProvider,
@@ -39,6 +46,18 @@ public sealed class ApiEndpointSender : IApiEndpointSender
         _httpClientFactory = httpClientFactory;
         _tokenProvider = tokenProvider;
         _logger = logger;
+    }
+
+    public void Dispose()
+    {
+        lock (_certificateClientsLock)
+        {
+            foreach (var client in _certificateClients.Values)
+            {
+                client.Dispose();
+            }
+            _certificateClients.Clear();
+        }
     }
 
     public async Task<ApiEndpointSendResult> SendAsync(
@@ -62,12 +81,12 @@ public sealed class ApiEndpointSender : IApiEndpointSender
 
         // Client-certificate (mTLS) destinations need their own handler carrying that destination's specific
         // certificate, so they cannot come from the shared named HttpClientFactory pool every other auth mode
-        // uses — a fresh handler per call is the tradeoff for a destination type expected to be low-volume
-        // relative to the batched destinations (Blob/S3/lake) that actually need pooling.
-        using var certificateClient = settings.AuthMode == ApiEndpointAuthMode.ClientCertificate
-            ? BuildClientCertificateHttpClient(secret ?? string.Empty, destination.Name)
-            : null;
-        var httpClient = certificateClient ?? _httpClientFactory.CreateClient(nameof(ApiEndpointSender));
+        // uses. Cached per destination for this sender's lifetime (see GetOrCreateCertificateHttpClient) rather
+        // than rebuilt per batch — a multi-hundred-batch run building a fresh TLS client-auth handshake and
+        // connection pool for every single batch would exhaust sockets/ephemeral ports under sustained volume.
+        var httpClient = settings.AuthMode == ApiEndpointAuthMode.ClientCertificate
+            ? GetOrCreateCertificateHttpClient(destination, secret ?? string.Empty)
+            : _httpClientFactory.CreateClient(nameof(ApiEndpointSender));
 
         var requestUrl = BuildRequestUrl(settings, secret);
         var maxAttempts = settings.RetryCount + 1;
@@ -162,8 +181,22 @@ public sealed class ApiEndpointSender : IApiEndpointSender
             query[settings.ApiKeyQueryParamName ?? "api_key"] = secret ?? string.Empty;
         }
 
-        var separator = settings.EndpointUrl.Contains('?') ? "&" : "?";
-        return $"{settings.EndpointUrl}{separator}{query}";
+        // UriBuilder (not string concatenation on a raw '?' check) so an endpoint URL that already carries a
+        // fragment (e.g. "https://api.example.com/ingest#v1") gets the query appended BEFORE the fragment —
+        // a plain "does it contain '?'" check would land the params (including the ApiKeyQuery secret) inside
+        // the fragment instead, which the URI parser strips before the request is ever sent, silently
+        // authenticating with no API key on every batch.
+        var builder = new UriBuilder(settings.EndpointUrl);
+        var existingQuery = HttpUtility.ParseQueryString(builder.Query);
+        foreach (string? key in existingQuery)
+        {
+            if (key is not null && query[key] is null)
+            {
+                query[key] = existingQuery[key];
+            }
+        }
+        builder.Query = query.ToString();
+        return builder.Uri.ToString();
     }
 
     private HttpRequestMessage BuildRequest(
@@ -201,7 +234,18 @@ public sealed class ApiEndpointSender : IApiEndpointSender
         foreach (var header in settings.Headers)
         {
             request.Headers.Remove(header.Key);
-            request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            request.Content.Headers.Remove(header.Key);
+
+            // .NET splits headers into two disjoint collections (request vs. content headers) and
+            // HttpRequestHeaders.TryAddWithoutValidation silently returns false — no exception — for a name
+            // that belongs to the content-headers collection instead (Content-Type, Content-Encoding,
+            // Content-Length, ...). Without this fallback, a caller who configures dest_apiHeadersJson to
+            // override Content-Type (e.g. adding a "+json" vendor suffix) would have it silently dropped,
+            // with the request still going out under the auto-computed ContentType set above.
+            if (!request.Headers.TryAddWithoutValidation(header.Key, header.Value))
+            {
+                request.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
         }
 
         ApplyAuth(request, settings, secret, bearerToken, signedBytes);
@@ -286,6 +330,24 @@ public sealed class ApiEndpointSender : IApiEndpointSender
             new FhirDestinationOAuth2Options(
                 settings.TokenEndpoint!, settings.ClientId!, clientSecret, settings.Scope),
             cancellationToken);
+
+    /// <summary>Returns this destination's cached client-certificate <see cref="HttpClient"/>, building and
+    /// caching it on first use. See the field doc on <see cref="_certificateClients"/> for why this is cached
+    /// rather than rebuilt per batch.</summary>
+    private HttpClient GetOrCreateCertificateHttpClient(DestinationConfiguration destination, string secret)
+    {
+        lock (_certificateClientsLock)
+        {
+            if (_certificateClients.TryGetValue(destination.Id, out var existing))
+            {
+                return existing;
+            }
+
+            var client = BuildClientCertificateHttpClient(secret, destination.Name);
+            _certificateClients[destination.Id] = client;
+            return client;
+        }
+    }
 
     /// <summary>
     /// Builds a one-off <see cref="HttpClient"/> presenting this destination's client certificate. The secret is

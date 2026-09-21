@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -235,24 +237,41 @@ public static class ApiEndpointTestEndpoints
         return call;
     }
 
-    /// <summary>Reads the whole body as text. <c>TooLarge</c> is true once <see cref="MaxBodyBytes"/> is
-    /// exceeded, in which case <c>Body</c> is empty and nothing has been stored.</summary>
+    /// <summary>Reads the whole body as text, decompressing first when the caller sent
+    /// <c>Content-Encoding: gzip</c> — the ApiEndpoint destination's <c>dest_apiCompression</c> option — so gzip
+    /// mode can actually be smoke-tested against this harness instead of receiving raw compressed bytes that fail
+    /// every parse check below. <c>TooLarge</c> is true once <see cref="MaxBodyBytes"/> is exceeded (measured on
+    /// the decompressed byte count, not the char count, which undercounts for any non-ASCII content), in which
+    /// case <c>Body</c> is empty and nothing has been stored.</summary>
     private static async Task<(string Body, bool TooLarge)> ReadBodyAsync(HttpRequest request, CancellationToken ct)
     {
-        using var reader = new StreamReader(request.Body);
-        var buffer = new char[81920];
-        var text = new System.Text.StringBuilder();
-        int read;
-        while ((read = await reader.ReadAsync(buffer, ct)) > 0)
+        var isGzip = request.Headers.ContentEncoding
+            .Any(value => string.Equals(value, "gzip", StringComparison.OrdinalIgnoreCase));
+        Stream sourceStream = isGzip ? new GZipStream(request.Body, CompressionMode.Decompress) : request.Body;
+
+        try
         {
-            text.Append(buffer, 0, read);
-            if (text.Length > MaxBodyBytes)
+            using var buffer = new MemoryStream();
+            var chunk = new byte[81920];
+            int read;
+            while ((read = await sourceStream.ReadAsync(chunk, ct)) > 0)
             {
-                return (string.Empty, true);
+                buffer.Write(chunk, 0, read);
+                if (buffer.Length > MaxBodyBytes)
+                {
+                    return (string.Empty, true);
+                }
+            }
+
+            return (Encoding.UTF8.GetString(buffer.ToArray()), false);
+        }
+        finally
+        {
+            if (isGzip)
+            {
+                await sourceStream.DisposeAsync();
             }
         }
-
-        return (text.ToString(), false);
     }
 
     private static bool TryParseDocument(string body, out JsonDocument document, out string? error)

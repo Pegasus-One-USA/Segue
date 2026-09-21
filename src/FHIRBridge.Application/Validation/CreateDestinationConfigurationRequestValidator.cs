@@ -114,6 +114,13 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         {
             context.AddFailure("dest_apiEndpointUrl", "Endpoint URL is required.");
         }
+        else if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out _))
+        {
+            // Checked BEFORE the https requirement below: IsHttpsOrLoopback also returns false for a value
+            // that isn't a URI at all, so checking https first reported the wrong reason — "must use https"
+            // for a value that fails at "isn't even a URL" — whenever Require HTTPS happened to be enabled.
+            context.AddFailure("dest_apiEndpointUrl", "Endpoint URL must be an absolute URI.");
+        }
         else
         {
             var requireHttps = string.Equals(
@@ -124,10 +131,6 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
                     "dest_apiEndpointUrl",
                     "Endpoint URL must use https — 'Require HTTPS' is enabled for this destination (loopback "
                         + "is permitted in development).");
-            }
-            else if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out _))
-            {
-                context.AddFailure("dest_apiEndpointUrl", "Endpoint URL must be an absolute URI.");
             }
         }
 
