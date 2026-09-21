@@ -1,0 +1,21 @@
+tests/FHIRBridge.UnitTests/Sources/EpicSourceConnectionScopeSyncServiceTests.cs
+  s_7e6564e8b9ed48::t_e786d641347c1b 45-65,203-267
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_7e6564e8b9ed48::t_e96bdcc85a7d83 9,77,173,190,220,227-242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "240a30d8d68d55b1dac65c908fde5ad065fcf088",
+  "prompts": {},
+  "sessions": {
+    "s_7e6564e8b9ed48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1686ffa8-a822-4a26-bff3-5a76fa12dc2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
