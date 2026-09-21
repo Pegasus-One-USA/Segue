@@ -338,6 +338,12 @@
                   <span class="stat-value">{{ r.address }}</span>
                 </div>
               }
+              @if (r.requestHost) {
+                <div class="stat-field">
+                  <span class="stat-label">Requested From</span>
+                  <span class="stat-value">{{ r.requestHost }}</span>
+                </div>
+              }
             </div>
 
             @if (r.status === 'Failed') {

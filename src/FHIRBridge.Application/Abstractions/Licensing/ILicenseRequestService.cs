@@ -22,10 +22,13 @@ public sealed record LicenseRequestStatusResult(
     /// <summary>Populated only when <see cref="Status"/> is "Failed" — the same payload the direct API call
     /// would have sent, encoded as one copy-pasteable string for the operator to share with the licensor
     /// manually (email/support ticket) instead.</summary>
-    string? EncodedPayload)
+    string? EncodedPayload,
+    /// <summary>The domain/port this install's API was reached on when the request was created — see
+    /// <c>LicenseRequest.RequestHost</c>'s remarks.</summary>
+    string? RequestHost)
 {
     public static LicenseRequestStatusResult NotRequested { get; } =
-        new(false, null, null, null, null, null, null, null, null, null, null);
+        new(false, null, null, null, null, null, null, null, null, null, null, null);
 }
 
 /// <summary>
@@ -41,8 +44,11 @@ public interface ILicenseRequestService
     Task<LicenseRequestStatusResult> GetAsync(CancellationToken cancellationToken);
 
     /// <summary>Fails with <see cref="InvalidOperationException"/> if a request already exists for this
-    /// install — use <see cref="ResubmitAsync"/> for a renewal instead.</summary>
-    Task<LicenseRequestStatusResult> CreateAndSubmitAsync(LicenseRequestInput input, CancellationToken cancellationToken);
+    /// install — use <see cref="ResubmitAsync"/> for a renewal instead. <paramref name="requestHost"/> is
+    /// the inbound HTTP request's Host header (domain, and port when non-default), captured by the
+    /// controller — never taken from <paramref name="input"/>, so it can't be spoofed via the form body.</summary>
+    Task<LicenseRequestStatusResult> CreateAndSubmitAsync(
+        LicenseRequestInput input, string? requestHost, CancellationToken cancellationToken);
 
     /// <summary>Fails with <see cref="InvalidOperationException"/> if no request exists yet for this
     /// install — use <see cref="CreateAndSubmitAsync"/> first.</summary>

@@ -17,6 +17,7 @@ public sealed class LicenseRequestConfiguration : IEntityTypeConfiguration<Licen
         builder.Property(x => x.Address).HasMaxLength(500);
         builder.Property(x => x.PhoneNumber).HasMaxLength(50).IsRequired();
         builder.Property(x => x.UniqueKey).HasMaxLength(64).IsRequired();
+        builder.Property(x => x.RequestHost).HasMaxLength(255);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(x => x.SubmissionError).HasMaxLength(500);
 

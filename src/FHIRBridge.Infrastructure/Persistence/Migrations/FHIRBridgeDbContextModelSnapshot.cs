@@ -1677,6 +1677,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("RequestHost")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)

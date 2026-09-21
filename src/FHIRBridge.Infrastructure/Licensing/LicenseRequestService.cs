@@ -13,7 +13,8 @@ namespace FHIRBridge.Infrastructure.Licensing;
 /// (the same shape used for the manual-fallback blob) field for field, since both paths carry identical
 /// information.</summary>
 internal sealed record LicenseRequestIntakeBody(
-    string ClientName, string Email, string? CompanyName, string? Address, string PhoneNumber, string UniqueKey);
+    string ClientName, string Email, string? CompanyName, string? Address, string PhoneNumber, string UniqueKey,
+    string? RequestHost);
 
 public sealed class LicenseRequestService : ILicenseRequestService
 {
@@ -53,7 +54,7 @@ public sealed class LicenseRequestService : ILicenseRequestService
     }
 
     public async Task<LicenseRequestStatusResult> CreateAndSubmitAsync(
-        LicenseRequestInput input, CancellationToken cancellationToken)
+        LicenseRequestInput input, string? requestHost, CancellationToken cancellationToken)
     {
         var existing = await _repository.GetAsync(cancellationToken);
         if (existing is not null)
@@ -77,7 +78,8 @@ public sealed class LicenseRequestService : ILicenseRequestService
             Guid.NewGuid(), input.ClientName.Trim(), input.Email.Trim(),
             string.IsNullOrWhiteSpace(input.CompanyName) ? null : input.CompanyName.Trim(),
             string.IsNullOrWhiteSpace(input.Address) ? null : input.Address.Trim(),
-            input.PhoneNumber.Trim(), uniqueKey, DateTime.UtcNow);
+            input.PhoneNumber.Trim(), uniqueKey, DateTime.UtcNow,
+            string.IsNullOrWhiteSpace(requestHost) ? null : requestHost.Trim());
 
         await _repository.AddAsync(request, cancellationToken);
         await AttemptSubmitAsync(request, cancellationToken);
@@ -113,7 +115,7 @@ public sealed class LicenseRequestService : ILicenseRequestService
                 $"{baseUrl}{IntakePath}",
                 new LicenseRequestIntakeBody(
                     request.ClientName, request.Email, request.CompanyName, request.Address,
-                    request.PhoneNumber, request.UniqueKey),
+                    request.PhoneNumber, request.UniqueKey, request.RequestHost),
                 cancellationToken);
 
             if (response.IsSuccessStatusCode)
@@ -173,12 +175,12 @@ public sealed class LicenseRequestService : ILicenseRequestService
         var encodedPayload = request.Status == LicenseRequestStatus.Failed
             ? LicenseRequestPayloadEncoder.Encode(new LicenseRequestPayload(
                 request.ClientName, request.Email, request.CompanyName, request.Address, request.PhoneNumber,
-                request.UniqueKey))
+                request.UniqueKey, request.RequestHost))
             : null;
 
         return new LicenseRequestStatusResult(
             true, request.ClientName, request.Email, request.CompanyName, request.Address, request.PhoneNumber,
             request.Status.ToString(), request.CreatedUtc, request.LastAttemptUtc, request.SubmissionError,
-            encodedPayload);
+            encodedPayload, request.RequestHost);
     }
 }

@@ -8,7 +8,8 @@ namespace FHIRBridge.Infrastructure.Licensing;
 /// exactly what the direct <c>POST /api/v1/license-request</c> call already sends; this is the same
 /// payload, just for the manual-fallback path when that call can't reach the licensor.</summary>
 public sealed record LicenseRequestPayload(
-    string ClientName, string Email, string? CompanyName, string? Address, string PhoneNumber, string UniqueKey);
+    string ClientName, string Email, string? CompanyName, string? Address, string PhoneNumber, string UniqueKey,
+    string? RequestHost = null);
 
 /// <summary>
 /// Encodes/decodes <see cref="LicenseRequestPayload"/> into a single copy-pasteable opaque string, for the

@@ -37,7 +37,7 @@ public sealed class LicenseRequest : Entity<Guid>
 
     public LicenseRequest(
         Guid id, string clientName, string email, string? companyName, string? address, string phoneNumber,
-        string uniqueKey, DateTime createdUtc)
+        string uniqueKey, DateTime createdUtc, string? requestHost = null)
     {
         Id = id;
         ClientName = clientName;
@@ -48,6 +48,7 @@ public sealed class LicenseRequest : Entity<Guid>
         UniqueKey = uniqueKey;
         Status = LicenseRequestStatus.Pending;
         CreatedUtc = createdUtc;
+        RequestHost = requestHost;
     }
 
     public string ClientName { get; private set; } = default!;
@@ -58,6 +59,13 @@ public sealed class LicenseRequest : Entity<Guid>
 
     /// <summary>Generated once at creation, never regenerated — see this class's remarks.</summary>
     public string UniqueKey { get; private set; } = default!;
+
+    /// <summary>The domain and, when non-default, port this install's API was reached on when the request
+    /// was created (the inbound HTTP request's Host header, e.g. "fhirbridge.acmehealth.com" or
+    /// "localhost:5000") — lets the licensor tell which deployment a request came from. Captured once at
+    /// creation, never re-derived on <see cref="Resubmit"/> (a renewal always runs on the same install).
+    /// Null if the request predates this field or the Host header was somehow absent.</summary>
+    public string? RequestHost { get; private set; }
 
     public LicenseRequestStatus Status { get; private set; }
     public DateTime CreatedUtc { get; private set; }

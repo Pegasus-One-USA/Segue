@@ -108,6 +108,9 @@ export interface LicenseRequestStatus {
   /** Populated only when `status` is 'Failed' — a single copy-pasteable string to share with the
    *  licensor manually instead of the direct API call that didn't succeed. */
   encodedPayload: string | null;
+  /** The domain (and port, when non-default) this install's API was reached on when the request was
+   *  created — captured server-side from the inbound request, never entered by the admin. */
+  requestHost: string | null;
 }
 
 /** Body of `POST /api/v1/license-request` — the blank first-time request form. Never re-collected on a

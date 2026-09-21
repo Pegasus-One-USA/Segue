@@ -37,6 +37,7 @@ public sealed class LicenseRequestController : ControllerBase
             var result = await _service.CreateAndSubmitAsync(
                 new LicenseRequestInput(
                     request.ClientName, request.Email, request.CompanyName, request.Address, request.PhoneNumber),
+                HttpContext.Request.Host.Value,
                 cancellationToken);
             return Ok(result);
         }
