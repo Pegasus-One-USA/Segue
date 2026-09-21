@@ -1,0 +1,33 @@
+@page
+@model FHIRBridge.LicenseServer.Pages.Account.LoginModel
+@{
+    ViewData["Title"] = "Log in";
+    Layout = "_Layout";
+}
+
+<div class="panel" style="max-width:400px;margin:72px auto 0;">
+    <div class="page-header" style="margin-bottom:20px;">
+        <h1 style="font-size:18px;">FHIRBridge License Server</h1>
+        <p class="page-subtitle">Sign in to mint and manage licenses.</p>
+    </div>
+    @if (Model.GeneratedPasswordHint is not null)
+    {
+        <p class="hint" style="margin-bottom:16px;">@Model.GeneratedPasswordHint</p>
+    }
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <p class="error">@Model.ErrorMessage</p>
+    }
+    <form method="post">
+        <div class="field">
+            <label for="username">Username</label>
+            <input type="text" id="username" asp-for="Username" autofocus autocomplete="username" style="max-width:none;" />
+        </div>
+        <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" asp-for="Password" autocomplete="current-password" style="max-width:none;" />
+        </div>
+        <input type="hidden" asp-for="ReturnUrl" />
+        <button type="submit" style="width:100%;">Log in</button>
+    </form>
+</div>

@@ -1,0 +1,100 @@
+using FHIRBridge.LicenseServer.Api;
+using FHIRBridge.LicenseServer.Data;
+using FHIRBridge.LicenseServer.Licensing;
+using FHIRBridge.LicenseServer.Security;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<LicenseSigningOptions>(builder.Configuration.GetSection(LicenseSigningOptions.SectionName));
+builder.Services.Configure<AdminCredentialsOptions>(builder.Configuration.GetSection(AdminCredentialsOptions.SectionName));
+
+builder.Services.AddSingleton<LicenseSigningKeyProvider>();
+builder.Services.AddSingleton<AdminAccountProvider>();
+builder.Services.AddSingleton<LicenseTokenMinter>();
+builder.Services.AddSingleton<LicenseTokenValidator>();
+
+var connectionString = builder.Configuration.GetConnectionString("LicenseServerDb")
+    ?? "Host=localhost;Port=5432;Database=FHIRBridgeLicenseServer;Username=postgres;Password=r00t1Pa$$2026;";
+builder.Services.AddDbContext<LicenseServerDbContext>(options => options.UseNpgsql(connectionString));
+
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.AccessDeniedPath = "/Account/Login";
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = true;
+        options.Cookie.Name = "FHIRBridgeLicenseServer.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    // Everything requires an authenticated admin session by default. /api/checkin and the login page are
+    // the only two exceptions, both opted out explicitly (via AllowAnonymous) rather than by narrowing this
+    // fallback policy — see CheckInEndpoints and Pages/Account/Login.cshtml.cs.
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
+
+builder.Services.AddRazorPages(options =>
+{
+    options.Conventions.AllowAnonymousToPage("/Account/Login");
+});
+
+var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    // Self-sufficient on ANY connection string (a client's Azure Postgres, a fresh CI container, a
+    // different local instance, anything) - no dependency on the local dev restart script, psql.exe, or
+    // any other out-of-process tooling having run first. Database.MigrateAsync() below can create tables
+    // inside an existing database but not the database itself, so that's handled first.
+    await PostgresDatabaseInitializer.EnsureDatabaseExistsAsync(connectionString, logger);
+
+    var db = scope.ServiceProvider.GetRequiredService<LicenseServerDbContext>();
+    await db.Database.MigrateAsync();
+
+    // Force both singletons to initialize now (rather than lazily on first request) so their startup log
+    // lines (dev-key warning, generated admin password) are impossible to miss.
+    scope.ServiceProvider.GetRequiredService<LicenseSigningKeyProvider>();
+    scope.ServiceProvider.GetRequiredService<AdminAccountProvider>();
+
+    // Same dev-placeholder warning as LicenseSigningKeyProvider above, for the OTHER shared secret this
+    // server holds — see LicenseRequestSharedKey's remarks for what it does and does not protect.
+    if (FHIRBridge.LicenseServer.Licensing.LicenseRequestSharedKey.IsUsingDevPlaceholder)
+    {
+        logger.LogWarning(
+            "License request shared key: using the EMBEDDED DEV-ONLY placeholder (FHIRBRIDGE_LICENSE_REQUEST_SHARED_KEY " +
+            "is not set). Set that env var to a real, non-committed 32-byte base64 secret — matching the value each " +
+            "customer install sets on their own side — for anything beyond local development.");
+    }
+}
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error");
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapRazorPages();
+app.MapCheckInApi();
+app.MapLicenseRequestApi();
+
+app.Run();
