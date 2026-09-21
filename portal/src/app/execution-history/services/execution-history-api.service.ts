@@ -37,6 +37,10 @@ export class ExecutionHistoryApiService {
     if (filter.status) params = params.set('status', filter.status);
     if (filter.source) params = params.set('source', filter.source);
     for (const source of filter.sources ?? []) params = params.append('sources', source);
+    for (const value of filter.statuses ?? []) params = params.append('statuses', value);
+    for (const value of filter.destinationTypes ?? []) params = params.append('destinationTypes', value);
+    for (const value of filter.applicationTypes ?? []) params = params.append('applicationTypes', value);
+    for (const value of filter.resourceTypes ?? []) params = params.append('resourceTypes', value);
     if (filter.triggeredBy) params = params.set('triggeredBy', filter.triggeredBy);
     if (filter.search) params = params.set('search', filter.search);
     if (filter.sortColumn) params = params.set('sortColumn', filter.sortColumn);

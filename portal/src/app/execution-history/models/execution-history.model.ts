@@ -15,6 +15,12 @@ export interface RouteExecution {
   sourceName: string | null;
   sourceSystemType: string | null;
   status: ExecutionStatus;
+  /** Destination types the run's workflow writes to — a list, since a workflow can fan out. */
+  destinationTypes?: string[] | null;
+  /** FHIR resource types the run's workflow names in its source-node configuration. */
+  resourceTypes?: string[] | null;
+  /** The audience of the workflow's source connection. */
+  applicationType?: string | null;
   startedAt: string;
   completedAt: string | null;
   durationMs: number | null;
@@ -86,6 +92,14 @@ export interface PagedResult<T> {
  *  Workflows list already uses). */
 export interface RouteExecutionPage extends PagedResult<RouteExecution> {
   availableSourceSystemTypes: string[];
+  /** Destination types configured in this tenant (the same catalog the workflow builder offers). */
+  availableDestinationTypes: string[];
+  /** Every WorkflowRunStatus value, not only those a run has reached. */
+  availableStatuses: string[];
+  /** Every ApplicationType value. */
+  availableApplicationTypes: string[];
+  /** Resource types named by the source-node configuration of the workflows behind these runs. */
+  availableResourceTypes: string[];
 }
 
 export interface RouteExecutionFilter {
@@ -97,6 +111,12 @@ export interface RouteExecutionFilter {
   /** Multi-select Source filter — sent as repeated `sources` params. `source` above stays for single-value
    *  callers (Dashboard links). */
   sources?: string[];
+  /** Multi-select Status filter — repeated `statuses` params. `status` above stays for the single-value
+   *  Dashboard tile links that deep-link straight here. */
+  statuses?: string[];
+  destinationTypes?: string[];
+  applicationTypes?: string[];
+  resourceTypes?: string[];
   triggeredBy?: string;
   search?: string;
   page: number;

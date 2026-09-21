@@ -1,4 +1,4 @@
-namespace FHIRBridge.Api.Workflows;
+﻿namespace FHIRBridge.Api.Workflows;
 
 /// <summary>
 /// One row of the (Runtime Plane) Execution History screen — a workflow run joined with its workflow's name and
@@ -21,7 +21,16 @@ public sealed record WorkflowRunHistoryDto(
     int WorkflowDefinitionVersion,
     string? CorrelationId,
     string? ErrorReferenceId,
-    string? BulkRequestId)
+    string? BulkRequestId,
+    /// <summary>The destination types the run's workflow writes to — a list, since a workflow can fan out to
+    /// several destinations. Read off the workflow definition, not the run: it is what the run was configured to
+    /// write to, which is the question the Destination filter asks.</summary>
+    IReadOnlyList<string>? DestinationTypes = null,
+    /// <summary>The FHIR resource types the run's workflow names in its source-node configuration.</summary>
+    IReadOnlyList<string>? ResourceTypes = null,
+    /// <summary>The audience (<see cref="FHIRBridge.SharedKernel.Enums.ApplicationType"/>) of the workflow's
+    /// source connection, so this screen's Audience filter matches the Workflows list's.</summary>
+    string? ApplicationType = null)
 {
     public long? DurationMs => CompletedAt.HasValue
         ? (long)(CompletedAt.Value - StartedAt).TotalMilliseconds
@@ -39,7 +48,17 @@ public sealed record WorkflowRunHistoryPageDto(
     int TotalCount,
     int Page,
     int PageSize,
-    IReadOnlyList<string> AvailableSourceSystemTypes);
+    IReadOnlyList<string> AvailableSourceSystemTypes,
+    /// <summary>Destination types configured in this tenant, from the same catalog the workflow builder offers —
+    /// see <c>WorkflowSummaryPageDto</c> for why these come from configuration rather than from the rows.</summary>
+    IReadOnlyList<string> AvailableDestinationTypes,
+    /// <summary>Every <see cref="FHIRBridge.Runtime.Domain.Workflows.WorkflowRunStatus"/> value, not only those a
+    /// run has actually reached, so the Status filter offers a roster that doesn't shift as the history does.</summary>
+    IReadOnlyList<string> AvailableStatuses,
+    /// <summary>Every <see cref="FHIRBridge.SharedKernel.Enums.ApplicationType"/> value.</summary>
+    IReadOnlyList<string> AvailableApplicationTypes,
+    /// <summary>FHIR resource types named by the source-node configuration of the workflows behind these runs.</summary>
+    IReadOnlyList<string> AvailableResourceTypes);
 
 /// <summary>
 /// A live read of one run's FHIR Bulk Data <c>$export</c> job, proxied from the source server on demand — backs the

@@ -13,6 +13,9 @@ import { sourceSystemDisplayName } from '../../../data/source-system-display-nam
 
 type SortColumn = 'pipeline' | 'source' | 'status' | 'duration' | 'lastRun' | 'triggeredBy';
 type SortDirection = 'asc' | 'desc';
+/** Multi-select filter categories shown in the filter bar — same contract the Workflows list uses, so the two
+ *  screens' filters look and behave alike. */
+type FilterCategory = 'status' | 'source' | 'destination' | 'audience' | 'resourceType';
 
 /** The Source filter's option list is no longer a hardcoded roster of every EHR the platform supports — it comes
  *  from the runs themselves (WorkflowRunHistoryPageDto.availableSourceSystemTypes), so a deployment that only ever
@@ -41,11 +44,32 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly search$ = new Subject<string>();
 
-  /** Source systems that actually appear in the run history, from the server's last response. */
+  // ── Multi-select facets ───────────────────────────────────────────────────
+  // Option lists come from the server's facets, which apply the same rule the Workflows list does: Status and
+  // Audience are closed enums offered in full, Source and Destination come from the configuration catalog the
+  // workflow builder itself offers, and Resource Type is collected from source-node configuration.
   readonly availableSources = signal<string[]>([]);
+  readonly availableDestinations = signal<string[]>([]);
+  readonly availableStatuses = signal<string[]>([]);
+  readonly availableAudiences = signal<string[]>([]);
+  readonly availableResourceTypes = signal<string[]>([]);
+
   readonly selectedSources = signal<Set<string>>(new Set());
-  /** True while the Source checkbox panel is open — see toggleSourceMenu / closeSourceMenuIfOutside. */
-  readonly sourceMenuOpen = signal(false);
+  readonly selectedDestinations = signal<Set<string>>(new Set());
+  readonly selectedStatuses = signal<Set<string>>(new Set());
+  readonly selectedAudiences = signal<Set<string>>(new Set());
+  readonly selectedResourceTypes = signal<Set<string>>(new Set());
+
+  /** Which filter dropdown panel is open, if any. */
+  readonly openFilterMenu = signal<FilterCategory | null>(null);
+
+  readonly filterDefs: { category: FilterCategory; label: string }[] = [
+    { category: 'status', label: 'Status' },
+    { category: 'source', label: 'Source' },
+    { category: 'destination', label: 'Destination' },
+    { category: 'audience', label: 'Audience' },
+    { category: 'resourceType', label: 'Resource Type' },
+  ];
 
   /** Set when the Workflows list's "Execution History" row action deep-links here (?workflowId=...) — narrows
    *  every load() to that one workflow's runs. Deliberately NOT cleared by reset() (the "Reset filters" button):
@@ -53,7 +77,6 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
    *  status/source/search — only its own "Show all workflows" control (see clearWorkflowFilter) leaves it. */
   readonly workflowIdFilter = signal<string | null>(null);
   readonly searchQuery   = signal('');
-  readonly statusFilter  = signal('');
   readonly triggerFilter = signal('');
   readonly pageIndex     = signal(0);
   readonly pageSize      = signal(10);
@@ -66,7 +89,10 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   readonly result        = signal<PagedResult<RouteExecution>>({ items: [], totalCount: 0, page: 1, pageSize: 10 });
   /** Any filter active — drives the two "no results" messages below the table. */
   readonly hasActiveFilters = computed(
-    () => !!this.searchQuery() || !!this.statusFilter() || !!this.triggerFilter() || this.selectedSources().size > 0
+    () => !!this.searchQuery() || !!this.triggerFilter()
+      || this.selectedSources().size > 0 || this.selectedDestinations().size > 0
+      || this.selectedStatuses().size > 0 || this.selectedAudiences().size > 0
+      || this.selectedResourceTypes().size > 0
       || !!this.workflowIdFilter(),
   );
 
@@ -98,11 +124,15 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
       this.load(true);
     });
 
-    // A Dashboard stat tile links here with ?status=X (e.g. clicking "Failed") — pre-select that
-    // status filter before the first load so the tile's click-through actually lands pre-filtered.
+    // A Dashboard stat tile links here with ?status=X (e.g. clicking "Failed") — pre-TICK that value in the
+    // Status filter before the first load, rather than the separate single-value filter it used to drive (now
+    // removed, since nothing could set it any more). Feeding the link into the checkbox set is what makes the
+    // arriving state visible in the UI: the user can see which status is filtering the list, add a second one,
+    // or untick it. Setting the invisible single-value filter instead would leave the list narrowed with no
+    // on-screen control showing why.
     const statusFromQuery = this.route.snapshot.queryParamMap.get('status');
     if (statusFromQuery) {
-      this.statusFilter.set(statusFromQuery);
+      this.selectedStatuses.set(new Set([statusFromQuery]));
     }
 
     // The Workflows list's "Execution History" row action deep-links here with ?workflowId=<id> — narrow to
@@ -125,8 +155,11 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     if (silent) this.searching.set(true);
     this.api.list({
       workflowId: this.workflowIdFilter() || undefined,
-      status: this.statusFilter() || undefined,
       sources: this.selectedSources().size ? [...this.selectedSources()] : undefined,
+      statuses: this.selectedStatuses().size ? [...this.selectedStatuses()] : undefined,
+      destinationTypes: this.selectedDestinations().size ? [...this.selectedDestinations()] : undefined,
+      applicationTypes: this.selectedAudiences().size ? [...this.selectedAudiences()] : undefined,
+      resourceTypes: this.selectedResourceTypes().size ? [...this.selectedResourceTypes()] : undefined,
       triggeredBy: this.triggerFilter() || undefined,
       search: this.searchQuery() || undefined,
       page: this.pageIndex() + 1,
@@ -138,6 +171,10 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
         this.searching.set(false);
         this.result.set(result);
         this.availableSources.set(result.availableSourceSystemTypes ?? []);
+        this.availableDestinations.set(result.availableDestinationTypes ?? []);
+        this.availableStatuses.set(result.availableStatuses ?? []);
+        this.availableAudiences.set(result.availableApplicationTypes ?? []);
+        this.availableResourceTypes.set(result.availableResourceTypes ?? []);
         this.loading.set(false);
       },
       error: () => {
@@ -149,29 +186,107 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
 
   onSearch(val: string): void { this.search$.next(val); }
 
-  onStatus(val: string): void  { this.statusFilter.set(val);  this.pageIndex.set(0); this.load(); }
   onTrigger(val: string): void { this.triggerFilter.set(val); this.pageIndex.set(0); this.load(); }
 
-  // ── Source multi-select (mirrors the Workflows list's filter dropdown) ──────
-  toggleSourceMenu(): void {
-    this.sourceMenuOpen.update(open => !open);
+  // ── Multi-select filters (mirrors the Workflows list's filter dropdowns) ────
+  optionsFor(category: FilterCategory): string[] {
+    switch (category) {
+      case 'status':       return this.availableStatuses();
+      case 'source':       return this.availableSources();
+      case 'destination':  return this.availableDestinations();
+      case 'audience':     return this.availableAudiences();
+      case 'resourceType': return this.availableResourceTypes();
+    }
+  }
+
+  selectedSetFor(category: FilterCategory): Set<string> {
+    switch (category) {
+      case 'status':       return this.selectedStatuses();
+      case 'source':       return this.selectedSources();
+      case 'destination':  return this.selectedDestinations();
+      case 'audience':     return this.selectedAudiences();
+      case 'resourceType': return this.selectedResourceTypes();
+    }
+  }
+
+  private signalForCategory(category: FilterCategory) {
+    switch (category) {
+      case 'status':       return this.selectedStatuses;
+      case 'source':       return this.selectedSources;
+      case 'destination':  return this.selectedDestinations;
+      case 'audience':     return this.selectedAudiences;
+      case 'resourceType': return this.selectedResourceTypes;
+    }
+  }
+
+  selectedCountFor(category: FilterCategory): number {
+    return this.selectedSetFor(category).size;
+  }
+
+  isFilterSelected(category: FilterCategory, value: string): boolean {
+    return this.selectedSetFor(category).has(value);
+  }
+
+  /** Brand/product name for an option. The VALUE stays the raw enum the API filters on; only the text changes,
+   *  through the same tables the table's own columns use so the filter and the column can't drift. */
+  displayLabelFor(category: FilterCategory, value: string): string {
+    if (category === 'source') return this.sourceOptionLabel(value);
+    if (category === 'status') return this.statusLabel(value);
+    if (category === 'audience') return this.audienceLabel(value);
+    if (category === 'destination') return value.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+    return value;
+  }
+
+  /** Same friendly audience names the Workflows list's Audience column shows. */
+  audienceLabel(applicationType: string): string {
+    return {
+      Backend: 'Backend Services',
+      EhrLaunch: 'EHR Launch',
+      Standalone: 'Standalone',
+      Patient: 'Patient',
+    }[applicationType] ?? applicationType;
+  }
+
+  toggleFilterMenu(category: FilterCategory): void {
+    this.openFilterMenu.set(this.openFilterMenu() === category ? null : category);
+    this.filterOptionSearch.set('');
   }
 
   /** Reads the click's real target rather than scattering stopPropagation() through the template — a click
    *  still inside .filter-dropdown (the trigger, or the open panel that is its DOM descendant) is left alone. */
   @HostListener('document:click', ['$event'])
-  closeSourceMenuIfOutside(event: MouseEvent): void {
-    if (this.sourceMenuOpen() && !(event.target as HTMLElement).closest('.filter-dropdown')) {
-      this.sourceMenuOpen.set(false);
+  closeFilterMenuIfOutside(event: MouseEvent): void {
+    if (this.openFilterMenu() && !(event.target as HTMLElement).closest('.filter-dropdown')) {
+      this.openFilterMenu.set(null);
+      this.filterOptionSearch.set('');
     }
   }
 
-  isSourceSelected(value: string): boolean {
-    return this.selectedSources().has(value);
+  // ── In-panel option search ────────────────────────────────────────────────
+  // Resource Type can carry ~36 FHIR types and Destination ~24 — past what is findable by eye in a scrolling
+  // panel. The box appears only once a panel has enough options to be worth searching.
+  private static readonly OPTION_SEARCH_THRESHOLD = 8;
+
+  readonly filterOptionSearch = signal('');
+
+  showOptionSearch(category: FilterCategory): boolean {
+    return this.optionsFor(category).length > ExecutionHistoryListComponent.OPTION_SEARCH_THRESHOLD;
   }
 
-  toggleSourceValue(value: string): void {
-    this.selectedSources.update(current => {
+  /** Matched on the LABEL the user can see, not the raw enum behind it. A selected option is always kept
+   *  visible even when it doesn't match, so narrowing can never hide a ticked box — and thus an active filter
+   *  on the table — from the person trying to untick it. */
+  visibleOptionsFor(category: FilterCategory): string[] {
+    const options = this.optionsFor(category);
+    const term = this.filterOptionSearch().trim().toLowerCase();
+    if (!term || !this.showOptionSearch(category)) return options;
+    return options.filter(value =>
+      this.isFilterSelected(category, value)
+      || this.displayLabelFor(category, value).toLowerCase().includes(term));
+  }
+
+  toggleFilterValue(category: FilterCategory, value: string): void {
+    this.signalForCategory(category).update(current => {
       const next = new Set(current);
       if (next.has(value)) next.delete(value); else next.add(value);
       return next;
@@ -180,16 +295,19 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.load();
   }
 
-  clearSources(): void {
-    this.selectedSources.set(new Set());
+  clearFilter(category: FilterCategory): void {
+    this.signalForCategory(category).set(new Set());
     this.pageIndex.set(0);
     this.load();
   }
 
   reset(): void {
     this.searchQuery.set('');
-    this.statusFilter.set('');
     this.selectedSources.set(new Set());
+    this.selectedDestinations.set(new Set());
+    this.selectedStatuses.set(new Set());
+    this.selectedAudiences.set(new Set());
+    this.selectedResourceTypes.set(new Set());
     this.triggerFilter.set('');
     this.pageIndex.set(0);
     this.load();

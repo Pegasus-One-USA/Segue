@@ -2123,6 +2123,12 @@ public static class WorkflowEndpoints
             // the single-value callers that link straight here (the Dashboard's widgets); both are honoured. Named
             // sourceFilters locally because the handler body already binds `sources` to the source CONNECTIONS.
             [Microsoft.AspNetCore.Mvc.FromQuery(Name = "sources")] string[]? sourceFilters,
+            // The same multi-select facets the Workflows list carries, so the two screens filter alike. `status`
+            // above stays for the Dashboard tiles that deep-link here with a single value; both are honoured.
+            string[]? statuses,
+            string[]? destinationTypes,
+            string[]? applicationTypes,
+            string[]? resourceTypes,
             string? triggeredBy,
             string? search,
             int? page,
@@ -2138,6 +2144,54 @@ public static class WorkflowEndpoints
             var workflowsById = (await definitionStore.ListAsync(cancellationToken)).ToDictionary(w => w.Id);
             var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
             var sourceInfoById = sources.ToDictionary(s => s.Id, s => (s.Name, SystemType: s.SourceSystemType.ToString()));
+            var applicationTypeBySourceId = sources.ToDictionary(s => s.Id, s => s.ApplicationType);
+            var destinations = await configurationRepository.GetDestinationsAsync(cancellationToken);
+            var destinationTypeByDestinationId = destinations.ToDictionary(d => d.Id, d => d.DestinationType);
+
+            // The destination types, resource types and audience a run's workflow carries are properties of the
+            // DEFINITION, not of the run, so they are resolved once per definition rather than per run — a history
+            // page is overwhelmingly repeat runs of the same few workflows.
+            var facetsByDefinitionId = new Dictionary<Guid, (string[] DestinationTypes, string[] ResourceTypes, string? ApplicationType)>();
+            foreach (var (definitionId, definition) in workflowsById)
+            {
+                var definitionDestinationTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                var definitionResourceTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                ApplicationType? definitionApplicationType = null;
+
+                foreach (var node in definition.Nodes)
+                {
+                    if (node.Category == WorkflowNodeCategory.Destination
+                        && TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId)
+                        && destinationTypeByDestinationId.TryGetValue(destinationId, out var destinationType))
+                    {
+                        definitionDestinationTypes.Add(destinationType.ToString());
+                    }
+
+                    if (node.Category != WorkflowNodeCategory.Source)
+                    {
+                        continue;
+                    }
+
+                    foreach (var resourceType in GetConfiguredResourceTypes(node.ConfigurationJson))
+                    {
+                        definitionResourceTypes.Add(resourceType);
+                    }
+
+                    // Same highest-precedence-wins rule /workflows/summary applies, so a run's Audience here and
+                    // its workflow's Audience there can't disagree.
+                    if (TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceId)
+                        && applicationTypeBySourceId.TryGetValue(sourceId, out var type) && type is not null
+                        && (definitionApplicationType is null || type.Value > definitionApplicationType.Value))
+                    {
+                        definitionApplicationType = type;
+                    }
+                }
+
+                facetsByDefinitionId[definitionId] = (
+                    definitionDestinationTypes.ToArray(),
+                    definitionResourceTypes.ToArray(),
+                    definitionApplicationType?.ToString());
+            }
 
             var items = new List<WorkflowRunHistoryDto>();
             foreach (var run in runs)
@@ -2165,7 +2219,10 @@ public static class WorkflowEndpoints
                     run.WorkflowDefinitionVersion,
                     run.CorrelationId,
                     run.ErrorReferenceId,
-                    run.BulkRequestId));
+                    run.BulkRequestId,
+                    facetsByDefinitionId[run.WorkflowDefinitionId].DestinationTypes,
+                    facetsByDefinitionId[run.WorkflowDefinitionId].ResourceTypes,
+                    facetsByDefinitionId[run.WorkflowDefinitionId].ApplicationType));
             }
 
             if (workflowId is { } wfId)
@@ -2182,6 +2239,21 @@ public static class WorkflowEndpoints
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+
+            // Same split /workflows/summary makes: Status and Audience are closed enums so the full roster is
+            // offered, Destination comes from the configuration catalog the builder itself offers, and Resource
+            // Type is collected from the source-node configuration of the workflows behind these runs.
+            var availableStatuses = Enum.GetNames<WorkflowRunStatus>()
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableApplicationTypes = Enum.GetNames<ApplicationType>()
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableDestinationTypes = destinations.Select(destination => destination.DestinationType.ToString())
+                .Concat(items.SelectMany(x => x.DestinationTypes ?? Array.Empty<string>()))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableResourceTypes = items.SelectMany(x => x.ResourceTypes ?? Array.Empty<string>())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
 
             if (!string.IsNullOrWhiteSpace(status))
             {
@@ -2212,6 +2284,41 @@ public static class WorkflowEndpoints
                     || (x.SourceSystemType is not null && selectedSources.Contains(x.SourceSystemType))).ToList();
             }
 
+            if (statuses is { Length: > 0 })
+            {
+                // Selecting Running also matches AwaitingBulkExport, for the same reason the single-value `status`
+                // filter above does: the portal presents that non-terminal status as Running, and a filter that
+                // disagreed with the label on screen is what made the Dashboard's Running tile not match this list.
+                var statusSet = new HashSet<string>(statuses, StringComparer.OrdinalIgnoreCase);
+                if (statusSet.Contains(nameof(WorkflowRunStatus.Running)))
+                {
+                    statusSet.Add(nameof(WorkflowRunStatus.AwaitingBulkExport));
+                }
+
+                items = items.Where(x => statusSet.Contains(x.Status)).ToList();
+            }
+
+            if (destinationTypes is { Length: > 0 })
+            {
+                var destinationTypeSet = new HashSet<string>(destinationTypes, StringComparer.OrdinalIgnoreCase);
+                items = items.Where(x =>
+                    x.DestinationTypes is { } types && types.Any(destinationTypeSet.Contains)).ToList();
+            }
+
+            if (applicationTypes is { Length: > 0 })
+            {
+                var applicationTypeSet = new HashSet<string>(applicationTypes, StringComparer.OrdinalIgnoreCase);
+                items = items.Where(x =>
+                    x.ApplicationType is not null && applicationTypeSet.Contains(x.ApplicationType)).ToList();
+            }
+
+            if (resourceTypes is { Length: > 0 })
+            {
+                var resourceTypeSet = new HashSet<string>(resourceTypes, StringComparer.OrdinalIgnoreCase);
+                items = items.Where(x =>
+                    x.ResourceTypes is { } types && types.Any(resourceTypeSet.Contains)).ToList();
+            }
+
             if (!string.IsNullOrWhiteSpace(triggeredBy))
             {
                 items = items.Where(x =>
@@ -2235,7 +2342,8 @@ public static class WorkflowEndpoints
                 .ToList();
 
             return Results.Ok(new WorkflowRunHistoryPageDto(
-                paged, totalCount, effectivePage, effectivePageSize, availableSourceSystemTypes));
+                paged, totalCount, effectivePage, effectivePageSize, availableSourceSystemTypes,
+                availableDestinationTypes, availableStatuses, availableApplicationTypes, availableResourceTypes));
         // Menu-level gate: backs both the Dashboard's "Recent Workflows" widget and the Execution History
         // page — both reuse workflow.view rather than a dedicated permission (see sidebar/route changes).
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
