@@ -167,6 +167,22 @@
   border-radius: var(--radius-base); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); padding: 8px;
 }
 
+// Shown only in panels with enough options to be worth searching (see showOptionSearch on the list
+// components). Sticks to the top so it stays reachable while the option list behind it scrolls. The negative
+// side margins let it span the panel's full width, past the panel's own 8px padding, so its border reads as a
+// divider under the whole panel rather than a floating underline.
+.filter-option-search {
+  position: sticky; top: -8px; z-index: 1;
+  box-sizing: border-box; height: 30px; width: calc(100% + 16px);
+  margin: -8px -8px 6px; padding: 0 10px;
+  border: none; border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface); font-size: 13px; color: var(--color-ink);
+
+  &:focus { outline: none; border-bottom-color: var(--color-primary); }
+
+  &::placeholder { color: var(--color-muted); }
+}
+
 .filter-dropdown-empty { padding: 8px; font-size: 13px; color: var(--color-muted); }
 
 .filter-checkbox-row {
