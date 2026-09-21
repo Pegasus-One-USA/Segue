@@ -6,8 +6,23 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.EventLog;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// A rolling file sink alongside the console — the ONLY place this service's logs go once deployed as a
+// Windows Service: there's no attached console there, and the Event Log provider is deliberately
+// silenced below (see that call's own remarks). Without this, a misbehaving deployed service would have
+// nowhere to be diagnosed from at all. Path is relative to the app's own published folder, so it works
+// identically whether run as a service or a plain console/`dotnet run` process.
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .WriteTo.Console()
+    .WriteTo.File(
+        Path.Combine(AppContext.BaseDirectory, "Logs", "licenseserver-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 14));
 
 // No-op unless the process is actually started by the Windows Service Control Manager (e.g. `dotnet run`
 // and console execution are unaffected) — lets the same published output run standalone or as a service.
@@ -21,10 +36,10 @@ builder.Host.UseWindowsService(options => options.ServiceName = "FHIRBridge.Lice
 // as a service. Confirmed on the real deployment VM: the LocalSystem service account isn't allowed to
 // auto-create a brand-new event source on first write ("Cannot open log for source ... Access is
 // denied" — Win32Exception 5), which crashes the WHOLE process the instant anything logs anything,
-// before the host ever finishes starting. This app has no need for genuine Windows Event Log output
-// (console logging already covers it, same as every other log call here) — silencing just this one
-// provider's actual writes, rather than removing/fighting its registration, sidesteps the permission
-// issue entirely without touching provider ordering.
+// before the host ever finishes starting. Silencing just this one provider's actual writes, rather than
+// removing/fighting its registration, sidesteps the permission issue entirely without touching provider
+// ordering — the rolling file sink registered above is what actually covers this app's need for
+// persistent, operator-visible output once deployed as a service (there is no attached console there).
 builder.Services.Configure<EventLogSettings>(settings => settings.Filter = (_, _) => false);
 
 builder.Services.Configure<LicenseSigningOptions>(builder.Configuration.GetSection(LicenseSigningOptions.SectionName));
@@ -54,9 +69,11 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
-    // Everything requires an authenticated admin session by default. /api/checkin and the login page are
-    // the only two exceptions, both opted out explicitly (via AllowAnonymous) rather than by narrowing this
-    // fallback policy — see CheckInEndpoints and Pages/Account/Login.cshtml.cs.
+    // Everything requires an authenticated admin session by default. /api/checkin, /api/license-requests,
+    // and the login page are the three exceptions, each opted out explicitly (via AllowAnonymous) rather
+    // than by narrowing this fallback policy — see CheckInEndpoints, LicenseRequestEndpoints, and
+    // Pages/Account/Login.cshtml.cs. The intake endpoint upserts by UniqueKey rather than inserting
+    // unboundedly, so this anonymous surface is bounded and deliberate, not an oversight.
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();

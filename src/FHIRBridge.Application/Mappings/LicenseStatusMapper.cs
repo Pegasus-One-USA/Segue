@@ -15,7 +15,8 @@ public static class LicenseStatusMapper
         LicenseStatus status,
         LicenseUsageCounts? usageCounts = null,
         LicenseUsageExecutionStats? executionStats = null,
-        bool alreadyActive = false) =>
+        bool alreadyActive = false,
+        bool allowTestingUtilities = false) =>
         new(
             status.State.ToString(),
             status.CustomerName,
@@ -36,7 +37,8 @@ public static class LicenseStatusMapper
                     counts.WorkflowCount,
                     executionStats?.SuccessfulExecutionsThisMonth ?? 0)
                 : null,
-            alreadyActive);
+            alreadyActive,
+            allowTestingUtilities);
 
     /// <summary>Shared by <see cref="ToDto"/> and <c>LicenseController.GetHistory</c> — every quota/allow-list
     /// dimension a license can carry, mapped to its wire shape.</summary>

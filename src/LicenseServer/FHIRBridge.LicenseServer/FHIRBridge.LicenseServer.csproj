@@ -38,6 +38,14 @@
     </PackageReference>
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.2.1" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.2.1" />
+    <!-- Same reasoning as System.Threading.AccessControl above, not a relaxation of the "no dependency
+         on the product" isolation: as a Windows Service there is no attached console, and the Event Log
+         provider is deliberately silenced (see Program.cs's remarks on that), so without a file sink a
+         misbehaving deployed service has nowhere to be diagnosed from at all. Serilog is already this
+         product's standard logging framework (FHIRBridge.Observability) — used here directly, by
+         reference to the NuGet packages only, never to that project. -->
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
   </ItemGroup>
 
 </Project>

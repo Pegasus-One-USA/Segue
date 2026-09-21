@@ -48,7 +48,12 @@ public sealed record LicenseStatusDto(
     bool IsExpired,
     int? DaysRemaining,
     LicenseUsageDto? Usage,
-    bool AlreadyActive = false);
+    bool AlreadyActive = false,
+    /// <summary>Mirrors <c>License:AllowTestingUtilities</c> (off by default) — whether this install's
+    /// "Clear License"/"Clear License History" testing/support endpoints are callable at all right now.
+    /// The portal uses this to decide whether to render that card; the endpoints themselves also check
+    /// the same setting server-side, so hiding the button is a UX nicety here, not the actual gate.</summary>
+    bool AllowTestingUtilities = false);
 
 /// <summary>Body of <c>POST /api/v1/license</c>.</summary>
 public sealed record ApplyLicenseRequest(string Token);

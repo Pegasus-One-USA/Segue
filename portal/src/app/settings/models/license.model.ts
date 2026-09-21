@@ -70,6 +70,10 @@ export interface LicenseStatus {
    *  the currently-active license was submitted again — nothing was re-persisted and no new history row
    *  was added. Always `false` on `GET /api/v1/license`. */
   alreadyActive: boolean;
+  /** Mirrors `License:AllowTestingUtilities` server-side (off by default) — whether the "Clear
+   *  License"/"Clear License History" testing/support buttons should render at all. The endpoints
+   *  themselves enforce the same setting, so this only controls whether the button is shown. */
+  allowTestingUtilities: boolean;
 }
 
 /** Body of `POST /api/v1/license`. */
