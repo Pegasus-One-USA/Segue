@@ -280,6 +280,9 @@ export const LICENSE_REQUEST_ENDPOINTS = {
   get:      `${API_V1_BASE}/license-request`,
   create:   `${API_V1_BASE}/license-request`,
   resubmit: `${API_V1_BASE}/license-request/resubmit`,
+  // Narrow read/write of just License:LicensorApplicationUrl — deliberately NOT the general-purpose
+  // system-settings endpoints, which the license gate does not allowlist while unlicensed.
+  licensorUrl: `${API_V1_BASE}/license-request/licensor-url`,
 };
 
 export const LOINC_ENDPOINTS = {

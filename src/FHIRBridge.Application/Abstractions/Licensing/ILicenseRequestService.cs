@@ -1,5 +1,17 @@
 namespace FHIRBridge.Application.Abstractions.Licensing;
 
+/// <summary>SystemSetting keys the license-request flow reads/writes, shared between
+/// <c>LicenseRequestService</c> (Infrastructure) and <c>LicenseRequestController</c> (Api) so both sides
+/// name the exact same key. Kept in the Application layer since both of those are DI clients of it, not
+/// owners — same reasoning as any other cross-layer constant.</summary>
+public static class LicenseRequestSettingKeys
+{
+    /// <summary>The licensor's base URL — see <c>LicenseRequestController.GetLicensorUrl</c>/
+    /// <c>SetLicensorUrl</c> for the narrow, license-gate-allowlisted endpoint pair that exposes just this
+    /// one key, instead of the general-purpose (and NOT allowlisted) SystemSettingsController.</summary>
+    public const string LicensorApplicationUrl = "License:LicensorApplicationUrl";
+}
+
 /// <summary>Fields collected on the blank first-time request form. Never re-collected on a renewal — see
 /// <see cref="ILicenseRequestService.ResubmitAsync"/>.</summary>
 public sealed record LicenseRequestInput(

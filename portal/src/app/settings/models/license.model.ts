@@ -122,3 +122,9 @@ export interface CreateLicenseRequestRequest {
   address: string | null;
   phoneNumber: string;
 }
+
+/** Mirrors LicensorApplicationUrlDto, the wire shape for GET/PUT
+ *  `api/v1/license-request/licensor-url` — the one system setting reachable while unlicensed. */
+export interface LicensorApplicationUrl {
+  url: string;
+}

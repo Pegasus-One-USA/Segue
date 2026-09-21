@@ -8,11 +8,6 @@ import {
 } from '../../models/license.model';
 import { ToastService } from '../../../services/toast.service';
 import { AppInitService } from '../../../onboarding/services/app-init.service';
-import { ISystemSettingsService } from '../../../system-settings/services/i-system-settings.service';
-
-/** SystemSetting key for the licensor's base URL — mirrors LicenseRequestService's own constant on the
- *  backend (src/FHIRBridge.Infrastructure/Licensing/LicenseRequestService.cs). */
-const LICENSOR_APPLICATION_URL_KEY = 'License:LicensorApplicationUrl';
 
 /** Whether to show the full status card (Active/Grace/Expired) vs. the "No license activated"
  *  activation-only view. Deliberately NOT the same grouping as the backend's `IsPresent` (which is
@@ -34,7 +29,6 @@ export class LicenseSettingsComponent implements OnInit {
   private readonly licenseSvc = inject(LicenseService);
   private readonly toast = inject(ToastService);
   private readonly appInit = inject(AppInitService);
-  private readonly systemSettingsSvc = inject(ISystemSettingsService);
 
   /** Exposed for the template's `@if` checks against a numeric limit field — every such field uses this
    *  sentinel to mean "unlimited" rather than `null` (see `LicenseLimits` in license.model.ts). */
@@ -82,10 +76,11 @@ export class LicenseSettingsComponent implements OnInit {
 
   // Base URL this install posts license requests to — a runtime SystemSetting (License:
   // LicensorApplicationUrl), editable here since it's the one detail a self-hosted deployment may need
-  // to change (e.g. the licensor moving to a new domain) without digging through generic System Settings.
+  // to change (e.g. the licensor moving to a new domain). Read/written via LicenseService's own narrow
+  // licensor-url endpoint (not the general ISystemSettingsService), since that's the only system
+  // setting the license gate allowlists while unlicensed — see LicenseRequestController.
   protected readonly licensorUrlLoading = signal(true);
   protected readonly licensorUrlSaving = signal(false);
-  protected readonly licensorUrlDescription = signal<string | null>(null);
   // A bare <form [formGroup]> (rather than a lone FormControl bound with [formControl]) is what makes
   // Angular's FormGroupDirective intercept the native submit event and call preventDefault() — without
   // it, (ngSubmit) still fires, but the browser also does its own full-page GET/POST navigation right
@@ -107,12 +102,10 @@ export class LicenseSettingsComponent implements OnInit {
 
   private loadLicensorUrl(): void {
     this.licensorUrlLoading.set(true);
-    this.systemSettingsSvc.getAll().subscribe({
-      next: (settings) => {
-        const setting = settings.find((s) => s.key === LICENSOR_APPLICATION_URL_KEY);
-        this.licensorUrlForm.setValue({ url: setting?.value ?? '' });
+    this.licenseSvc.getLicensorUrl().subscribe({
+      next: (setting) => {
+        this.licensorUrlForm.setValue({ url: setting.url });
         this.licensorUrlForm.markAsPristine();
-        this.licensorUrlDescription.set(setting?.description ?? null);
         this.licensorUrlLoading.set(false);
       },
       error: () => {
@@ -127,13 +120,10 @@ export class LicenseSettingsComponent implements OnInit {
     if (this.licensorUrlForm.invalid) { this.licensorUrlForm.markAllAsTouched(); return; }
     this.licensorUrlSaving.set(true);
 
-    this.systemSettingsSvc.set(LICENSOR_APPLICATION_URL_KEY, {
-      value: this.licensorUrlForm.getRawValue().url.trim(),
-      description: this.licensorUrlDescription(),
-    }).subscribe({
+    this.licenseSvc.setLicensorUrl(this.licensorUrlForm.getRawValue().url.trim()).subscribe({
       next: (setting) => {
         this.licensorUrlSaving.set(false);
-        this.licensorUrlForm.setValue({ url: setting.value });
+        this.licensorUrlForm.setValue({ url: setting.url });
         this.licensorUrlForm.markAsPristine();
         this.toast.success('Licensor application URL saved');
       },

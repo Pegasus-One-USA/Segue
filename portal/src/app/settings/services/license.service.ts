@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { LICENSE_ENDPOINTS, LICENSE_REQUEST_ENDPOINTS } from '../../core/api-endpoints';
 import {
   ApplyLicenseRequest, CreateLicenseRequestRequest, LicenseHistoryEntry, LicenseRequestStatus, LicenseStatus,
+  LicensorApplicationUrl,
 } from '../models/license.model';
 
 @Injectable({ providedIn: 'root' })
@@ -32,5 +33,16 @@ export class LicenseService {
 
   resubmitRequest(): Observable<LicenseRequestStatus> {
     return this.http.post<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.resubmit, {});
+  }
+
+  // Narrow read/write of just the licensor URL — reachable while unlicensed (see the endpoint's own
+  // comment); the general-purpose ISystemSettingsService.getAll()/set() is NOT, since the license gate
+  // does not allowlist /api/v1/system/settings.
+  getLicensorUrl(): Observable<LicensorApplicationUrl> {
+    return this.http.get<LicensorApplicationUrl>(LICENSE_REQUEST_ENDPOINTS.licensorUrl);
+  }
+
+  setLicensorUrl(url: string): Observable<LicensorApplicationUrl> {
+    return this.http.put<LicensorApplicationUrl>(LICENSE_REQUEST_ENDPOINTS.licensorUrl, { url });
   }
 }

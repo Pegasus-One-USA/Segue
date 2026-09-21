@@ -4,6 +4,7 @@ using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities.Licensing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -18,11 +19,6 @@ internal sealed record LicenseRequestIntakeBody(
 
 public sealed class LicenseRequestService : ILicenseRequestService
 {
-    /// <summary>SystemSetting key for the licensor's base URL — see appsettings.json's
-    /// "License:LicensorApplicationUrl" for the compiled-in default, and
-    /// SystemSettingsService.ValidatedValueFor for the shape this is held to on save.</summary>
-    private const string LicensorApplicationUrlSettingKey = "License:LicensorApplicationUrl";
-
     /// <summary>Fixed path appended to the licensor's base URL — the base itself is the only part an
     /// admin edits.</summary>
     private const string IntakePath = "/api/license-requests";
@@ -81,7 +77,21 @@ public sealed class LicenseRequestService : ILicenseRequestService
             input.PhoneNumber.Trim(), uniqueKey, DateTime.UtcNow,
             string.IsNullOrWhiteSpace(requestHost) ? null : requestHost.Trim());
 
-        await _repository.AddAsync(request, cancellationToken);
+        try
+        {
+            await _repository.AddAsync(request, cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Two concurrent POST /api/v1/license-request calls can both pass the GetAsync check above
+            // before either commits — the schema's SingletonGuard unique index (see
+            // LicenseRequestConfiguration) rejects whichever insert loses that race. Same outward
+            // behavior as losing the pre-check: the caller should resubmit against the row that won.
+            throw new InvalidOperationException(
+                "A license request already exists for this install — use resubmit to try again instead of " +
+                "creating a new one.");
+        }
+
         await AttemptSubmitAsync(request, cancellationToken);
 
         return ToResult(request);
@@ -160,8 +170,8 @@ public sealed class LicenseRequestService : ILicenseRequestService
     private async Task<string> ResolveLicensorApplicationUrlAsync(CancellationToken cancellationToken)
     {
         var configured = await _settingsCache.GetStringAsync(
-            LicensorApplicationUrlSettingKey,
-            _configuration[LicensorApplicationUrlSettingKey] ?? string.Empty,
+            LicenseRequestSettingKeys.LicensorApplicationUrl,
+            _configuration[LicenseRequestSettingKeys.LicensorApplicationUrl] ?? string.Empty,
             cancellationToken);
 
         if (string.IsNullOrWhiteSpace(configured))
