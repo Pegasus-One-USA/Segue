@@ -8,6 +8,14 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// No-op unless the process is actually started by the Windows Service Control Manager (e.g. `dotnet run`
+// and console execution are unaffected) — lets the same published output run standalone or as a service.
+// Without this, Windows Service Control Manager reports a bare "CouldNotStartService" on Start-Service:
+// the process never registers with the SCM's start protocol, so it never gets a chance to report
+// "running" — it just looks like an immediate, unexplained failure from the SCM's point of view, even
+// though the app itself starts up fine when run directly from a console.
+builder.Host.UseWindowsService(options => options.ServiceName = "FHIRBridge.LicenseServer");
+
 builder.Services.Configure<LicenseSigningOptions>(builder.Configuration.GetSection(LicenseSigningOptions.SectionName));
 builder.Services.Configure<AdminCredentialsOptions>(builder.Configuration.GetSection(AdminCredentialsOptions.SectionName));
 
