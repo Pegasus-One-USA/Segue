@@ -128,6 +128,95 @@ public sealed class FhirRestBulkExportClient : IFhirBulkExportClient
             ErrorMessage: $"Bulk export status poll returned {(int)response.StatusCode} ({response.ReasonPhrase}). {errorBody}");
     }
 
+    public async Task<BulkExportStatusSnapshot> GetStatusAsync(
+        string statusUrl,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        var accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, statusUrl);
+        SetBearer(httpRequest, accessToken);
+        httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Accepted)
+        {
+            // Deliberately no body read: a Bulk Data server answers an in-flight job with 202 and NO content —
+            // there is no partial manifest to parse, and X-Progress is the only detail on offer. Callers that want
+            // a populated per-type list while the job runs build it from what they REQUESTED, not from here.
+            return new BulkExportStatusSnapshot(
+                BulkExportPollStatus.InProgress,
+                Progress: ReadProgressHeader(response),
+                RetryAfter: ResolvePollDelay(response));
+        }
+
+        if (response.StatusCode == HttpStatusCode.OK)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var (transactionTime, request, requiresAccessToken) = ParseManifestMetadata(body);
+
+            return new BulkExportStatusSnapshot(
+                BulkExportPollStatus.Completed,
+                Progress: ReadProgressHeader(response),
+                Files: ParseManifest(body, "output"),
+                ErrorFiles: ParseManifest(body, "error"),
+                TransactionTime: transactionTime,
+                Request: request,
+                RequiresAccessToken: requiresAccessToken);
+        }
+
+        var errorBody = await SafeReadAsync(response, cancellationToken);
+        // Same 300-char cap the kick-off path uses — Epic answers some failures with a full HTML error page, which
+        // is noise in a log and must never be rendered into the portal.
+        var snippet = errorBody.Length > 300 ? errorBody[..300] + "…" : errorBody;
+        return new BulkExportStatusSnapshot(
+            BulkExportPollStatus.Failed,
+            ErrorMessage: $"Bulk export status returned {(int)response.StatusCode} ({response.ReasonPhrase}). {snippet}".TrimEnd());
+    }
+
+    /// <summary>The Bulk Data spec's optional <c>X-Progress</c> header — free text the server may use to describe
+    /// how far along an in-flight job is (Epic: "Searched 0 of 2 patients"). Absent on servers that don't implement
+    /// it, which is conformant, so this is always best-effort.</summary>
+    private static string? ReadProgressHeader(HttpResponseMessage response)
+        => response.Headers.TryGetValues("X-Progress", out var values)
+            ? values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim()
+            : null;
+
+    /// <summary>Reads the completion manifest's scalar fields — the ones <see cref="ParseManifest"/> skips because
+    /// the poller has no use for them, but an operator reading the status does.</summary>
+    private static (DateTimeOffset? TransactionTime, string? Request, bool? RequiresAccessToken) ParseManifestMetadata(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return (null, null, null);
+            }
+
+            DateTimeOffset? transactionTime = DateTimeOffset.TryParse(
+                GetString(root, "transactionTime"), out var parsedTransactionTime)
+                ? parsedTransactionTime
+                : null;
+
+            bool? requiresAccessToken = root.TryGetProperty("requiresAccessToken", out var tokenFlag)
+                && tokenFlag.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? tokenFlag.GetBoolean()
+                : null;
+
+            return (transactionTime, GetString(root, "request"), requiresAccessToken);
+        }
+        catch (JsonException)
+        {
+            // A malformed manifest shouldn't lose the file lists ParseManifest may still recover — the scalars are
+            // supplementary display detail, so absence of them is survivable.
+            return (null, null, null);
+        }
+    }
+
     public async Task<IReadOnlyList<ResourceEnvelope>> DownloadResultsAsync(
         IReadOnlyList<BulkExportFile> files,
         FhirSourceConfiguration source,

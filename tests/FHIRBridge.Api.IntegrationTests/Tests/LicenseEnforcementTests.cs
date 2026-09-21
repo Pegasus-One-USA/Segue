@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Licensing;
-using FHIRBridge.Infrastructure.Licensing;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
 namespace FHIRBridge.Api.IntegrationTests.Tests;
@@ -11,11 +13,11 @@ namespace FHIRBridge.Api.IntegrationTests.Tests;
 /// End-to-end proof that real license enforcement blocks an actual HTTP call with 403 once a quota/allow-list
 /// is hit — the exact scenario the user reported (set a limit, still able to create one more anyway).
 ///
-/// Mints a real, in-process-signed license token via <see cref="DevLicenseMintingService"/> (the same dev
-/// private key <c>SignedLicenseValidator</c> verifies against — see that class's remarks) and applies it via
-/// the real, non-environment-gated <c>POST /api/v1/license</c> endpoint, rather than the temporary
-/// <c>DevLicenseMintingController</c> HTTP endpoint (which 404s outside Development — see
-/// <see cref="DevLicenseMintingTests"/> — and this suite's <see cref="ApiFactory"/> runs "Testing").
+/// Mints a real, in-process-signed license token with the same dev private key
+/// <c>SignedLicenseValidator</c> verifies against (see that class's remarks — this key is duplicated here
+/// deliberately, same as <c>SignedLicenseValidatorTests</c>, rather than referencing the standalone,
+/// deliberately-not-in-the-solution minting tool project) and applies it via the real
+/// <c>POST /api/v1/license</c> endpoint.
 ///
 /// <see cref="ApiFixture"/>'s host (and its underlying <c>ILicenseService.Current</c> singleton) is shared
 /// across every test in the "ApiTests" collection, so applying a restrictive license here mutates state every
@@ -25,21 +27,42 @@ namespace FHIRBridge.Api.IntegrationTests.Tests;
 [Collection("ApiTests")]
 public sealed class LicenseEnforcementTests(ApiFixture f)
 {
+    // Same dev keypair as SignedLicenseValidatorTests / LicensePublicKey.cs.
+    private const string DevPrivateKeyPkcs8Base64 =
+        "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgzNfRUjAwdWWhtF6HDTFMjzkpc6ix4tAt0KpVuBS1H+mhRANCAAQnMOZWXkeX06SoZyVY2NFCQjAPD9dXCmyoZChc3n59+CHbwMLDg8lzcuh/60NbOQzfHLB/fGxuUpTM+n5l2sJr";
+
     private static string MintToken(
         int maxUsers = LicenseLimits.Unlimited,
         int maxWorkflows = LicenseLimits.Unlimited,
         int maxSourceConnections = LicenseLimits.Unlimited,
-        IReadOnlyList<string>? allowedSourceTypes = null) =>
-        new DevLicenseMintingService().Mint(new DevLicenseMintRequest(
-            CustomerId: $"license-enforcement-test-{Guid.NewGuid():N}",
-            CustomerName: "License Enforcement Test",
-            Edition: "standard",
-            ExpiresUtc: DateTime.UtcNow.AddYears(1),
-            MaxUsers: maxUsers,
-            MaxWorkflows: maxWorkflows,
-            MaxSourceConnections: maxSourceConnections,
-            Features: Array.Empty<string>(),
-            AllowedSourceTypes: allowedSourceTypes));
+        IReadOnlyList<string>? allowedSourceTypes = null)
+    {
+        // Deliberately not disposed: Microsoft.IdentityModel.Tokens caches signature providers keyed off
+        // the key material — see SignedLicenseValidatorTests' repeated remarks on the same pattern.
+        var ecdsa = ECDsa.Create();
+        ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(DevPrivateKeyPkcs8Base64), out _);
+
+        var payloadJson = JsonSerializer.Serialize(new
+        {
+            iss = "pegasusone",
+            sub = $"license-enforcement-test-{Guid.NewGuid():N}",
+            customerName = "License Enforcement Test",
+            edition = "standard",
+            nbf = ToUnixSeconds(DateTime.UtcNow),
+            exp = ToUnixSeconds(DateTime.UtcNow.AddYears(1)),
+            maxUsers,
+            maxWorkflows,
+            maxSourceConnections,
+            features = Array.Empty<string>(),
+            allowedSourceTypes,
+        });
+
+        var credentials = new SigningCredentials(new ECDsaSecurityKey(ecdsa), SecurityAlgorithms.EcdsaSha256);
+        return new JsonWebTokenHandler().CreateToken(payloadJson, credentials);
+    }
+
+    private static long ToUnixSeconds(DateTime value) =>
+        new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc)).ToUnixTimeSeconds();
 
     private static async Task ApplyLicenseAsync(HttpClient client, string token)
     {

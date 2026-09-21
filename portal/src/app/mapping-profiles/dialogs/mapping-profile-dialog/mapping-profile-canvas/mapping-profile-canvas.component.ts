@@ -6,7 +6,7 @@ import { MappingCatalogService, FhirElement } from '../../../../services/mapping
 import { DestinationColumn, DestinationTable, DestinationProbeRequest } from '../../../../services/destination-schema.service';
 import { FieldMappingCanvasComponent } from '../../../../components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component';
 import {
-  MappingRow, MappingSourceRef, MappingDestType, serializeRowsFlat,
+  MappingRow, MappingSourceRef, MappingDestType, isSqlFamilyDestType, serializeRowsFlat,
 } from '../../../../components/node-library/destination-wizard/field-mapping/field-mapping-model';
 import { ChildTableRelation } from '../../../../components/node-library/destination-wizard/field-mapping/field-mapping-summary.model';
 
@@ -77,7 +77,9 @@ export class MappingProfileCanvasComponent {
   readonly readOnly = input(false);
 
   readonly resource = computed(() => this.resources()[0] ?? '');
-  readonly isSql = computed(() => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres');
+  // Shared predicate, not an inline list — Masters and the workflow canvas must agree about which
+  // destinations are relational, and Fabric Warehouse is now one of them.
+  readonly isSql = computed(() => isSqlFamilyDestType(this.destType()));
 
   // No decrypted destination credentials are ever available here — see this class's own doc comment.
   readonly connectionInfo: DestinationProbeRequest | null = null;

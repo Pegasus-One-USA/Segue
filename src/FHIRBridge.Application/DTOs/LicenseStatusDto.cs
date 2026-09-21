@@ -47,7 +47,14 @@ public sealed record LicenseStatusDto(
     bool IsPresent,
     bool IsExpired,
     int? DaysRemaining,
-    LicenseUsageDto? Usage);
+    LicenseUsageDto? Usage,
+    bool AlreadyActive = false);
 
 /// <summary>Body of <c>POST /api/v1/license</c>.</summary>
 public sealed record ApplyLicenseRequest(string Token);
+
+/// <summary>Wire shape for one row returned by <c>GET /api/v1/license/history</c> — mirrors
+/// <c>FHIRBridge.Domain.Entities.Licensing.LicenseHistoryEntry</c>, minus the raw token (no UI need to
+/// expose it here).</summary>
+public sealed record LicenseHistoryEntryDto(
+    DateTime AppliedUtc, string? CustomerName, string? Edition, string State, DateTime? ExpiresUtc, bool IsCurrent);

@@ -141,6 +141,9 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(x => x.ErrorMessage);
         builder.Property(x => x.ErrorReferenceId).HasMaxLength(50);
+        // 200, not Epic's own 32 hex chars: this column is vendor-agnostic (see BulkRequestIds.FromStatusUrl) and
+        // other Bulk Data servers use longer opaque tokens as their job id.
+        builder.Property(x => x.BulkRequestId).HasMaxLength(200);
         builder.Property(x => x.TriggeredBy).HasMaxLength(200);
         builder.Property(x => x.TriggerType).HasMaxLength(50);
         builder.Property(x => x.TargetNodeId);

@@ -4,200 +4,417 @@
     <p class="page-sub">View Segue's current license and activate or renew it.</p>
   </div>
 
-  <!-- ⚠ TEMPORARY / DEV-ONLY link — the page it opens 404s itself outside a Development-hosted API.
-       Delete this link alongside license-dev-mint.component.* once minting moves to its own tool. -->
-  <a class="dev-mint-link" routerLink="/settings/license/mint-dev">Dev: Mint a test license →</a>
+  <div class="tab-strip" role="tablist">
+    <button type="button" role="tab" class="tab-btn" [class.tab-btn--active]="activeTab() === 'status'"
+            [attr.aria-selected]="activeTab() === 'status'" (click)="activeTab.set('status')">
+      Status
+    </button>
+    <button type="button" role="tab" class="tab-btn" [class.tab-btn--active]="activeTab() === 'update'"
+            [attr.aria-selected]="activeTab() === 'update'" (click)="activeTab.set('update')">
+      {{ hasLicense() ? 'Update License' : 'Activate License' }}
+    </button>
+    <button type="button" role="tab" class="tab-btn" [class.tab-btn--active]="activeTab() === 'request'"
+            [attr.aria-selected]="activeTab() === 'request'" (click)="activeTab.set('request')">
+      License Request
+    </button>
+    <button type="button" role="tab" class="tab-btn" [class.tab-btn--active]="activeTab() === 'history'"
+            [attr.aria-selected]="activeTab() === 'history'" (click)="activeTab.set('history')">
+      License History
+    </button>
+  </div>
 
-  @if (loading()) {
-    <section class="settings-card">
-      <p class="card-sub">Loading…</p>
-    </section>
-  } @else {
-    @if (status(); as s) {
-      @if (hasLicense()) {
-        <section class="settings-card" [class.settings-card--expired]="s.isExpired">
-          <div class="card-row">
-            <div>
-              <h2 class="card-title">License Status</h2>
-              <p class="card-sub">{{ s.customerName || 'Unknown customer' }} · {{ s.edition || 'Unknown edition' }}</p>
+  <!-- ── Status ───────────────────────────────────────────────────────────────────────────────── -->
+  @if (activeTab() === 'status') {
+    @if (loading()) {
+      <section class="settings-card">
+        <p class="card-sub">Loading…</p>
+      </section>
+    } @else {
+      @if (status(); as s) {
+        @if (hasLicense()) {
+          <section class="settings-card" [class.settings-card--expired]="s.isExpired">
+            <div class="card-row">
+              <div>
+                <h2 class="card-title">License Status</h2>
+                <p class="card-sub">{{ s.customerName || 'Unknown customer' }} · {{ s.edition || 'Unknown edition' }}</p>
+              </div>
+              <span class="badge" [class.badge-active]="!s.isExpired" [class.badge-suspended]="s.isExpired">
+                {{ s.isExpired ? 'Expired' : (s.state === 'Grace' ? 'Grace Period' : 'Active') }}
+              </span>
             </div>
-            <span class="badge" [class.badge-active]="!s.isExpired" [class.badge-suspended]="s.isExpired">
-              {{ s.isExpired ? 'Expired' : (s.state === 'Grace' ? 'Grace Period' : 'Active') }}
-            </span>
-          </div>
 
-          <div class="license-grid">
-            <div class="stat-field">
-              <span class="stat-label">Customer Name</span>
-              <span class="stat-value">{{ s.customerName || '—' }}</span>
+            <div class="license-grid">
+              <div class="stat-field">
+                <span class="stat-label">Customer Name</span>
+                <span class="stat-value">{{ s.customerName || '—' }}</span>
+              </div>
+              <div class="stat-field">
+                <span class="stat-label">Edition</span>
+                <span class="stat-value">{{ s.edition || '—' }}</span>
+              </div>
+              <div class="stat-field">
+                <span class="stat-label">Issued</span>
+                <span class="stat-value">{{ s.issuedUtc ? (s.issuedUtc | date: 'mediumDate') : '—' }}</span>
+              </div>
+              <div class="stat-field">
+                <span class="stat-label">Expires</span>
+                <span class="stat-value">{{ s.expiresUtc ? (s.expiresUtc | date: 'mediumDate') : '—' }}</span>
+              </div>
+              <div class="stat-field stat-field--days" [class.stat-field--danger]="s.isExpired">
+                <span class="stat-label">Days Remaining</span>
+                <span class="stat-value stat-value--lg">{{ s.daysRemaining ?? 'Unlimited' }}</span>
+              </div>
             </div>
-            <div class="stat-field">
-              <span class="stat-label">Edition</span>
-              <span class="stat-value">{{ s.edition || '—' }}</span>
-            </div>
-            <div class="stat-field">
-              <span class="stat-label">Issued</span>
-              <span class="stat-value">{{ s.issuedUtc ? (s.issuedUtc | date: 'mediumDate') : '—' }}</span>
-            </div>
-            <div class="stat-field">
-              <span class="stat-label">Expires</span>
-              <span class="stat-value">{{ s.expiresUtc ? (s.expiresUtc | date: 'mediumDate') : '—' }}</span>
-            </div>
-            <div class="stat-field stat-field--days" [class.stat-field--danger]="s.isExpired">
-              <span class="stat-label">Days Remaining</span>
-              <span class="stat-value stat-value--lg">{{ s.daysRemaining ?? 'Unlimited' }}</span>
-            </div>
-          </div>
 
-          @if (s.features.length) {
-            <div class="feature-tags">
-              @for (feature of s.features; track feature) {
-                <span class="feature-tag">{{ feature }}</span>
-              }
-            </div>
-          }
-        </section>
+            @if (s.features.length) {
+              <div class="feature-tags">
+                @for (feature of s.features; track feature) {
+                  <span class="feature-tag">{{ feature }}</span>
+                }
+              </div>
+            }
+          </section>
 
-        @if (s.limits; as l) {
-          @if (l.allowedSourceTypes?.length || l.allowedResourceTypes?.length || l.allowedDestinationTypes?.length || l.allowedHospitals?.length || l.maxProcessedRecordsPerMonth !== null) {
+          @if (s.usage; as u) {
             <section class="settings-card">
-              <h2 class="card-title">Additional Restrictions</h2>
-              <p class="card-sub">Extra terms this license places on top of the quotas above.</p>
+              <h2 class="card-title">Usage</h2>
+              <p class="card-sub">How much of the license is currently being used.</p>
 
-              @if (l.allowedSourceTypes?.length) {
-                <div class="restriction-block">
-                  <span class="stat-label">Allowed Source Types</span>
-                  <div class="feature-tags">
-                    @for (sourceType of l.allowedSourceTypes; track sourceType) {
-                      <span class="feature-tag">{{ sourceType }}</span>
-                    }
-                  </div>
+              <div class="usage-grid">
+                <div class="usage-stat">
+                  <span class="usage-label">Users</span>
+                  <span class="usage-value">{{ u.userCount }} / {{ s.limits ? formatLimit(s.limits.maxUsers) : 'Unlimited' }}</span>
                 </div>
-              }
-
-              @if (l.allowedResourceTypes?.length) {
-                <div class="restriction-block">
-                  <span class="stat-label">Allowed Resource Types</span>
-                  <div class="feature-tags">
-                    @for (resourceType of l.allowedResourceTypes; track resourceType) {
-                      <span class="feature-tag">{{ resourceType }}</span>
-                    }
-                  </div>
+                <div class="usage-stat">
+                  <span class="usage-label">Source Connections</span>
+                  <span class="usage-value">{{ u.sourceConnectionCount }} / {{ s.limits ? formatLimit(s.limits.maxSourceConnections) : 'Unlimited' }}</span>
                 </div>
-              }
-
-              @if (l.allowedDestinationTypes?.length) {
-                <div class="restriction-block">
-                  <span class="stat-label">Allowed Destination Types</span>
-                  <div class="feature-tags">
-                    @for (destinationType of l.allowedDestinationTypes; track destinationType) {
-                      <span class="feature-tag">{{ destinationType }}</span>
-                    }
-                  </div>
+                <div class="usage-stat">
+                  <span class="usage-label">Workflows</span>
+                  <span class="usage-value">{{ u.workflowCount }} / {{ s.limits ? formatLimit(s.limits.maxWorkflows) : 'Unlimited' }}</span>
                 </div>
-              }
-
-              @if (l.allowedHospitals?.length) {
-                <div class="restriction-block">
-                  <span class="stat-label">Allowed Hospitals</span>
-                  <ul class="hospital-list">
-                    @for (hospital of l.allowedHospitals; track hospital.baseUrl) {
-                      <li>
-                        <strong>{{ hospital.displayName || hospital.baseUrl }}</strong>
-                        <span class="hospital-list-vendor">{{ hospital.vendor }}</span>
-                      </li>
-                    }
-                  </ul>
+                <div class="usage-stat">
+                  <span class="usage-label">Successful Executions (This Month)</span>
+                  <span class="usage-value">{{ u.successfulExecutionsThisMonth ?? 0 }} / {{ s.limits ? formatLimit(s.limits.maxSuccessfulWorkflowExecutionsPerMonth) : 'Unlimited' }}</span>
                 </div>
-              }
-
-              @if (l.maxProcessedRecordsPerMonth !== LICENSE_UNLIMITED) {
-                <div class="restriction-block">
-                  <span class="stat-label">Processed Records</span>
-                  <span class="stat-value">Up to {{ l.maxProcessedRecordsPerMonth | number }} records/month</span>
-                </div>
-              }
-
+              </div>
             </section>
           }
-        }
 
-        @if (s.usage; as u) {
-          <section class="settings-card">
-            <h2 class="card-title">Usage</h2>
-            <p class="card-sub">How much of the license is currently being used.</p>
+          @if (s.limits; as l) {
+            @if (l.allowedSourceTypes?.length || l.allowedResourceTypes?.length || l.allowedDestinationTypes?.length || l.allowedHospitals?.length || l.maxProcessedRecordsPerMonth !== null) {
+              <section class="settings-card">
+                <h2 class="card-title">Additional Restrictions</h2>
+                <p class="card-sub">Extra terms this license places on top of the quotas above.</p>
 
-            <div class="usage-grid">
-              <div class="usage-stat">
-                <span class="usage-label">Users</span>
-                <span class="usage-value">{{ u.userCount }} / {{ s.limits ? formatLimit(s.limits.maxUsers) : 'Unlimited' }}</span>
-              </div>
-              <div class="usage-stat">
-                <span class="usage-label">Source Connections</span>
-                <span class="usage-value">{{ u.sourceConnectionCount }} / {{ s.limits ? formatLimit(s.limits.maxSourceConnections) : 'Unlimited' }}</span>
-              </div>
-              <div class="usage-stat">
-                <span class="usage-label">Workflows</span>
-                <span class="usage-value">{{ u.workflowCount }} / {{ s.limits ? formatLimit(s.limits.maxWorkflows) : 'Unlimited' }}</span>
-              </div>
-              <div class="usage-stat">
-                <span class="usage-label">Successful Executions (This Month)</span>
-                <span class="usage-value">{{ u.successfulExecutionsThisMonth ?? 0 }} / {{ s.limits ? formatLimit(s.limits.maxSuccessfulWorkflowExecutionsPerMonth) : 'Unlimited' }}</span>
-              </div>
-            </div>
+                @if (l.allowedSourceTypes?.length) {
+                  <div class="restriction-block">
+                    <span class="stat-label">Allowed Source Types</span>
+                    <div class="feature-tags">
+                      @for (sourceType of l.allowedSourceTypes; track sourceType) {
+                        <span class="feature-tag">{{ sourceType }}</span>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (l.allowedResourceTypes?.length) {
+                  <div class="restriction-block">
+                    <span class="stat-label">Allowed Resource Types</span>
+                    <div class="feature-tags">
+                      @for (resourceType of l.allowedResourceTypes; track resourceType) {
+                        <span class="feature-tag">{{ resourceType }}</span>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (l.allowedDestinationTypes?.length) {
+                  <div class="restriction-block">
+                    <span class="stat-label">Allowed Destination Types</span>
+                    <div class="feature-tags">
+                      @for (destinationType of l.allowedDestinationTypes; track destinationType) {
+                        <span class="feature-tag">{{ destinationType }}</span>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (l.allowedHospitals?.length) {
+                  <div class="restriction-block">
+                    <span class="stat-label">Allowed Hospitals</span>
+                    <ul class="hospital-list">
+                      @for (hospital of l.allowedHospitals; track hospital.baseUrl) {
+                        <li>
+                          <strong>{{ hospital.displayName || hospital.baseUrl }}</strong>
+                          <span class="hospital-list-vendor">{{ hospital.vendor }}</span>
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                }
+
+                @if (l.maxProcessedRecordsPerMonth !== LICENSE_UNLIMITED) {
+                  <div class="restriction-block">
+                    <span class="stat-label">Processed Records</span>
+                    <span class="stat-value">Up to {{ l.maxProcessedRecordsPerMonth | number }} records/month</span>
+                  </div>
+                }
+
+              </section>
+            }
+          }
+        } @else {
+          <section class="settings-card settings-card--expired">
+            <h2 class="card-title">No License Activated</h2>
+            @if (s.state === 'Invalid') {
+              <p class="card-sub">
+                The previously applied license token is invalid{{ s.invalidReason ? ': ' + s.invalidReason : '.' }}
+                Open the {{ 'Activate License' }} tab to paste a valid token.
+              </p>
+            } @else {
+              <p class="card-sub">Open the Activate License tab to paste a license token.</p>
+            }
           </section>
         }
-      } @else {
-        <section class="settings-card settings-card--expired">
-          <h2 class="card-title">No License Activated</h2>
-          @if (s.state === 'Invalid') {
-            <p class="card-sub">
-              The previously applied license token is invalid{{ s.invalidReason ? ': ' + s.invalidReason : '.' }}
-              Paste a valid token below to activate Segue.
-            </p>
-          } @else {
-            <p class="card-sub">Paste a license token below to activate Segue.</p>
-          }
-        </section>
       }
+    }
+  }
 
+  <!-- ── Activate / Update License ───────────────────────────────────────────────────────────── -->
+  @if (activeTab() === 'update') {
+    @if (loading()) {
       <section class="settings-card">
-        <div class="card-row">
-          <div>
-            <h2 class="card-title">{{ hasLicense() ? 'Update License' : 'Activate License' }}</h2>
-            <p class="card-sub">
-              @if (hasLicense()) {
-                Paste a new license token to renew or replace the current one.
-              } @else {
-                Paste your license token below and activate it.
-              }
-            </p>
-          </div>
+        <p class="card-sub">Loading…</p>
+      </section>
+    } @else {
+      <section class="settings-card">
+        <h2 class="card-title">{{ hasLicense() ? 'Update License' : 'Activate License' }}</h2>
+        <p class="card-sub">
           @if (hasLicense()) {
-            <button type="button" class="btn-outline" (click)="toggleUpdateSection()">
-              {{ showUpdateSection() ? 'Cancel' : 'Update' }}
-            </button>
+            Paste a new license token to renew or replace the current one.
+          } @else {
+            Paste your license token below and activate it.
           }
-        </div>
+        </p>
 
-        @if (showUpdateSection()) {
-          <form [formGroup]="form" (ngSubmit)="activate()">
-            <div class="form-field form-field--full">
-              <label for="lic-token">License Token <span class="req">*</span></label>
-              <textarea id="lic-token" rows="6" formControlName="token" placeholder="Paste your license token here…"></textarea>
-              @if (form.controls.token.touched && form.controls.token.invalid) {
-                <p class="field-error">A license token is required.</p>
-              }
-              @if (applyError()) {
-                <p class="field-error">{{ applyError() }}</p>
+        <form [formGroup]="form" (ngSubmit)="activate()">
+          <div class="form-field form-field--full">
+            <label for="lic-token">License Token <span class="req">*</span></label>
+            <textarea id="lic-token" rows="6" formControlName="token" placeholder="Paste your license token here…"></textarea>
+            @if (form.controls.token.touched && form.controls.token.invalid) {
+              <p class="field-error">A license token is required.</p>
+            }
+            @if (applyError()) {
+              <p class="field-error">{{ applyError() }}</p>
+            }
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" [disabled]="activating()">
+              {{ activating() ? 'Activating…' : 'Activate License' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    }
+  }
+
+  <!-- ── License Request: this install's own outbound request to the licensor ─────────────────── -->
+  @if (activeTab() === 'request') {
+    <section class="settings-card">
+      <h2 class="card-title">Licensor Application URL</h2>
+      <p class="card-sub">
+        Where this install's license requests are sent. Change it only if the licensor's server moves to
+        a different domain.
+      </p>
+
+      @if (licensorUrlLoading()) {
+        <p class="card-sub" style="margin-top: 12px;">Loading…</p>
+      } @else {
+        <form [formGroup]="licensorUrlForm" (ngSubmit)="saveLicensorUrl()">
+          <div class="form-field">
+            <label for="licensor-url">License Server URL <span class="req">*</span></label>
+            <input id="licensor-url" type="url" formControlName="url" placeholder="https://license.example.com" />
+            @if (licensorUrlForm.controls.url.touched && licensorUrlForm.controls.url.invalid) {
+              <p class="field-error">A licensor application URL is required.</p>
+            }
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" [disabled]="licensorUrlSaving() || licensorUrlForm.pristine">
+              {{ licensorUrlSaving() ? 'Saving…' : 'Save URL' }}
+            </button>
+          </div>
+        </form>
+      }
+    </section>
+
+    @if (requestLoading()) {
+      <section class="settings-card">
+        <p class="card-sub">Loading…</p>
+      </section>
+    } @else {
+      <section class="settings-card">
+        @if (!request()?.exists) {
+          <h2 class="card-title">Request a License</h2>
+          <p class="card-sub">Submit your details and we'll follow up with a license for Segue.</p>
+
+          <form [formGroup]="requestForm" (ngSubmit)="submitRequest()">
+            <div class="form-field">
+              <label for="req-name">Client Name <span class="req">*</span></label>
+              <input id="req-name" type="text" formControlName="clientName" />
+              @if (requestForm.controls.clientName.touched && requestForm.controls.clientName.invalid) {
+                <p class="field-error">Client name is required.</p>
               }
             </div>
+            <div class="form-field">
+              <label for="req-email">Email Address <span class="req">*</span></label>
+              <input id="req-email" type="email" formControlName="email" />
+              @if (requestForm.controls.email.touched && requestForm.controls.email.invalid) {
+                <p class="field-error">A valid email address is required.</p>
+              }
+            </div>
+            <div class="form-field">
+              <label for="req-company">Company Name</label>
+              <input id="req-company" type="text" formControlName="companyName" />
+            </div>
+            <div class="form-field">
+              <label for="req-phone">Phone Number <span class="req">*</span></label>
+              <input id="req-phone" type="tel" formControlName="phoneNumber" />
+              @if (requestForm.controls.phoneNumber.touched && requestForm.controls.phoneNumber.invalid) {
+                <p class="field-error">A phone number is required.</p>
+              }
+            </div>
+            <div class="form-field form-field--full">
+              <label for="req-address">Address</label>
+              <input id="req-address" type="text" formControlName="address" />
+            </div>
+
+            @if (requestError()) {
+              <p class="field-error">{{ requestError() }}</p>
+            }
+
             <div class="form-actions">
-              <button type="submit" class="btn-primary" [disabled]="activating()">
-                {{ activating() ? 'Activating…' : 'Activate License' }}
+              <button type="submit" class="btn-primary" [disabled]="submittingRequest()">
+                {{ submittingRequest() ? 'Submitting…' : 'Submit Request' }}
               </button>
             </div>
           </form>
+        } @else if (request()) {
+          @if (request(); as r) {
+            <div class="card-row">
+              <div>
+                <h2 class="card-title">License Request</h2>
+                <p class="card-sub">Submitted {{ r.createdUtc ? (r.createdUtc | date: 'medium') : '—' }}</p>
+              </div>
+              <span class="badge"
+                    [class.badge-active]="r.status === 'Submitted'"
+                    [class.badge-suspended]="r.status === 'Failed'">
+                {{ r.status }}
+              </span>
+            </div>
+
+            <div class="license-grid">
+              <div class="stat-field">
+                <span class="stat-label">Client Name</span>
+                <span class="stat-value">{{ r.clientName }}</span>
+              </div>
+              <div class="stat-field">
+                <span class="stat-label">Email</span>
+                <span class="stat-value">{{ r.email }}</span>
+              </div>
+              @if (r.companyName) {
+                <div class="stat-field">
+                  <span class="stat-label">Company</span>
+                  <span class="stat-value">{{ r.companyName }}</span>
+                </div>
+              }
+              <div class="stat-field">
+                <span class="stat-label">Phone</span>
+                <span class="stat-value">{{ r.phoneNumber }}</span>
+              </div>
+              @if (r.address) {
+                <div class="stat-field">
+                  <span class="stat-label">Address</span>
+                  <span class="stat-value">{{ r.address }}</span>
+                </div>
+              }
+              @if (r.requestHost) {
+                <div class="stat-field">
+                  <span class="stat-label">Requested From</span>
+                  <span class="stat-value">{{ r.requestHost }}</span>
+                </div>
+              }
+            </div>
+
+            @if (r.status === 'Failed') {
+              <div class="form-field form-field--full">
+                <p class="field-error">
+                  We couldn't reach Segue directly{{ r.submissionError ? ': ' + r.submissionError : '.' }}
+                  Please pass the following details to Segue support for your license request:
+                </p>
+                <textarea id="req-encoded" rows="4" readonly (click)="$any($event.target).select()">{{ r.encodedPayload }}</textarea>
+                <div class="form-actions">
+                  <button type="button" class="btn-outline" (click)="copyEncodedPayload()">Copy Code</button>
+                </div>
+              </div>
+            }
+
+            <div class="form-actions">
+              <button type="button" class="btn-outline" [disabled]="submittingRequest()" (click)="resendRequest()">
+                {{ submittingRequest() ? 'Resending…' : 'Resend Request' }}
+              </button>
+            </div>
+          }
+        }
+      </section>
+    }
+  }
+
+  <!-- ── License History ─────────────────────────────────────────────────────────────────────── -->
+  @if (activeTab() === 'history') {
+    @if (historyLoading()) {
+      <section class="settings-card">
+        <p class="card-sub">Loading…</p>
+      </section>
+    } @else {
+      <section class="settings-card">
+        <h2 class="card-title">License History</h2>
+        <p class="card-sub">Every license this install has applied — the current one is marked below.</p>
+
+        @if (!history().length) {
+          <p class="card-sub" style="margin-top: 12px;">
+            No license has been applied since this feature was added. Activating or renewing a license from
+            here on will start appearing in this list.
+          </p>
+        } @else {
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Applied</th>
+                <th>Customer</th>
+                <th>Edition</th>
+                <th>State</th>
+                <th>Expires</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of history(); track entry.appliedUtc) {
+                <tr [class.history-row--current]="entry.isCurrent">
+                  <td>{{ entry.appliedUtc | date: 'medium' }}</td>
+                  <td>{{ entry.customerName || '—' }}</td>
+                  <td>{{ entry.edition || '—' }}</td>
+                  <td>{{ entry.state }}</td>
+                  <td>{{ entry.expiresUtc ? (entry.expiresUtc | date: 'mediumDate') : '—' }}</td>
+                  <td>
+                    @if (entry.isCurrent) {
+                      <span class="badge badge-active">Current</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
         }
       </section>
     }

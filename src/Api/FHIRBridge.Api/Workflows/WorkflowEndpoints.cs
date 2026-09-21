@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Api.Workflows;
@@ -18,7 +18,9 @@ using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Runtime.Application.Abstractions.Applications;
+using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
+using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -543,13 +545,17 @@ public static class WorkflowEndpoints
             string? sortDirection = null,
             string[]? statuses = null,
             string[]? applicationTypes = null,
-            string[]? sourceSystemTypes = null) =>
+            string[]? sourceSystemTypes = null,
+            string[]? destinationTypes = null,
+            string[]? lastRunStatuses = null,
+            string[]? resourceTypes = null) =>
         {
             var workflows = await store.ListAsync(cancellationToken);
             var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
             var applicationTypeBySourceId = sources.ToDictionary(source => source.Id, source => source.ApplicationType);
             var systemTypeBySourceId = sources.ToDictionary(source => source.Id, source => source.SourceSystemType);
-            var destinationTypeByDestinationId = (await configurationRepository.GetDestinationsAsync(cancellationToken))
+            var destinations = await configurationRepository.GetDestinationsAsync(cancellationToken);
+            var destinationTypeByDestinationId = destinations
                 .ToDictionary(destination => destination.Id, destination => destination.DestinationType);
 
             // Row-level visibility: module access (the policy below) only proves the caller holds SOME
@@ -600,6 +606,10 @@ public static class WorkflowEndpoints
                 // the loop below answers the stronger one — and, in the same pass, collects the vendor groups the
                 // permission filter after it needs — so both the status and the response flag read off it.
                 var hasConfiguredDestination = false;
+                // A workflow can fan out to several destinations, so the Destination filter matches on a SET per
+                // row rather than a single value the way Source does — collected in the same pass that already
+                // walks these nodes for the permission check.
+                var workflowDestinationTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
                 {
                     if (!TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId))
@@ -611,6 +621,24 @@ public static class WorkflowEndpoints
                     if (destinationTypeByDestinationId.TryGetValue(destinationId, out var destinationVendorType))
                     {
                         AddVendorGroupIfSpecific(usedGroups, destinationVendorType);
+                        workflowDestinationTypes.Add(destinationVendorType.ToString());
+                    }
+                }
+
+                // The resource types SELECTED in the workflow — the destination wizard's own "dest_resources"
+                // picker, which is the record of what this workflow actually writes.
+                //
+                // Deliberately NOT the source node's "Resources" list. On a Backend Services connection that list
+                // is everything the vendor authorized (~59 types for Epic), so filtering on it matched workflows
+                // by types they never write: picking "Account" returned a workflow whose destination selects only
+                // Patient/Practitioner/Encounter/Condition/Observation. dest_resources is both the narrower and
+                // the correct answer to "which resource types are selected in this workflow".
+                var workflowResourceTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
+                {
+                    foreach (var resourceType in GetConfiguredResourceTypes(node.ConfigurationJson))
+                    {
+                        workflowResourceTypes.Add(resourceType);
                     }
                 }
 
@@ -662,7 +690,10 @@ public static class WorkflowEndpoints
                     workflow.UpdatedOnUtc,
                     workflow.UpdatedBy,
                     workflow.Description,
-                    workflow.WorkflowNumber));
+                    workflow.WorkflowNumber,
+                    workflowDestinationTypes.ToArray(),
+                    workflowResourceTypes.ToArray(),
+                    lastRun?.Status.ToString()));
             }
 
             // Resolve each summary's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/pre-conversion
@@ -675,13 +706,35 @@ public static class WorkflowEndpoints
                 ModifiedBy = summary.ModifiedBy is { } modifiedBy ? actorNames.GetValueOrDefault(modifiedBy, modifiedBy) : null,
             }).ToList();
 
-            // Facet option lists reflect the full unfiltered set (not `matching`) so unchecking every box in one
-            // category doesn't make the other categories' checkboxes disappear out from under the user.
-            var availableStatuses = summaries.Select(s => s.Status)
-                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToArray();
-            var availableApplicationTypes = summaries.Select(s => s.ApplicationType).OfType<string>()
+            // Facet option lists are deliberately NOT derived from the rows on screen, nor even from `summaries`
+            // alone. Two different rules apply, and which one a facet gets depends on what the user is choosing
+            // between:
+            //
+            //  * Status / Audience / Last Run Status are CLOSED enums — every possible value is offered, whether or
+            //    not any workflow currently has it. A fixed roster doesn't shift under the user as they filter, and
+            //    an empty result for "Failed" is itself the answer to "do I have any failed workflows?".
+            //  * Source / Destination come from the SAME configuration catalog the workflow builder offers when
+            //    creating a workflow, so a connection that was just configured is filterable immediately rather
+            //    than only after some workflow happens to use it.
+            //  * Resource Type is collected from what source nodes actually name in their stored configuration:
+            //    there is no tenant-level catalog of "resource types in play" to read it from.
+            //
+            // Sources/destinations still union in the types referenced by existing workflows, so a workflow wired
+            // to a connection that was since deleted keeps a filter option that matches it instead of becoming
+            // unreachable.
+            var availableStatuses = Enum.GetNames<WorkflowLifecycleStatus>()
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableApplicationTypes = Enum.GetNames<ApplicationType>()
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableLastRunStatuses = Enum.GetNames<WorkflowRunStatus>()
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableSourceSystemTypes = sources.Select(source => source.SourceSystemType.ToString())
+                .Concat(summaries.Select(s => s.SourceSystemType).OfType<string>())
                 .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
-            var availableSourceSystemTypes = summaries.Select(s => s.SourceSystemType).OfType<string>()
+            var availableDestinationTypes = destinations.Select(destination => destination.DestinationType.ToString())
+                .Concat(summaries.SelectMany(s => s.DestinationTypes ?? Array.Empty<string>()))
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableResourceTypes = summaries.SelectMany(s => s.ResourceTypes ?? Array.Empty<string>())
                 .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
 
             IEnumerable<WorkflowSummaryDto> matching = summaries;
@@ -714,6 +767,30 @@ public static class WorkflowEndpoints
                 matching = matching.Where(summary => summary.SourceSystemType is not null && sourceSystemTypeSet.Contains(summary.SourceSystemType));
             }
 
+            if (destinationTypes is { Length: > 0 })
+            {
+                // ANY-match, not all: a workflow that fans out to SQL Server and Blob Storage belongs under both.
+                var destinationTypeSet = new HashSet<string>(destinationTypes, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary =>
+                    summary.DestinationTypes is { } types && types.Any(destinationTypeSet.Contains));
+            }
+
+            if (lastRunStatuses is { Length: > 0 })
+            {
+                // A never-run workflow has no last-run status, so it matches no selection here — deliberate: the
+                // filter asks "how did the last run end", which is unanswerable for a workflow that never ran.
+                var lastRunStatusSet = new HashSet<string>(lastRunStatuses, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary =>
+                    summary.LastRun is not null && lastRunStatusSet.Contains(summary.LastRun));
+            }
+
+            if (resourceTypes is { Length: > 0 })
+            {
+                var resourceTypeSet = new HashSet<string>(resourceTypes, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary =>
+                    summary.ResourceTypes is { } types && types.Any(resourceTypeSet.Contains));
+            }
+
             var sorted = SortSummaries(matching, sortColumn, sortDirection).ToArray();
 
             var effectivePage = Math.Max(1, page);
@@ -724,7 +801,8 @@ public static class WorkflowEndpoints
                 .ToArray();
 
             return Results.Ok(new WorkflowSummaryPageDto(
-                pageItems, sorted.Length, availableStatuses, availableApplicationTypes, availableSourceSystemTypes));
+                pageItems, sorted.Length, availableStatuses, availableApplicationTypes, availableSourceSystemTypes,
+                availableDestinationTypes, availableLastRunStatuses, availableResourceTypes));
         // Workflow-module access gate (workflow.view OR any workflow-node permission) — can this role view
         // the Workflows list at all. This is the real data source behind the Workflows page.
         }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
@@ -2050,6 +2128,12 @@ public static class WorkflowEndpoints
             // the single-value callers that link straight here (the Dashboard's widgets); both are honoured. Named
             // sourceFilters locally because the handler body already binds `sources` to the source CONNECTIONS.
             [Microsoft.AspNetCore.Mvc.FromQuery(Name = "sources")] string[]? sourceFilters,
+            // The same multi-select facets the Workflows list carries, so the two screens filter alike. `status`
+            // above stays for the Dashboard tiles that deep-link here with a single value; both are honoured.
+            string[]? statuses,
+            string[]? destinationTypes,
+            string[]? applicationTypes,
+            string[]? resourceTypes,
             string? triggeredBy,
             string? search,
             int? page,
@@ -2065,6 +2149,54 @@ public static class WorkflowEndpoints
             var workflowsById = (await definitionStore.ListAsync(cancellationToken)).ToDictionary(w => w.Id);
             var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
             var sourceInfoById = sources.ToDictionary(s => s.Id, s => (s.Name, SystemType: s.SourceSystemType.ToString()));
+            var applicationTypeBySourceId = sources.ToDictionary(s => s.Id, s => s.ApplicationType);
+            var destinations = await configurationRepository.GetDestinationsAsync(cancellationToken);
+            var destinationTypeByDestinationId = destinations.ToDictionary(d => d.Id, d => d.DestinationType);
+
+            // The destination types, resource types and audience a run's workflow carries are properties of the
+            // DEFINITION, not of the run, so they are resolved once per definition rather than per run — a history
+            // page is overwhelmingly repeat runs of the same few workflows.
+            var facetsByDefinitionId = new Dictionary<Guid, (string[] DestinationTypes, string[] ResourceTypes, string? ApplicationType)>();
+            foreach (var (definitionId, definition) in workflowsById)
+            {
+                var definitionDestinationTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                var definitionResourceTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                ApplicationType? definitionApplicationType = null;
+
+                foreach (var node in definition.Nodes)
+                {
+                    if (node.Category == WorkflowNodeCategory.Destination
+                        && TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId)
+                        && destinationTypeByDestinationId.TryGetValue(destinationId, out var destinationType))
+                    {
+                        definitionDestinationTypes.Add(destinationType.ToString());
+                    }
+
+                    if (node.Category != WorkflowNodeCategory.Source)
+                    {
+                        continue;
+                    }
+
+                    foreach (var resourceType in GetConfiguredResourceTypes(node.ConfigurationJson))
+                    {
+                        definitionResourceTypes.Add(resourceType);
+                    }
+
+                    // Same highest-precedence-wins rule /workflows/summary applies, so a run's Audience here and
+                    // its workflow's Audience there can't disagree.
+                    if (TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceId)
+                        && applicationTypeBySourceId.TryGetValue(sourceId, out var type) && type is not null
+                        && (definitionApplicationType is null || type.Value > definitionApplicationType.Value))
+                    {
+                        definitionApplicationType = type;
+                    }
+                }
+
+                facetsByDefinitionId[definitionId] = (
+                    definitionDestinationTypes.ToArray(),
+                    definitionResourceTypes.ToArray(),
+                    definitionApplicationType?.ToString());
+            }
 
             var items = new List<WorkflowRunHistoryDto>();
             foreach (var run in runs)
@@ -2091,7 +2223,11 @@ public static class WorkflowEndpoints
                     run.ErrorMessage,
                     run.WorkflowDefinitionVersion,
                     run.CorrelationId,
-                    run.ErrorReferenceId));
+                    run.ErrorReferenceId,
+                    run.BulkRequestId,
+                    facetsByDefinitionId[run.WorkflowDefinitionId].DestinationTypes,
+                    facetsByDefinitionId[run.WorkflowDefinitionId].ResourceTypes,
+                    facetsByDefinitionId[run.WorkflowDefinitionId].ApplicationType));
             }
 
             if (workflowId is { } wfId)
@@ -2108,6 +2244,21 @@ public static class WorkflowEndpoints
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+
+            // Same split /workflows/summary makes: Status and Audience are closed enums so the full roster is
+            // offered, Destination comes from the configuration catalog the builder itself offers, and Resource
+            // Type is collected from the source-node configuration of the workflows behind these runs.
+            var availableStatuses = Enum.GetNames<WorkflowRunStatus>()
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableApplicationTypes = Enum.GetNames<ApplicationType>()
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableDestinationTypes = destinations.Select(destination => destination.DestinationType.ToString())
+                .Concat(items.SelectMany(x => x.DestinationTypes ?? Array.Empty<string>()))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableResourceTypes = items.SelectMany(x => x.ResourceTypes ?? Array.Empty<string>())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
 
             if (!string.IsNullOrWhiteSpace(status))
             {
@@ -2138,6 +2289,41 @@ public static class WorkflowEndpoints
                     || (x.SourceSystemType is not null && selectedSources.Contains(x.SourceSystemType))).ToList();
             }
 
+            if (statuses is { Length: > 0 })
+            {
+                // Selecting Running also matches AwaitingBulkExport, for the same reason the single-value `status`
+                // filter above does: the portal presents that non-terminal status as Running, and a filter that
+                // disagreed with the label on screen is what made the Dashboard's Running tile not match this list.
+                var statusSet = new HashSet<string>(statuses, StringComparer.OrdinalIgnoreCase);
+                if (statusSet.Contains(nameof(WorkflowRunStatus.Running)))
+                {
+                    statusSet.Add(nameof(WorkflowRunStatus.AwaitingBulkExport));
+                }
+
+                items = items.Where(x => statusSet.Contains(x.Status)).ToList();
+            }
+
+            if (destinationTypes is { Length: > 0 })
+            {
+                var destinationTypeSet = new HashSet<string>(destinationTypes, StringComparer.OrdinalIgnoreCase);
+                items = items.Where(x =>
+                    x.DestinationTypes is { } types && types.Any(destinationTypeSet.Contains)).ToList();
+            }
+
+            if (applicationTypes is { Length: > 0 })
+            {
+                var applicationTypeSet = new HashSet<string>(applicationTypes, StringComparer.OrdinalIgnoreCase);
+                items = items.Where(x =>
+                    x.ApplicationType is not null && applicationTypeSet.Contains(x.ApplicationType)).ToList();
+            }
+
+            if (resourceTypes is { Length: > 0 })
+            {
+                var resourceTypeSet = new HashSet<string>(resourceTypes, StringComparer.OrdinalIgnoreCase);
+                items = items.Where(x =>
+                    x.ResourceTypes is { } types && types.Any(resourceTypeSet.Contains)).ToList();
+            }
+
             if (!string.IsNullOrWhiteSpace(triggeredBy))
             {
                 items = items.Where(x =>
@@ -2161,7 +2347,8 @@ public static class WorkflowEndpoints
                 .ToList();
 
             return Results.Ok(new WorkflowRunHistoryPageDto(
-                paged, totalCount, effectivePage, effectivePageSize, availableSourceSystemTypes));
+                paged, totalCount, effectivePage, effectivePageSize, availableSourceSystemTypes,
+                availableDestinationTypes, availableStatuses, availableApplicationTypes, availableResourceTypes));
         // Menu-level gate: backs both the Dashboard's "Recent Workflows" widget and the Execution History
         // page — both reuse workflow.view rather than a dedicated permission (see sidebar/route changes).
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
@@ -2231,8 +2418,86 @@ public static class WorkflowEndpoints
                 run.ErrorMessage,
                 run.WorkflowDefinitionVersion,
                 run.CorrelationId,
-                run.ErrorReferenceId));
+                run.ErrorReferenceId,
+                run.BulkRequestId));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // Live read of this run's FHIR Bulk Data $export job, proxied from the source server — backs the Execution
+        // History row's "Bulk Data Status Request" popup. Proxied rather than fetched from the browser because the
+        // status URL requires the source's bearer token, which must never leave the server; and read live rather
+        // than served from the last poll tick so an operator watching a long export sees current progress.
+        //
+        // Gated on workflow.view, not UnifiedAdmin like /summary above: anyone who can see the run in the list
+        // should be able to see WHY it is still running.
+        group.MapGet("/workflow-runs/{runId:guid}/bulk-export-status", async (
+            Guid runId,
+            IWorkflowRunStore runStore,
+            IBulkExportJobRepository bulkExportJobRepository,
+            IFhirBulkExportClient bulkExportClient,
+            ISourceConnectionRuntimeResolver sourceResolver,
+            CancellationToken cancellationToken) =>
+        {
+            var run = await runStore.GetAsync(runId, cancellationToken);
+            if (run is null)
+            {
+                return Results.NotFound();
+            }
+
+            var job = await bulkExportJobRepository.GetLatestByWorkflowRunAsync(runId, cancellationToken);
+            if (job is null || string.IsNullOrWhiteSpace(job.StatusUrl))
+            {
+                // No export job, or one kicked off but not yet assigned a status URL — nothing to look up yet.
+                // 404 rather than an empty body, so the portal can distinguish "no bulk export here" from "here is
+                // an export with nothing in it".
+                return Results.NotFound();
+            }
+
+            // The resource types this node actually asked for. While the job runs this is the ONLY source of a
+            // per-type list — a Bulk Data server answers an in-flight job with 202 and no body — so without it the
+            // popup's table would be empty for the whole duration of the export, which is exactly when it is opened.
+            var requestedResourceTypes = ParseRequestedResourceTypes(job.RequestedResourceTypesJson);
+
+            var source = await sourceResolver.ResolveAsync(
+                job.SourceConnectionId, searchParameters: null, targetPatientId: null, cancellationToken);
+            if (source is null)
+            {
+                // The source connection was deleted out from under an in-flight job. Report what is known locally
+                // rather than failing outright — the id and timings are still useful.
+                return Results.Ok(new BulkExportStatusDto(
+                    run.BulkRequestId ?? BulkRequestIds.FromStatusUrl(job.StatusUrl),
+                    job.Status,
+                    Progress: null,
+                    job.KickedOffOnUtc,
+                    job.NextPollNotBeforeUtc,
+                    job.PollAttemptCount,
+                    TransactionTime: null,
+                    Request: null,
+                    RequiresAccessToken: null,
+                    BuildPendingResourceTypes(requestedResourceTypes),
+                    Errors: [],
+                    RetryAfterSeconds: null,
+                    ErrorMessage: "The source connection for this export no longer exists, so its live status "
+                        + "cannot be read."));
+            }
+
+            var snapshot = await bulkExportClient.GetStatusAsync(job.StatusUrl, source, cancellationToken);
+
+            return Results.Ok(new BulkExportStatusDto(
+                run.BulkRequestId ?? BulkRequestIds.FromStatusUrl(job.StatusUrl),
+                snapshot.Status.ToString(),
+                snapshot.Progress,
+                job.KickedOffOnUtc,
+                job.NextPollNotBeforeUtc,
+                job.PollAttemptCount,
+                snapshot.TransactionTime,
+                snapshot.Request,
+                snapshot.RequiresAccessToken,
+                BuildResourceTypeStatuses(snapshot, requestedResourceTypes),
+                BuildManifestErrors(snapshot),
+                snapshot.RetryAfter is { } retryAfter ? (int)retryAfter.TotalSeconds : null,
+                snapshot.ErrorMessage));
+        }).RequireAuthorization(AuthorizationPolicies.HasPermission(
+            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
 
         // Drill-down into what each node actually fetched/transformed/wrote. Returns decrypted PHI payloads.
         group.MapGet("/workflow-runs/{runId:guid}/resources", async (
@@ -3011,6 +3276,97 @@ public static class WorkflowEndpoints
         };
     }
 
+    /// <summary>The resource types a deferred bulk-export node asked for, as persisted on the job row. Returns
+    /// empty (never throws) for null/blank/malformed JSON — the popup degrades to whatever the manifest provides
+    /// rather than failing on a bad row.</summary>
+    private static IReadOnlyList<string> ParseRequestedResourceTypes(string? requestedResourceTypesJson)
+    {
+        if (string.IsNullOrWhiteSpace(requestedResourceTypesJson))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(requestedResourceTypesJson) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static IReadOnlyList<BulkExportResourceTypeStatusDto> BuildPendingResourceTypes(
+        IReadOnlyList<string> requestedResourceTypes)
+        => requestedResourceTypes
+            .Select(resourceType => new BulkExportResourceTypeStatusDto(resourceType, FileCount: null, State: "Pending"))
+            .ToList();
+
+    /// <summary>
+    /// Projects a status read onto ONE per-type list the portal renders identically in both states.
+    ///
+    /// <para>In flight, the server has returned 202 with no manifest, so every requested type is reported
+    /// <c>Pending</c> with no count — this is what keeps the popup's table populated while the export runs, which
+    /// is when an operator actually opens it.</para>
+    ///
+    /// <para>On completion, the manifest's <c>output</c> entries are grouped by type into FILE counts (never record
+    /// counts — see <see cref="BulkExportResourceTypeStatusDto"/>). A requested type the manifest never mentions is
+    /// still emitted, as <c>Pending</c> with 0, so a type the server quietly dropped stays visible instead of
+    /// vanishing from the list.</para>
+    ///
+    /// <para>The manifest's signed <c>url</c> values are deliberately discarded here: they are directly downloadable
+    /// NDJSON of bulk PHI, and this projection is what keeps them off the wire.</para>
+    /// </summary>
+    private static IReadOnlyList<BulkExportResourceTypeStatusDto> BuildResourceTypeStatuses(
+        BulkExportStatusSnapshot snapshot,
+        IReadOnlyList<string> requestedResourceTypes)
+    {
+        if (snapshot.Files is not { Count: > 0 })
+        {
+            return BuildPendingResourceTypes(requestedResourceTypes);
+        }
+
+        var fileCountsByType = snapshot.Files
+            .GroupBy(file => file.ResourceType, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+
+        var statuses = fileCountsByType
+            .Select(entry => new BulkExportResourceTypeStatusDto(entry.Key, entry.Value, State: "Ready"))
+            .ToList();
+
+        statuses.AddRange(requestedResourceTypes
+            .Where(resourceType => !fileCountsByType.ContainsKey(resourceType))
+            .Select(resourceType => new BulkExportResourceTypeStatusDto(resourceType, FileCount: 0, State: "Pending")));
+
+        return statuses
+            .OrderBy(status => status.ResourceType, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>The manifest's <c>error</c> array surfaced as plain text. Only the file's resource-type label is
+    /// available without downloading each OperationOutcome, which this deliberately does not do — the popup is a
+    /// cheap status read, and those files are fetched (and their issues parsed) by the poller's own completion path.</summary>
+    private static IReadOnlyList<string> BuildManifestErrors(BulkExportStatusSnapshot snapshot)
+    {
+        var errors = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(snapshot.ErrorMessage))
+        {
+            errors.Add(snapshot.ErrorMessage);
+        }
+
+        if (snapshot.ErrorFiles is { Count: > 0 })
+        {
+            errors.AddRange(snapshot.ErrorFiles
+                .GroupBy(file => file.ResourceType, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Count() == 1
+                    ? $"The source server reported an issue for {group.Key}."
+                    : $"The source server reported {group.Count()} issues for {group.Key}."));
+        }
+
+        return errors;
+    }
+
     // Defaults to newest-first by start time — matches this endpoint's pre-sorting behavior before
     // sortColumn/sortDirection existed, so an unsorted request (the initial page load) looks unchanged.
     private static IEnumerable<WorkflowRunHistoryDto> SortRuns(
@@ -3160,6 +3516,33 @@ public static class WorkflowEndpoints
         return TryParseConfigurationSettings(configurationJson) is { } config
             && config[key]?.ToString() is { } raw
             && Guid.TryParse(raw, out value);
+    }
+
+    /// <summary>
+    /// The FHIR resource types a DESTINATION node's stored configuration selects — the destination wizard's own
+    /// <c>dest_resources</c> picker, which is the record of what the workflow actually writes. Backs the Resource
+    /// Type facet on the workflow list and Execution History.
+    ///
+    /// <para>Deliberately reads only <c>dest_resources</c>, not the source node's <c>Resources</c>. The two answer
+    /// different questions: on a Backend Services connection <c>Resources</c> is everything the vendor authorized
+    /// (~59 types for Epic), so matching on it returned workflows for types they never write. <c>dest_resources</c>
+    /// is what a user actually picked, and is what "resource types selected in the workflow" means.</para>
+    ///
+    /// <para>A workflow whose destination names nothing here contributes no resource types and is matched by no
+    /// selection — which is correct: nothing has been selected to write.</para>
+    /// </summary>
+    private static IEnumerable<string> GetConfiguredResourceTypes(string? configurationJson)
+    {
+        var raw = GetConfigurationString(configurationJson, "dest_resources");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            yield break;
+        }
+
+        foreach (var candidate in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            yield return candidate;
+        }
     }
 
     private static string? GetConfigurationString(string? configurationJson, string key)

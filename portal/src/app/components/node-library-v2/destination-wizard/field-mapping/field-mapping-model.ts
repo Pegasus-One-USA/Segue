@@ -30,7 +30,12 @@ export type MappingDestType =
   // they deliberately stay OUT of SQL_FAMILY_TYPES below, which makes isSqlFamilyDestType/
   // qualifyTableName/splitTableName/reconcileTargetsForDestTypeSwitch all no-op for them exactly as
   // they already do for 'csv' and 'blob'.
-  | 'datalake' | 'fabric';
+  | 'datalake' | 'fabric'
+  // Microsoft Fabric WAREHOUSE — unlike every other type on this line, this one IS relational: a Fabric
+  // Warehouse is a SQL Server over TDS with a real, probeable table/column schema, so it joins
+  // SQL_FAMILY_TYPES below and gets the live table picker and schema authoring the SQL engines get.
+  // 'fabric' above remains the FILE surface (OneLake Files) and stays out, exactly as before.
+  | 'fabricwarehouse';
 
 /** Outcome of the live destination-schema read that populates the SQL table list. Distinguishes the three
  *  states an empty table list can mean, which an empty array alone cannot: never attempted ('idle'), in
@@ -49,7 +54,7 @@ export type SchemaLoadState = 'idle' | 'loading' | 'loaded' | 'failed' | 'unavai
 // _qualifyDefaultTable, field-mapping-canvas.component.ts's submitCreateTable/_finishCreateTable,
 // field-mapping-summary.model.ts's old private qualify()) goes through these instead. ──────────────────
 
-const SQL_FAMILY_TYPES: readonly MappingDestType[] = ['sql', 'mysql', 'postgres'];
+const SQL_FAMILY_TYPES: readonly MappingDestType[] = ['sql', 'mysql', 'postgres', 'fabricwarehouse'];
 
 /** Whether `type` is one of the three relational engines table qualification applies to at all. */
 export function isSqlFamilyDestType(type: MappingDestType): boolean {
@@ -60,7 +65,9 @@ export function isSqlFamilyDestType(type: MappingDestType): boolean {
  *  "public" for PostgreSQL, "" for MySQL (no schema layer distinct from the database) and for any
  *  non-relational type (never actually schema-qualified; callers only invoke this for SQL-family types). */
 export function defaultSchemaFor(type: MappingDestType): string {
-  return type === 'sql' ? 'dbo' : type === 'postgres' ? 'public' : '';
+  // Fabric Warehouse defaults to dbo exactly as SQL Server does — FabricDestinationSettings.WarehouseSchema
+  // uses the same default, so a bare name qualified here and one the backend derives always agree.
+  return type === 'sql' || type === 'fabricwarehouse' ? 'dbo' : type === 'postgres' ? 'public' : '';
 }
 
 /** Schema-qualifies a bare table name for `type`'s own default schema. Already-qualified names

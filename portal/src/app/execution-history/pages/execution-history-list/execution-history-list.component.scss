@@ -50,3 +50,233 @@
   &.trigger-scheduled         { background: var(--color-info-soft); color: var(--color-info-strong); }
   &.trigger-interactivelaunch { background: var(--color-warning-soft); color: var(--color-warning-strong); }
 }
+
+// ── Bulk Request ID column ──────────────────────────────────────────────────────────────────────
+// Vendor export-job ids are long opaque tokens (Epic's are 32 hex chars). Truncated with a title
+// attribute rather than wrapped, so one long id can't stretch the row height of the whole table.
+.bulk-request-id {
+  display: inline-block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+// Info icon beside a still-running export's Status badge.
+.bulk-info-btn {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: var(--space-2);
+  color: var(--color-muted);
+  border-radius: var(--radius-sm);
+  transition: color .15s ease;
+
+  mat-icon {
+    font-size: 17px;
+    width: 17px;
+    height: 17px;
+  }
+
+  &:hover,
+  &:focus-visible { color: var(--color-primary); }
+  &:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+}
+
+// ── Bulk Data Status Request popup ──────────────────────────────────────────────────────────────
+.bulk-status {
+  width: min(660px, calc(100vw - 34px));
+  max-height: min(84vh, 760px);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-radius: var(--radius-modal);
+  box-shadow: 0 22px 55px rgba(18, 20, 27, .18);
+  overflow: hidden;
+
+  > *:not(.bulk-status__head):not(.bulk-status__foot) {
+    padding-left: var(--space-10);
+    padding-right: var(--space-10);
+  }
+
+  &__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-8);
+    padding: var(--space-8) var(--space-10);
+    border-bottom: 1px solid var(--color-border);
+
+    h2 { margin: 0; font-size: 18px; }
+  }
+
+  &__id {
+    margin: var(--space-2) 0 0;
+    color: var(--color-muted);
+    word-break: break-all;
+  }
+
+  // Everything between head and foot scrolls; head and foot stay put.
+  &__summary,
+  &__facts,
+  &__request,
+  &__table,
+  &__errors,
+  &__muted,
+  &__error { flex: 0 0 auto; }
+
+  &__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    flex-wrap: wrap;
+    padding-top: var(--space-8);
+  }
+
+  // The X-Progress line — the single most useful thing on screen while an export is in flight, so it
+  // reads at body size rather than as secondary metadata.
+  &__progress {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  &__facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-6) var(--space-8);
+    margin: var(--space-8) 0 0;
+
+    dt {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--color-muted);
+    }
+
+    dd {
+      margin: var(--space-1) 0 0;
+      font-size: 13px;
+      color: var(--color-ink);
+    }
+  }
+
+  &__label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--color-muted);
+    margin-bottom: var(--space-2);
+  }
+
+  &__request {
+    margin-top: var(--space-8);
+
+    code {
+      display: block;
+      padding: var(--space-4) var(--space-6);
+      background: var(--color-side);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-base);
+      font-size: 11.5px;
+      line-height: 1.5;
+      word-break: break-all;
+      color: var(--color-ink-2);
+    }
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: var(--space-8);
+    font-size: 13px;
+
+    th, td {
+      text-align: left;
+      padding: var(--space-4) var(--space-6);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    th {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--color-muted);
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+  }
+
+  // The count is files, not records — right-aligned so a column of numbers reads as one.
+  // Qualified with th/td rather than forcing the override: the `th, td { text-align: left }` rule above
+  // is (0,0,1,1) and outranks a bare class, so the element qualifier is what actually wins here.
+  th#{&}__files-col,
+  td#{&}__files-col { text-align: right; }
+
+  &__errors {
+    margin-top: var(--space-8);
+
+    ul {
+      margin: 0;
+      padding-left: var(--space-9);
+      font-size: 13px;
+      color: var(--color-error-strong);
+    }
+
+    li + li { margin-top: var(--space-2); }
+  }
+
+  &__muted {
+    margin: var(--space-8) 0 0;
+    font-size: 13px;
+    color: var(--color-muted);
+  }
+
+  &__error {
+    margin: var(--space-8) 0 0;
+    padding: var(--space-6);
+    font-size: 13px;
+    color: var(--color-error-strong);
+    background: var(--color-error-soft);
+    border-radius: var(--radius-base);
+  }
+
+  &__foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-6);
+    padding: var(--space-6) var(--space-10);
+    margin-top: var(--space-10);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .close-x {
+    all: unset;
+    cursor: pointer;
+    font-size: 23px;
+    line-height: 1;
+    color: var(--color-ink-2);
+    &:hover { color: var(--color-ink); }
+  }
+
+  .cancel {
+    min-height: 38px;
+    padding: var(--space-4) var(--space-9);
+    color: var(--color-ink);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-input);
+    border-radius: var(--radius-base);
+    font-size: 14px;
+    font-weight: 650;
+    cursor: pointer;
+    &:hover { background: var(--color-side); }
+  }
+}

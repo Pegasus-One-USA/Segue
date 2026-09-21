@@ -298,6 +298,7 @@
 
   @if (creatingNewTable()) {
     <app-field-mapping-create-table-modal
+      [destType]="destType()"
       [existingTables]="sqlTableOptions()"
       [columnsForTable]="columnsForTable()"
       [submitting]="creatingTableSubmitting()"
@@ -309,6 +310,7 @@
 
   @if (addColumnTarget(); as t) {
     <app-field-mapping-add-column-modal
+      [destType]="destType()"
       [tableName]="t.tableName"
       [submitting]="addColumnSubmitting()"
       [error]="addColumnError()"
@@ -330,6 +332,7 @@
 
   @if (editColumnTarget(); as t) {
     <app-field-mapping-edit-column-modal
+      [destType]="destType()"
       [tableName]="t.tableName"
       [currentColumnName]="t.columnName"
       [currentDataType]="dataTypeForTable()(t.tableName, t.columnName)"

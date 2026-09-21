@@ -3,7 +3,9 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Infrastructure.Destinations.Fabric;
 using FHIRBridge.Integration.Sql;
 using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.Data.SqlClient;
@@ -86,15 +88,47 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
     private readonly IConfigurationRepository _repository;
     private readonly ISecretProvider _secretProvider;
     private readonly ISqlConnectionSecretMerger _sqlConnectionSecretMerger;
+    /// <summary>Null only in tests that never exercise a Fabric Warehouse destination — every DI-resolved
+    /// instance gets the real factory (see Infrastructure DependencyInjection).</summary>
+    private readonly IFabricWarehouseConnectionFactory? _fabricWarehouseConnectionFactory;
 
     public SqlDestinationSchemaService(
         IConfigurationRepository repository,
         ISecretProvider secretProvider,
-        ISqlConnectionSecretMerger sqlConnectionSecretMerger)
+        ISqlConnectionSecretMerger sqlConnectionSecretMerger,
+        IFabricWarehouseConnectionFactory? fabricWarehouseConnectionFactory = null)
     {
         _repository = repository;
         _secretProvider = secretProvider;
         _sqlConnectionSecretMerger = sqlConnectionSecretMerger;
+        _fabricWarehouseConnectionFactory = fabricWarehouseConnectionFactory;
+    }
+
+    /// <summary>
+    /// Opens a schema connection for a SAVED destination. Fabric Warehouse is the one type whose connection is not
+    /// built from a stored connection string: it authenticates with an Entra access token attached to the
+    /// connection (see <see cref="IFabricWarehouseConnectionFactory"/>), so the secret — when there is one at all —
+    /// is a service-principal client secret rather than credentials to splice into a connection string. Reusing
+    /// the same factory the write path uses means the picker and the writer can never authenticate differently.
+    /// </summary>
+    private async Task<DbConnection> OpenForDestinationAsync(
+        DestinationConfiguration destination,
+        CancellationToken cancellationToken)
+    {
+        if (destination.DestinationType != DestinationType.DataFabricWarehouse)
+        {
+            var connectionString = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
+            return await OpenConnectionAsync(destination.DestinationType, connectionString, cancellationToken);
+        }
+
+        if (_fabricWarehouseConnectionFactory is null)
+        {
+            throw new InvalidOperationException(
+                "A Fabric Warehouse connection factory is required to read a Fabric Warehouse schema.");
+        }
+
+        var settings = Fabric.FabricDestinationSettings.Parse(destination);
+        return await _fabricWarehouseConnectionFactory.OpenAsync(destination, settings, cancellationToken);
     }
 
     public async Task<DestinationSchemaDto> GetSchemaAsync(
@@ -109,8 +143,8 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             return new DestinationSchemaDto(destinationId, []);
         }
 
-        var connectionString = await _secretProvider.GetSecretAsync(destination.SecretReference, cancellationToken);
-        var tables = await ReadSchemaAsync(destination.DestinationType, connectionString, cancellationToken);
+        await using var connection = await OpenForDestinationAsync(destination, cancellationToken);
+        var tables = await ReadSchemaFromConnectionAsync(destination.DestinationType, connection, cancellationToken);
 
         return new DestinationSchemaDto(destinationId, tables);
     }
@@ -125,19 +159,11 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
                 false, $"Destination type '{request.DestinationType}' is not a relational database.", []);
         }
 
-        string connectionString;
         try
         {
-            connectionString = await ResolveProbeConnectionStringAsync(request, cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            return new DestinationSchemaProbeDto(false, exception.Message, []);
-        }
-
-        try
-        {
-            var tables = await ReadSchemaAsync(request.DestinationType, connectionString, cancellationToken);
+            await using var connection = await OpenForProbeAsync(request, cancellationToken);
+            var tables = await ReadSchemaFromConnectionAsync(
+                request.DestinationType, connection, cancellationToken);
             return new DestinationSchemaProbeDto(true, null, tables);
         }
         catch (Exception exception)
@@ -208,7 +234,6 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         string schemaName, tableName, columnName, normalizedDataType;
         int? maxLength;
-        string connectionString;
         try
         {
             (schemaName, tableName) = SplitTableName(type, request.TableName);
@@ -220,7 +245,6 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             // server's own "Login failed for user 'sa'" — which reads like wrong credentials rather than
             // credentials that were never attached. Test Connection already went through this resolver, so a
             // connection the user had just successfully tested would fail the moment it altered a table.
-            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -229,7 +253,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         try
         {
-            await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
+            await using var connection = await OpenForProbeAsync(request.Connection, cancellationToken);
 
             // Never auto-create the table here — a column can only be added to a table the user
             // explicitly created (via "Create a new table…") or that already exists for real. Silently
@@ -282,7 +306,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
                 false, $"Destination type '{type}' does not support table creation.");
         }
 
-        string schemaName, tableName, connectionString;
+        string schemaName, tableName;
         var columns = new List<(string Name, string NormalizedType, int? MaxLength)>();
         (string SchemaName, string TableName, string ColumnName)? parent = null;
         string? fkColumnName = null;
@@ -295,7 +319,6 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             // server's own "Login failed for user 'sa'" — which reads like wrong credentials rather than
             // credentials that were never attached. Test Connection already went through this resolver, so a
             // connection the user had just successfully tested would fail the moment it altered a table.
-            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
 
             foreach (var column in request.Columns ?? [])
             {
@@ -323,7 +346,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         try
         {
-            await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
+            await using var connection = await OpenForProbeAsync(request.Connection, cancellationToken);
 
             if (await TableExistsAsync(type, connection, schemaName, tableName, cancellationToken))
             {
@@ -336,7 +359,10 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
                 // whatever columns were originally requested — so any queued ADD COLUMN behind this one in
                 // the same flush still gets to run instead of being stranded (see AddColumnAsync's own
                 // "never auto-create" comment for why a hard failure here would otherwise dead-end it).
-                var liveTables = await ReadSchemaAsync(type, connectionString, cancellationToken);
+                // Reuses the connection already open above rather than dialing a second one — required for
+                // Fabric Warehouse, whose connection is an Entra-token session with no connection string to
+                // re-dial, and strictly better for every other engine too.
+                var liveTables = await ReadSchemaFromConnectionAsync(type, connection, cancellationToken);
                 var existingTable = liveTables.FirstOrDefault(t =>
                     string.Equals(t.SchemaName, schemaName, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(t.TableName, tableName, StringComparison.OrdinalIgnoreCase));
@@ -353,7 +379,10 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             // already exists — so only SQL Server needs (or gets) an explicit create-schema step below; a
             // non-default PostgreSQL schema that genuinely doesn't exist just fails the table-create below
             // with Postgres's own "schema does not exist" error, same never-throws/Success=false contract.
-            if (type is DestinationType.SqlServer or DestinationType.AzureSql)
+            // Fabric Warehouse is included: it has a real schema layer (defaulting to dbo, like SQL Server) and
+            // supports the same schema-provisioning statement, so a table created into a not-yet-existing schema
+            // needs this step too.
+            if (IsSqlServerDialect(type))
             {
                 // ddl-allowed: explicit user action from the mapping canvas's "Create a new table…" affordance,
                 // not automatic writer-side schema mutation.
@@ -398,7 +427,15 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         var resultColumns = new List<DestinationColumnSchemaDto>
         {
-            new("Id", "bigint", "Integer", false, null, IsPrimaryKey: true),
+            // IsAutoGenerated varies by engine, and getting it wrong is not cosmetic: the mapping canvas hides
+            // auto-generated columns as write targets. SQL Server/MySQL/PostgreSQL give Id an
+            // IDENTITY/AUTO_INCREMENT default, so the database fills it. Fabric Warehouse supports none of
+            // those, so its Id is a plain writable BIGINT the caller MUST map — reporting it as
+            // auto-generated made the canvas treat it as absent and queue a column-add for a column the
+            // table's own creation had just produced, which Fabric rejected as a duplicate.
+            new("Id", "bigint", "Integer", false, null,
+                IsPrimaryKey: true,
+                IsAutoGenerated: type != DestinationType.DataFabricWarehouse),
         };
         resultColumns.AddRange(columns.Select(c =>
             new DestinationColumnSchemaDto(c.Name, c.NormalizedType, MapType(type)(c.NormalizedType.Split('(')[0]), true, c.MaxLength)));
@@ -422,6 +459,13 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
     {
         DestinationType.MySql => $"{Quote(type, "Id")} BIGINT AUTO_INCREMENT NOT NULL",
         DestinationType.PostgreSql => $"{Quote(type, "Id")} BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL",
+        // Fabric Warehouse supports neither half of the SQL Server definition below: IDENTITY is not implemented,
+        // and a PRIMARY KEY constraint can only be declared NONCLUSTERED NOT ENFORCED (Fabric does not enforce
+        // uniqueness). Emitting a plain NOT NULL BIGINT is the honest shape — the column exists and is writable,
+        // and the mapping pipeline supplies its value like any other mapped column (it already hands every cell
+        // over stringly-typed, see MappedDestinationSerialization.GetCell). Emitting SQL Server's version instead
+        // would be rejected by a real Warehouse when the table is created.
+        DestinationType.DataFabricWarehouse => "[Id] BIGINT NOT NULL",
         _ => $"Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_{schemaName}_{tableName}_Id PRIMARY KEY",
     };
 
@@ -438,6 +482,12 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         DestinationType.PostgreSql => $"{Quote(type, fkColumnName)} BIGINT NOT NULL, " +
             $"CONSTRAINT \"FK_{schemaName}_{tableName}_{fkColumnName}\" FOREIGN KEY ({Quote(type, fkColumnName)}) " +
             $"REFERENCES {QuoteTable(type, parent.SchemaName, parent.TableName)} ({Quote(type, parent.ColumnName)})",
+        // Fabric Warehouse does not support FOREIGN KEY constraints (its table constraints are limited, and what
+        // it does accept is NOT ENFORCED). The column itself is what the mapping pipeline actually writes to, so
+        // it is created exactly as elsewhere — only the unenforceable constraint clause is dropped. The parent/
+        // child relationship stays a client-side fact (see ChildTableRelation in field-mapping-summary.model.ts),
+        // which is already how it is tracked for every engine.
+        DestinationType.DataFabricWarehouse => $"[{fkColumnName}] BIGINT NOT NULL",
         _ => $"[{fkColumnName}] BIGINT NOT NULL " +
             $"CONSTRAINT FK_{schemaName}_{tableName}_{fkColumnName} " +
             $"REFERENCES [{parent.SchemaName}].[{parent.TableName}]([{parent.ColumnName}])",
@@ -454,7 +504,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
                 false, $"Destination type '{type}' does not support dropping columns.");
         }
 
-        string schemaName, tableName, columnName, connectionString;
+        string schemaName, tableName, columnName;
         try
         {
             (schemaName, tableName) = SplitTableName(type, request.TableName);
@@ -465,7 +515,6 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             // server's own "Login failed for user 'sa'" — which reads like wrong credentials rather than
             // credentials that were never attached. Test Connection already went through this resolver, so a
             // connection the user had just successfully tested would fail the moment it altered a table.
-            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -474,7 +523,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
 
         try
         {
-            await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
+            await using var connection = await OpenForProbeAsync(request.Connection, cancellationToken);
             await using var command = connection.CreateCommand();
             // ddl-allowed: explicit user action from the mapping canvas's column-delete affordance, not
             // automatic writer-side schema mutation. MySQL/PostgreSQL both accept "DROP COLUMN" the same as
@@ -506,7 +555,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
                 false, $"Destination type '{type}' does not support altering columns.");
         }
 
-        string schemaName, tableName, columnName, normalizedDataType, connectionString;
+        string schemaName, tableName, columnName, normalizedDataType;
         int? maxLength;
         string? newColumnName = null;
         try
@@ -524,7 +573,6 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
             // server's own "Login failed for user 'sa'" — which reads like wrong credentials rather than
             // credentials that were never attached. Test Connection already went through this resolver, so a
             // connection the user had just successfully tested would fail the moment it altered a table.
-            connectionString = await ResolveProbeConnectionStringAsync(request.Connection, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -537,7 +585,7 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         string? references;
         try
         {
-            await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
+            await using var connection = await OpenForProbeAsync(request.Connection, cancellationToken);
             var renaming = newColumnName is not null
                 && !string.Equals(newColumnName, columnName, StringComparison.OrdinalIgnoreCase);
 
@@ -718,6 +766,10 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
     {
         DestinationType.MySql => MySqlDdlTypeValidator.Validate(dataType),
         DestinationType.PostgreSql => PostgreSqlDdlTypeValidator.Validate(dataType),
+        // Fabric Warehouse speaks T-SQL but supports a narrower type list than SQL Server (no nvarchar, no MAX,
+        // no tinyint/uniqueidentifier) — validating it with SQL Server's allowlist would let the canvas offer a
+        // column a live tenant then rejects at table-creation time. See FabricWarehouseDdlTypeValidator.
+        DestinationType.DataFabricWarehouse => FabricWarehouseDdlTypeValidator.Validate(dataType),
         _ => SqlServerDdlTypeValidator.Validate(dataType),
     };
 
@@ -751,18 +803,126 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         CancellationToken cancellationToken)
     {
         await using var connection = await OpenConnectionAsync(type, connectionString, cancellationToken);
-        var isSqlServer = type is DestinationType.SqlServer or DestinationType.AzureSql;
+        return await ReadSchemaFromConnectionAsync(type, connection, cancellationToken);
+    }
 
-        var constraints = await ReadConstraintsAsync(connection, isSqlServer, cancellationToken);
+    /// <summary>
+    /// Builds Fabric settings from an ad-hoc probe/DDL request. Mirrors what FabricDestinationSettings.Parse
+    /// derives from a saved destination's metadata, from the same field names the wizard's Fabric form emits.
+    /// </summary>
+    private static Fabric.FabricDestinationSettings FabricSettingsFrom(DestinationConnectionProbeRequest request)
+        => new(
+            Mode: Fabric.FabricLandingMode.WarehouseTable,
+            AuthMode: string.Equals(request.FabricAuthMode, "servicePrincipal", StringComparison.OrdinalIgnoreCase)
+                ? Fabric.FabricAuthMode.ServicePrincipal
+                : Fabric.FabricAuthMode.ManagedIdentity,
+            Workspace: request.FabricWorkspace ?? string.Empty,
+            ItemName: request.FabricItemName ?? string.Empty,
+            ItemType: "Warehouse",
+            BasePath: string.Empty,
+            FileFormat: Fabric.FabricFileFormat.Parquet,
+            Partitioning: Fabric.FabricPartitionScheme.None,
+            TenantId: request.FabricTenantId,
+            ClientId: request.FabricClientId,
+            ManagedIdentityClientId: request.FabricManagedIdentityClientId,
+            AuthorityHost: request.FabricAuthorityHost,
+            EndpointSuffix: string.IsNullOrWhiteSpace(request.FabricEndpointSuffix)
+                ? "fabric.microsoft.com"
+                : request.FabricEndpointSuffix,
+            AccountUrlOverride: null,
+            WarehouseSqlEndpoint: request.FabricWarehouseSqlEndpoint);
+
+    /// <summary>
+    /// Opens the connection an ad-hoc probe or DDL action runs against. A Fabric Warehouse takes an Entra token
+    /// on the connection rather than credentials inside a connection string, so it is opened through its own
+    /// factory; every other relational type keeps the existing connection-string path unchanged.
+    /// </summary>
+    private async Task<DbConnection> OpenForProbeAsync(
+        DestinationConnectionProbeRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.DestinationType != DestinationType.DataFabricWarehouse)
+        {
+            var connectionString = await ResolveProbeConnectionStringAsync(request, cancellationToken);
+            return await OpenConnectionAsync(request.DestinationType, connectionString, cancellationToken);
+        }
+
+        if (_fabricWarehouseConnectionFactory is null)
+        {
+            throw new InvalidOperationException(
+                "A Fabric Warehouse connection factory is required to reach a Fabric Warehouse.");
+        }
+
+        // A saved destination's stored secret is used when the form left the secret blank (the same
+        // ExistingDestinationId fallback ResolveProbeConnectionStringAsync performs for a SQL password).
+        var secret = request.FabricSecret;
+        if (string.IsNullOrWhiteSpace(secret) && request.ExistingDestinationId is { } existingId)
+        {
+            var existing = await _repository.GetDestinationAsync(existingId, cancellationToken);
+            if (existing is not null)
+            {
+                try
+                {
+                    secret = await _secretProvider.GetSecretAsync(existing.SecretReference, cancellationToken);
+                }
+                catch (SecretNotConfiguredException)
+                {
+                    // Managed identity needs no secret at all — leave it null and let the credential decide.
+                }
+            }
+        }
+
+        return await _fabricWarehouseConnectionFactory.OpenAdHocAsync(
+            FabricSettingsFrom(request), secret, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads a Fabric Warehouse's table/column schema on a connection the caller already opened and owns.
+    /// Exposed for FabricDestinationConnectionTestService, whose Test Connection probe opens exactly this
+    /// connection and can hand back the tables in the same round trip — so a brand-new, not-yet-provisioned
+    /// Warehouse node can populate the mapping canvas's table picker, as the SQL-family probe already does.
+    /// The connection is NOT disposed here; it belongs to the caller.
+    /// </summary>
+    internal static Task<List<DestinationTableSchemaDto>> ReadFabricWarehouseSchemaAsync(
+        DbConnection connection,
+        CancellationToken cancellationToken)
+        => ReadSchemaFromConnectionAsync(DestinationType.DataFabricWarehouse, connection, cancellationToken);
+
+    /// <summary>
+    /// The schema read itself, against an already-open connection. Split out from <see cref="ReadSchemaAsync"/> so
+    /// a Fabric Warehouse — whose connection is opened with an Entra token rather than built from a connection
+    /// string (see <see cref="OpenForDestinationAsync"/>) — runs the identical read rather than a parallel copy of it.
+    /// </summary>
+    private static async Task<List<DestinationTableSchemaDto>> ReadSchemaFromConnectionAsync(
+        DestinationType type,
+        DbConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var isSqlServer = type is DestinationType.SqlServer or DestinationType.AzureSql;
+        // Fabric Warehouse uses SQL Server's UPPERCASE INFORMATION_SCHEMA spelling and its 'sys'/
+        // 'INFORMATION_SCHEMA' schema filter, so it reads columns the SQL Server way. It does NOT get the sys.*
+        // key-metadata query below: Fabric has no enforced PRIMARY KEY or FOREIGN KEY constraints, so
+        // sys.index_columns/sys.foreign_key_columns have nothing to report even where the views exist. Its
+        // columns keep IsPrimaryKey=false/References=null, exactly as PostgreSQL/MySQL columns already do.
+        var readsSqlServerColumns = isSqlServer || type == DestinationType.DataFabricWarehouse;
+
+        // Fabric Warehouse does not enforce PRIMARY KEY or UNIQUE constraints, and does not expose the
+        // INFORMATION_SCHEMA.KEY_COLUMN_USAGE / TABLE_CONSTRAINTS views the constraint read joins — so running it
+        // there THROWS rather than returning nothing. That failure used to be swallowed by the Test Connection
+        // probe and surfaced as an empty warehouse: connected, no tables, no error. Skipped outright instead;
+        // every column simply reports IsPrimaryKey=false/IsUnique=false, which is the truth for Fabric.
+        var constraints = type == DestinationType.DataFabricWarehouse
+            ? new Dictionary<string, (bool IsPrimaryKey, bool IsUnique)>(StringComparer.OrdinalIgnoreCase)
+            : await ReadConstraintsAsync(connection, readsSqlServerColumns, cancellationToken);
         var autoGenerated = await ReadAutoGeneratedAsync(connection, type, cancellationToken);
         // FK reference targets are only readable from SQL Server's own sys.* catalog views —
-        // PostgreSQL/MySQL columns keep References=null (see DestinationColumnSchemaDto's own doc comment).
+        // PostgreSQL/MySQL/Fabric columns keep References=null (see DestinationColumnSchemaDto's own doc comment).
         var keyMetadata = isSqlServer
             ? await ReadSqlServerKeyMetadataAsync(connection, cancellationToken)
             : new Dictionary<string, (bool IsPrimaryKey, string? References)>();
 
         await using var command = connection.CreateCommand();
-        command.CommandText = isSqlServer ? SqlServerColumnsSql : InformationSchemaSql;
+        command.CommandText = readsSqlServerColumns ? SqlServerColumnsSql : InformationSchemaSql;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await ReadColumnsAsync(reader, MapType(type), constraints, autoGenerated, keyMetadata, cancellationToken);
@@ -1026,8 +1186,25 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         return builder.ConnectionString;
     }
 
+    /// <summary>
+    /// Destination types with a live, queryable schema — the ones that can offer a real table/column picker and
+    /// DDL authoring. <see cref="DestinationType.DataFabricWarehouse"/> qualifies because a Fabric Warehouse is a
+    /// SQL Server over TDS: the same INFORMATION_SCHEMA reads apply unchanged. Note the FILE Fabric surface
+    /// (<see cref="DestinationType.DataFabricAzure"/>) is deliberately absent and must stay absent — OneLake Files
+    /// has no tables at all, which is exactly why the Warehouse surface is its own type.
+    /// </summary>
     private static bool IsRelational(DestinationType type)
-        => type is DestinationType.SqlServer or DestinationType.AzureSql or DestinationType.PostgreSql or DestinationType.MySql;
+        => type is DestinationType.SqlServer or DestinationType.AzureSql or DestinationType.PostgreSql
+            or DestinationType.MySql or DestinationType.DataFabricWarehouse;
+
+    /// <summary>
+    /// Whether <paramref name="type"/> speaks SQL Server's own T-SQL dialect — SQL Server, Azure SQL, and Fabric
+    /// Warehouse, whose TDS endpoint is SQL-Server-shaped. Used for the quoting/naming defaults those three share;
+    /// where Fabric's T-SQL SUBSET differs (no IDENTITY, narrower type list) it is branched on explicitly instead,
+    /// so this never silently grants Fabric a construct it would reject at run time.
+    /// </summary>
+    private static bool IsSqlServerDialect(DestinationType type)
+        => type is DestinationType.SqlServer or DestinationType.AzureSql or DestinationType.DataFabricWarehouse;
 
     private static async Task<DbConnection> OpenConnectionAsync(
         DestinationType type,

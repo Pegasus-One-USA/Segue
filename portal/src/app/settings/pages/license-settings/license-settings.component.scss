@@ -3,6 +3,14 @@
   display: block;
   min-height: 100%;
   background: var(--color-bg);
+
+  /* When this page is opened as a full-page route, .shell-content (the ancestor) is what scrolls and
+     this rule is a no-op. When it's opened as a Settings dialog instead (app-dialog-panel), that panel
+     clips overflow and relies on its content — this host — to do its own internal scrolling (see
+     dialog-shell.component.scss's `::ng-deep > *:last-child` comment); without this, tall content
+     (e.g. a long license history) was silently clipped with no visible scrollbar. */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 
@@ -10,12 +18,15 @@
 .page-title  { font-size: 20px; font-weight: 700; color: var(--color-ink); margin: 0; }
 .page-sub    { font-size: 14px; color: var(--color-muted); margin: 0; }
 
-/* ⚠ TEMPORARY / DEV-ONLY link to license-dev-mint — delete alongside that page. Deliberately styled as
-   a quiet text link, not a button, so it never reads as a first-class product action. */
-.dev-mint-link {
-  align-self: flex-start; font-size: 12.5px; font-weight: 600; color: var(--color-warning-strong);
-  text-decoration: none;
-  &:hover { text-decoration: underline; }
+/* ── Tab strip ────────────────────────────────────────────────────── */
+.tab-strip { display: flex; gap: 4px; border-bottom: 1px solid var(--color-border); }
+.tab-btn {
+  padding: 10px 16px; border: none; background: none; cursor: pointer;
+  font-size: 13.5px; font-weight: 600; color: var(--color-muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color var(--transition-base), border-color var(--transition-base);
+  &:hover { color: var(--color-ink-2); }
+  &--active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
 }
 
 /* ── Cards ────────────────────────────────────────────────────────── */
@@ -97,18 +108,33 @@
   font-size: 12px; font-weight: 600; color: var(--color-muted);
   text-transform: uppercase; letter-spacing: 0.05em;
 }
-.form-field textarea {
+.form-field textarea,
+.form-field input {
   padding: 10px 12px; border: 1px solid var(--color-border-input); border-radius: 9px;
-  font-size: 13px; font-family: 'SFMono-Regular', Consolas, monospace; color: var(--color-ink);
-  background: var(--color-surface); outline: none; resize: vertical;
+  font-size: 13px; color: var(--color-ink);
+  background: var(--color-surface); outline: none;
   transition: border-color var(--transition-base), box-shadow var(--transition-base);
 
   &:hover  { border-color: var(--color-muted-2); }
   &:focus  { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(0, 168, 157, 0.12); }
 }
+.form-field textarea { font-family: 'SFMono-Regular', Consolas, monospace; resize: vertical; }
 .field-error { font-size: 12px; color: var(--color-error); margin: 0; }
 
 .form-actions { display: flex; gap: 10px; margin-top: 18px; }
+
+/* ── License History ─────────────────────────────────────────────── */
+.history-table {
+  width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 13px;
+}
+.history-table th {
+  text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--color-muted);
+  text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--color-border);
+}
+.history-table td {
+  padding: 10px; border-bottom: 1px solid var(--color-border); color: var(--color-ink);
+}
+.history-row--current td:first-child { font-weight: 700; }
 
 .btn-primary {
   padding: 9px 18px; border-radius: 9px; background: var(--color-primary); border: none;
@@ -124,4 +150,18 @@
   transition: all var(--transition-base);
   &:hover:not(:disabled) { background: var(--color-primary-soft); }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+/* ── License Request modal ────────────────────────────────────────── */
+.request-modal-panel {
+  width: min(560px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.request-modal-header-actions { display: flex; align-items: center; gap: 10px; }
+.modal-close {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border: none; background: transparent; color: var(--color-muted-2);
+  font-size: 20px; line-height: 1; cursor: pointer; border-radius: var(--radius-sm, 6px);
+  &:hover { background: var(--color-side); color: var(--color-ink-2); }
 }

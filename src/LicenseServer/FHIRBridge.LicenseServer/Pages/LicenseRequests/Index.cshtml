@@ -1,0 +1,104 @@
+@page
+@model FHIRBridge.LicenseServer.Pages.LicenseRequests.IndexModel
+@{
+    ViewData["Title"] = "License Requests";
+}
+
+<div class="page-header">
+    <h1>License Requests</h1>
+    <p class="page-subtitle">Customer installs asking for a license — direct API calls and manually pasted codes both land here.</p>
+</div>
+
+@if (Model.Requests.Count == 0)
+{
+    <div class="panel empty-state">
+        <p>No license requests yet.</p>
+        <p class="hint">See <code>README.md</code> for the <code>/api/license-requests</code> request shape.</p>
+    </div>
+}
+else
+{
+    <table>
+        <thead>
+            <tr>
+                <th>Client</th>
+                <th>Contact</th>
+                <th>Received</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var request in Model.Requests)
+            {
+                <tr>
+                    <td>
+                        <strong>@request.ClientName</strong>
+                        @if (request.CompanyName is not null)
+                        {
+                            <div class="muted">@request.CompanyName</div>
+                        }
+                    </td>
+                    <td>
+                        <div>@request.Email</div>
+                        <div class="muted">@request.PhoneNumber</div>
+                    </td>
+                    <td>
+                        <div>@request.ReceivedAtUtc.ToString("u")</div>
+                        @if (request.SubmissionCount > 1)
+                        {
+                            <div class="muted">
+                                resent @request.LastSubmittedUtc.ToString("u")
+                                (@request.SubmissionCount submissions total)
+                            </div>
+                        }
+                    </td>
+                    <td>@(request.ReceivedManually ? "Manual code" : "Direct API")</td>
+                    <td>
+                        @if (request.FulfilledAtUtc is not null)
+                        {
+                            <span class="badge">Fulfilled</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-pending">Pending</span>
+                        }
+                    </td>
+                    <td>
+                        @if (request.FulfilledAtUtc is null)
+                        {
+                            <a href="/Licenses/Create?RequestId=@request.Id">Create License</a>
+                        }
+                        else
+                        {
+                            <span class="muted">already minted</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<div class="panel" style="margin-top:24px;">
+    <h2>Have a manually shared code instead?</h2>
+    <p class="muted">
+        When a customer's install couldn't reach this server directly, its License Request screen shows an
+        encrypted code for them to send you (email, support ticket). Paste it below to add it to the list
+        above.
+    </p>
+
+    @if (Model.DecodeErrorMessage is not null)
+    {
+        <p class="error">@Model.DecodeErrorMessage</p>
+    }
+
+    <form method="post" asp-page-handler="Decode">
+        <div class="field">
+            <label for="EncodedPayload">Encrypted Data</label>
+            <textarea id="EncodedPayload" asp-for="EncodedPayload" rows="3" placeholder="Paste the code here…"></textarea>
+        </div>
+        <button type="submit">Decode &amp; Add</button>
+    </form>
+</div>

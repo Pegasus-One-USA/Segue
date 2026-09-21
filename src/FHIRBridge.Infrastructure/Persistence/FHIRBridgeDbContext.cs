@@ -59,6 +59,8 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<BrandConfiguration> BrandConfigurations => Set<BrandConfiguration>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+    public DbSet<LicenseRequest> LicenseRequests => Set<LicenseRequest>();
+    public DbSet<LicenseHistoryEntry> LicenseHistoryEntries => Set<LicenseHistoryEntry>();
 
     /// <summary>Per-period counters behind generated workflow numbers (WLW-ddMMyy-NNNN).</summary>
     public DbSet<WorkflowNumberSequence> WorkflowNumberSequences => Set<WorkflowNumberSequence>();
