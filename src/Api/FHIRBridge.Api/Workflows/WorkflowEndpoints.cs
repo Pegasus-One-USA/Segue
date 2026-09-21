@@ -625,11 +625,16 @@ public static class WorkflowEndpoints
                     }
                 }
 
-                // Resource types the SOURCE nodes are configured to retrieve. Read off stored configuration, never
-                // off a past run: the filter answers "which workflows are set up to pull Observation", which stays
-                // answerable for a workflow that has never run.
+                // The resource types SELECTED in the workflow — the destination wizard's own "dest_resources"
+                // picker, which is the record of what this workflow actually writes.
+                //
+                // Deliberately NOT the source node's "Resources" list. On a Backend Services connection that list
+                // is everything the vendor authorized (~59 types for Epic), so filtering on it matched workflows
+                // by types they never write: picking "Account" returned a workflow whose destination selects only
+                // Patient/Practitioner/Encounter/Condition/Observation. dest_resources is both the narrower and
+                // the correct answer to "which resource types are selected in this workflow".
                 var workflowResourceTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Source))
+                foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
                 {
                     foreach (var resourceType in GetConfiguredResourceTypes(node.ConfigurationJson))
                     {
@@ -3514,31 +3519,29 @@ public static class WorkflowEndpoints
     }
 
     /// <summary>
-    /// The FHIR resource types a node's stored configuration NAMES, for the workflow list's Resource Type facet.
-    /// Reads the same keys the runtime's source executor reads — the comma-separated <c>Resources</c> list the
-    /// builder writes, the legacy single <c>resourceType</c>, and a destination node's own <c>dest_resources</c>
-    /// picker — so the filter agrees with what the workflow would actually retrieve.
+    /// The FHIR resource types a DESTINATION node's stored configuration selects — the destination wizard's own
+    /// <c>dest_resources</c> picker, which is the record of what the workflow actually writes. Backs the Resource
+    /// Type facet on the workflow list and Execution History.
     ///
-    /// <para>Deliberately does NOT reproduce the executor's derive-from-SMART-scopes fallback. That fallback needs
-    /// the connection's granted scopes and a round of destination narrowing to resolve, which is per-run work; a
-    /// list screen can't afford it per row, and a facet built from a guess would quietly disagree with the runtime.
-    /// A workflow whose types are only implied by scopes therefore contributes nothing here and is not matched by
-    /// this filter, which is why the facet is documented as "types the workflow names", not "types it will fetch".</para>
+    /// <para>Deliberately reads only <c>dest_resources</c>, not the source node's <c>Resources</c>. The two answer
+    /// different questions: on a Backend Services connection <c>Resources</c> is everything the vendor authorized
+    /// (~59 types for Epic), so matching on it returned workflows for types they never write. <c>dest_resources</c>
+    /// is what a user actually picked, and is what "resource types selected in the workflow" means.</para>
+    ///
+    /// <para>A workflow whose destination names nothing here contributes no resource types and is matched by no
+    /// selection — which is correct: nothing has been selected to write.</para>
     /// </summary>
     private static IEnumerable<string> GetConfiguredResourceTypes(string? configurationJson)
     {
-        foreach (var key in new[] { "Resources", "resourceType", "dest_resources" })
+        var raw = GetConfigurationString(configurationJson, "dest_resources");
+        if (string.IsNullOrWhiteSpace(raw))
         {
-            var raw = GetConfigurationString(configurationJson, key);
-            if (string.IsNullOrWhiteSpace(raw))
-            {
-                continue;
-            }
+            yield break;
+        }
 
-            foreach (var candidate in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                yield return candidate;
-            }
+        foreach (var candidate in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            yield return candidate;
         }
     }
 

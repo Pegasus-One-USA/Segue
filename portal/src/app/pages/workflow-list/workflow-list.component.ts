@@ -19,7 +19,7 @@ import { ToastService } from '../../services/toast.service';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
 import { PermissionService } from '../../auth/services/permission.service';
 import { AuthStore } from '../../auth/store/auth.store';
-import { sourceSystemDisplayName } from '../../data/source-system-display-names.data';
+import { sourceTypeLabel, destinationTypeLabel } from '../../data/connection-type-labels.util';
 import {
   IntegrationDetails,
   buildIntegrationDetails,
@@ -205,19 +205,12 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (category === 'audience') return this.audienceLabel(value);
     // The filter's VALUE stays the enum member the API filters on; only the text changes.
     if (category === 'source') return this.sourceSystemLabel(value);
-    if (category === 'destination') return this.destinationTypeLabel(value);
+    if (category === 'destination') return destinationTypeLabel(value);
     // Last Run Status offers every WorkflowRunStatus, including the two the run list never shows as-is:
     // AwaitingBulkExport reads as "Running" there, so spelling it out here keeps the filter honest about
     // being a distinct stored value rather than appearing to duplicate Running.
     if (category === 'lastRunStatus') return this.lastRunStatusLabel(value);
     return value;
-  }
-
-  /** Splits a PascalCase enum name into words for display (SqlServer -> "Sql Server"), leaving the VALUE —
-   *  which the API filters on — untouched. Destination types have no brand-name table of their own the way
-   *  source systems do, and the raw enum names are close enough to their product names to read correctly. */
-  destinationTypeLabel(destinationType: string): string {
-    return destinationType.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
   }
 
   /** Same PascalCase split, plus the one status whose stored name is not what the rest of the UI calls it. */
@@ -226,9 +219,10 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     return status.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
   }
 
-  /** Brand name for a source system — the Source badge and the Source filter must agree. */
+  /** The name the Source Connections master shows for this vendor — the Source badge, the Source filter and
+   *  that master all read the same SOURCES catalog, so none of them can drift from the others. */
   sourceSystemLabel(sourceSystemType: string | null | undefined): string {
-    return sourceSystemDisplayName(sourceSystemType);
+    return sourceTypeLabel(sourceSystemType);
   }
 
   selectedSetFor(category: FilterCategory): Set<string> {

@@ -9,7 +9,7 @@ import { ExecutionHistoryApiService } from '../../services/execution-history-api
 import { BulkExportStatus, PagedResult, RouteExecution } from '../../models/execution-history.model';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 import { ModalOverlayComponent } from '../../../components/shared/modal-overlay/modal-overlay.component';
-import { sourceSystemDisplayName } from '../../../data/source-system-display-names.data';
+import { sourceTypeLabel, destinationTypeLabel } from '../../../data/connection-type-labels.util';
 
 type SortColumn = 'pipeline' | 'source' | 'status' | 'duration' | 'lastRun' | 'triggeredBy';
 type SortDirection = 'asc' | 'desc';
@@ -233,7 +233,7 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     if (category === 'source') return this.sourceOptionLabel(value);
     if (category === 'status') return this.statusLabel(value);
     if (category === 'audience') return this.audienceLabel(value);
-    if (category === 'destination') return value.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+    if (category === 'destination') return destinationTypeLabel(value);
     return value;
   }
 
@@ -463,13 +463,13 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     // Show the vendor type (Epic, Athenahealth, ...) to match the Workflows list's Source badge,
     // not the per-connection name (e.g. "Epic_gogo") — fall back to it only when the type is unknown.
     // Through the same brand-name table that badge uses, or the two drift apart (eCW vs "Healow").
-    return sourceSystemDisplayName(execution.sourceSystemType) || execution.sourceName || '—';
+    return sourceTypeLabel(execution.sourceSystemType) || execution.sourceName || '—';
   }
 
   /** Brand name for a Source filter option — same table the Source badge above uses, so the filter's text and
    *  the column's text can't drift (eCW vs "Healow"). The VALUE stays the raw enum the API filters on. */
   sourceOptionLabel(sourceSystemType: string): string {
-    return sourceSystemDisplayName(sourceSystemType) || sourceSystemType;
+    return sourceTypeLabel(sourceSystemType) || sourceSystemType;
   }
 
   formatDuration(ms: number | null): string {
