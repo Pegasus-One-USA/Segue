@@ -21,4 +21,9 @@ public sealed class EfLicenseHistoryRepository : ILicenseHistoryRepository
 
     public async Task<IReadOnlyList<LicenseHistoryEntry>> GetAllAsync(CancellationToken cancellationToken) =>
         await _db.LicenseHistoryEntries.OrderByDescending(x => x.AppliedUtc).ToListAsync(cancellationToken);
+
+    // ExecuteDeleteAsync bypasses the change tracker (and AuditingSaveChangesInterceptor) for a genuine
+    // hard delete — same pattern EfUserAccessRepository uses for its own bulk-clear operations.
+    public async Task ClearAllAsync(CancellationToken cancellationToken) =>
+        await _db.LicenseHistoryEntries.ExecuteDeleteAsync(cancellationToken);
 }

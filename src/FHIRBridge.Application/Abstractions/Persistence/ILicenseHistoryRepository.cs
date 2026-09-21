@@ -8,4 +8,8 @@ public interface ILicenseHistoryRepository
 
     /// <summary>Newest first — matches how an admin actually wants to read "what did we apply, and when".</summary>
     Task<IReadOnlyList<LicenseHistoryEntry>> GetAllAsync(CancellationToken cancellationToken);
+
+    /// <summary>Testing/support utility only — wipes every row. Never called from the normal
+    /// apply-a-license flow; see <c>LicenseController</c>'s dedicated "Clear License History" endpoint.</summary>
+    Task ClearAllAsync(CancellationToken cancellationToken);
 }

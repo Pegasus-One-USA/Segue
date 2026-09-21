@@ -55,6 +55,8 @@ export class LicenseSettingsComponent implements OnInit {
   });
 
   protected readonly applyError = signal<string | null>(null);
+  protected readonly clearingLicense = signal(false);
+  protected readonly clearingHistory = signal(false);
 
   protected readonly form = this.fb.nonNullable.group({
     token: ['', Validators.required],
@@ -261,6 +263,43 @@ export class LicenseSettingsComponent implements OnInit {
         this.applyError.set(
           err.error?.error_description ?? err.error?.title ?? 'The license token failed verification.'
         );
+      },
+    });
+  }
+
+  // ── Testing/support utilities — never part of the normal apply flow ────────────────────────────
+
+  protected clearLicense(): void {
+    if (!confirm('Clear the currently activated license? This cannot be undone.')) { return; }
+
+    this.clearingLicense.set(true);
+    this.licenseSvc.clear().subscribe({
+      next: (s) => {
+        this.clearingLicense.set(false);
+        this.status.set(s);
+        this.toast.success('License cleared');
+        this.appInit.refreshLicenseGate();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.clearingLicense.set(false);
+        this.toast.error(err.error?.error_description ?? 'Failed to clear the license.');
+      },
+    });
+  }
+
+  protected clearHistory(): void {
+    if (!confirm('Clear all license history? This cannot be undone.')) { return; }
+
+    this.clearingHistory.set(true);
+    this.licenseSvc.clearHistory().subscribe({
+      next: () => {
+        this.clearingHistory.set(false);
+        this.history.set([]);
+        this.toast.success('License history cleared');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.clearingHistory.set(false);
+        this.toast.error(err.error?.error_description ?? 'Failed to clear license history.');
       },
     });
   }

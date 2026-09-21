@@ -216,6 +216,16 @@
           </div>
         </form>
       </section>
+
+      <section class="settings-card">
+        <h2 class="card-title">Testing Utility</h2>
+        <p class="card-sub">Removes the currently activated license, reverting this install to Unlicensed. Cannot be undone.</p>
+        <div class="form-actions">
+          <button type="button" class="btn-danger" [disabled]="clearingLicense()" (click)="clearLicense()">
+            {{ clearingLicense() ? 'Clearing…' : 'Clear License' }}
+          </button>
+        </div>
+      </section>
     }
   }
 
@@ -416,6 +426,12 @@
             </tbody>
           </table>
         }
+
+        <div class="form-actions">
+          <button type="button" class="btn-danger" [disabled]="clearingHistory()" (click)="clearHistory()">
+            {{ clearingHistory() ? 'Clearing…' : 'Clear License History' }}
+          </button>
+        </div>
       </section>
     }
   }

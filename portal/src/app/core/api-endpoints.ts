@@ -271,6 +271,9 @@ export const LICENSE_ENDPOINTS = {
   get:     `${API_V1_BASE}/license`,
   apply:   `${API_V1_BASE}/license`,
   history: `${API_V1_BASE}/license/history`,
+  // TESTING/SUPPORT UTILITY ONLY — see LicenseController.Clear/ClearHistory.
+  clear:        `${API_V1_BASE}/license`,
+  clearHistory: `${API_V1_BASE}/license/history`,
 };
 
 // ─── License Request (LicenseRequestController — api/v1/license-request) ────

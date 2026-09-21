@@ -152,6 +152,16 @@
   &:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 
+/* Testing/support utilities only (Clear License, Clear License History) — deliberately loud, so
+   nobody mistakes them for a normal workflow action. */
+.btn-danger {
+  padding: 9px 18px; border-radius: 9px; background: var(--color-error); border: none;
+  color: var(--color-on-primary); font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background var(--transition-base);
+  &:hover:not(:disabled) { background: var(--color-error-strong); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
 /* ── License Request modal ────────────────────────────────────────── */
 .request-modal-panel {
   width: min(560px, 90vw);

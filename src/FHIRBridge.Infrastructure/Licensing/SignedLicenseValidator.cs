@@ -87,11 +87,6 @@ public static class SignedLicenseValidator
     /// </summary>
     public static LicenseStatus Validate(string? licenseToken, bool enforceActivationWindow)
     {
-        if (string.IsNullOrWhiteSpace(licenseToken))
-        {
-            return Invalid("No license token was provided.");
-        }
-
         ECDsa ecdsa;
         try
         {
@@ -102,6 +97,24 @@ public static class SignedLicenseValidator
             // Failing to load OUR OWN embedded public key is a configuration bug, not a bad token — but it
             // must still never throw out of this method, so it's reported the same way as any other failure.
             return Invalid($"License public key could not be loaded: {ex.Message}");
+        }
+
+        return ValidateCore(licenseToken, enforceActivationWindow, ecdsa);
+    }
+
+    /// <summary>Test-only seam: validates against an explicitly supplied public key instead of the
+    /// compiled-in <see cref="LicensePublicKey.PublicKeyBase64"/>. Exists so
+    /// <c>SignedLicenseValidatorTests</c> can mint and verify tokens against its own throwaway keypair
+    /// regardless of whatever real key <see cref="LicensePublicKey.PublicKeyBase64"/> currently holds —
+    /// that suite must never need (or embed) the real production private key.</summary>
+    internal static LicenseStatus ValidateWithPublicKey(string? licenseToken, bool enforceActivationWindow, ECDsa publicKey) =>
+        ValidateCore(licenseToken, enforceActivationWindow, publicKey);
+
+    private static LicenseStatus ValidateCore(string? licenseToken, bool enforceActivationWindow, ECDsa ecdsa)
+    {
+        if (string.IsNullOrWhiteSpace(licenseToken))
+        {
+            return Invalid("No license token was provided.");
         }
 
         var validationParameters = new TokenValidationParameters
