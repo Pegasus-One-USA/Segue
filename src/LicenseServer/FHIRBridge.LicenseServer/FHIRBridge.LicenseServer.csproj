@@ -25,6 +25,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.8" />
+    <!-- UseWindowsService() activates a Windows Event Log logging provider when actually running
+         as a service, which needs this package (Api/Worker/Gateway all carry the same reference for
+         the same reason). Without it, the very first log call crashes the whole process with a
+         FileNotFoundException on System.Threading.AccessControl, confirmed on the real deployment
+         VM, where it took the service down before it ever signaled "running" to the SCM. -->
+    <PackageReference Include="System.Threading.AccessControl" Version="10.0.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
       <PrivateAssets>all</PrivateAssets>
