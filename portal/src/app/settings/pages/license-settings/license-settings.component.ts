@@ -258,7 +258,9 @@ export class LicenseSettingsComponent implements OnInit {
         this.status.set(s);
         this.form.reset({ token: '' });
         this.activeTab.set('status');
-        this.toast.success('License activated');
+        this.toast.success(
+          s.alreadyActive ? 'This license is already active' : 'License activated',
+        );
         this.appInit.refreshLicenseGate();
       },
       error: (err: HttpErrorResponse) => {

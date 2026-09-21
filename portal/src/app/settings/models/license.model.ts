@@ -66,6 +66,10 @@ export interface LicenseStatus {
   daysRemaining: number | null;
   /** Only populated when `isPresent` — nothing meaningful to show usage against otherwise. */
   usage: LicenseUsage | null;
+  /** Only ever `true` on the response to `POST /api/v1/license`, and only when the exact same token as
+   *  the currently-active license was submitted again — nothing was re-persisted and no new history row
+   *  was added. Always `false` on `GET /api/v1/license`. */
+  alreadyActive: boolean;
 }
 
 /** Body of `POST /api/v1/license`. */

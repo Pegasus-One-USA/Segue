@@ -47,7 +47,8 @@ public sealed record LicenseStatusDto(
     bool IsPresent,
     bool IsExpired,
     int? DaysRemaining,
-    LicenseUsageDto? Usage);
+    LicenseUsageDto? Usage,
+    bool AlreadyActive = false);
 
 /// <summary>Body of <c>POST /api/v1/license</c>.</summary>
 public sealed record ApplyLicenseRequest(string Token);

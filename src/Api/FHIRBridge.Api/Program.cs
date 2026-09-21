@@ -780,8 +780,9 @@ app.UseAuthentication();
 // License gate: once the license isn't Active (no token applied yet, expired, or invalid), every
 // /api/v1 action is blocked — including anonymous ones — except the handful of endpoints needed to
 // register the first admin, log in/out, see why (GET /auth/me, the setup-status check the portal
-// polls at boot), and actually fix it (the License screen, plus its dev-only minting helper). Without
-// that carve-out an inactive license would be permanently unrecoverable through the app itself. This
+// polls at boot), and actually fix it (the License screen — status/apply/history plus the license
+// request flow — and its dev-only minting helper). Without that carve-out an inactive license would
+// be permanently unrecoverable through the app itself. This
 // is the enforcement stage ILicenseService/LicenseStatus's own doc comments said was still to come —
 // everything before this was verification/reporting only.
 var licenseGateAllowedPrefixes = new[]
@@ -801,6 +802,7 @@ var licenseGateAllowedPrefixes = new[]
     "/api/v1/auth/internal/reset-password",
     "/api/v1/config",
     "/api/v1/license",
+    "/api/v1/license-request",
     "/api/v1/dev/license-mint",
 };
 var licenseGateService = app.Services.GetRequiredService<FHIRBridge.Application.Abstractions.Licensing.ILicenseService>();

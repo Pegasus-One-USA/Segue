@@ -62,6 +62,18 @@ public sealed class LicenseService : ILicenseService
                 false, status.InvalidReason ?? "The license token failed verification.", null);
         }
 
+        // Re-applying the exact same token as the one already active — a back-to-back double-submit, or a
+        // renewal screen the admin resubmits without changing anything — is a no-op: nothing is
+        // re-persisted and no new LicenseHistoryEntry row is added, so the history table doesn't
+        // accumulate duplicate rows for a license that never actually changed.
+        lock (_lock)
+        {
+            if (Current.State == LicenseState.Active && CurrentRawToken == licenseToken)
+            {
+                return new LicenseApplyResult(true, null, Current, true);
+            }
+        }
+
         using (var scope = _scopeFactory.CreateScope())
         {
             // A license minted against a specific LicenseRequest (requestKey claim present) must match

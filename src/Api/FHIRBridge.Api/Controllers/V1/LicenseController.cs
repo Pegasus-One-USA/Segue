@@ -67,7 +67,7 @@ public sealed class LicenseController : ControllerBase
         // without a second round-trip to GET.
         var usageCounts = await _licenseUsageCountsProvider.GetCurrentCountsAsync(cancellationToken);
         var executionStats = await _licenseUsageExecutionStatsProvider.GetCurrentStatsAsync(cancellationToken);
-        return Ok(LicenseStatusMapper.ToDto(result.Status, usageCounts, executionStats));
+        return Ok(LicenseStatusMapper.ToDto(result.Status, usageCounts, executionStats, result.AlreadyActive));
     }
 
     /// <summary>Every license this install has ever successfully applied, newest first — the current one
