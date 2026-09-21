@@ -219,11 +219,11 @@
 <header class="doc-header">
   <div class="wrap">
     <h1>Product Licensing</h1>
-    <p class="subtitle">Signed license tokens, quota/allow-list enforcement, a global "must be active" gate, and a standalone license-minting server — implementation summary and file-by-file change log</p>
+    <p class="subtitle">Signed license tokens, quota/allow-list enforcement, a global "must be active" gate, an in-repo license-minting server (Segue), and the install-to-licensor License Request workflow — implementation summary and file-by-file change log</p>
     <div class="meta">
-      <div><strong>Branch</strong> feature/licensing</div>
-      <div><strong>Scope</strong> Backend (.NET 9) + Frontend (Angular 20) + a new standalone .NET project</div>
-      <div><strong>Status</strong> Implemented, tested, verified</div>
+      <div><strong>Branch</strong> feature/license-upgrade (originally built on feature/licensing)</div>
+      <div><strong>Scope</strong> Backend (.NET 9) + Frontend (Angular 20) + <code>src/LicenseServer/FHIRBridge.LicenseServer</code> (merged into this repo)</div>
+      <div><strong>Status</strong> Implemented, tested, verified — updated with the License Request workflow, production signing key, and multi-request support</div>
     </div>
   </div>
 </header>
@@ -250,6 +250,12 @@
       <li><a href="#tests">Main repo — Tests</a></li>
       <li><a href="#portal">Portal (Angular)</a></li>
       <li><a href="#license-server-files">FHIRBridge.LicenseServer — full file listing</a></li>
+      <li><a href="#post-merge">Post-merge: production key &amp; Segue rebrand</a></li>
+      <li><a href="#license-request-overview">License Request — a customer install's outbound ask</a></li>
+      <li><a href="#license-request-mainrepo">License Request — main repo (Domain/Application/Infrastructure/Api)</a></li>
+      <li><a href="#license-request-server">License Request — LicenseServer (deny, history, edit)</a></li>
+      <li><a href="#license-request-portal">License Request — Portal UI</a></li>
+      <li><a href="#testing-utilities">Testing/support utilities</a></li>
       <li><a href="#verification">Verification</a></li>
     </ol>
   </nav>
@@ -288,15 +294,20 @@
   </ul>
 
   <h2 id="new-project"><span class="num">3.</span>New standalone project — FHIRBridge.LicenseServer</h2>
+  <div class="callout warn">
+    <strong>Update — merged into this repo.</strong>
+    <span>Originally a fully separate git repository (<code>D:\Project\FHIRBridge\FHIRBridge-LicenseServer</code>). It has since been merged into this monorepo at <code>src/LicenseServer/FHIRBridge.LicenseServer</code> so the whole product ships from one repo/CI pipeline — see <a href="#post-merge">§19</a>. It still runs as its own ASP.NET Core process, its own PostgreSQL database, and still duplicates (never references) the claim-shape logic it needs from the main product, for the same isolation reasoning below — only the source-control boundary changed, not the process/deployment/code-sharing boundary.</span>
+  </div>
   <div class="callout project">
-    <strong>Separate repository, separate process, zero code sharing.</strong>
-    <span><code>D:\Project\FHIRBridge\FHIRBridge-LicenseServer</code> is its own git repository with no project or package reference into the main FHIRBridge repo. It duplicates only the small pieces of claim-shape logic it needs (mirrored, not shared) so that a compromise of one codebase can never directly touch the other. Runs as its own ASP.NET Core Razor Pages app, its own PostgreSQL database, on its own port (5220 in local dev).</span>
+    <strong>Separate process, separate database, zero code sharing.</strong>
+    <span>No project or package reference into the main FHIRBridge product's own code. It duplicates only the small pieces of claim-shape logic it needs (mirrored, not shared) so that a compromise of one codebase can never directly touch the other. Runs as its own ASP.NET Core Razor Pages app, its own PostgreSQL database, on its own port (5220 in local dev, 3021 in shared/deployed environments).</span>
   </div>
   <p>What it does:</p>
   <ul class="feature-list">
-    <li><strong>Mints signed licenses.</strong> An internal admin (username/password login, no self-registration) fills in a form — customer, edition, expiry, every quota dimension, allowed source/resource/destination types (checkboxes, narrowed to only what the product actually supports today), allowed hospitals — and it signs an ES256 JWS token with the same claim shape and dev key the main repo verifies against.</li>
-    <li><strong>Records every issued license.</strong> Each mint is persisted to <code>IssuedLicenses</code> (customer, limits, summaries, the raw token, the exact claims JSON that was signed) for an audit trail of what was ever issued.</li>
+    <li><strong>Mints signed licenses.</strong> An internal admin (username/password login, no self-registration) fills in a form — customer, edition, expiry, every quota dimension, activation window, allowed source/resource/destination types (checkboxes, narrowed to only what the product actually supports today), allowed hospitals — and it signs an ES256 JWS token with the same claim shape the main repo verifies against, using the real production signing key (see <a href="#post-merge">§19</a>) rather than a shared dev key.</li>
+    <li><strong>Records every issued license.</strong> Each mint is persisted to <code>IssuedLicenses</code> (customer, limits, summaries, activation window, the requesting install's <code>RequestHost</code> if minted against a License Request, the raw token, the exact claims JSON that was signed) for an audit trail of what was ever issued.</li>
     <li><strong>Receives usage check-ins.</strong> A <code>CheckInEndpoints</code>/<code>CheckInContracts</code> ingest surface accepts the periodic heartbeat batches the main product's <code>LicenseHeartbeatWorker</code> sends, recording per-installation usage over time.</li>
+    <li><strong>Receives and tracks license requests.</strong> A customer install can ask for a license directly from its own License screen — see <a href="#license-request-overview">§20</a> for the full workflow, including deny/history/edit on this server's own admin pages.</li>
     <li><strong>Self-migrating.</strong> Applies its own EF Core migrations against its own PostgreSQL database on startup — no manual DB setup step for a fresh install of this tool itself.</li>
   </ul>
 
@@ -526,7 +537,7 @@
   </table>
 
   <h2 id="license-server-files"><span class="num">17.</span>FHIRBridge.LicenseServer — full file listing</h2>
-  <p class="section-intro">Every file in the new standalone project (<code>D:\Project\FHIRBridge\FHIRBridge-LicenseServer</code>, its own git repository).</p>
+  <p class="section-intro">The project as first built (then still its own repository). All paths below are now under <code>src/LicenseServer/FHIRBridge.LicenseServer/</code> in this repo — see <a href="#post-merge">§19</a> for the merge, and <a href="#license-request-server">§21</a> for every file added since for the License Request workflow (Deny, History, Details/Edit, <code>RequestHost</code>).</p>
   <table class="file-table">
     <tr><th>File</th><th>Status</th><th>What it does</th></tr>
     <tr><td class="file-path">Program.cs</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">App entry point — Razor Pages, cookie auth, self-migrating DB startup.</td></tr>
@@ -552,17 +563,124 @@
     <tr><td class="file-path">FHIRBridge.LicenseServer.csproj, .gitignore, README.md, CLAUDE.md, Properties/launchSettings.json</td><td class="status"><span class="pill pill-project">Project</span></td><td class="why">Project scaffolding and documentation.</td></tr>
   </table>
 
-  <h2 id="verification"><span class="num">18.</span>Verification</h2>
+  <h2 id="post-merge"><span class="num">19.</span>Post-merge: production key &amp; Segue rebrand</h2>
+  <p class="section-intro">After the initial build described above, <code>FHIRBridge-LicenseServer</code> was merged into this repository (<code>src/LicenseServer/FHIRBridge.LicenseServer</code>) so the whole product ships from one repo/CI pipeline. The work below happened after that merge, on the same <code>feature/license-upgrade</code> branch.</p>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Licensing/LicensePublicKey.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Rotated <code>PublicKeyBase64</code> from the shared dev key to the real PegasusOne production signing key. Compiled-in constant, deliberately <em>not</em> configurable via an appsettings file — a config-editable trust anchor would let anyone with filesystem/deploy access to one install mint themselves a trusted license by pointing it at their own key.</td></tr>
+    <tr><td class="file-path">src/FHIRBridge.Infrastructure/Licensing/SignedLicenseValidator.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Refactored into a shared <code>ValidateCore</code> plus a test-only <code>internal static ValidateWithPublicKey(...)</code> seam, so unit tests validate against a throwaway keypair instead of the real compiled production key. Added <code>FriendlyValidationFailureReason(Exception?)</code> — turns the raw <code>IDX10517</code>/<code>SecurityTokenInvalidSignatureException</code> message into a plain-English explanation ("This token's signature could not be verified. It may have been copied incorrectly, tampered with, or signed for a different environment than this one...").</td></tr>
+    <tr><td class="file-path">tests/FHIRBridge.UnitTests/Licensing/SignedLicenseValidatorTests.cs</td><td class="status"><span class="pill pill-test">Test</span> <span class="pill pill-modified">Modified</span></td><td class="why">All 92 cases now call <code>ValidateWithPublicKey</code> against a locally generated keypair — fully decoupled from the real compiled key, so rotating the production key again never breaks this suite.</td></tr>
+    <tr><td class="file-path">src/LicenseServer/FHIRBridge.LicenseServer/Program.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Added <code>UseWindowsService()</code> (this server now runs as a real Windows Service in deployed environments, not just <code>dotnet run</code>) and <code>Configure&lt;EventLogSettings&gt;(s =&gt; s.Filter = (_, _) =&gt; false)</code> to stop it crashing on startup when the process account lacks Windows Event Log permissions.</td></tr>
+    <tr><td class="file-path">src/LicenseServer/FHIRBridge.LicenseServer/FHIRBridge.LicenseServer.csproj</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Added <code>Microsoft.Extensions.Hosting.WindowsServices</code> and <code>System.Threading.AccessControl</code> (the latter needed transitively by the Windows Service host, missing caused a startup <code>FileNotFoundException</code>).</td></tr>
+    <tr><td class="file-path">src/LicenseServer/FHIRBridge.LicenseServer/Pages/Shared/_Layout.cshtml, Account/Login.cshtml, Licenses/Create.cshtml, Index.cshtml, Guide.cshtml</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Rebranded every user-facing "FHIRBridge" string to "Segue" (page title, nav brand, login heading, mint-form heading, dashboard subtitle, Guide references) — text only, no namespace/class/database-name changes.</td></tr>
+  </table>
+  <div class="callout warn">
+    <strong>Deployment notes.</strong>
+    <span>Hosted on port <code>3021</code> in shared/deployed environments (reusing a customer-visible port required a revert after a collision with an existing Terminology service on 6013). Config is read from the environment's shared <code>C:\inetpub\FHIRBridge_Configurations\license</code> folder. HTTPS is served directly by this app's own Kestrel (<code>Kestrel:Certificates:Default:Path/KeyPath</code>), unlike the API/Worker which are loopback-only behind the Gateway — this is a standalone customer/admin-facing app with no reverse proxy in front of it.</span>
+  </div>
+
+  <h2 id="license-request-overview"><span class="num">20.</span>License Request — a customer install's outbound ask</h2>
+  <p class="section-intro">
+    A deployed install doesn't always have a license yet, or needs another one for a renewal. The License
+    Request workflow lets an admin ask the licensor for one directly from their own product's Settings screen,
+    without leaving the app or knowing the licensor's minting process — and lets whoever runs
+    <code>FHIRBridge.LicenseServer</code> see and act on that ask.
+  </p>
+  <div class="callout">
+    <strong>Any number of requests, each independent.</strong>
+    <span>This started as a strict one-request-per-install rule (a <code>SingletonGuard</code> unique index enforced it at the schema level). It was later reworked so every "Submit Request" click creates its own independent row with its own freshly generated key — an install can submit as many as it needs (one per renewal, or several while testing) and every one shows up as its own entry, both in the install's own "Your Requests History" list and on the LicenseServer's History page.</span>
+  </div>
+  <div class="flow-steps">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body"><strong>Admin submits (or resends/edits) a request</strong><span>Settings → License → License Request tab. The browser's own origin (<code>window.location.origin</code> — e.g. <code>https://fhirbridge.acmehealth.com</code> or <code>http://localhost:4200</code>) is captured client-side and sent as <code>requestedFromUrl</code>, since the API's own Host header only reflects where the API itself is bound, never the portal's port.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body"><strong>A 64-char random key is generated and the request is recorded</strong><span><code>LicenseRequestService.CreateAndSubmitAsync</code> — 32 random bytes, hex-encoded — then tries the licensor's direct intake API (<code>POST {LicensorApplicationUrl}/api/license-requests</code>).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">3</div>
+      <div class="step-body"><strong>Direct call succeeds → Submitted; fails → Failed, with a manual-fallback code</strong><span>A network/DNS/timeout/non-2xx failure never surfaces as an error to the admin — the request lands in <code>Failed</code> with an AES-256-GCM encoded blob (<code>LicenseRequestPayloadEncoder</code>) they copy and share with support instead, decoded on the LicenseServer's own <code>/LicenseRequests</code> page.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">4</div>
+      <div class="step-body"><strong>The LicenseServer records it, upserted by the request's key</strong><span>A resend of the <em>same</em> request (Edit + re-attempt) updates that one row in place — contact details, <code>RequestHost</code>, submission count — and clears any prior Fulfilled/Denied decision so it needs a fresh look. A genuinely new "Resend"/"Submit" always creates a brand-new row with its own key instead.</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body"><strong>An operator mints or denies it</strong><span>On <code>/LicenseRequests</code> (pending only) or <code>/LicenseRequests/History</code> (everything), clicking a row opens full details with an inline Edit form and either <strong>Create License</strong> (pre-fills the mint form, embeds the request's key as the <code>requestKey</code> claim) or <strong>Deny</strong> (records <code>DeniedAtUtc</code>/an optional internal-only reason).</span></div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">6</div>
+      <div class="step-body"><strong>Activation re-validates the key</strong><span><code>LicenseService.ApplyAsync</code>: if the token being applied carries a <code>requestKey</code> claim, it's looked up via <code>ILicenseRequestRepository.GetByUniqueKeyAsync</code> against <em>any</em> of this install's own past requests — proving the license was minted for a request this install actually made, not one copied from elsewhere. A token with no <code>requestKey</code> claim skips this check entirely.</span></div>
+    </div>
+  </div>
+
+  <h2 id="license-request-mainrepo"><span class="num">21.</span>License Request — main repo</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">FHIRBridge.Domain/Entities/Licensing/LicenseRequest.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">The aggregate — <code>ClientName/Email/CompanyName/Address/PhoneNumber</code>, an immutable <code>UniqueKey</code>, <code>RequestHost</code> (refreshed on every submission that supplies one), <code>Status</code> (Pending/Submitted/Failed), <code>UpdateDetails(...)</code> (corrects contact fields, never the key), <code>Resubmit(...)</code> (resets to Pending ahead of a re-attempt).</td></tr>
+    <tr><td class="file-path">FHIRBridge.Application/Abstractions/Licensing/ILicenseRequestService.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>ListAsync</code> (every request this install has ever made), <code>CreateAndSubmitAsync</code> (always creates a new one — never fails because one already exists), <code>UpdateAsync(id, ...)</code> (correct + re-submit one specific request). <code>LicenseRequestStatusResult</code> carries an <code>Id</code> so the portal can target a specific row.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Application/Abstractions/Persistence/ILicenseRequestRepository.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>ListAsync</code>/<code>GetAsync(id)</code>/<code>GetByUniqueKeyAsync(key)</code>/<code>AddAsync</code>/<code>SaveAsync</code> — a real collection per install, not a singleton slot.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Infrastructure/Licensing/LicenseRequestService.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Implements the above — generates the key, POSTs the intake body (<code>LicenseRequestIntakeBody</code>, mirrored field-for-field on the LicenseServer side), falls back to the encoded manual blob on failure.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Infrastructure/Licensing/LicenseRequestPayloadEncoder.cs, LicenseRequestSharedKey.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">AES-256-GCM encode/decode of the manual-fallback blob, and the pre-shared key both sides of that blob use (this repo's copy and the LicenseServer's own decode-only copy).</td></tr>
+    <tr><td class="file-path">FHIRBridge.Infrastructure/Persistence/EfLicenseRequestRepository.cs, InMemoryLicenseRequestRepository.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Real (EF) and no-DB-profile implementations of the repository above.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Infrastructure/Persistence/Configurations/LicenseRequestConfiguration.cs</td><td class="status"><span class="pill pill-new">New</span> → <span class="pill pill-modified">Modified</span></td><td class="why">Originally added a shadow <code>SingletonGuard</code> column with a schema-level unique index enforcing one row per install; later removed in favor of a real unique index on <code>UniqueKey</code> itself, once every submission became its own independent row.</td></tr>
+    <tr><td class="file-path">Persistence/Migrations/…AddLicenseRequests, …AddLicenseRequestHost, …AddLicenseRequestSingletonGuard, …RemoveLicenseRequestSingletonGuard (+ the matching FHIRBridge.Infrastructure.Migrations.PostgreSql copies)</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">The table's schema evolution, in order: create it; add <code>RequestHost</code>; add (then later remove) the singleton-enforcing shadow column/index.</td></tr>
+    <tr><td class="file-path">Api/Controllers/V1/LicenseRequestController.cs</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>UnifiedAdmin</code>-gated: <code>GET</code> (list all), <code>POST</code> (always creates new), <code>PUT {id}</code> (correct + resubmit one), <code>GET</code>/<code>PUT licensor-url</code> (the narrow, license-gate-allowlisted setting pair for where requests get sent). A <code>POST {id}/resubmit</code> endpoint existed briefly for "resend in place" and was removed once Resend was changed to always submit a new request instead.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Infrastructure/Licensing/LicenseService.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>ApplyAsync</code>'s <code>requestKey</code> claim check — see §20, step 6.</td></tr>
+  </table>
+
+  <h2 id="license-request-server"><span class="num">22.</span>License Request — LicenseServer side</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">Domain/LicenseRequest.cs</td><td class="status"><span class="pill pill-new">New</span> → <span class="pill pill-modified">Modified</span></td><td class="why">This server's own copy of the request record — <code>ClientName/Email/…/UniqueKey</code>, <code>RequestHost</code>, <code>SubmissionCount</code>, <code>ReceivedManually</code>, <code>FulfilledAtUtc/FulfilledIssuedLicenseId</code>, and (added later) <code>DeniedAtUtc</code>/<code>DenialReason</code> for the Deny action.</td></tr>
+    <tr><td class="file-path">Domain/IssuedLicense.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Added <code>RequestHost</code>, copied from the linked request at mint time (denormalized, so the audit trail still shows which deployment asked even if that request row is later removed).</td></tr>
+    <tr><td class="file-path">Api/LicenseRequestContracts.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>LicenseRequestIntakeBody</code> gained <code>RequestHost</code>, mirroring the main repo's intake body.</td></tr>
+    <tr><td class="file-path">Api/LicenseRequestEndpoints.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>UpsertLicenseRequestAsync</code>'s update branch now also refreshes <code>RequestHost</code> whenever a value is supplied (not just on first insert), and clears a prior <code>DeniedAtUtc</code>/<code>DenialReason</code> on resubmission, same as it already cleared <code>FulfilledAtUtc</code>.</td></tr>
+    <tr><td class="file-path">Licensing/LicenseRequestPayloadEncoder.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">This server's decode-only copy's <code>LicenseRequestPayload</code> record gained <code>RequestHost</code> too, so the manual-fallback path carries it as well.</td></tr>
+    <tr><td class="file-path">Pages/LicenseRequests/Index.cshtml(.cs)</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Narrowed to pending-only (<code>FulfilledAtUtc == null &amp;&amp; DeniedAtUtc == null</code>) — the action-needed list. Rows are clickable through to Details; a "Deny" link sits next to "Create License". Still hosts the manual-code decode form.</td></tr>
+    <tr><td class="file-path">Pages/LicenseRequests/History.cshtml(.cs)</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Every request ever received — pending, fulfilled, and denied alike, newest-first — with the same click-through to Details.</td></tr>
+    <tr><td class="file-path">Pages/LicenseRequests/Details.cshtml(.cs)</td><td class="status"><span class="pill pill-new">New</span></td><td class="why">Full single-request view: every field including <code>RequestHost</code> and the request key, the linked issued license if fulfilled, an inline <strong>Edit Request Details</strong> form (corrects contact details/<code>RequestHost</code>; the request key is never part of the form), and a <strong>Deny Request</strong> form (optional internal-only reason) when still pending.</td></tr>
+    <tr><td class="file-path">Pages/Licenses/Create.cshtml(.cs)</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">The "Linked License Request" panel shows the request's <code>RequestHost</code> ("Requesting URL"); the minted <code>IssuedLicense.RequestHost</code> is copied from <code>LinkedRequest?.RequestHost</code>.</td></tr>
+    <tr><td class="file-path">Pages/Licenses/Index.cshtml</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Added a "Requesting URL" row to each issued license's detail table.</td></tr>
+    <tr><td class="file-path">Pages/Index.cshtml(.cs), Pages/Shared/_Layout.cshtml</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">The pending-request count (dashboard banner + nav badge) excludes denied requests, same as fulfilled ones. Nav gained a "Request History" link.</td></tr>
+    <tr><td class="file-path">wwwroot/css/site.css</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Added <code>.clickable-row</code> (cursor), <code>.badge-suspended</code> (Denied badge), <code>button.btn-danger</code> (the Deny button).</td></tr>
+    <tr><td class="file-path">Migrations/…AddLicenseRequestAndIssuedLicenseRequestHost, …AddLicenseRequestDenial</td><td class="status"><span class="pill pill-new">New</span></td><td class="why"><code>RequestHost</code> on both <code>LicenseRequests</code> and <code>IssuedLicenses</code>; then <code>DeniedAtUtc</code>/<code>DenialReason</code> on <code>LicenseRequests</code>.</td></tr>
+  </table>
+
+  <h2 id="license-request-portal"><span class="num">23.</span>License Request — Portal UI</h2>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">settings/models/license.model.ts</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why"><code>LicenseRequestStatus</code> is now one row of a list (carries <code>id</code>, no more <code>exists</code> flag); <code>CreateLicenseRequestRequest</code> gained <code>requestedFromUrl</code> and doubles as the edit-request body; the short-lived <code>ResubmitLicenseRequestRequest</code> type was added then removed once Resend stopped calling a resubmit-in-place endpoint.</td></tr>
+    <tr><td class="file-path">settings/services/license.service.ts</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why"><code>getRequest()</code> → <code>getRequests()</code> (list); added <code>updateRequest(id, …)</code>.</td></tr>
+    <tr><td class="file-path">core/api-endpoints.ts</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why"><code>LICENSE_REQUEST_ENDPOINTS.update</code> is now <code>(id) =&gt; …/license-request/{id}</code>.</td></tr>
+    <tr><td class="file-path">settings/pages/license-settings/license-settings.component.ts/.html</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why">The License Request tab reworked into: a collapsed "Request a License" card behind a <strong>New Request</strong> button (was always-expanded, and hidden entirely once one request existed); a "Your Requests History" list of every request this install has made, each row with its own <strong>Resend Request</strong> (submits a brand-new request with the same details — its own new key/timestamp, so it shows as a distinct entry everywhere) and <strong>Edit License Request</strong> (in-place correction + resubmit, never regenerates the key) actions. The "Requested From" field is captured (<code>window.location.origin</code>) and sent on every submit/resend/edit, but is no longer shown back to the client — it's for the licensor's eyes only.</td></tr>
+  </table>
+
+  <h2 id="testing-utilities"><span class="num">24.</span>Testing/support utilities</h2>
+  <p class="section-intro">Clearly marked as testing/support-only in code — never part of the normal apply flow, and not gated to Development the way the earlier dev-mint tooling is, so use with care against a real environment.</p>
+  <table class="file-table">
+    <tr><th>File</th><th>Status</th><th>What changed &amp; why</th></tr>
+    <tr><td class="file-path">Api/Controllers/V1/LicenseController.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why">Added <code>DELETE</code> (clear the currently applied license back to Unlicensed) and <code>DELETE history</code> (hard-delete every <code>LicenseHistoryEntry</code> via <code>ExecuteDeleteAsync</code>, bypassing the audit-append-only interceptor by design since this is a support reset, not a product action).</td></tr>
+    <tr><td class="file-path">FHIRBridge.Application/Abstractions/Licensing/ILicenseService.cs, Infrastructure/Licensing/LicenseService.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>ClearAsync</code> — removes the <code>SystemSetting</code> row and resets <code>Current</code>/<code>CurrentRawToken</code> in memory under the existing lock.</td></tr>
+    <tr><td class="file-path">FHIRBridge.Application/Abstractions/Persistence/ILicenseHistoryRepository.cs, Infrastructure/Persistence/EfLicenseHistoryRepository.cs, InMemoryLicenseHistoryRepository.cs</td><td class="status"><span class="pill pill-modified">Modified</span></td><td class="why"><code>ClearAllAsync</code> for both the real and no-DB-profile implementations.</td></tr>
+    <tr><td class="file-path">portal/settings/services/license.service.ts, license-settings.component.ts/.html/.scss</td><td class="status"><span class="pill pill-frontend">Frontend</span> <span class="pill pill-modified">Modified</span></td><td class="why">Red "Clear License" (Update tab) and "Clear License History" (History tab) buttons, each behind a native <code>confirm()</code> prompt.</td></tr>
+  </table>
+
+  <h2 id="verification"><span class="num">25.</span>Verification</h2>
   <ul class="feature-list">
-    <li><strong>Unit tests:</strong> 85/85 licensing tests passing (<code>dotnet test tests/FHIRBridge.UnitTests --filter "FullyQualifiedName~Licensing"</code>).</li>
+    <li><strong>Unit tests (quota/enforcement engine):</strong> 85/85 licensing tests passing (<code>dotnet test tests/FHIRBridge.UnitTests --filter "FullyQualifiedName~Licensing"</code>), including the 92-case <code>SignedLicenseValidatorTests</code> suite after its production-key decoupling refactor.</li>
+    <li><strong>License Request workflow:</strong> verified by build + manual end-to-end testing (submit → intake → LicenseServer record → mint/deny → activate) rather than a dedicated automated test suite — <code>LicenseRequestService</code>/<code>LicenseRequestController</code>/the multi-request repository rework, and every LicenseServer/portal change in §21–24, have no unit or integration tests of their own yet. Treat this as an open gap, not a verified-safe area, if changing this code further.</li>
     <li><strong>Architecture tests:</strong> only one pre-existing, unrelated failure (an <code>ApplicationType</code> switch in <code>WorkflowEndpoints.cs</code>, not part of this work) — no new layering or switch-ban violations introduced.</li>
-    <li><strong>Build:</strong> API, Worker, and the standalone LicenseServer all build cleanly (0 errors) after every change described above; the Angular portal builds cleanly as well.</li>
+    <li><strong>Build:</strong> API, Worker, the in-repo LicenseServer, and the Angular portal all build cleanly (0 errors) after every change described above, including the post-merge and License Request work in §19–24.</li>
     <li><strong>Functional safety review:</strong> every enforcement insertion point was individually diff-reviewed to confirm it is purely additive — a new guard call placed before existing logic, fail-open on no-license/unlimited/internal-error, never altering an existing branch. See the earlier validation pass in this same working session for the full file-by-file confirmation.</li>
-    <li><strong>HIPAA:</strong> no FHIR resource content or patient data is touched anywhere in the licensing code; the audit/governance log tables are untouched by the enforcement interceptor (it only watches User/SourceConnection/ResourcePipelineRoute/WorkflowDefinition/DestinationConfiguration); dev-only minting stays hard-gated to the Development environment.</li>
+    <li><strong>HIPAA:</strong> no FHIR resource content or patient data is touched anywhere in the licensing code; the audit/governance log tables are untouched by the enforcement interceptor (it only watches User/SourceConnection/ResourcePipelineRoute/WorkflowDefinition/DestinationConfiguration); dev-only minting stays hard-gated to the Development environment. License Request contact details (name/email/phone/address) are business contact info, not patient data.</li>
   </ul>
 
   <footer>
-    FHIRBridge — Product Licensing implementation summary. Generated for the <code>feature/licensing</code> branch.
+    FHIRBridge — Product Licensing implementation summary. Originally generated for <code>feature/licensing</code>; updated on <code>feature/license-upgrade</code> with the License Server merge, production key rotation, Segue rebrand, and the License Request workflow.
   </footer>
 
 </div>
