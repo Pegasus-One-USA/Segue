@@ -225,6 +225,7 @@ public sealed class CreateModel : PageModel
             AllowedDestinationTypesSummary = fields.AllowedDestinationTypes is null ? "(all)" : string.Join(", ", fields.AllowedDestinationTypes),
             ClaimsJson = claimsJson,
             Token = token,
+            RequestHost = LinkedRequest?.RequestHost,
         };
         _db.IssuedLicenses.Add(issuedLicense);
 

@@ -4,7 +4,6 @@ using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities.Licensing;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -43,23 +42,15 @@ public sealed class LicenseRequestService : ILicenseRequestService
         _logger = logger;
     }
 
-    public async Task<LicenseRequestStatusResult> GetAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<LicenseRequestStatusResult>> ListAsync(CancellationToken cancellationToken)
     {
-        var request = await _repository.GetAsync(cancellationToken);
-        return ToResult(request);
+        var requests = await _repository.ListAsync(cancellationToken);
+        return requests.Select(ToResult).ToList();
     }
 
     public async Task<LicenseRequestStatusResult> CreateAndSubmitAsync(
         LicenseRequestInput input, string? requestHost, CancellationToken cancellationToken)
     {
-        var existing = await _repository.GetAsync(cancellationToken);
-        if (existing is not null)
-        {
-            throw new InvalidOperationException(
-                "A license request already exists for this install — use resubmit to try again instead of " +
-                "creating a new one.");
-        }
-
         if (string.IsNullOrWhiteSpace(input.ClientName) || string.IsNullOrWhiteSpace(input.Email)
             || string.IsNullOrWhiteSpace(input.PhoneNumber))
         {
@@ -77,36 +68,42 @@ public sealed class LicenseRequestService : ILicenseRequestService
             input.PhoneNumber.Trim(), uniqueKey, DateTime.UtcNow,
             string.IsNullOrWhiteSpace(requestHost) ? null : requestHost.Trim());
 
-        try
-        {
-            await _repository.AddAsync(request, cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            // Two concurrent POST /api/v1/license-request calls can both pass the GetAsync check above
-            // before either commits — the schema's SingletonGuard unique index (see
-            // LicenseRequestConfiguration) rejects whichever insert loses that race. Same outward
-            // behavior as losing the pre-check: the caller should resubmit against the row that won.
-            throw new InvalidOperationException(
-                "A license request already exists for this install — use resubmit to try again instead of " +
-                "creating a new one.");
-        }
-
+        await _repository.AddAsync(request, cancellationToken);
         await AttemptSubmitAsync(request, cancellationToken);
 
         return ToResult(request);
     }
 
-    public async Task<LicenseRequestStatusResult> ResubmitAsync(CancellationToken cancellationToken)
+    public async Task<LicenseRequestStatusResult> UpdateAsync(
+        Guid id, LicenseRequestInput input, string? requestHost, CancellationToken cancellationToken)
     {
-        var request = await _repository.GetAsync(cancellationToken)
-            ?? throw new InvalidOperationException(
-                "No license request exists for this install yet — submit one first.");
+        var request = await _repository.GetAsync(id, cancellationToken)
+            ?? throw new InvalidOperationException("That license request could not be found.");
 
-        request.Resubmit();
+        if (string.IsNullOrWhiteSpace(input.ClientName) || string.IsNullOrWhiteSpace(input.Email)
+            || string.IsNullOrWhiteSpace(input.PhoneNumber))
+        {
+            throw new InvalidOperationException("Client name, email, and phone number are required.");
+        }
+
+        request.UpdateDetails(
+            input.ClientName.Trim(), input.Email.Trim(),
+            string.IsNullOrWhiteSpace(input.CompanyName) ? null : input.CompanyName.Trim(),
+            string.IsNullOrWhiteSpace(input.Address) ? null : input.Address.Trim(),
+            input.PhoneNumber.Trim());
+        request.Resubmit(requestHost);
         await AttemptSubmitAsync(request, cancellationToken);
 
         return ToResult(request);
+    }
+
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var request = await _repository.GetAsync(id, cancellationToken)
+            ?? throw new InvalidOperationException("That license request could not be found.");
+
+        request.SoftDelete(DateTime.UtcNow);
+        await _repository.SaveAsync(request, cancellationToken);
     }
 
     private async Task AttemptSubmitAsync(LicenseRequest request, CancellationToken cancellationToken)
@@ -121,12 +118,11 @@ public sealed class LicenseRequestService : ILicenseRequestService
         {
             // No licensor URL configured yet — a normal, recoverable setup state, not a network/DNS
             // failure, but it still has to land in Failed (with the fallback blob) rather than
-            // propagating: AddAsync already committed this request row by the time we get here, and
-            // this table holds at most one row per install, so letting this throw would leave that
-            // row stuck Pending forever with no fallback blob and no way to recover — a fresh
-            // CreateAndSubmitAsync is refused (a request already exists), and Resubmit would just hit
-            // this same exception again. Marking Failed here instead means: fallback blob available
-            // immediately, and once an admin sets the URL, Resubmit resolves it and proceeds normally.
+            // propagating: AddAsync already committed this request row by the time we get here, so
+            // letting this throw would leave it stuck Pending forever with no fallback blob and no way
+            // to recover. Marking Failed here instead means: fallback blob available immediately, and
+            // once an admin sets the URL, editing (or submitting a fresh request) resolves it and
+            // proceeds normally.
             _logger.LogWarning(ex, "License request {RequestId} could not be submitted: {Message}", request.Id, ex.Message);
             request.MarkFailed(attemptedUtc, ex.Message);
             await _repository.SaveAsync(request, cancellationToken);
@@ -191,13 +187,8 @@ public sealed class LicenseRequestService : ILicenseRequestService
     private static string DisplayHostOf(string baseUrl) =>
         Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) ? uri.Host : baseUrl;
 
-    private static LicenseRequestStatusResult ToResult(LicenseRequest? request)
+    private static LicenseRequestStatusResult ToResult(LicenseRequest request)
     {
-        if (request is null)
-        {
-            return LicenseRequestStatusResult.NotRequested;
-        }
-
         var encodedPayload = request.Status == LicenseRequestStatus.Failed
             ? LicenseRequestPayloadEncoder.Encode(new LicenseRequestPayload(
                 request.ClientName, request.Email, request.CompanyName, request.Address, request.PhoneNumber,
@@ -205,7 +196,7 @@ public sealed class LicenseRequestService : ILicenseRequestService
             : null;
 
         return new LicenseRequestStatusResult(
-            true, request.ClientName, request.Email, request.CompanyName, request.Address, request.PhoneNumber,
+            request.Id, request.ClientName, request.Email, request.CompanyName, request.Address, request.PhoneNumber,
             request.Status.ToString(), request.CreatedUtc, request.LastAttemptUtc, request.SubmissionError,
             encodedPayload, request.RequestHost);
     }

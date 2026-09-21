@@ -87,11 +87,6 @@ public static class SignedLicenseValidator
     /// </summary>
     public static LicenseStatus Validate(string? licenseToken, bool enforceActivationWindow)
     {
-        if (string.IsNullOrWhiteSpace(licenseToken))
-        {
-            return Invalid("No license token was provided.");
-        }
-
         ECDsa ecdsa;
         try
         {
@@ -102,6 +97,24 @@ public static class SignedLicenseValidator
             // Failing to load OUR OWN embedded public key is a configuration bug, not a bad token — but it
             // must still never throw out of this method, so it's reported the same way as any other failure.
             return Invalid($"License public key could not be loaded: {ex.Message}");
+        }
+
+        return ValidateCore(licenseToken, enforceActivationWindow, ecdsa);
+    }
+
+    /// <summary>Test-only seam: validates against an explicitly supplied public key instead of the
+    /// compiled-in <see cref="LicensePublicKey.PublicKeyBase64"/>. Exists so
+    /// <c>SignedLicenseValidatorTests</c> can mint and verify tokens against its own throwaway keypair
+    /// regardless of whatever real key <see cref="LicensePublicKey.PublicKeyBase64"/> currently holds —
+    /// that suite must never need (or embed) the real production private key.</summary>
+    internal static LicenseStatus ValidateWithPublicKey(string? licenseToken, bool enforceActivationWindow, ECDsa publicKey) =>
+        ValidateCore(licenseToken, enforceActivationWindow, publicKey);
+
+    private static LicenseStatus ValidateCore(string? licenseToken, bool enforceActivationWindow, ECDsa ecdsa)
+    {
+        if (string.IsNullOrWhiteSpace(licenseToken))
+        {
+            return Invalid("No license token was provided.");
         }
 
         var validationParameters = new TokenValidationParameters
@@ -134,8 +147,7 @@ public static class SignedLicenseValidator
 
         if (!result.IsValid || result.SecurityToken is not JsonWebToken jsonWebToken)
         {
-            var reason = result.Exception?.Message ?? "Signature or issuer validation failed.";
-            return Invalid(Truncate(reason));
+            return Invalid(FriendlyValidationFailureReason(result.Exception));
         }
 
         try
@@ -206,6 +218,26 @@ public static class SignedLicenseValidator
         new(LicenseState.Invalid, null, null, null, null, null, Array.Empty<string>(), reason);
 
     private static string Truncate(string value) => value.Length > 200 ? value[..200] : value;
+
+    /// <summary>Translates a token-validation failure into plain language for the admin pasting a token
+    /// into the portal. The underlying Microsoft.IdentityModel.Tokens exception (e.g. "IDX10517: Signature
+    /// validation failed. The token's kid is missing. Keys tried: '...', InternalId: '...'.") is an
+    /// internal library diagnostic meant for a developer reading logs, not something a non-technical admin
+    /// can act on — it never gets surfaced to the portal as-is.</summary>
+    private static string FriendlyValidationFailureReason(Exception? ex) => ex switch
+    {
+        SecurityTokenInvalidIssuerException =>
+            "This token was not issued by PegasusOne and cannot be trusted.",
+        SecurityTokenInvalidSignatureException or SecurityTokenSignatureKeyNotFoundException =>
+            "This token's signature could not be verified. It may have been copied incorrectly, " +
+            "tampered with, or signed for a different environment than this one. Request a fresh token " +
+            "from your license provider.",
+        SecurityTokenInvalidAlgorithmException =>
+            "This token uses a signing method this installation does not support.",
+        _ =>
+            "This token's signature could not be verified. It may have been copied incorrectly or " +
+            "tampered with — request a fresh token from your license provider.",
+    };
 
     // NOTE: deliberately routed through TryGetPayloadValue<object> + a manual pattern match below, rather
     // than TryGetPayloadValue<int?>/<long?> directly. Microsoft.IdentityModel.JsonWebTokens' JsonWebToken

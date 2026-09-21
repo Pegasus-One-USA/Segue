@@ -8,6 +8,11 @@ import {
 } from '../../models/license.model';
 import { ToastService } from '../../../services/toast.service';
 import { AppInitService } from '../../../onboarding/services/app-init.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { LicenseHistoryDetailDialogComponent } from '../../dialogs/license-history-detail-dialog/license-history-detail-dialog.component';
+import {
+  LicenseRequestFormDialogComponent, LicenseRequestFormDialogData,
+} from '../../dialogs/license-request-form-dialog/license-request-form-dialog.component';
 
 /** Whether to show the full status card (Active/Grace/Expired) vs. the "No license activated"
  *  activation-only view. Deliberately NOT the same grouping as the backend's `IsPresent` (which is
@@ -29,6 +34,7 @@ export class LicenseSettingsComponent implements OnInit {
   private readonly licenseSvc = inject(LicenseService);
   private readonly toast = inject(ToastService);
   private readonly appInit = inject(AppInitService);
+  private readonly dialog = inject(DialogService);
 
   /** Exposed for the template's `@if` checks against a numeric limit field — every such field uses this
    *  sentinel to mean "unlimited" rather than `null` (see `LicenseLimits` in license.model.ts). */
@@ -55,24 +61,24 @@ export class LicenseSettingsComponent implements OnInit {
   });
 
   protected readonly applyError = signal<string | null>(null);
+  protected readonly clearingLicense = signal(false);
+  protected readonly clearingHistory = signal(false);
 
   protected readonly form = this.fb.nonNullable.group({
     token: ['', Validators.required],
   });
 
-  // ── License request (this install's own outbound request to the licensor) ─────────────────────
+  // ── License requests (this install's own outbound requests to the licensor — any number of them,
+  // each independent; "Submit Request" always creates a new one, never blocked by an existing one) ──
   protected readonly requestLoading = signal(true);
-  protected readonly request = signal<LicenseRequestStatus | null>(null);
-  protected readonly submittingRequest = signal(false);
-  protected readonly requestError = signal<string | null>(null);
+  protected readonly requests = signal<LicenseRequestStatus[]>([]);
 
-  protected readonly requestForm = this.fb.nonNullable.group({
-    clientName:  ['', Validators.required],
-    email:       ['', [Validators.required, Validators.email]],
-    companyName: [''],
-    address:     [''],
-    phoneNumber: ['', Validators.required],
-  });
+  // Which request (by id) is currently being re-sent as a new request, so only that row's button shows
+  // "Sending…" instead of every row in the list at once.
+  protected readonly resubmittingRequestId = signal<string | null>(null);
+
+  // Which request (by id) is currently being soft-deleted — same per-row-loading pattern as resend.
+  protected readonly deletingRequestId = signal<string | null>(null);
 
   // Base URL this install posts license requests to — a runtime SystemSetting (License:
   // LicensorApplicationUrl), editable here since it's the one detail a self-hosted deployment may need
@@ -95,7 +101,7 @@ export class LicenseSettingsComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
-    this.loadRequest();
+    this.loadRequests();
     this.loadLicensorUrl();
     this.loadHistory();
   }
@@ -148,16 +154,16 @@ export class LicenseSettingsComponent implements OnInit {
     });
   }
 
-  private loadRequest(): void {
+  private loadRequests(): void {
     this.requestLoading.set(true);
-    this.licenseSvc.getRequest().subscribe({
+    this.licenseSvc.getRequests().subscribe({
       next: (r) => {
-        this.request.set(r);
+        this.requests.set(r);
         this.requestLoading.set(false);
       },
       error: () => {
         this.requestLoading.set(false);
-        this.toast.error('Failed to load license request status');
+        this.toast.error('Failed to load license requests');
       },
     });
   }
@@ -177,58 +183,97 @@ export class LicenseSettingsComponent implements OnInit {
     });
   }
 
-  protected submitRequest(): void {
-    if (this.requestForm.invalid) { this.requestForm.markAllAsTouched(); return; }
-    this.requestError.set(null);
-    this.submittingRequest.set(true);
-
-    const raw = this.requestForm.getRawValue();
-    this.licenseSvc.createRequest({
-      clientName:  raw.clientName.trim(),
-      email:       raw.email.trim(),
-      companyName: raw.companyName.trim() || null,
-      address:     raw.address.trim() || null,
-      phoneNumber: raw.phoneNumber.trim(),
-    }).subscribe({
-      next: (r) => {
-        this.submittingRequest.set(false);
-        this.request.set(r);
-        this.toast.success(
-          r.status === 'Submitted' ? 'License request sent' : 'License request saved',
-          r.status === 'Submitted'
-            ? "We'll be in touch once it's ready."
-            : 'Could not reach the licensor directly — share the code below with them instead.'
-        );
-      },
-      error: (err: HttpErrorResponse) => {
-        this.submittingRequest.set(false);
-        this.requestError.set(err.error?.error_description ?? 'Failed to submit the license request.');
-      },
-    });
+  /** Replaces one request in the list with its freshly-returned state, or prepends a brand-new one —
+   *  avoids a full reload after every submit/resend/edit. */
+  private upsertRequestInList(r: LicenseRequestStatus): void {
+    const current = this.requests();
+    const index = current.findIndex((x) => x.id === r.id);
+    this.requests.set(
+      index === -1 ? [r, ...current] : current.map((x, i) => (i === index ? r : x)),
+    );
   }
 
-  protected resendRequest(): void {
-    this.submittingRequest.set(true);
-    this.licenseSvc.resubmitRequest().subscribe({
-      next: (r) => {
-        this.submittingRequest.set(false);
-        this.request.set(r);
+  protected openNewRequestDialog(): void {
+    this.dialog.open<LicenseRequestFormDialogComponent, LicenseRequestFormDialogData, LicenseRequestStatus | undefined>(
+      LicenseRequestFormDialogComponent, { data: { mode: 'create' }, disableClose: true },
+    ).afterClosed().subscribe((result) => {
+        if (!result) return;
+        this.upsertRequestInList(result);
         this.toast.success(
-          r.status === 'Submitted' ? 'License request re-sent' : 'License request saved',
-          r.status === 'Submitted'
+          result.status === 'Submitted' ? 'License request sent' : 'License request saved',
+          result.status === 'Submitted'
+            ? "We'll be in touch once it's ready."
+            : 'Could not reach the licensor directly — share the code from that row with them instead.'
+        );
+      });
+  }
+
+  /** "Resend" submits a brand-new request carrying this row's same details — every request is
+   *  independent now, so re-sending shows up as its own new entry (its own timestamp and key) rather
+   *  than mutating the original. */
+  protected resendRequest(r: LicenseRequestStatus): void {
+    this.resubmittingRequestId.set(r.id);
+    this.licenseSvc.createRequest({
+      clientName:       r.clientName,
+      email:            r.email,
+      companyName:      r.companyName,
+      address:          r.address,
+      phoneNumber:      r.phoneNumber,
+      requestedFromUrl: window.location.origin,
+    }).subscribe({
+      next: (created) => {
+        this.resubmittingRequestId.set(null);
+        this.upsertRequestInList(created);
+        this.toast.success(
+          created.status === 'Submitted' ? 'License request re-sent' : 'License request saved',
+          created.status === 'Submitted'
             ? "We'll be in touch once it's ready."
             : 'Could not reach the licensor directly — share the code below with them instead.'
         );
       },
       error: (err: HttpErrorResponse) => {
-        this.submittingRequest.set(false);
+        this.resubmittingRequestId.set(null);
         this.toast.error(err.error?.error_description ?? 'Failed to resend the license request.');
       },
     });
   }
 
-  protected copyEncodedPayload(): void {
-    const payload = this.request()?.encodedPayload;
+  protected openEditRequestDialog(r: LicenseRequestStatus): void {
+    this.dialog.open<LicenseRequestFormDialogComponent, LicenseRequestFormDialogData, LicenseRequestStatus | undefined>(
+      LicenseRequestFormDialogComponent, { data: { mode: 'edit', request: r }, disableClose: true },
+    ).afterClosed().subscribe((result) => {
+        if (!result) return;
+        this.upsertRequestInList(result);
+        this.toast.success('License request updated');
+      });
+  }
+
+  /** Soft-deletes a request — hides it from this list; the licensor's own copy and its key are
+   *  untouched (a license already minted against it keeps working). */
+  protected deleteRequest(r: LicenseRequestStatus): void {
+    if (!confirm(`Delete the request for "${r.clientName}"? It will disappear from this list; support can restore it later if needed.`)) {
+      return;
+    }
+
+    this.deletingRequestId.set(r.id);
+    this.licenseSvc.deleteRequest(r.id).subscribe({
+      next: () => {
+        this.deletingRequestId.set(null);
+        this.requests.set(this.requests().filter((x) => x.id !== r.id));
+        this.toast.success('License request deleted');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.deletingRequestId.set(null);
+        this.toast.error(err.error?.error_description ?? 'Failed to delete the license request.');
+      },
+    });
+  }
+
+  protected openHistoryDetail(entry: LicenseHistoryEntry): void {
+    this.dialog.open(LicenseHistoryDetailDialogComponent, { data: entry, width: '640px' });
+  }
+
+  protected copyEncodedPayload(payload: string | null): void {
     if (!payload) return;
     navigator.clipboard?.writeText(payload).then(
       () => this.toast.success('Copied to clipboard'),
@@ -261,6 +306,43 @@ export class LicenseSettingsComponent implements OnInit {
         this.applyError.set(
           err.error?.error_description ?? err.error?.title ?? 'The license token failed verification.'
         );
+      },
+    });
+  }
+
+  // ── Testing/support utilities — never part of the normal apply flow ────────────────────────────
+
+  protected clearLicense(): void {
+    if (!confirm('Clear the currently activated license? This cannot be undone.')) { return; }
+
+    this.clearingLicense.set(true);
+    this.licenseSvc.clear().subscribe({
+      next: (s) => {
+        this.clearingLicense.set(false);
+        this.status.set(s);
+        this.toast.success('License cleared');
+        this.appInit.refreshLicenseGate();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.clearingLicense.set(false);
+        this.toast.error(err.error?.error_description ?? 'Failed to clear the license.');
+      },
+    });
+  }
+
+  protected clearHistory(): void {
+    if (!confirm('Clear all license history? It will disappear from this list immediately; support can restore it later if needed.')) { return; }
+
+    this.clearingHistory.set(true);
+    this.licenseSvc.clearHistory().subscribe({
+      next: () => {
+        this.clearingHistory.set(false);
+        this.history.set([]);
+        this.toast.success('License history cleared');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.clearingHistory.set(false);
+        this.toast.error(err.error?.error_description ?? 'Failed to clear license history.');
       },
     });
   }

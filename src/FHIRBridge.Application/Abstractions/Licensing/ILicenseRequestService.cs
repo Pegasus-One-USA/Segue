@@ -12,57 +12,61 @@ public static class LicenseRequestSettingKeys
     public const string LicensorApplicationUrl = "License:LicensorApplicationUrl";
 }
 
-/// <summary>Fields collected on the blank first-time request form. Never re-collected on a renewal — see
-/// <see cref="ILicenseRequestService.ResubmitAsync"/>.</summary>
+/// <summary>Fields collected on the request form — for a brand new submission or to correct an existing
+/// one via <see cref="ILicenseRequestService.UpdateAsync"/>.</summary>
 public sealed record LicenseRequestInput(
     string ClientName, string Email, string? CompanyName, string? Address, string PhoneNumber);
 
-/// <summary>Current state of this install's one-and-only license request, for the portal to render —
-/// covers "no request yet" (<see cref="Exists"/> false), Pending/Submitted/Failed, and (only when Failed)
-/// the manual-fallback blob to share with the licensor.</summary>
+/// <summary>One submitted license request, for the portal to render — covers Pending/Submitted/Failed, and
+/// (only when Failed) the manual-fallback blob to share with the licensor. This install can have any number
+/// of these; each is independent, identified by <see cref="Id"/>.</summary>
 public sealed record LicenseRequestStatusResult(
-    bool Exists,
-    string? ClientName,
-    string? Email,
+    Guid Id,
+    string ClientName,
+    string Email,
     string? CompanyName,
     string? Address,
-    string? PhoneNumber,
-    string? Status,
-    DateTime? CreatedUtc,
+    string PhoneNumber,
+    string Status,
+    DateTime CreatedUtc,
     DateTime? LastAttemptUtc,
     string? SubmissionError,
     /// <summary>Populated only when <see cref="Status"/> is "Failed" — the same payload the direct API call
     /// would have sent, encoded as one copy-pasteable string for the operator to share with the licensor
     /// manually (email/support ticket) instead.</summary>
     string? EncodedPayload,
-    /// <summary>The domain/port this install's API was reached on when the request was created — see
+    /// <summary>The admin's own browser origin at the most recent submission of this request — see
     /// <c>LicenseRequest.RequestHost</c>'s remarks.</summary>
-    string? RequestHost)
-{
-    public static LicenseRequestStatusResult NotRequested { get; } =
-        new(false, null, null, null, null, null, null, null, null, null, null, null);
-}
+    string? RequestHost);
 
 /// <summary>
-/// This install's outbound license request — one row, ever (see <c>LicenseRequest</c>'s own remarks).
-/// Generates a <c>UniqueKey</c> at first request, tries the licensor's direct intake API, and falls back to
-/// an encoded manual-share blob when that call doesn't succeed. A renewal (<see cref="ResubmitAsync"/>)
-/// reuses the exact same stored details and key — an admin cannot change contact details on a renewal,
-/// since the whole point of <c>UniqueKey</c> is that it keeps identifying the same install across its
-/// entire license lifetime.
+/// This install's outbound license requests — any number of them, each independent (see
+/// <c>LicenseRequest</c>'s own remarks). Every "Submit Request" creates a new one, with its own
+/// <c>UniqueKey</c>, and tries the licensor's direct intake API, falling back to an encoded manual-share
+/// blob when that call doesn't succeed.
 /// </summary>
 public interface ILicenseRequestService
 {
-    Task<LicenseRequestStatusResult> GetAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<LicenseRequestStatusResult>> ListAsync(CancellationToken cancellationToken);
 
-    /// <summary>Fails with <see cref="InvalidOperationException"/> if a request already exists for this
-    /// install — use <see cref="ResubmitAsync"/> for a renewal instead. <paramref name="requestHost"/> is
-    /// the inbound HTTP request's Host header (domain, and port when non-default), captured by the
-    /// controller — never taken from <paramref name="input"/>, so it can't be spoofed via the form body.</summary>
+    /// <summary>Always creates a brand-new request with a freshly generated key — never fails because one
+    /// already exists. <paramref name="requestHost"/> is the admin's own browser origin at submit time
+    /// (falling back to the inbound HTTP request's Host header only if that wasn't supplied) — see
+    /// <c>LicenseRequestController.ResolveRequestedFrom</c>. Purely informational for the licensor, never
+    /// used for any security decision.</summary>
     Task<LicenseRequestStatusResult> CreateAndSubmitAsync(
         LicenseRequestInput input, string? requestHost, CancellationToken cancellationToken);
 
-    /// <summary>Fails with <see cref="InvalidOperationException"/> if no request exists yet for this
-    /// install — use <see cref="CreateAndSubmitAsync"/> first.</summary>
-    Task<LicenseRequestStatusResult> ResubmitAsync(CancellationToken cancellationToken);
+    /// <summary>Corrects an existing request's contact details (e.g. a typo'd email) and re-attempts the
+    /// outbound call so the licensor's copy is corrected too — never touches <c>UniqueKey</c>. Fails with
+    /// <see cref="InvalidOperationException"/> if <paramref name="id"/> doesn't match one of this install's
+    /// own requests.</summary>
+    Task<LicenseRequestStatusResult> UpdateAsync(
+        Guid id, LicenseRequestInput input, string? requestHost, CancellationToken cancellationToken);
+
+    /// <summary>Hides one request from <see cref="ListAsync"/> without physically deleting it (see
+    /// <c>LicenseRequest.SoftDelete</c>) — its key stays resolvable if a license was already minted
+    /// against it. Fails with <see cref="InvalidOperationException"/> if <paramref name="id"/> doesn't
+    /// match one of this install's own requests.</summary>
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

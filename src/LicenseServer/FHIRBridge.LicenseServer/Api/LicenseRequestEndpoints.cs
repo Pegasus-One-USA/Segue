@@ -68,6 +68,7 @@ public static class LicenseRequestEndpoints
                 Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim(),
                 PhoneNumber = request.PhoneNumber.Trim(),
                 UniqueKey = request.UniqueKey,
+                RequestHost = string.IsNullOrWhiteSpace(request.RequestHost) ? null : request.RequestHost.Trim(),
                 ReceivedAtUtc = nowUtc,
                 LastSubmittedUtc = nowUtc,
                 SubmissionCount = 1,
@@ -85,14 +86,24 @@ public static class LicenseRequestEndpoints
             existing.CompanyName = string.IsNullOrWhiteSpace(request.CompanyName) ? null : request.CompanyName.Trim();
             existing.Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
             existing.PhoneNumber = request.PhoneNumber.Trim();
+            // Refreshed every time a value is supplied (same as the other contact fields above) — this is
+            // the admin's current browser origin, not an identity anchor like UniqueKey, so a later
+            // resubmission correcting an earlier wrong/missing value is expected, not a bug. A resubmit
+            // that doesn't supply one (e.g. a non-browser caller) leaves whatever's already stored alone.
+            if (!string.IsNullOrWhiteSpace(request.RequestHost))
+            {
+                existing.RequestHost = request.RequestHost.Trim();
+            }
             existing.LastSubmittedUtc = nowUtc;
             existing.SubmissionCount++;
 
-            // A resend is a fresh ask, even if the earlier one was already minted — without this, a
-            // renewal request silently vanished into an already-"Fulfilled" row instead of reappearing
-            // as something that needs a new look on /LicenseRequests.
+            // A resend is a fresh ask, even if the earlier one was already minted or denied — without
+            // this, a renewal request silently vanished into an already-decided row instead of
+            // reappearing as something that needs a new look on /LicenseRequests.
             existing.FulfilledAtUtc = null;
             existing.FulfilledIssuedLicenseId = null;
+            existing.DeniedAtUtc = null;
+            existing.DenialReason = null;
         }
 
         await db.SaveChangesAsync(cancellationToken);
