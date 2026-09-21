@@ -147,8 +147,7 @@ public static class SignedLicenseValidator
 
         if (!result.IsValid || result.SecurityToken is not JsonWebToken jsonWebToken)
         {
-            var reason = result.Exception?.Message ?? "Signature or issuer validation failed.";
-            return Invalid(Truncate(reason));
+            return Invalid(FriendlyValidationFailureReason(result.Exception));
         }
 
         try
@@ -219,6 +218,26 @@ public static class SignedLicenseValidator
         new(LicenseState.Invalid, null, null, null, null, null, Array.Empty<string>(), reason);
 
     private static string Truncate(string value) => value.Length > 200 ? value[..200] : value;
+
+    /// <summary>Translates a token-validation failure into plain language for the admin pasting a token
+    /// into the portal. The underlying Microsoft.IdentityModel.Tokens exception (e.g. "IDX10517: Signature
+    /// validation failed. The token's kid is missing. Keys tried: '...', InternalId: '...'.") is an
+    /// internal library diagnostic meant for a developer reading logs, not something a non-technical admin
+    /// can act on — it never gets surfaced to the portal as-is.</summary>
+    private static string FriendlyValidationFailureReason(Exception? ex) => ex switch
+    {
+        SecurityTokenInvalidIssuerException =>
+            "This token was not issued by PegasusOne and cannot be trusted.",
+        SecurityTokenInvalidSignatureException or SecurityTokenSignatureKeyNotFoundException =>
+            "This token's signature could not be verified. It may have been copied incorrectly, " +
+            "tampered with, or signed for a different environment than this one. Request a fresh token " +
+            "from your license provider.",
+        SecurityTokenInvalidAlgorithmException =>
+            "This token uses a signing method this installation does not support.",
+        _ =>
+            "This token's signature could not be verified. It may have been copied incorrectly or " +
+            "tampered with — request a fresh token from your license provider.",
+    };
 
     // NOTE: deliberately routed through TryGetPayloadValue<object> + a manual pattern match below, rather
     // than TryGetPayloadValue<int?>/<long?> directly. Microsoft.IdentityModel.JsonWebTokens' JsonWebToken

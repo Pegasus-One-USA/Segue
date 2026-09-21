@@ -37,7 +37,7 @@
             </tr>
             <tr>
                 <td>Expires</td>
-                <td>The date their contract term ends. FHIRBridge starts warning them as this approaches.</td>
+                <td>The date their contract term ends. Segue starts warning them as this approaches.</td>
                 <td>Contract term end date.</td>
             </tr>
             <tr>
@@ -59,7 +59,7 @@
                     an optional display name.</td>
                 <td><strong>Ask the client's technical contact for the exact FHIR base URL</strong> of each
                     site (their EHR vendor's IT team can provide this — it's the same URL used to configure
-                    the source connection on the FHIRBridge side).</td>
+                    the source connection on the Segue side).</td>
             </tr>
             <tr>
                 <td>Allowed Resource Types / Allowed Destination Types</td>
@@ -93,7 +93,7 @@
     <p class="hint">
         If you see a yellow "DEV SIGNING KEY ACTIVE" banner at the top of every page, this instance is NOT
         using your real production signing key — tokens minted right now will not verify against a real
-        customer's deployed FHIRBridge instance. Fix the <code>LicenseSigning</code> configuration (PFX path
+        customer's deployed Segue instance. Fix the <code>LicenseSigning</code> configuration (PFX path
         + password) before minting anything for a real client.
     </p>
 </div>
@@ -106,7 +106,7 @@
             text: it can only be <em>verified</em> by their software, never <em>edited</em> or reused to
             create a different license, so there's no special handling required (unlike a password or API
             key).</li>
-        <li>Tell them: log into the FHIRBridge portal as an Admin/SuperAdmin, go to
+        <li>Tell them: log into the Segue portal as an Admin/SuperAdmin, go to
             <strong>Settings → License</strong>, paste the token into the activation box, and save.</li>
         <li>They should immediately see their customer name, edition, expiry date, and usage limits reflected
             on that screen.</li>
