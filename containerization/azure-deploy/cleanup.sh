@@ -12,7 +12,7 @@
 # The tag-based mode filters on BOTH Environment=<value> AND ManagedBy=Bicep, not Environment
 # alone: a shared resource group can easily also hold a Terraform-managed deployment (../terraform
 # environments, ../terraform/vendor-registry) using the SAME Environment tag value (both default to
-# "fhirbridge") — those are tagged ManagedBy=Terraform, not Bicep, so this second condition is what
+# "segue") — those are tagged ManagedBy=Terraform, not Bicep, so this second condition is what
 # actually keeps this script from also deleting them.
 #
 # Interactive selection only applies to the TAG-BASED fallback below, where there's genuine
@@ -23,10 +23,10 @@
 # prompt/picker entirely and deletes everything found, for unattended use.
 #
 # Usage:
-#   ./cleanup.sh -g fhirbridge-rg -w        # preview only (-WhatIf) - prints the checklist, deletes nothing, ever
-#   ./cleanup.sh -g fhirbridge-rg           # opens the numbered picker on whatever's found
-#   ./cleanup.sh -e fhirbridge              # tag-based: picker over Environment=<value> AND ManagedBy=Bicep resources
-#   ./cleanup.sh -g fhirbridge-rg -d main -y   # unattended, deletes everything found
+#   ./cleanup.sh -g segue-rg -w        # preview only (-WhatIf) - prints the checklist, deletes nothing, ever
+#   ./cleanup.sh -g segue-rg           # opens the numbered picker on whatever's found
+#   ./cleanup.sh -e segue              # tag-based: picker over Environment=<value> AND ManagedBy=Bicep resources
+#   ./cleanup.sh -g segue-rg -d main -y   # unattended, deletes everything found
 set -euo pipefail
 
 RESOURCE_GROUP=""

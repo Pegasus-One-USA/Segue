@@ -29,6 +29,24 @@ public static class AuthorizationPolicies
     /// </summary>
     public const string MappingCatalogAccess = nameof(MappingCatalogAccess);
 
+    /// <summary>
+    /// Pre-create source endpoint discovery (SMART configuration + resource types + backend auth scope
+    /// probing) — part of building/editing a source connection, not a separate admin-only capability.
+    /// Satisfied by UnifiedAdmin OR "sourceconnections.create"/"sourceconnections.edit" (see
+    /// <c>SourceDiscoveryAccessAuthorizationHandler</c>), so a role scoped to managing source connections
+    /// can use the wizard's Discover action without needing the Admin/SuperAdmin role.
+    /// </summary>
+    public const string SourceDiscoveryAccess = nameof(SourceDiscoveryAccess);
+
+    /// <summary>
+    /// Read access to the full permission catalog (every permission that exists, grouped/labeled) — read-only
+    /// reference metadata, not tenant configuration. Satisfied by UnifiedAdmin OR the "role.view" permission
+    /// (see <c>PermissionCatalogAccessAuthorizationHandler</c>), so the Role Permissions screen's read-only
+    /// grid (reachable with role.view alone) can actually load for a non-Admin viewer. <c>GetAll</c> on the
+    /// same controller keeps requiring UnifiedAdmin directly, unaffected by this policy.
+    /// </summary>
+    public const string PermissionCatalogAccess = nameof(PermissionCatalogAccess);
+
     /// <summary>Prefix used to construct permission-based policy names.</summary>
     public const string PermissionPolicyPrefix = "HasPermission:";
 

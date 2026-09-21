@@ -14,8 +14,19 @@ export type TerminologyFrequencyOption = 'Daily' | 'Weekly' | 'Monthly';
 export type SettingFieldDescriptor =
   | { kind: 'toggle' }
   | { kind: 'frequency'; options: TerminologyFrequencyOption[] }
+  | { kind: 'select'; options: string[] }
   | { kind: 'time' }
   | { kind: 'text' };
+
+/** Fixed-choice General Settings keys, rendered as a dropdown instead of the free-text default.
+ *
+ *  Generalizes what TERMINOLOGY_FREQUENCY_OPTIONS does for terminology keys: without an entry here a key
+ *  falls through to `text`, where a typo ("Dayly") saves happily and silently breaks the consumer that
+ *  parses it. Keyed by exact setting key, since these are one-off enumerations rather than a pattern. */
+const SELECT_OPTIONS: Record<string, string[]> = {
+  // Mirrors the backend WorkflowNumberResetPolicy enum — WorkflowNumberGenerator parses this value by name.
+  'WorkflowNumbering:ResetPolicy': ['Never', 'Daily', 'Monthly', 'Quarterly', 'Yearly', 'CustomAnchorDate'],
+};
 
 const TERMINOLOGY_FREQUENCY_OPTIONS: Record<string, TerminologyFrequencyOption[]> = {
   CvxHapi: ['Weekly', 'Monthly'],
@@ -95,6 +106,11 @@ export function describeSettingField(key: string): SettingFieldDescriptor {
     return { kind: 'toggle' };
   }
 
+  const selectOptions = SELECT_OPTIONS[key];
+  if (selectOptions) {
+    return { kind: 'select', options: selectOptions };
+  }
+
   const frequencyMatch = TERMINOLOGY_FREQUENCY_KEY.exec(key);
   if (frequencyMatch) {
     const options = TERMINOLOGY_FREQUENCY_OPTIONS[frequencyMatch[1]];
@@ -108,4 +124,12 @@ export function describeSettingField(key: string): SettingFieldDescriptor {
   }
 
   return { kind: 'text' };
+}
+
+/** "WorkflowNumbering:PadWidth" -> "Pad Width". The group row already names the group, so repeating the
+ *  prefix on every field inside its own dialog is noise; the raw key stays available as the input's id. */
+export function settingFieldLabel(key: string): string {
+  const colonIndex = key.lastIndexOf(':');
+  const tail = colonIndex >= 0 ? key.slice(colonIndex + 1) : key;
+  return humanizeSegment(tail);
 }

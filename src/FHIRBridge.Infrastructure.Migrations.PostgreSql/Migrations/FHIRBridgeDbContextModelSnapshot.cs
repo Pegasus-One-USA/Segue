@@ -1597,6 +1597,119 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.ToTable("WorkflowAuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Licensing.LicenseHistoryEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AppliedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Edition")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("ExpiresUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppliedUtc");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.ToTable("LicenseHistoryEntries", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Licensing.LicenseRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ClientName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastAttemptUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("RequestHost")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SubmissionError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("UniqueKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("UniqueKey")
+                        .IsUnique();
+
+                    b.ToTable("LicenseRequests", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.Licensing.UsageLedgerEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2100,15 +2213,8 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<DateTime>("FetchedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("FetchedJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTime?>("MappedAtUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("MappedValuesJson")
-                        .HasColumnType("text");
 
                     b.Property<string>("MasterPatientId")
                         .HasMaxLength(200)
@@ -2116,9 +2222,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 
                     b.Property<DateTime?>("NormalizedAtUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("NormalizedJson")
-                        .HasColumnType("text");
 
                     b.Property<string>("ResourceType")
                         .IsRequired()
@@ -2391,6 +2494,11 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsFullAccess")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsSystem")
                         .HasColumnType("boolean");
 
@@ -2413,7 +2521,8 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("Roles", (string)null);
                 });
@@ -4659,6 +4768,35 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.ToTable("WebhookConfigurations", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.WorkflowNumberSequence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("LastValue")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PeriodKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PeriodKey")
+                        .IsUnique();
+
+                    b.ToTable("WorkflowNumberSequences", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Infrastructure.Messaging.ProcessedMessage", b =>
                 {
                     b.Property<string>("MessageId")
@@ -4847,9 +4985,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<string>("DestinationValueJson")
-                        .HasColumnType("text");
-
                     b.Property<double?>("DurationMs")
                         .HasColumnType("double precision");
 
@@ -4892,9 +5027,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<string>("SourceSystemType")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
-
-                    b.Property<string>("SourceValueJson")
-                        .HasColumnType("text");
 
                     b.Property<bool>("Success")
                         .HasColumnType("boolean");
@@ -4964,7 +5096,15 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<int>("Version")
                         .HasColumnType("integer");
 
+                    b.Property<string>("WorkflowNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("WorkflowNumber")
+                        .IsUnique()
+                        .HasFilter("\"WorkflowNumber\" IS NOT NULL");
 
                     b.ToTable("WorkflowDefinitions", (string)null);
                 });
@@ -5046,34 +5186,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.ToTable("WorkflowNodes", (string)null);
                 });
 
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeConfiguration", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsSecret")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("WorkflowNodeId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("WorkflowNodeId");
-
-                    b.ToTable("WorkflowNodeConfigurations", (string)null);
-                });
-
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5132,6 +5244,9 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("DeliveryDetailJson")
+                        .HasColumnType("text");
+
                     b.Property<int?>("ItemCount")
                         .HasColumnType("integer");
 
@@ -5140,12 +5255,11 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<string>("PayloadJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset>("RecordedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ResourceTypeCountsJson")
+                        .HasColumnType("text");
 
                     b.Property<Guid>("WorkflowNodeRunId")
                         .HasColumnType("uuid");
@@ -5167,6 +5281,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("BulkRequestId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
@@ -6007,15 +6125,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeConfiguration", b =>
-                {
-                    b.HasOne("FHIRBridge.Runtime.Domain.Workflows.WorkflowNode", null)
-                        .WithMany("Configuration")
-                        .HasForeignKey("WorkflowNodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeRun", b =>
                 {
                     b.HasOne("FHIRBridge.Runtime.Domain.Workflows.WorkflowRun", null)
@@ -6035,11 +6144,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Navigation("Edges");
 
                     b.Navigation("Nodes");
-                });
-
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNode", b =>
-                {
-                    b.Navigation("Configuration");
                 });
 
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowRun", b =>

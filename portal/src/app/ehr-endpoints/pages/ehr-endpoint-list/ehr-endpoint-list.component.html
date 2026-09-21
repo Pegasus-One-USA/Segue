@@ -1,5 +1,12 @@
 <div class="list-page">
 
+  <!-- Header: this screen is reached as a dialog off System Settings > General, where the launcher row
+       it came from is no longer visible — without its own title the dialog reads as untitled. -->
+  <div class="page-header">
+    <h1 class="page-title">EHR Endpoints</h1>
+    <p class="page-sub">Vendor endpoints workflows connect through.</p>
+  </div>
+
   <!-- Filter Bar -->
   <div class="filter-card">
     <div class="filter-row">
@@ -16,6 +23,9 @@
           [value]="searchQuery()"
           (input)="onSearch($any($event.target).value)"
         />
+        @if (searching()) {
+          <span class="search-spinner" aria-hidden="true"></span>
+        }
       </div>
 
       <div class="type-filter-wrap">
@@ -143,10 +153,19 @@
             <th mat-header-cell *matHeaderCellDef class="col-actions"></th>
             <td mat-cell *matCellDef="let e" class="col-actions">
               <div class="actions-cell">
+                @if (hasRowMenu()) {
                 <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                  <!-- Placeholder only — view details for an EHR endpoint is not implemented yet.
+                       Disabled, no click handler; same visibility/View pattern (including the .view
+                       permission gate) as source-connection-list's own View menu item, just not wired to
+                       anything yet. -->
+                  <button mat-menu-item disabled *appHideWithoutPermission="'ehrendpoints.view'">
+                    <mat-icon>visibility</mat-icon>
+                    View (Coming Soon)
+                  </button>
                   <button mat-menu-item *appHideWithoutPermission="'ehrendpoints.edit'" (click)="openEdit(e)">
                     <mat-icon>edit</mat-icon>
                     Edit
@@ -156,6 +175,7 @@
                     Delete
                   </button>
                 </mat-menu>
+                }
               </div>
             </td>
           </ng-container>

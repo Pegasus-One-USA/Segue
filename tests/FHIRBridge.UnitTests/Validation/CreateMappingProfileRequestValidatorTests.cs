@@ -136,6 +136,75 @@ public sealed class CreateMappingProfileRequestValidatorTests
     }
 
     [Fact]
+    public async Task Upsert_destination_with_a_default_token_as_the_upsert_key_fails()
+    {
+        // Neither a run-constant token (collides across every row) nor a per-record one (never matches its
+        // own previous write) can meaningfully key an upsert — see HaveNoDefaultUpsertKeyField's own doc
+        // comment on CreateMappingProfileRequestValidator.
+        var request = ValidRequest(
+            destinationObject: "dbo.Patient;mode=upsert",
+            fields: [new MappingFieldDto("PatientId", "@newGuid", MappingValueType.String, true, null, null, IsUpsertKey: true)]);
+
+        var result = await _sut.ValidateAsync(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("can't also be the upsert key"));
+    }
+
+    [Fact]
+    public async Task Non_upsert_destination_with_a_default_token_as_the_upsert_key_passes()
+    {
+        // Insert-only destinations never consult IsUpsertKey at run time, so a default column that happens
+        // to be flagged as one (e.g. serializeRowsFlat's own PK auto-detection, stamped regardless of write
+        // mode) is harmless — "@newGuid on the real PK column" is exactly the surrogate-key use case this
+        // feature is meant to support. Only upsert mode makes the flag meaningful enough to reject.
+        var request = ValidRequest(
+            destinationObject: "dbo.Patient",
+            fields: [new MappingFieldDto("PatientId", "@newGuid", MappingValueType.String, true, null, null, IsUpsertKey: true)]);
+
+        (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Unrecognized_at_token_fails()
+    {
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("PatientId", "@notARealToken", MappingValueType.String, false, null, null),
+        ]);
+
+        var result = await _sut.ValidateAsync(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("not a recognized @token"));
+    }
+
+    [Fact]
+    public async Task At_default_token_without_a_DefaultValue_fails()
+    {
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("ClientType", "@default", MappingValueType.String, false, null, null),
+        ]);
+
+        var result = await _sut.ValidateAsync(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("must supply a DefaultValue"));
+    }
+
+    [Fact]
+    public async Task At_default_token_with_a_DefaultValue_passes()
+    {
+        var request = ValidRequest(fields:
+        [
+            new MappingFieldDto("ClientType", "@default", MappingValueType.String, false, "Patient", null),
+        ]);
+
+        (await _sut.ValidateAsync(request)).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Field_mapped_to_missing_column_fails()
     {
         StubSchema(new DestinationColumnSchemaDto("PatientId", "int", "Integer", false, null, IsPrimaryKey: true));

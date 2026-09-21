@@ -51,6 +51,8 @@
       </div>
     </div>
 
+    <!-- Not shown on the De-identification screen — see hideMapFieldsChrome(). -->
+    @if (!hideMapFieldsChrome()) {
     <div class="dw-stepper">
       @for (label of STEP_LABELS; track $index) {
         <div class="dw-step" [class.active]="isStepActive($index + 1)" [class.done]="isStepDone($index + 1)">
@@ -64,6 +66,7 @@
         }
       }
     </div>
+    }
   }
 
   <!-- ── Body ─────────────────────────────────────────────────────────────── -->
@@ -248,43 +251,11 @@
         }
       }
 
-      <!-- Cross-cutting — applies regardless of destination type, so it lives outside the per-type form
-           component. Read-only when reusing an existing connection as-is (nothing to save it through in
-           that mode — see selectExisting()/provisionDestinationConnection()). -->
-      <div class="dw-field dw-field--full">
-        <label class="dw-label" for="dw-deid-profile">De-identification profile</label>
-        <div class="dw-existing-connection-row">
-          <div class="dw-select-wrap">
-            <select
-              id="dw-deid-profile"
-              class="dw-select"
-              [disabled]="connectionMode() === 'existing'"
-              [value]="selectedDeIdentificationProfileId() ?? ''"
-              (change)="selectedDeIdentificationProfileId.set($any($event.target).value || null)"
-            >
-              <option value="">None</option>
-              @for (p of deIdentificationProfiles(); track p.id) {
-                <option [value]="p.id">{{ p.name }}</option>
-              }
-            </select>
-          </div>
-        </div>
-        @if (connectionMode() !== 'existing') {
-          <div class="dw-existing-connection-row" style="margin-top: 8px;">
-            <input
-              type="text"
-              class="dw-select"
-              placeholder="New profile name…"
-              [value]="newProfileName()"
-              (input)="newProfileName.set($any($event.target).value)"
-            />
-            <button type="button" class="dw-clear-btn" title="Create a new de-identification profile"
-                    [disabled]="!newProfileName().trim() || creatingProfile()"
-                    (click)="createDeIdentificationProfile()">+ New</button>
-          </div>
-          <span class="dw-hint">Resources routed to this destination are redacted per the selected profile's rules before delivery. Manage a profile's rules on the Transformation Rules screen.</span>
-        }
-      </div>
+      <!-- The de-identification profile picker used to live here. It moved to Step 3's "De-identification"
+           tab, which is where the profile's rules are authored — having the picker on Step 1 as well meant two
+           controls for one value, and the Step 1 copy was the misleading one: it was disabled for a reused
+           connection even though the profile is perfectly editable in that mode. selectedDeIdentificationProfileId
+           and createDeIdentificationProfile() are unchanged and still bound by the Step 3 panel below. -->
     }
 
     <!-- ── Connection form host ── the component DESTINATION_FORM_REGISTRY resolves for this destination
@@ -762,6 +733,7 @@
     } @else if (isStepActive(3)) {
       @if (!activeMappingGroup()) {
         <!-- ── Data group selection screen ── choose which group's canvas to open ── -->
+        @if (!hideMapFieldsChrome()) {
         <div class="dw-section-head">
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
@@ -770,6 +742,7 @@
             Choose a data group to configure.
           </span>
         </div>
+        }
 
         <!-- The Mapping / Transformation / De-identification tabs the user actually works in live inside
              the mapping canvas's own Mapping list (see field-mapping-list.component.html). Whichever
@@ -828,14 +801,11 @@
                        of the mapping list for a SQL destination, and opens the payload-tree rules panel
                        for a FHIR one — so a second entry point from this row is redundant. The
                        TransformationRules:Hidden setting (rulesHidden) still gates the rules UI itself. -->
-                  @if (canSelectExistingProfile()) {
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-secondary"
-                      title="Reuse a mapping profile already saved for this source connection, destination, and resource type"
-                      (click)="openExistingProfilePicker(r)"
-                    >Select Existing</button>
-                  }
+                  <!-- "Select Existing" used to sit here, reusing a mapping profile already saved for this
+                       source connection + destination + resource type. Hidden on request, leaving "Map" as
+                       the single way into a data group's mapping. canSelectExistingProfile() and
+                       openExistingProfilePicker() (and ExistingMappingProfileDialogComponent behind them)
+                       are left intact, so restoring it is putting this block back. -->
                 </td>
               </tr>
             }
@@ -870,7 +840,7 @@
           [hasSqlTables]="hasSqlTables()"
           [sqlTableOptions]="sqlTableOptions()"
           [sqlTableNames]="sqlTableBareNames()"
-          [schemaAuthoringEnabled]="isSql()"
+          [schemaAuthoringEnabled]="hasLiveRelationalSchema()"
           [schemaLoadState]="schemaLoadState()"
           [csvDelimiterKey]="activeFormConfig()['dest_delimiter'] ?? 'comma'"
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
@@ -930,13 +900,17 @@
         </div>
         <div class="dw-review-card">
           <span class="dw-review-key">De-identification</span>
-          <span class="dw-review-val" [class.dw-review-val--warn]="!selectedDeIdentificationProfileId() || !selectedProfileHasRules()">
-            @if (!selectedDeIdentificationProfileId()) {
-              ⚠ No policy assigned
-            } @else if (!selectedProfileHasRules()) {
-              ⚠ {{ selectedDeIdentificationProfileName() }} (no active rules)
+          <!-- The rule COUNT, not the policy name. The policy is created automatically and named with the
+               workflow id, which tells a reader nothing — and read "None" whenever the freshly created policy
+               had not yet reached the loaded profile list. What matters here is whether anything is actually
+               being redacted, and how much. -->
+          <span class="dw-review-val" [class.dw-review-val--warn]="selectedProfileRuleCount() === 0">
+            @if (selectedProfileRuleCount() === null) {
+              Rule count unavailable
+            } @else if (selectedProfileRuleCount() === 0) {
+              ⚠ No rules
             } @else {
-              {{ selectedDeIdentificationProfileName() }}
+              {{ selectedProfileRuleCount() }} {{ selectedProfileRuleCount() === 1 ? 'rule' : 'rules' }}
             }
           </span>
         </div>

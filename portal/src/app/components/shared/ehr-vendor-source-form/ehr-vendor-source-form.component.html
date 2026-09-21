@@ -501,6 +501,23 @@
               }
             }
           }
+
+          <!-- Sibling of showSecret()/showJwt() above, not nested in either — Group bulk export is orthogonal to
+               which client-auth method this connection uses. -->
+          @if (showGroupBulkExportCheckbox()) {
+            <div class="eaf-field eaf-field--full">
+              <label class="eaf-checkbox-row">
+                <input type="checkbox" formControlName="groupBulkExport" />
+                <span>This connection will be used for Group bulk export (adds <code>system/Group.read</code>)</span>
+              </label>
+              <p class="eaf-hint">
+                Group $export needs system/Group.read on top of the resource scopes above, or eCW rejects the
+                export outright — this connection has no Data Retrieval / Export Scope section to derive it from
+                (that config lives on the workflow node, not here), so check this when the connection is meant
+                for a Group bulk export.
+              </p>
+            </div>
+          }
         </div>
       </div>
 

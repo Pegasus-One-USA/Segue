@@ -132,7 +132,12 @@ export function buildConnectionMetadata(
          'dest_fabricPath', 'dest_fabricFileFormat', 'dest_fabricPartitionBy',
          'dest_fabricAuthMode', 'dest_fabricTenantId', 'dest_fabricClientId',
          'dest_fabricManagedIdentityClientId', 'dest_fabricEndpointSuffix', 'dest_fabricAuthorityHost',
-         'dest_fabricAccountUrl']
+         'dest_fabricAccountUrl',
+         // Warehouse landing mode. This list is an allowlist — a key absent from it is silently dropped before
+         // the save, so omitting these made the form post them and the server reject the request as missing.
+         'dest_fabricWarehouseSqlEndpoint', 'dest_fabricWarehouseStagingLakehouse',
+         'dest_fabricWarehouseTable', 'dest_fabricWarehouseSchema',
+         'dest_fabricWarehouseWriteMode', 'dest_fabricWarehouseStagingPath']
     : kind === 'sql'
       ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
       : kind === 'fhir'

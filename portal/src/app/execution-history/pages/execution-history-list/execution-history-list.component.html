@@ -1,4 +1,4 @@
-<div class="list-page">
+﻿<div class="list-page">
 
   <!-- Drill-down context from the Workflows list's "Execution History" row action (?workflowId=...) — a
        persistent scope, not a togglable filter (see workflowIdFilter's own doc comment), so it gets its own
@@ -26,68 +26,64 @@
           [value]="searchQuery()"
           (input)="onSearch($any($event.target).value)"
         />
-      </div>
-
-      <!-- Source filter — multi-select over the vendors that actually have runs, same control the Workflows
-           list uses. Options come from the server's facet list, not a hardcoded roster of every EHR. -->
-      <div class="filter-dropdown">
-        <button
-          type="button"
-          class="filter-dropdown-btn"
-          [class.filter-dropdown-btn--active]="selectedSources().size > 0"
-          (click)="toggleSourceMenu()"
-        >
-          Source
-          @if (selectedSources().size > 0) {
-            <span class="filter-count-badge">{{ selectedSources().size }}</span>
-          }
-          <svg class="select-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-            <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-
-        @if (sourceMenuOpen()) {
-          <div class="filter-dropdown-panel">
-            @if (availableSources().length === 0) {
-              <div class="filter-dropdown-empty">No values yet</div>
-            } @else {
-              @for (value of availableSources(); track value) {
-                <label class="filter-checkbox-row">
-                  <input
-                    type="checkbox"
-                    [checked]="isSourceSelected(value)"
-                    (change)="toggleSourceValue(value)"
-                  />
-                  <span>{{ sourceOptionLabel(value) }}</span>
-                </label>
-              }
-            }
-            @if (selectedSources().size > 0) {
-              <button type="button" class="filter-clear-btn" (click)="clearSources()">Clear</button>
-            }
-          </div>
+        @if (searching()) {
+          <span class="search-spinner" aria-hidden="true"></span>
         }
       </div>
 
-      <!-- Status filter -->
-      <div class="select-wrap">
-        <div class="select-box">
-          <select [value]="statusFilter()" (change)="onStatus($any($event.target).value)">
-            <option value="">All Statuses</option>
-            <option value="Pending">Pending</option>
-            <!-- No separate "Awaiting Bulk Export" option: the API's Running filter also returns AwaitingBulkExport
-                 runs (see WorkflowEndpoints' /workflow-runs status filter), matching how they're labelled here. -->
-            <option value="Running">Running</option>
-            <option value="Succeeded">Succeeded</option>
-            <option value="PartialSuccess">Partial Success</option>
-            <option value="Failed">Failed</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
-          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+      <!-- Multi-select filters — same control and facet contract the Workflows list uses, so the two screens'
+           filters look and behave alike. Options come from the server's facets, never a hardcoded roster. -->
+      @for (def of filterDefs; track def.category) {
+        <div class="filter-dropdown">
+          <button
+            type="button"
+            class="filter-dropdown-btn"
+            [class.filter-dropdown-btn--active]="selectedCountFor(def.category) > 0"
+            (click)="toggleFilterMenu(def.category)"
+          >
+            {{ def.label }}
+            @if (selectedCountFor(def.category) > 0) {
+              <span class="filter-count-badge">{{ selectedCountFor(def.category) }}</span>
+            }
+            <svg class="select-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+
+          @if (openFilterMenu() === def.category) {
+            <div class="filter-dropdown-panel">
+              @if (showOptionSearch(def.category)) {
+                <input
+                  type="search"
+                  class="filter-option-search"
+                  [placeholder]="'Search ' + def.label.toLowerCase() + '...'"
+                  [value]="filterOptionSearch()"
+                  (input)="filterOptionSearch.set($any($event.target).value)"
+                />
+              }
+              @if (optionsFor(def.category).length === 0) {
+                <div class="filter-dropdown-empty">No values yet</div>
+              } @else if (visibleOptionsFor(def.category).length === 0) {
+                <div class="filter-dropdown-empty">No matches</div>
+              } @else {
+                @for (value of visibleOptionsFor(def.category); track value) {
+                  <label class="filter-checkbox-row">
+                    <input
+                      type="checkbox"
+                      [checked]="isFilterSelected(def.category, value)"
+                      (change)="toggleFilterValue(def.category, value)"
+                    />
+                    <span>{{ displayLabelFor(def.category, value) }}</span>
+                  </label>
+                }
+              }
+              @if (selectedCountFor(def.category) > 0) {
+                <button type="button" class="filter-clear-btn" (click)="clearFilter(def.category)">Clear</button>
+              }
+            </div>
+          }
         </div>
-      </div>
+      }
 
       <!-- Triggered By filter -->
       <div class="select-wrap">
@@ -164,6 +160,17 @@
             <span class="badge" [ngClass]="statusClass(r.status)">
               {{ statusLabel(r.status) }}
             </span>
+            @if (showBulkInfoIcon(r)) {
+              <button
+                type="button"
+                class="bulk-info-btn"
+                (click)="openBulkStatus(r, $event)"
+                title="Bulk Data Status Request — check this export's progress on the source system"
+                aria-label="View bulk data export status"
+              >
+                <mat-icon>info_outline</mat-icon>
+              </button>
+            }
             @if (r.errorReferenceId) {
               <a
                 class="mono link error-reference-link"
@@ -172,6 +179,19 @@
                 (click)="$event.stopPropagation()"
                 title="View this error in Operations → Errors"
               >{{ r.errorReferenceId }}</a>
+            }
+          </td>
+        </ng-container>
+
+        <!-- The source vendor's own id for the run's $export job (Epic's BulkRequest/{id}). Not sortable:
+             it's a lookup key an operator copies, not an axis anyone orders a list by. -->
+        <ng-container matColumnDef="bulkRequestId">
+          <th mat-header-cell *matHeaderCellDef>Bulk Request ID</th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.bulkRequestId) {
+              <span class="mono bulk-request-id" [title]="r.bulkRequestId">{{ r.bulkRequestId }}</span>
+            } @else {
+              <span class="cell-muted">—</span>
             }
           </td>
         </ng-container>
@@ -269,3 +289,131 @@
   </div>
 
 </div>
+
+<!-- Bulk Data Status Request ─────────────────────────────────────────────────────────────────────────
+     A live, server-proxied read of the source's $export status URL. Renders two genuinely different
+     states off ONE resourceTypes list: in flight the source returns 202 with no body, so every requested
+     type shows as Pending and X-Progress is the only live detail; on completion the same list carries
+     real file counts from the manifest. No download URLs are ever present — see BulkExportStatusDto. -->
+<app-modal-overlay [open]="bulkStatusOpen()" (closed)="closeBulkStatus()">
+  <section class="bulk-status">
+    <header class="bulk-status__head">
+      <div>
+        <h2>Bulk Data Status Request</h2>
+        @if (bulkStatus()?.bulkRequestId || bulkStatusRun()?.bulkRequestId) {
+          <p class="bulk-status__id mono">{{ bulkStatus()?.bulkRequestId ?? bulkStatusRun()?.bulkRequestId }}</p>
+        }
+      </div>
+      <button class="close-x" type="button" (click)="closeBulkStatus()" aria-label="Close">×</button>
+    </header>
+
+    @if (bulkStatusLoading()) {
+      <p class="bulk-status__muted">Reading status from the source system…</p>
+    } @else if (bulkStatusError()) {
+      <p class="bulk-status__error">{{ bulkStatusError() }}</p>
+    } @else {
+      <!-- Aliased in its own @if: Angular control flow does not bind `as` on an @else if branch. -->
+      @if (bulkStatus(); as status) {
+
+      <div class="bulk-status__summary">
+        <span class="badge" [ngClass]="bulkStatusClass(status.status)">
+          {{ status.status === 'InProgress' ? 'In Progress' : status.status }}
+        </span>
+
+        @if (status.status === 'InProgress') {
+          <!-- X-Progress is optional in the Bulk Data spec; Epic populates it reliably, others may not. -->
+          <p class="bulk-status__progress">
+            {{ status.progress ?? 'Export in progress — the source system reported no progress detail.' }}
+          </p>
+        }
+      </div>
+
+      <dl class="bulk-status__facts">
+        <div>
+          <dt>Started</dt>
+          <dd>{{ status.kickedOffOnUtc | date: 'medium' }}</dd>
+        </div>
+        <div>
+          <dt>Elapsed</dt>
+          <dd>{{ bulkElapsed(status.kickedOffOnUtc) }}</dd>
+        </div>
+        @if (status.status === 'InProgress') {
+          <div>
+            <dt>Poll attempts</dt>
+            <dd>{{ status.pollAttemptCount }}</dd>
+          </div>
+          @if (status.nextPollNotBeforeUtc) {
+            <div>
+              <dt>Next poll</dt>
+              <dd>{{ status.nextPollNotBeforeUtc | date: 'medium' }}</dd>
+            </div>
+          }
+        }
+        @if (status.transactionTime) {
+          <div>
+            <dt>Transaction time</dt>
+            <dd>{{ status.transactionTime | date: 'medium' }}</dd>
+          </div>
+        }
+      </dl>
+
+      @if (status.request) {
+        <div class="bulk-status__request">
+          <span class="bulk-status__label">Request</span>
+          <code class="mono">{{ status.request }}</code>
+        </div>
+      }
+
+      @if (status.resourceTypes.length > 0) {
+        <table class="bulk-status__table">
+          <thead>
+            <tr>
+              <th>Resource Type</th>
+              <th>State</th>
+              <!-- Files, NOT records: one NDJSON file may hold a single resource or fifty thousand, and the
+                   real total is only known once the poller downloads and parses it. -->
+              <th
+                class="bulk-status__files-col"
+                title="Number of NDJSON files the source produced. Record counts are known only after download."
+              >Files</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (type of status.resourceTypes; track type.resourceType) {
+              <tr>
+                <td>{{ type.resourceType }}</td>
+                <td>
+                  <span class="badge" [ngClass]="type.state === 'Ready' ? 'badge-completed' : 'badge-queued'">
+                    {{ type.state }}
+                  </span>
+                </td>
+                <td class="bulk-status__files-col">
+                  {{ type.fileCount === null ? '—' : type.fileCount }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <p class="bulk-status__muted">No resource types have been reported for this export yet.</p>
+      }
+
+      @if (status.errors.length > 0) {
+        <div class="bulk-status__errors">
+          <span class="bulk-status__label">Reported issues</span>
+          <ul>
+            @for (error of status.errors; track error) {
+              <li>{{ error }}</li>
+            }
+          </ul>
+        </div>
+      }
+
+      }
+    }
+
+    <footer class="bulk-status__foot">
+      <button class="cancel" type="button" (click)="closeBulkStatus()">Close</button>
+    </footer>
+  </section>
+</app-modal-overlay>

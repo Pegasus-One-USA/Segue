@@ -1,12 +1,24 @@
 #!/usr/bin/env bash
-# Builds (and optionally pushes) the 3 custom FHIRBridge container images from the repo root.
+# Builds (and optionally pushes) the 5 custom Segue container images from the repo root -- so
+# one command refreshes everything the Container Apps environment actually deploys.
 # Terraform's azure/aws environments assume this has already been run against their registry.
+# segue-redis (containerization/docker/redis-tls) is stock redis:7-alpine plus a fixed,
+# committed self-signed TLS certificate — see that Dockerfile's own comment for why it's a custom
+# image at all (FHIRBridge.Api/.Worker refuse a plaintext Redis connection outside Development).
+# segue-postgres (containerization/docker/postgres-local) is stock postgres:16-alpine plus a
+# custom entrypoint that keeps PGDATA on local ephemeral disk and treats a mounted Azure Files
+# share purely as a backup target — see that Dockerfile's own comment for why (Postgres's startup
+# permission check can never pass directly on Azure Files/SMB).
+# segue-postgres-backup (containerization/docker/postgres-backup) is stock postgres:16-alpine
+# plus azcopy and a pg_dump-to-Blob-Storage script — only actually deployed (as a scheduled
+# Container Apps Job) when a client's Bicep/Terraform deployment keeps Postgres containerized
+# instead of using the managed Azure Database for PostgreSQL path; see that Dockerfile's own comment.
 #
 # Usage:
-#   ./build-images.sh                                   # local tags only, no push
+#   ./build-images.sh                                   # tag from VERSION, no push
 #   ./build-images.sh -t v1.2.0                          # local tags with a specific version
-#   ./build-images.sh -r myregistry.azurecr.io -t v1.2.0 -p   # build, tag, and push to ACR
-#   ./build-images.sh -r 123456789012.dkr.ecr.us-east-1.amazonaws.com/fhirbridge -t v1.2.0 -p  # ECR
+#   ./build-images.sh -r myregistry.azurecr.io -t v1.2.0 -p   # build+push all 5, ACR
+#   ./build-images.sh -r 123456789012.dkr.ecr.us-east-1.amazonaws.com/segue -t v1.2.0 -p  # ECR, all 5
 #
 # -r REGISTRY   registry/repo prefix images are tagged with (default: none — local tag only)
 # -t TAG        image tag (default: local)
@@ -15,7 +27,7 @@
 set -euo pipefail
 
 REGISTRY=""
-TAG="local"
+TAG=""
 PUSH="false"
 
 while getopts "r:t:p" opt; do
@@ -28,19 +40,39 @@ while getopts "r:t:p" opt; do
 done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# Default the tag to the product version in the repo-root VERSION file — the same single source
+# every .NET assembly (Directory.Build.props) and the Angular footer already read. Left unset by the
+# caller, images are tagged with the version this working tree actually IS, so a hand-built image can
+# never silently claim to be some other release. Pass -t explicitly to override.
+if [[ -z "$TAG" ]]; then
+  if [[ ! -f "${REPO_ROOT}/VERSION" ]]; then
+    echo "Error: VERSION not found at ${REPO_ROOT}/VERSION" >&2
+    exit 1
+  fi
+  TAG="$(tr -d '[:space:]' < "${REPO_ROOT}/VERSION")"
+  if [[ -z "$TAG" ]]; then
+    echo "Error: VERSION at ${REPO_ROOT}/VERSION is empty" >&2
+    exit 1
+  fi
+  echo "==> Tag not specified; using version ${TAG} from VERSION"
+fi
+
 PREFIX=""
 if [[ -n "$REGISTRY" ]]; then
   PREFIX="${REGISTRY%/}/"
 fi
 
 declare -A IMAGES=(
-  [fhirbridge-app]="containerization/docker/fhirbridge-app/Dockerfile"
-  [demo-app]="containerization/docker/demo-app/Dockerfile"
-  [fhirbridge-worker]="containerization/docker/worker/Dockerfile"
+  [segue-app]="containerization/docker/segue-app/Dockerfile"
+  [segue-worker]="containerization/docker/worker/Dockerfile"
+  [segue-redis]="containerization/docker/redis-tls/Dockerfile"
+  [segue-postgres]="containerization/docker/postgres-local/Dockerfile"
+  [segue-postgres-backup]="containerization/docker/postgres-backup/Dockerfile"
 )
-# fhirbridge-app and demo-app bake $TAG into their Angular build (footer version display) -
-# fhirbridge-worker has no UI, so it doesn't take this build-arg.
-UI_IMAGES=("fhirbridge-app" "demo-app")
+# segue-app bakes $TAG into its Angular build (footer version display) -
+# segue-worker has no UI, so it doesn't take this build-arg.
+UI_IMAGES=("segue-app")
 
 for name in "${!IMAGES[@]}"; do
   dockerfile="${IMAGES[$name]}"

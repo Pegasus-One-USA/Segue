@@ -1,7 +1,8 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { WORKFLOW_ENDPOINTS } from '../core/api-endpoints';
+import { SKIP_LOADER } from '../core/loading.interceptor';
 
 export type WorkflowNodeCategory = 0 | 10 | 20 | 30 | 40;
 export type WorkflowDataContract =
@@ -298,12 +299,18 @@ export interface WorkflowBuildResult {
 // ── Workflow-list screen (GET /workflows/summary) ──────────────────────────────
 export type WorkflowAction = 'Launch' | 'Run';
 
+/** Mirrors the backend's WorkflowLifecycleStatus. */
+export type WorkflowLifecycleStatus = 'Draft' | 'Ready' | 'Disabled';
+
 export interface WorkflowSummary {
   workflowId: string;
   name: string;
   /** Free-text notes captured in the builder; null/absent when never filled in. */
   description?: string | null;
-  status: 'Enabled' | 'Disabled';
+  /** Draft = no destination wired up yet, so it cannot run; Ready = it will run; Disabled = complete but
+   *  deliberately paused. Draft/Ready are derived from the graph server-side (never stored), Disabled is the
+   *  stored IsEnabled flag. Replaces the former 'Enabled' value, which no longer exists. */
+  status: WorkflowLifecycleStatus;
   nodes: number;
   edges: number;
   lastRun: string | null;           // WorkflowRunStatus name (Running | Succeeded | Failed) or null
@@ -323,6 +330,14 @@ export interface WorkflowSummary {
   createdBy?: string | null;
   modifiedOnUtc?: string | null;
   modifiedBy?: string | null;
+  /** Human-quotable sequential id (e.g. `WLW-150926-0042`), assigned when the workflow is created and stable
+   *  for its life. Null for workflows created before numbering existed, or while numbering is switched off.
+   *  Unlike `name`, this is unique — it is what the UI quotes when identifying one workflow among duplicates. */
+  workflowNumber?: string | null;
+  /** Every distinct destination type this workflow writes to — a list, since a workflow can fan out. */
+  destinationTypes?: string[] | null;
+  /** Every FHIR resource type this workflow's source nodes name in their stored configuration. */
+  resourceTypes?: string[] | null;
 }
 
 /** Server-side page of /workflows/summary — items is just this page's rows, totalCount is the full matching-row
@@ -335,6 +350,13 @@ export interface WorkflowSummaryPage {
   availableStatuses: string[];
   availableApplicationTypes: string[];
   availableSourceSystemTypes: string[];
+  /** Destination types configured in this tenant (from the destination catalog the builder offers), not merely
+   *  the ones some workflow already writes to — a just-configured destination is filterable immediately. */
+  availableDestinationTypes: string[];
+  /** Every WorkflowRunStatus value, not only those observed, so the option list never shifts under the user. */
+  availableLastRunStatuses: string[];
+  /** Every FHIR resource type named by any source node's stored configuration. */
+  availableResourceTypes: string[];
 }
 
 export interface WorkflowSummaryQuery {
@@ -346,6 +368,9 @@ export interface WorkflowSummaryQuery {
   statuses?: string[];
   applicationTypes?: string[];
   sourceSystemTypes?: string[];
+  destinationTypes?: string[];
+  lastRunStatuses?: string[];
+  resourceTypes?: string[];
 }
 
 export interface WorkflowLaunchUrl {
@@ -408,8 +433,11 @@ export class WorkflowApiService {
   }
 
   /** Workflow-list screen: one summary row per workflow with the derived Launch/Run action. Paging/search/sort are
-   *  applied server-side — see WorkflowEndpoints.MapGet("/workflows/summary"). */
-  summary(query: WorkflowSummaryQuery): Observable<WorkflowSummaryPage> {
+   *  applied server-side — see WorkflowEndpoints.MapGet("/workflows/summary"). `silent` skips the global loader
+   *  (SKIP_LOADER — see loading.interceptor.ts) so this call can't trigger AppComponent's app-wide `[inert]`
+   *  toggle, which blurs whatever currently has focus, including — mid-keystroke — the search box that just
+   *  triggered this very request (see WorkflowListComponent.onSearch). */
+  summary(query: WorkflowSummaryQuery, silent = false): Observable<WorkflowSummaryPage> {
     let params = new HttpParams().set('page', query.page).set('pageSize', query.pageSize);
     if (query.search) params = params.set('search', query.search);
     if (query.sortColumn) params = params.set('sortColumn', query.sortColumn);
@@ -417,7 +445,11 @@ export class WorkflowApiService {
     for (const value of query.statuses ?? []) params = params.append('statuses', value);
     for (const value of query.applicationTypes ?? []) params = params.append('applicationTypes', value);
     for (const value of query.sourceSystemTypes ?? []) params = params.append('sourceSystemTypes', value);
-    return this.http.get<WorkflowSummaryPage>(WORKFLOW_ENDPOINTS.summary, { params });
+    for (const value of query.destinationTypes ?? []) params = params.append('destinationTypes', value);
+    for (const value of query.lastRunStatuses ?? []) params = params.append('lastRunStatuses', value);
+    for (const value of query.resourceTypes ?? []) params = params.append('resourceTypes', value);
+    const context = silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<WorkflowSummaryPage>(WORKFLOW_ENDPOINTS.summary, { params, context });
   }
 
   /**
@@ -457,6 +489,16 @@ export class WorkflowApiService {
       WORKFLOW_ENDPOINTS.destinationData(workflowId),
       { params: new HttpParams().set('top', top) },
     );
+  }
+
+  /** Downloads the full configuration dump (every config table this workflow touches, with the SQL that
+   *  selected each one) as a text file. Observed as the full response so the caller can honour the
+   *  server-supplied Content-Disposition filename rather than inventing its own. */
+  configurationExport(workflowId: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(WORKFLOW_ENDPOINTS.configurationExport(workflowId), {
+      responseType: 'blob',
+      observe: 'response',
+    });
   }
 
   runs(workflowId: string): Observable<WorkflowRunDto[]> {

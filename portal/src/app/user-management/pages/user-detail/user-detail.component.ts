@@ -3,6 +3,7 @@ import {
   Component, OnInit, OnDestroy, signal, computed, inject, Input, ViewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 
@@ -21,6 +22,7 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { IUserService } from '../../../auth/services/i-user.service';
 import { AuthService } from '../../../auth/services/auth.service';
 import { IRoleService } from '../../services/i-role.service';
+import { FullAccessResolverService } from '../../../auth/services/full-access-resolver.service';
 import {
   User, UserRole, Permission, PermissionCategory, PasswordResetLinkResult,
 } from '../../../auth/models/user.model';
@@ -36,6 +38,9 @@ import { ToastService } from '../../../services/toast.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { PermissionGroup, PermissionAction, permissionCode } from '../../../auth/models/permission.constants';
+import { PhaseConfigService } from '../../../services/phase-config.service';
+import { isNodePermissionPrefixVisible } from '../../../data/node-permission-visibility.util';
+import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_PREFIXES } from '../../../data/terminology-feature.config';
 
 // A permission within the effective-permissions preview — same shape as `Permission` plus
 // whether the user's roles actually grant it. Mirrors AssignRolesDialogComponent's preview.
@@ -84,14 +89,16 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   // as soon as the view initializes regardless of which tab is active.
   @ViewChild(UserPermissionOverridesComponent) private overridesComponent?: UserPermissionOverridesComponent;
 
-  private readonly userService = inject(IUserService);
-  private readonly roleService = inject(IRoleService);
+  private readonly userService   = inject(IUserService);
+  private readonly roleService   = inject(IRoleService);
+  private readonly fullAccessSvc = inject(FullAccessResolverService);
   readonly authService         = inject(AuthService);
   private readonly dialog      = inject(MatDialog);
   private readonly customDialog = inject(DialogService);
   private readonly toast       = inject(ToastService);
   private readonly router      = inject(Router);
   private readonly actionGuard = inject(PermissionActionGuard);
+  private readonly phaseCfg    = inject(PhaseConfigService);
 
   // ─── Permission gating ──────────────────────────────────────────────────────
   // Mirrors user-list.component.ts's canX() pattern exactly — this page reaches the exact same
@@ -130,11 +137,23 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
     return !!email && email.toLowerCase() === this.user()?.email?.toLowerCase();
   });
 
+  // RBAC Fix 7: whether the current caller holds Full System Access via any of their own roles —
+  // resolved via the shared FullAccessResolverService (see that file for why it matches by role
+  // NAME, never displayName or id), cross-referenced against the roles this session's own claims say
+  // it holds. Starts false (fails closed) until the async check resolves in ngOnInit, or if it ever
+  // errors. Resolved once per component instance, and skipped entirely for a literal SuperAdmin claim
+  // (see ngOnInit below).
+  private readonly callerHasFullAccess = signal(false);
+
   // Bypassing a user's second factor entirely is too sensitive to delegate to the general "edit
   // user" permission Admins also hold — the backend enforces this too (SuperAdminOnly policy on
-  // POST /users/{id}/mfa/disable); this just keeps the button from being shown to someone who'd
-  // get a 403 anyway.
-  protected readonly isSuperAdmin = computed(() => this.authService.hasRole('SuperAdmin'));
+  // POST /users/{id}/mfa/disable, which ALSO accepts any role with Full System Access — see
+  // UnifiedAdminAuthorizationHandler's matching fallback in SuperAdminOnlyAuthorizationHandler);
+  // this just keeps the button from being shown to someone who'd get a 403 anyway. Name kept as
+  // `isSuperAdmin` (used verbatim by user-detail.component.html) even though it now also covers a
+  // custom Full System Access role, to avoid any template change for this fix.
+  protected readonly isSuperAdmin = computed(() =>
+    this.authService.hasRole('SuperAdmin') || this.callerHasFullAccess());
 
   // ─── Computed: this user's true effective permission ids ─────────────────
   // Mirrors the backend's LocalAuthService.GetPermissionCodesAsync merge: role-derived permissions,
@@ -154,21 +173,36 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
   });
 
   // ─── Computed: full catalog, each permission marked allowed/denied for this user ─
+  // Drops any group for a source/destination node the Workflow Builder itself doesn't let anyone
+  // add yet (phase-gated — see PhaseConfigService/node-permission-visibility.util.ts), the same
+  // filter role-permissions.component.ts's own Workflow Nodes table and the Assign Roles dialog's
+  // preview already apply — without it, Effective Permissions disagreed with both of those and
+  // with what the workflow canvas actually offers (e.g. still listing Cerner/Sftp as a full group).
+  // Also drops the four Terminology Codes groups while TERMINOLOGY_FEATURE_ENABLED is false (see
+  // data/terminology-feature.config.ts) — same reasoning, just keyed off that flag instead of the
+  // phase catalog. A group with no permissions at all can't have a resource to check, so it's
+  // dropped too — never shown as an empty, always-"0 allowed" card.
   catalogWithStatus = computed<StatusCategory[]>(() => {
     const allowedIds = this.effectivePermissionIds();
     return this.catalog().map(cat => ({
       id:          cat.id,
       displayName: cat.displayName,
-      groups: cat.groups.map(g => ({
-        id:          g.id,
-        displayName: g.displayName,
-        permissions: g.permissions.map(p => ({ ...p, allowed: allowedIds.has(p.id) })),
-      })),
+      groups: cat.groups
+        .filter(g => g.permissions.length > 0
+          && (TERMINOLOGY_FEATURE_ENABLED || !TERMINOLOGY_PERMISSION_PREFIXES.has(g.permissions[0].resource))
+          && isNodePermissionPrefixVisible(g.permissions[0].resource, this.phaseCfg))
+        .map(g => ({
+          id:          g.id,
+          displayName: g.displayName,
+          permissions: g.permissions.map(p => ({ ...p, allowed: allowedIds.has(p.id) })),
+        })),
     }));
   });
 
+  // Counted from catalogWithStatus (not the raw catalog) so the total is scoped to the same
+  // phase-visible groups above — otherwise "N allowed" + "denied" wouldn't add back up to this.
   totalPermissionsCount = computed(() =>
-    this.catalog().reduce((sum, cat) => sum + cat.groups.reduce((s, g) => s + g.permissions.length, 0), 0)
+    this.catalogWithStatus().reduce((sum, cat) => sum + cat.groups.reduce((s, g) => s + g.permissions.length, 0), 0)
   );
   // Counted from catalogWithStatus (catalog permissions only) rather than user().permissions.length
   // directly — a role can carry permissions the catalog excludes (deactivated/hidden ones), which
@@ -181,12 +215,28 @@ export class UserDetailComponent implements OnInit, OnDestroy, HasUnsavedChanges
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
   ngOnInit(): void {
+    // GET /permissions/catalog is UnifiedAdmin-only server-side (PermissionsController) — a 403 here
+    // just means this viewer isn't an admin/Full-Access role, which is the routine case for most people
+    // opening a user's detail page, not a real failure. The Roles & Permissions tab already degrades
+    // gracefully with an empty catalog (0 of 0), so only toast for a genuine, unexpected error.
     this.roleService.getPermissionCatalog()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: catalog => this.catalog.set(catalog),
-        error: () => this.toast.error('Failed to load the permission catalog.'),
+        error: (err: HttpErrorResponse) => {
+          if (err.status !== 403) this.toast.error('Failed to load the permission catalog.');
+        },
       });
+
+    // RBAC Fix 7 — see callerHasFullAccess's own doc comment above. A literal SuperAdmin claim already
+    // satisfies isSuperAdmin's OR on its own, so skip this extra API call entirely for that common case,
+    // exactly as the other Full-Access sites (Fix 3-6) do.
+    if (!this.authService.hasRole('SuperAdmin')) {
+      const heldRoleNames = new Set(this.authService.roles().map(r => r.name));
+      this.fullAccessSvc.resolve(heldRoleNames)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(hasFullAccess => this.callerHasFullAccess.set(hasFullAccess));
+    }
 
     if (this.id) {
       this.loadUser(this.id);

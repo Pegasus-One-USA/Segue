@@ -2,6 +2,7 @@ using System.Data.Common;
 using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Entities.Licensing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Infrastructure.Licensing;
@@ -48,7 +49,10 @@ public sealed class LicenseService : ILicenseService
 
     public async Task<LicenseApplyResult> ApplyAsync(string licenseToken, CancellationToken cancellationToken)
     {
-        var status = SignedLicenseValidator.Validate(licenseToken);
+        // enforceActivationWindow: true — this IS the "apply a freshly generated key" path (as opposed to
+        // ReloadAsync re-resolving an already-applied token on every process restart, which must never
+        // re-check this same deadline). See SignedLicenseValidator.Validate's remarks for why.
+        var status = SignedLicenseValidator.Validate(licenseToken, enforceActivationWindow: true);
         if (status.State == LicenseState.Invalid)
         {
             // Rejected at the door: nothing is written and Current is left exactly as it was, so a bad
@@ -58,11 +62,54 @@ public sealed class LicenseService : ILicenseService
                 false, status.InvalidReason ?? "The license token failed verification.", null);
         }
 
+        // Re-applying the exact same token as the one already current — a back-to-back double-submit,
+        // or a renewal screen the admin resubmits without changing anything — is a no-op: nothing is
+        // re-persisted and no new LicenseHistoryEntry row is added, so the history table doesn't
+        // accumulate duplicate rows for a license that never actually changed. Deliberately NOT
+        // restricted to State == Active: CurrentRawToken is non-null for Grace and Expired too (see
+        // ReloadAsync), and re-applying the same token while it's sitting in Grace/Expired is at least
+        // as likely as while Active, so it gets the same no-op treatment.
+        lock (_lock)
+        {
+            if (CurrentRawToken is not null && CurrentRawToken == licenseToken)
+            {
+                return new LicenseApplyResult(true, null, Current, true);
+            }
+        }
+
         using (var scope = _scopeFactory.CreateScope())
         {
+            // A license minted against a specific LicenseRequest (requestKey claim present) must match
+            // one of THIS install's own past requests, proving it was minted for a request this install
+            // actually made and not one copied from a different customer. A token with no requestKey
+            // claim at all skips this entirely — every license minted before this feature existed, or one
+            // deliberately minted without a request tied to it, keeps working unchanged.
+            if (!string.IsNullOrEmpty(status.RequestKey))
+            {
+                var requestRepository = scope.ServiceProvider.GetRequiredService<ILicenseRequestRepository>();
+                var ourRequest = await requestRepository.GetByUniqueKeyAsync(status.RequestKey, cancellationToken);
+                if (ourRequest is null)
+                {
+                    return new LicenseApplyResult(
+                        false,
+                        "This license was minted for a different license request than this install's own — "
+                        + "it can't be applied here.",
+                        null);
+                }
+            }
+
             var repository = scope.ServiceProvider.GetRequiredService<ISystemSettingRepository>();
             await repository.UpsertAsync(
                 LicenseTokenSettingKey, licenseToken, "Signed product license token.", cancellationToken);
+
+            // Audit trail of every license ever successfully applied — Current/CurrentRawToken (and the
+            // SystemSetting row above) always reflect only the most recent one; this table keeps the rest.
+            var historyRepository = scope.ServiceProvider.GetRequiredService<ILicenseHistoryRepository>();
+            await historyRepository.AddAsync(
+                new LicenseHistoryEntry(
+                    Guid.NewGuid(), licenseToken, DateTime.UtcNow, status.CustomerName, status.Edition,
+                    status.State.ToString(), status.ExpiresUtc),
+                cancellationToken);
         }
 
         lock (_lock)
@@ -83,6 +130,21 @@ public sealed class LicenseService : ILicenseService
         {
             Current = status;
             CurrentRawToken = status.State == LicenseState.Invalid ? null : token;
+        }
+    }
+
+    public async Task ClearAsync(CancellationToken cancellationToken)
+    {
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var repository = scope.ServiceProvider.GetRequiredService<ISystemSettingRepository>();
+            await repository.DeleteAsync(LicenseTokenSettingKey, cancellationToken);
+        }
+
+        lock (_lock)
+        {
+            Current = LicenseStatus.Unlicensed;
+            CurrentRawToken = null;
         }
     }
 

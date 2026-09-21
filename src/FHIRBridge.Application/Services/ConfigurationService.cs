@@ -225,11 +225,28 @@ public sealed class ConfigurationService : IConfigurationService
     // so a re-save with blank Client Secret / Private Key fields is ambiguous between "nothing changed" and
     // "clear it" — and every caller today means the former. Only an explicit new InlineClientSecret or key-vault
     // reference in the request should actually replace what's stored; a blank field on update preserves it.
+    //
+    // The one exception is PrivateKey when the connection is ACTUALLY MOVING AWAY from SmartBackendServices —
+    // gated on existing.AuthenticationType, not merely on the request's, because AuthenticationType.None is a
+    // real, legitimate value for an interactive connection's confidential asymmetric client, which can carry a
+    // real, in-use PrivateKey under it (SMART App Launch permits private_key_jwt outside Backend Services too).
+    // Gating on the requested type alone would null that key out on every no-op save that happens to resolve to
+    // None. Gating on "existing WAS SmartBackendServices and requested is not" only ever fires for the actual
+    // hazard this exists to close: a signing-key reference left wired in after a switch AWAY from
+    // SmartBackendServices (SourceConnectionRuntimeResolver used to resolve any non-null PrivateKey regardless of
+    // auth type, failing runs over a secret the connection's current auth method never needed) — it never touches
+    // a connection that never used SmartBackendServices in the first place. Only PrivateKey gets this treatment;
+    // ClientSecret has no equivalent "wrong auth type" hazard today.
     private static SourceAuthenticationConfiguration PreserveSecretsIfBlank(
         SourceAuthenticationConfiguration requested, SourceAuthenticationConfiguration existing)
     {
         var clientSecret = requested.ClientSecret ?? existing.ClientSecret;
-        var privateKey = requested.PrivateKey ?? existing.PrivateKey;
+        var movedAwayFromSmartBackendServices =
+            existing.AuthenticationType == AuthenticationType.SmartBackendServices &&
+            requested.AuthenticationType != AuthenticationType.SmartBackendServices;
+        var privateKey = movedAwayFromSmartBackendServices
+            ? null
+            : requested.PrivateKey ?? existing.PrivateKey;
         if (ReferenceEquals(clientSecret, requested.ClientSecret) && ReferenceEquals(privateKey, requested.PrivateKey))
         {
             return requested;
@@ -556,6 +573,12 @@ public sealed class ConfigurationService : IConfigurationService
 
         var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
 
+        // Same gate as the delete path below: once a destination has actually received pipeline data, its
+        // identity is referenced by existing execution history and audit records, so it becomes view-only.
+        // Editing it in place — repointing it at a different server, table, or secret — would silently
+        // retarget what that history describes.
+        await EnsureDestinationHasNoExecutionHistoryAsync(destinationConfiguration, "edited", cancellationToken);
+
         // Neither the destination list dialog nor the wizard canvas flow ever re-displays a previously stored
         // secret, so KeyVaultName/SecretName on a re-save are not a reliable signal — CreateDestinationConfiguration
         // RequestValidator requires them non-empty on every request (including edits that don't touch the secret
@@ -607,6 +630,29 @@ public sealed class ConfigurationService : IConfigurationService
             "Destination '{DestinationName}' ({DestinationId}, {DestinationType}) was {EnabledState}.",
             destinationConfiguration.Name, destinationConfiguration.Id, destinationConfiguration.DestinationType,
             isEnabled ? "enabled" : "disabled");
+
+        return ConfigurationMapper.ToDto(destinationConfiguration);
+    }
+
+    public async Task<DestinationConfigurationDto> SetDestinationConfigurationDeIdentificationProfileAsync(
+        Guid destinationId,
+        Guid? deIdentificationProfileId,
+        CancellationToken cancellationToken)
+    {
+        var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
+        destinationConfiguration.SetDeIdentificationProfile(deIdentificationProfileId);
+
+        await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);
+
+        // Same rationale as the enable/disable toggle above: changing which redactions apply to a destination
+        // silently changes what PHI leaves the platform, so the change itself needs to be on record.
+        _logger.LogInformation(
+            LogEvents.DestinationUpdated,
+            "Destination '{DestinationName}' ({DestinationId}, {DestinationType}) de-identification profile was {ProfileState}.",
+            destinationConfiguration.Name,
+            destinationConfiguration.Id,
+            destinationConfiguration.DestinationType,
+            deIdentificationProfileId is { } profileId ? $"set to {profileId}" : "cleared");
 
         return ConfigurationMapper.ToDto(destinationConfiguration);
     }

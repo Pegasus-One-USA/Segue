@@ -162,9 +162,22 @@ export class WizardService {
   // Trusted issuers for EHR-launch (iss validation). Mandatory server-side for EHR launch; captured in the Data step.
   readonly trustedIssuers = signal('');
 
-  readonly scopeString = computed(() =>
-    this.scopeBuilder.buildScopes(this.currentApp(), this.resources())
-  );
+  // Set from the form's "Group bulk export" checkbox (entity/Settings mode has no Export Scope field of its
+  // own to derive this from — see ehr-vendor-source-form's groupBulkExport control remarks). ScopeBuilderService
+  // knows nothing about vendor-specific scopes or Group's special-cased exclusion, so the injection happens
+  // here instead, gated on the one condition that actually matters: a Backend/system-scoped eCW (Healow)
+  // connection meant for Group $export.
+  readonly groupBulkExport = signal(false);
+
+  readonly scopeString = computed(() => {
+    const built = this.scopeBuilder.buildScopes(this.currentApp(), this.resources());
+    const needsGroupRead =
+      this.groupBulkExport() &&
+      this.ehrType() === 'Healow' &&
+      this.currentApp().scopePrefix === 'system/' &&
+      !built.split(' ').includes('system/Group.read');
+    return needsGroupRead ? `system/Group.read ${built}`.trim() : built;
+  });
 
   // ── ingestion ─────────────────────────────────────────────────────────────
   readonly mode = signal('export');
@@ -253,7 +266,7 @@ export class WizardService {
 
     this.store.editingNodeId.set(existingNodeId ?? null);
     this.step.set(1);
-    this.isOpen.set(true);
+    this._openWithScrollLock();
   }
 
   // ── open (entity mode — Source Connections CRUD page) ─────────────────────
@@ -288,6 +301,11 @@ export class WizardService {
         ? [...dto.retrieval.resourceTypes]
         : [...FHIR_RESOURCES]
     );
+    // Reflects back whatever scopeString() actually produced on the last save — entity mode has no exportScope
+    // to derive this from (see scopeString's own remarks), so the saved Scopes list is the only source of truth.
+    this.groupBulkExport.set(
+      !!dto?.authentication?.scopes?.includes('system/Group.read'),
+    );
     const gate = EPIC_INGESTION[this.currentApp().context];
     this.setMode(gate?.default || 'search');
     this.connected.set(!!dto);
@@ -311,7 +329,7 @@ export class WizardService {
 
     this.store.editingNodeId.set(null);
     this.step.set(1);
-    this.isOpen.set(true);
+    this._openWithScrollLock();
   }
 
   close(): void {
@@ -322,6 +340,49 @@ export class WizardService {
     this.readonlyMode.set(false);
     this.entityId.set(null);
     this.entityDto.set(null);
+    this._unlockContentScroll();
+  }
+
+  // ── scroll lock ───────────────────────────────────────────────────────────
+  // This modal (canvas-mode wizard AND entity-mode Source Connections view/edit/add) renders as a plain
+  // descendant of the routed page (source-connection-list.component.html's .sc-modal-backdrop, position:absolute
+  // against .shell-content — same containing-block trick dialog-shell.component.scss uses), rather than through
+  // DialogService's shared <app-dialog-outlet/>. That means it never picked up DialogService's own scroll-lock
+  // fix (_lockContentScroll/_unlockContentScroll below) — reproduced here verbatim rather than shared, to avoid
+  // coupling this service to DialogService for a single cross-cutting concern. Without it, opening this modal
+  // from a row's ⋮ "View"/"Edit" mat-menu item (exactly how Source Connections opens it) renders the panel
+  // against .shell-content's scrolled-past-top edge, while an async focus-restore from the menu's own close
+  // silently scrolls .shell-content back afterward — leaving the modal panel and the underlying list table
+  // visibly out of sync (the table "bleeding through" behind/below the panel).
+  private scrollLockOriginalTop = 0;
+
+  private _openWithScrollLock(): void {
+    const wasOpen = this.isOpen();
+    this.isOpen.set(true);
+    if (!wasOpen) this._lockContentScroll();
+  }
+
+  private _lockContentScroll(): void {
+    const content = document.querySelector<HTMLElement>('.shell-content');
+    if (!content) return;
+    this.scrollLockOriginalTop = content.scrollTop;
+    content.style.overflowY = 'hidden';
+    content.scrollTop = 0;
+
+    // Re-assert a moment later: when this modal was opened from a mat-menu item (e.g. a row's ⋮ "View"/"Edit"),
+    // the menu's own close restores focus to its trigger button asynchronously — and focusing an element that
+    // isn't fully in view auto-scrolls it back into view, silently undoing the reset above right after it
+    // happened. Re-clamping after the menu's close settles wins the race regardless of which task queue CDK's
+    // focus restore lands in. See DialogService._lockContentScroll for the identical fix/reasoning.
+    setTimeout(() => { content.scrollTop = 0; }, 0);
+    setTimeout(() => { content.scrollTop = 0; }, 300);
+  }
+
+  private _unlockContentScroll(): void {
+    const content = document.querySelector<HTMLElement>('.shell-content');
+    if (!content) return;
+    content.style.overflowY = '';
+    content.scrollTop = this.scrollLockOriginalTop;
   }
 
   // ── step navigation ───────────────────────────────────────────────────────

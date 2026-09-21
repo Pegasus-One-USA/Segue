@@ -62,5 +62,8 @@ export const DESTINATION_FORM_REGISTRY: DestinationFormRegistry<DestinationType>
   Databricks: DatabricksDestinationFormComponent,
   DataLakeWebhook: DataLakeWebhookDestinationFormComponent,
   DataFabricAzure: DataFabricDestinationFormComponent,
+  // Same form as the Files surface: one Fabric connection shape (workspace/item/Entra auth), with the
+  // Warehouse-only fields it already carries. The landing mode is implied by the destination type.
+  DataFabricWarehouse: DataFabricDestinationFormComponent,
   ApiEndpoint: ApiEndpointDestinationFormComponent,
 };

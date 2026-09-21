@@ -19,10 +19,20 @@ export interface PhaseConfig {
    * Rank 2=Validation, 3=Normalize, 4=Terminology, 5=De-identify.
    */
   hiddenRanks: number[];
+
+  /**
+   * Fabric landing modes offered in the Microsoft Fabric destination form.
+   *
+   * Separate from enabledTransformIds because this gates a CHOICE INSIDE one destination, not the destination
+   * itself: OneLake Files is verified and shipping, while the Warehouse COPY INTO path is complete but has never
+   * been run against a real Fabric tenant. Listing only the verified mode keeps the unverified one out of users'
+   * hands without holding back the whole destination.
+   */
+  enabledFabricModes: string[];
 }
 
 // ── Phase 1 ───────────────────────────────────────────────────────────────────
-// Sources:      Epic, Generic FHIR R4, Athenahealth
+// Sources:      Epic, Athenahealth, eClinicalWorks
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
 // Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB + FHIR Repository (Aidbox) + Medplum +
@@ -30,10 +40,9 @@ export interface PhaseConfig {
 const PHASE_1_CONFIG: PhaseConfig = {
   enabledSourceIds: [
     'epic',
-    'generic-fhir',
     'athena',
     'healow',
-    // Phase 2+: 'cerner', 'allscripts', 'meditech', 'hl7v2', 'sample'
+    // Phase 2+: 'generic-fhir', 'cerner', 'allscripts', 'meditech', 'hl7v2', 'sample'
   ],
 
   enabledTransformIds: [
@@ -50,13 +59,16 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // Lake destinations — backend writers, Step 1 forms and canvas wizard families are all in place
     // (see MappedDataLakeWebhookDestinationWriter / MappedDataFabricDestinationWriter).
     'dest-datalake-webhook',
+    // Microsoft Fabric (OneLake Files) — writer, node executor, catalog entry, Step 1 form and wizard
+    // family are all in place and registered (see MappedDataFabricDestinationWriter).
+    // The vendor heading must be enabled too, not just its surfaces: it is filtered by the same
+    // allowlist, and a filtered-out heading takes its children with it (see filteredCategories).
+    'dest-fabric-group',
+    'dest-fabric',
+    'dest-fabric-warehouse',
     // General-purpose, fully configurable outbound REST API — writer, sender, validator, Step 1 form and
     // wizard family are all in place (see MappedApiEndpointDestinationWriter).
     'dest-apiendpoint',
-    // Microsoft Fabric is hidden from the UI until a Fabric tenant is available to verify a live write
-    // against. Everything behind it is complete and registered — writer, node executor, catalog entry,
-    // Step 1 form, wizard family — so re-listing this one id is the only change needed to bring it back.
-    // 'dest-fabric',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
     // Phase 2+ destinations: 'dest-azuresql',
@@ -66,6 +78,14 @@ const PHASE_1_CONFIG: PhaseConfig = {
     //   'dest-restapi', 'dest-inmemory'
     // Phase 2+ analytics: 'hedis', 'anomaly', 'patient-agg'
   ],
+
+  // OneLake Files is verified end to end against a live Fabric tenant. Warehouse (staged Parquet + COPY INTO,
+  // MERGE on upsert) is listed alongside it but has NOT had a live write confirmed yet — its shape is the
+  // documented one, and the three things most likely to need adjusting on first contact are the COPY INTO
+  // credential clause, the abfss staging URL form, and whether the identity needs grants on the staging
+  // Lakehouse separately from the Warehouse. Note it also requires a pre-created target table: FHIRBridge
+  // never creates or alters destination schema.
+  enabledFabricModes: ['oneLakeFiles', 'warehouseTable'],
 
   hiddenRanks: [
     2,   // Validation
@@ -92,6 +112,11 @@ export class PhaseConfigService {
   /** True if the given transform/destination ID is visible in the current phase. */
   isTransformEnabled(id: string): boolean {
     return this._config().enabledTransformIds.includes(id);
+  }
+
+  /** True if the given Fabric landing mode is offered in the current phase. */
+  isFabricModeEnabled(mode: string): boolean {
+    return this._config().enabledFabricModes.includes(mode);
   }
 
   /** True if an entire rank-level category should be hidden. */

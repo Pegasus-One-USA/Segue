@@ -1,7 +1,4 @@
-.list-page {
-  padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
+﻿.list-page {
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -78,6 +75,17 @@
     transform: translateY(-50%);
     color: var(--color-muted);
     pointer-events: none;
+  }
+
+  // Shown only while a search-triggered reload is in flight (searching()) — a local, non-blocking stand-in
+  // for the app-wide global loader, which this request deliberately skips (see reload()'s `silent` param).
+  .search-spinner {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--color-muted);
   }
 
   .search-input {
@@ -422,6 +430,11 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 
 .cell-primary { font-size: 14px; font-weight: 600; color: var(--color-ink); }
 .cell-meta    { font-size: 12px; color: var(--color-muted); }
+
+/* Monospaced so the incremental segment stays column-aligned down the list, making a scan for one
+   number far easier than proportional digits allow. */
+.cell-number  { font-family: var(--font-mono); letter-spacing: -0.01em; }
+.cell-meta-sep { margin: 0 4px; }
 /* Free-text workflow description — clamped to two lines so a long note can't stretch the row; the full text
    stays reachable via the title tooltip. */
 .cell-desc {
@@ -565,6 +578,14 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   background: rgba(15, 23, 42, 0.55);
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
+
+  /* A second overlay layered over an already-open modal (the New-workflow discard confirm). Sits one
+     level above it, with a lighter scrim so the form underneath stays readable — the user is being
+     asked about that form, so hiding it behind a second full-strength backdrop would be backwards. */
+  &.modal-overlay--stacked {
+    z-index: calc(var(--z-modal, 200) + 1);
+    background: rgba(15, 23, 42, 0.32);
+  }
 }
 
 .modal {
@@ -576,6 +597,10 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
 
   &.modal-wide { max-width: 920px; }
+
+  /* Confirmations — narrower than the forms they sit over, so the modal beneath stays visible at the
+     edges and the stack reads as one thing layered on another rather than a page swap. */
+  &.modal--sm { max-width: 420px; }
 }
 
 .modal-head {
@@ -603,6 +628,98 @@ td.col-num { text-align: center; color: var(--color-ink-2); }
 }
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* ── Integration details panel ───────────────────────────────────────────────
+   Read top-to-bottom by a third-party developer who has no access to this portal and no one to ask, so it is
+   laid out as a document (what it is → how it works → what you need → what's blocking) rather than a form. */
+.integration-summary {
+  font-size: 14px; line-height: 1.55; color: var(--color-ink);
+  margin: 0 0 16px;
+}
+
+.integration-banner {
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-base);
+  padding: 11px 14px; margin-bottom: 18px;
+  font-size: 13.5px; line-height: 1.5; color: var(--color-ink);
+}
+
+.integration-heading {
+  font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--color-ink-2);
+  margin: 22px 0 10px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--color-border);
+}
+
+.integration-steps {
+  margin: 0 0 4px; padding-left: 20px;
+  li { font-size: 13.5px; line-height: 1.6; color: var(--color-ink); margin-bottom: 4px; }
+}
+
+.integration-value { margin-bottom: 16px; }
+
+.integration-value-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 5px;
+}
+
+.integration-label { font-size: 13px; font-weight: 600; color: var(--color-ink); }
+
+.integration-plain {
+  font-size: 13.5px; color: var(--color-ink);
+  padding: 8px 0;
+}
+
+.integration-hint {
+  font-size: 12.5px; line-height: 1.5; color: var(--color-ink-2);
+  margin: 6px 0 0;
+}
+
+.integration-checks { list-style: none; margin: 0; padding: 0; }
+
+.integration-check {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--color-border);
+  &:last-child { border-bottom: none; }
+
+  strong { display: block; font-size: 13.5px; color: var(--color-ink); margin-bottom: 2px; }
+  .integration-hint { margin-top: 0; }
+}
+
+.integration-check-body { flex: 1; min-width: 0; }
+
+/* Fixed-width badge so the labels line up into a scannable column down the left. */
+.integration-check-badge {
+  flex: 0 0 auto; width: 92px; text-align: center;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+  padding: 3px 0; border-radius: var(--radius-pill, 999px);
+  margin-top: 1px;
+}
+
+.integration-check.is-ok .integration-check-badge {
+  background: var(--color-success-soft); color: var(--color-success-strong);
+}
+
+.integration-check.is-blocked .integration-check-badge {
+  background: var(--color-warning-soft); color: var(--color-warning-strong);
+}
+
+.integration-check.is-note .integration-check-badge {
+  background: var(--color-side); color: var(--color-ink-2);
+}
+
+.btn-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-size: 12.5px; font-weight: 600; color: var(--color-primary);
+  &:hover { text-decoration: underline; }
+}
+
+@media (max-width: 640px) {
+  .integration-check { flex-direction: column; gap: 6px; }
+  .integration-check-badge { width: auto; padding: 3px 10px; }
+}
 
 .text-input {
   width: 100%; box-sizing: border-box;

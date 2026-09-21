@@ -61,6 +61,7 @@
           (editColumn)="openEditColumnModal(card.resource, card.tableName, $event)"
           (renameColumn)="onRenameFreeColumn(card.resource, card.tableName, $event.oldName, $event.newName)"
           (toggleUpsertKey)="onToggleUpsertKey(card.resource, card.tableName, $event)"
+          (setDefaultValue)="openDefaultValueModal(card.resource, card.tableName, $event)"
         />
       }
 
@@ -297,6 +298,7 @@
 
   @if (creatingNewTable()) {
     <app-field-mapping-create-table-modal
+      [destType]="destType()"
       [existingTables]="sqlTableOptions()"
       [columnsForTable]="columnsForTable()"
       [submitting]="creatingTableSubmitting()"
@@ -308,6 +310,7 @@
 
   @if (addColumnTarget(); as t) {
     <app-field-mapping-add-column-modal
+      [destType]="destType()"
       [tableName]="t.tableName"
       [submitting]="addColumnSubmitting()"
       [error]="addColumnError()"
@@ -316,8 +319,20 @@
     />
   }
 
+  @if (defaultValueTarget(); as t) {
+    <app-field-mapping-default-value-modal
+      [columnName]="t.column"
+      [tableName]="t.tableName"
+      [existing]="t.existing"
+      (submitted)="submitDefaultValue($event)"
+      (removed)="removeDefaultValue()"
+      (cancelled)="closeDefaultValueModal()"
+    />
+  }
+
   @if (editColumnTarget(); as t) {
     <app-field-mapping-edit-column-modal
+      [destType]="destType()"
       [tableName]="t.tableName"
       [currentColumnName]="t.columnName"
       [currentDataType]="dataTypeForTable()(t.tableName, t.columnName)"

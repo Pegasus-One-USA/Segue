@@ -44,6 +44,12 @@ public sealed class DynamicPortalCorsPolicyProvider : ICorsPolicyProvider
             // such request (logout, change-password, any POST/PUT/PATCH/DELETE) fails before it reaches the
             // server, surfacing to the user as a generic CORS error.
             .WithHeaders("Authorization", "Content-Type", "Accept", "X-Correlation-Id", "X-Requested-With", "X-SignalR-User-Agent", "X-CSRF-Token")
+            // Response headers the portal reads off a cross-origin response. Without an explicit expose list the
+            // browser hides everything but the CORS-safelisted headers, so a file download can only ever fall back
+            // to a generated name — Content-Disposition is what carries the server's own suggested filename (e.g.
+            // the workflow configuration export). Kept to this one header for the same "only what the portal
+            // actually uses" reason as the request-header list above.
+            .WithExposedHeaders("Content-Disposition")
             .AllowCredentials()
             .Build();
     }

@@ -9,18 +9,18 @@
 #   cp .env.example .env   # edit secrets
 #   docker compose up -d
 #
-# fhirbridge-app -> http://localhost:8080   demo-app -> http://localhost:5500
-name: fhirbridge-containerized
+# segue-app -> http://localhost:8080   demo-app -> http://localhost:5500
+name: segue-containerized
 
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: fhirbridge-ctr-sqlserver
+    container_name: segue-ctr-sqlserver
     labels:
-      com.fhirbridge.project: "FHIRBridge"
-      com.fhirbridge.component: "containerization"
-      com.fhirbridge.environment: "local"
-      com.fhirbridge.managed-by: "docker-compose"
+      com.segue.project: "Segue"
+      com.segue.component: "containerization"
+      com.segue.environment: "local"
+      com.segue.managed-by: "docker-compose"
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Express"
@@ -37,12 +37,12 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: fhirbridge-ctr-redis
+    container_name: segue-ctr-redis
     labels:
-      com.fhirbridge.project: "FHIRBridge"
-      com.fhirbridge.component: "containerization"
-      com.fhirbridge.environment: "local"
-      com.fhirbridge.managed-by: "docker-compose"
+      com.segue.project: "Segue"
+      com.segue.component: "containerization"
+      com.segue.environment: "local"
+      com.segue.managed-by: "docker-compose"
     # Relying solely on network isolation isn't defense-in-depth — requirepass means a compromised
     # container elsewhere on this network still can't just connect to Redis without the password.
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
@@ -56,20 +56,19 @@ services:
       timeout: 5s
       retries: 10
 
-  fhirbridge-app:
+  segue-app:
     build:
       context: ../../
-      dockerfile: containerization/docker/fhirbridge-app/Dockerfile
+      dockerfile: containerization/docker/segue-app/Dockerfile
       args:
         PORTAL_CONFIG: "${PORTAL_BUILD_CONFIG:-production}"
-        APP_VERSION: "${IMAGE_TAG:-local}"
-    image: fhirbridge-app:${IMAGE_TAG:-local}
-    container_name: fhirbridge-ctr-app
+    image: segue-app:${IMAGE_TAG:-local}
+    container_name: segue-ctr-app
     labels:
-      com.fhirbridge.project: "FHIRBridge"
-      com.fhirbridge.component: "containerization"
-      com.fhirbridge.environment: "local"
-      com.fhirbridge.managed-by: "docker-compose"
+      com.segue.project: "Segue"
+      com.segue.component: "containerization"
+      com.segue.environment: "local"
+      com.segue.managed-by: "docker-compose"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -77,7 +76,7 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Production}"
-      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=Segue;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
       ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
       Authentication__SigningKey: "${JWT_SIGNING_KEY}"
       DataProtection__KeyRingPath: "/app/keys"
@@ -92,8 +91,8 @@ services:
     ports:
       - "${APP_HOST_PORT:-8080}:80"
     volumes:
-      - fhirbridge-dataprotection-keys:/app/keys
-    # Fresh databases: fhirbridge-app and worker both auto-migrate FHIRBridgeDb on boot and can
+      - segue-dataprotection-keys:/app/keys
+    # Fresh databases: segue-app and worker both auto-migrate FHIRBridgeDb on boot and can
     # race on the initial CREATE DATABASE (only the loser crashes; Migrate() is fine once the DB
     # exists). Auto-restart turns that into a self-healing retry instead of a wedged container.
     restart: unless-stopped
@@ -104,14 +103,13 @@ services:
       dockerfile: containerization/docker/demo-app/Dockerfile
       args:
         DEMO_CONFIG: "${DEMO_BUILD_CONFIG:-production}"
-        APP_VERSION: "${IMAGE_TAG:-local}"
     image: demo-app:${IMAGE_TAG:-local}
-    container_name: fhirbridge-ctr-demo-app
+    container_name: segue-ctr-demo-app
     labels:
-      com.fhirbridge.project: "FHIRBridge"
-      com.fhirbridge.component: "containerization"
-      com.fhirbridge.environment: "local"
-      com.fhirbridge.managed-by: "docker-compose"
+      com.segue.project: "Segue"
+      com.segue.component: "containerization"
+      com.segue.environment: "local"
+      com.segue.managed-by: "docker-compose"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -127,55 +125,47 @@ services:
     build:
       context: ../../
       dockerfile: containerization/docker/worker/Dockerfile
-    image: fhirbridge-worker:${IMAGE_TAG:-local}
-    container_name: fhirbridge-ctr-worker
+    image: segue-worker:${IMAGE_TAG:-local}
+    container_name: segue-ctr-worker
     labels:
-      com.fhirbridge.project: "FHIRBridge"
-      com.fhirbridge.component: "containerization"
-      com.fhirbridge.environment: "local"
-      com.fhirbridge.managed-by: "docker-compose"
+      com.segue.project: "Segue"
+      com.segue.component: "containerization"
+      com.segue.environment: "local"
+      com.segue.managed-by: "docker-compose"
     depends_on:
       sqlserver:
         condition: service_healthy
       redis:
         condition: service_healthy
-      # Not a guarantee (fhirbridge-app's own DB migration can still be in flight after it starts
+      # Not a guarantee (segue-app's own DB migration can still be in flight after it starts
       # listening), just a head start that makes the CREATE DATABASE race far less likely in
       # practice — `restart: unless-stopped` above/below is the actual safety net.
-      fhirbridge-app:
+      segue-app:
         condition: service_started
     environment:
       ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Production}"
-      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=FHIRBridge;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__FHIRBridgeDb: "Server=sqlserver,1433;Database=Segue;User Id=sa;Password=${SQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
       ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
       RuntimeWorker__Enabled: "true"
       Messaging__Provider: "InMemory"
-      # MUST match fhirbridge-app's path and volume. Data Protection encrypts the ProvisionedSecrets rows
-      # holding the PHI field-encryption key, JWT signing key, download-link secret and transform hashing key;
-      # a worker on its own (container-local, ephemeral) ring treats the app's rows as unreadable and
-      # regenerates them, which permanently orphans recorded execution-history payloads, logs users out, and
-      # leaves the worker unable to read destination connection strings the Api wizard wrote.
-      DataProtection__KeyRingPath: "/app/keys"
-    volumes:
-      - fhirbridge-dataprotection-keys:/app/keys
     restart: unless-stopped
 
 volumes:
   sqlserver-data:
     labels:
-      com.fhirbridge.project: "FHIRBridge"
-      com.fhirbridge.component: "containerization"
-      com.fhirbridge.environment: "local"
-      com.fhirbridge.managed-by: "docker-compose"
+      com.segue.project: "Segue"
+      com.segue.component: "containerization"
+      com.segue.environment: "local"
+      com.segue.managed-by: "docker-compose"
   redis-data:
     labels:
-      com.fhirbridge.project: "FHIRBridge"
-      com.fhirbridge.component: "containerization"
-      com.fhirbridge.environment: "local"
-      com.fhirbridge.managed-by: "docker-compose"
-  fhirbridge-dataprotection-keys:
+      com.segue.project: "Segue"
+      com.segue.component: "containerization"
+      com.segue.environment: "local"
+      com.segue.managed-by: "docker-compose"
+  segue-dataprotection-keys:
     labels:
-      com.fhirbridge.project: "FHIRBridge"
-      com.fhirbridge.component: "containerization"
-      com.fhirbridge.environment: "local"
-      com.fhirbridge.managed-by: "docker-compose"
+      com.segue.project: "Segue"
+      com.segue.component: "containerization"
+      com.segue.environment: "local"
+      com.segue.managed-by: "docker-compose"

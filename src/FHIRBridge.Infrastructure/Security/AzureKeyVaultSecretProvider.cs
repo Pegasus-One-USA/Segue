@@ -1,3 +1,4 @@
+﻿using Azure;
 using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using FHIRBridge.Application.Abstractions.Security;
@@ -43,6 +44,31 @@ public class AzureKeyVaultSecretProvider : ISecretProvider
             secretReference.KeyVaultName);
 
         return secret.Value.Value;
+    }
+
+    /// <summary>Whether a secret exists in the vault and when it was last updated, without ever returning
+    /// the value. Uses GetSecretAsync (not GetPropertiesOfSecret) so an existing-but-empty secret reports
+    /// unprovisioned, matching <see cref="GetSecretAsync"/>'s own empty-value-is-a-fault rule; a missing
+    /// secret is a normal "not set yet" answer, so RequestFailedException/404 returns false rather than
+    /// throwing. Any other failure (auth, network) propagates — callers must not read "vault unreachable"
+    /// as "credential not configured".</summary>
+    public virtual async Task<ProvisionedSecretMetadata> GetMetadataAsync(
+        SecretReference secretReference,
+        CancellationToken cancellationToken)
+    {
+        var client = GetClient(secretReference.KeyVaultName);
+
+        try
+        {
+            var secret = await client.GetSecretAsync(secretReference.SecretName, cancellationToken: cancellationToken);
+            return string.IsNullOrWhiteSpace(secret.Value.Value)
+                ? new ProvisionedSecretMetadata(false, null)
+                : new ProvisionedSecretMetadata(true, secret.Value.Properties.UpdatedOn?.UtcDateTime);
+        }
+        catch (RequestFailedException exception) when (exception.Status == 404)
+        {
+            return new ProvisionedSecretMetadata(false, null);
+        }
     }
 
     private SecretClient GetClient(string keyVaultNameOrUri)

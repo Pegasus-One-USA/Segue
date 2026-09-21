@@ -1,8 +1,10 @@
-﻿using FHIRBridge.Application.Abstractions.Security;
+﻿using FHIRBridge.Application.Abstractions.Caching;
+using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
+using FHIRBridge.Infrastructure.Workflows.Numbering;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -42,8 +44,23 @@ public sealed class WorkflowSqlStoreTests
         return mock.Object;
     }
 
+    // Pass-through: every WorkflowNumbering:* key resolves to its compiled-in default, so the store runs
+    // against a REAL WorkflowNumberGenerator (numbering genuinely exercised on every save here) rather than
+    // a stub that would hide a regression in the carry-over-on-edit behaviour.
+    private static ISystemSettingsCache DefaultSettingsCache()
+    {
+        var mock = new Mock<ISystemSettingsCache>();
+        mock.Setup(x => x.GetStringAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, string defaultValue, CancellationToken _) => defaultValue);
+        mock.Setup(x => x.GetBoolAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, bool defaultValue, CancellationToken _) => defaultValue);
+        mock.Setup(x => x.GetIntAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, int defaultValue, CancellationToken _) => defaultValue);
+        return mock.Object;
+    }
+
     private static SqlWorkflowDefinitionStore CreateDefinitionStore(FHIRBridgeDbContext context, string actorEmail = "test@example.com") =>
-        new(context, CurrentUserAs(actorEmail));
+        new(context, CurrentUserAs(actorEmail), new WorkflowNumberGenerator(context, DefaultSettingsCache()));
 
     [Fact]
     public async Task Definition_store_round_trips_nodes_edges_and_configuration()
@@ -51,9 +68,14 @@ public sealed class WorkflowSqlStoreTests
         var definitionId = Guid.NewGuid();
         var workflow = new WorkflowDefinition(definitionId, "Epic -> SQL", 1);
         var source = workflow.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
-        var destination = workflow.AddNode("SqlServerDestinationNode", WorkflowNodeCategory.Destination, 30);
+        // ConfigurationJson is now the single store for a node's settings — the parallel key/value table it
+        // used to round-trip alongside is gone (plan §6).
+        var destination = workflow.AddNode(
+            "SqlServerDestinationNode",
+            WorkflowNodeCategory.Destination,
+            30,
+            configurationJson: """{"table":"dbo.Patient"}""");
         workflow.AddEdge(source.Id, destination.Id);
-        workflow.AddNodeConfiguration(destination.Id, "table", "dbo.Patient");
 
         await using (var context = CreateContext())
         {
@@ -69,8 +91,97 @@ public sealed class WorkflowSqlStoreTests
             reloaded.Nodes.Should().HaveCount(2);
             reloaded.Edges.Should().ContainSingle();
             reloaded.Nodes.Single(node => node.NodeType == "SqlServerDestinationNode")
-                .Configuration.Should().ContainSingle(configuration =>
-                    configuration.Key == "table" && configuration.Value == "dbo.Patient");
+                .ConfigurationJson.Should().Contain("dbo.Patient");
+        }
+    }
+
+    [Fact]
+    public async Task Definition_store_assigns_a_workflow_number_on_create()
+    {
+        var definitionId = Guid.NewGuid();
+        var workflow = new WorkflowDefinition(definitionId, "Numbered workflow", 1);
+        workflow.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+
+        await using (var context = CreateContext())
+        {
+            await CreateDefinitionStore(context).SaveAsync(workflow, CancellationToken.None);
+        }
+
+        await using (var context = CreateContext())
+        {
+            var reloaded = await CreateDefinitionStore(context).GetAsync(definitionId, CancellationToken.None);
+            reloaded!.WorkflowNumber.Should().MatchRegex(@"^WLW-\d{6}-\d{4}$");
+        }
+    }
+
+    // The store's save is always a delete-then-re-add, so without an explicit carry-over an edit would mint a
+    // brand-new number every time — renumbering a workflow users may already have quoted, and burning a
+    // counter value on every save. This is the single most important behaviour in the numbering feature.
+    [Fact]
+    public async Task Definition_store_keeps_the_same_workflow_number_across_edits()
+    {
+        var definitionId = Guid.NewGuid();
+        var workflow = new WorkflowDefinition(definitionId, "Originally named", 1);
+        workflow.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+
+        string? numberAfterCreate;
+        await using (var context = CreateContext())
+        {
+            await CreateDefinitionStore(context).SaveAsync(workflow, CancellationToken.None);
+        }
+
+        await using (var context = CreateContext())
+        {
+            numberAfterCreate = (await CreateDefinitionStore(context).GetAsync(definitionId, CancellationToken.None))!.WorkflowNumber;
+        }
+
+        // Re-save the same id the way an edit does: a freshly built graph carrying no number of its own.
+        var edited = new WorkflowDefinition(definitionId, "Renamed after an edit", 1);
+        edited.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+        edited.AddNode("SqlServerDestinationNode", WorkflowNodeCategory.Destination, 30);
+
+        await using (var context = CreateContext())
+        {
+            await CreateDefinitionStore(context).SaveAsync(edited, CancellationToken.None);
+        }
+
+        await using (var context = CreateContext())
+        {
+            var reloaded = await CreateDefinitionStore(context).GetAsync(definitionId, CancellationToken.None);
+            reloaded!.Name.Should().Be("Renamed after an edit");
+            reloaded.WorkflowNumber.Should().Be(numberAfterCreate, "an edit must never renumber the workflow");
+        }
+    }
+
+    [Fact]
+    public async Task Definition_store_issues_distinct_increasing_numbers_to_separate_workflows()
+    {
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+
+        var first = new WorkflowDefinition(firstId, "First", 1);
+        first.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+        var second = new WorkflowDefinition(secondId, "Second", 1);
+        second.AddNode("EpicSourceNode", WorkflowNodeCategory.Source, 0);
+
+        await using (var context = CreateContext())
+        {
+            var store = CreateDefinitionStore(context);
+            await store.SaveAsync(first, CancellationToken.None);
+            await store.SaveAsync(second, CancellationToken.None);
+        }
+
+        await using (var context = CreateContext())
+        {
+            var store = CreateDefinitionStore(context);
+            var firstNumber = (await store.GetAsync(firstId, CancellationToken.None))!.WorkflowNumber;
+            var secondNumber = (await store.GetAsync(secondId, CancellationToken.None))!.WorkflowNumber;
+
+            firstNumber.Should().NotBeNullOrWhiteSpace();
+            secondNumber.Should().NotBe(firstNumber);
+
+            // Same period, so the incremental segment is what differs — and it counts up.
+            string.CompareOrdinal(secondNumber, firstNumber).Should().BeGreaterThan(0);
         }
     }
 

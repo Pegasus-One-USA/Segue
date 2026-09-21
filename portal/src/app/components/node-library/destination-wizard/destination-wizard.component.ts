@@ -53,6 +53,7 @@ import {
   WizardDestinationFormApi,
   SqlFamilyFormApi,
   isSqlFamilyForm,
+  isFabricForm,
   isMongoForm,
 } from './destination-forms/destination-form-api';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
@@ -728,6 +729,10 @@ export class DestinationWizardComponent implements OnInit {
         !this.hasExistingChanged(),
       existingDestinationId:
         this.selectedExistingId() ?? this.resolvedDestinationId(),
+      // Which concrete destination type this form is serving. Only forms shared by more than one type read
+      // it — the Fabric form uses it to pin its landing mode, since DataFabricWarehouse IS the Warehouse
+      // surface and must not present a mode choice that could contradict the type.
+      destinationType: this.resolveDestinationTypeForRules(),
     };
   }
 
@@ -1451,6 +1456,13 @@ export class DestinationWizardComponent implements OnInit {
   /** Ad-hoc connection details from Step 1's SQL form — powers the canvas's real ALTER TABLE / CREATE TABLE calls. */
   connectionInfo(): DestinationProbeRequest | null {
     const form = this.activeForm();
+    // Fabric Warehouse is relational and supports the same live probe and DDL authoring, but describes its
+    // connection with a workspace + TDS endpoint + Entra identity rather than server/database/password — so
+    // it builds its own request shape. Without this it returned null here, and the canvas Create table /
+    // Add column handlers (which bail on a null connection) silently did nothing.
+    if (this.isFabricWarehouse() && isFabricForm(form)) {
+      return form.getFabricProbeRequest();
+    }
     if (!this.isSql() || !isSqlFamilyForm(form)) return null;
     return form.getProbeRequest();
   }
@@ -1741,6 +1753,10 @@ export class DestinationWizardComponent implements OnInit {
   // branches and Step 4's review summary.
   readonly deIdentificationProfiles = signal<DeIdentificationProfileDto[]>([]);
   readonly selectedDeIdentificationProfileId = signal<string | null>(null);
+  // What the server currently has, so _save() can PUT the profile only when it actually changed. Without this
+  // baseline every destination save would issue a redundant profile write — and, because that write is
+  // deliberately audit-logged, would file a "policy changed" log entry for saves that changed nothing.
+  private readonly _persistedDeIdentificationProfileId = signal<string | null>(null);
   readonly newProfileName = signal('');
   readonly creatingProfile = signal(false);
   readonly selectedDeIdentificationProfileName = computed(() => {
@@ -1816,6 +1832,18 @@ export class DestinationWizardComponent implements OnInit {
       this.destType() === 'mysql' ||
       this.destType() === 'postgres',
   );
+  /**
+   * Whether this destination has a LIVE RELATIONAL SCHEMA — real tables and columns that can be probed, mapped
+   * against, and authored with ALTER/CREATE TABLE.
+   *
+   * Deliberately distinct from isSql(), which means something narrower: "collects server/database/username/
+   * password and tests with those". Fabric Warehouse is the first type where the two diverge — it is a SQL
+   * Server over TDS with a full schema, but authenticates with an Entra token through the Fabric form, so it
+   * belongs here and NOT in isSql(). Conflating them is what left the Warehouse mapping canvas with no table
+   * list, no Add column and no Create table.
+   */
+  readonly hasLiveRelationalSchema = computed(() => this.isSql() || this.isFabricWarehouse());
+
   readonly isMySql = computed(() => this.destType() === 'mysql');
   readonly isPostgres = computed(() => this.destType() === 'postgres');
   readonly isMongo = computed(() => this.destType() === 'mongo');
@@ -1836,6 +1864,8 @@ export class DestinationWizardComponent implements OnInit {
   readonly isDataLake = computed(() => this.destType() === 'datalake');
   /** Microsoft Fabric (OneLake Files) — same file-shaped mapping as isBlob(). */
   readonly isFabric = computed(() => this.destType() === 'fabric');
+  /** Microsoft Fabric (Warehouse) — the relational surface, distinct from isFabric()'s file surface. */
+  readonly isFabricWarehouse = computed(() => this.destType() === 'fabricwarehouse');
   /** General-purpose outbound REST API — same file-shaped mapping (typed target fields, no live schema) as
    *  isDataLake()/isBlob(). */
   readonly isApiEndpoint = computed(() => this.destType() === 'apiendpoint');
@@ -2416,6 +2446,15 @@ export class DestinationWizardComponent implements OnInit {
         this.sqlTables.set(form.sqlTables());
         this.probeState.set('ok');
       }
+      // Fabric Warehouse is relational but is NOT an isSqlFamilyForm (it authenticates with an Entra token,
+      // so it has no getProbeRequest()/server/database/password to offer). Its own Test Connection already
+      // returns the Warehouse's tables, so take them the same way the SQL branch above does — otherwise the
+      // mapping canvas gets an empty table picker on a connection that tested fine.
+      if (this.isFabricWarehouse() && isFabricForm(form) && form.probeState() === 'ok') {
+        this.sqlTables.set(form.sqlTables());
+        this.probeState.set('ok');
+        this.schemaLoadState.set('loaded');
+      }
       const metadata = form.getMetadata();
       if (!metadata) return;
       this.provisionDestinationConnection(metadata, () =>
@@ -2517,6 +2556,7 @@ export class DestinationWizardComponent implements OnInit {
     if (this.isAzureFhir()) return 'AzureFhirService';
     if (this.isBlob()) return 'BlobStorage';
     if (this.isDataLake()) return 'DataLakeWebhook';
+    if (this.isFabricWarehouse()) return 'DataFabricWarehouse';
     if (this.isFabric()) return 'DataFabricAzure';
     if (this.isApiEndpoint()) return 'ApiEndpoint';
     if (!this.isSql()) return 'Csv';
@@ -2668,7 +2708,9 @@ export class DestinationWizardComponent implements OnInit {
   private _resolveDestinationObjectForCanvas(
     destinationObject: string,
   ): string | null {
-    if (!this.isSql()) return destinationObject; // CSV/Mongo targets are never schema-qualified
+    // Fabric Warehouse IS schema-qualified (dbo by default), so it resolves against the probed schema
+    // exactly as the SQL engines do — see hasLiveRelationalSchema.
+    if (!this.hasLiveRelationalSchema()) return destinationObject; // CSV/Mongo targets are never schema-qualified
     const table = this.sqlTables().find(
       (t) =>
         t.fullName.toLowerCase() === destinationObject.toLowerCase() ||
@@ -3536,7 +3578,7 @@ export class DestinationWizardComponent implements OnInit {
     this._existingBaseline = null;
     const form = this.activeForm();
     form?.reset();
-    if (this.isSql()) {
+    if (this.hasLiveRelationalSchema()) {
       this.probeState.set('idle');
       this.sqlTables.set([]);
       if (isSqlFamilyForm(form)) form.resetProbe();
@@ -3628,9 +3670,11 @@ export class DestinationWizardComponent implements OnInit {
     // this is a no-op for every non-SQL destination.
     this._refreshSqlTablesFromLiveSchema();
 
-    // Read-only here — reusing an existing connection as-is never calls provisionDestinationConnection's
-    // create/update branch (see _save()), so there's nothing to change the profile through in this mode.
+    // Reusing an existing connection as-is never calls provisionDestinationConnection's create/update branch,
+    // so _save() persists any change to this via the narrow profile-only endpoint instead — a policy change
+    // must never fork the connection. Baseline recorded alongside so that write only fires on a real change.
     this.selectedDeIdentificationProfileId.set(selected.deIdentificationProfileId ?? null);
+    this._persistedDeIdentificationProfileId.set(selected.deIdentificationProfileId ?? null);
 
     const metadata = this._parseConnectionMetadata(
       selected.connectionMetadataJson,
@@ -3818,8 +3862,12 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   hasSqlTables(): boolean {
+    // hasLiveRelationalSchema(), not isSql(): a Fabric Warehouse has real probed tables too, and gating this
+    // on isSql() left every table-picker affordance off for it — including isPrimaryTargetValid's
+    // "only show a card for a table that really exists" check, which then short-circuited to true and
+    // displayed a guessed table that had never been created.
     return (
-      this.isSql() && this.probeState() === 'ok' && this.sqlTables().length > 0
+      this.hasLiveRelationalSchema() && this.probeState() === 'ok' && this.sqlTables().length > 0
     );
   }
 
@@ -4148,6 +4196,9 @@ export class DestinationWizardComponent implements OnInit {
       targets[r] =
         type === 'csv'
           ? def.csvFile
+          // 'fabric' (OneLake Files) lands FILES, so it takes a stripped file stem like blob/datalake.
+          // 'fabricwarehouse' deliberately does NOT appear here — it writes to a real, schema-qualified
+          // table and so falls through to _qualifyDefaultTable below, exactly like the SQL engines.
           : type === 'blob' || type === 'datalake' || type === 'fabric' || type === 'apiendpoint'
             ? def.csvFile.replace(/\.csv$/i, '')
             : this._qualifyDefaultTable(def.sqlTable, type);
@@ -4187,8 +4238,16 @@ export class DestinationWizardComponent implements OnInit {
     const destinationId = f['destinationId'];
     if (destinationId) {
       this.destinationConfigSvc.getById(destinationId).subscribe({
-        next: dto => this.selectedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null),
-        error: () => this.selectedDeIdentificationProfileId.set(null),
+        next: dto => {
+          this.selectedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null);
+          this._persistedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null);
+        },
+        // Leave the selection alone on a failed read. Resetting it to null here would make a transient list
+        // fetch failure look like "no policy assigned", and the next save would then persist that null over a
+        // policy that is actually set — turning a read blip into real, silent data loss.
+        error: () => {
+          // Intentional no-op: keep the current selection. See the note above.
+        },
       });
     }
     if (this.isFhir()) {
@@ -4393,7 +4452,7 @@ export class DestinationWizardComponent implements OnInit {
     // supports all three (SqlDestinationSchemaService.IsSupported), so this used to silently skip the
     // live-schema refresh for MySQL/PostgreSQL destinations, leaving their mapping canvas showing whatever
     // stale table/column list the last saved mapping summary happened to restore.
-    if (!this.isSql()) return;
+    if (!this.hasLiveRelationalSchema()) return;
 
     // selectedExistingId() (set by selectExisting() — picking an already-saved connection from the "Existing
     // connection" dropdown) and resolvedDestinationId() (set by _populateFromNode()/provisionDestinationConnection()
@@ -4612,6 +4671,7 @@ export class DestinationWizardComponent implements OnInit {
     const isBlob = this.isBlob();
     const isDataLake = this.isDataLake();
     const isFabric = this.isFabric();
+    const isFabricWarehouse = this.isFabricWarehouse();
     const isApiEndpoint = this.isApiEndpoint();
     const name =
       metadata.fields['dest_name'] ||
@@ -4631,9 +4691,11 @@ export class DestinationWizardComponent implements OnInit {
                     ? 'Data Lake Webhook Destination'
                     : isFabric
                       ? 'Microsoft Fabric Destination'
-                      : isApiEndpoint
-                        ? 'API Endpoint Destination'
-                        : 'File Destination');
+                      : isFabricWarehouse
+                        ? 'Microsoft Fabric Warehouse Destination'
+                        : isApiEndpoint
+                          ? 'API Endpoint Destination'
+                          : 'File Destination');
     const secretName = newSecretName(name);
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
@@ -4744,6 +4806,21 @@ export class DestinationWizardComponent implements OnInit {
                   connectionMetadataJson: JSON.stringify(metadata.fields),
                   deIdentificationProfileId,
                 }
+              : isFabricWarehouse
+              ? {
+                  name,
+                  // Same metadata shape as the Files branch below — workspace/item/Entra auth — differing only
+                  // in the type, which is what carries "this is the Warehouse surface" to the backend. Without
+                  // this branch a Warehouse destination fell through to the Csv default at the end of this
+                  // chain and was rejected for a missing dest_filePattern, a field it has no concept of.
+                  destinationType: 'DataFabricWarehouse',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  target: metadata.fields['dest_fabricWorkspace'] || null,
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
               : isFabric
               ? {
                   name,
@@ -4811,6 +4888,49 @@ export class DestinationWizardComponent implements OnInit {
           typeof msg === 'string'
             ? msg
             : 'Failed to create the destination connection.',
+        );
+      },
+    });
+  }
+
+  /**
+   * Writes the Step 3 de-identification policy selection to the DestinationConfiguration row.
+   *
+   * Needed because provisionDestinationConnection() — the only other writer — can't cover this case: it
+   * early-returns for reused ("existing") connections, and for new ones it runs on Step 1 → Next, long before
+   * the De-identification tab on Step 3 is even reachable. So a selection made there was simply discarded, the
+   * column stayed NULL, and reopening honestly rendered "None".
+   *
+   * Uses the narrow profile-only endpoint rather than destinationConfigSvc.update(): a full PUT runs the
+   * create-request validator, which demands KeyVaultName/SecretName on every call — values this wizard never
+   * re-displays for a stored secret — and routing a policy change through provisionDestinationConnection would
+   * fork the connection instead of updating it.
+   *
+   * Non-blocking with a toast on failure, matching the mapping-profile import below: the node's own local save
+   * never depended on this, so a failed policy write must not block "Add to Workflow"/"Update".
+   *
+   * Takes the id straight from the config bag _save() just built rather than reading
+   * selectedExistingId()/resolvedDestinationId() itself, because those two are NOT the row this node ends up
+   * pointing at in every mode: when an existing connection was picked and then edited, the save forks a brand-new
+   * connection while selectedExistingId() still holds the ORIGINAL's id. Writing the policy there would mutate a
+   * connection the user deliberately forked away from — and one another workflow may share. config['destinationId']
+   * is set only in the two modes that reuse a real row as-is, which is exactly when this write is safe.
+   */
+  private _persistDeIdentificationProfile(destinationId: string | undefined): void {
+    const profileId = this.selectedDeIdentificationProfileId();
+    // No destination row this node actually owns — nothing to attach a policy to. Unchanged means no write, so
+    // a plain re-save neither issues a redundant PUT nor files a spurious "policy changed" audit entry.
+    if (!destinationId || profileId === this._persistedDeIdentificationProfileId()) {
+      return;
+    }
+
+    this.destinationConfigSvc.setDeIdentificationProfile(destinationId, profileId).subscribe({
+      next: () => this._persistedDeIdentificationProfileId.set(profileId),
+      error: (err) => {
+        const msg = err?.error?.title ?? err?.error?.error ?? err?.message;
+        this.toast.show(
+          'De-identification policy not saved',
+          typeof msg === 'string' ? msg : 'Failed to save the de-identification policy for this destination.',
         );
       },
     });
@@ -4938,6 +5058,18 @@ export class DestinationWizardComponent implements OnInit {
     });
     config['dest_mapping_summary_v1'] = JSON.stringify(doc);
 
+    // The de-identification policy picked on Step 3's "De-identification" tab. Two separate destinations for
+    // it, both previously missing — which is why the picker reset to "None" on every reopen:
+    //  - This node field, which the workflow builder reads to decide whether the graph gets a
+    //    De-identification chain node. Nothing wrote the key before, so that check could never fire.
+    //  - The DestinationConfiguration row itself, via _persistDeIdentificationProfile() below — the node field
+    //    alone is local canvas state and is not what the pipeline reads at run time.
+    const selectedDeIdProfileId = this.selectedDeIdentificationProfileId();
+    if (selectedDeIdProfileId) {
+      config['deIdentificationProfileId'] = selectedDeIdProfileId;
+    }
+    this._persistDeIdentificationProfile(config['destinationId']);
+
     const emitSaved = () => {
       this.saved.emit({
         attachNode: this.attachNode(),
@@ -4960,11 +5092,13 @@ export class DestinationWizardComponent implements OnInit {
                           ? 'dest-blob'
                           : type === 'datalake'
                             ? 'dest-datalake-webhook'
-                            : type === 'fabric'
-                              ? 'dest-fabric'
-                              : type === 'apiendpoint'
-                                ? 'dest-apiendpoint'
-                                : 'dest-csv',
+                            : type === 'fabricwarehouse'
+                              ? 'dest-fabric-warehouse'
+                              : type === 'fabric'
+                                ? 'dest-fabric'
+                                : type === 'apiendpoint'
+                                  ? 'dest-apiendpoint'
+                                  : 'dest-csv',
         status: 'enabled',
         config,
       });

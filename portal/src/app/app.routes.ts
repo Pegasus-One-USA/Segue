@@ -1,4 +1,5 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
 import { authGuard } from './auth/guards/auth.guard';
 import { permissionGuard } from './auth/guards/permission.guard';
 import { setupGuard } from './auth/guards/setup.guard';
@@ -53,25 +54,25 @@ export const routes: Routes = [
           import('./dashboard/dashboard.routes').then(m => m.DASHBOARD_ROUTES),
       },
 
-      // Workflow / Pipeline Builder — gated on workflow.view only (reach/view baseline); the finer
-      // create-vs-edit mutation permission depends on the ?id= query param (new vs. existing workflow),
-      // which a route guard can't branch on cleanly, so it's enforced inside the component itself
-      // (WorkflowBuilderComponent.canMutate) and independently by the backend (workflow.create/edit).
+      // V1's builder is retired (plan §8). The route is kept as a redirect rather than deleted so an old
+      // bookmark, a saved link, or anything that still points at it lands on the surviving builder with its
+      // ?id= intact, instead of hitting a blank 404. queryParamsHandling: 'preserve' is what carries that id.
+      //
+      // Safe to retire because every stored graph was checked first: the graph-version dry-run reported
+      // isSafeToRetireV1 — no workflow uses a V1-only node type (see WorkflowGraphVersionConverter).
       {
         path: 'workflow-builder',
-        canActivate: [permissionGuard],
-        // Module access (workflow.view OR any workflow-node permission), not a plain workflow.view
-        // check — see permission.guard.ts / PermissionService.hasWorkflowModuleAccess.
-        data: { workflowModuleAccess: true },
-        canDeactivate: [unsavedChangesGuard],
-        loadComponent: () =>
-          import('./pages/workflow-builder/workflow-builder.component').then(
-            m => m.WorkflowBuilderComponent
-          ),
+        pathMatch: 'full',
+        // Explicit redirect rather than the string form: this returns a UrlTree built from the CURRENT
+        // queryParams, so ?id=<workflowId> is carried across verbatim. The string form's query-param
+        // behaviour depends on router configuration, and silently losing the id would land the user on a
+        // blank new-workflow canvas instead of the workflow they asked for.
+        redirectTo: ({ queryParams }) =>
+          inject(Router).createUrlTree(['/workflow-builder-v2'], { queryParams }),
       },
-      // V2 — the independent Source → Destination → Mapping → Transformation → De-identification canvas.
-      // A fully separate component/service/model tree from V1 above (see pages/workflow-builder-v2/) —
-      // nothing here shares code with the V1 route.
+      // The Source → Destination → Mapping → Transformation → De-identification canvas — now the only
+      // builder. The -v2 suffix is retained for this release so every existing link keeps working; renaming
+      // it is cosmetic and can follow separately.
       {
         path: 'workflow-builder-v2',
         canActivate: [permissionGuard],
@@ -120,8 +121,11 @@ export const routes: Routes = [
       },
 
       // Backward-compatible redirects for the old standalone URLs these pages used to live at.
-      { path: 'ehr-endpoints', redirectTo: 'settings/ehr-endpoints' },
-      { path: 'allowed-origins', redirectTo: 'settings/allowed-origins' },
+      // EHR Endpoints and Allowed Origins are launcher rows on System Settings > General now (opened as
+      // dialogs), not routes of their own — so these land on that page rather than a path that no longer
+      // resolves. The row still has to be clicked; a URL can't open the dialog directly.
+      { path: 'ehr-endpoints', redirectTo: 'settings/system-settings/general' },
+      { path: 'allowed-origins', redirectTo: 'settings/system-settings/general' },
       { path: 'system-security', redirectTo: 'settings/system-settings/security' },
       { path: 'source-connections', redirectTo: 'settings/workflow-configurations/source-connections' },
       { path: 'destination-connections', redirectTo: 'settings/workflow-configurations/destination-connections' },

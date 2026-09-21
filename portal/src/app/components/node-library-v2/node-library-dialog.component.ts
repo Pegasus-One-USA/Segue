@@ -69,6 +69,11 @@ interface LibraryItem {
   group?: string | null;
   isMerge?: boolean;
   mergeOpt?: MergeNodeOption;
+  /** Set on a CHILD row — the id of the vendor row it nests under (see Transform.parentId). */
+  parentId?: string | null;
+  /** True for a vendor heading that has children. A parent is not selectable: clicking it expands or
+   *  collapses its surfaces, and only a child opens a wizard. */
+  isParent?: boolean;
 }
 
 interface LibraryCategory {
@@ -99,8 +104,10 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-databricks':  { abbr: 'DBR', color: '#FF3621' },
   'dest-blob':        { abbr: 'BLB', color: '#0089D6' },
   'dest-datalake-webhook': { abbr: 'DLW', color: '#7C3AED' },
+  'dest-fabric-group': { abbr: 'FAB', color: '#117865' },
+  'dest-fabric':      { abbr: 'OLF', color: '#117865' },
+  'dest-fabric-warehouse': { abbr: 'FWH', color: '#0F6B5C' },
   'dest-apiendpoint': { abbr: 'API', color: '#DB2777' },
-  'dest-fabric':      { abbr: 'FAB', color: '#117865' },
   'dest-s3':          { abbr: 'S3',  color: '#FF9900' },
   'dest-fhir':        { abbr: 'AB',  color: '#00A89D' },
   'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
@@ -271,7 +278,7 @@ export class NodeLibraryDialogComponent {
 
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
-  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'apiendpoint' | null>(null);
+  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint' | null>(null);
   readonly destWizardAttach = signal<CanvasNode | null>(null);
   readonly destEditNode     = signal<CanvasNode | null>(null);
   // Queried directly (rather than threading another output through) so both onDestWizardCancelled() and
@@ -403,7 +410,7 @@ export class NodeLibraryDialogComponent {
   readonly destMappingTypeLabel = computed(() => this.destTypeLabel(this.destWizardType()));
   readonly destMappingCount = signal(0);
 
-  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'apiendpoint' | null>(null);
+  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint' | null>(null);
 
   // Guards the dest wizard's own "← Back to library" button — same "don't silently discard progress"
   // intent as pendingDestSwitch above, just for backing out to the library instead of switching type.
@@ -441,7 +448,7 @@ export class NodeLibraryDialogComponent {
             if (!untracked(() => this.showDestWizard())) { untracked(() => this._close()); }
             return;
           }
-          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir' || tId === 'dest-blob' || tId === 'dest-medplum' || tId === 'dest-azurefhir' || tId === 'dest-datalake-webhook' || tId === 'dest-fabric' || tId === 'dest-apiendpoint') {
+          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir' || tId === 'dest-blob' || tId === 'dest-medplum' || tId === 'dest-azurefhir' || tId === 'dest-datalake-webhook' || tId === 'dest-fabric' || tId === 'dest-fabric-warehouse' || tId === 'dest-apiendpoint') {
             untracked(() => this._openDestWizardEdit(node));
             // _openDestWizardEdit's own canOpenDestWizard() check already showed a toast and returned
             // without setting showDestWizard() true if the permission check failed — stopping there would
@@ -487,21 +494,21 @@ export class NodeLibraryDialogComponent {
     const byRank = new Map<number, LibraryItem[]>();
 
     // Rank 0 — Sources (filtered by phase config: only enabled sources shown; and by RBAC — a source
-    // with a dedicated permission group the current role lacks View for is excluded from the library
-    // entirely, same as a phase-hidden source, rather than shown disabled. Tile visibility is
-    // specifically the vendor's own View permission — separate from Create (gates actually adding a
-    // new node, see onSourceSelected) and Edit (gates modifying an existing one) — a role could hold
-    // View without Create/Edit and still see the tile, just be unable to complete adding/editing it.
-    // This is a presentation-only filter: the backend re-validates the exact same permissions
-    // independently at save time (WorkflowEndpoints.cs) regardless of what this dialog ever showed, so
-    // removing a node from view here is not a security control — it's purely so a user never sees, or
-    // can search up, a type their role can't use.
+    // with a dedicated permission group the current role holds NONE of View/Create/Edit for is excluded
+    // from the library entirely, same as a phase-hidden source, rather than shown disabled. Any one of
+    // the three is enough to see the tile — a role scoped to just Create (no separate View) must still
+    // be able to find and use the tile to create a node, exactly as a View-only role can see it to look
+    // but not add/edit. This is a presentation-only filter: the backend re-validates the exact same
+    // permissions independently at save time (WorkflowEndpoints.cs) regardless of what this dialog ever
+    // showed, so removing a node from view here is not a security control — it's purely so a user never
+    // sees, or can search up, a type their role can't use at all.
     // Hidden entirely (not just disabled) while picking a destination/transform — a source tile is
     // never a valid pick outside 'source' mode, so there's nothing useful to show it disabled for.
     if (m === 'source') {
       const visibleSources = SOURCES.filter(s =>
         this.phaseCfg.isSourceEnabled(s.id) &&
-        (!s.permissionPrefix || this.permissions.hasPermission(`${s.permissionPrefix}.view`))
+        (!s.permissionPrefix || this.permissions.hasAny(
+          [`${s.permissionPrefix}.view`, `${s.permissionPrefix}.create`, `${s.permissionPrefix}.edit`]))
       );
       byRank.set(0, visibleSources.map(s => ({
         id:       s.id,
@@ -528,10 +535,14 @@ export class NodeLibraryDialogComponent {
       // 'transform' mode, same reasoning as hiding sources above.
       if (t.rank === 7 && m === 'source') return;
       // RBAC: a destination type with a dedicated permission group (see transforms.data.ts) the current
-      // role lacks View for is excluded from the library entirely, same as a phase-hidden item — see
-      // the matching comment on the Sources filter above for why this is presentation-only, not a
-      // security control, and for the View/Create/Edit distinction.
-      if (t.permissionPrefix && !this.permissions.hasPermission(`${t.permissionPrefix}.view`)) return;
+      // role holds NONE of View/Create/Edit for is excluded from the library entirely, same as a
+      // phase-hidden item — see the matching comment on the Sources filter above for why this is
+      // presentation-only, not a security control, and for why any one of the three is sufficient
+      // (a role scoped to just {vendor}.create, e.g. mysql.create, must still see the MySQL tile to
+      // use it — the backend's own check in WorkflowEndpoints.cs is vendor-Create/Edit-specific too,
+      // with no generic destinationconnections.create/.edit of its own to fall back on).
+      if (t.permissionPrefix && !this.permissions.hasAny(
+        [`${t.permissionPrefix}.view`, `${t.permissionPrefix}.create`, `${t.permissionPrefix}.edit`])) return;
 
       const meta = TRANSFORM_META[t.id] ?? { abbr: t.name.slice(0, 3).toUpperCase(), color: '#64748B' };
       let status: ItemStatus = 'disabled';
@@ -542,6 +553,12 @@ export class NodeLibraryDialogComponent {
         if (!this.phaseCfg.isTransformEnabled(t.id)) {
           status = 'disabled';
           reason = 'Not available in this phase';
+        } else if (TRANSFORMS.some(other => other.parentId === t.id)) {
+          // A vendor heading has no picker entry of its own (it is not a destination), so it would always
+          // resolve to 'disabled' below and be filtered out, taking its children with it. Its selectability
+          // is decided by its children, which are evaluated on their own rows.
+          status = 'show';
+          reason = null;
         } else {
           const pi = pickerMap.get(t.id);
           status = pi ? (pi.status as ItemStatus) : 'disabled';
@@ -550,7 +567,7 @@ export class NodeLibraryDialogComponent {
 
         // Lock the other destination type while mid-way through configuring one —
         // switching would silently discard the in-progress form.
-        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-fhir' || t.id === 'dest-blob' || t.id === 'dest-medplum' || t.id === 'dest-azurefhir' || t.id === 'dest-datalake-webhook' || t.id === 'dest-fabric' || t.id === 'dest-apiendpoint') && this.destTypeLocked()) {
+        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-fhir' || t.id === 'dest-blob' || t.id === 'dest-medplum' || t.id === 'dest-azurefhir' || t.id === 'dest-datalake-webhook' || t.id === 'dest-fabric' || t.id === 'dest-fabric-warehouse' || t.id === 'dest-apiendpoint') && this.destTypeLocked()) {
           status = 'disabled';
           reason = 'Finish or go back to Configure before switching destination type.';
         }
@@ -562,6 +579,10 @@ export class NodeLibraryDialogComponent {
         category: t.category ?? null,
         isSource: false, status, reason,
         group: t.group ?? null,
+        parentId: t.parentId ?? null,
+        // A vendor heading is whatever at least one other entry points at. Derived rather than flagged so
+        // adding a surface is a one-line catalog change and nothing here needs updating.
+        isParent: TRANSFORMS.some(other => other.parentId === t.id),
       };
 
       if (!byRank.has(t.rank)) byRank.set(t.rank, []);
@@ -606,13 +627,52 @@ export class NodeLibraryDialogComponent {
   // V2 lists only what can actually be picked right now: an item the current pipeline can't accept is
   // omitted rather than shown greyed out, so the list never offers something that does nothing when
   // clicked. Categories left with no selectable item drop out entirely.
+  /** Which vendor headings are currently expanded, by id. Collapsed by default so the list reads as one row
+   *  per product; a search match expands the matching vendor automatically (see filteredCategories). */
+  readonly expandedParents = signal<ReadonlySet<string>>(new Set<string>());
+
+  toggleParent(id: string): void {
+    const next = new Set(this.expandedParents());
+    if (!next.delete(id)) next.add(id);
+    this.expandedParents.set(next);
+  }
+
+  isParentExpanded(id: string): boolean {
+    return this.expandedParents().has(id) || this.searchQuery().trim().length > 0;
+  }
+
   readonly filteredCategories = computed<LibraryCategory[]>(() => {
     const q = this.searchQuery().trim().toLowerCase();
     const isSelectable = (i: LibraryItem): boolean => i.status !== 'disabled' && i.status !== 'hide';
+    const matches = (i: LibraryItem): boolean =>
+      !q || i.name.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q);
+
     return this.allCategories()
-      .map(cat => ({ ...cat, items: cat.items.filter(i =>
-        isSelectable(i) && (!q || i.name.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q))
-      )}))
+      .map(cat => {
+        const kept = cat.items.filter(i => isSelectable(i) && matches(i));
+        // A child that survived the filter must keep its heading, even when the heading's own name doesn't
+        // match the query ("warehouse" matches the surface, not "Microsoft Fabric"). Equally, a heading whose
+        // children were all filtered out is dropped — an expandable row that expands to nothing is worse
+        // than no row. Children are then ordered directly beneath their own parent so the nesting in the
+        // template is contiguous rather than relying on catalog declaration order.
+        const keptIds = new Set(kept.map(i => i.id));
+        const neededParentIds = new Set(
+          kept.map(i => i.parentId).filter((id): id is string => !!id));
+        const withParents = cat.items.filter(i =>
+          keptIds.has(i.id) || (i.isParent && neededParentIds.has(i.id)));
+        const ordered: LibraryItem[] = [];
+        for (const item of withParents) {
+          if (item.parentId) continue;   // emitted with its parent, below
+          if (item.isParent) {
+            const children = withParents.filter(c => c.parentId === item.id);
+            if (children.length === 0) continue;   // heading with nothing under it
+            ordered.push(item, ...children);
+            continue;
+          }
+          ordered.push(item);
+        }
+        return { ...cat, items: ordered };
+      })
       .filter(cat => cat.items.length > 0);
   });
 
@@ -637,6 +697,13 @@ export class NodeLibraryDialogComponent {
   selectItem(item: LibraryItem): void {
     if (item.status === 'disabled' || item.status === 'hide') return;
 
+    // A vendor heading is not a destination — it has no type to configure. Clicking it opens or closes its
+    // surfaces, and the surface the user then picks is what routes to a wizard below.
+    if (item.isParent) {
+      this.toggleParent(item.id);
+      return;
+    }
+
     // Any registered source type (Epic, the other EHR vendors, Generic FHIR, HL7v2, Sample, ...) jumps straight
     // into its own config form — a single registry lookup instead of one `if (item.id === '...')` per source.
     if (item.isSource && SOURCE_FORM_REGISTRY[item.id]) {
@@ -656,9 +723,9 @@ export class NodeLibraryDialogComponent {
       return;
     }
 
-    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-fhir' || item.id === 'dest-blob' || item.id === 'dest-medplum' || item.id === 'dest-azurefhir' || item.id === 'dest-datalake-webhook' || item.id === 'dest-fabric' || item.id === 'dest-apiendpoint') {
-      const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'apiendpoint' =
-        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-medplum' ? 'medplum' : item.id === 'dest-fhir' ? 'fhir' : item.id === 'dest-blob' ? 'blob' : item.id === 'dest-azurefhir' ? 'azurefhir' : item.id === 'dest-datalake-webhook' ? 'datalake' : item.id === 'dest-fabric' ? 'fabric' : item.id === 'dest-apiendpoint' ? 'apiendpoint' : 'csv';
+    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-fhir' || item.id === 'dest-blob' || item.id === 'dest-medplum' || item.id === 'dest-azurefhir' || item.id === 'dest-datalake-webhook' || item.id === 'dest-fabric' || item.id === 'dest-fabric-warehouse' || item.id === 'dest-apiendpoint') {
+      const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint' =
+        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-medplum' ? 'medplum' : item.id === 'dest-fhir' ? 'fhir' : item.id === 'dest-blob' ? 'blob' : item.id === 'dest-azurefhir' ? 'azurefhir' : item.id === 'dest-datalake-webhook' ? 'datalake' : item.id === 'dest-fabric-warehouse' ? 'fabricwarehouse' : item.id === 'dest-fabric' ? 'fabric' : item.id === 'dest-apiendpoint' ? 'apiendpoint' : 'csv';
       if (this.showDestWizard()) {
         // Already showing this exact destination type — _openDestWizard() unconditionally resets step,
         // attach node and mapping state, which would wipe the form for no reason. No-op instead.
@@ -678,8 +745,10 @@ export class NodeLibraryDialogComponent {
     this.selectedId.set(item.id);
   }
 
-  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'apiendpoint' | null): string {
-    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'medplum' ? 'Medplum' : type === 'fhir' ? 'FHIR Repository (Aidbox)' : type === 'azurefhir' ? 'Azure FHIR Service' : type === 'blob' ? 'Azure Blob Storage' : type === 'apiendpoint' ? 'API Endpoint' : 'CSV';
+  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint' | null): string {
+    // 'datalake'/'fabric' previously fell through to 'CSV' here — the same class of gap this method's own
+    // doc comment above describes for MySQL/PostgreSQL. Named explicitly now, alongside the new Warehouse type.
+    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'medplum' ? 'Medplum' : type === 'fhir' ? 'FHIR Repository (Aidbox)' : type === 'azurefhir' ? 'Azure FHIR Service' : type === 'blob' ? 'Azure Blob Storage' : type === 'datalake' ? 'Data Lake Webhook' : type === 'fabricwarehouse' ? 'Microsoft Fabric (Warehouse)' : type === 'fabric' ? 'Microsoft Fabric' : type === 'apiendpoint' ? 'API Endpoint' : 'CSV';
   }
 
   confirmDestSwitch(): void {
@@ -797,7 +866,7 @@ export class NodeLibraryDialogComponent {
   // create/edit/delete request for either of these DestinationType values comes in. So the backend already
   // requires sourceconnections.create/.edit/.delete for these two — checking it here (instead of an empty
   // prefix list) is closing a UI/backend mismatch, not inventing a new code.
-  private destWizardPermissionPrefixes(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'apiendpoint'): string[] {
+  private destWizardPermissionPrefixes(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint'): string[] {
     switch (type) {
       case 'sql':      return ['sqlserver', 'azuresql'];
       case 'csv':      return ['csv'];
@@ -815,12 +884,13 @@ export class NodeLibraryDialogComponent {
       // applies to them server-side — the real code the backend checks, not a placeholder.
       case 'datalake': return ['sourceconnections'];
       case 'fabric': return ['sourceconnections'];
+      case 'fabricwarehouse': return ['sourceconnections'];
       // General-purpose API Endpoint likewise has no dedicated PermissionGroupCode member.
       case 'apiendpoint': return ['sourceconnections'];
     }
   }
 
-  private canOpenDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'apiendpoint', action: 'create' | 'edit'): boolean {
+  private canOpenDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint', action: 'create' | 'edit'): boolean {
     const prefixes = this.destWizardPermissionPrefixes(type);
     if (!prefixes.length) return true;
     if (prefixes.some(prefix => this.permissions.hasPermission(`${prefix}.${action}`))) return true;
@@ -828,7 +898,7 @@ export class NodeLibraryDialogComponent {
     return false;
   }
 
-  private _openDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'apiendpoint'): void {
+  private _openDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint'): void {
     if (!this.canOpenDestWizard(type, 'create')) return;
     const pm = this.pickerModel();
     if (!pm) return;
@@ -855,8 +925,8 @@ export class NodeLibraryDialogComponent {
 
   private _openDestWizardEdit(node: CanvasNode): void {
     const tId = (node as TransformNode).transformId;
-    const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'apiendpoint' =
-      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : tId === 'dest-fhir' ? 'fhir' : tId === 'dest-blob' ? 'blob' : tId === 'dest-azurefhir' ? 'azurefhir' : tId === 'dest-datalake-webhook' ? 'datalake' : tId === 'dest-fabric' ? 'fabric' : tId === 'dest-apiendpoint' ? 'apiendpoint' : 'csv';
+    const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint' =
+      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : tId === 'dest-fhir' ? 'fhir' : tId === 'dest-blob' ? 'blob' : tId === 'dest-azurefhir' ? 'azurefhir' : tId === 'dest-datalake-webhook' ? 'datalake' : tId === 'dest-fabric-warehouse' ? 'fabricwarehouse' : tId === 'dest-fabric' ? 'fabric' : tId === 'dest-apiendpoint' ? 'apiendpoint' : 'csv';
     if (!this.canOpenDestWizard(type, 'edit')) return;
     const inbound = this.store.inboundEdges(node.id);
     const parentId = inbound[0]?.from ?? '';

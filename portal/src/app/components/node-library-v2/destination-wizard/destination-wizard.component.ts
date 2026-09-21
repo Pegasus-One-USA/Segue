@@ -53,6 +53,7 @@ import {
   WizardDestinationFormApi,
   SqlFamilyFormApi,
   isSqlFamilyForm,
+  isFabricForm,
   isMongoForm,
 } from './destination-forms/destination-form-api';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
@@ -67,6 +68,7 @@ import {
   qualifyTableName,
   reconcileTargetsForDestTypeSwitch,
   checkColumnTypeCompatibility,
+  DefaultValueToken,
 } from './field-mapping/field-mapping-model';
 import { computePendingTableNames, runQueuedOpsSequentially } from './field-mapping/field-mapping-schema-ops.util';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
@@ -78,6 +80,7 @@ import {
   MappingSummaryDocument,
   ChildTableRelation,
   buildMappingSummaryDocument,
+  tableNameMatches,
   applyMappingSummaryDocument,
   pruneOrphanedMappingRows,
 } from './field-mapping/field-mapping-summary.model';
@@ -707,14 +710,36 @@ export class DestinationWizardComponent implements OnInit {
   readonly configHeading = computed(() => `${this.chainNodeLabel() ?? this.destLabel()} Configuration`);
 
   /**
+   * Hides the four-step rail and Step 3's "Map fields" heading on the De-identification screen.
+   *
+   * Both describe a journey the user isn't on: chainNodeEntry already documents that Step 3 IS the screen
+   * in this mode, so Configure → Data groups → Map fields → Review is progress through steps they never
+   * take, and the heading ("Map fields — Map FHIR paths to SQL table columns") names an activity that
+   * doesn't happen here — nothing is being mapped to a column, redaction rules are being chosen. The
+   * resource list and its per-group actions below carry the whole screen on their own.
+   */
+  readonly hideMapFieldsChrome = computed(
+    () => this.chainNodeEntry() && this.configTab() === 'deidentification');
+
+  /**
    * Step 3's Save when this wizard was opened from a chain node (see chainNodeEntry). Commits exactly
    * what "Add to Workflow"/"Update" commits — same _save() path, so the node and its configuration are
    * persisted identically — and then closes back to the canvas (see
    * NodeLibraryDialogComponent.onDestWizardSaved). Configuring a second resource means reopening the
    * node, which keeps "Save" unambiguous: it finishes the step rather than half-committing it.
+   *
+   * Flushes the queued schema DDL first, exactly as the Review step's own "Add to Workflow"/"Update"
+   * does (see next()'s final-step branch) — this entry point is the ONLY other place _save() runs, and
+   * without the flush a column added via the canvas's "+ Add column" was never actually created against
+   * the destination: the mapping profile was then saved referencing a column that doesn't exist, and the
+   * backend's own column-existence check (WorkflowEndpoints.ValidateMappedColumnsExistAsync) rejected the
+   * whole save with "field '<name>' does not exist on '<table>'". Same contract as there: on failure the
+   * op stays queued and the save is skipped, so a profile is never persisted against absent schema.
    */
   saveChainNode(): void {
-    this._save();
+    this.flushPendingSchemaOps().subscribe((ok) => {
+      if (ok) this._save();
+    });
   }
 
   /** Maps this wizard's chain-node tab onto the Mapping list's own tab names — that list
@@ -759,6 +784,8 @@ export class DestinationWizardComponent implements OnInit {
         return 'DataLakeWebhook';
       case 'fabric':
         return 'DataFabricAzure';
+      case 'fabricwarehouse':
+        return 'DataFabricWarehouse';
       case 'apiendpoint':
         return 'ApiEndpoint';
       case 'medplum':
@@ -800,6 +827,10 @@ export class DestinationWizardComponent implements OnInit {
         !this.hasExistingChanged(),
       existingDestinationId:
         this.selectedExistingId() ?? this.resolvedDestinationId(),
+      // Which concrete destination type this form is serving. Only forms shared by more than one type read
+      // it — the Fabric form uses it to pin its landing mode, since DataFabricWarehouse IS the Warehouse
+      // surface and must not present a mode choice that could contradict the type.
+      destinationType: this.resolveDestinationTypeForRules(),
     };
   }
 
@@ -1523,6 +1554,13 @@ export class DestinationWizardComponent implements OnInit {
   /** Ad-hoc connection details from Step 1's SQL form — powers the canvas's real ALTER TABLE / CREATE TABLE calls. */
   connectionInfo(): DestinationProbeRequest | null {
     const form = this.activeForm();
+    // Fabric Warehouse is relational and supports the same live probe and DDL authoring, but describes its
+    // connection with a workspace + TDS endpoint + Entra identity rather than server/database/password — so
+    // it builds its own request shape. Without this it returned null here, and the canvas Create table /
+    // Add column handlers (which bail on a null connection) silently did nothing.
+    if (this.isFabricWarehouse() && isFabricForm(form)) {
+      return form.getFabricProbeRequest();
+    }
     if (!this.isSql() || !isSqlFamilyForm(form)) return null;
     return form.getProbeRequest();
   }
@@ -1566,7 +1604,7 @@ export class DestinationWizardComponent implements OnInit {
         // schema probe) for the exact same real table. Without this, the lookup below silently never
         // matches — the column is queued (the toast fires unconditionally) but never actually appears
         // on the canvas, since every table in sqlTables() comes back unchanged.
-        const matches = t.fullName === e.tableName || (this.isMySql() && t.tableName === e.tableName);
+        const matches = tableNameMatches(t, e.tableName);
         if (!matches) return t;
         const idx = t.columns.findIndex((c) => c.name === column.name);
         const columns =
@@ -1815,14 +1853,25 @@ export class DestinationWizardComponent implements OnInit {
   readonly selectedDeIdentificationProfileId = signal<string | null>(null);
   readonly newProfileName = signal('');
   readonly creatingProfile = signal(false);
-  readonly selectedDeIdentificationProfileName = computed(() => {
-    const id = this.selectedDeIdentificationProfileId();
-    return id ? (this.deIdentificationProfiles().find(p => p.id === id)?.name ?? 'None') : 'None';
-  });
+  // selectedDeIdentificationProfileName used to live here, resolving the policy id to its display name for the
+  // Step 4 Review card. Nothing reads it now: the policy is named with the workflow id, which is an identifier
+  // rather than something worth showing, and the card reports selectedProfileRuleCount instead.
 
   private loadDeIdentificationProfiles(): void {
     this.deIdentificationProfileSvc.list().subscribe({
-      next: profiles => this.deIdentificationProfiles.set(profiles),
+      next: profiles => {
+        this.deIdentificationProfiles.set(profiles);
+        // FALLBACK ONLY. The authoritative link is the profile id stamped on the destination node
+        // (_populateFromNode) — matching on the name is matching on a display field, which breaks the moment a
+        // policy is renamed or a workflow is cloned, creating a second empty policy and silently redacting
+        // nothing. This covers just the case where no id was stamped: a node saved before that key existed.
+        // Only ever ADOPTS: creating a policy is FieldMappingListComponent's job, and only when a rule is added.
+        const workflowId = this.currentWorkflowId();
+        if (workflowId && !this.selectedDeIdentificationProfileId()) {
+          const owned = profiles.find(p => p.name === workflowId);
+          if (owned) this.selectedDeIdentificationProfileId.set(owned.id);
+        }
+      },
       error: () => this.deIdentificationProfiles.set([]),
     });
   }
@@ -1876,24 +1925,42 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly AZUREFHIR_TYPES: DestinationTypeV2[] = ['AzureFhirService'];
   private static readonly DATALAKE_TYPES: DestinationTypeV2[] = ['DataLakeWebhook'];
   private static readonly FABRIC_TYPES: DestinationTypeV2[] = ['DataFabricAzure'];
+  private static readonly FABRIC_WAREHOUSE_TYPES: DestinationTypeV2[] = ['DataFabricWarehouse'];
   private static readonly APIENDPOINT_TYPES: DestinationTypeV2[] = ['ApiEndpoint'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
   // only the probed destinationType and saved transformId differ from SQL Server. Mongo/Blob are their own
   // families: no live introspection, so each gets its own form/branches rather than reusing SQL's or CSV's.
+  // Deliberately does NOT include 'fabricwarehouse'. isSql() gates the SQL-family CONNECTION FORM
+  // (server/database/username/password + its Test-connection probe), and a Fabric Warehouse authenticates with
+  // an Entra identity through the Fabric form instead — it has no SQL login to collect. What it does share is
+  // the relational MAPPING surface, which is gated by isSqlFamilyDestType()/SQL_FAMILY_TYPES, not by this.
   readonly isSql = computed(
     () =>
       this.destType() === 'sql' ||
       this.destType() === 'mysql' ||
       this.destType() === 'postgres',
   );
+  /**
+   * Whether this destination has a LIVE RELATIONAL SCHEMA — real tables and columns that can be probed, mapped
+   * against, and authored with ALTER/CREATE TABLE.
+   *
+   * Deliberately distinct from isSql(), which means something narrower: "collects server/database/username/
+   * password and tests with those". Fabric Warehouse is the first type where the two diverge — it is a SQL
+   * Server over TDS with a full schema, but authenticates with an Entra token through the Fabric form, so it
+   * belongs here and NOT in isSql(). Conflating them is what left the Warehouse mapping canvas with no table
+   * list, no Add column and no Create table.
+   */
+  readonly hasLiveRelationalSchema = computed(() => this.isSql() || this.isFabricWarehouse());
+
   readonly isMySql = computed(() => this.destType() === 'mysql');
   readonly isPostgres = computed(() => this.destType() === 'postgres');
   readonly isMongo = computed(() => this.destType() === 'mongo');
   // Medplum is a FHIR R4 server destination: columnless (writes whole resources), no live schema probe,
   // a single target (the FHIR base URL) and an opaque secret. Its own form/branches, like Mongo.
   readonly isMedplum = computed(() => this.destType() === 'medplum');
+
   /** A FHIR-native repository (Aidbox) — writes whole FHIR resources, so it has no field-mapping canvas of
    *  its own; step 3 offers passthrough vs. per-field transform rules instead. */
   readonly isFhir = computed(() => this.destType() === 'fhir');
@@ -1908,6 +1975,9 @@ export class DestinationWizardComponent implements OnInit {
   readonly isDataLake = computed(() => this.destType() === 'datalake');
   /** Microsoft Fabric (OneLake Files) — same file-shaped mapping as isBlob(). */
   readonly isFabric = computed(() => this.destType() === 'fabric');
+  /** Microsoft Fabric (Warehouse) — a real relational target, so it is included in isSql() below and gets the
+   *  live schema probe and table picker. Distinct from isFabric(), which is the FILE surface. */
+  readonly isFabricWarehouse = computed(() => this.destType() === 'fabricwarehouse');
   /** General-purpose outbound REST API — same file-shaped mapping (typed target fields, no live schema) as
    *  isDataLake()/isBlob(). */
   readonly isApiEndpoint = computed(() => this.destType() === 'apiendpoint');
@@ -1946,9 +2016,11 @@ export class DestinationWizardComponent implements OnInit {
                       ? 'Data Lake Webhook'
                       : this.destType() === 'fabric'
                         ? 'Microsoft Fabric (OneLake)'
-                        : this.destType() === 'apiendpoint'
-                          ? 'API Endpoint'
-                          : 'CSV',
+                        : this.destType() === 'fabricwarehouse'
+                          ? 'Microsoft Fabric (Warehouse)'
+                          : this.destType() === 'apiendpoint'
+                            ? 'API Endpoint'
+                            : 'CSV',
   );
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -2042,11 +2114,23 @@ export class DestinationWizardComponent implements OnInit {
 
     effect(() => {
       const profileId = this.selectedDeIdentificationProfileId();
+      // No policy yet is a real answer, not a pending one: nothing is redacted. Distinct from null, which
+      // means the count could not be read.
       if (!profileId) {
-        this.selectedProfileHasRules.set(true); // the "no profile selected" case has its own dedicated flag
+        this.selectedProfileRuleCount.set(0);
         return;
       }
-      this.profileHasActiveRules(profileId).subscribe(hasRules => this.selectedProfileHasRules.set(hasRules));
+      // Re-read on arriving at Review, not just when the policy id changes. The policy is created once and then
+      // never changes, so depending on it alone would pin the count to whatever it was when the policy first
+      // appeared — showing 0 on Review after rules had been added on Step 3.
+      //
+      // The signal has to be READ to register the dependency, but the fetch is an unfiltered list of the whole
+      // tenant's rules, so firing it on 1->2 and 2->3 as well would be three wasted full-list reads per pass at
+      // no benefit: Step 4 is the only place the count is rendered.
+      if (this.step() !== 4) {
+        return;
+      }
+      this.profileActiveRuleCount(profileId).subscribe(count => this.selectedProfileRuleCount.set(count));
     });
 
     effect(() => this.stepChange.emit(this.step()));
@@ -2509,6 +2593,15 @@ export class DestinationWizardComponent implements OnInit {
         this.sqlTables.set(form.sqlTables());
         this.probeState.set('ok');
       }
+      // Fabric Warehouse is relational but is NOT an isSqlFamilyForm (it authenticates with an Entra token,
+      // so it has no getProbeRequest()/server/database/password to offer). Its own Test Connection already
+      // returns the Warehouse's tables, so take them the same way the SQL branch above does — otherwise the
+      // mapping canvas gets an empty table picker on a connection that tested fine.
+      if (this.isFabricWarehouse() && isFabricForm(form) && form.probeState() === 'ok') {
+        this.sqlTables.set(form.sqlTables());
+        this.probeState.set('ok');
+        this.schemaLoadState.set('loaded');
+      }
       const metadata = form.getMetadata();
       if (!metadata) return;
       this.provisionDestinationConnection(metadata, () =>
@@ -2610,6 +2703,7 @@ export class DestinationWizardComponent implements OnInit {
     if (this.isAzureFhir()) return 'AzureFhirService';
     if (this.isBlob()) return 'BlobStorage';
     if (this.isDataLake()) return 'DataLakeWebhook';
+    if (this.isFabricWarehouse()) return 'DataFabricWarehouse';
     if (this.isFabric()) return 'DataFabricAzure';
     if (this.isApiEndpoint()) return 'ApiEndpoint';
     if (!this.isSql()) return 'Csv';
@@ -2702,6 +2796,10 @@ export class DestinationWizardComponent implements OnInit {
       // has no field mappings at all — there is no profile to pick, and offering one implied a step that
       // does not apply to it.
       !this.isWholeResourceFhirDestination() &&
+      // Same reasoning for the De-identification screen: it configures redaction rules on a profile, not
+      // field mappings, so a mapping-profile picker sitting beside each data group offered an action that
+      // has nothing to do with what that screen does.
+      this.configTab() !== 'deidentification' &&
       !!this.sourceConnectionId() &&
       !!(this.selectedExistingId() ?? this.resolvedDestinationId()) &&
       !!this.sourceVendor(),
@@ -2731,21 +2829,34 @@ export class DestinationWizardComponent implements OnInit {
   /** "Mark as Master" for whichever resource's mapping canvas is currently open — promotes the mapping
    *  profile this Field Mapping node already saved for that resource into a new, independently-named master
    *  template (see MappingProfileService.promoteToMaster). Requires the mapping to have been saved at least
-   *  once already (so a real profile id exists to clone from); the button stays enabled regardless, but this
-   *  guards with a clear toast rather than silently no-op-ing. */
+   *  template, built from whatever is on the canvas right now. No prior save is required: an ordinary save
+   *  writes no MappingProfile at all any more, so there would be nothing to promote. */
   markActiveGroupAsMaster(): void {
     const resource = this.activeMappingGroup();
     if (!resource) return;
 
-    const mappingNode = this.pipelineStore.byId(this.attachNode().id);
-    const existingIds = this._parseExistingMappingProfileIds(
-      mappingNode?.fields ?? {},
-    );
-    const profileId = existingIds[resource];
-    if (!profileId) {
+    // Builds the master from the canvas rows as they stand, rather than promoting a profile a previous save
+    // happened to leave behind. Ordinary saves no longer write any MappingProfile (see _save), so there is
+    // nothing to promote — and this is the honest behaviour anyway: the master is a snapshot of what is on
+    // screen when the button is pressed, not of whatever the last save persisted.
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: this.sourceVendor().toUpperCase(),
+      destType: this.nonFhirDestType(),
+      destLabel: this.destLabel(),
+      mappingRows: this.mappingRows().filter((row) => row.resource === resource),
+      sqlTables: this.sqlTables(),
+      childTableRelationsByTable: this.childTableRelationsByTable(),
+      availableFields: this.availableFieldsFn,
+      sourceConnectionId: this.sourceConnectionId(),
+      destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
+      targetByResource: this.targetByResource(),
+      existingMappingProfileIdByResource: {},
+    });
+
+    if (doc.mappings.length === 0) {
       this.toast.show(
-        'Save the mapping first',
-        `Save "${resource}"'s mapping at least once before marking it as a master template.`,
+        'Nothing to save as a master',
+        `Map at least one field for "${resource}" before marking it as a master template.`,
       );
       return;
     }
@@ -2765,7 +2876,31 @@ export class DestinationWizardComponent implements OnInit {
       .afterClosed()
       .subscribe((name) => {
         if (!name) return;
-        this.mappingProfileSvc.promoteToMaster(profileId, name).subscribe({
+        this.createMasterFromDocument(doc, name, resource);
+      });
+  }
+
+  /** Imports one resource's mapping as a named master template, then renames it to what the user typed. */
+  private createMasterFromDocument(
+    doc: MappingSummaryDocument,
+    name: string,
+    resource: string,
+  ): void {
+    this.mappingProfileImportSvc.import(doc).subscribe({
+      next: (result) => {
+        const created = result.profiles.find(
+          (p) => p.resourceType === resource && p.mappingProfileId !== EMPTY_GUID,
+        );
+        if (!created) {
+          this.toast.show(
+            'Master mapping not saved',
+            result.profiles.flatMap((p) => p.warnings).join(' ') ||
+              'The mapping could not be imported.',
+          );
+          return;
+        }
+
+        this.mappingProfileSvc.promoteToMaster(created.mappingProfileId, name).subscribe({
           next: () =>
             this.toast.success(
               'Master mapping saved',
@@ -2785,7 +2920,16 @@ export class DestinationWizardComponent implements OnInit {
             );
           },
         });
-      });
+      },
+      error: (err) => {
+        const msg =
+          err?.error?.title ?? err?.error?.error ?? err?.message ?? 'Failed to save the master mapping.';
+        this.toast.show(
+          'Master mapping not saved',
+          typeof msg === 'string' ? msg : 'Failed to save the master mapping.',
+        );
+      },
+    });
   }
 
   /** MappingProfile.DestinationObject is stored as the bare table name (e.g. "Patient_NewMapped"), but
@@ -2798,7 +2942,9 @@ export class DestinationWizardComponent implements OnInit {
   private _resolveDestinationObjectForCanvas(
     destinationObject: string,
   ): string | null {
-    if (!this.isSql()) return destinationObject; // CSV/Mongo targets are never schema-qualified
+    // Fabric Warehouse IS schema-qualified (dbo by default), so it resolves against the probed schema
+    // exactly as the SQL engines do — see hasLiveRelationalSchema.
+    if (!this.hasLiveRelationalSchema()) return destinationObject; // CSV/Mongo targets are never schema-qualified
     const table = this.sqlTables().find(
       (t) =>
         t.fullName.toLowerCase() === destinationObject.toLowerCase() ||
@@ -2858,6 +3004,26 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     const newRows: MappingRow[] = profile.fields.map((f) => {
+      // A "@token" JsonPath (JsonMappingEngine.IsSystemToken) has no real source at all — reconstructing
+      // it as an ordinary mode: 'value' row (as every field below unconditionally used to) produced a
+      // broken row with a fabricated fhirPath and, worse, silently lost defaultValue/defaultValueType on
+      // the very next save (see field-mapping-summary.model.ts's identical fix for the canonical Mapping
+      // JSON round-trip — this is the same gap in the "Select Existing" profile-picker's own load path).
+      if (f.jsonPath?.startsWith('@')) {
+        return {
+          resource,
+          sources: [],
+          mode: 'default',
+          defaultToken: f.jsonPath as DefaultValueToken,
+          defaultValue: f.defaultValue ?? null,
+          defaultValueType: f.valueType,
+          targetName: f.targetField,
+          tableName: resolvedTarget,
+          isRequired: f.isRequired,
+          format: f.format ?? null,
+          isUpsertKey: f.isUpsertKey ?? false,
+        };
+      }
       const resolved = this._resolveFhirPath(resource, f);
       return {
         resource,
@@ -3669,7 +3835,7 @@ export class DestinationWizardComponent implements OnInit {
     this._existingBaseline = null;
     const form = this.activeForm();
     form?.reset();
-    if (this.isSql()) {
+    if (this.hasLiveRelationalSchema()) {
       this.probeState.set('idle');
       this.sqlTables.set([]);
       if (isSqlFamilyForm(form)) form.resetProbe();
@@ -3761,9 +3927,9 @@ export class DestinationWizardComponent implements OnInit {
     // this is a no-op for every non-SQL destination.
     this._refreshSqlTablesFromLiveSchema();
 
-    // Read-only here — reusing an existing connection as-is never calls provisionDestinationConnection's
-    // create/update branch (see _save()), so there's nothing to change the profile through in this mode.
-    this.selectedDeIdentificationProfileId.set(selected.deIdentificationProfileId ?? null);
+    // The de-identification policy is NOT read off the destination any more: it belongs to the workflow, not
+    // to the connection, and a reused connection may already carry another workflow's policy in that column.
+    // loadDeIdentificationProfiles() adopts this workflow's own by name instead.
 
     const metadata = this._parseConnectionMetadata(
       selected.connectionMetadataJson,
@@ -3931,31 +4097,14 @@ export class DestinationWizardComponent implements OnInit {
     return candidate;
   }
 
-  /** Reads a Field Mapping node's own previously-saved mappingProfileIds map (falling back to the legacy
-   *  singular mappingProfileId, attributed to this node's primary resource, for a node saved before the map
-   *  existed) — mirrors WorkflowBuildAssemblerServiceV2.parseExistingMappingProfileIds so both save paths agree
-   *  on which id belongs to which resource. */
-  private _parseExistingMappingProfileIds(
-    fields: Record<string, string>,
-  ): Record<string, string> {
-    const raw = fields['mappingProfileIds'];
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (parsed && typeof parsed === 'object')
-          return parsed as Record<string, string>;
-      } catch {
-        // fall through to the legacy singular field below
-      }
-    }
-    const legacyId = fields['mappingProfileId'];
-    const primaryResource = this.selectedResources()[0];
-    return legacyId && primaryResource ? { [primaryResource]: legacyId } : {};
-  }
 
   hasSqlTables(): boolean {
+    // hasLiveRelationalSchema(), not isSql(): a Fabric Warehouse has real probed tables too, and gating this
+    // on isSql() left every table-picker affordance off for it — including isPrimaryTargetValid's
+    // "only show a card for a table that really exists" check, which then short-circuited to true and
+    // displayed a guessed table that had never been created.
     return (
-      this.isSql() && this.probeState() === 'ok' && this.sqlTables().length > 0
+      this.hasLiveRelationalSchema() && this.probeState() === 'ok' && this.sqlTables().length > 0
     );
   }
 
@@ -4284,6 +4433,9 @@ export class DestinationWizardComponent implements OnInit {
       targets[r] =
         type === 'csv'
           ? def.csvFile
+          // 'fabric' (OneLake Files) lands FILES, so it takes a stripped file stem like blob/datalake.
+          // 'fabricwarehouse' deliberately does NOT appear here — it writes to a real, schema-qualified
+          // table and so falls through to _qualifyDefaultTable below, exactly like the SQL engines.
           : type === 'blob' || type === 'datalake' || type === 'fabric' || type === 'apiendpoint'
             ? def.csvFile.replace(/\.csv$/i, '')
             : this._qualifyDefaultTable(def.sqlTable, type);
@@ -4316,15 +4468,40 @@ export class DestinationWizardComponent implements OnInit {
     this.resolvedDestinationId.set(f['destinationId'] || null);
     this.resolvedSecretKeyVaultName.set(f['secretKeyVaultName'] || null);
     this.resolvedSecretName.set(f['secretName'] || null);
-    // Restore the de-identification profile picker from the real DestinationConfiguration row — the canvas
-    // node's own fields don't carry it (it's a destination-level attribute, not a mapping/config one), so
-    // without this, re-saving an edited node would silently clear whatever profile was assigned. Applies to
-    // every destination type uniformly, including the hand-rolled FHIR/Aidbox branch below.
-    const destinationId = f['destinationId'];
-    if (destinationId) {
-      this.destinationConfigSvc.getById(destinationId).subscribe({
-        next: dto => this.selectedDeIdentificationProfileId.set(dto?.deIdentificationProfileId ?? null),
-        error: () => this.selectedDeIdentificationProfileId.set(null),
+    // The de-identification policy, restored from the id STAMPED ON THIS NODE — the authoritative record of
+    // which policy this workflow owns.
+    //
+    // The DestinationConfiguration row is consulted ONLY as the migration fallback below — the policy belongs
+    // to the workflow, not to the connection, and a reused connection may carry another workflow's policy.
+    //
+    // Not resolved by NAME here either, even though the policy is named with the workflow id. Matching on a
+    // display-name field makes it do foreign-key duty: rename the policy, or clone the workflow, and the
+    // lookup misses, a second empty policy is created, and that workflow silently redacts nothing. The stamped
+    // id survives both. loadDeIdentificationProfiles()'s name lookup remains only as a fallback for a node
+    // saved before this key was written.
+    if (f['deIdentificationProfileId']) {
+      this.selectedDeIdentificationProfileId.set(f['deIdentificationProfileId']);
+    } else if (f['destinationId']) {
+      // MIGRATION for a workflow configured before the policy became per-workflow. Its node carries no stamped
+      // id — the policy lived on the DestinationConfiguration row — so without this the wizard opens showing no
+      // policy, the de-identification chain node is dropped on the next save, and a workflow that was redacting
+      // silently stops. Adopt the destination's policy once; _save() then stamps it onto the node, and every
+      // later open takes the branch above. Nothing is written back to the destination column, so a connection
+      // shared with another workflow is not disturbed.
+      //
+      // Known imprecision: a BRAND-NEW workflow reusing a connection that already carries a policy will adopt
+      // it too — the node fields cannot distinguish "legacy workflow" from "new workflow on an old connection".
+      // That is the pre-existing behaviour rather than a new one, and it errs toward redacting under an
+      // inherited policy instead of silently redacting nothing, which is the right direction to fail for PHI.
+      this.destinationConfigSvc.getById(f['destinationId']).subscribe({
+        next: dto => {
+          if (dto?.deIdentificationProfileId && !this.selectedDeIdentificationProfileId()) {
+            this.selectedDeIdentificationProfileId.set(dto.deIdentificationProfileId);
+          }
+        },
+        // Leave the selection alone on a failed read: resetting it here would make a transient failure look
+        // like "no policy assigned", which is the migration hazard this branch exists to prevent.
+        error: () => { /* keep whatever is already selected */ },
       });
     }
     if (this.isFhir()) {
@@ -4529,7 +4706,7 @@ export class DestinationWizardComponent implements OnInit {
     // supports all three (SqlDestinationSchemaService.IsSupported), so this used to silently skip the
     // live-schema refresh for MySQL/PostgreSQL destinations, leaving their mapping canvas showing whatever
     // stale table/column list the last saved mapping summary happened to restore.
-    if (!this.isSql()) return;
+    if (!this.hasLiveRelationalSchema()) return;
 
     // selectedExistingId() (set by selectExisting() — picking an already-saved connection from the "Existing
     // connection" dropdown) and resolvedDestinationId() (set by _populateFromNode()/provisionDestinationConnection()
@@ -4712,22 +4889,23 @@ export class DestinationWizardComponent implements OnInit {
   // (used as inlineSecret). This replaces per-family inline buildSqlConnectionString/buildSftpUri/
   // buildConnectionMetadata calls that used to live here — each destination-forms/ component now does that
   // assembly itself (see e.g. SqlFamilyDestinationFormComponent.getMetadata()).
-  /** Tracks whether the currently-selected profile actually has active rules — drives the Step 4 Review
-   *  card's read-only de-identification summary. Re-checked whenever the selection changes; defaults true
-   *  (nothing flagged) while a check is in flight or none is selected, since the "no profile at all" case
-   *  is rendered from selectedDeIdentificationProfileId directly. */
-  readonly selectedProfileHasRules = signal(true);
+  /** How many enabled rules the workflow's de-identification policy currently holds — the Step 4 Review
+   *  card reports this COUNT rather than the policy's name. The name is now an internal identifier (the
+   *  workflow id) that means nothing to a reader, and it could read "None" before the freshly created
+   *  policy had made it into the loaded list; the rule count is what actually answers "is anything being
+   *  redacted here". null while a check is in flight or no policy exists yet. */
+  readonly selectedProfileRuleCount = signal<number | null>(null);
 
-  /** Whether the given profile currently has at least one enabled rule under it. Client-side filter over
-   *  the full rule list (the backend's GET has no deIdentificationProfileId query param — this endpoint
-   *  wasn't built to be filtered by profile, only by resource/destination/field) rather than a new
-   *  backend param for what's otherwise a one-off check. Fails OPEN (treated as "has rules") on a
-   *  transient lookup error — same tolerance validateRuleConflictsForSave already uses elsewhere in this
-   *  file — this warning is a nudge, not the only safeguard, and shouldn't block Step 1 on a flaky call. */
-  private profileHasActiveRules(profileId: string): Observable<boolean> {
+  /** How many enabled rules sit under the given profile. Client-side filter over the full rule list (the
+   *  backend's GET has no deIdentificationProfileId query param — this endpoint wasn't built to be filtered
+   *  by profile, only by resource/destination/field) rather than a new backend param for what's otherwise a
+   *  one-off check. Fails to null (reported as "unavailable" rather than as zero) on a transient lookup
+   *  error: claiming "0 rules" when the call simply failed would read as "nothing is redacted", which is the
+   *  more dangerous of the two wrong answers. */
+  private profileActiveRuleCount(profileId: string): Observable<number | null> {
     return this.transformationRulesSvc.list({}).pipe(
-      map(rules => rules.some(r => r.deIdentificationProfileId === profileId && r.isEnabled)),
-      catchError(() => of(true)),
+      map(rules => rules.filter(r => r.deIdentificationProfileId === profileId && r.isEnabled).length),
+      catchError(() => of<number | null>(null)),
     );
   }
 
@@ -4748,6 +4926,7 @@ export class DestinationWizardComponent implements OnInit {
     const isBlob = this.isBlob();
     const isDataLake = this.isDataLake();
     const isFabric = this.isFabric();
+    const isFabricWarehouse = this.isFabricWarehouse();
     const isApiEndpoint = this.isApiEndpoint();
     const name =
       metadata.fields['dest_name'] ||
@@ -4767,9 +4946,11 @@ export class DestinationWizardComponent implements OnInit {
                     ? 'Data Lake Webhook Destination'
                     : isFabric
                       ? 'Microsoft Fabric Destination'
-                      : isApiEndpoint
-                        ? 'API Endpoint Destination'
-                        : 'File Destination');
+                      : isFabricWarehouse
+                        ? 'Microsoft Fabric Warehouse Destination'
+                        : isApiEndpoint
+                          ? 'API Endpoint Destination'
+                          : 'File Destination');
     const secretName = newSecretName(name);
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
@@ -4880,6 +5061,21 @@ export class DestinationWizardComponent implements OnInit {
                   connectionMetadataJson: JSON.stringify(metadata.fields),
                   deIdentificationProfileId,
                 }
+              : isFabricWarehouse
+              ? {
+                  name,
+                  // Same metadata shape as the Files branch below — workspace/item/Entra auth — differing only
+                  // in the type, which is what carries "this is the Warehouse surface" to the backend. Without
+                  // this branch a Warehouse destination fell through to the Csv default at the end of this
+                  // chain and was rejected for a missing dest_filePattern, a field it has no concept of.
+                  destinationType: 'DataFabricWarehouse',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  target: metadata.fields['dest_fabricWorkspace'] || null,
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
               : isFabric
               ? {
                   name,
@@ -4952,6 +5148,18 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
+  /*
+   * _persistDeIdentificationProfile() used to live here, writing the Step 3 policy selection to
+   * DestinationConfiguration.DeIdentificationProfileId via the narrow profile-only endpoint.
+   *
+   * Removed with the policy picker. The policy is now per WORKFLOW, created on demand and carried on the
+   * De-identification node, because a destination can be reused by several workflows and that one column
+   * cannot express a per-workflow policy — whichever workflow saved last won it. The endpoint
+   * (PUT destinations/{id}/deidentification-profile) and DestinationConfigurationService.setDeIdentificationProfile
+   * are left in place: the column is still what V1's ConfiguredPipelineService reads through
+   * IGovernancePolicyService, so it remains meaningful — just not something this wizard writes.
+   */
+
   private _save(): void {
     // Drop any mapping row left behind pointing at a column that's since been renamed/dropped directly in
     // the database (rather than through this wizard) — without this, a save can silently persist (and a
@@ -4962,7 +5170,23 @@ export class DestinationWizardComponent implements OnInit {
       this.sqlTables(),
     );
     if (pruned.length !== this.mappingRows().length) {
+      // Never drop a user's mapping without saying so. This prune is a safety net for a column deleted or
+      // renamed OUT-OF-BAND (directly in the database), which is rare — but it can't tell that apart from a
+      // column this wizard itself just created whose local schema update didn't land (see tableNameMatches:
+      // exactly that bug silently deleted a freshly mapped row on every save, with no error, for a column
+      // that really did exist in the database). Silence is what made that invisible, so name the rows.
+      const keptKeys = new Set(pruned.map((r) => `${r.tableName}.${r.targetName}`));
+      const dropped = this.mappingRows().filter(
+        (r) => !keptKeys.has(`${r.tableName}.${r.targetName}`),
+      );
       this.mappingRows.set(pruned);
+      this.toast.error(
+        `Removed ${dropped.length} mapping${dropped.length === 1 ? '' : 's'} with no matching column`,
+        dropped
+          .map((r) => `"${r.targetName}" on ${r.tableName}`)
+          .join(', ') +
+          ' — the column was not found in the destination schema. Re-add the column, then map it again.',
+      );
     }
 
     const type = this.destType();
@@ -5047,18 +5271,14 @@ export class DestinationWizardComponent implements OnInit {
       ),
     );
     config['dest_mappings_v2'] = JSON.stringify(this.mappingRows());
-    // This wizard's own Field Mapping node's previously-saved profile id per resource (mappingProfileIds,
-    // falling back to the legacy singular mappingProfileId for the primary resource) — passed through so the
-    // import call below updates THOSE exact profiles rather than letting the backend search for "the" profile
-    // matching (resourceType, sourceConnectionId, destinationId), a triple more than one workflow can share.
-    const mappingNodeForIds = this.pipelineStore.byId(this.attachNode().id);
-    const existingMappingProfileIdByResource =
-      this._parseExistingMappingProfileIds(mappingNodeForIds?.fields ?? {});
 
     // The canonical Mapping JSON (see field-mapping-summary.model.ts) — additive alongside the two keys
-    // above; this is what _populateFromNode prefers on reload, and what "Save mapping"/the export
-    // preview modal show. Includes what dest_mappings_v2 alone can't: which extra tables are children
-    // and of what (childTableRelationsByTable). Also what POST mapping-profiles/import sends verbatim below.
+    // above; this is what _populateFromNode prefers on reload, and what "Save mapping"/the export preview
+    // modal show. Includes what dest_mappings_v2 alone can't: which extra tables are children and of what.
+    //
+    // existingMappingProfileIdByResource is deliberately empty: an ordinary save no longer writes any
+    // MappingProfile, so there are no ids to carry forward (plan §2.d). "Mark as Master" builds its own
+    // document when it needs one.
     const doc = buildMappingSummaryDocument({
       sourceVendor: this.sourceVendor().toUpperCase(),
       destType: this.nonFhirDestType(),
@@ -5070,9 +5290,27 @@ export class DestinationWizardComponent implements OnInit {
       sourceConnectionId: this.sourceConnectionId(),
       destinationId: this.selectedExistingId() ?? this.resolvedDestinationId(),
       targetByResource: this.targetByResource(),
-      existingMappingProfileIdByResource,
+      existingMappingProfileIdByResource: {},
     });
     config['dest_mapping_summary_v1'] = JSON.stringify(doc);
+
+    // The workflow's de-identification policy, created on demand by the De-identification tab the first time a
+    // rule is added (FieldMappingListComponent.ensureWorkflowProfile$) and named with the workflow id.
+    //
+    // Recorded on this node field only. workflow-builder-v2.component.ts reads it (`hasDeIdentification`) to
+    // decide whether the graph gets a De-identification chain node, and the graph mapper copies it onto that
+    // node as `profileId`, which is what DeIdentificationNodeExecutor.ResolveProfileIdAsync reads at run time.
+    //
+    // Deliberately NOT written to DestinationConfiguration.DeIdentificationProfileId any more. A destination
+    // can be reused by several workflows, so that single column cannot hold a per-workflow policy — whichever
+    // workflow saved last won, and the others silently redacted under someone else's policy. Carrying it on the
+    // node keeps it private to this pipeline. (The V1 ConfiguredPipelineService still reads that column via
+    // IGovernancePolicyService, so a V1 route against the same destination is unaffected by what V2 does here —
+    // and equally is not configured from here.)
+    const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
+    if (deIdentificationProfileId) {
+      config['deIdentificationProfileId'] = deIdentificationProfileId;
+    }
 
     const emitSaved = () => {
       this.saved.emit({
@@ -5096,101 +5334,29 @@ export class DestinationWizardComponent implements OnInit {
                           ? 'dest-blob'
                           : type === 'datalake'
                             ? 'dest-datalake-webhook'
-                            : type === 'fabric'
-                              ? 'dest-fabric'
-                              : type === 'apiendpoint'
-                                ? 'dest-apiendpoint'
-                                : 'dest-csv',
+                            : type === 'fabricwarehouse'
+                              ? 'dest-fabric-warehouse'
+                              : type === 'fabric'
+                                ? 'dest-fabric'
+                                : type === 'apiendpoint'
+                                  ? 'dest-apiendpoint'
+                                  : 'dest-csv',
         status: 'enabled',
         config,
       });
     };
 
-    // Import the mapping profile(s) now that both real ids exist — skipped when either is still missing
-    // (e.g. no source configured yet) or there's nothing mapped, so this stays a no-op for those cases
-    // exactly like before this endpoint existed. Either way "Add to Pipeline"/"Update" still completes —
-    // a failed import is surfaced as a toast, not a blocker, since the node's own local save (config above)
-    // never depended on it.
-    if (
-      doc.sourceConnectionId &&
-      doc.destinationId &&
-      doc.mappings.length > 0
-    ) {
-      this.savingMappingProfiles.set(true);
-      this.mappingProfileImportSvc.import(doc).subscribe({
-        next: (result) => {
-          this.savingMappingProfiles.set(false);
-          const failed = result.profiles.filter(
-            (p) => p.warnings.length > 0 && p.mappingProfileId === EMPTY_GUID,
-          );
-          if (failed.length) {
-            this.toast.show(
-              'Mapping profile import had issues',
-              failed
-                .map((p) => `${p.resourceType}: ${p.warnings.join(' ')}`)
-                .join(' '),
-            );
-          } else {
-            this.toast.success(
-              'Mapping profile saved',
-              `${result.profiles.length} resource mapping${result.profiles.length === 1 ? '' : 's'} imported.`,
-            );
-          }
-          // Stamp every resource's real, server-assigned mappingProfileId straight onto the Field Mapping node
-          // this wizard is attached to — without this, the ids this call just returned are discarded, the next
-          // save's existingMappingProfileIdByResource comes back empty, and both this endpoint and
-          // /workflows/build would mint fresh, unrelated duplicate profiles instead of reusing these (and, pre-
-          // fix, fall back to searching by (resourceType, sourceConnectionId, destinationId) — the exact search
-          // that let one workflow's save silently overwrite another's profile). Keeps the legacy singular
-          // mappingProfileId in sync too (primary resource only) for anything still reading that older field.
-          const succeeded = result.profiles.filter(
-            (p) => p.mappingProfileId !== EMPTY_GUID,
-          );
-          if (succeeded.length > 0) {
-            const mappingNode = this.pipelineStore.byId(this.attachNode().id);
-            if (mappingNode) {
-              const mappingProfileIds = {
-                ...this._parseExistingMappingProfileIds(
-                  mappingNode.fields ?? {},
-                ),
-                ...Object.fromEntries(
-                  succeeded.map((p) => [p.resourceType, p.mappingProfileId]),
-                ),
-              };
-              const primary =
-                succeeded.find(
-                  (p) => p.resourceType === doc.mappings[0]?.resourceType,
-                ) ?? succeeded[0];
-              this.pipelineStore.updateNode(mappingNode.id, {
-                fields: {
-                  ...mappingNode.fields,
-                  mappingProfileId: primary.mappingProfileId,
-                  mappingProfileIds: JSON.stringify(mappingProfileIds),
-                },
-              });
-            }
-          }
-          emitSaved();
-        },
-        error: (err) => {
-          this.savingMappingProfiles.set(false);
-          const msg =
-            err?.error?.title ??
-            err?.error?.error ??
-            err?.message ??
-            'Failed to import the mapping profile.';
-          this.toast.show(
-            'Mapping profile not saved',
-            typeof msg === 'string'
-              ? msg
-              : 'Failed to import the mapping profile.',
-          );
-          emitSaved();
-        },
-      });
-      return;
-    }
-
+    // A mapping is now saved ON THE NODE and nowhere else (plan §2.d / §3.3): the node's own config above
+    // already carries every row, so an ordinary save writes no MappingProfile at all.
+    //
+    // This used to import one on EVERY save, which is what created the duplicate masters, and left two
+    // sources of truth for the same mapping — the node's rows and the profile's fields — free to diverge.
+    // They did: a node holding 12 fields while its profile held 15 silently dropped the three columns the
+    // workflow's transformation rules targeted, so the rules had nothing to attach to and vanished from the
+    // UI while remaining in the database.
+    //
+    // Master profiles are now created only by an explicit "Mark as Master" (see markActiveGroupAsMaster),
+    // which is what that button always implied.
     emitSaved();
   }
 }

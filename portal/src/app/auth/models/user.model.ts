@@ -51,6 +51,11 @@ export interface Role {
   permissions:  Permission[];
   color:        string;
   isSystemRole: boolean;
+  // RBAC redesign Step 6: mirrors Role.IsFullAccess (RoleDto.IsFullAccess) — true means this role
+  // automatically holds every current and future permission (see CachedUserPermissionsProvider),
+  // independent of anything in `permissions` above. See role-dialog.component.ts (the toggle) and
+  // role-permissions.component.ts (the read-only banner replacing the matrix for such a role).
+  isFullAccess: boolean;
   createdAt:    string;
   createdBy?:     string | null;
   modifiedOnUtc?: string | null;
@@ -170,6 +175,9 @@ export interface RoleDto {
   description:  string;
   permissions:  PermissionDto[];
   isSystemRole: boolean;
+  // RBAC redesign Step 6 — see Role.isFullAccess above. Absent on a stale/pre-Step-4 response would
+  // deserialize as undefined; mapRoleDto (api-user.service.ts) defaults it to false either way.
+  isFullAccess?: boolean;
   createdOnUtc?:  string | null;
   createdBy?:     string | null;
   modifiedOnUtc?: string | null;

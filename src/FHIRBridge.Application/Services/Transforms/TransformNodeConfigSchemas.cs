@@ -1,4 +1,4 @@
-using FHIRBridge.Application.DTOs.Transforms;
+﻿using FHIRBridge.Application.DTOs.Transforms;
 using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services.Transforms;
@@ -27,15 +27,20 @@ public static class TransformationRulesFeatureFlag
 public static class TransformNodeConfigSchemas
 {
     private static TransformConfigFieldSchema Text(
-        string key, string label, string? defaultValue = null, string? placeholder = null, bool advanced = false) =>
-        new(key, label, "text", null, defaultValue, placeholder, advanced);
+        string key, string label, string? defaultValue = null, string? placeholder = null, bool advanced = false,
+        TransformConfigFieldVisibility? visibleWhen = null) =>
+        new(key, label, "text", null, defaultValue, placeholder, advanced, visibleWhen);
 
     // A number input (rejects non-numeric keystrokes at the UI layer) for the many config keys that are
     // parsed as int/decimal by the node itself (config.GetInt / decimal.TryParse) but used to be a plain
     // text box — free to type "abc" into a field that will just fail to parse downstream.
     private static TransformConfigFieldSchema Number(
-        string key, string label, string? defaultValue = null, string? placeholder = null, bool advanced = false) =>
-        new(key, label, "number", null, defaultValue, placeholder, advanced);
+        string key, string label, string? defaultValue = null, string? placeholder = null, bool advanced = false,
+        TransformConfigFieldVisibility? visibleWhen = null) =>
+        new(key, label, "number", null, defaultValue, placeholder, advanced, visibleWhen);
+
+    private static TransformConfigFieldVisibility OnlyWhen(string key, params string[] values) =>
+        new(key, values);
 
     private static TransformConfigFieldSchema Select(string key, string label, string[] options, string defaultValue, bool advanced = false) =>
         new(key, label, "select", options, defaultValue, IsAdvanced: advanced);
@@ -285,8 +290,13 @@ public static class TransformNodeConfigSchemas
             [TransformNodeType.HashingMasking] = new(TransformNodeType.HashingMasking, "Hashing/Masking",
             [
                 Select("mode", "Mode", ["hash", "mask", "redact"], "mask"),
-                Number("keepLength", "Characters to keep visible (mask mode)", "4", advanced: true),
-                Text("token", "Replacement token (redact mode)", placeholder: "e.g. [REDACTED]", advanced: true),
+                // Each applies to exactly one mode — hashing has nothing to keep visible, and only redact
+                // substitutes a token. Scoped rather than merely marked advanced so a hash rule's stored
+                // config says "mode = hash" and nothing else.
+                Number("keepLength", "End characters to keep visible", "4", advanced: true,
+                    visibleWhen: OnlyWhen("mode", "mask")),
+                Text("token", "Replacement token", placeholder: "e.g. [REDACTED]", advanced: true,
+                    visibleWhen: OnlyWhen("mode", "redact")),
             ]),
         };
 

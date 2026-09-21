@@ -1,5 +1,5 @@
 import { Component, computed, input, output } from '@angular/core';
-import { MappingRow, MappingDestType } from './field-mapping-model';
+import { MappingRow, MappingDestType, isSqlFamilyDestType } from './field-mapping-model';
 import { buildSqlInsert, buildCsvPreview, CSV_DELIMITERS } from './field-mapping-preview.util';
 
 interface FmPreviewSection {
@@ -33,9 +33,9 @@ export class FieldMappingPreviewDrawerComponent {
   // SQL Server/MySQL/PostgreSQL all render as a plain, dialect-agnostic INSERT statement
   // (buildSqlInsert doesn't quote identifiers, so it's already valid across all three) — this used to
   // only cover 'sql' (SQL Server), silently falling MySQL/PostgreSQL back to the CSV preview instead.
-  readonly isSqlFamily = computed(
-    () => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres',
-  );
+  // Routed through the shared predicate rather than re-listing the engines inline: the list now includes
+  // Fabric Warehouse, and an inline copy is exactly how this gate drifted out of step before.
+  readonly isSqlFamily = computed(() => isSqlFamilyDestType(this.destType()));
 
   readonly sections = computed<FmPreviewSection[]>(() => {
     const delimiter = CSV_DELIMITERS[this.csvDelimiterKey()] ?? ',';

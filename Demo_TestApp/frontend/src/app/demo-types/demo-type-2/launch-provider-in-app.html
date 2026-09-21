@@ -55,8 +55,8 @@
       </p>
     } @else if (launchError()) {
       <p class="error-banner">
-        The workflow FHIRBridge triggered for this launch failed to complete, so there is no patient data to
-        show ({{ launchError() }}). Check FHIRBridge's Execution History for this run's error detail.
+        No patient data could be shown for this launch: {{ launchError() }} If the workflow itself failed,
+        FHIRBridge's Execution History has the error detail for this run.
       </p>
     } @else if (patient(); as p) {
       <div class="patient-cards-grid">
@@ -96,11 +96,11 @@
             </div>
             <div class="field-row">
               <span class="field-label">Date of Birth</span>
-              <span class="field-value">{{ p.dateOfBirth ? (p.dateOfBirth | date: 'MMMM d, y') : 'Not Available' }}</span>
+              <span class="field-value">{{ p.dateOfBirth ? (p.dateOfBirth | date: 'MMMM d, y') : '' }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">Age</span>
-              <span class="field-value">{{ age() }}</span>
+              <span class="field-value">{{ age() ?? '' }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">Marital Status</span>
@@ -108,11 +108,11 @@
             </div>
             <div class="field-row">
               <span class="field-label">Status</span>
-              <span class="field-value">{{ p.active ? 'Active' : 'Inactive' }}</span>
+              <span class="field-value">{{ p.active ? 'Active' : '' }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">Deceased</span>
-              <span class="field-value">{{ p.deceased ? 'Yes' : 'No' }}</span>
+              <span class="field-value">{{ p.deceased ? 'Yes' : '' }}</span>
             </div>
           </mat-card-content>
         </mat-card>

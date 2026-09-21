@@ -7,6 +7,7 @@ using FHIRBridge.Application.Services.Licensing;
 using FHIRBridge.Application.Services.Mapping;
 using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Application.Services.Transforms.Nodes;
+using FHIRBridge.Application.Services.Workflows;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -80,6 +81,8 @@ public static class DependencyInjection
         services.AddScoped<IFhirResourceTransformService, FhirResourceTransformService>();
         services.AddScoped<ITransformationRuleService, TransformationRuleService>();
         services.AddScoped<IWorkflowConfigurationCleanupService, WorkflowConfigurationCleanupService>();
+        services.AddScoped<IWorkflowConfigurationMigrationService, WorkflowConfigurationMigrationService>();
+        services.AddScoped<IWorkflowGraphVersionMigrationService, WorkflowGraphVersionMigrationService>();
         services.AddScoped<IEhrEndpointService, EhrEndpointService>();
         services.AddScoped<IAllowedCorsOriginsService, AllowedCorsOriginsService>();
         services.AddSingleton<IScopeGeneratorService, ScopeGeneratorService>();

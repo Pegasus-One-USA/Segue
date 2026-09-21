@@ -1,0 +1,97 @@
+<div class="detail-container">
+  <div class="detail-header">
+    <h2>{{ entry.customerName || 'Unknown Customer' }}</h2>
+    <div class="detail-header-badges">
+      <span class="badge">{{ entry.edition || '—' }}</span>
+      @if (entry.isCurrent) {
+        <span class="badge badge-active">Current</span>
+      }
+    </div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="stat-field">
+      <span class="stat-label">State (at the time it was applied)</span>
+      <span class="stat-value">{{ entry.state }}</span>
+    </div>
+    <div class="stat-field">
+      <span class="stat-label">Activated (Applied) At</span>
+      <span class="stat-value">{{ entry.appliedUtc | date: 'medium' }}</span>
+    </div>
+    <div class="stat-field">
+      <span class="stat-label">Issued On</span>
+      <span class="stat-value">{{ entry.issuedUtc ? (entry.issuedUtc | date: 'medium') : '—' }}</span>
+    </div>
+    <div class="stat-field">
+      <span class="stat-label">Expires</span>
+      <span class="stat-value">{{ entry.expiresUtc ? (entry.expiresUtc | date: 'medium') : 'Never' }}</span>
+    </div>
+  </div>
+
+  @if (entry.limits; as limits) {
+    <h3>Limits</h3>
+    <div class="detail-grid">
+      <div class="stat-field">
+        <span class="stat-label">Max Users</span>
+        <span class="stat-value">{{ formatLimit(limits.maxUsers) }}</span>
+      </div>
+      <div class="stat-field">
+        <span class="stat-label">Max Workflows</span>
+        <span class="stat-value">{{ formatLimit(limits.maxWorkflows) }}</span>
+      </div>
+      <div class="stat-field">
+        <span class="stat-label">Max Source Connections</span>
+        <span class="stat-value">{{ formatLimit(limits.maxSourceConnections) }}</span>
+      </div>
+      <div class="stat-field">
+        <span class="stat-label">Max Processed Records / Month</span>
+        <span class="stat-value">{{ formatLimit(limits.maxProcessedRecordsPerMonth) }}</span>
+      </div>
+      <div class="stat-field">
+        <span class="stat-label">Max Successful Executions / Month</span>
+        <span class="stat-value">{{ formatLimit(limits.maxSuccessfulWorkflowExecutionsPerMonth) }}</span>
+      </div>
+    </div>
+
+    <h3>Restrictions</h3>
+    <div class="restriction-block">
+      <span class="stat-label">Allowed Source Types</span>
+      <span class="stat-value">{{ limits.allowedSourceTypes?.length ? limits.allowedSourceTypes!.join(', ') : 'All allowed' }}</span>
+    </div>
+    <div class="restriction-block">
+      <span class="stat-label">Allowed Resource Types</span>
+      <span class="stat-value">{{ limits.allowedResourceTypes?.length ? limits.allowedResourceTypes!.join(', ') : 'All allowed' }}</span>
+    </div>
+    <div class="restriction-block">
+      <span class="stat-label">Allowed Destination Types</span>
+      <span class="stat-value">{{ limits.allowedDestinationTypes?.length ? limits.allowedDestinationTypes!.join(', ') : 'All allowed' }}</span>
+    </div>
+
+    @if (limits.allowedHospitals?.length) {
+      <div class="restriction-block">
+        <span class="stat-label">Allowed Hospitals</span>
+        <ul class="hospital-list">
+          @for (h of limits.allowedHospitals; track h.baseUrl) {
+            <li>
+              <span class="hospital-list-vendor">{{ h.vendor }}</span>
+              <span>{{ h.displayName || h.baseUrl }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  }
+
+  @if (entry.features.length) {
+    <h3>Features</h3>
+    <div class="feature-tags">
+      @for (f of entry.features; track f) {
+        <span class="feature-tag">{{ f }}</span>
+      }
+    </div>
+  }
+
+  <div class="detail-footer">
+    <button type="button" class="btn-outline" (click)="dialogRef.close()">Close</button>
+  </div>
+</div>

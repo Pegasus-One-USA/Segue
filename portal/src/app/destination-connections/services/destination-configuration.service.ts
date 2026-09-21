@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpContext } from '@angular/common/http';
+import { SKIP_LOADER } from '../../core/loading.interceptor';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { DESTINATION_ENDPOINTS } from '../../core/api-endpoints';
@@ -23,7 +24,10 @@ export interface DestinationExecutionHistory {
 export class DestinationConfigurationService {
   private readonly http = inject(HttpClient);
 
-  getPaged(filter: DestinationConfigurationFilter): Observable<PagedResult<DestinationConfigurationDto>> {
+  /** `silent` (passed only from a debounced search-box keystroke) sends SKIP_LOADER so this request
+   *  bypasses the app-wide global loader — which dims the screen and marks the routed content [inert],
+   *  blurring the very input being typed into. The caller shows a small in-field spinner instead. */
+  getPaged(filter: DestinationConfigurationFilter, silent = false): Observable<PagedResult<DestinationConfigurationDto>> {
     let params = new HttpParams()
       .set('page', String(filter.page))
       .set('pageSize', String(filter.pageSize));
@@ -34,7 +38,8 @@ export class DestinationConfigurationService {
     if (filter.sortBy) params = params.set('sortBy', filter.sortBy);
     if (filter.sortOrder) params = params.set('sortOrder', filter.sortOrder);
 
-    return this.http.get<PagedResult<DestinationConfigurationDto>>(DESTINATION_ENDPOINTS.paged, { params });
+    const context = silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<PagedResult<DestinationConfigurationDto>>(DESTINATION_ENDPOINTS.paged, { params, context });
   }
 
   create(request: CreateDestinationConfigurationRequest): Observable<DestinationConfigurationDto> {
@@ -55,6 +60,15 @@ export class DestinationConfigurationService {
 
   delete(id: string): Observable<void> {
     return this.http.delete<void>(DESTINATION_ENDPOINTS.byId(id));
+  }
+
+  /** Sets (or clears, with null) the destination's de-identification profile on its own. Deliberately not the
+   *  full `update()` above: that PUT runs the create-request validator, which requires KeyVaultName/SecretName on
+   *  every call — values this wizard never re-displays for a stored secret. The Map-fields screen changes the
+   *  profile long after Step 1 provisioned the connection, so it needs a write that touches nothing else. */
+  setDeIdentificationProfile(id: string, deIdentificationProfileId: string | null): Observable<DestinationConfigurationDto> {
+    return this.http.put<DestinationConfigurationDto>(
+      DESTINATION_ENDPOINTS.deIdentificationProfile(id), { deIdentificationProfileId });
   }
 
   hasExecutionHistory(id: string): Observable<DestinationExecutionHistory> {

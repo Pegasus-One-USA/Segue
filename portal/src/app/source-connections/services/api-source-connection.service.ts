@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpContext } from '@angular/common/http';
+import { SKIP_LOADER } from '../../core/loading.interceptor';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { SOURCE_CONNECTIONS_ENDPOINTS } from '../../core/api-endpoints';
@@ -22,7 +23,10 @@ export class ApiSourceConnectionService extends ISourceConnectionService {
     );
   }
 
-  getPaged(filter: SourceConnectionFilter): Observable<PagedResult<SourceConnectionModel>> {
+  /** `silent` (passed only from a debounced search-box keystroke) sends SKIP_LOADER so this request
+   *  bypasses the app-wide global loader — which dims the screen and marks the routed content [inert],
+   *  blurring the very input being typed into. The caller shows a small in-field spinner instead. */
+  getPaged(filter: SourceConnectionFilter, silent = false): Observable<PagedResult<SourceConnectionModel>> {
     let params = new HttpParams()
       .set('page', String(filter.page))
       .set('pageSize', String(filter.pageSize));
@@ -34,7 +38,8 @@ export class ApiSourceConnectionService extends ISourceConnectionService {
     if (filter.sortBy) params = params.set('sortBy', filter.sortBy);
     if (filter.sortOrder) params = params.set('sortOrder', filter.sortOrder);
 
-    return this.http.get<PagedResult<SourceConnectionModel>>(SOURCE_CONNECTIONS_ENDPOINTS.paged, { params }).pipe(
+    const context = silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<PagedResult<SourceConnectionModel>>(SOURCE_CONNECTIONS_ENDPOINTS.paged, { params, context }).pipe(
       catchError(err => throwError(() => err))
     );
   }
@@ -69,16 +74,17 @@ export class ApiSourceConnectionService extends ISourceConnectionService {
     );
   }
 
-  generateSigningKey(): Observable<GeneratedSigningKeyModel> {
-    return this.http.post<GeneratedSigningKeyModel>(SOURCE_CONNECTIONS_ENDPOINTS.generateSigningKey, {}).pipe(
+  generateSigningKey(sourceSystemType: string): Observable<GeneratedSigningKeyModel> {
+    const params = new HttpParams().set('sourceSystemType', sourceSystemType);
+    return this.http.post<GeneratedSigningKeyModel>(SOURCE_CONNECTIONS_ENDPOINTS.generateSigningKey, {}, { params }).pipe(
       catchError(err => throwError(() => err))
     );
   }
 
-  importSigningKey(privateKeyPem: string): Observable<GeneratedSigningKeyModel> {
+  importSigningKey(privateKeyPem: string, sourceSystemType: string): Observable<GeneratedSigningKeyModel> {
     return this.http.post<GeneratedSigningKeyModel>(
       SOURCE_CONNECTIONS_ENDPOINTS.importSigningKey,
-      { privateKeyPem }
+      { privateKeyPem, sourceSystemType }
     ).pipe(
       catchError(err => throwError(() => err))
     );

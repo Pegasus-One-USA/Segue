@@ -424,26 +424,36 @@ app.MapGet("/api/provider-in-app-launch-context", async (
     //
     // Best-effort: this app cannot usefully block a real EHR launch on its own pre-flight failing, and a refusal
     // is already recorded server-side as a ValidationFailed row.
+    //
+    // Only the INBOUND launch leg is pre-flighted. The frontend calls this same endpoint again on the post-OAuth
+    // return leg (to re-resolve standaloneBaseUrl) and deliberately omits iss there — that leg launches nothing, so
+    // validating it minted a correlation id and a Validated run row for an attempt that could never execute,
+    // stranding one orphaned Execution History entry per launch. iss is the launch leg's own marker (see
+    // launch-provider-in-app.ts's ngOnInit, which passes it only when the EHR supplied iss+launch), so gating on it
+    // pre-flights exactly the calls that go on to hand the browser off to the EHR.
     string? attemptCorrelationId = null;
-    try
+    if (!string.IsNullOrWhiteSpace(iss))
     {
-        var validateResponse = await client.PostAsync(
-            $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/validate-run",
-            new StringContent(
-                JsonSerializer.Serialize(new { patientId = (string?)null, patientSearchCriteria = (string?)null, callerId = (string?)null }),
-                Encoding.UTF8,
-                "application/json"));
-
-        if (validateResponse.IsSuccessStatusCode)
+        try
         {
-            var validation = JsonSerializer.Deserialize<ValidateRunResult>(
-                await validateResponse.Content.ReadAsStringAsync(), jsonOptions);
-            attemptCorrelationId = validation?.CorrelationId;
+            var validateResponse = await client.PostAsync(
+                $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/validate-run",
+                new StringContent(
+                    JsonSerializer.Serialize(new { patientId = (string?)null, patientSearchCriteria = (string?)null, callerId = (string?)null }),
+                    Encoding.UTF8,
+                    "application/json"));
+
+            if (validateResponse.IsSuccessStatusCode)
+            {
+                var validation = JsonSerializer.Deserialize<ValidateRunResult>(
+                    await validateResponse.Content.ReadAsStringAsync(), jsonOptions);
+                attemptCorrelationId = validation?.CorrelationId;
+            }
         }
-    }
-    catch (Exception ex)
-    {
-        logger.LogWarning(ex, "validate-run pre-flight could not be completed for ProviderInAppWorkflowId={WorkflowId}.", workflowId);
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "validate-run pre-flight could not be completed for ProviderInAppWorkflowId={WorkflowId}.", workflowId);
+        }
     }
 
 
@@ -805,6 +815,10 @@ app.MapDelete("/api/epic-session", (HttpContext http, SessionStore sessions, Epi
 });
 
 app.MapBackendSystemEndpoints();
+
+// Pipeline-run lineage lookup — GET /api/pipeline-runs/{runId}/patients returns the Patient_NewMapped rows
+// stamped with that FHIRBridge PipelineRunId, so a workflow run can be inspected by run id after the fact.
+app.MapPipelineRunPatientEndpoints();
 
 // "New 11" menu data — read-only GETs over the curated _11 tables, available to any authenticated role.
 app.MapResource11Endpoints();

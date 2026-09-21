@@ -1,6 +1,10 @@
 <div class="list-page">
 
-  <!-- Decrypt Provisioned Secret tool -->
+  <!-- Decrypt Provisioned Secret tool.
+       Elevated-only: it recovers secret plaintext (private key PEMs), which is the most sensitive thing on
+       this page. It used to be protected by the page's own superAdminGuard; now that General is reachable
+       with configuration.view/write, it carries its own gate instead. -->
+  @if (isElevated()) {
   <div class="filter-card">
     <div class="filter-header-text">
       <h3>Decrypt Provisioned Secret</h3>
@@ -39,10 +43,22 @@
       </div>
     }
   </div>
+  }
 
   <!-- Terminology Servers: grouped settings, Run Now, and History for the 13 HAPI-terminology-server
-       sync systems — replaces the flat "Terminology:*Hapi:*" rows that used to render below. -->
-  <app-hapi-terminology-table [searchTerm]="search()"></app-hapi-terminology-table>
+       sync systems — replaces the flat "Terminology:*Hapi:*" rows that used to render below.
+
+       Gated on TERMINOLOGY_SERVER_TABLE_ENABLED as well as elevation. The table fetches
+       GET /api/v1/terminology/hapi from its own ngOnInit, so without a flag check it would issue that
+       request on every load of this page even when this table is switched off — work for a feature
+       nobody can reach. That flag is deliberately NOT TERMINOLOGY_FEATURE_ENABLED, which governs the
+       separate, newer Terminology Codes tab: gating this table on that flag too took this screen down
+       as a side effect when Terminology Codes was switched off. Elevation still applies on top: these
+       carry external download credentials and endpoint URLs, matching Terminology's place in
+       SUPER_ADMIN_ONLY_GROUPS. -->
+  @if (terminologyServerTableEnabled && isElevated()) {
+    <app-hapi-terminology-table [searchTerm]="search()"></app-hapi-terminology-table>
+  }
 
   <!-- Filter Bar -->
   <div class="filter-card">
@@ -65,11 +81,15 @@
         />
       </div>
 
-      <div class="filter-actions">
-        <button class="btn-add" type="button" (click)="openAdd()">
-          New
-        </button>
-      </div>
+      <!-- Creating a raw SystemSetting row is a configuration.* action; an ehrendpoints.view-only viewer
+           is here only for the EHR Endpoints launcher row. -->
+      @if (canViewSettingGroups()) {
+        <div class="filter-actions">
+          <button class="btn-add" type="button" (click)="openAdd()">
+            New
+          </button>
+        </div>
+      }
     </div>
   </div>
 
@@ -114,7 +134,7 @@
             <th mat-header-cell *matHeaderCellDef>Key</th>
             <td mat-cell *matCellDef="let row">
               <div class="cell-name">
-                @if ($any(row).isGeneralGroup) {
+                @if ($any(row).isGeneralGroup || $any(row).isLauncher) {
                   <span class="cell-primary cell-data">{{ $any(row).label }}</span>
                 } @else {
                   <span class="cell-primary cell-data">{{ $any(row).key }}</span>
@@ -127,7 +147,9 @@
           <ng-container matColumnDef="value">
             <th mat-header-cell *matHeaderCellDef>Value</th>
             <td mat-cell *matCellDef="let row">
-              @if ($any(row).isGeneralGroup) {
+              @if ($any(row).isLauncher) {
+                <span class="cell-data muted">{{ $any(row).summary }}</span>
+              } @else if ($any(row).isGeneralGroup) {
                 <span class="cell-data muted">{{ $any(row).settings.length }} setting{{ $any(row).settings.length === 1 ? '' : 's' }}</span>
               } @else {
                 <span class="cell-data">{{ $any(row).value }}</span>
@@ -139,7 +161,7 @@
           <ng-container matColumnDef="description">
             <th mat-header-cell *matHeaderCellDef>Description</th>
             <td mat-cell *matCellDef="let row" class="col-description">
-              {{ $any(row).isGeneralGroup ? '' : ($any(row).description || '—') }}
+              {{ ($any(row).isGeneralGroup || $any(row).isLauncher) ? '' : ($any(row).description || '—') }}
             </td>
           </ng-container>
 
@@ -147,7 +169,7 @@
           <ng-container matColumnDef="actionBy">
             <th mat-header-cell *matHeaderCellDef>Action by</th>
             <td mat-cell *matCellDef="let row">
-              {{ $any(row).isGeneralGroup ? '' : (($any(row).modifiedBy || $any(row).createdBy) ?? '—') }}
+              {{ ($any(row).isGeneralGroup || $any(row).isLauncher) ? '' : (($any(row).modifiedBy || $any(row).createdBy) ?? '—') }}
             </td>
           </ng-container>
 
@@ -160,7 +182,9 @@
               }
             </th>
             <td mat-cell *matCellDef="let row">
-              @if ($any(row).isGeneralGroup) {
+              @if ($any(row).isLauncher) {
+                <!-- Launchers have no settings rows behind them, so there is no last-modified to show. -->
+              } @else if ($any(row).isGeneralGroup) {
                 {{ ($any(row).lastModifiedOnUtc | date: 'short') || '—' }}
               } @else {
                 {{ (($any(row).modifiedOnUtc || $any(row).createdOnUtc) | date: 'short') || '—' }}
@@ -177,7 +201,12 @@
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
-                  @if ($any(row).isGeneralGroup) {
+                  @if ($any(row).isLauncher) {
+                    <button mat-menu-item (click)="openLauncher($any(row))">
+                      <mat-icon>edit</mat-icon>
+                      Edit
+                    </button>
+                  } @else if ($any(row).isGeneralGroup) {
                     <button mat-menu-item (click)="openEditGroup($any(row))">
                       <mat-icon>edit</mat-icon>
                       Edit
@@ -203,6 +232,7 @@
 
           <tr mat-row *matRowDef="let row; columns: ['groupHeader']; when: isGroupHeaderRow" class="group-header-row"></tr>
           <tr mat-row *matRowDef="let row; columns: ['codeGroupHeader']; when: isCodeGroupHeaderRow" class="code-group-header-row"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols; when: isLauncherRow" class="data-row"></tr>
           <tr mat-row *matRowDef="let row; columns: displayedCols; when: isGeneralGroupRow" class="data-row"></tr>
           <tr mat-row *matRowDef="let row; columns: displayedCols; when: isDataRow" class="data-row"></tr>
 

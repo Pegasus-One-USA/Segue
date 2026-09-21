@@ -9,15 +9,16 @@ using Microsoft.IdentityModel.Tokens;
 namespace FHIRBridge.UnitTests.Licensing;
 
 /// <summary>
-/// Covers <see cref="SignedLicenseValidator"/> end to end against the real dev keypair embedded in
-/// <see cref="LicensePublicKey"/> / <c>tools/FHIRBridge.LicenseMinter</c>.
+/// Covers <see cref="SignedLicenseValidator"/> end to end against a throwaway test-only keypair, via
+/// <see cref="SignedLicenseValidator.ValidateWithPublicKey"/> — deliberately NOT against whatever
+/// <see cref="LicensePublicKey.PublicKeyBase64"/> is actually compiled to, since that constant now
+/// holds real production key material this suite must never need (or embed the private half of).
 /// </summary>
 public sealed class SignedLicenseValidatorTests
 {
-    // Same dev keypair as src/FHIRBridge.Infrastructure/Licensing/LicensePublicKey.cs and
-    // tools/FHIRBridge.LicenseMinter's --dev-key fallback — duplicated here deliberately (per the spec,
-    // this test suite must not reference the standalone, deliberately-not-in-the-solution minting tool
-    // project) so this test can mint tokens the validator's embedded dev public key will actually verify.
+    // A fixed, throwaway P-256 keypair, generated once for this test suite only — has never signed a
+    // real license and is not used anywhere in production. Fixed (not freshly generated per test run)
+    // so a failing assertion is reproducible.
     private const string DevPrivateKeyPkcs8Base64 =
         "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgzNfRUjAwdWWhtF6HDTFMjzkpc6ix4tAt0KpVuBS1H+mhRANCAAQnMOZWXkeX06SoZyVY2NFCQjAPD9dXCmyoZChc3n59+CHbwMLDg8lzcuh/60NbOQzfHLB/fGxuUpTM+n5l2sJr";
 
@@ -31,7 +32,7 @@ public sealed class SignedLicenseValidatorTests
         var key = LoadDevPrivateKey();
         var token = MintToken(key, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1));
 
-        var status = SignedLicenseValidator.Validate(token);
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
 
         status.State.Should().Be(LicenseState.Active);
         status.CustomerName.Should().Be("Mercy Health System");
@@ -54,7 +55,7 @@ public sealed class SignedLicenseValidatorTests
         var key = LoadDevPrivateKey();
         var token = MintToken(key, DateTime.UtcNow.AddYears(-1), DateTime.UtcNow.AddDays(-30));
 
-        var status = SignedLicenseValidator.Validate(token);
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
 
         status.State.Should().Be(LicenseState.Expired);
         status.CustomerName.Should().Be("Mercy Health System");
@@ -75,7 +76,7 @@ public sealed class SignedLicenseValidatorTests
         var key = LoadDevPrivateKey();
         var token = MintToken(key, DateTime.UtcNow.AddDays(30), DateTime.UtcNow.AddYears(1));
 
-        var status = SignedLicenseValidator.Validate(token);
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
 
         status.State.Should().Be(LicenseState.Invalid);
         status.InvalidReason.Should().NotBeNullOrWhiteSpace();
@@ -95,7 +96,7 @@ public sealed class SignedLicenseValidatorTests
         parts.Should().HaveCount(3);
         var tamperedToken = string.Join('.', parts[0], FlipOneChar(parts[1]), parts[2]);
 
-        var status = SignedLicenseValidator.Validate(tamperedToken);
+        var status = SignedLicenseValidator.ValidateWithPublicKey(tamperedToken, enforceActivationWindow: false, key);
 
         status.State.Should().Be(LicenseState.Invalid);
         status.InvalidReason.Should().NotBeNullOrWhiteSpace();
@@ -107,7 +108,10 @@ public sealed class SignedLicenseValidatorTests
         var otherKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var token = MintToken(otherKey, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1));
 
-        var status = SignedLicenseValidator.Validate(token);
+        // Validated against a DIFFERENT keypair than the one that signed it — this is the whole point
+        // of the test, so it deliberately does not reuse LoadDevPrivateKey() here.
+        var trustedKey = LoadDevPrivateKey();
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, trustedKey);
 
         status.State.Should().Be(LicenseState.Invalid);
     }
@@ -119,8 +123,9 @@ public sealed class SignedLicenseValidatorTests
     [InlineData("garbage.garbage.garbage")]
     public void Garbage_input_reports_Invalid_without_throwing(string garbage)
     {
+        var key = LoadDevPrivateKey();
         LicenseStatus? status = null;
-        Action act = () => status = SignedLicenseValidator.Validate(garbage);
+        Action act = () => status = SignedLicenseValidator.ValidateWithPublicKey(garbage, enforceActivationWindow: false, key);
 
         act.Should().NotThrow();
         status!.State.Should().Be(LicenseState.Invalid);
@@ -136,7 +141,7 @@ public sealed class SignedLicenseValidatorTests
         var key = LoadDevPrivateKey();
         var token = MintToken(key, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1), maxUsers: null);
 
-        var status = SignedLicenseValidator.Validate(token);
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
 
         status.State.Should().Be(LicenseState.Active);
         status.Limits.Should().NotBeNull();
@@ -163,7 +168,7 @@ public sealed class SignedLicenseValidatorTests
             },
             maxProcessedRecordsPerMonth: 50000);
 
-        var status = SignedLicenseValidator.Validate(token);
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
 
         status.State.Should().Be(LicenseState.Active);
         status.Limits.Should().NotBeNull();
@@ -187,7 +192,7 @@ public sealed class SignedLicenseValidatorTests
         var key = LoadDevPrivateKey();
         var token = MintToken(key, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1));
 
-        var status = SignedLicenseValidator.Validate(token);
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
 
         status.State.Should().Be(LicenseState.Active);
         status.Limits.Should().NotBeNull();
@@ -213,7 +218,7 @@ public sealed class SignedLicenseValidatorTests
             allowedResourceTypes: new[] { "Patient", "Observation" },
             allowedDestinationTypes: new[] { "SqlServer", "Sftp" });
 
-        var status = SignedLicenseValidator.Validate(token);
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
 
         status.State.Should().Be(LicenseState.Active);
         status.Limits.Should().NotBeNull();
@@ -231,7 +236,7 @@ public sealed class SignedLicenseValidatorTests
         var key = LoadDevPrivateKey();
         var token = MintToken(key, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1));
 
-        var status = SignedLicenseValidator.Validate(token);
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
 
         status.State.Should().Be(LicenseState.Active);
         status.Limits.Should().NotBeNull();
@@ -256,11 +261,116 @@ public sealed class SignedLicenseValidatorTests
         parts.Should().HaveCount(3);
         var tamperedToken = string.Join('.', parts[0], FlipOneChar(parts[1]), parts[2]);
 
-        var status = SignedLicenseValidator.Validate(tamperedToken);
+        var status = SignedLicenseValidator.ValidateWithPublicKey(tamperedToken, enforceActivationWindow: false, key);
 
         status.State.Should().Be(LicenseState.Invalid);
         status.Limits.Should().BeNull();
         status.InvalidReason.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void Activation_window_is_ignored_by_default_even_when_long_passed()
+    {
+        // Deliberately not disposed here: see the repeated remark on the tests above.
+        var key = LoadDevPrivateKey();
+        var token = MintToken(
+            key,
+            DateTime.UtcNow.AddDays(-30),
+            DateTime.UtcNow.AddYears(1),
+            activateByUtc: DateTime.UtcNow.AddDays(-29));
+
+        // The single-arg overload (what ReloadAsync uses on every process restart) must never enforce
+        // this claim — an already-applied, currently-running license can't be allowed to brick itself
+        // just because real time passed its original activation deadline.
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
+
+        status.State.Should().Be(LicenseState.Active);
+    }
+
+    [Fact]
+    public void Activation_window_enforced_and_expired_reports_Invalid()
+    {
+        var key = LoadDevPrivateKey();
+        var token = MintToken(
+            key,
+            DateTime.UtcNow.AddHours(-2),
+            DateTime.UtcNow.AddYears(1),
+            activateByUtc: DateTime.UtcNow.AddHours(-1));
+
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: true, key);
+
+        status.State.Should().Be(LicenseState.Invalid);
+        status.InvalidReason.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void Activation_window_uses_a_short_tolerance_not_the_5_minute_nbf_exp_skew()
+    {
+        // Regression test for a real observed bug: a 1-minute window minted, applied 3 minutes later,
+        // incorrectly reported Active because the activation check originally reused the 5-minute
+        // nbf/exp ClockSkew — turning every window into "window + 5 minutes". A deadline 3 minutes in
+        // the past must be enforced (Invalid), not tolerated.
+        var key = LoadDevPrivateKey();
+        var token = MintToken(
+            key,
+            DateTime.UtcNow.AddMinutes(-4),
+            DateTime.UtcNow.AddYears(1),
+            activateByUtc: DateTime.UtcNow.AddMinutes(-3));
+
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: true, key);
+
+        status.State.Should().Be(LicenseState.Invalid);
+    }
+
+    [Fact]
+    public void Activation_window_enforced_and_still_open_reports_Active()
+    {
+        // Deliberately not disposed here: see the repeated remark on the tests above.
+        var key = LoadDevPrivateKey();
+        var token = MintToken(
+            key,
+            DateTime.UtcNow.AddMinutes(-10),
+            DateTime.UtcNow.AddYears(1),
+            activateByUtc: DateTime.UtcNow.AddMinutes(50));
+
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: true, key);
+
+        status.State.Should().Be(LicenseState.Active);
+    }
+
+    [Fact]
+    public void Activation_window_enforced_but_absent_claim_never_blocks()
+    {
+        // Deliberately not disposed here: see the repeated remark on the tests above.
+        var key = LoadDevPrivateKey();
+        var token = MintToken(key, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1));
+
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: true, key);
+
+        status.State.Should().Be(LicenseState.Active);
+    }
+
+    [Fact]
+    public void RequestKey_claim_round_trips_when_present()
+    {
+        var key = LoadDevPrivateKey();
+        var token = MintToken(
+            key, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1), requestKey: "abc123uniquekey");
+
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
+
+        status.RequestKey.Should().Be("abc123uniquekey");
+    }
+
+    [Fact]
+    public void RequestKey_is_null_when_absent()
+    {
+        var key = LoadDevPrivateKey();
+        var token = MintToken(key, DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddYears(1));
+
+        var status = SignedLicenseValidator.ValidateWithPublicKey(token, enforceActivationWindow: false, key);
+
+        status.RequestKey.Should().BeNull();
     }
 
     private static ECDsa LoadDevPrivateKey()
@@ -286,7 +396,9 @@ public sealed class SignedLicenseValidatorTests
         object[]? allowedHospitals = null,
         int? maxProcessedRecordsPerMonth = null,
         string[]? allowedResourceTypes = null,
-        string[]? allowedDestinationTypes = null)
+        string[]? allowedDestinationTypes = null,
+        DateTime? activateByUtc = null,
+        string? requestKey = null)
     {
         features ??= new[] { "hl7-mllp", "deid", "runtime-plane" };
 
@@ -307,6 +419,8 @@ public sealed class SignedLicenseValidatorTests
             maxProcessedRecordsPerMonth,
             allowedResourceTypes,
             allowedDestinationTypes,
+            activateByUtc = activateByUtc.HasValue ? ToUnixSeconds(activateByUtc.Value) : (long?)null,
+            requestKey,
         });
 
         var credentials = new SigningCredentials(new ECDsaSecurityKey(signingKey), SecurityAlgorithms.EcdsaSha256);

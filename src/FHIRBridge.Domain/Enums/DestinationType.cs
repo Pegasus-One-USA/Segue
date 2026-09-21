@@ -39,13 +39,35 @@ public enum DestinationType
     DataLakeWebhook = 24,
 
     /// <summary>
-    /// Microsoft Fabric. Landing surface is selected per destination by <c>dest_fabricMode</c> — today OneLake's
-    /// Files area (Entra-only auth over the OneLake blob endpoint, NDJSON/CSV/Parquet); Warehouse COPY INTO and
-    /// Eventstream are declared but not yet implemented and fail fast rather than silently mis-writing. Writing
-    /// into a Lakehouse <c>Tables/</c> path is rejected on purpose: a registered Fabric table requires the Delta
-    /// transaction log, which this writer does not produce. See <c>FabricDestinationSettings</c>.
+    /// Microsoft Fabric, FILE landing surfaces — today OneLake's Files area (Entra-only auth over the OneLake blob
+    /// endpoint, NDJSON/CSV/Parquet). Landing surface is still selected per destination by <c>dest_fabricMode</c>,
+    /// because Files and Eventstream remain distinct protocols under this one type. Writing into a Lakehouse
+    /// <c>Tables/</c> path is rejected on purpose: a registered Fabric table requires the Delta transaction log,
+    /// which this writer does not produce. See <c>FabricDestinationSettings</c>.
+    ///
+    /// <para>Deliberately NOT the Warehouse surface — see <see cref="DataFabricWarehouse"/> for why that is its own
+    /// type rather than one more mode here.</para>
     /// </summary>
     DataFabricAzure = 25,
+
+    /// <summary>
+    /// Microsoft Fabric WAREHOUSE — rows into a Warehouse table via staged Parquet plus <c>COPY INTO</c> over the
+    /// TDS endpoint (<c>WarehouseTableLandingStrategy</c>).
+    ///
+    /// <para><b>Why this is its own type rather than a mode of <see cref="DataFabricAzure"/>.</b> It answers
+    /// differently to every question the system asks a destination: it speaks TDS rather than the OneLake blob
+    /// endpoint, it has a live queryable schema (so the mapping UI can offer a real table/column picker and
+    /// ALTER/CREATE TABLE authoring, see <c>SqlDestinationSchemaService</c>), and field mapping applies to it at
+    /// all (see the portal's SQL_FAMILY_DESTINATION_TYPES). Modelling it as a mode meant every one of those gates
+    /// had to re-parse <c>dest_fabricMode</c> out of connection metadata to answer a question the type itself
+    /// should answer — a tax paid at a dozen call sites, each one silently mis-routing a destination when missed.
+    /// Same reasoning FabricLandingMode itself documents for not inferring the surface from a URL.</para>
+    ///
+    /// <para>Shares <c>MappedDataFabricDestinationWriter</c> with <see cref="DataFabricAzure"/>: that writer already
+    /// resolves an <c>IFabricLandingStrategy</c> from the configured mode and delegates, so the split is a
+    /// classification change, not a second implementation of the same protocol.</para>
+    /// </summary>
+    DataFabricWarehouse = 26,
 
     /// <summary>
     /// General-purpose, fully configurable outbound REST API — the "bring your own endpoint" destination. Unlike
@@ -57,5 +79,5 @@ public enum DestinationType
     /// data-lake ingestion front doors (Fabric/Databricks/HEC) and always PHI-carrying/https-only; this type is
     /// the general destination for an arbitrary customer- or partner-owned HTTP API. See <c>ApiEndpointSettings</c>.
     /// </summary>
-    ApiEndpoint = 26
+    ApiEndpoint = 27
 }

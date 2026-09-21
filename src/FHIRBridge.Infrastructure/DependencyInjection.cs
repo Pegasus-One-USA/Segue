@@ -1,4 +1,4 @@
-﻿using FHIRBridge.Application.Abstractions.Aggregation;
+using FHIRBridge.Application.Abstractions.Aggregation;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
@@ -115,6 +115,19 @@ public static class DependencyInjection
                 options.Configuration = redisConnectionString;
                 options.InstanceName = "fhirbridge:";
             });
+
+            // Raw pub/sub connection (distinct from the IDistributedCache one above, and from the
+            // RunStatusHub SignalR backplane's own internal connection in Program.cs — each owns its own
+            // connection so a problem in one can't take another down). Backs cross-replica cache
+            // invalidation broadcasts (see InProcessAllowedCorsOriginsCache) — resolved lazily on first
+            // use, not at startup, and never throws on a down Redis (AbortOnConnectFail: false) since a
+            // Redis outage must degrade a cache's staleness bound, not break the request that touched it.
+            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ =>
+            {
+                var redisOptions = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
+                redisOptions.AbortOnConnectFail = false;
+                return StackExchange.Redis.ConnectionMultiplexer.Connect(redisOptions);
+            });
         }
 
         // Field-level encryptor for the PHI-bearing execution-history columns (fetched/normalized/mapped payloads).
@@ -178,15 +191,11 @@ public static class DependencyInjection
         // ISystemSettingsCache/ICurrentTenantResolver above — works against either repository registration
         // (DB or in-memory) since it doesn't touch the repository until Program.cs calls ReloadAsync.
         services.AddSingleton<Application.Abstractions.Licensing.ILicenseService, LicenseService>();
-
-        // ⚠ TEMPORARY / DEV-ONLY — signs throwaway test license tokens for the portal's temporary
-        // "Dev: Mint a test license" page. Backed by DevLicenseMintingController, which is hard-gated to
-        // IHostEnvironment.IsDevelopment() (returns 404 everywhere else) — see DevLicenseSigningKey's
-        // remarks. Registering this singleton unconditionally is safe: nothing outside that
-        // Development-only controller ever calls it. DELETE this registration alongside
-        // DevLicenseSigningKey/IDevLicenseMintingService/DevLicenseMintingService/DevLicenseMintingController
-        // once license minting moves to its own separate internal tool.
-        services.AddSingleton<IDevLicenseMintingService, DevLicenseMintingService>();
+        // A short, explicit timeout (default HttpClient timeout is 100s) — a silently-dropping
+        // licensor host would otherwise block the admin's POST for the whole default before the
+        // manual-fallback path (AttemptSubmitAsync's catch) is even reached.
+        services.AddHttpClient(nameof(LicenseRequestService), client => client.Timeout = TimeSpan.FromSeconds(15));
+        services.AddScoped<Application.Abstractions.Licensing.ILicenseRequestService, LicenseRequestService>();
 
         // Resolves a user's effective permission codes per request (DB-backed, short-lived cache) —
         // replaces embedding them as JWT claims, which overflowed the browser's access-token cookie once
@@ -198,6 +207,10 @@ public static class DependencyInjection
         // "SSO Configurations" admin screen — reads/writes SAML + magic-link fields as SystemSetting
         // rows via the two services registered just above, so saves take effect without a restart.
         services.AddScoped<ISsoConfigurationsService, SsoConfigurationsService>();
+
+        // Shared by every controller that builds an absolute OAuth redirect_uri/launch/authorize/standalone
+        // URL (OAuthController, PatientStandaloneLaunchController) — see its own remarks.
+        services.AddScoped<IOAuthPublicOriginResolver, OAuthPublicOriginResolver>();
 
         // Registered unconditionally — resolves against IUserAccessRepository, so it works identically whether
         // that's the in-memory or EF-backed implementation registered below.
@@ -217,6 +230,8 @@ public static class DependencyInjection
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
+            services.AddSingleton<ILicenseRequestRepository, InMemoryLicenseRequestRepository>();
+            services.AddSingleton<ILicenseHistoryRepository, InMemoryLicenseHistoryRepository>();
             services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
             services.AddSingleton<IBrandConfigurationRepository, InMemoryBrandConfigurationRepository>();
             services.AddSingleton<ITenantRepository, InMemoryTenantRepository>();
@@ -302,6 +317,8 @@ public static class DependencyInjection
             services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
             services.AddScoped<IUserFhirContextBindingRepository, EfUserFhirContextBindingRepository>();
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
+            services.AddScoped<ILicenseRequestRepository, EfLicenseRequestRepository>();
+            services.AddScoped<ILicenseHistoryRepository, EfLicenseHistoryRepository>();
             services.AddScoped<ISystemSettingsSeeder, SystemSettingsSeeder>();
             services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();
             services.AddScoped<IBrandConfigurationRepository, EfBrandConfigurationRepository>();
@@ -316,6 +333,13 @@ public static class DependencyInjection
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
             services.AddScoped<IBulkExportJobRepository, EfBulkExportJobRepository>();
             services.Configure<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>(configuration.GetSection("BulkExport"));
+            // Off unless a host explicitly turns it on (Development only) — see EhrDataDumpOptions: the dump holds
+            // raw, unmasked FHIR resources.
+            services.Configure<FHIRBridge.Runtime.Application.Workflows.EhrDataDumpOptions>(
+                configuration.GetSection(FHIRBridge.Runtime.Application.Workflows.EhrDataDumpOptions.SectionName));
+            // Resolved by both extraction paths: SourceNodeExecutor (search-REST, in the Api) and
+            // RankedWorkflowOrchestrator.ResumeAfterBulkExportAsync (bulk export, in the Worker).
+            services.AddSingleton<FHIRBridge.Runtime.Application.Workflows.EhrDataDumpWriter>();
             services.AddScoped<FHIRBridge.Runtime.Application.Workflows.Storage.IBulkExportPauseRecorder, FHIRBridge.Infrastructure.Workflows.BulkExportPauseRecorder>();
             services.AddScoped<IPipelineRunRouteExecutionRepository, EfPipelineRunRouteExecutionRepository>();
             services.AddScoped<EfExecutionResourceHistoryRecorder>();
@@ -472,6 +496,15 @@ public static class DependencyInjection
         // Microsoft Fabric / OneLake: reuses the singleton BlobContainerClientCache registered above (OneLake
         // speaks the blob protocol), with its own Entra-only credential dispatch.
         services.AddScoped<Destinations.Fabric.IOneLakeClientFactory, Destinations.Fabric.OneLakeClientFactory>();
+
+        // One strategy per Fabric landing surface, resolved by FabricLandingMode. MappedDataFabricDestinationWriter
+        // dispatches through the registry rather than branching, so a new surface is a registration here and
+        // nothing else. Eventstream is deliberately absent: it is authenticated HTTP, already served by the Data
+        // Lake Webhook destination, and FabricDestinationSettings.Parse redirects to it by name.
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.OneLakeFilesLandingStrategy>();
+        services.AddScoped<Destinations.Fabric.IFabricWarehouseConnectionFactory, Destinations.Fabric.FabricWarehouseConnectionFactory>();
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.WarehouseTableLandingStrategy>();
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategyRegistry, Destinations.Fabric.FabricLandingStrategyRegistry>();
         services.AddScoped<MappedDataFabricDestinationWriter>();
         services.AddScoped<MappedMongoDestinationWriter>();
         services.AddHttpClient(nameof(MedplumTokenProvider));
@@ -523,6 +556,7 @@ public static class DependencyInjection
 
         services.AddScoped<IMongoDestinationConnectionTestService, Destinations.MongoDestinationConnectionTestService>();
         services.AddScoped<IBlobDestinationConnectionTestService, Destinations.BlobDestinationConnectionTestService>();
+        services.AddScoped<IFabricDestinationConnectionTestService, Destinations.FabricDestinationConnectionTestService>();
 
         foreach (var registration in MappingSchemaProviderFactory.DefaultRegistrations)
         {
@@ -572,6 +606,12 @@ public static class DependencyInjection
         // Runs LOINC/SNOMED/ICD-10/RxNorm imports off the request thread — see TerminologyImportChannel's
         // remarks for why this stays in-process rather than going through the Worker/MassTransit.
         services.AddSingleton<TerminologyImportChannel>();
+        // NOTE: TerminologyImportOrphanReconciler is deliberately NOT registered here. It marks every
+        // "Running" import row as Interrupted on startup, which is only sound for the single process that
+        // owns those imports — registered in shared infrastructure it would also run in the Worker and in
+        // every additional API replica, where it would mark another live host's in-flight import as dead.
+        // The API host registers it directly (see Api/Program.cs), the same way SignalRTerminologyStatusNotifier
+        // is API-host-only.
         services.AddHostedService<TerminologyImportBackgroundService>();
         // Grouped settings/Run Now/history for the 13 HAPI-terminology-server sync systems — see
         // HapiTerminologyConfigurationController. The registry is stateless (pure lookup + delegate
@@ -693,7 +733,7 @@ public static class DependencyInjection
             services.AddScoped<DbSecretStore>();
             services.AddScoped<ISecretWriter, CompositeSecretWriter>();
             services.AddScoped<ISecretProvider, CompositeSecretProvider>();
-            services.AddScoped<IAppSecretMetadataProvider>(sp => sp.GetRequiredService<DbSecretStore>());
+            services.AddScoped<IAppSecretMetadataProvider, CompositeSecretMetadataProvider>();
         }
 
         services.AddScoped<IAppSecretsAdminService, AppSecretsAdminService>();

@@ -1,4 +1,5 @@
 // user-management/pages/user-detail/user-permission-overrides.component.scss
+@use '../../../_permission-checkbox' as *;
 
 .permission-overrides {
   display: flex;
@@ -261,32 +262,9 @@
     }
   }
 
-  // Angular Material reserves a 40px invisible touch target around every checkbox regardless of
-  // visual size — shrink it via the supported CSS custom properties and hide the touch-target
-  // element outright, so the checkbox's own ~18px box drives row height (same approach as the
-  // role-permissions grid, for a matching look).
-  mat-checkbox {
-    display: inline-flex;
-    --mdc-checkbox-state-layer-size: 22px;
-
-    ::ng-deep {
-      .mdc-checkbox {
-        width: 22px;
-        height: 22px;
-        padding: 0;
-        flex: 0 0 22px;
-      }
-
-      .mdc-checkbox__background {
-        top: 2px;
-        left: 2px;
-      }
-
-      .mat-mdc-checkbox-touch-target {
-        display: none;
-      }
-    }
-  }
+  // Checkbox sizing/coloring for every mat-checkbox inside this table comes from the shared
+  // _permission-checkbox.scss `@use`d at the top of this file — identical rule the Role
+  // Permissions screen uses, so both permission grids read identically.
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────────

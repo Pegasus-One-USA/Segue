@@ -1,8 +1,11 @@
-﻿.list-page {
+﻿@use '../../../_list-page' as *;
+
+.list-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 24px;
+  // Run full-bleed (like the other Logs & Compliance tabs) rather than the shared partial's 1400px
+  // centered width, so switching tabs never jumps the content width.
 }
 
 .page-header h1 {
@@ -17,30 +20,8 @@
   font-size: 13px;
 }
 
-.filter-bar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.correlation-input {
-  flex: 0 0 400px;
-  padding: 8px 12px;
-  border: 1px solid var(--color-border-input);
-  border-radius: 6px;
-  font-family: monospace;
-  font-size: 13px;
-}
-
-.btn {
-  padding: 8px 16px;
-  border-radius: 6px;
-  border: none;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  cursor: pointer;
-  font-size: 13px;
-}
+// Filter bar chrome comes from the shared _list-page partial above (standard filter design shared with
+// Workflows / Source Connections / Execution History). Search button uses .btn-search from that partial.
 
 .error-message {
   color: var(--color-error-strong);

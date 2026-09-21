@@ -6,6 +6,7 @@ import { BrandingService } from './services/branding.service';
 import { ToastComponent } from './components/shared/toast/toast.component';
 import { GlobalLoaderComponent } from './components/shared/global-loader/global-loader.component';
 import { LoadingService } from './services/loading.service';
+import { BlockingConfirmService } from './core/services/blocking-confirm.service';
 
 @Component({
   selector: 'app-root',
@@ -15,7 +16,20 @@ import { LoadingService } from './services/loading.service';
   // every route (including /auth/login) — the app's single notification surface and single
   // "the app is busy" indicator, covering every HTTP request (loadingInterceptor) and every route
   // navigation (this component, below) — lazy chunks, guards, and resolvers included.
-  template: '<router-outlet /><app-toast /><app-global-loader />',
+  //
+  // The routed content is wrapped in its own element (router-outlet has no host element of its own to
+  // attach this to) so it can be marked [inert] while the app is busy: [inert] removes the whole
+  // subtree from the tab order and from hit-testing, which is what actually stops a keyboard user from
+  // reaching a control behind the loader — GlobalLoaderComponent's backdrop only stops the mouse. Both
+  // <app-toast /> and <app-global-loader /> stay outside this wrapper, deliberately: a toast must stay
+  // dismissible and the loader itself must never be the thing it's blocking.
+  template: `
+    <div [attr.inert]="loading.isLoading() && !blockingConfirm.isOpen() ? '' : null">
+      <router-outlet />
+    </div>
+    <app-toast />
+    <app-global-loader />
+  `,
 })
 export class AppComponent {
   // Instantiate ThemeService at startup so the persisted theme is applied.
@@ -27,7 +41,13 @@ export class AppComponent {
   // before the router renders anything) — this reference just keeps the singleton reachable here
   // for consistency with the other startup services on this line; it triggers nothing on its own.
   private readonly branding = inject(BrandingService);
-  private readonly loading = inject(LoadingService);
+  // protected (not private): read from the inline template above to drive [attr.inert].
+  protected readonly loading = inject(LoadingService);
+  // Also drives [attr.inert] above: a route's own in-template CanDeactivate confirm lives INSIDE the
+  // routed subtree, and the navigation it is gating keeps LoadingService busy the whole time it is
+  // open — so without this exception the dialog would inert its own buttons and deadlock navigation.
+  // See BlockingConfirmService for the full explanation.
+  protected readonly blockingConfirm = inject(BlockingConfirmService);
 
   constructor() {
     // Router navigations are a second, non-HTTP source of "the app is busy" — a lazy-loaded

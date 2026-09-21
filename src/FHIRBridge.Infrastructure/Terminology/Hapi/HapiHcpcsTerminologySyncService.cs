@@ -13,6 +13,9 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 ///
 /// 1. CMS publishes a new dated zip URL every quarter (e.g. "october-2026-alpha-numeric-hcpcs-file.zip")
 ///    with no stable permanent link, so this first scrapes the listing page for the most recent one.
+///    The data file inside is likewise not stably named — a re-published quarter carries a revision
+///    suffix after the ANWEB token (e.g. "HCPC2026_OCT_ANWEB_v2.txt"), so it is located by the ANWEB
+///    token rather than an exact "_ANWEB.txt" suffix.
 /// 2. The fixed-width "ANWEB" data file wraps long descriptions across multiple physical rows sharing
 ///    the same HCPCS code (a "sequence number" field, positions 6-10, increments by 100 per
 ///    continuation row) — reconstructing the full description requires concatenating consecutive
@@ -66,14 +69,15 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
 
         var concepts = await DownloadAndParseAsync(downloadClient, zipUrl, cancellationToken);
         _logger.LogInformation("Parsed {Total} HCPCS codes from the official release.", concepts.Count);
+        var version = VersionFromZipUrl(zipUrl);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "HCPCS", VersionFromZipUrl(zipUrl), concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl, "HCPCS", version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
             "HCPCS loaded into the terminology server: {Total} codes in {Elapsed}.", concepts.Count, stopwatch.Elapsed);
 
-        return new HapiHcpcsSyncResult(concepts.Count, stopwatch.Elapsed);
+        return new HapiHcpcsSyncResult(concepts.Count, stopwatch.Elapsed, version);
     }
 
     /// <summary>CMS's quarterly zip filename itself (e.g. "october-2026-alpha-numeric-hcpcs-file.zip")
@@ -102,6 +106,25 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
         return "https://www.cms.gov" + match.Groups[1].Value;
     }
 
+    /// <summary>
+    /// Picks the ANWEB fixed-width data file out of a release zip's entry names.
+    ///
+    /// CMS does not name this file stably: when a quarter is re-published the ANWEB token carries a
+    /// revision suffix (October 2026 ships "HCPC2026_OCT_ANWEB_v2.txt"), so matching on an exact
+    /// "_ANWEB.txt" suffix silently finds nothing on precisely the corrected releases. Matching is
+    /// therefore on the ANWEB token anywhere in the name, restricted to .txt so the zip's .xlsx copy
+    /// of the same data and its ANWEB-named transaction report are excluded, and with the record
+    /// layout document excluded. Where several revisions ship together the highest-sorting name wins,
+    /// so a "_v2" supersedes a "_v1".
+    /// </summary>
+    internal static string? SelectDataFileName(IEnumerable<string> entryNames) =>
+        entryNames
+            .Where(n => n.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
+                && n.Contains("ANWEB", StringComparison.OrdinalIgnoreCase)
+                && !n.Contains("recordlayout", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(n => n, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+
     private static async Task<IReadOnlyList<Concept>> DownloadAndParseAsync(HttpClient http, string zipUrl, CancellationToken ct)
     {
         await using var zipBytes = await http.GetStreamAsync(zipUrl, ct);
@@ -110,8 +133,9 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
         memory.Position = 0;
 
         using var archive = new ZipArchive(memory, ZipArchiveMode.Read);
-        var entry = archive.Entries.FirstOrDefault(e => e.Name.EndsWith("_ANWEB.txt", StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException("Could not find the '*_ANWEB.txt' data file in the downloaded HCPCS release zip.");
+        var entry = SelectDataFileName(archive.Entries.Select(e => e.Name)) is { } name
+            ? archive.Entries.First(e => e.Name == name)
+            : throw new InvalidOperationException("Could not find the ANWEB data file in the downloaded HCPCS release zip.");
 
         var results = new List<Concept>(20_000);
         string? currentCode = null;

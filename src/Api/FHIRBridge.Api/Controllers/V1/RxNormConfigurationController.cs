@@ -24,15 +24,15 @@ public sealed class RxNormConfigurationController : ControllerBase
         (_service, _importChannel, _db) = (service, importChannel, db);
 
     [HttpGet]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.View, description: "View RxNorm terminology configuration.")]
+    [StandardPermission(PermissionGroupCode.RxNorm, PermissionActionCode.View, description: "View RxNorm terminology configuration.")]
     public async Task<ActionResult<RxNormConfigurationDto>> Get(CancellationToken cancellationToken) => Ok(await _service.GetAsync(cancellationToken));
 
     [HttpPut]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Update RxNorm terminology configuration and credentials.")]
+    [StandardPermission(PermissionGroupCode.RxNorm, PermissionActionCode.Write, description: "Update RxNorm terminology configuration and credentials.")]
     public async Task<ActionResult<RxNormConfigurationDto>> Update([FromBody] UpdateRxNormConfigurationRequest request, CancellationToken cancellationToken) => Ok(await _service.UpdateAsync(request, cancellationToken));
 
     [HttpPost("synchronize")]
-    [StandardPermission(PermissionGroupCode.Configuration, PermissionActionCode.Write, description: "Manually synchronize the RxNorm release.")]
+    [StandardPermission(PermissionGroupCode.RxNorm, PermissionActionCode.Write, description: "Manually synchronize the RxNorm release.")]
     public IActionResult Synchronize()
     {
         _importChannel.Enqueue(async (services, ct) =>

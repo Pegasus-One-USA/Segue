@@ -4,6 +4,8 @@
    utility classes, and base styles.
    ============================================================ */
 
+@import 'sweetalert2/dist/sweetalert2.min.css';
+
 /* ─── Angular Material M3 Token Overrides ─────────────────────────────────── */
 html {
   /* Colors reference the semantic tier (:root) so Material follows the theme. */
@@ -271,6 +273,23 @@ html {
   --space-11: 28px;
   --space-12: 32px;
 
+  /* ── Page gutter ─────────────────────────────────────────────────────
+     The ONE place the routed-page edge inset is defined. Every page in the
+     right-hand content area gets its padding from these tokens via the
+     `.shell-content > *` rule further down — pages must NOT declare their own
+     page-level padding, or changing the app's gutter stops being a one-line edit.
+     Deliberately hairline: 8px is the floor that still clears the cards' 12px
+     border-radius, so a card reads as a card floating on the background rather
+     than as a clipped rendering artifact. No responsive override — already at
+     the floor, there is nothing left to shrink on a small screen. */
+  --page-gutter-x: var(--space-4);
+  --page-gutter-y: var(--space-4);
+
+  /* Routed pages are uncapped (edge-to-edge) by design; only text-heavy FORM pages
+     keep a reading measure, since a form spanning a 1900px monitor is hard to scan.
+     Tables do not use this — they degrade to .table-wrapper's overflow-x instead. */
+  --page-max-width-form: 1280px;
+
   /* ── Shadows ── */
   --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.04);
   --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -294,6 +313,14 @@ html {
   --z-dropdown: 30;
   --z-backdrop: 50;
   --z-modal:    200;
+  /* The blocking loading overlay (GlobalLoaderComponent's backdrop) must sit above every custom app
+     modal (--z-modal above) AND above Angular Material's own MatDialog/MatMenu/etc., which render into
+     .cdk-overlay-container — a separate layer Angular CDK defaults to z-index: 1000 regardless of this
+     app's own scale (see --z-toast below). 1050 clears that CDK default, so a blocking load triggered
+     from inside a real MatDialog still blocks that dialog's own fields too, while staying under
+     --z-toast so a completion/error toast (which only ever fires after loading stops) is never buried
+     under a backdrop that should already be gone by then. */
+  --z-loading-overlay: 1050;
   /* Toasts sit above every modal — a confirmation for an action taken inside a dialog (e.g. "Copied" on the
      Launch URL modal, "Step saved" on the Transformation Rules dialog) must stay visible, not be hidden
      behind the dialog it was triggered from. 300 clears every custom app modal using --z-modal above, but
@@ -301,6 +328,66 @@ html {
      separate layer Angular CDK defaults to z-index: 1000 regardless of this app's own scale, so a toast at
      300 still lost to any open MatDialog. 1100 clears that CDK default with headroom to spare. */
   --z-toast:    1100;
+  /* The session-expired dialog is the one overlay that must outrank literally everything else —
+     including the loading overlay and toasts above — since once the session is gone, nothing else
+     the user was looking at should stay reachable or visible above the "please log in" prompt. */
+  --z-session-expired: 1200;
+}
+
+/* ─── Session-expired prompt (SweetAlert2) ────────────────────────────────────
+   SweetAlert2 renders its own self-contained overlay (a single fixed backdrop +
+   popup, default z-index 1060) rather than going through Angular CDK's own
+   overlay stack — that stack was fighting GlobalLoaderComponent's busy-spinner
+   overlay for stacking order. Overridden here to sit above every custom z-index
+   this app defines (see --z-session-expired) and to pick up this app's design
+   tokens (radius/shadow/typography/brand color) instead of SweetAlert2's defaults. */
+.swal2-container {
+  z-index: var(--z-session-expired);
+}
+.se-swal-popup {
+  border-radius: var(--radius-modal);
+  padding: 2rem 1.75rem 1.75rem;
+  font-family: var(--font-family);
+  box-shadow: var(--shadow-xl);
+}
+/* SweetAlert2's own icon-color rule (div:where(.swal2-icon).swal2-warning) uses :where() so it
+   contributes zero specificity — chaining onto its swal2-warning class (rendered alongside
+   se-swal-icon, not replacing it) is enough to win on specificity alone. */
+.se-swal-icon.swal2-warning {
+  border-color: var(--color-warning);
+  color: var(--color-warning-strong);
+}
+.se-swal-title {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1.1875rem;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.se-swal-text {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+.se-swal-confirm {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0 1.75rem;
+  margin-top: 1rem;
+  border: none;
+  box-sizing: border-box;
+  border-radius: var(--radius-base);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-family: inherit;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover { background: var(--color-primary-dark); }
+  &:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -823,6 +910,17 @@ a {
   }
 }
 
+/* Workflow lifecycle "Draft" — incomplete (no destination wired up), so it cannot run yet. Warning tone
+   rather than error: a draft is a normal stage of authoring, not a fault. */
+.badge-draft {
+  background: var(--color-warning-soft);
+  color:      var(--color-warning-strong);
+
+  &::before {
+    background: var(--color-warning);
+  }
+}
+
 .badge-running {
   background: var(--color-info-soft);
   color:      var(--color-info-strong);
@@ -1098,8 +1196,18 @@ textarea {
    Excludes .checkbox-visual__input (rule-config-form's transform-rule config
    editor), which already hand-implements this exact look via a hidden native
    input + a custom sibling box, to avoid fighting that component's own
-   absolute-positioned hit target. */
-input[type='checkbox']:not(.checkbox-visual__input) {
+   absolute-positioned hit target.
+   Also excludes .mdc-checkbox__native-control — Angular Material's own <mat-checkbox> renders a
+   real native <input type="checkbox"> under the hood (visually hidden via opacity, per its own
+   compiled template), which this selector was matching too: this rule's own background/border/
+   checked-mark then painted directly on top of (and slightly offset from) Material's real
+   .mdc-checkbox__background box, defeating Material's opacity:0 for that element. Net effect on
+   every <mat-checkbox> in the app: two independently-colored, offset boxes layered on each other
+   ("double checkbox"). role-permissions.component.scss originally worked around this locally
+   (re-neutralizing the native control there) rather than risk this shared rule — excluding the
+   class here fixes it at the source for every current and future <mat-checkbox>, hand-rolled
+   native checkboxes are unaffected since none of them carry Material's own internal class. */
+input[type='checkbox']:not(.checkbox-visual__input):not(.mdc-checkbox__native-control) {
   appearance:    none;
   -webkit-appearance: none;
   width:         18px;
@@ -1339,14 +1447,51 @@ input:-webkit-autofill:active {
   border-left-color: var(--color-primary);
 }
 
+/* ─── Routed page gutter ─────────────────────────────────────────────────────── */
+/* The single source of truth for the inset between a page's content and the edges of the
+   right-hand content area. Every routed page is a custom element child of .shell-content
+   (<app-workflow-list>, <app-audit-logs>, …), so one rule here reaches all ~87 of them —
+   individual page stylesheets deliberately no longer declare page-level padding. Retuning
+   the app's gutter is editing --page-gutter-x/y in :root, nothing else.
+
+   $page-bleed is every child of .shell-content that must stay edge-to-edge:
+     • app-modal-overlay / app-dialog-outlet — their backdrop is position:absolute; inset:0,
+       which resolves against .shell-content's PADDING box, so padding here would leave an
+       unfaded border all around every modal.
+     • app-workflow-builder-v2 — owns its own viewport (height:100% + overflow:hidden); a
+       padded parent shrinks its box and clips the canvas.
+     • the four feature shells that render a full-width .shell-tabs strip above their own
+       <router-outlet> — an inset strip would leave a gap either side of its border-bottom.
+       They stay full-bleed here and re-apply the gutter one level deeper, below.
+   app-system-settings-shell is NOT in this list: it has no tab strip (it renders its child
+   route directly), so it takes the gutter like any other page and its child inherits it. */
+$page-bleed: 'app-modal-overlay, app-dialog-outlet, app-workflow-builder-v2, app-governance-shell, app-operations-shell, app-settings-shell, app-terminology-configurations-shell, app-workflow-configurations-shell';
+
+.shell-content > *:not(#{$page-bleed}) {
+  display: block;
+  padding: var(--page-gutter-y) var(--page-gutter-x);
+}
+
+/* A tab-strip shell is full-bleed so its strip can span edge to edge, so the gutter is applied
+   one level deeper instead — to whichever page its <router-outlet> renders. The outlet element
+   itself renders nothing and its component is inserted as its NEXT sibling, hence
+   `router-outlet + *`. app-workflow-builder-v2 is excluded again: it is routed INSIDE
+   app-workflow-configurations-shell and must stay full-bleed at this level too. */
+.shell-content > * > router-outlet + *:not(#{$page-bleed}) {
+  display: block;
+  padding: var(--page-gutter-y) var(--page-gutter-x);
+}
+
 // Shared icon-chip tab grid for feature shells with many child screens (Operations, Governance,
 // Settings). Each screen is a small rounded chip (icon + label) rather than a plain text link —
 // reads as a cohesive grid and wraps cleanly onto additional rows instead of a ragged text list.
+// Horizontal padding is --page-gutter-x, not its own value, so the chips share a left edge with
+// the cards on the page below them.
 .shell-tabs {
   display:       flex;
   flex-wrap:     wrap;
   gap:           var(--space-2);
-  padding:       var(--space-8) var(--space-10);
+  padding:       var(--space-4) var(--page-gutter-x);
   border-bottom: 1px solid var(--color-border);
   background:    var(--color-surface);
 }

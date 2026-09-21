@@ -4,22 +4,23 @@ import { superAdminGuard } from '../auth/guards/super-admin.guard';
 import { roleGuard } from '../auth/guards/role.guard';
 import { unsavedChangesGuard } from '../core/guards/unsaved-changes.guard';
 import { settingsLandingGuard } from './guards/settings-landing.guard';
+import { featureFlagGuard } from './guards/feature-flag.guard';
+import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_CODES } from '../data/terminology-feature.config';
 
 // Terminology Codes: each of the four import systems has its own independent View/Write pair
 // (loinc.*/snomedct.*/rxnorm.*/icd10.*, split off from a shared "TerminologyCodes" group, itself
-// originally split off from Email's configuration.view/write) — kept as one list here since every
-// gate that needs "can this role reach ANY terminology system" (the shell route, its own landing
-// redirect) uses the exact same OR across all eight codes.
-const TERMINOLOGY_PERMISSIONS = [
-  'loinc.view', 'loinc.write',
-  'snomedct.view', 'snomedct.write',
-  'rxnorm.view', 'rxnorm.write',
-  'icd10.view', 'icd10.write',
-];
+// originally split off from Email's configuration.view/write) — kept as one list (data/terminology-
+// feature.config.ts) since every gate that needs "can this role reach ANY terminology system" (the
+// shell route, its own landing redirect) uses the exact same OR across all eight codes.
+const TERMINOLOGY_PERMISSIONS = TERMINOLOGY_PERMISSION_CODES;
 
 // Email + Terminology Codes together — every permission that can unlock some part of the
 // System Settings shell without the SuperAdmin role (General/Security stay role-only; see below).
-const SYSTEM_SETTINGS_PERMISSIONS = ['configuration.view', 'configuration.write', ...TERMINOLOGY_PERMISSIONS];
+// Terminology's codes only count toward this OR while the feature itself is enabled — otherwise a
+// role holding only e.g. loinc.view would still see this shell's parent tab, then find every child
+// inside it hidden (Email needs configuration.*, General/Security need SuperAdmin, and Terminology
+// is force-disabled below), landing on an empty shell instead of being routed to something real.
+const SYSTEM_SETTINGS_PERMISSIONS = ['configuration.view', 'configuration.write', ...(TERMINOLOGY_FEATURE_ENABLED ? TERMINOLOGY_PERMISSIONS : [])];
 
 // Every child below keeps the exact guard/permission it had as a standalone top-level route
 // before consolidation under this shell — see docs/backend/12-provider-standalone-ehr-launch-fixes.md.
@@ -37,15 +38,9 @@ export const SETTINGS_ROUTES: Routes = [
         loadComponent: () =>
           import('./pages/branding/branding-settings.component').then(m => m.BrandingSettingsComponent),
       },
-      {
-        path: 'ehr-endpoints',
-        canActivate: [permissionGuard],
-        data: { permissions: ['ehrendpoints.view'] },
-        loadComponent: () =>
-          import('../ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component').then(
-            m => m.EhrEndpointListComponent
-          ),
-      },
+      // NOTE: 'ehr-endpoints' was removed — it is now a launcher row on System Settings > General, opened
+      // as a full dialog. The row keeps the same ehrendpoints.view gate this route had, and General itself
+      // is reachable with configuration.view/write, so a non-SuperAdmin holder still gets there.
       {
         // Merges the formerly-standalone Source Connections, Destination Connections, and Mapping
         // Profiles tabs into one screen with a section per former tab — grouped because all three
@@ -122,43 +117,15 @@ export const SETTINGS_ROUTES: Routes = [
           },
         ],
       },
-      {
-        path: 'allowed-origins',
-        canActivate: [superAdminGuard],
-        loadComponent: () =>
-          import('../allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component').then(
-            m => m.AllowedCorsOriginListComponent
-          ),
-      },
-      {
-        // Gated on role rather than a permission code, matching the backend LicenseController's own
-        // gate ([Authorize(Policy = AuthorizationPolicies.UnifiedAdmin)], which UnifiedAdminRequirement
-        // accepts for SuperAdmin or Admin token-role claims). superAdminGuard is SuperAdmin-only and
-        // would incorrectly hide this from an Admin the backend actually lets in, so this uses the
-        // generic roleGuard instead, with the same two role strings AuthStore.isAdmin() checks.
-        path: 'license',
-        canActivate: [roleGuard],
-        data: { roles: ['SuperAdmin', 'Admin'] },
-        loadComponent: () =>
-          import('./pages/license-settings/license-settings.component').then(
-            m => m.LicenseSettingsComponent
-          ),
-      },
-      {
-        // ⚠ TEMPORARY / DEV-ONLY — backs the "Dev: Mint a test license" page, linked from the License
-        // settings screen's "Dev: Mint a test license →" button. Same roleGuard/roles as the 'license'
-        // route above (already verified to match the backend's UnifiedAdmin policy) — the actual
-        // security boundary is server-side (DevLicenseMintingController 404s outside Development), not
-        // this route guard. Delete this route alongside license-dev-mint.component.* once minting moves
-        // to its own separate internal tool.
-        path: 'license/mint-dev',
-        canActivate: [roleGuard],
-        data: { roles: ['SuperAdmin', 'Admin'] },
-        loadComponent: () =>
-          import('./pages/license-dev-mint/license-dev-mint.component').then(
-            m => m.LicenseDevMintComponent
-          ),
-      },
+      // NOTE: 'allowed-origins' was removed — also a launcher row on System Settings > General now, still
+      // gated superAdminOnly exactly as this route was, so nobody gained or lost access.
+      // NOTE: the 'license' route was removed — License is now a launcher row on Settings > System Settings >
+      // General, opened as a full dialog (SettingsPageDialogService). That row is gated superAdminOnly,
+      // so License is SuperAdmin-only now; it was previously roleGuard ['SuperAdmin','Admin'], matching
+      // LicenseController's UnifiedAdmin policy, which still accepts Admin. An Admin who is not a SuperAdmin
+      // therefore no longer has any UI path to License, even though the API would still serve them.
+      // NOTE: the 'license/mint-dev' route (the temporary "Dev: Mint a test license" page) was removed —
+      // license minting now happens exclusively via the standalone FHIRBridge-LicenseServer tool.
       {
         // Merges the formerly-standalone Email Settings, System Settings, and System Security tabs into
         // one screen with a section per former tab. General/Security remain SuperAdmin-role-only (they
@@ -167,11 +134,16 @@ export const SETTINGS_ROUTES: Routes = [
         // the four Terminology Codes systems are independently permission-controlled (configuration.*/
         // loinc.*/snomedct.*/rxnorm.*/icd10.*) and must be reachable by a role that holds one of those
         // without also being SuperAdmin — so this parent gate is an OR across every one of them, exactly
-        // like workflow-configurations above; General/Security get their OWN explicit superAdminGuard on
-        // their child routes below rather than inheriting a blanket one from here.
+        // like workflow-configurations above; Security gets its OWN explicit superAdminGuard on its child
+        // route below rather than inheriting a blanket one from here. (General used to as well — it now
+        // gates per row instead; see its child route.)
         path: 'system-settings',
         canActivate: [permissionGuard],
-        data: { permissions: SYSTEM_SETTINGS_PERMISSIONS },
+        // ehrendpoints.view is included because EHR Endpoints moved here from its own route: a role holding
+        // only that permission must still get through this shell to reach General's EHR Endpoints row.
+        // The General child re-checks configuration.* on its own, and each row gates itself, so widening
+        // this parent OR does not expose anything further.
+        data: { permissions: [...SYSTEM_SETTINGS_PERMISSIONS, 'ehrendpoints.view'] },
         loadComponent: () =>
           import('./layout/system-settings-shell/system-settings-shell.component').then(
             m => m.SystemSettingsShellComponent
@@ -186,8 +158,23 @@ export const SETTINGS_ROUTES: Routes = [
               import('./pages/email-settings/email-settings.component').then(m => m.EmailSettingsComponent),
           },
           {
+            // Opened up from superAdminGuard to the same permission pair Email uses: General now hosts
+            // rows that a configuration.* holder legitimately manages (worker intervals, caching,
+            // workflow numbering), plus rows that stay SuperAdmin-only. The page gates each row itself
+            // (see SystemSettingListComponent's SUPER_ADMIN_ONLY_GROUPS / LAUNCHER_ROWS) rather than
+            // locking the whole screen, so nothing that was SuperAdmin-only before became reachable.
+            //
+            // NOTE: this row-level split is UI-only. SystemSettingsController still authorizes every key
+            // with the same configuration.* policy, so a caller holding configuration.write can still
+            // change a locked key by calling the API directly. Making the restriction real needs
+            // per-key gating server-side.
             path: 'general',
-            canActivate: [superAdminGuard],
+            canActivate: [permissionGuard],
+            // ehrendpoints.view is in the OR because EHR Endpoints is a row on this page now: a role holding
+            // only that permission has to reach General to open it. Such a role sees the EHR Endpoints row
+            // and nothing else — the setting groups themselves still render only for configuration.* holders
+            // (see SystemSettingListComponent.canSee / SUPER_ADMIN_ONLY_GROUPS).
+            data: { permissions: ['configuration.view', 'configuration.write', 'ehrendpoints.view'] },
             loadComponent: () =>
               import('../system-settings/pages/system-setting-list/system-setting-list.component').then(
                 m => m.SystemSettingListComponent
@@ -207,8 +194,13 @@ export const SETTINGS_ROUTES: Routes = [
             // system is independently permission-controlled, so this parent gate is an OR across all
             // eight loinc/snomedct/rxnorm/icd10 view/write codes; each leaf route below is then gated
             // on its OWN specific system's codes only.
+            // featureFlagGuard runs first: while TERMINOLOGY_FEATURE_ENABLED is false, this route (and
+            // therefore every child under it — Angular never matches descendants of a blocked segment)
+            // is unreachable for anyone, permissions notwithstanding, and a direct/bookmarked URL into
+            // it redirects to the System Settings shell instead of rendering. See
+            // data/terminology-feature.config.ts to re-enable.
             path: 'terminology',
-            canActivate: [permissionGuard],
+            canActivate: [featureFlagGuard(TERMINOLOGY_FEATURE_ENABLED, '/settings/system-settings'), permissionGuard],
             data: { permissions: TERMINOLOGY_PERMISSIONS },
             loadComponent: () =>
               import('./layout/terminology-configurations-shell/terminology-configurations-shell.component').then(
@@ -280,22 +272,15 @@ export const SETTINGS_ROUTES: Routes = [
                 m => m.SsoConfigurationsComponent
               ),
           },
-          // Was a static `redirectTo: 'email'` — landed a Terminology-Codes-only (or General/Security-
-          // only) role on Email's own route, which their permissions/role don't cover, bouncing them
-          // straight to /unauthorized instead of into the section they can actually use.
+          // Every former sibling tab (Email, Security, SSO Configurations) is a launcher row on General
+          // now, and Terminology Codes is feature-flagged off — so General is the only section left and a
+          // permission-aware landing guard has nothing left to choose between. A plain redirect replaces
+          // it. General's own child guard still decides whether this caller may proceed; restore
+          // settingsLandingGuard here if a second section is ever added back.
           {
             path: '',
             pathMatch: 'full',
-            // Empty children only to satisfy route-config validation; the guard always
-            // redirects (UrlTree) so nothing renders here. See NG04014 note above.
-            canActivate: [settingsLandingGuard('/settings/system-settings', [
-              { path: 'email', permissions: ['configuration.view', 'configuration.write'] },
-              { path: 'terminology', permissions: TERMINOLOGY_PERMISSIONS },
-              { path: 'general', superAdminOnly: true },
-              { path: 'security', superAdminOnly: true },
-              { path: 'sso-configurations', superAdminOnly: true },
-            ])],
-            children: [],
+            redirectTo: 'general',
           },
         ],
       },
@@ -311,9 +296,11 @@ export const SETTINGS_ROUTES: Routes = [
         canActivate: [settingsLandingGuard('/settings', [
           { path: 'branding', permissions: ['configuration.write'] },
           { path: 'workflow-configurations', permissions: ['sourceconnections.view', 'destinationconnections.view', 'mappingprofiles.view', 'transformationrules.view'] },
-          { path: 'ehr-endpoints', permissions: ['ehrendpoints.view'] },
-          { path: 'system-settings', permissions: SYSTEM_SETTINGS_PERMISSIONS },
-          { path: 'allowed-origins', superAdminOnly: true },
+          // ehr-endpoints / allowed-origins are no longer routes (they are launcher rows on
+          // system-settings/general), so landing candidates point at system-settings instead — otherwise
+          // this guard would redirect to a path that no longer resolves.
+          { path: 'system-settings', permissions: [...SYSTEM_SETTINGS_PERMISSIONS, 'ehrendpoints.view'] },
+          { path: 'system-settings', superAdminOnly: true },
         ])],
         children: [],
       },

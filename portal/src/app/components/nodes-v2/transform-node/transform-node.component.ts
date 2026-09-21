@@ -10,6 +10,10 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'terminology':      { abbr: 'TRM', color: '#F59E0B' },
   'deid-safeharbor':  { abbr: 'DEI', color: '#EF4444' },
   'deid-kanon':       { abbr: 'KAN', color: '#EF4444' },
+  // V2's consolidated chain step (transforms-v2.data.ts). Without an entry the abbr fell back to
+  // transformId.slice(0, 3) — "DEI". Colour is the same #6366F1 that fallback produced, so only the
+  // label changes.
+  'deidentification': { abbr: 'De-Id', color: '#6366F1' },
   'field-mapping':    { abbr: 'MAP', color: '#6366F1' },
   'dest-sqlserver':   { abbr: 'SQL', color: '#CC2927' },
   'dest-azuresql':    { abbr: 'AZS', color: '#0078D4' },

@@ -1,0 +1,87 @@
+@page
+@model FHIRBridge.LicenseServer.Pages.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+@if (Model.PendingLicenseRequestCount > 0)
+{
+    <div class="panel" style="border-color:var(--warn-border); background:var(--warn-soft); margin-bottom:20px;">
+        <strong>@Model.PendingLicenseRequestCount</strong> license
+        request@(Model.PendingLicenseRequestCount == 1 ? "" : "s") waiting —
+        <a href="/LicenseRequests">review and mint</a>.
+    </div>
+}
+
+<div class="page-header">
+    <h1>Installations</h1>
+    <p class="page-subtitle">Deployed Segue instances that have checked in, most-recently-seen first.</p>
+</div>
+
+@if (Model.Installations.Count == 0)
+{
+    <div class="panel empty-state">
+        <p>No installations have checked in yet.</p>
+        <p class="hint">See <code>README.md</code> for the <code>/api/checkin</code> request shape.</p>
+    </div>
+}
+else
+{
+    <div class="install-grid">
+        @foreach (var installation in Model.Installations)
+        {
+            var license = installation.CurrentIssuedLicense;
+            <div class="install-card">
+                <div class="install-card-head">
+                    <div class="install-identity">
+                        <span class="install-customer">@installation.CustomerName</span>
+                        <span class="badge">@installation.Edition</span>
+                    </div>
+                    <div class="install-meta">
+                        <span>Last seen @installation.LastSeenUtc.ToString("u")</span>
+                        <span><code>@installation.InstallationId</code></span>
+                        @if (license is null)
+                        {
+                            <span class="muted">no linked license — showing raw counts</span>
+                        }
+                        else
+                        {
+                            <span>License expires @license.ExpiresUtc.ToString("yyyy-MM-dd")</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="stat-grid">
+                    <div class="stat-chip status-@IndexModel.QuotaStatusClass(installation.LastUserCount, license?.MaxUsers)">
+                        <span class="stat-chip-label">Users</span>
+                        <span class="stat-chip-value">@IndexModel.FormatQuota(installation.LastUserCount, license?.MaxUsers)</span>
+                    </div>
+                    <div class="stat-chip status-@IndexModel.QuotaStatusClass(installation.LastSourceConnectionCount, license?.MaxSourceConnections)">
+                        <span class="stat-chip-label">Source Connections</span>
+                        <span class="stat-chip-value">@IndexModel.FormatQuota(installation.LastSourceConnectionCount, license?.MaxSourceConnections)</span>
+                    </div>
+                    <div class="stat-chip status-none">
+                        <span class="stat-chip-label">Tenants</span>
+                        <span class="stat-chip-value">@installation.LastTenantCount</span>
+                    </div>
+                    <div class="stat-chip status-@IndexModel.QuotaStatusClass(installation.LastWorkflowCount, license?.MaxWorkflows)">
+                        <span class="stat-chip-label">Workflows</span>
+                        <span class="stat-chip-value">@IndexModel.FormatQuota(installation.LastWorkflowCount, license?.MaxWorkflows)</span>
+                    </div>
+                    <div class="stat-chip status-@IndexModel.QuotaStatusClass(installation.LastProcessedRecordsThisMonth, license?.MaxProcessedRecordsPerMonth)">
+                        <span class="stat-chip-label">Records / Month</span>
+                        <span class="stat-chip-value">@IndexModel.FormatQuota(installation.LastProcessedRecordsThisMonth, license?.MaxProcessedRecordsPerMonth)</span>
+                    </div>
+                    <div class="stat-chip status-none">
+                        <span class="stat-chip-label">Configured Runs (cum.)</span>
+                        <span class="stat-chip-value">@installation.LastCumulativeConfiguredPipelineRunCount</span>
+                    </div>
+                    <div class="stat-chip status-none">
+                        <span class="stat-chip-label">Runtime Runs (cum.)</span>
+                        <span class="stat-chip-value">@installation.LastCumulativeRuntimeWorkflowRunCount</span>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

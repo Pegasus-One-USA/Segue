@@ -1,59 +1,27 @@
-import { Component, inject, computed } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { MatIconModule } from '@angular/material/icon';
-import { AuthStore } from '../../../auth/store/auth.store';
+import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
 
-interface SystemSettingsSection {
-  label: string;
-  route: string;
-  icon: string;
-  /** Omit for sections every viewer who reached this shell may see. */
-  permissions?: string[];
-  /** Hidden unless the user has the SuperAdmin role — General/Security have no permission of their
-   *  own (AllowedCorsOriginsController-style backend policies gate them by role, not permission). */
-  superAdminOnly?: boolean;
-}
-
-// Kept in sync with settings.routes.ts's per-section guards below this shell — Email is
-// independently permission-controlled, so a role holding only configuration.view must see it here
-// without also seeing General/Security.
-const SYSTEM_SETTINGS_SECTIONS: SystemSettingsSection[] = [
-  { label: 'Email', route: 'email', icon: 'mail', permissions: ['configuration.view', 'configuration.write'] },
-  { label: 'General', route: 'general', icon: 'tune', superAdminOnly: true },
-  { label: 'Security', route: 'security', icon: 'security', superAdminOnly: true },
-  // 'Terminology Codes' tab hidden from navigation — its settings now live under the "Terminology
-  // Settings" group on the General tab instead. The route (settings.routes.ts) and its backend
-  // controllers are untouched, so this is reversible by restoring this entry; nothing behind it was
-  // changed or disabled.
-  // {
-  //   label: 'Terminology Codes', route: 'terminology', icon: 'biotech',
-  //   permissions: [
-  //     'loinc.view', 'loinc.write', 'snomedct.view', 'snomedct.write', 'rxnorm.view', 'rxnorm.write', 'icd10.view', 'icd10.write',
-  //   ],
-  // },
-  // SuperAdmin-role-only, matching settings.routes.ts's own sso-configurations child guard and the
-  // backend's SsoConfigurationsController policy.
-  { label: 'SSO Configurations', route: 'sso-configurations', icon: 'admin_panel_settings', superAdminOnly: true },
-];
-
+/**
+ * Route component for Settings → System Settings.
+ *
+ * It used to render a tab strip (Email / General / Security / SSO Configurations / Terminology Codes) with
+ * per-tab permission filtering. Email, Security and SSO Configurations are now launcher rows on General —
+ * opened as full dialogs via SettingsPageDialogService, each keeping the exact permission its tab had — and
+ * Terminology Codes is feature-flagged off (data/terminology-feature.config.ts). That leaves General as the
+ * only section, so the strip would render a single tab pointing at the page already on screen.
+ *
+ * The shell is kept rather than collapsed away because the route still needs a component to host the parent
+ * permission gate and the child routes (which remain, so deep links like /settings/system-settings/email
+ * keep resolving). It simply renders its child directly now.
+ *
+ * To restore tabs: put the nav back in the template alongside a section list, and swap the '' child's plain
+ * `redirectTo: 'general'` in settings.routes.ts back to a settingsLandingGuard over the real sections.
+ */
 @Component({
   selector: 'app-system-settings-shell',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, MatIconModule],
+  imports: [RouterOutlet],
   templateUrl: './system-settings-shell.component.html',
   styleUrl: './system-settings-shell.component.scss',
 })
-export class SystemSettingsShellComponent {
-  private readonly store = inject(AuthStore);
-
-  // Same visibility rule as settings-shell.component.ts's own tab list — kept in sync deliberately
-  // so a section only appears here if the user could also reach it via this shell's own route guard.
-  readonly sections = computed<SystemSettingsSection[]>(() =>
-    SYSTEM_SETTINGS_SECTIONS.filter(section => {
-      if (section.superAdminOnly) return this.store.hasRole('SuperAdmin');
-      if (!section.permissions?.length) return true;
-      if (this.store.isAdmin()) return true;
-      return section.permissions.some(p => this.store.hasPermission(p));
-    })
-  );
-}
+export class SystemSettingsShellComponent {}

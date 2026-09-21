@@ -1,0 +1,79 @@
+@page
+@model FHIRBridge.LicenseServer.Pages.LicenseRequests.HistoryModel
+@{
+    ViewData["Title"] = "Request History";
+}
+
+<div class="page-header">
+    <h1>Request History</h1>
+    <p class="page-subtitle">
+        Every license request this server has ever received, pending and fulfilled alike. Click a row for
+        full details. Still-pending requests also show on <a href="/LicenseRequests">License Requests</a>.
+    </p>
+</div>
+
+@if (Model.Requests.Count == 0)
+{
+    <div class="panel empty-state">
+        <p>No license requests yet.</p>
+    </div>
+}
+else
+{
+    <table>
+        <thead>
+            <tr>
+                <th>Client</th>
+                <th>Requesting URL</th>
+                <th>Contact</th>
+                <th>Received</th>
+                <th>Source</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var request in Model.Requests)
+            {
+                <tr class="clickable-row" onclick="location.href='/LicenseRequests/Details/@request.Id'">
+                    <td>
+                        <a href="/LicenseRequests/Details/@request.Id"><strong>@request.ClientName</strong></a>
+                        @if (request.CompanyName is not null)
+                        {
+                            <div class="muted">@request.CompanyName</div>
+                        }
+                    </td>
+                    <td>@(request.RequestHost ?? "(unknown)")</td>
+                    <td>
+                        <div>@request.Email</div>
+                        <div class="muted">@request.PhoneNumber</div>
+                    </td>
+                    <td>
+                        <div>@request.ReceivedAtUtc.ToString("u")</div>
+                        @if (request.SubmissionCount > 1)
+                        {
+                            <div class="muted">
+                                last @request.LastSubmittedUtc.ToString("u")
+                                (@request.SubmissionCount submissions total)
+                            </div>
+                        }
+                    </td>
+                    <td>@(request.ReceivedManually ? "Manual code" : "Direct API")</td>
+                    <td>
+                        @if (request.FulfilledAtUtc is not null)
+                        {
+                            <span class="badge">Fulfilled</span>
+                        }
+                        else if (request.DeniedAtUtc is not null)
+                        {
+                            <span class="badge badge-suspended">Denied</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-pending">Pending</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

@@ -19,6 +19,12 @@ public interface IBulkExportJobRepository
     /// is the last one its run is waiting on.</summary>
     Task<IReadOnlyList<BulkExportJob>> GetPendingByWorkflowRunAsync(Guid workflowRunId, Guid excludingJobId, CancellationToken cancellationToken);
 
+    /// <summary>The most recently kicked-off job for this workflow run, in ANY state — unlike
+    /// <see cref="GetPendingByWorkflowRunAsync"/>, which is a poller concern and deliberately sees only non-terminal
+    /// rows. Backs the operator-facing status lookup, which stays useful after a job completes or fails. Null when
+    /// the run never deferred to an export.</summary>
+    Task<BulkExportJob?> GetLatestByWorkflowRunAsync(Guid workflowRunId, CancellationToken cancellationToken);
+
     Task UpdateAsync(BulkExportJob job, CancellationToken cancellationToken);
 
     /// <summary>Count of non-terminal (<c>Pending</c>/<c>Polling</c>) jobs against this SourceConnection, across every

@@ -176,7 +176,7 @@ public sealed class PipelineRunsController : ControllerBase
     /// Drill-down into a route execution's per-resource fetch/normalize/map/store history. PHI-free: returns only
     /// per-stage status, timing, warnings, data-quality score, and the master patient id — never the raw
     /// fetched/normalized/mapped payloads. To view an individual decrypted field value, use the gated + audited
-    /// reveal on the Data Lineage screen (DataLineageController.RevealFieldValue), which requires the stricter
+    /// reveal on the Data Lineage screen (removed — resource content is no longer retained), which required the stricter
     /// Payload/View permission and writes a DataAccessLog per reveal.
     /// </summary>
     [HttpGet("route-executions/{routeExecutionId:guid}/resources")]

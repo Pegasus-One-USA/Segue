@@ -5,5 +5,10 @@
 # affected by those being torn down/recreated during testing — switch resource_group_name once a
 # dedicated group is available.
 
-name_prefix         = "fhirbridge"
+name_prefix         = "segue"
 resource_group_name = "rg-tusharpuri"
+
+# Real registry name in use as of this writing — see acr_name_override's description in
+# variables.tf. Remove this line to fall back to the auto-generated name_prefix+vendor+random
+# pattern instead (only meaningful for a brand-new registry that hasn't been created yet).
+acr_name_override = "seguebuilds"

@@ -173,7 +173,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var workflowSource = await ResolveWorkflowSourceAsync(workflowId, cancellationToken);
             return await StartEhrLaunchCoreAsync(
                 workflowSource, issuer, launch, redirectUri, routeId: null, workflowId: workflowId,
-                callerId: effectiveCallerId, cancellationToken, userIdentity: context.UserIdentity);
+                callerId: effectiveCallerId, cancellationToken, userIdentity: context.UserIdentity,
+                correlationId: context.CorrelationId);
         }
 
         if (context.RouteId is { } contextRouteId)
@@ -181,7 +182,8 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             var (sourceConnection, routeId) = await ResolveRouteSourceAsync(contextRouteId, cancellationToken);
             return await StartEhrLaunchCoreAsync(
                 sourceConnection, issuer, launch, redirectUri, routeId, workflowId: null,
-                callerId: effectiveCallerId, cancellationToken, userIdentity: context.UserIdentity);
+                callerId: effectiveCallerId, cancellationToken, userIdentity: context.UserIdentity,
+                correlationId: context.CorrelationId);
         }
 
         throw new InvalidOperationException("The launch context does not reference a route or a workflow.");
@@ -368,7 +370,13 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
         Guid? workflowId,
         string? callerId,
         CancellationToken cancellationToken,
-        string? userIdentity = null)
+        string? userIdentity = null,
+        // The attempt-scoped correlation id minted by validate-run and carried across the EHR redirect inside the
+        // encrypted launch context. Threaded through to the pending authorization so /oauth/callback can restore it
+        // and the resulting run CONTINUES validate-run's own Execution History row instead of opening a second one.
+        // The standalone path (StartStandaloneCoreAsync) has always passed this; EHR launch silently dropped it,
+        // which is why an EHR launch produced an orphaned Validated row plus a separate executed row.
+        string? correlationId = null)
     {
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(launch))
         {
@@ -406,7 +414,7 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
         var authorizationUrl = await IssueAuthorizationAsync(
             source, sourceConnection, launch, routeId, workflowId, requestedRedirectUri: redirectUri,
-            callerId: callerId, cancellationToken, userIdentity: userIdentity);
+            callerId: callerId, cancellationToken, userIdentity: userIdentity, correlationId: correlationId);
 
         return authorizationUrl;
     }
@@ -1113,8 +1121,18 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             clientSecret = await _secretProvider.GetSecretAsync(sourceConnection.Authentication.ClientSecret, cancellationToken);
         }
 
+        // Gated on AuthenticationType, matching SourceConnectionRuntimeResolver's identical guard for the
+        // Backend/refresh path — every save path (wizard, entity-mode edit, workflow rebuild) only ever
+        // populates PrivateKey when AuthenticationType is SmartBackendServices (SMART App Launch's confidential
+        // asymmetric client, valid for interactive audiences too, not just Backend Services), so this can't
+        // reject a legitimate confidential client. Without it, a connection whose auth method moved away from
+        // SmartBackendServices but still carries a leftover PrivateKey reference (PreserveSecretsIfBlank only
+        // clears it on that exact transition) would sign the initial authorization_code exchange with a stale
+        // key while the refresh leg (through the now-gated runtime resolver) does not — the two legs disagreeing
+        // about how this client authenticates, surfacing later as a refresh-only invalid_client.
         string? privateKeyPem = null;
-        if (sourceConnection.Authentication.PrivateKey is not null)
+        if (sourceConnection.Authentication.AuthenticationType == AuthenticationType.SmartBackendServices &&
+            sourceConnection.Authentication.PrivateKey is not null)
         {
             privateKeyPem = await _secretProvider.GetSecretAsync(sourceConnection.Authentication.PrivateKey, cancellationToken);
         }

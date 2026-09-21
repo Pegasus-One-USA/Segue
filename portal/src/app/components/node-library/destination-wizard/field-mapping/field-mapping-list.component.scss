@@ -475,13 +475,16 @@
 }
 
 .fm-draft-form {
-  margin-top: var(--space-6);
+  // Sat tight against the rules table above it and against its own Cancel/Add-rule row below, which read
+  // as cramped next to the table's roomier rows. One step up on both (12px -> 16px, matching the padding
+  // already used inside) separates the editor from the list it sits under without restyling either.
+  margin-top: var(--space-8);
   padding: var(--space-8);
   background: var(--color-side);
   border-radius: var(--radius-base);
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-8);
 }
 
 .fm-draft-row {
@@ -554,4 +557,78 @@
   &:disabled { background: var(--color-border); border-color: var(--color-border); color: var(--color-muted); cursor: not-allowed; }
   &:not(:disabled):hover { background: var(--color-primary-dark); }
   &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+// ── De-identification editor row ─────────────────────────────────────────────────────────────────────
+// The draft is a row of the rules table (see the template), so these keep its controls looking like an
+// editable version of the row above rather than a form dropped into a cell.
+.fm-draft-tr {
+  background: var(--color-side);
+
+  // Bottom, not middle: every cell carries a caption label above its control, so aligning on the cell's
+  // centre would stagger the controls themselves by however tall each label happened to wrap. Anchoring
+  // the bottom edge puts every control — and the action buttons, which have no label — on one line.
+  > td { vertical-align: bottom; }
+
+  // Reuses the draft form's own label+control pairing (caption above, compact select below) rather than a
+  // second near-identical style, so the Scope and Source field cells match the Config cell's labels and the
+  // mapping draft's fields. Full width so each control visibly occupies its column.
+  .fm-draft-field select { width: 100%; }
+
+  // Left-aligned like the Edit…/Remove links in the rows above, so the whole Actions column reads as one
+  // line of controls rather than the editor's buttons drifting out to the table's right edge.
+  .fm-draft-actions {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: var(--space-6);
+  }
+}
+
+// The config form renders mode plus whichever field that mode uses, inside the Config cell.
+// Nested under .rule-config-form--inline on purpose, and not merely under .config-control: the component's
+// own rule compiles to `.config-control[_ngcontent] select[_ngcontent]`, which ties any override written as
+// `.fm-draft-tr .config-control select` exactly on specificity (0,3,1) and then wins on stylesheet order.
+// The extra class makes these (0,4,1) so they actually apply. Scoped to this row so every other usage of
+// the shared component (join popover, transform-rules dialog, FHIR rule popover, Transformation Rules page)
+// keeps its own sizing.
+.fm-draft-tr ::ng-deep .rule-config-form--inline {
+  // Matches the gap the table's own cells sit on, so mode and its companion field read as one column
+  // rather than two loosely-grouped controls.
+  gap: var(--space-6);
+  flex-wrap: nowrap;
+
+  .config-control {
+    gap: var(--space-2);
+
+    // Both exist only to bottom-align controls across the component's default stretched grid; in a table
+    // cell they added ~30px of dead height above each control.
+    label {
+      min-height: 0;
+      margin-bottom: 0;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    select, input {
+      width: auto;
+      min-width: 0;
+      height: auto;
+      font-size: 13px;
+      font-weight: 400;
+      padding: var(--space-2) var(--space-6);
+    }
+
+    // The component draws its own chevron (appearance: none + a solid-triangle SVG background) to match
+    // the "Node type" select in the dialogs it was built for. Beside this row's native pickers that glyph
+    // is the last thing making it read as a different control, so hand the arrow back to the browser and
+    // drop the 32px clearance the custom one needed.
+    select {
+      appearance: auto;
+      -webkit-appearance: auto;
+      -moz-appearance: auto;
+      background-image: none;
+      padding-right: var(--space-6);
+    }
+  }
 }

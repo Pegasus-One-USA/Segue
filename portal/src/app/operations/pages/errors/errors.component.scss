@@ -1,8 +1,11 @@
+@use '../../../_list-page' as *;
+
 .list-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 24px;
+  // Run full-bleed (like the other Logs & Compliance tabs) rather than the shared partial's 1400px
+  // centered width, so switching tabs never jumps the content width.
 }
 
 .page-header h1 {
@@ -17,12 +20,10 @@
   font-size: 13px;
 }
 
-.filter-bar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
+// Filter bar chrome (.filter-card / .filter-row / .search-wrap / .search-input / .filter-actions /
+// .btn-reset) comes from the shared _list-page partial above — standard filter design shared with
+// Workflows / Source Connections / Execution History. The Search button uses .btn-search from that
+// partial; the table action buttons below keep this component's own .btn / .btn-ghost / .btn-sm.
 
 .filter-note {
   margin: 0;
@@ -38,25 +39,6 @@
   color: var(--color-primary);
   cursor: pointer;
   text-decoration: underline;
-}
-
-.correlation-input {
-  flex: 0 0 240px;
-  padding: 8px 12px;
-  border: 1px solid var(--color-border-input);
-  border-radius: 6px;
-  font-family: monospace;
-  font-size: 13px;
-}
-
-.filter-select {
-  flex: 0 0 180px;
-  width: auto;
-  padding: 8px 12px;
-  border: 1px solid var(--color-border-input);
-  border-radius: 6px;
-  font-size: 13px;
-  background: var(--color-surface);
 }
 
 .btn {

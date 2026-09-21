@@ -1132,6 +1132,11 @@ export class EhrVendorSourceFormComponent
     exportScope: [''],
     groupId: [''],
     patientIdList: [''],
+    // Entity/Settings mode has no Retrieval section at all (see showRetrievalSection's remarks — GroupId/
+    // resource types genuinely belong on the workflow node, not here), so there is no exportScope control there
+    // to derive system/Group.read from. This standalone checkbox is scopeString()'s only signal for "this
+    // connection is meant for Group bulk export" when opened outside canvas mode.
+    groupBulkExport: [false],
     fhirOutputFormat: ['ndjson'],
     // ── Full Refresh calendar recurrence (Search REST, Run Mode = Full Refresh only) ────────────────────────────
     fullRefreshRecurrence: ['daily'],
@@ -1176,6 +1181,26 @@ export class EhrVendorSourceFormComponent
   private readonly exportScopeValue = toSignal(
     this.form.controls.exportScope.valueChanges,
     { initialValue: this.form.controls.exportScope.value },
+  );
+  private readonly groupBulkExportValue = toSignal(
+    this.form.controls.groupBulkExport.valueChanges,
+    { initialValue: this.form.controls.groupBulkExport.value },
+  );
+
+  /** Backend/system-scoped eCW (Healow) only — Settings (entity mode) has no Retrieval section to show an
+   *  Export Scope picker in, so this is the one place outside canvas mode where an operator can say "this
+   *  connection needs system/Group.read" (see scopeString() and the groupBulkExport control's remarks). Shown
+   *  in canvas mode too — harmless there since the Export Scope=Group path already covers it and this control
+   *  simply stays unchecked/unused. */
+  protected readonly showGroupBulkExportCheckbox = computed(
+    () =>
+      this.audienceConfig().scopePrefix === 'system' &&
+      this.vendor() === 'Healow' &&
+      // Canvas mode already has a real Export Scope field (Retrieval Configuration, section 6) that drives the
+      // same system/Group.read injection via scopeString()'s other branch — showing this checkbox there too is
+      // redundant and reads as if both need setting. Entity/Settings mode has no such field at all (see
+      // showRetrievalSection's remarks), which is the one case this checkbox actually exists for.
+      this.wiz.wizardMode() !== 'canvas',
   );
   private readonly runModeValue = toSignal(
     this.form.controls.runMode.valueChanges,
@@ -1766,6 +1791,26 @@ export class EhrVendorSourceFormComponent
           })
           .filter((s): s is string => s !== null)
       : res.map((r) => `${cfg.scopePrefix}/${r}.${suffix}`);
+
+    // A Group-level Bulk Data $export needs system/Group.read (to read the Group definition) on top of the
+    // per-resource read scopes above — otherwise eCW's token omits it and Group/{id}/$export is rejected with
+    // HAPI-0333. Group is deliberately excluded from vendorScopeProfile's per-resource map (it must never leak
+    // into a Backend Single Patient grant, which eCW requires it excluded from), so this is the only path that
+    // requests it. Mirrors workflow-build-assembler-v2.service.ts's identical Healow-branch injection for the
+    // canvas-build path — this is the same fix for entity-mode/Settings, where retrieval: null (see
+    // populateFormFromSourceConnection's remarks) means the backend's own isGroupExport scope regeneration can
+    // never fire for a connection saved here, so the scope must already be correct at save time.
+    const needsGroupRead =
+      cfg.scopePrefix === 'system' &&
+      this.vendor() === 'Healow' &&
+      ((this.retrievalMethodValue() === 'bulk-export' &&
+        this.exportScopeValue() === 'group') ||
+        this.groupBulkExportValue()) &&
+      !resourceScopes.includes('system/Group.read');
+    if (needsGroupRead) {
+      resourceScopes.unshift('system/Group.read');
+    }
+
     return [...fixed, ...resourceScopes].join('\n');
   });
 
@@ -2466,6 +2511,10 @@ export class EhrVendorSourceFormComponent
         exportScope: '',
         groupId: '',
         patientIdList: '',
+        // Independent of showRetrieval (see showGroupBulkExportCheckbox's own gate), but cleared alongside it
+        // here so switching away from Backend System doesn't leave a stale checked value behind for if the
+        // user switches back.
+        groupBulkExport: false,
         fhirOutputFormat: 'ndjson',
         fullRefreshRecurrence: 'daily',
         fullRefreshDaysOfWeek: [],
@@ -2890,7 +2939,7 @@ export class EhrVendorSourceFormComponent
    *  casing for how the key was provisioned. */
   protected generateKeyPair(): void {
     this.keyGenStatus.set('generating');
-    this.sourceConnectionSvc.generateSigningKey().subscribe({
+    this.sourceConnectionSvc.generateSigningKey(this.vendor()).subscribe({
       next: (key) => {
         this.form.patchValue({
           jwtKid: key.keyId,
@@ -2952,7 +3001,7 @@ export class EhrVendorSourceFormComponent
 
     this.keyGenStatus.set('generating');
     this.sourceConnectionSvc
-      .importSigningKey(this.pendingPrivateKeyPem)
+      .importSigningKey(this.pendingPrivateKeyPem, this.vendor())
       .subscribe({
         next: (key) => {
           this.form.patchValue({
@@ -3188,6 +3237,11 @@ export class EhrVendorSourceFormComponent
       patientIdList: retrieval?.patientIds?.join(', ') ?? '',
       fhirOutputFormat:
         retrieval?.outputFormat ?? this.form.controls.fhirOutputFormat.value,
+      // Reflects back whatever scopeString() actually produced on the last save (see its own remarks) — an
+      // entity-mode connection has no exportScope to derive this from, so the saved Scopes list itself is the
+      // only source of truth for whether Group.read was ever requested.
+      groupBulkExport:
+        dto.authentication?.scopes?.includes('system/Group.read') ?? false,
     });
 
     // Same reasoning as resolvedRetrievalMethod above: this per-method Resource Type control needs a non-empty
@@ -3665,7 +3719,13 @@ export class EhrVendorSourceFormComponent
       // athenahealth only — bare numeric practice id; the backend builds the ah-practice reference from it.
       // Empty for every other vendor (showPracticeId() gates both visibility and requiredness).
       'Practice ID': v.practiceId ?? '',
-      'Auth method': v.authMethod ?? 'secret',
+      // Falls back to the vendor+audience default rather than a blanket 'secret': Epic's Backend System audience
+      // is private_key_jwt (SMART Backend Services) and is pinned to that server-side, so a 'secret' fallback here
+      // told the assembler there was no signing key to carry and produced a connection with neither a key nor a
+      // secret. Only reachable when authMethod is genuinely unset (a node saved before this field was captured,
+      // or a clone whose discovery didn't advertise private_key_jwt); a real user selection always wins.
+      'Auth method':
+        v.authMethod ?? defaultAuthMethodFor(this.vendor(), this.audience()),
       // Only meaningful for Backend System + JWT — lets a later "was this key FHIRBridge-provisioned?" check (e.g.
       // WorkflowBuilderComponent auto-filling the real JWKS URL after build assigns a sourceConnectionId) tell a
       // generated/imported key apart from one pointing at an externally-hosted JWKS, without re-deriving it from

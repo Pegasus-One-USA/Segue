@@ -8,6 +8,12 @@ public sealed record WorkflowDefinitionRequest(
     IReadOnlyCollection<WorkflowNodeRequest> Nodes,
     IReadOnlyCollection<WorkflowEdgeRequest> Edges,
     WorkflowTriggerRequest? Trigger = null,
+    // Defaults to TRUE by product decision: a workflow is expected to be launchable by the third-party app it
+    // was built for as soon as it is created, without an extra admin step. Note this deliberately differs from
+    // the database column's default (false, see the InitialCreate migration) and from WorkflowDefinition's own
+    // constructor default — a workflow created through any path that does NOT go through this request model
+    // starts non-public. The exposure this grants is bounded by the allowed-origins check on the anonymous
+    // endpoints (CallerIdOriginValidator), not by this flag alone.
     bool IsPubliclyLaunchable = true,
     // Optional multi-line free-text notes for this workflow. Null/blank clears whatever was stored.
     string? Description = null);

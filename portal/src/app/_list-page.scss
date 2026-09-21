@@ -6,10 +6,12 @@
 // into every list page — is what keeps the repo's !important ratchet (scripts/check-tokens.mjs) from
 // climbing every time a new list page is added.
 
+// No padding and no max-width here on purpose: the page's edge inset comes from the single
+// `.shell-content > *` rule in styles.scss (--page-gutter-x/y), and pages run edge-to-edge
+// rather than being capped and centred — a centred 1400px column left ~150px of dead space
+// on each flank of a wide table. A 12-column table still degrades gracefully via
+// .table-wrapper's overflow-x below, not by shrinking its columns.
 .list-page {
-  padding: 32px;
-  max-width: 1400px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -17,6 +19,57 @@
   background: var(--color-bg);
   position: relative;
 }
+
+// Bounded-height variant, applied automatically to any list page that owns a .table-card (the paged
+// table layout). .shell-content is the scroll parent, so the default `min-height: 100%` above lets a
+// tall table grow the page PAST the viewport, pushing the pagination footer below the fold — reachable
+// only by scrolling down or zooming out. Constraining the page and scrolling .table-wrapper internally
+// keeps the filter bar and the paginator on screen at any zoom level.
+// --
+// Scoped with :has() rather than applied to every .list-page on purpose: pages WITHOUT a .table-card
+// (Compliance Reports, Correlation Search, Data Lineage) are free-flowing content with no internal
+// scroll region of their own — bounding those would clip them with no way to scroll.
+.list-page:has(.table-card) {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// Page heading. Matches the .page-header/.page-title/.page-sub trio the settings pages (Email, License)
+// already use, so a list page hosted as a dialog off System Settings > General identifies itself the same
+// way they do — the launcher row that opened it is not visible from inside the dialog.
+// ── Inline search spinner ────────────────────────────────────────────────────
+// The small in-field spinner a server-backed search box shows while its debounced request is in
+// flight, INSTEAD of the app-wide GlobalLoaderComponent. The global loader dims the whole screen and
+// marks the routed content [inert], which blurs the very input the user is still typing into — so any
+// search that round-trips passes SKIP_LOADER and shows this instead. Mirrors the pattern
+// WorkflowListComponent established. Requires the .search-wrap ancestor's `position: relative`.
+.search-spinner {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--color-muted);
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: list-page-spin 0.8s linear infinite;
+}
+
+// Keeps the -50% vertical centering from .search-spinner while rotating — a bare rotate() would
+// replace the whole transform and drop the element out of alignment mid-spin.
+@keyframes list-page-spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .search-spinner { animation: none; opacity: 0.6; }
+}
+
+.page-header { display: flex; flex-direction: column; gap: 4px; }
+.page-title  { font-size: 20px; font-weight: 700; color: var(--color-ink); margin: 0; }
+.page-sub    { font-size: 14px; color: var(--color-muted); margin: 0; }
 
 .filter-card {
   background: var(--color-surface);
@@ -53,6 +106,12 @@
     &:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
   }
 }
+
+// Opt-in modifier for list pages whose only filter is a short id/token search (the Logs & Compliance
+// tabs) rather than a long free-text query — caps the search field at half the filter row instead of
+// letting it stretch across the whole width. Scoped to .filter-card--compact-search so other consumers
+// of this partial (Source Connections, EHR Endpoints, …) are unaffected.
+.filter-card--compact-search .search-wrap { max-width: 50%; }
 
 .select-wrap { flex: 0 0 180px; }
 
@@ -108,6 +167,22 @@
   border-radius: var(--radius-base); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); padding: 8px;
 }
 
+// Shown only in panels with enough options to be worth searching (see showOptionSearch on the list
+// components). Sticks to the top so it stays reachable while the option list behind it scrolls. The negative
+// side margins let it span the panel's full width, past the panel's own 8px padding, so its border reads as a
+// divider under the whole panel rather than a floating underline.
+.filter-option-search {
+  position: sticky; top: -8px; z-index: 1;
+  box-sizing: border-box; height: 30px; width: calc(100% + 16px);
+  margin: -8px -8px 6px; padding: 0 10px;
+  border: none; border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface); font-size: 13px; color: var(--color-ink);
+
+  &:focus { outline: none; border-bottom-color: var(--color-primary); }
+
+  &::placeholder { color: var(--color-muted); }
+}
+
 .filter-dropdown-empty { padding: 8px; font-size: 13px; color: var(--color-muted); }
 
 .filter-checkbox-row {
@@ -138,6 +213,21 @@
   }
 }
 
+// Primary "Search"/apply button for a filter row — a solid teal primary sized to sit level with
+// .btn-reset (both 40px), for list pages that trigger a server-side lookup on demand (the Logs &
+// Compliance tabs) rather than filtering live. Deliberately 40px (not the global .btn-primary's 44px
+// min-height) so Search and Reset line up in the same filter row.
+.btn-search {
+  display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 18px;
+  border: none; border-radius: var(--radius-base);
+  background: var(--color-primary); color: var(--color-on-primary);
+  font-size: 13.5px; font-weight: 600; cursor: pointer;
+  transition: background var(--transition-base);
+  &:hover, &:active { background: var(--color-primary-dark); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-soft); }
+  &:disabled { background: var(--color-border); color: var(--color-muted-2); cursor: not-allowed; }
+}
+
 .table-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -157,15 +247,25 @@
 // regardless of how few rows sit above it.
 app-pagination-bar {
   margin-top: auto;
+  flex: 0 0 auto;
 }
 
 .table-meta {
   display: flex; align-items: center;
   padding: 12px 20px; border-bottom: 1px solid var(--color-border); background: var(--color-side);
+  flex: 0 0 auto;
 }
 
 .entries-info { font-size: 13px; color: var(--color-muted); }
-.table-wrapper { overflow-x: auto; }
+// The ONLY scrolling region inside .table-card: the header/meta row above and the paginator below stay
+// put while rows scroll under them. min-height: 0 is required — a flex item defaults to min-height: auto
+// and would otherwise refuse to shrink below the table's natural height, recreating the overflow.
+.table-wrapper {
+  overflow-x: auto;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 
 .data-table {
   width: 100%;
@@ -229,6 +329,7 @@ app-pagination-bar {
 
 .table-paginator {
   margin-top: auto;
+  flex: 0 0 auto;
   border-top: 1px solid var(--color-border); background: var(--color-side);
 
   ::ng-deep {

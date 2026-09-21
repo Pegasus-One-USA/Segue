@@ -1606,6 +1606,119 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("WorkflowAuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Licensing.LicenseHistoryEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AppliedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Edition")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ExpiresUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppliedUtc");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.ToTable("LicenseHistoryEntries", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.Licensing.LicenseRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ClientName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastAttemptUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("RequestHost")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("SubmissionError")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("UniqueKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("UniqueKey")
+                        .IsUnique();
+
+                    b.ToTable("LicenseRequests", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.Licensing.UsageLedgerEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2118,15 +2231,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("FetchedAtUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("FetchedJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime?>("MappedAtUtc")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("MappedValuesJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("MasterPatientId")
                         .HasMaxLength(200)
@@ -2134,9 +2240,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("NormalizedAtUtc")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("NormalizedJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ResourceType")
                         .IsRequired()
@@ -2411,6 +2514,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsFullAccess")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsSystem")
                         .HasColumnType("bit");
 
@@ -2434,7 +2542,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("Roles", (string)null);
                 });
@@ -4694,6 +4803,36 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("WebhookConfigurations", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.WorkflowNumberSequence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("LastValue")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PeriodKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PeriodKey")
+                        .IsUnique();
+
+                    b.ToTable("WorkflowNumberSequences", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Infrastructure.Messaging.ProcessedMessage", b =>
                 {
                     b.Property<string>("MessageId")
@@ -4882,9 +5021,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("DestinationValueJson")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<double?>("DurationMs")
                         .HasColumnType("float");
 
@@ -4927,9 +5063,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<string>("SourceSystemType")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("SourceValueJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("Success")
                         .HasColumnType("bit");
@@ -4999,7 +5132,15 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<int>("Version")
                         .HasColumnType("int");
 
+                    b.Property<string>("WorkflowNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("WorkflowNumber")
+                        .IsUnique()
+                        .HasFilter("[WorkflowNumber] IS NOT NULL");
 
                     b.ToTable("WorkflowDefinitions", (string)null);
                 });
@@ -5081,34 +5222,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("WorkflowNodes", (string)null);
                 });
 
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeConfiguration", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("IsSecret")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("WorkflowNodeId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("WorkflowNodeId");
-
-                    b.ToTable("WorkflowNodeConfigurations", (string)null);
-                });
-
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5167,6 +5280,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("DeliveryDetailJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("ItemCount")
                         .HasColumnType("int");
 
@@ -5175,12 +5291,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("PayloadJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTimeOffset>("RecordedAtUtc")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ResourceTypeCountsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid>("WorkflowNodeRunId")
                         .HasColumnType("uniqueidentifier");
@@ -5202,6 +5317,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BulkRequestId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset");
@@ -6042,15 +6161,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeConfiguration", b =>
-                {
-                    b.HasOne("FHIRBridge.Runtime.Domain.Workflows.WorkflowNode", null)
-                        .WithMany("Configuration")
-                        .HasForeignKey("WorkflowNodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeRun", b =>
                 {
                     b.HasOne("FHIRBridge.Runtime.Domain.Workflows.WorkflowRun", null)
@@ -6070,11 +6180,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Navigation("Edges");
 
                     b.Navigation("Nodes");
-                });
-
-            modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowNode", b =>
-                {
-                    b.Navigation("Configuration");
                 });
 
             modelBuilder.Entity("FHIRBridge.Runtime.Domain.Workflows.WorkflowRun", b =>

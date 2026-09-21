@@ -1,7 +1,4 @@
 .detail-page {
-  padding: 32px;
-  max-width: 1400px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -121,7 +118,10 @@
 .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-muted); }
 .stat-value { font-size: 14px; font-weight: 600; color: var(--color-ink); }
 
-.mono { font-family: monospace; font-size: 12px; }
+/* --font-mono, not bare `monospace`: the latter resolves to the browser's default fixed-width face, which
+   is not the one the rest of the application uses — so the correlation id rendered in a visibly different
+   typeface from every other monospaced value on the same page. */
+.mono { font-family: var(--font-mono); font-size: 12px; }
 .link { color: var(--color-primary); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 
@@ -498,4 +498,133 @@
     .mat-mdc-paginator-container { padding: 8px 16px; }
     .mat-mdc-paginator-range-label { color: var(--color-muted); font-size: 13px; }
   }
+}
+
+/* One node's summary, in the same bordered panel the destination node's write result uses, so every node
+   in the run reads the same way rather than each having its own shape. */
+.node-summary-panel {
+  padding: 14px 18px;
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+
+  &__figures {
+    display: grid;
+    grid-template-columns: max-content max-content;
+    gap: 6px 20px;
+    margin: 0;
+    align-items: baseline;
+
+    dt { font-size: 13px; font-weight: 600; color: var(--color-muted); }
+    dd {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--color-ink);
+      /* Tabular figures so a column of counts aligns on its digits rather than drifting. */
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  &__rules {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--color-border);
+  }
+
+  &__rules-title {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-muted);
+  }
+}
+
+/* One resource type inside a node's summary, with the transformation rules applied to it nested beneath —
+   rules are configured per resource type, so this is the cut that actually answers "what happened to my
+   Patients?" rather than a flat run-wide rule list. */
+.resource-type-block {
+  & + & {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--color-border);
+  }
+
+  &__head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  &__name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+
+  &__count {
+    font-size: 12px;
+    color: var(--color-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Indented so the rules read as belonging to the type above them. */
+  &__rules {
+    margin-top: 4px;
+    margin-left: 14px;
+  }
+
+  &__none {
+    display: block;
+    margin-top: 4px;
+    margin-left: 14px;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--color-muted);
+  }
+}
+
+/* Per-resource-type counts for the nodes whose output is no longer retained. The markup was added with
+   no styling at all, so the browser's default <dl> rendering put every value on its own line under its
+   label — a tall, ragged stack. Laid out as label/value pairs on one row each, matching .stat-label /
+   .stat-value above so it reads like the rest of the run's detail. */
+.resource-count-list {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  gap: 4px 16px;
+  margin: 0;
+  align-items: baseline;
+
+  dt {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Destination write result for database-shaped destinations — mirrors the payload-preview dialog's
+   presentation so a payload looks the same wherever it is shown. Uses the app's own --font-mono token
+   rather than repeating a font stack, so it tracks the rest of the application. */
+.destination-write-json {
+  margin: 0;
+  padding: 14px 18px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
 }

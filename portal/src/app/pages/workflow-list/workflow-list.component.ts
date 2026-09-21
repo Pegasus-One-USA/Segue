@@ -1,6 +1,7 @@
 ﻿import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal, computed } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
+import { HttpResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -10,13 +11,27 @@ import { MatDividerModule } from '@angular/material/divider';
 import {
   WorkflowApiService,
   WorkflowSummary,
+  WorkflowLifecycleStatus,
   WorkflowRunStatus,
   DestinationData,
 } from '../../services/workflow-api.service';
 import { ToastService } from '../../services/toast.service';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
 import { PermissionService } from '../../auth/services/permission.service';
-import { sourceSystemDisplayName } from '../../data/source-system-display-names.data';
+import { AuthStore } from '../../auth/store/auth.store';
+import {
+  sourceTypeLabel,
+  destinationTypeLabel,
+  sourceTypeOptions,
+  destinationTypeOptions,
+  resourceTypeOptions,
+} from '../../data/connection-type-labels.util';
+import { PhaseConfigService } from '../../services/phase-config.service';
+import {
+  IntegrationDetails,
+  buildIntegrationDetails,
+  integrationDetailsAsText,
+} from './integration-details.util';
 
 /** Debounce before a search-box keystroke triggers a server round-trip (see onSearch). */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -39,7 +54,7 @@ interface DataModal {
 type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun' | 'actionOn';
 type SortDirection = 'asc' | 'desc';
 /** Multi-select filter categories shown in the filter bar — see filterDefs/signalFor. */
-type FilterCategory = 'status' | 'audience' | 'source';
+type FilterCategory = 'status' | 'audience' | 'source' | 'destination' | 'lastRunStatus' | 'resourceType';
 
 @Component({
   selector: 'app-workflow-list',
@@ -55,6 +70,8 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly runStatusHub = inject(RunStatusHubService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly permissions = inject(PermissionService);
+  private readonly phaseCfg = inject(PhaseConfigService);
+  private readonly authStore = inject(AuthStore);
 
   // ── RBAC: workflow.view (the route guard already reached here) only grants VIEW access — these four
   // are what actually gate each action-specific button/menu-item below, kept independent of one another
@@ -64,15 +81,29 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   protected readonly canDelete = computed(() => this.permissions.hasPermission('workflow.delete'));
   protected readonly canRun    = computed(() => this.permissions.hasPermission('workflow.run'));
 
+  /** Gates the two overflow-menu items that expose the workflow's own wiring rather than act on it:
+   *  "Integration Details" (the URLs, ids and headers a third party needs to drive this workflow) and
+   *  "Download Configuration" (every configuration table it touches, dumped for offline analysis).
+   *  Both are disclosure, not action, so they are restricted to SuperAdmin rather than to any
+   *  workflow.* permission — deliberately NOT authStore.isAdmin(), which also admits a plain Admin. */
+  protected readonly canViewConfiguration = computed(() => this.authStore.hasRole('SuperAdmin'));
+
   readonly summaries = signal<WorkflowSummary[]>([]);
   readonly loading = signal(true);
   readonly searchQuery = signal('');
+  /** True only while a search-box-triggered reload is in flight — see onSearch/reload. Drives a small inline
+   *  spinner in the search box instead of the app-wide global loader, which would otherwise blur the very
+   *  input the user is still typing into (AppComponent marks the routed content `[inert]` while busy). */
+  readonly searching = signal(false);
 
   /** Workflow id currently running/launching — disables its action button. Not set for an async ("background") run,
    *  which returns immediately so the row stays interactive; see runAsync. */
   readonly busyId = signal<string | null>(null);
   /** Workflow id whose enable/disable or delete call is in flight — disables its row controls. */
   readonly rowBusyId = signal<string | null>(null);
+  /** Workflow id whose configuration export is being built server-side. Kept separate from rowBusyId because
+   *  this is a pure read: it must not disable the row's enable/delete controls while it runs. */
+  readonly exportingId = signal<string | null>(null);
 
   readonly launchModal = signal<LaunchModal | null>(null);
   readonly dataModal = signal<DataModal | null>(null);
@@ -81,6 +112,10 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Workflow pending copy (duplicate) confirmation — holds the name typed into the modal. */
   readonly confirmCopy = signal<WorkflowSummary | null>(null);
   readonly copyName = signal('');
+  /** The pre-filled "<name> (copy)" suggestion, kept so an untouched name can be told from an edited one. */
+  private readonly copyNameSuggestion = signal('');
+  /** Shows the "discard your input?" confirm layered over the Copy-workflow modal. */
+  readonly confirmDiscardCopyWorkflow = signal(false);
   // Default sort surfaces the most recently run (created/updated activity proxy) workflows first —
   // per user direction, so a newly built or just-triggered workflow is immediately visible without
   // having to search/sort manually. Backend orders never-run workflows last (LastRunAt ?? -1).
@@ -110,19 +145,49 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  category's checkboxes disappear. */
   readonly availableStatuses = signal<string[]>([]);
   readonly availableAudiences = signal<string[]>([]);
-  readonly availableSources = signal<string[]>([]);
+  readonly availableLastRunStatuses = signal<string[]>([]);
+
+  // Source, Destination and Resource Type come from the CATALOGS the connection masters and the destination
+  // wizard build their own pickers from — not from the workflows that happen to exist. A filter answers "which
+  // of the things I can configure do I want to see", so it offers what those screens offer; deriving it from
+  // current rows meant the Destination filter listed five types while Destination Connections listed twenty,
+  // and a vendor with no connection yet was unfilterable. Gated exactly as the masters gate their dropdowns
+  // (phase config + the vendor's own `{prefix}.view`), so a role never sees a vendor it cannot access.
+  private readonly hasPermission = (code: string) => this.permissions.hasPermission(code);
+
+  readonly availableSources = computed(() =>
+    sourceTypeOptions({
+      isEnabled: (id: string) => this.phaseCfg.isSourceEnabled(id),
+      hasPermission: this.hasPermission,
+    }).map(o => o.value),
+  );
+
+  readonly availableDestinations = computed(() =>
+    destinationTypeOptions({
+      isEnabled: (id: string) => this.phaseCfg.isTransformEnabled(id),
+      hasPermission: this.hasPermission,
+    }).map(o => o.value),
+  );
+
+  readonly availableResourceTypes = computed(() => resourceTypeOptions().map(o => o.value));
 
   readonly selectedStatuses = signal<Set<string>>(new Set());
   readonly selectedAudiences = signal<Set<string>>(new Set());
   readonly selectedSources = signal<Set<string>>(new Set());
+  readonly selectedDestinations = signal<Set<string>>(new Set());
+  readonly selectedLastRunStatuses = signal<Set<string>>(new Set());
+  readonly selectedResourceTypes = signal<Set<string>>(new Set());
 
   /** Which filter dropdown panel is open, if any — see toggleFilterMenu/closeFilterMenus. */
   readonly openFilterMenu = signal<FilterCategory | null>(null);
 
   readonly filterDefs: { category: FilterCategory; label: string }[] = [
     { category: 'status', label: 'Status' },
+    { category: 'lastRunStatus', label: 'Last Run Status' },
     { category: 'audience', label: 'Audience' },
     { category: 'source', label: 'Source' },
+    { category: 'destination', label: 'Destination' },
+    { category: 'resourceType', label: 'Resource Type' },
   ];
 
   constructor() {
@@ -154,9 +219,12 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   optionsFor(category: FilterCategory): string[] {
     switch (category) {
-      case 'status':   return this.availableStatuses();
-      case 'audience': return this.availableAudiences();
-      case 'source':   return this.availableSources();
+      case 'status':        return this.availableStatuses();
+      case 'audience':      return this.availableAudiences();
+      case 'source':        return this.availableSources();
+      case 'destination':   return this.availableDestinations();
+      case 'lastRunStatus': return this.availableLastRunStatuses();
+      case 'resourceType':  return this.availableResourceTypes();
     }
   }
 
@@ -166,27 +234,45 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (category === 'audience') return this.audienceLabel(value);
     // The filter's VALUE stays the enum member the API filters on; only the text changes.
     if (category === 'source') return this.sourceSystemLabel(value);
+    if (category === 'destination') return destinationTypeLabel(value);
+    // Last Run Status offers every WorkflowRunStatus, including the two the run list never shows as-is:
+    // AwaitingBulkExport reads as "Running" there, so spelling it out here keeps the filter honest about
+    // being a distinct stored value rather than appearing to duplicate Running.
+    if (category === 'lastRunStatus') return this.lastRunStatusLabel(value);
     return value;
   }
 
-  /** Brand name for a source system — the Source badge and the Source filter must agree. */
+  /** Same PascalCase split, plus the one status whose stored name is not what the rest of the UI calls it. */
+  lastRunStatusLabel(status: string): string {
+    if (status === 'AwaitingBulkExport') return 'Awaiting Bulk Export';
+    return status.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  }
+
+  /** The name the Source Connections master shows for this vendor — the Source badge, the Source filter and
+   *  that master all read the same SOURCES catalog, so none of them can drift from the others. */
   sourceSystemLabel(sourceSystemType: string | null | undefined): string {
-    return sourceSystemDisplayName(sourceSystemType);
+    return sourceTypeLabel(sourceSystemType);
   }
 
   selectedSetFor(category: FilterCategory): Set<string> {
     switch (category) {
-      case 'status':   return this.selectedStatuses();
-      case 'audience': return this.selectedAudiences();
-      case 'source':   return this.selectedSources();
+      case 'status':        return this.selectedStatuses();
+      case 'audience':      return this.selectedAudiences();
+      case 'source':        return this.selectedSources();
+      case 'destination':   return this.selectedDestinations();
+      case 'lastRunStatus': return this.selectedLastRunStatuses();
+      case 'resourceType':  return this.selectedResourceTypes();
     }
   }
 
   private signalForCategory(category: FilterCategory) {
     switch (category) {
-      case 'status':   return this.selectedStatuses;
-      case 'audience': return this.selectedAudiences;
-      case 'source':   return this.selectedSources;
+      case 'status':        return this.selectedStatuses;
+      case 'audience':      return this.selectedAudiences;
+      case 'source':        return this.selectedSources;
+      case 'destination':   return this.selectedDestinations;
+      case 'lastRunStatus': return this.selectedLastRunStatuses;
+      case 'resourceType':  return this.selectedResourceTypes;
     }
   }
 
@@ -200,6 +286,35 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   toggleFilterMenu(category: FilterCategory): void {
     this.openFilterMenu.set(this.openFilterMenu() === category ? null : category);
+    // Each panel opens with an empty box — a term left over from the last time this filter was opened would
+    // silently hide options the user never chose to exclude.
+    this.filterOptionSearch.set('');
+  }
+
+  // ── In-panel option search ────────────────────────────────────────────────
+  // Resource Type can carry ~36 FHIR types and Destination ~24 — well past what is findable by eye in a 280px
+  // scrolling panel. The box appears only once a panel actually has enough options to be worth searching, so
+  // the short lists (Status has three) are not cluttered by a control they don't need.
+  private static readonly OPTION_SEARCH_THRESHOLD = 8;
+
+  /** The term typed into the open panel's search box. Reset whenever a panel opens or closes. */
+  readonly filterOptionSearch = signal('');
+
+  showOptionSearch(category: FilterCategory): boolean {
+    return this.optionsFor(category).length > WorkflowListComponent.OPTION_SEARCH_THRESHOLD;
+  }
+
+  /** The options actually rendered in the open panel — matched on the LABEL the user can see, not the raw enum
+   *  value behind it, so typing "Sql" finds "Sql Server" and typing "eCW" finds the Healow option. A selected
+   *  option is always kept visible even when it doesn't match, so narrowing the list can never hide a box that
+   *  is currently ticked (and is silently filtering the table) from the person trying to untick it. */
+  visibleOptionsFor(category: FilterCategory): string[] {
+    const options = this.optionsFor(category);
+    const term = this.filterOptionSearch().trim().toLowerCase();
+    if (!term || !this.showOptionSearch(category)) return options;
+    return options.filter(value =>
+      this.isFilterSelected(category, value)
+      || this.displayLabelFor(category, value).toLowerCase().includes(term));
   }
 
   // Centralized "click outside closes it" check — reads the click's actual target instead of relying
@@ -211,6 +326,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private closeFilterMenuIfOutside(event: MouseEvent): void {
     if (!(event.target as HTMLElement).closest('.filter-dropdown')) {
       this.openFilterMenu.set(null);
+      this.filterOptionSearch.set('');
     }
   }
 
@@ -235,6 +351,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.selectedStatuses.set(new Set());
     this.selectedAudiences.set(new Set());
     this.selectedSources.set(new Set());
+    this.selectedDestinations.set(new Set());
+    this.selectedLastRunStatuses.set(new Set());
+    this.selectedResourceTypes.set(new Set());
     this.sortColumn.set('lastRun');
     this.sortDirection.set('desc');
     this.pageIndex.set(0);
@@ -276,37 +395,48 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     }
   }
 
-  reload(): void {
+  /** `silent` (only ever passed from onSearch's debounce) skips the app-wide global loader for this request —
+   *  see WorkflowApiService.summary for why: without it, every debounced keystroke blurs the search box mid-type. */
+  reload(silent = false): void {
     this.loading.set(true);
+    if (silent) this.searching.set(true);
     this.api
-      .summary({
-        page: this.pageIndex() + 1,
-        pageSize: this.pageSize(),
-        search: this.searchQuery().trim() || undefined,
-        sortColumn: this.sortColumn(),
-        sortDirection: this.sortDirection(),
-        statuses: [...this.selectedStatuses()],
-        applicationTypes: [...this.selectedAudiences()],
-        sourceSystemTypes: [...this.selectedSources()],
-      })
+      .summary(
+        {
+          page: this.pageIndex() + 1,
+          pageSize: this.pageSize(),
+          search: this.searchQuery().trim() || undefined,
+          sortColumn: this.sortColumn(),
+          sortDirection: this.sortDirection(),
+          statuses: [...this.selectedStatuses()],
+          applicationTypes: [...this.selectedAudiences()],
+          sourceSystemTypes: [...this.selectedSources()],
+          destinationTypes: [...this.selectedDestinations()],
+          lastRunStatuses: [...this.selectedLastRunStatuses()],
+          resourceTypes: [...this.selectedResourceTypes()],
+        },
+        silent,
+      )
       .subscribe({
         next: result => {
           this.summaries.set(result.items);
           this.totalCount.set(result.totalCount);
           this.availableStatuses.set(result.availableStatuses);
           this.availableAudiences.set(result.availableApplicationTypes);
-          this.availableSources.set(result.availableSourceSystemTypes);
+          this.availableLastRunStatuses.set(result.availableLastRunStatuses ?? []);
           this.loading.set(false);
+          this.searching.set(false);
           // A delete/copy (or a filter/page-size change) can shrink the matching set out from under a page index
           // that pointed past the new last page — snap back and refetch rather than showing an empty page.
           const lastPageIndex = Math.max(0, Math.ceil(result.totalCount / this.pageSize()) - 1);
           if (this.pageIndex() > lastPageIndex) {
             this.pageIndex.set(lastPageIndex);
-            this.reload();
+            this.reload(silent);
           }
         },
         error: err => {
           this.loading.set(false);
+          this.searching.set(false);
           this.toast.error(this.messageOf(err, 'Failed to load workflows.'));
         },
       });
@@ -318,29 +448,93 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (this.searchDebounceHandle) {
       clearTimeout(this.searchDebounceHandle);
     }
-    this.searchDebounceHandle = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS);
+    this.searchDebounceHandle = setTimeout(() => this.reload(true), SEARCH_DEBOUNCE_MS);
   }
 
-  /** Which builder the New action opens — V2 (the Source → Mapping → Transformation →
-   *  De-identification → Destination canvas under pages/workflow-builder-v2) by default, V1 for the
-   *  original canvas. */
-  readonly builderVersion = signal<'v1' | 'v2'>('v2');
+  // ── New workflow (name + description first) ──────────────────────────────
+  //
+  // The workflow is created BEFORE the canvas opens, so it always has a real id. That is what removes the
+  // "authored before the workflow existed" class of bug at its root: node config, mapping and transform rules
+  // no longer have to be parked somewhere without an owner and reconciled on a later save.
+  readonly showNewWorkflow = signal(false);
+  readonly newWorkflowName = signal('');
+  readonly newWorkflowDescription = signal('');
+  readonly creatingWorkflow = signal(false);
+  /** Shows the "discard your input?" confirm layered over the New-workflow modal. */
+  readonly confirmDiscardNewWorkflow = signal(false);
 
-  /** Whether the user actually picked a version, as opposed to this just holding its default. Edit reads
-   *  the same signal as an override (see onEdit), so without this the new V2 default would force EVERY
-   *  existing workflow into V2 — including V1-authored ones, whose V1-only steps (normalize, terminology,
-   *  patient matching) V2's catalog has no entry for and cannot render. */
-  private builderVersionTouched = false;
-
-  onBuilderVersionChange(value: string): void {
-    this.builderVersionTouched = true;
-    this.builderVersion.set(value === 'v2' ? 'v2' : 'v1');
-  }
-
-  /** Opens the Pipeline Builder on a blank canvas — Workflows is now the single entry point for both list and create. */
+  /** Opens the name/description modal. The canvas is only reached once the workflow is actually created. */
   onNewWorkflow(): void {
     if (!this.canCreate()) return;
-    this.router.navigate([this.builderVersion() === 'v2' ? '/workflow-builder-v2' : '/workflow-builder']);
+    this.newWorkflowName.set('');
+    this.newWorkflowDescription.set('');
+    this.showNewWorkflow.set(true);
+  }
+
+  /** True once anything has been typed into the New-workflow form. */
+  private hasNewWorkflowInput(): boolean {
+    return !!this.newWorkflowName().trim() || !!this.newWorkflowDescription().trim();
+  }
+
+  /** Close attempt from ×, Cancel or Escape. Anything typed is confirmed before it is thrown away;
+   *  an untouched form closes immediately, with nothing to lose. */
+  cancelNewWorkflow(): void {
+    // Mid-create, and while the discard confirm is already up, the base modal ignores close attempts —
+    // the confirm owns the interaction until it is answered.
+    if (this.creatingWorkflow() || this.confirmDiscardNewWorkflow()) return;
+
+    if (this.hasNewWorkflowInput()) {
+      this.confirmDiscardNewWorkflow.set(true);
+      return;
+    }
+
+    this.closeNewWorkflow();
+  }
+
+  /** Confirmed discard — drops the typed values and closes. */
+  discardNewWorkflow(): void {
+    this.confirmDiscardNewWorkflow.set(false);
+    this.closeNewWorkflow();
+  }
+
+  /** "Keep editing" — dismisses the confirm and leaves the New-workflow modal exactly as it was. */
+  keepEditingNewWorkflow(): void {
+    this.confirmDiscardNewWorkflow.set(false);
+  }
+
+  private closeNewWorkflow(): void {
+    this.showNewWorkflow.set(false);
+    this.confirmDiscardNewWorkflow.set(false);
+    this.newWorkflowName.set('');
+    this.newWorkflowDescription.set('');
+  }
+
+  /** Creates an empty workflow (no nodes, no edges) and opens the builder on it. It starts life as Draft —
+   *  it has no destination yet — and is created enabled, so adding a destination is all it takes to be Ready. */
+  confirmNewWorkflow(): void {
+    const name = this.newWorkflowName().trim();
+    if (!name || this.creatingWorkflow()) return;
+
+    const description = this.newWorkflowDescription().trim();
+    this.creatingWorkflow.set(true);
+    this.api
+      .save({ name, description: description || null, isEnabled: true, nodes: [], edges: [] })
+      .subscribe({
+        next: created => {
+          this.creatingWorkflow.set(false);
+          this.closeNewWorkflow();
+          // new=1 tells the builder this workflow has an id but an EMPTY graph, so it resets the canvas
+          // instead of taking the edit path — see its ngOnInit. Without it the builder treats the id as
+          // an existing workflow to load, and the stale canvas state breaks the `+` picker.
+          this.router.navigate(['/workflow-builder-v2'], {
+            queryParams: { id: created.id, new: '1' },
+          });
+        },
+        error: err => {
+          this.creatingWorkflow.set(false);
+          this.toast.error(this.messageOf(err, 'Could not create the workflow.'));
+        },
+      });
   }
 
   /** Launch rows are unaffected (still their own thing — see below). Every Run row now always dispatches in the
@@ -351,6 +545,16 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  unreached from this screen now that mode always defaults from an explicit 'async' call. */
   onAction(row: WorkflowSummary, mode: 'sync' | 'async' = 'sync'): void {
     if (this.busyId() || !this.canRun()) return;
+
+    // Only a Ready workflow is runnable — a Draft has no destination to write to and a Disabled one is
+    // paused. The menu item is already disabled for both (see the row menu's Run item), so this is a
+    // defensive guard for a row whose status went stale between render and click, e.g. after a Disable
+    // toggle elsewhere in the session. Launch is deliberately exempt: an interactive launch produces a URL
+    // and does not depend on a configured destination.
+    if (row.action === 'Run' && row.status !== 'Ready') {
+      this.toast.error(this.statusHint(row.status));
+      return;
+    }
 
     if (row.action === 'Launch') {
       this.busyId.set(row.workflowId);
@@ -450,60 +654,17 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /**
    * Open the workflow in the Pipeline Builder for full graph editing (Save there issues a PUT update).
    *
-   * A workflow authored in V2 MUST reopen in V2: the two builders read the same graph differently. V2's
-   * canvas order is Source → Mapping → Transformation → De-identification → Destination, while the
-   * persisted edges are in execution order (see WorkflowGraphMapperServiceV2.toAuthoringOrder, which
-   * reverses that on load). V1 has no such step, so it draws V2's execution-order edges against
-   * authoring-order node positions — every edge crosses backwards, and V2-only steps render as raw ids
-   * because V1's catalog has no entry for them.
-   *
-   * The builder is therefore detected from the graph itself rather than left to the toolbar selector:
-   * the presence of a V2-only chain step decides it. Detection needs the node list, which
-   * /workflows/summary doesn't carry, so this fetches the definition first; a failed fetch just falls
-   * back to the selected version rather than blocking navigation.
+   * Now a straight navigation. It used to fetch the definition first purely to decide WHICH builder to
+   * open, by looking for a V2-only chain step — a guess that could not tell a V2 workflow containing no
+   * such step (a bare Source → Destination) from a V1 one, and so silently opened it in a builder that
+   * could not configure Field Mapping. With V1 retired (plan §8) there is nothing to detect.
    */
   onEdit(row: WorkflowSummary): void {
-    // The toolbar selector doubles as a manual override, for workflows saved before __builderVersion
-    // existed — those can't be detected and would otherwise always open in V1. Only counts once the user
-    // has actually picked a version: the default is V2 now, and treating that as an override would send
-    // every V1 workflow to a builder that cannot draw it.
-    const forcedV2 = this.builderVersionTouched && this.builderVersion() === 'v2';
-    this.api.load(row.workflowId).subscribe({
-      next: definition => this.openBuilder(row.workflowId, forcedV2 || this.isV2Definition(definition)),
-      error: () => this.openBuilder(row.workflowId, forcedV2),
-    });
+    this.openBuilder(row.workflowId);
   }
 
-  private openBuilder(workflowId: string, useV2: boolean): void {
-    this.router.navigate([useV2 ? '/workflow-builder-v2' : '/workflow-builder'], {
-      queryParams: { id: workflowId },
-    });
-  }
-
-  /**
-   * Whether this graph was authored in V2. Prefers the explicit `__builderVersion` stamp
-   * (WorkflowGraphMapperServiceV2.nodeToRequest); falls back to spotting a V2-only chain step for
-   * workflows saved before that stamp existed. The fallback can't identify a V2 workflow that contains
-   * no such step — a bare Source → Destination looks identical either way — which is what the toolbar
-   * override above is for.
-   */
-  private isV2Definition(definition: { nodes: { configurationJson?: string | null }[] }): boolean {
-    return definition.nodes.some(node => {
-      const config = this.configOf(node);
-      if (config['__builderVersion'] === 'v2') return true;
-      const transformId = config['__transformId'];
-      return transformId === 'transformation' || transformId === 'deidentification';
-    });
-  }
-
-  private configOf(node: { configurationJson?: string | null }): Record<string, unknown> {
-    if (!node.configurationJson) return {};
-    try {
-      const parsed = JSON.parse(node.configurationJson) as unknown;
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      return {};
-    }
+  private openBuilder(workflowId: string): void {
+    this.router.navigate(['/workflow-builder-v2'], { queryParams: { id: workflowId } });
   }
 
   /** Enable/disable toggle via the activate/deactivate endpoints. */
@@ -515,9 +676,14 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     call.subscribe({
       next: () => {
         this.rowBusyId.set(null);
+        // Re-enabling does not simply restore "Enabled" — Draft/Ready is derived from the graph, so a
+        // workflow with no destination wired up goes back to Draft, exactly as the server would report it
+        // on the next reload. Getting this wrong would show a stale "Ready" until the list refreshed.
         this.summaries.update(rows =>
           rows.map(w =>
-            w.workflowId === row.workflowId ? { ...w, status: enabling ? 'Enabled' : 'Disabled' } : w,
+            w.workflowId === row.workflowId
+              ? { ...w, status: enabling ? (w.hasDestination ? 'Ready' : 'Draft') : 'Disabled' }
+              : w,
           ),
         );
         this.toast.success(enabling ? 'Enabled' : 'Disabled', `"${row.name}" is now ${enabling ? 'enabled' : 'disabled'}.`);
@@ -592,6 +758,85 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.copy(row.workflowId, 'Workflow ID');
   }
 
+  // ── Integration details (third-party self-serve) ──────────────────────────
+  //
+  // Everything a partner app needs to drive THIS workflow from their own product, assembled from the summary row
+  // the list already holds — no extra round-trip. The contents differ per audience because the four audiences are
+  // executed in genuinely different ways: Backend is a server-to-server call, while the three interactive ones
+  // cannot be started from a server at all (the run happens as a side effect of a real person completing an
+  // EHR/patient sign-in), so for those the deliverable is a URL to send the user to, not an endpoint to call.
+  readonly integrationModal = signal<IntegrationDetails | null>(null);
+
+  openIntegrationDetails(row: WorkflowSummary): void {
+    this.integrationModal.set(
+      buildIntegrationDetails(row, this.apiOrigin(), this.audienceLabel(row.applicationType)));
+  }
+
+  closeIntegrationDetails(): void {
+    this.integrationModal.set(null);
+  }
+
+  /** Absolute origin of this API, so the values shown are real URLs a partner can paste, not relative paths. */
+  /** Absolute origin of this API, so the values shown are real URLs a partner can paste, not relative paths. */
+  private apiOrigin(): string {
+    return window.location.origin;
+  }
+
+  /** True when any readiness check is blocking — drives the panel's warning banner. */
+  hasBlockingChecks(modal: IntegrationDetails): boolean {
+    return modal.checks.some(check => check.state === 'blocked');
+  }
+
+  /** Copies the whole panel as plain text, so an admin can paste it straight into an email to the partner. */
+  copyIntegrationDetails(modal: IntegrationDetails): void {
+    this.copy(integrationDetailsAsText(modal), 'Integration details');
+  }
+
+  /**
+   * Downloads the workflow's full configuration dump as a text file — every configuration table it touches,
+   * each with the SQL that selected its rows and those rows printed one data point per line.
+   *
+   * The file is built server-side (see the /configuration-export endpoint): the browser only has the summary
+   * row, not the source/destination/mapping/route/rule records the report is mostly made of.
+   */
+  onDownloadConfiguration(row: WorkflowSummary): void {
+    if (this.exportingId()) return;
+    this.exportingId.set(row.workflowId);
+
+    this.api.configurationExport(row.workflowId).subscribe({
+      next: response => {
+        this.exportingId.set(null);
+        const blob = response.body;
+        if (!blob) {
+          this.toast.error('Download', 'The export came back empty.');
+          return;
+        }
+        this.saveBlob(blob, this.fileNameFrom(response, `workflow-config-${row.workflowId}.txt`));
+        this.toast.success('Configuration exported', `The configuration for "${row.name}" was downloaded.`);
+      },
+      error: err => {
+        this.exportingId.set(null);
+        this.toast.error('Download', this.messageOf(err, 'Could not export the workflow configuration.'));
+      },
+    });
+  }
+
+  /** Prefers the server's Content-Disposition filename (it carries the workflow name + a UTC timestamp). */
+  private fileNameFrom(response: HttpResponse<Blob>, fallback: string): string {
+    const header = response.headers.get('Content-Disposition');
+    const match = header?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+    return match?.[1] ? decodeURIComponent(match[1]) : fallback;
+  }
+
+  private saveBlob(blob: Blob, fileName: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  }
+
   /** Deep-links to the Execution History screen pre-filtered to this one workflow's runs (see
    *  ExecutionHistoryListComponent's workflowIdFilter/?workflowId= handling) — same backend param the
    *  Dashboard's ?status= tile links already established the pattern for. */
@@ -604,13 +849,45 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  POST /workflows/{id}/copy gate. */
   askCopyWorkflow(row: WorkflowSummary): void {
     if (!this.canCreate()) return;
-    this.copyName.set(`${row.name} (copy)`);
+    const suggestion = `${row.name} (copy)`;
+    this.copyName.set(suggestion);
+    this.copyNameSuggestion.set(suggestion);
     this.confirmCopy.set(row);
   }
 
+  /** True once the pre-filled "<name> (copy)" suggestion has actually been edited. The untouched
+   *  suggestion is not the user's work, so closing on it has nothing to lose. */
+  private hasCopyInput(): boolean {
+    return this.copyName().trim() !== this.copyNameSuggestion().trim();
+  }
+
+  /** Same deliberate-close rule as the New-workflow modal: an edited name is confirmed before it is
+   *  thrown away; an untouched one closes immediately. */
   cancelCopyWorkflow(): void {
+    if (this.confirmDiscardCopyWorkflow()) return;
+
+    if (this.hasCopyInput()) {
+      this.confirmDiscardCopyWorkflow.set(true);
+      return;
+    }
+
+    this.closeCopyWorkflow();
+  }
+
+  discardCopyWorkflow(): void {
+    this.confirmDiscardCopyWorkflow.set(false);
+    this.closeCopyWorkflow();
+  }
+
+  keepEditingCopyWorkflow(): void {
+    this.confirmDiscardCopyWorkflow.set(false);
+  }
+
+  private closeCopyWorkflow(): void {
     this.confirmCopy.set(null);
+    this.confirmDiscardCopyWorkflow.set(false);
     this.copyName.set('');
+    this.copyNameSuggestion.set('');
   }
 
   /** Duplicates the workflow under the typed name. The copy is always created disabled (see
@@ -624,8 +901,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.api.copy(row.workflowId, name).subscribe({
       next: () => {
         this.rowBusyId.set(null);
-        this.confirmCopy.set(null);
-        this.copyName.set('');
+        this.closeCopyWorkflow();
         this.reload();
         this.toast.success('Workflow copied', `"${name}" was created (disabled). Enable it when you're ready.`);
       },
@@ -660,6 +936,29 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       () => this.toast.success('Copied', `${label} copied to clipboard.`),
       () => this.toast.error('Could not copy to the clipboard.'),
     );
+  }
+
+  /** Tooltip for the lifecycle badge — "Draft" on its own does not say why the workflow cannot run. */
+  statusHint(status: WorkflowLifecycleStatus): string {
+    return {
+      Draft: 'No destination configured yet, so this workflow cannot run. Add one to make it Ready.',
+      Ready: 'Source and destination are configured — this workflow will run.',
+      Disabled: 'Deliberately paused. Enable it from the row menu to make it runnable again.',
+    }[status];
+  }
+
+  /** Tooltip for the row menu's Run item. Only a Ready workflow can run — a Draft has no destination wired
+   *  up and a Disabled one is deliberately paused — so when Run is disabled this explains WHICH of the two
+   *  it is (and how to fix it) rather than leaving a greyed-out item with no reason. Reuses statusHint so the
+   *  explanation matches the one on the status badge itself instead of drifting into a second wording. */
+  runDisabledHint(row: WorkflowSummary): string {
+    if (row.status !== 'Ready') {
+      return this.statusHint(row.status);
+    }
+
+    return this.busyId() === row.workflowId
+      ? 'This workflow is already running.'
+      : 'Run this workflow in the background.';
   }
 
   /** Deliberately mirrors ExecutionHistoryListComponent's statusClass so the same run never renders as two

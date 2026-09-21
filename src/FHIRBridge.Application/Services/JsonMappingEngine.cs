@@ -28,12 +28,48 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
 
         foreach (var field in fields)
         {
+            // "Set default value" column (field-mapping-model.ts's DefaultValueToken '@default'): always
+            // writes the literal DefaultValue text, never anything read from the source payload — there IS
+            // no source at all for this field, by construction (see MappingRow's own doc comment on why
+            // that's what keeps "default" and "mapped from a source" mutually exclusive).
+            if (string.Equals(field.JsonPath, "@default", StringComparison.OrdinalIgnoreCase))
+            {
+                // CreateMappingProfileRequestValidator requires DefaultValue whenever JsonPath is "@default",
+                // but that's a save-time guarantee, not a compile-time one — a profile saved before that
+                // rule existed could still reach here with none.
+                if (string.IsNullOrWhiteSpace(field.DefaultValue))
+                {
+                    errors.Add($"Field '{field.TargetField}' is set to a literal default value but has none configured.");
+                    parent[field.TargetField] = null;
+                    continue;
+                }
+
+                parent[field.TargetField] = ConvertValue(
+                    field.DefaultValue, field.ValueType, field.Format, field.TargetField, errors,
+                    field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform);
+                continue;
+            }
+
             // System-value field: sourced from pipeline/runtime context (run id, write time, resource type, …)
             // rather than the source JSON. The value flows into the row exactly like a normal mapped column.
             if (IsSystemToken(field.JsonPath))
             {
                 object? systemValue = null;
-                systemValues?.TryGetValue(field.JsonPath, out systemValue);
+                // "@destinationObject" is special-cased to this FIELD's own DestinationObject when it has one
+                // — a field on a child/extra table (ArrayPolicy.SeparateDestination, e.g. a Patient.name array
+                // fanned out onto dbo.PatientName) must report ITS OWN table, not the profile's primary table
+                // the run-level systemValues dictionary carries. Only the primary-table fields (the common
+                // case, where DestinationObject is unset) fall back to the profile-level value.
+                if (string.Equals(field.JsonPath, "@destinationObject", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(field.DestinationObject))
+                {
+                    systemValue = field.DestinationObject;
+                }
+                else
+                {
+                    systemValues?.TryGetValue(field.JsonPath, out systemValue);
+                }
+
                 if (systemValue is null && field.IsRequired)
                 {
                     errors.Add($"Required system field '{field.TargetField}' had no value for token '{field.JsonPath}'.");
@@ -85,7 +121,39 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             }
 
             var values = resolved.Select(r => r.Value).ToList();
-            rawArrayValues[field.TargetField] = values;
+
+            // A FHIR reference resolves to "Encounter/abc", but a destination column wants the id alone — the
+            // type prefix is redundant (the column already says which resource it points at) and it breaks any
+            // join against that resource's own id column, which stores the bare value. Normalized here, at the
+            // single point every value passes through, so it applies to every ArrayPolicy rather than only the
+            // scalar case. Fields with a ReferenceLookup (the "Resolves to" control) were already getting this
+            // via ExtractReferenceId below and are unaffected: that call is idempotent on a bare id. This is
+            // what plain reference mappings — the ones WITHOUT "Resolves to" — were missing, which is why
+            // Observation.EncounterId stored "Encounter/anon-…" while Encounter.PatientId stored the bare id.
+            if (IsFhirReferencePath(field.JsonPath))
+            {
+                values = values
+                    .Select(value => value is string reference ? ExtractReferenceId(reference) : value)
+                    .ToList();
+            }
+
+            // The transform stage deliberately hands a chain LED by ConcatenationTemplating/ArrayListOperations
+            // the full occurrence list rather than the single value an ArrayPolicy collapsed it to, because that
+            // is the only way "join every line of the address" can work (see TransformNodeExecutors). But the
+            // full list spans EVERY instance of the repeating parent, which silently overrode the field's own
+            // Instance Selection: Patient.name.given set to "First" still fed the rule all four values of a
+            // payload carrying the same name twice (use=official and use=usual, as Epic sends), and concat wrote
+            // "Camila Maria Camila Maria". The screen said First and meant nothing.
+            //
+            // Narrow the list to the selected instance instead of abandoning the override. Each resolved value
+            // carries the index path it came from, so name[0].given[*] is separable from name[1].given[*] while
+            // address[0].line[*] — every value under one instance — stays whole and still joins as before.
+            // "All records" (RepeatParent, or FirstItem plus the csv aggregate above) remains the way to span
+            // every instance, so nothing loses the ability to do so.
+            rawArrayValues[field.TargetField] =
+                policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+                    ? TakeFirstInstance(resolved, values)
+                    : values;
 
             // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
             // delimited string on the parent row" — no ArrayPolicy value represents that (see
@@ -131,7 +199,17 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                 }
 
                 case ArrayPolicy.StoreJson:
-                    parent[field.TargetField] = JsonSerializer.Serialize(values);
+                    // A ValueType=Json field's values are ALREADY raw JSON text (ConvertElement returns
+                    // element.GetRawText()), so JsonSerializer.Serialize(values) would double-encode them — the
+                    // whole node would land in the column as an escaped string ("[{\"..\":..}]") instead of clean
+                    // JSON. Emit clean JSON directly: a single node as-is (e.g. "$" → the raw resource object),
+                    // multiple occurrences wrapped once into a real JSON array with no re-escaping. Non-JSON value
+                    // types (arrays of strings/numbers) still go through Serialize, which is correct for them.
+                    parent[field.TargetField] = field.ValueType == MappingValueType.Json
+                        ? (values.Count == 1
+                            ? values[0]
+                            : "[" + string.Join(",", values.Select(v => v?.ToString() ?? "null")) + "]")
+                        : JsonSerializer.Serialize(values);
                     break;
 
                 case ArrayPolicy.RejectIfMultiple:
@@ -189,7 +267,11 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
     /// <summary>Extracts the resource-local id from a FHIR reference string — "Patient/xyz" or an absolute URL
     /// ending "…/Patient/xyz" both yield "xyz"; a bare id with no "/" is returned as-is. Null/blank input (no
     /// reference present on this resource) yields null — nothing to resolve, so the target column is left
-    /// unpopulated rather than guessing.</summary>
+    /// unpopulated rather than guessing.
+    ///
+    /// A version-specific reference ("Patient/xyz/_history/2") yields "xyz", not "2": the id is the segment
+    /// BEFORE "_history", and taking the last segment outright returned the version number — a value that
+    /// matches no row and, for a plain (non-FK) mapping, would have been stored as the id itself.</summary>
     private static string? ExtractReferenceId(string? rawReference)
     {
         if (string.IsNullOrWhiteSpace(rawReference))
@@ -197,9 +279,28 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             return null;
         }
 
-        var slashIndex = rawReference.LastIndexOf('/');
-        return slashIndex >= 0 ? rawReference[(slashIndex + 1)..] : rawReference;
+        var reference = rawReference.Trim();
+
+        // "#contained" and "urn:uuid:…" carry no Type/id pair — the whole string IS the identifier.
+        if (reference[0] == '#' || reference.StartsWith("urn:", StringComparison.OrdinalIgnoreCase))
+        {
+            return reference;
+        }
+
+        var segments = reference.Split('/');
+        var historyIndex = Array.FindIndex(
+            segments, segment => segment.Equals("_history", StringComparison.OrdinalIgnoreCase));
+        var idIndex = historyIndex > 0 ? historyIndex - 1 : segments.Length - 1;
+
+        return segments[idIndex].Length > 0 ? segments[idIndex] : reference;
     }
+
+    /// <summary>
+    /// True when this field reads a FHIR <c>Reference.reference</c> element, whose value is always a
+    /// "Type/id" pointer (or an absolute URL ending in one) rather than a plain scalar.
+    /// </summary>
+    private static bool IsFhirReferencePath(string? jsonPath)
+        => jsonPath is not null && jsonPath.TrimEnd().EndsWith(".reference", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Selects the value among <paramref name="indices"/>/<paramref name="values"/> (same order, one per array item)
@@ -296,6 +397,37 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
     }
 
     /// <summary>
+    /// The values belonging to the FIRST instance of the outermost repeating parent — i.e. everything sharing
+    /// the first resolved value's leading index. For "Patient.name.given" over two name entries that is
+    /// name[0]'s given names alone; for "Patient.address.line" over one address it is every line, unchanged.
+    /// Values with no index path (a non-repeating field) are all kept: there is only one instance.
+    /// </summary>
+    private static IReadOnlyList<object?> TakeFirstInstance(
+        List<(object? Value, IReadOnlyList<int> Indices)> resolved, List<object?> values)
+    {
+        // `values` is a positional projection of `resolved` (same order, possibly reference-id-normalized), and
+        // the loop below indexes one by the other. That holds today; assert it rather than leave it as an
+        // invariant a future edit could quietly break into an off-by-one that silently redacts the wrong value.
+        if (resolved.Count != values.Count || resolved.Count <= 1 || resolved[0].Indices.Count == 0)
+        {
+            return values;
+        }
+
+        var firstInstance = resolved[0].Indices[0];
+        var kept = new List<object?>(resolved.Count);
+        for (var i = 0; i < resolved.Count; i++)
+        {
+            // `values` rather than resolved[i].Value: the reference-id normalization above rewrote them.
+            if (resolved[i].Indices.Count > 0 && resolved[i].Indices[0] == firstInstance)
+            {
+                kept.Add(values[i]);
+            }
+        }
+
+        return kept.Count > 0 ? kept : values;
+    }
+
+    /// <summary>
     /// Resolves a "joinedFields" field: <see cref="MappingFieldDto.JsonPath"/> is a <c>|</c>-delimited list of
     /// sub-paths (see <c>MappingImportService.BuildJsonPathAndFormat</c>), each resolved independently and then
     /// joined per row with the delimiter encoded in <see cref="MappingFieldDto.Format"/> (<c>;delimiter=X</c>).
@@ -366,19 +498,33 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
     private static string JoinValues(IEnumerable<object?> values) =>
         string.Join(", ", values.Select(v => v?.ToString() ?? string.Empty));
 
-    /// <summary>True for a plain single-source field ("directField", or "directField;aggregate=csv") — the
-    /// only shape where "the whole array, as one column" is this field's own deliberate choice rather than a
-    /// side effect of some other feature (joinedFields, wholeNodeAsJson) that already has its own, different
-    /// handling for a repeating element.</summary>
-    private static bool IsDirectField(string? format) =>
-        format?.StartsWith("directField", StringComparison.OrdinalIgnoreCase) == true;
-
     /// <summary>Joins a JSON array's own scalar items ("given":["Camila","Maria"]) into one delimited string
     /// ("Camila, Maria") instead of letting element.ToString() fall through to the array's raw JSON text
     /// ("[\"Camila\",\"Maria\"]") — the field's own JsonPath resolved to the whole array (no trailing "[*]"
     /// to fan it out into separate rows/columns), so this is the only representation a single String/Json
     /// column can hold. Nested objects/arrays inside the array are skipped rather than stringified, since
     /// there's no sensible flat-text form for those.</summary>
+    /// <summary>
+    /// True when every item is a scalar, so <see cref="JoinArrayOfStrings"/> can represent the whole array.
+    ///
+    /// That join keeps only strings/numbers/booleans and DROPS objects and nested arrays, which is correct for
+    /// "given":["Camila","Maria"] and catastrophic for "telecom":[{...},{...}] — every item is dropped and the
+    /// column receives an empty string while the run reports success. An array holding anything non-scalar has
+    /// no faithful single-column text form, so it keeps its raw JSON rather than being silently emptied.
+    /// </summary>
+    private static bool IsScalarArray(JsonElement array)
+    {
+        foreach (var item in array.EnumerateArray())
+        {
+            if (item.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private static string JoinArrayOfStrings(JsonElement array)
     {
         var parts = new List<string>();
@@ -512,7 +658,20 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         // MappingFieldDto.DeferTypeToTransform.
         if (deferTypeToTransform)
         {
-            return element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString();
+            return element.ValueKind switch
+            {
+                JsonValueKind.String => element.GetString(),
+                // An ARRAY must not be handed on as its raw JSON text. element.ToString() yields
+                // ["a","b"] — brackets, quotes and all — and that string is what lands in the destination
+                // column when no rule reshapes it, which is never what a text column wants. It also defeats
+                // the rule that was the whole reason for deferring: the array collapses to ONE value, so
+                // ConcatenationTemplating/ArrayListOperations see a single string instead of the items and
+                // pass it through unchanged. Join the elements, exactly as the String branch below does.
+                // Only a scalar array can be joined — see IsScalarArray. Anything else keeps its raw JSON,
+                // which is lossy for a text column but not DESTRUCTIVE, and is what this path produced before.
+                JsonValueKind.Array => IsScalarArray(element) ? JoinArrayOfStrings(element) : element.ToString(),
+                _ => element.ToString(),
+            };
         }
 
         var converted = valueType switch
@@ -521,11 +680,16 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                 element.ValueKind switch
                 {
                     JsonValueKind.String => element.GetString(),
-                    // Only a plain directField's own array collapses into a delimited string here — a
-                    // joinedFields sub-path resolving to an array goes through ElementToJoinString instead
-                    // (a distinct, multi-source concern), and wholeNodeAsJson fields never reach this
-                    // String branch at all (their ValueType is Json, handled below).
-                    JsonValueKind.Array when IsDirectField(format) => JoinArrayOfStrings(element),
+                    // An array collapses into a delimited string — never its raw JSON text. A joinedFields
+                    // sub-path resolving to an array goes through ElementToJoinString instead (a distinct,
+                    // multi-source concern) and does not reach here, and wholeNodeAsJson fields never reach
+                    // this String branch at all (their ValueType is Json, handled below).
+                    //
+                    // This used to apply only to a plain directField, so any other format wrote ["a","b"]
+                    // — brackets and quotes — into a text column. Whatever the format, a String column wants
+                    // the values, not a JSON document; a field that genuinely wants JSON declares ValueType
+                    // Json and is handled below.
+                    JsonValueKind.Array when IsScalarArray(element) => JoinArrayOfStrings(element),
                     _ => element.ToString()
                 },
                 maxLength, targetField, errors),
