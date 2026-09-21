@@ -123,7 +123,7 @@ jobs:
 
       - name: Compile ARM template
         if: github.event_name == 'push'
-        uses: azure/CLI@v2
+        uses: azure/CLI@v3
         with:
           inlineScript: |
             az bicep build --file containerization/azure-deploy/main.bicep \
