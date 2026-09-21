@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
@@ -1347,7 +1348,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             // way JsonMappingEngine's own MappingValueType.Json case stores a JSON column as a string.
             transformed[destinationField] = currentValue is System.Text.Json.Nodes.JsonNode jsonNode
                 ? jsonNode.ToJsonString()
-                : currentValue;
+                : CoerceToExpectedValueType(currentValue, rules[^1].ExpectedValueType);
         }
 
         // A configured field whose source path matched nothing in this resource never reaches `row` at all, so
@@ -1381,6 +1382,51 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         }
 
         return (transformed ?? row, fhirWriteBackPatches, lineageEntries);
+    }
+
+    /// <summary>
+    /// A transform node's job is to produce a valid FHIR value — for most Date/DateTime/Integer/Decimal-declared
+    /// fields that means a formatted STRING (e.g. DateTimeFormatNode always returns "2026-03-14", never a native
+    /// DateTime), because that's what a FHIR-native destination needs. A relational destination needs the
+    /// opposite: RelationalDestinationWriterBase.Stringify only avoids re-stringifying a value that already
+    /// arrives as a native CLR DateTime/DateOnly/int/decimal/etc. (see its own doc comment) — a plain string gets
+    /// sent as an untyped ADO `text` parameter, which PostgreSQL then refuses to implicitly cast back to the
+    /// destination column's real `date`/`integer`/`numeric` type (42804), even though the string is
+    /// well-formed. JsonMappingEngine.ConvertValue already solves exactly this for a field with NO transform
+    /// rule (coercing straight to a native CLR type from ValueType); this mirrors that same coercion for a
+    /// field whose value just came OUT of a rule chain, using the chain's own declared ExpectedValueType (see
+    /// FieldMappingJoinPopoverComponent.resolveExpectedValueType and CreateMappingProfileRequestValidator on the
+    /// portal side — same value, already validated to match the destination column at save time). Only ever
+    /// narrows a string; every other CLR shape (already-native DateTime/int/decimal, null, JsonNode-turned-string
+    /// from the branch above) passes through unchanged, so a node that already self-types (DateMathAge →
+    /// int, BooleanConversion → bool) is untouched.
+    /// </summary>
+    private static object? CoerceToExpectedValueType(object? value, MappingValueType? expectedValueType)
+    {
+        if (value is not string text || expectedValueType is null)
+        {
+            return value;
+        }
+
+        return expectedValueType switch
+        {
+            MappingValueType.Date => DateTime.TryParse(
+                text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+                ? date.Date
+                : value,
+            MappingValueType.DateTime => DateTime.TryParse(
+                text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dateTime)
+                ? dateTime
+                : value,
+            MappingValueType.Integer => long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer)
+                ? integer
+                : value,
+            MappingValueType.Decimal => decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var dec)
+                ? dec
+                : value,
+            MappingValueType.Boolean => bool.TryParse(text, out var boolean) ? boolean : value,
+            _ => value,
+        };
     }
 
     /// <summary>Best-effort JSON serialization of a hop's before/after value for lineage storage — a lineage

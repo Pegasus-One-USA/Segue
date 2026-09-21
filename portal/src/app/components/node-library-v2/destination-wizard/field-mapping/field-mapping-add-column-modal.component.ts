@@ -11,7 +11,7 @@ export const FM_ADD_COLUMN_DATA_TYPES: readonly string[] = [
   'nvarchar(50)', 'nvarchar(120)', 'nvarchar(255)', 'nvarchar(max)',
   'varchar(50)', 'varchar(255)',
   'int', 'bigint', 'bit',
-  'date', 'datetime2',
+  'date', 'datetime2', 'datetimeoffset',
   'decimal(18,2)',
   'uniqueidentifier',
 ];

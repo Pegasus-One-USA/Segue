@@ -100,6 +100,12 @@ internal static partial class PostgreSqlDdlTypeValidator
         ["datetime2"] = "timestamp",
         ["datetime"] = "timestamp",
         ["timestamp"] = "timestamp",
+        // "datetimeoffset" is SQL Server's timezone-aware type — PostgreSQL's equivalent is "timestamptz"
+        // (timestamp with time zone), which stores an unambiguous instant rather than a naive local value.
+        // Also accepts Postgres's own two spellings for it unchanged.
+        ["datetimeoffset"] = "timestamptz",
+        ["timestamptz"] = "timestamptz",
+        ["timestamp with time zone"] = "timestamptz",
         ["time"] = "time",
         // "uniqueidentifier" is SQL Server's GUID keyword — PostgreSQL has a native, equivalent UUID type.
         ["uniqueidentifier"] = "uuid",
