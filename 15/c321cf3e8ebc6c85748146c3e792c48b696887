@@ -1,0 +1,26 @@
+portal/src/app/data/connection-type-labels.util.ts
+  s_4f5d1619e405a5::t_5e241f4a384253 3,7-10,12-13,15-24,41-100
+  s_4f5d1619e405a5::t_6872e0db666741 101
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_4f5d1619e405a5::t_f3fd162d9a29ae 22-29,73,149
+  s_4f5d1619e405a5::t_2c5d25fe44c47f 150-155,157-160,162-167,169-172
+  s_4f5d1619e405a5::t_9ce1fff8510c7d 156,161,168
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_4f5d1619e405a5::t_5ab803684172ec 12-20,54-56,64-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "15c321cf3e8ebc6c85748146c3e792c48b696887",
+  "prompts": {},
+  "sessions": {
+    "s_4f5d1619e405a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d72fff9d-b9df-409d-a882-e47a118b52ea",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

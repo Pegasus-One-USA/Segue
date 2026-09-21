@@ -1,0 +1,21 @@
+src/FHIRBridge.Infrastructure/Destinations/RelationalDestinationWriterBase.cs
+  s_174e16661bf66d::t_513e99ee09777e 392-396
+tests/FHIRBridge.UnitTests/Destinations/RelationalDestinationWriterBaseTests.cs
+  s_174e16661bf66d::t_02a4a6605174e2 1-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e441b6132c36d5ea13e7ce32543532de7b68677f",
+  "prompts": {},
+  "sessions": {
+    "s_174e16661bf66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a051edf-3c44-4555-8dea-ae48ca7f4ff9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

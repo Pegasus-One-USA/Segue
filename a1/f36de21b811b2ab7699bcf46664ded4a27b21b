@@ -1,0 +1,47 @@
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/EhrDataDumpOptions.cs
+  s_9902767ae338b9::t_41b1824c6bd9e3 1-20
+src/Api/FHIRBridge.Api/appsettings.Development.json
+  s_9902767ae338b9::t_ff1466052d0ae2 6-11,13
+  s_9902767ae338b9::t_2f6ba7f97b5cc8 12
+.gitignore
+  s_9902767ae338b9::t_36252c6dc83820 81-83
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_9902767ae338b9::t_087b0405875404 336-339
+  s_9902767ae338b9::t_24e050c686068c 340-342
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/EhrDataDumpWriter.cs
+  s_9902767ae338b9::t_1653a273d2e536 1-116
+src/Worker/FHIRBridge.Worker/appsettings.Development.json
+  s_9902767ae338b9::t_2f6ba7f97b5cc8 12
+  s_93f79809fe4a39::t_8af51c9bb564d5 14-25
+  s_9902767ae338b9::t_ff1466052d0ae2 6-11,13
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_9902767ae338b9::t_c6696385018d19 31,50,69,88,107,126,145,164,232,837-838,872,875,877-883,885,887-888,892,911-912
+  s_9902767ae338b9::t_04b5f9cd2ce23e 32-33,51-52,70-71,89-90,108-109,127-128,146-147,165-166,217,233,251,873-874,876,884,886,889-891,893-910
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_9902767ae338b9::t_aaf0fe1baf0975 1,25,39-40,53,215-238
+  s_9902767ae338b9::t_d16599397c8b08 239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a1f36de21b811b2ab7699bcf46664ded4a27b21b",
+  "prompts": {},
+  "sessions": {
+    "s_93f79809fe4a39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "16c788f7-a266-4b72-8a2c-60374e6e1e92",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_9902767ae338b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7bf2a2a0-a38f-4433-8fbe-03747b57d15b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
