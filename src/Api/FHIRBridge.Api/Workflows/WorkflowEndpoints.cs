@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Api.Workflows;
@@ -545,13 +545,17 @@ public static class WorkflowEndpoints
             string? sortDirection = null,
             string[]? statuses = null,
             string[]? applicationTypes = null,
-            string[]? sourceSystemTypes = null) =>
+            string[]? sourceSystemTypes = null,
+            string[]? destinationTypes = null,
+            string[]? lastRunStatuses = null,
+            string[]? resourceTypes = null) =>
         {
             var workflows = await store.ListAsync(cancellationToken);
             var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
             var applicationTypeBySourceId = sources.ToDictionary(source => source.Id, source => source.ApplicationType);
             var systemTypeBySourceId = sources.ToDictionary(source => source.Id, source => source.SourceSystemType);
-            var destinationTypeByDestinationId = (await configurationRepository.GetDestinationsAsync(cancellationToken))
+            var destinations = await configurationRepository.GetDestinationsAsync(cancellationToken);
+            var destinationTypeByDestinationId = destinations
                 .ToDictionary(destination => destination.Id, destination => destination.DestinationType);
 
             // Row-level visibility: module access (the policy below) only proves the caller holds SOME
@@ -602,6 +606,10 @@ public static class WorkflowEndpoints
                 // the loop below answers the stronger one — and, in the same pass, collects the vendor groups the
                 // permission filter after it needs — so both the status and the response flag read off it.
                 var hasConfiguredDestination = false;
+                // A workflow can fan out to several destinations, so the Destination filter matches on a SET per
+                // row rather than a single value the way Source does — collected in the same pass that already
+                // walks these nodes for the permission check.
+                var workflowDestinationTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
                 {
                     if (!TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId))
@@ -613,6 +621,19 @@ public static class WorkflowEndpoints
                     if (destinationTypeByDestinationId.TryGetValue(destinationId, out var destinationVendorType))
                     {
                         AddVendorGroupIfSpecific(usedGroups, destinationVendorType);
+                        workflowDestinationTypes.Add(destinationVendorType.ToString());
+                    }
+                }
+
+                // Resource types the SOURCE nodes are configured to retrieve. Read off stored configuration, never
+                // off a past run: the filter answers "which workflows are set up to pull Observation", which stays
+                // answerable for a workflow that has never run.
+                var workflowResourceTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var node in workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Source))
+                {
+                    foreach (var resourceType in GetConfiguredResourceTypes(node.ConfigurationJson))
+                    {
+                        workflowResourceTypes.Add(resourceType);
                     }
                 }
 
@@ -664,7 +685,10 @@ public static class WorkflowEndpoints
                     workflow.UpdatedOnUtc,
                     workflow.UpdatedBy,
                     workflow.Description,
-                    workflow.WorkflowNumber));
+                    workflow.WorkflowNumber,
+                    workflowDestinationTypes.ToArray(),
+                    workflowResourceTypes.ToArray(),
+                    lastRun?.Status.ToString()));
             }
 
             // Resolve each summary's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/pre-conversion
@@ -677,13 +701,35 @@ public static class WorkflowEndpoints
                 ModifiedBy = summary.ModifiedBy is { } modifiedBy ? actorNames.GetValueOrDefault(modifiedBy, modifiedBy) : null,
             }).ToList();
 
-            // Facet option lists reflect the full unfiltered set (not `matching`) so unchecking every box in one
-            // category doesn't make the other categories' checkboxes disappear out from under the user.
-            var availableStatuses = summaries.Select(s => s.Status)
-                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToArray();
-            var availableApplicationTypes = summaries.Select(s => s.ApplicationType).OfType<string>()
+            // Facet option lists are deliberately NOT derived from the rows on screen, nor even from `summaries`
+            // alone. Two different rules apply, and which one a facet gets depends on what the user is choosing
+            // between:
+            //
+            //  * Status / Audience / Last Run Status are CLOSED enums — every possible value is offered, whether or
+            //    not any workflow currently has it. A fixed roster doesn't shift under the user as they filter, and
+            //    an empty result for "Failed" is itself the answer to "do I have any failed workflows?".
+            //  * Source / Destination come from the SAME configuration catalog the workflow builder offers when
+            //    creating a workflow, so a connection that was just configured is filterable immediately rather
+            //    than only after some workflow happens to use it.
+            //  * Resource Type is collected from what source nodes actually name in their stored configuration:
+            //    there is no tenant-level catalog of "resource types in play" to read it from.
+            //
+            // Sources/destinations still union in the types referenced by existing workflows, so a workflow wired
+            // to a connection that was since deleted keeps a filter option that matches it instead of becoming
+            // unreachable.
+            var availableStatuses = Enum.GetNames<WorkflowLifecycleStatus>()
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableApplicationTypes = Enum.GetNames<ApplicationType>()
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableLastRunStatuses = Enum.GetNames<WorkflowRunStatus>()
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableSourceSystemTypes = sources.Select(source => source.SourceSystemType.ToString())
+                .Concat(summaries.Select(s => s.SourceSystemType).OfType<string>())
                 .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
-            var availableSourceSystemTypes = summaries.Select(s => s.SourceSystemType).OfType<string>()
+            var availableDestinationTypes = destinations.Select(destination => destination.DestinationType.ToString())
+                .Concat(summaries.SelectMany(s => s.DestinationTypes ?? Array.Empty<string>()))
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
+            var availableResourceTypes = summaries.SelectMany(s => s.ResourceTypes ?? Array.Empty<string>())
                 .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray();
 
             IEnumerable<WorkflowSummaryDto> matching = summaries;
@@ -716,6 +762,30 @@ public static class WorkflowEndpoints
                 matching = matching.Where(summary => summary.SourceSystemType is not null && sourceSystemTypeSet.Contains(summary.SourceSystemType));
             }
 
+            if (destinationTypes is { Length: > 0 })
+            {
+                // ANY-match, not all: a workflow that fans out to SQL Server and Blob Storage belongs under both.
+                var destinationTypeSet = new HashSet<string>(destinationTypes, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary =>
+                    summary.DestinationTypes is { } types && types.Any(destinationTypeSet.Contains));
+            }
+
+            if (lastRunStatuses is { Length: > 0 })
+            {
+                // A never-run workflow has no last-run status, so it matches no selection here — deliberate: the
+                // filter asks "how did the last run end", which is unanswerable for a workflow that never ran.
+                var lastRunStatusSet = new HashSet<string>(lastRunStatuses, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary =>
+                    summary.LastRun is not null && lastRunStatusSet.Contains(summary.LastRun));
+            }
+
+            if (resourceTypes is { Length: > 0 })
+            {
+                var resourceTypeSet = new HashSet<string>(resourceTypes, StringComparer.OrdinalIgnoreCase);
+                matching = matching.Where(summary =>
+                    summary.ResourceTypes is { } types && types.Any(resourceTypeSet.Contains));
+            }
+
             var sorted = SortSummaries(matching, sortColumn, sortDirection).ToArray();
 
             var effectivePage = Math.Max(1, page);
@@ -726,7 +796,8 @@ public static class WorkflowEndpoints
                 .ToArray();
 
             return Results.Ok(new WorkflowSummaryPageDto(
-                pageItems, sorted.Length, availableStatuses, availableApplicationTypes, availableSourceSystemTypes));
+                pageItems, sorted.Length, availableStatuses, availableApplicationTypes, availableSourceSystemTypes,
+                availableDestinationTypes, availableLastRunStatuses, availableResourceTypes));
         // Workflow-module access gate (workflow.view OR any workflow-node permission) — can this role view
         // the Workflows list at all. This is the real data source behind the Workflows page.
         }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
@@ -3332,6 +3403,35 @@ public static class WorkflowEndpoints
         return TryParseConfigurationSettings(configurationJson) is { } config
             && config[key]?.ToString() is { } raw
             && Guid.TryParse(raw, out value);
+    }
+
+    /// <summary>
+    /// The FHIR resource types a node's stored configuration NAMES, for the workflow list's Resource Type facet.
+    /// Reads the same keys the runtime's source executor reads — the comma-separated <c>Resources</c> list the
+    /// builder writes, the legacy single <c>resourceType</c>, and a destination node's own <c>dest_resources</c>
+    /// picker — so the filter agrees with what the workflow would actually retrieve.
+    ///
+    /// <para>Deliberately does NOT reproduce the executor's derive-from-SMART-scopes fallback. That fallback needs
+    /// the connection's granted scopes and a round of destination narrowing to resolve, which is per-run work; a
+    /// list screen can't afford it per row, and a facet built from a guess would quietly disagree with the runtime.
+    /// A workflow whose types are only implied by scopes therefore contributes nothing here and is not matched by
+    /// this filter, which is why the facet is documented as "types the workflow names", not "types it will fetch".</para>
+    /// </summary>
+    private static IEnumerable<string> GetConfiguredResourceTypes(string? configurationJson)
+    {
+        foreach (var key in new[] { "Resources", "resourceType", "dest_resources" })
+        {
+            var raw = GetConfigurationString(configurationJson, key);
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                continue;
+            }
+
+            foreach (var candidate in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                yield return candidate;
+            }
+        }
     }
 
     private static string? GetConfigurationString(string? configurationJson, string key)
