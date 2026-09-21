@@ -6,7 +6,10 @@ namespace FHIRBridge.Application.Abstractions.Licensing;
 /// is left unchanged — see <c>LicenseService.ApplyAsync</c>'s remarks ("a bad token is rejected at the
 /// door rather than bricking the next restart").
 /// </summary>
-public sealed record LicenseApplyResult(bool Succeeded, string? ErrorMessage, LicenseStatus? Status);
+/// <param name="AlreadyActive">True when <paramref name="Status"/> was already the currently-applied,
+/// Active license — the exact same token was submitted again, so nothing was re-persisted and no new
+/// <c>LicenseHistoryEntry</c> row was added. Always <c>false</c> on a genuinely new/changed application.</param>
+public sealed record LicenseApplyResult(bool Succeeded, string? ErrorMessage, LicenseStatus? Status, bool AlreadyActive = false);
 
 /// <summary>
 /// Resolves, verifies, and reports the product's current signed license. Registered as a singleton by

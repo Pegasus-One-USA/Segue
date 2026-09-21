@@ -1,8 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { LICENSE_ENDPOINTS } from '../../core/api-endpoints';
-import { ApplyLicenseRequest, DevLicenseMintRequest, DevLicenseMintResponse, LicenseStatus } from '../models/license.model';
+import { LICENSE_ENDPOINTS, LICENSE_REQUEST_ENDPOINTS } from '../../core/api-endpoints';
+import {
+  ApplyLicenseRequest, CreateLicenseRequestRequest, LicenseHistoryEntry, LicenseRequestStatus, LicenseStatus,
+  LicensorApplicationUrl,
+} from '../models/license.model';
 
 @Injectable({ providedIn: 'root' })
 export class LicenseService {
@@ -16,12 +19,30 @@ export class LicenseService {
     return this.http.post<LicenseStatus>(LICENSE_ENDPOINTS.apply, request);
   }
 
-  /** ⚠ TEMPORARY / DEV-ONLY — calls the throwaway license-minting endpoint backing the
-   *  "Dev: Mint a test license" page (settings/license/mint-dev). The backend 404s this call on any
-   *  non-Development host; that server-side gate is the real security boundary here. Delete this
-   *  method (and DevLicenseMintRequest/DevLicenseMintResponse, LICENSE_ENDPOINTS.devMint, and the
-   *  license-dev-mint page) once license minting moves to its own separate internal tool. */
-  mintDev(request: DevLicenseMintRequest): Observable<DevLicenseMintResponse> {
-    return this.http.post<DevLicenseMintResponse>(LICENSE_ENDPOINTS.devMint, request);
+  getHistory(): Observable<LicenseHistoryEntry[]> {
+    return this.http.get<LicenseHistoryEntry[]>(LICENSE_ENDPOINTS.history);
+  }
+
+  getRequest(): Observable<LicenseRequestStatus> {
+    return this.http.get<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.get);
+  }
+
+  createRequest(request: CreateLicenseRequestRequest): Observable<LicenseRequestStatus> {
+    return this.http.post<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.create, request);
+  }
+
+  resubmitRequest(): Observable<LicenseRequestStatus> {
+    return this.http.post<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.resubmit, {});
+  }
+
+  // Narrow read/write of just the licensor URL — reachable while unlicensed (see the endpoint's own
+  // comment); the general-purpose ISystemSettingsService.getAll()/set() is NOT, since the license gate
+  // does not allowlist /api/v1/system/settings.
+  getLicensorUrl(): Observable<LicensorApplicationUrl> {
+    return this.http.get<LicensorApplicationUrl>(LICENSE_REQUEST_ENDPOINTS.licensorUrl);
+  }
+
+  setLicensorUrl(url: string): Observable<LicensorApplicationUrl> {
+    return this.http.put<LicensorApplicationUrl>(LICENSE_REQUEST_ENDPOINTS.licensorUrl, { url });
   }
 }

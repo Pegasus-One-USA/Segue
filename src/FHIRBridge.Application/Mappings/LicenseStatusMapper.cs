@@ -14,7 +14,8 @@ public static class LicenseStatusMapper
     public static LicenseStatusDto ToDto(
         LicenseStatus status,
         LicenseUsageCounts? usageCounts = null,
-        LicenseUsageExecutionStats? executionStats = null) =>
+        LicenseUsageExecutionStats? executionStats = null,
+        bool alreadyActive = false) =>
         new(
             status.State.ToString(),
             status.CustomerName,
@@ -47,5 +48,6 @@ public static class LicenseStatusMapper
                     counts.TenantCount,
                     counts.WorkflowCount,
                     executionStats?.SuccessfulExecutionsThisMonth ?? 0)
-                : null);
+                : null,
+            alreadyActive);
 }

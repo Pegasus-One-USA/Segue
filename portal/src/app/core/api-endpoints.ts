@@ -268,14 +268,21 @@ export const APP_SECRETS_ENDPOINTS = {
 // UnifiedAdmin-only (SuperAdmin or Admin): reports the product's current signed license and lets an
 // admin apply a new token. Verification/reporting only — no enforcement lives behind this yet.
 export const LICENSE_ENDPOINTS = {
-  get:   `${API_V1_BASE}/license`,
-  apply: `${API_V1_BASE}/license`,
-  // ⚠ TEMPORARY / DEV-ONLY — backs the "Dev: Mint a test license" page
-  // (settings/license/mint-dev). The backend controller behind this URL 404s itself on any host
-  // that isn't running in the Development environment (see DevLicenseMintingController's remarks) —
-  // that server-side gate is the actual security boundary, not this URL being hard to find. Delete
-  // this entry alongside the license-dev-mint page once minting moves to its own separate internal tool.
-  devMint: `${API_V1_BASE}/dev/license-mint`,
+  get:     `${API_V1_BASE}/license`,
+  apply:   `${API_V1_BASE}/license`,
+  history: `${API_V1_BASE}/license/history`,
+};
+
+// ─── License Request (LicenseRequestController — api/v1/license-request) ────
+// UnifiedAdmin-only: this install's own outbound request for a license from the licensor. One request per
+// install, ever — resubmit re-sends the same stored details rather than creating a new one.
+export const LICENSE_REQUEST_ENDPOINTS = {
+  get:      `${API_V1_BASE}/license-request`,
+  create:   `${API_V1_BASE}/license-request`,
+  resubmit: `${API_V1_BASE}/license-request/resubmit`,
+  // Narrow read/write of just License:LicensorApplicationUrl — deliberately NOT the general-purpose
+  // system-settings endpoints, which the license gate does not allowlist while unlicensed.
+  licensorUrl: `${API_V1_BASE}/license-request/licensor-url`,
 };
 
 export const LOINC_ENDPOINTS = {

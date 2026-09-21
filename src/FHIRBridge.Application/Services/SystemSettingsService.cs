@@ -60,6 +60,7 @@ public sealed class SystemSettingsService : ISystemSettingsService
     private static string ValidatedValueFor(string key, string value) => key switch
     {
         "OAuth:PublicBaseUrl" => ValidatePublicBaseUrl(value),
+        "License:LicensorApplicationUrl" => ValidateLicensorApplicationUrl(value),
         _ => value,
     };
 
@@ -91,6 +92,43 @@ public sealed class SystemSettingsService : ISystemSettingsService
         {
             throw new InvalidOperationException(
                 "OAuth:PublicBaseUrl must not include a path, query, or fragment — scheme and host only, e.g. https://portal.example.com.");
+        }
+
+        return uri.GetLeftPart(UriPartial.Authority);
+    }
+
+    // Unlike OAuth:PublicBaseUrl, blank is NOT valid here — LicenseRequestService has no request-derived
+    // fallback to fall back to (there's no incoming request to derive an origin from; this is an OUTBOUND
+    // call this install itself makes), so an admin clearing this field would just break license requests
+    // with no explanation until they tried to submit one. Same "scheme + host + port only" shape
+    // requirement as OAuth:PublicBaseUrl, for the same reason: this value is concatenated directly into
+    // the intake URL LicenseRequestService posts to.
+    private static string ValidateLicensorApplicationUrl(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "License:LicensorApplicationUrl cannot be blank — license requests have nowhere to be sent " +
+                "without it.");
+        }
+
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+        {
+            throw new InvalidOperationException(
+                "License:LicensorApplicationUrl must be an absolute URL, e.g. https://license.example.com.");
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException("License:LicensorApplicationUrl must use http or https.");
+        }
+
+        if (uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+        {
+            throw new InvalidOperationException(
+                "License:LicensorApplicationUrl must not include a path, query, or fragment — scheme and " +
+                "host only, e.g. https://license.example.com.");
         }
 
         return uri.GetLeftPart(UriPartial.Authority);

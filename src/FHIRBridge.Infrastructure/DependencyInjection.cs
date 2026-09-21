@@ -191,15 +191,11 @@ public static class DependencyInjection
         // ISystemSettingsCache/ICurrentTenantResolver above — works against either repository registration
         // (DB or in-memory) since it doesn't touch the repository until Program.cs calls ReloadAsync.
         services.AddSingleton<Application.Abstractions.Licensing.ILicenseService, LicenseService>();
-
-        // ⚠ TEMPORARY / DEV-ONLY — signs throwaway test license tokens for the portal's temporary
-        // "Dev: Mint a test license" page. Backed by DevLicenseMintingController, which is hard-gated to
-        // IHostEnvironment.IsDevelopment() (returns 404 everywhere else) — see DevLicenseSigningKey's
-        // remarks. Registering this singleton unconditionally is safe: nothing outside that
-        // Development-only controller ever calls it. DELETE this registration alongside
-        // DevLicenseSigningKey/IDevLicenseMintingService/DevLicenseMintingService/DevLicenseMintingController
-        // once license minting moves to its own separate internal tool.
-        services.AddSingleton<IDevLicenseMintingService, DevLicenseMintingService>();
+        // A short, explicit timeout (default HttpClient timeout is 100s) — a silently-dropping
+        // licensor host would otherwise block the admin's POST for the whole default before the
+        // manual-fallback path (AttemptSubmitAsync's catch) is even reached.
+        services.AddHttpClient(nameof(LicenseRequestService), client => client.Timeout = TimeSpan.FromSeconds(15));
+        services.AddScoped<Application.Abstractions.Licensing.ILicenseRequestService, LicenseRequestService>();
 
         // Resolves a user's effective permission codes per request (DB-backed, short-lived cache) —
         // replaces embedding them as JWT claims, which overflowed the browser's access-token cookie once
@@ -234,6 +230,8 @@ public static class DependencyInjection
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
+            services.AddSingleton<ILicenseRequestRepository, InMemoryLicenseRequestRepository>();
+            services.AddSingleton<ILicenseHistoryRepository, InMemoryLicenseHistoryRepository>();
             services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
             services.AddSingleton<IBrandConfigurationRepository, InMemoryBrandConfigurationRepository>();
             services.AddSingleton<ITenantRepository, InMemoryTenantRepository>();
@@ -319,6 +317,8 @@ public static class DependencyInjection
             services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
             services.AddScoped<IUserFhirContextBindingRepository, EfUserFhirContextBindingRepository>();
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
+            services.AddScoped<ILicenseRequestRepository, EfLicenseRequestRepository>();
+            services.AddScoped<ILicenseHistoryRepository, EfLicenseHistoryRepository>();
             services.AddScoped<ISystemSettingsSeeder, SystemSettingsSeeder>();
             services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();
             services.AddScoped<IBrandConfigurationRepository, EfBrandConfigurationRepository>();

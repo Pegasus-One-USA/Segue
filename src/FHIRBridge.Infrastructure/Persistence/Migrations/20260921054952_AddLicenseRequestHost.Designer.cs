@@ -4,6 +4,7 @@ using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FHIRBridge.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FHIRBridgeDbContext))]
-    partial class FHIRBridgeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260921054952_AddLicenseRequestHost")]
+    partial class AddLicenseRequestHost
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1681,11 +1684,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
-                    b.Property<int>("SingletonGuard")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(1);
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1701,9 +1699,6 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("SingletonGuard")
-                        .IsUnique();
 
                     b.HasIndex("UniqueKey");
 

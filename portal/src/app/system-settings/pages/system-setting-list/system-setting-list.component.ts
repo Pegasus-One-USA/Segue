@@ -33,13 +33,13 @@ const HAPI_TERMINOLOGY_KEY_PATTERN = /^Terminology:\w+Hapi:/;
 // LOINC's legacy group is either superseded by LoincHapi:* or unused by any sync code at all.
 const LEGACY_TERMINOLOGY_KEY_PATTERN = /^Terminology:(Loinc|Ndc|RxNorm|Snomed|Ucum):/;
 
-// "License:Token" is the applied license token itself — live data written by the License screen's Activate
-// flow (LicenseService.ApplyAsync upserts it), not a configuration knob. It only ever appeared here because
-// it happens to be stored as a SystemSetting row, and rendering it as an editable "License" group is both
-// redundant (the License launcher row above manages licensing properly) and dangerous: hand-editing a signed
-// token through a free-text field can only invalidate it.
+// Every "License:*" key is managed on its own dedicated screen now, not as generic key/value rows here:
+// "License:Token" is live data written by the License screen's Activate flow (LicenseService.ApplyAsync
+// upserts it) — hand-editing a signed token through a free-text field can only invalidate it —  and
+// "License:LicensorApplicationUrl" has its own field on the License screen's License Request tab, so
+// showing it again here as a generic "License" group would just be a second, redundant place to edit it.
 //
-// Hidden from this list only. The row stays in the database — deleting it would deactivate the product.
+// Hidden from this list only. Both rows stay in the database.
 const LICENSE_TOKEN_KEY_PATTERN = /^License:/;
 
 interface GroupHeaderRow {
@@ -401,7 +401,7 @@ export class SystemSettingListComponent implements OnInit {
   toggleCode(code: string): void {
     this.collapsedCodes.update(set => {
       const next = new Set(set);
-      next.has(code) ? next.delete(code) : next.add(code);
+      if (next.has(code)) { next.delete(code); } else { next.add(code); }
       return next;
     });
   }

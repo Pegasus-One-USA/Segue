@@ -780,8 +780,10 @@ app.UseAuthentication();
 // License gate: once the license isn't Active (no token applied yet, expired, or invalid), every
 // /api/v1 action is blocked — including anonymous ones — except the handful of endpoints needed to
 // register the first admin, log in/out, see why (GET /auth/me, the setup-status check the portal
-// polls at boot), and actually fix it (the License screen, plus its dev-only minting helper). Without
-// that carve-out an inactive license would be permanently unrecoverable through the app itself. This
+// polls at boot), and actually fix it (the License screen — status/apply/history plus the license
+// request flow, including its own narrow GET/PUT .../license-request/licensor-url pair — and its
+// dev-only minting helper). Without that carve-out an inactive license would be permanently
+// unrecoverable through the app itself. This
 // is the enforcement stage ILicenseService/LicenseStatus's own doc comments said was still to come —
 // everything before this was verification/reporting only.
 var licenseGateAllowedPrefixes = new[]
@@ -801,6 +803,10 @@ var licenseGateAllowedPrefixes = new[]
     "/api/v1/auth/internal/reset-password",
     "/api/v1/config",
     "/api/v1/license",
+    // Deliberately NOT the general-purpose /api/v1/system/settings (which would open every OTHER
+    // setting to read/write while unlicensed) — license-request's own controller exposes a narrow
+    // GET/PUT .../license-request/licensor-url pair for just the one key the License screen needs.
+    "/api/v1/license-request",
     "/api/v1/dev/license-mint",
 };
 var licenseGateService = app.Services.GetRequiredService<FHIRBridge.Application.Abstractions.Licensing.ILicenseService>();
@@ -1011,6 +1017,16 @@ static void LoadLicense(WebApplication app)
 {
     var licenseService = app.Services.GetRequiredService<FHIRBridge.Application.Abstractions.Licensing.ILicenseService>();
     licenseService.ReloadAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+    // One-time, startup-only warning (not logged per-request from the scoped LicenseRequestService
+    // itself) — see LicenseRequestSharedKey's remarks for what this key does and does not protect.
+    if (FHIRBridge.Infrastructure.Licensing.LicenseRequestSharedKey.IsUsingDevPlaceholder)
+    {
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("LicenseRequestSharedKey").LogWarning(
+            "License request shared key: using the EMBEDDED DEV-ONLY placeholder (FHIRBRIDGE_LICENSE_REQUEST_SHARED_KEY " +
+            "is not set). Set that env var to a real, non-committed 32-byte base64 secret — shared out of band with " +
+            "the licensor's FHIRBridge-LicenseServer deployment — for anything beyond local development.");
+    }
 }
 
 // Reflection discovers every [StandardPermission] code in use (see PermissionCatalog), but only
