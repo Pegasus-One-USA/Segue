@@ -84,4 +84,28 @@ public sealed class LicenseController : ControllerBase
             e.AppliedUtc, e.CustomerName, e.Edition, e.State, e.ExpiresUtc,
             currentToken is not null && e.Token == currentToken)));
     }
+
+    /// <summary>TESTING/SUPPORT UTILITY ONLY — removes the currently-applied license entirely, reverting
+    /// this install to Unlicensed. Never called by the normal apply flow. Leaves
+    /// <see cref="ILicenseHistoryRepository"/>'s rows untouched — see <see cref="ClearHistory"/> for that.</summary>
+    [HttpDelete]
+    [ProducesResponseType(typeof(LicenseStatusDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Clear(CancellationToken cancellationToken)
+    {
+        await _licenseService.ClearAsync(cancellationToken);
+
+        var usageCounts = await _licenseUsageCountsProvider.GetCurrentCountsAsync(cancellationToken);
+        var executionStats = await _licenseUsageExecutionStatsProvider.GetCurrentStatsAsync(cancellationToken);
+        return Ok(LicenseStatusMapper.ToDto(_licenseService.Current, usageCounts, executionStats));
+    }
+
+    /// <summary>TESTING/SUPPORT UTILITY ONLY — wipes every <see cref="LicenseHistoryEntryDto"/> row.
+    /// Does not touch the currently-applied license itself — see <see cref="Clear"/> for that.</summary>
+    [HttpDelete("history")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> ClearHistory(CancellationToken cancellationToken)
+    {
+        await _licenseHistoryRepository.ClearAllAsync(cancellationToken);
+        return NoContent();
+    }
 }

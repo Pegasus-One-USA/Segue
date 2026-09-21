@@ -133,6 +133,21 @@ public sealed class LicenseService : ILicenseService
         }
     }
 
+    public async Task ClearAsync(CancellationToken cancellationToken)
+    {
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var repository = scope.ServiceProvider.GetRequiredService<ISystemSettingRepository>();
+            await repository.DeleteAsync(LicenseTokenSettingKey, cancellationToken);
+        }
+
+        lock (_lock)
+        {
+            Current = LicenseStatus.Unlicensed;
+            CurrentRawToken = null;
+        }
+    }
+
     /// <summary>Checks, in order: (a) the SystemSetting row, (b) <see cref="LicenseTokenEnvVar"/>, (c) the
     /// file named by <see cref="LicenseTokenFileEnvVar"/>. First one found wins.</summary>
     private async Task<string?> ResolveTokenAsync(CancellationToken cancellationToken)

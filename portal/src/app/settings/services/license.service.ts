@@ -45,4 +45,14 @@ export class LicenseService {
   setLicensorUrl(url: string): Observable<LicensorApplicationUrl> {
     return this.http.put<LicensorApplicationUrl>(LICENSE_REQUEST_ENDPOINTS.licensorUrl, { url });
   }
+
+  // TESTING/SUPPORT UTILITY ONLY — see LicenseController.Clear/ClearHistory. Never called from the
+  // normal apply flow.
+  clear(): Observable<LicenseStatus> {
+    return this.http.delete<LicenseStatus>(LICENSE_ENDPOINTS.clear);
+  }
+
+  clearHistory(): Observable<void> {
+    return this.http.delete<void>(LICENSE_ENDPOINTS.clearHistory);
+  }
 }

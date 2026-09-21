@@ -17,4 +17,10 @@ public sealed class InMemoryLicenseHistoryRepository : ILicenseHistoryRepository
     public Task<IReadOnlyList<LicenseHistoryEntry>> GetAllAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<LicenseHistoryEntry>>(
             _entries.OrderByDescending(x => x.AppliedUtc).ToArray());
+
+    public Task ClearAllAsync(CancellationToken cancellationToken)
+    {
+        _entries.Clear();
+        return Task.CompletedTask;
+    }
 }
