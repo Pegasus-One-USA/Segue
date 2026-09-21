@@ -5,6 +5,7 @@ using FHIRBridge.LicenseServer.Security;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.EventLog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,16 @@ var builder = WebApplication.CreateBuilder(args);
 // "running" — it just looks like an immediate, unexplained failure from the SCM's point of view, even
 // though the app itself starts up fine when run directly from a console.
 builder.Host.UseWindowsService(options => options.ServiceName = "FHIRBridge.LicenseServer");
+
+// UseWindowsService() also auto-registers a Windows Event Log logging provider when actually running
+// as a service. Confirmed on the real deployment VM: the LocalSystem service account isn't allowed to
+// auto-create a brand-new event source on first write ("Cannot open log for source ... Access is
+// denied" — Win32Exception 5), which crashes the WHOLE process the instant anything logs anything,
+// before the host ever finishes starting. This app has no need for genuine Windows Event Log output
+// (console logging already covers it, same as every other log call here) — silencing just this one
+// provider's actual writes, rather than removing/fighting its registration, sidesteps the permission
+// issue entirely without touching provider ordering.
+builder.Services.Configure<EventLogSettings>(settings => settings.Filter = (_, _) => false);
 
 builder.Services.Configure<LicenseSigningOptions>(builder.Configuration.GetSection(LicenseSigningOptions.SectionName));
 builder.Services.Configure<AdminCredentialsOptions>(builder.Configuration.GetSection(AdminCredentialsOptions.SectionName));
