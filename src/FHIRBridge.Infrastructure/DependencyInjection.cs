@@ -333,6 +333,13 @@ public static class DependencyInjection
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
             services.AddScoped<IBulkExportJobRepository, EfBulkExportJobRepository>();
             services.Configure<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>(configuration.GetSection("BulkExport"));
+            // Off unless a host explicitly turns it on (Development only) — see EhrDataDumpOptions: the dump holds
+            // raw, unmasked FHIR resources.
+            services.Configure<FHIRBridge.Runtime.Application.Workflows.EhrDataDumpOptions>(
+                configuration.GetSection(FHIRBridge.Runtime.Application.Workflows.EhrDataDumpOptions.SectionName));
+            // Resolved by both extraction paths: SourceNodeExecutor (search-REST, in the Api) and
+            // RankedWorkflowOrchestrator.ResumeAfterBulkExportAsync (bulk export, in the Worker).
+            services.AddSingleton<FHIRBridge.Runtime.Application.Workflows.EhrDataDumpWriter>();
             services.AddScoped<FHIRBridge.Runtime.Application.Workflows.Storage.IBulkExportPauseRecorder, FHIRBridge.Infrastructure.Workflows.BulkExportPauseRecorder>();
             services.AddScoped<IPipelineRunRouteExecutionRepository, EfPipelineRunRouteExecutionRepository>();
             services.AddScoped<EfExecutionResourceHistoryRecorder>();

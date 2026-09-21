@@ -78,3 +78,6 @@ publish/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Raw EHR extraction dumps (EhrDataDump) — unmasked FHIR resources, never commit.
+EHRData/

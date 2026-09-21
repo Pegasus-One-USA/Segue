@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows.Audit;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
@@ -22,6 +22,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IServiceScopeFactory? _scopeFactory;
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly IBulkExportPauseRecorder? _bulkExportPauseRecorder;
+    private readonly EhrDataDumpWriter? _ehrDataDumpWriter;
     private readonly ILogger<RankedWorkflowOrchestrator> _logger;
 
     public RankedWorkflowOrchestrator(
@@ -35,7 +36,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         IServiceScopeFactory? scopeFactory = null,
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IBulkExportPauseRecorder? bulkExportPauseRecorder = null,
-        ILogger<RankedWorkflowOrchestrator>? logger = null)
+        ILogger<RankedWorkflowOrchestrator>? logger = null,
+        EhrDataDumpWriter? ehrDataDumpWriter = null)
     {
         _graphValidator = graphValidator;
         _executorRegistry = executorRegistry;
@@ -48,6 +50,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         _workflowDefinitionStore = workflowDefinitionStore;
         _bulkExportPauseRecorder = bulkExportPauseRecorder;
         _logger = logger ?? NullLogger<RankedWorkflowOrchestrator>.Instance;
+        _ehrDataDumpWriter = ehrDataDumpWriter;
     }
 
     public Task<WorkflowRunResult> ExecuteAsync(
@@ -208,6 +211,31 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 ["skippedResourceTypes"] = skippedResourceTypeReasons is { Count: > 0 } ? skippedResourceTypeReasons.ToArray() : null,
             });
         outputsByNodeId[pausedNode.Id] = materializedOutput;
+
+        // The bulk-export twin of the dump SourceNodeExecutor writes for a search-REST run. A deferred run's
+        // resources don't exist at the point the executor returns -- they arrive here, on resume -- so without this
+        // every bulk-export workflow produced no dump file at all.
+        if (_ehrDataDumpWriter is { IsEnabled: true } dumpWriter)
+        {
+            await dumpWriter.WriteAsync(
+                workflowRun.WorkflowDefinitionId,
+                new Dictionary<string, string?>
+                {
+                    ["WorkflowRunId"] = workflowRunId.ToString(),
+                    ["CorrelationId"] = context.CorrelationId,
+                    ["NodeId"] = pausedNode.Id.ToString(),
+                    ["NodeType"] = pausedNode.NodeType,
+                    ["Source"] = "BulkExportPollWorker",
+                    ["RetrievalMethod"] = "bulk-export",
+                },
+                resources
+                    .Select(resource => new EhrDataDumpRecord(
+                        resource.ResourceType, resource.ResourceId, resource.RawJson))
+                    .ToList(),
+                skippedResourceTypeReasons,
+                cancellationToken);
+        }
+
 
         if (skippedResourceTypeReasons is { Count: > 0 })
         {
