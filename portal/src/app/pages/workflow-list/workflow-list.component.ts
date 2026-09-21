@@ -19,7 +19,14 @@ import { ToastService } from '../../services/toast.service';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
 import { PermissionService } from '../../auth/services/permission.service';
 import { AuthStore } from '../../auth/store/auth.store';
-import { sourceTypeLabel, destinationTypeLabel } from '../../data/connection-type-labels.util';
+import {
+  sourceTypeLabel,
+  destinationTypeLabel,
+  sourceTypeOptions,
+  destinationTypeOptions,
+  resourceTypeOptions,
+} from '../../data/connection-type-labels.util';
+import { PhaseConfigService } from '../../services/phase-config.service';
 import {
   IntegrationDetails,
   buildIntegrationDetails,
@@ -63,6 +70,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly runStatusHub = inject(RunStatusHubService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly permissions = inject(PermissionService);
+  private readonly phaseCfg = inject(PhaseConfigService);
   private readonly authStore = inject(AuthStore);
 
   // ── RBAC: workflow.view (the route guard already reached here) only grants VIEW access — these four
@@ -137,10 +145,31 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  category's checkboxes disappear. */
   readonly availableStatuses = signal<string[]>([]);
   readonly availableAudiences = signal<string[]>([]);
-  readonly availableSources = signal<string[]>([]);
-  readonly availableDestinations = signal<string[]>([]);
   readonly availableLastRunStatuses = signal<string[]>([]);
-  readonly availableResourceTypes = signal<string[]>([]);
+
+  // Source, Destination and Resource Type come from the CATALOGS the connection masters and the destination
+  // wizard build their own pickers from — not from the workflows that happen to exist. A filter answers "which
+  // of the things I can configure do I want to see", so it offers what those screens offer; deriving it from
+  // current rows meant the Destination filter listed five types while Destination Connections listed twenty,
+  // and a vendor with no connection yet was unfilterable. Gated exactly as the masters gate their dropdowns
+  // (phase config + the vendor's own `{prefix}.view`), so a role never sees a vendor it cannot access.
+  private readonly hasPermission = (code: string) => this.permissions.hasPermission(code);
+
+  readonly availableSources = computed(() =>
+    sourceTypeOptions({
+      isEnabled: (id: string) => this.phaseCfg.isSourceEnabled(id),
+      hasPermission: this.hasPermission,
+    }).map(o => o.value),
+  );
+
+  readonly availableDestinations = computed(() =>
+    destinationTypeOptions({
+      isEnabled: (id: string) => this.phaseCfg.isTransformEnabled(id),
+      hasPermission: this.hasPermission,
+    }).map(o => o.value),
+  );
+
+  readonly availableResourceTypes = computed(() => resourceTypeOptions().map(o => o.value));
 
   readonly selectedStatuses = signal<Set<string>>(new Set());
   readonly selectedAudiences = signal<Set<string>>(new Set());
@@ -394,10 +423,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
           this.totalCount.set(result.totalCount);
           this.availableStatuses.set(result.availableStatuses);
           this.availableAudiences.set(result.availableApplicationTypes);
-          this.availableSources.set(result.availableSourceSystemTypes);
-          this.availableDestinations.set(result.availableDestinationTypes ?? []);
           this.availableLastRunStatuses.set(result.availableLastRunStatuses ?? []);
-          this.availableResourceTypes.set(result.availableResourceTypes ?? []);
           this.loading.set(false);
           this.searching.set(false);
           // A delete/copy (or a filter/page-size change) can shrink the matching set out from under a page index

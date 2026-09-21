@@ -9,7 +9,15 @@ import { ExecutionHistoryApiService } from '../../services/execution-history-api
 import { BulkExportStatus, PagedResult, RouteExecution } from '../../models/execution-history.model';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 import { ModalOverlayComponent } from '../../../components/shared/modal-overlay/modal-overlay.component';
-import { sourceTypeLabel, destinationTypeLabel } from '../../../data/connection-type-labels.util';
+import {
+  sourceTypeLabel,
+  destinationTypeLabel,
+  sourceTypeOptions,
+  destinationTypeOptions,
+  resourceTypeOptions,
+} from '../../../data/connection-type-labels.util';
+import { PhaseConfigService } from '../../../services/phase-config.service';
+import { PermissionService } from '../../../auth/services/permission.service';
 
 type SortColumn = 'pipeline' | 'source' | 'status' | 'duration' | 'lastRun' | 'triggeredBy';
 type SortDirection = 'asc' | 'desc';
@@ -43,16 +51,34 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly search$ = new Subject<string>();
+  private readonly phaseCfg = inject(PhaseConfigService);
+  private readonly permissions = inject(PermissionService);
+  private readonly hasPermission = (code: string) => this.permissions.hasPermission(code);
 
   // ── Multi-select facets ───────────────────────────────────────────────────
   // Option lists come from the server's facets, which apply the same rule the Workflows list does: Status and
   // Audience are closed enums offered in full, Source and Destination come from the configuration catalog the
   // workflow builder itself offers, and Resource Type is collected from source-node configuration.
-  readonly availableSources = signal<string[]>([]);
-  readonly availableDestinations = signal<string[]>([]);
   readonly availableStatuses = signal<string[]>([]);
   readonly availableAudiences = signal<string[]>([]);
-  readonly availableResourceTypes = signal<string[]>([]);
+
+  // Source, Destination and Resource Type come from the catalogs, not from the runs on screen — same reasoning
+  // (and same gating) as the Workflows list, so the two screens offer identical option lists.
+  readonly availableSources = computed(() =>
+    sourceTypeOptions({
+      isEnabled: (id: string) => this.phaseCfg.isSourceEnabled(id),
+      hasPermission: this.hasPermission,
+    }).map(o => o.value),
+  );
+
+  readonly availableDestinations = computed(() =>
+    destinationTypeOptions({
+      isEnabled: (id: string) => this.phaseCfg.isTransformEnabled(id),
+      hasPermission: this.hasPermission,
+    }).map(o => o.value),
+  );
+
+  readonly availableResourceTypes = computed(() => resourceTypeOptions().map(o => o.value));
 
   readonly selectedSources = signal<Set<string>>(new Set());
   readonly selectedDestinations = signal<Set<string>>(new Set());
@@ -170,11 +196,8 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
       next: result => {
         this.searching.set(false);
         this.result.set(result);
-        this.availableSources.set(result.availableSourceSystemTypes ?? []);
-        this.availableDestinations.set(result.availableDestinationTypes ?? []);
         this.availableStatuses.set(result.availableStatuses ?? []);
         this.availableAudiences.set(result.availableApplicationTypes ?? []);
-        this.availableResourceTypes.set(result.availableResourceTypes ?? []);
         this.loading.set(false);
       },
       error: () => {
