@@ -1,0 +1,242 @@
+@page
+@model FHIRBridge.LicenseServer.Pages.Licenses.CreateModel
+@{
+    ViewData["Title"] = "Mint License";
+}
+
+<div class="page-header">
+    <h1>Mint a FHIRBridge License</h1>
+    <p class="page-subtitle">Fill in what the customer's contract actually covers — see the <a href="/Guide">Guide</a> for what to collect before you start.</p>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <p class="error">@Model.ErrorMessage</p>
+}
+
+@if (Model.LinkedRequest is not null)
+{
+    <div class="panel">
+        <h2>Linked License Request</h2>
+        <p class="muted">
+            This license will embed this request's key so the requesting install can confirm it's the one
+            being activated — see <a href="/LicenseRequests">License Requests</a>.
+        </p>
+        <table>
+            <tbody>
+                <tr><th>Client Name</th><td>@Model.LinkedRequest.ClientName</td></tr>
+                <tr><th>Email</th><td>@Model.LinkedRequest.Email</td></tr>
+                @if (Model.LinkedRequest.CompanyName is not null)
+                {
+                    <tr><th>Company</th><td>@Model.LinkedRequest.CompanyName</td></tr>
+                }
+                <tr><th>Phone</th><td>@Model.LinkedRequest.PhoneNumber</td></tr>
+                @if (Model.LinkedRequest.Address is not null)
+                {
+                    <tr><th>Address</th><td>@Model.LinkedRequest.Address</td></tr>
+                }
+                <tr><th>Request Key</th><td><code>@Model.LinkedRequest.UniqueKey</code></td></tr>
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (Model.MintedToken is not null)
+{
+    <div class="panel">
+        <h2>License token</h2>
+        <p class="muted">Signed and recorded. Copy this token — it is also saved on the <a href="/Licenses">Issued Licenses</a> page.</p>
+        <textarea id="token-output" class="token-output" readonly onclick="this.select()">@Model.MintedToken</textarea>
+        <div style="margin-top:8px;">
+            <button type="button" class="secondary" onclick="copyToClipboard('token-output', this)">Copy Token</button>
+        </div>
+
+        <h2>Claims signed into this token</h2>
+        <textarea id="claims-output" class="token-output" readonly onclick="this.select()">@Model.MintedClaimsJson</textarea>
+        <div style="margin-top:8px;">
+            <button type="button" class="secondary" onclick="copyToClipboard('claims-output', this)">Copy Claims JSON</button>
+        </div>
+    </div>
+}
+
+<div class="panel">
+    <form method="post">
+        <input type="hidden" asp-for="RequestId" />
+        <div class="form-section">
+            <h2>Customer</h2>
+            <div class="field-grid">
+                <div class="field">
+                    <label for="CustomerId">Customer Id</label>
+                    <input type="text" id="CustomerId" asp-for="CustomerId" placeholder="e.g. mercy-health" />
+                </div>
+                <div class="field">
+                    <label for="CustomerName">Customer Name</label>
+                    <input type="text" id="CustomerName" asp-for="CustomerName" placeholder="e.g. Mercy Health System" />
+                </div>
+                <div class="field">
+                    <label for="Edition">Edition</label>
+                    <input type="text" id="Edition" asp-for="Edition" />
+                </div>
+                <div class="field">
+                    <label for="ExpiresOn">Expires</label>
+                    <input type="date" id="ExpiresOn" asp-for="ExpiresOn" />
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Limits <span class="hint">(leave blank, or type -1, for unlimited)</span></h2>
+            <div class="field-grid">
+                <div class="field">
+                    <label for="MaxUsers">Max Users</label>
+                    <input type="number" min="-1" id="MaxUsers" asp-for="MaxUsers" />
+                </div>
+                <div class="field">
+                    <label for="MaxWorkflows">Max Workflows</label>
+                    <input type="number" min="-1" id="MaxWorkflows" asp-for="MaxWorkflows" />
+                </div>
+                <div class="field">
+                    <label for="MaxSourceConnections">Max Source Connections</label>
+                    <input type="number" min="-1" id="MaxSourceConnections" asp-for="MaxSourceConnections" />
+                </div>
+                <div class="field">
+                    <label for="MaxProcessedRecordsPerMonth">Max Processed Records / Month</label>
+                    <input type="number" min="-1" id="MaxProcessedRecordsPerMonth" asp-for="MaxProcessedRecordsPerMonth" />
+                </div>
+                <div class="field">
+                    <label for="MaxSuccessfulWorkflowExecutionsPerMonth">Max Successful Executions / Month</label>
+                    <input type="number" min="-1" id="MaxSuccessfulWorkflowExecutionsPerMonth" asp-for="MaxSuccessfulWorkflowExecutionsPerMonth" />
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Activation Window <span class="hint">(leave blank for no deadline)</span></h2>
+            <div class="field-grid">
+                <div class="field">
+                    <label for="ActivationWindowMinutes">Minutes to activate after minting</label>
+                    <input type="number" min="1" id="ActivationWindowMinutes" asp-for="ActivationWindowMinutes" placeholder="e.g. 60" />
+                    <p class="hint">Once minted, this license must be applied (POST /api/v1/license) within this many minutes or it's rejected as expired. Never affects an already-applied, currently-running license.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Allowed Source Types <span class="hint">(none checked = all allowed)</span></h2>
+            <div class="checkbox-grid">
+                @foreach (var (value, label) in FHIRBridge.LicenseServer.Pages.Licenses.CreateModel.SourceSystemTypes)
+                {
+                    <label>
+                        <input type="checkbox" name="SelectedSourceTypes" value="@value"
+                               checked="@(Model.SelectedSourceTypes.Contains(value))" />
+                        @label
+                    </label>
+                }
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Allowed Resource Types <span class="hint">(none checked = all allowed)</span></h2>
+            <div class="checkbox-grid">
+                @foreach (var value in FHIRBridge.LicenseServer.Pages.Licenses.CreateModel.ResourceTypes)
+                {
+                    <label>
+                        <input type="checkbox" name="SelectedResourceTypes" value="@value"
+                               checked="@(Model.SelectedResourceTypes.Contains(value))" />
+                        @value
+                    </label>
+                }
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Allowed Destination Types <span class="hint">(none checked = all allowed)</span></h2>
+            <div class="checkbox-grid">
+                @foreach (var value in FHIRBridge.LicenseServer.Pages.Licenses.CreateModel.DestinationTypes)
+                {
+                    <label>
+                        <input type="checkbox" name="SelectedDestinationTypes" value="@value"
+                               checked="@(Model.SelectedDestinationTypes.Contains(value))" />
+                        @value
+                    </label>
+                }
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Allowed Hospitals <span class="hint">(none filled in = any hospital allowed)</span></h2>
+            <div id="hospital-rows">
+                @for (var i = 0; i < Model.Hospitals.Count; i++)
+                {
+                    <div class="hospital-row" data-row-index="@i" hidden="@(i >= 2 && string.IsNullOrWhiteSpace(Model.Hospitals[i].Vendor))">
+                        <div>
+                            <label>Vendor</label>
+                            <input type="text" asp-for="Hospitals[i].Vendor" placeholder="Epic" />
+                        </div>
+                        <div>
+                            <label>Base URL</label>
+                            <input type="text" asp-for="Hospitals[i].BaseUrl" placeholder="https://epic.mercy.example/fhir/r4" />
+                        </div>
+                        <div>
+                            <label>Display Name</label>
+                            <input type="text" asp-for="Hospitals[i].DisplayName" placeholder="Mercy Main" />
+                        </div>
+                        <div>
+                            <button type="button" class="secondary" onclick="clearHospitalRow(this)">Clear</button>
+                        </div>
+                    </div>
+                }
+            </div>
+            <button type="button" class="secondary" onclick="revealNextHospitalRow()">+ Add another hospital</button>
+        </div>
+
+        <div class="form-section">
+            <h2>Features <span class="hint">(comma-separated)</span></h2>
+            <div class="field">
+                <input type="text" asp-for="FeaturesCsv" placeholder="hl7-mllp, advanced-mapping, sftp-destination" />
+            </div>
+        </div>
+
+        <button type="submit">Sign &amp; Mint License</button>
+    </form>
+</div>
+
+<script>
+    function copyToClipboard(elementId, button) {
+        var el = document.getElementById(elementId);
+        var originalLabel = button.textContent;
+
+        function showCopied() {
+            button.textContent = 'Copied!';
+            setTimeout(function () { button.textContent = originalLabel; }, 1500);
+        }
+
+        function fallbackCopy() {
+            el.select();
+            document.execCommand('copy');
+            showCopied();
+        }
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(el.value).then(showCopied, fallbackCopy);
+        } else {
+            fallbackCopy();
+        }
+    }
+
+    function revealNextHospitalRow() {
+        var rows = document.querySelectorAll('#hospital-rows .hospital-row[hidden]');
+        if (rows.length > 0) {
+            rows[0].removeAttribute('hidden');
+            rows[0].querySelector('input').focus();
+        }
+    }
+
+    function clearHospitalRow(button) {
+        var row = button.closest('.hospital-row');
+        row.querySelectorAll('input').forEach(function (input) { input.value = ''; });
+        if (parseInt(row.getAttribute('data-row-index'), 10) >= 2) {
+            row.setAttribute('hidden', 'hidden');
+        }
+    }
+</script>

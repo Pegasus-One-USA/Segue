@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Standalone internal tool: FHIRBridge license minting + usage check-in server. Lives in this
+    solution (under the LicenseServer solution folder) for shared build/deploy tooling, but is
+    deliberately kept decoupled from the product itself: NO project/package reference to any other
+    project here (Api/Worker/Domain/Application/Infrastructure/etc). It only mirrors the claim shape
+    and ES256 signing/validation approach used by FHIRBridge.Infrastructure/Licensing's
+    SignedLicenseValidator and tools/FHIRBridge.LicenseMinter, by hand, so tokens minted here are
+    byte-for-byte compatible with what the product already validates — never by referencing those
+    projects directly. Keep the dependency surface to ASP.NET Core (Razor Pages + minimal APIs),
+    EF Core/PostgreSQL, and the IdentityModel token libraries only.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>FHIRBridge.LicenseServer</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.2.1" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.2.1" />
+  </ItemGroup>
+
+</Project>

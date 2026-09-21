@@ -1,0 +1,153 @@
+@page "/Guide"
+@{
+    ViewData["Title"] = "Guide";
+}
+
+<div class="page-header">
+    <h1>Operator's Guide</h1>
+    <p class="page-subtitle">
+        A step-by-step runbook for whoever runs this tool: what to collect from a client before minting a
+        license, how to actually generate one, what to hand back, and how renewals/monitoring work.
+    </p>
+</div>
+
+<div class="panel">
+    <h2>Step 1 — Before you mint anything, collect this from the client</h2>
+    <table>
+        <thead>
+            <tr><th>Field</th><th>What it is</th><th>Where to get it</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Customer Id</td>
+                <td>A short, stable slug you'll reuse for every future renewal for this customer (e.g.
+                    <code>cust-mercy-health</code>). Never changes once chosen.</td>
+                <td>You assign this — pick it once, write it down (e.g. in your CRM/contract record).</td>
+            </tr>
+            <tr>
+                <td>Customer Name</td>
+                <td>The display name shown on their license and in your dashboard.</td>
+                <td>Their legal/organization name from the contract.</td>
+            </tr>
+            <tr>
+                <td>Edition</td>
+                <td>Their purchased tier (e.g. <code>standard</code>, <code>enterprise</code>) — free text,
+                    purely informational, not enforced by this tool.</td>
+                <td>Sales contract / order form.</td>
+            </tr>
+            <tr>
+                <td>Expires</td>
+                <td>The date their contract term ends. FHIRBridge starts warning them as this approaches.</td>
+                <td>Contract term end date.</td>
+            </tr>
+            <tr>
+                <td>Max Users / Workflows / Source Connections / Processed Records per Month</td>
+                <td>The four numeric quotas. Leave blank (or type <code>-1</code>) for any dimension that's
+                    unlimited on their plan.</td>
+                <td>Whatever was actually negotiated/sold — check the order form, don't guess.</td>
+            </tr>
+            <tr>
+                <td>Allowed Source Types</td>
+                <td>Which EHR vendors they're allowed to connect (Epic, Athenahealth, Healow/eCW, etc.).
+                    Leave everything unchecked to allow all types.</td>
+                <td>Ask which EHR system(s) the client's hospitals actually run.</td>
+            </tr>
+            <tr>
+                <td>Allowed Hospitals</td>
+                <td>Only fill this in if the contract restricts them to specific named sites rather than
+                    "any N hospitals of their choice." Each entry needs the vendor, the FHIR base URL, and
+                    an optional display name.</td>
+                <td><strong>Ask the client's technical contact for the exact FHIR base URL</strong> of each
+                    site (their EHR vendor's IT team can provide this — it's the same URL used to configure
+                    the source connection on the FHIRBridge side).</td>
+            </tr>
+            <tr>
+                <td>Allowed Resource Types / Allowed Destination Types</td>
+                <td>Only fill these in if the contract restricts which FHIR resources (Patient, Observation,
+                    ...) or which destination types (SqlServer, Csv, ...) they may use. Leave unchecked for
+                    "everything allowed."</td>
+                <td>Contract scope / statement of work.</td>
+            </tr>
+            <tr>
+                <td>Features</td>
+                <td>Comma-separated capability flags, e.g. <code>hl7-mllp</code>, <code>deid</code>,
+                    <code>runtime-plane</code> — only set ones the client actually purchased.</td>
+                <td>Order form / sales engineering notes.</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="panel">
+    <h2>Step 2 — Generate the license</h2>
+    <ol>
+        <li>Go to <a href="/Licenses/Create">Mint License</a>.</li>
+        <li>Fill in every field you collected in Step 1. Anything you leave blank on a numeric limit means
+            "unlimited"; anything you leave unchecked on a checklist means "all allowed."</li>
+        <li>Click <strong>Generate License</strong>.</li>
+        <li>You'll get back a long signed text token, plus the exact claims JSON that was signed into it —
+            review the JSON once to sanity-check nothing was mistyped before sending it anywhere.</li>
+        <li>This mint is automatically recorded on the <a href="/Licenses">Issued Licenses</a> page, so you
+            always have a history of what was ever issued to whom.</li>
+    </ol>
+    <p class="hint">
+        If you see a yellow "DEV SIGNING KEY ACTIVE" banner at the top of every page, this instance is NOT
+        using your real production signing key — tokens minted right now will not verify against a real
+        customer's deployed FHIRBridge instance. Fix the <code>LicenseSigning</code> configuration (PFX path
+        + password) before minting anything for a real client.
+    </p>
+</div>
+
+<div class="panel">
+    <h2>Step 3 — What to send the client, and what they do with it</h2>
+    <ol>
+        <li>Copy the token text (the long string starting with <code>eyJ...</code>) and send it to the
+            client's admin contact — email/secure message is fine. The token is safe to transmit as plain
+            text: it can only be <em>verified</em> by their software, never <em>edited</em> or reused to
+            create a different license, so there's no special handling required (unlike a password or API
+            key).</li>
+        <li>Tell them: log into the FHIRBridge portal as an Admin/SuperAdmin, go to
+            <strong>Settings → License</strong>, paste the token into the activation box, and save.</li>
+        <li>They should immediately see their customer name, edition, expiry date, and usage limits reflected
+            on that screen.</li>
+    </ol>
+</div>
+
+<div class="panel">
+    <h2>Step 4 — Renewing an existing customer</h2>
+    <ol>
+        <li>Go back to <a href="/Licenses/Create">Mint License</a>.</li>
+        <li>Use the <strong>exact same Customer Id</strong> as last time (check <a href="/Licenses">Issued
+            Licenses</a> if you're not sure what it was) — everything else (limits, allow-lists, expiry) can
+            be changed to reflect the new contract term.</li>
+        <li>Send the new token the same way as Step 3. The client pastes it into Settings → License's
+            "Update License" section — no downtime, no redeploy, the new terms apply immediately.</li>
+    </ol>
+</div>
+
+<div class="panel">
+    <h2>Step 5 — Monitoring usage</h2>
+    <p>
+        The <a href="/">Dashboard</a> lists every installation that has ever checked in, with its most
+        recently reported counts against the limits of whichever license it's currently reporting under
+        (shown as "used / limit" per quota). This is a best-effort signal, not a guarantee: an install that's
+        firewalled off from reaching this server will keep working perfectly for its own customer — it just
+        won't show up here, or will show a stale "last seen" date. Absence from this dashboard is not itself
+        a problem to chase; a genuinely broken license (expired, rejected) is something the client will tell
+        you about directly, since their own portal shows that to them first.
+    </p>
+</div>
+
+<div class="panel">
+    <h2>Reference — field conventions</h2>
+    <ul>
+        <li><strong>Any numeric limit:</strong> blank or <code>-1</code> = unlimited for that dimension.</li>
+        <li><strong>Any checklist (source types / resource types / destination types):</strong> nothing
+            checked = everything of that kind is allowed.</li>
+        <li><strong>Allowed Hospitals:</strong> empty = any hospital is allowed (still subject to the source
+            type restriction above, if one is set).</li>
+        <li>This server holds the <em>real private signing key</em> and must stay access-controlled
+            (internal network / VPN, not a public bookmark) — anyone who can log in here can mint a valid
+            license for any customer.</li>
+    </ul>
+</div>
