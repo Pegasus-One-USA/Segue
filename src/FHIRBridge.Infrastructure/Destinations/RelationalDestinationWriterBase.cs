@@ -381,10 +381,14 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
 
     // .NET's default ToString() for DateOnly ("MM/dd/yyyy") isn't a date literal any SQL dialect accepts, so
     // DateOnly/DateTimeOffset still need their own explicit, dialect-portable string format (ISO 8601) rather
-    // than falling through to Convert.ToString. DateTime and bool are passed through as their native CLR type
-    // so each provider (Npgsql/MySqlConnector/SqlClient) can infer the correct parameter type for whatever real
-    // column type the destination schema actually has (date/datetime/boolean/bit/tinyint), instead of being
-    // coerced to a string that a strictly-typed column will reject.
+    // than falling through to Convert.ToString. DateTime, bool and the numeric CLR types are passed through as
+    // their native CLR type so each provider (Npgsql/MySqlConnector/SqlClient) can infer the correct parameter
+    // type for whatever real column type the destination schema actually has (date/datetime/boolean/bit/tinyint/
+    // int/decimal), instead of being coerced to a string that a strictly-typed column will reject. This matters
+    // most for PostgreSQL: unlike SQL Server, Npgsql sends an untyped string as a `text` parameter and Postgres
+    // refuses to implicitly cast text to integer/numeric on INSERT (42804), even when the string is numeric —
+    // e.g. JsonMappingEngine.ConvertInteger already hands back a real int for an Integer-typed field, and this
+    // switch used to stringify it right back before it ever reached the provider.
     private static object Stringify(object? value) => value switch
     {
         null => DBNull.Value,
@@ -392,6 +396,12 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         DateTimeOffset dateTimeOffset => dateTimeOffset.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
         DateOnly dateOnly => dateOnly.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         bool boolean => boolean,
+        int intValue => intValue,
+        long longValue => longValue,
+        short shortValue => shortValue,
+        decimal decimalValue => decimalValue,
+        double doubleValue => doubleValue,
+        float floatValue => floatValue,
         _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
     };
 

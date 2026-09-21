@@ -2,6 +2,7 @@ import { Component, HostBinding, computed, inject, input, output, signal, effect
 import { A11yModule } from '@angular/cdk/a11y';
 import { FormsModule } from '@angular/forms';
 import { MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCandidate } from './field-mapping-model';
+import { MappingValueType } from '../../../../mapping-profiles/models/mapping-profile.model';
 import { DestinationTypeV2 as DestinationType } from '../../../../models/destination-configuration-v2.model';
 import { ToastService } from '../../../../services/toast.service';
 import {
@@ -168,7 +169,14 @@ export class FieldMappingJoinPopoverComponent {
         // Integer), but this field is mapped as Date." The Rules dialog has always sent this; saving the
         // same rule from this inline popover left it null, so which UI attached the rule decided whether
         // the workflow could be saved at all.
-        expectedValueType: TRANSFORM_NODE_DEFAULT_VALUE_TYPES[this.ruleNodeType()] ?? null,
+        //
+        // NumberCast is a special case: its own "Target type" config field (integer/decimal — see
+        // TransformNodeConfigSchemas.cs) is what actually decides the output type, not the node type alone
+        // (unlike DateMathAge, which always produces an Integer). Blindly using the static per-node-type
+        // default here always declared 'Decimal' (NumberCast's schema default), even when the author had
+        // explicitly picked "integer" in this same popover — so an integer-typed destination column always
+        // failed CreateMappingProfileRequestValidator's mismatch check regardless of what was configured.
+        expectedValueType: this.resolveExpectedValueType(),
       })
       .subscribe({
         next: saved => {
@@ -181,6 +189,18 @@ export class FieldMappingJoinPopoverComponent {
           this.toast.error('Could not save the transformation rule', err?.error?.detail ?? err?.message ?? '');
         },
       });
+  }
+
+  // NumberCast's "targetType" config value ("integer" | "decimal" — see TransformNodeConfigSchemas.cs) overrides
+  // the node type's static default when present, since it's the field the author actually used to pick the
+  // output type in this popover. Every other node type keeps using the static per-node-type default.
+  private resolveExpectedValueType(): MappingValueType | null {
+    if (this.ruleNodeType() === 'NumberCast') {
+      const targetType = this.ruleConfig()['targetType'];
+      if (targetType === 'integer') return 'Integer';
+      if (targetType === 'decimal') return 'Decimal';
+    }
+    return TRANSFORM_NODE_DEFAULT_VALUE_TYPES[this.ruleNodeType()] ?? null;
   }
 
   deleteRule(): void {
