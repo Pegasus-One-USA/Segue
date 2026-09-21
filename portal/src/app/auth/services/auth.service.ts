@@ -225,6 +225,17 @@ export class AuthService {
     return this.api.getCurrentUser();
   }
 
+  // ─── Re-sync AuthStore without a token refresh ────────────────────────────
+  // Used by authInterceptor as TokenRefreshCoordinator's onAlreadyRefreshed callback: when this tab's
+  // cross-tab lock wait discovers another tab already refreshed moments ago, calling refreshToken()
+  // again would send the now-already-rotated-away cookie and fail. GET /auth/me instead applies the
+  // same "AuthStore reflects the latest profile" side effect refreshToken()'s own tap() would have,
+  // without touching the refresh token at all — so this tab doesn't silently keep stale permission/
+  // role claims for the rest of the session just because another tab happened to win the race.
+  syncCurrentUser(): Observable<User> {
+    return this.api.getCurrentUser().pipe(tap(user => this.store.setUser(user)));
+  }
+
   // ─── Permission helpers ───────────────────────────────────────────────────
   // hasPermission() delegates to PermissionService (the one centralized, admin-bypass-aware,
   // O(1) implementation) rather than AuthStore.hasPermission() — AuthStore keeps its own

@@ -42,10 +42,29 @@ export class TokenRefreshCoordinator {
   // which genuinely needs its own refresh a few seconds later (e.g. its own token independently
   // expired) is never blocked from getting one.
   private static readonly RECENT_REFRESH_WINDOW_MS = 5_000;
+  // Bounds how long a tab waits for another tab's held lock — matches the 10s bound
+  // SessionExpiredDialogService.logOutAndRedirect() already applies to its own logout call, and for
+  // the same reason: a tab suspended (backgrounded on mobile, a paused debugger) while holding the
+  // lock must not leave every other tab's refresh hanging forever with a stuck spinner.
+  private static readonly LOCK_WAIT_TIMEOUT_MS = 10_000;
 
-  refresh<T>(startRefresh: () => Observable<T>): Observable<T> {
+  /**
+   * @param startRefresh The real network call (e.g. `authService.refreshToken()`), which also carries
+   *   this refresh's side effects (rotating cookies server-side, updating AuthStore from the tap() on
+   *   the response).
+   * @param onAlreadyRefreshed Invoked instead of `startRefresh` when this tab discovers, after
+   *   acquiring the cross-tab lock, that another tab already refreshed moments ago. `startRefresh`
+   *   itself must NOT be called in that case — the cookie it would send has already been rotated away
+   *   and the call would fail — but this tab's own AuthStore still needs the same side effects
+   *   `startRefresh` would have applied (e.g. updated permissions/role claims), or it silently drifts
+   *   out of sync with the fresh session every other tab now has. Typically a lighter call than
+   *   `startRefresh` (e.g. `GET /auth/me` instead of `/auth/refresh`) that applies the same
+   *   store-updating side effect. If omitted, the skip path returns `undefined` and applies no side
+   *   effect at all — only safe for a caller that doesn't need one.
+   */
+  refresh<T>(startRefresh: () => Observable<T>, onAlreadyRefreshed?: () => Observable<T>): Observable<T> {
     if (!this.inFlight$) {
-      this.inFlight$ = from(this.refreshWithCrossTabLock(startRefresh)).pipe(
+      this.inFlight$ = from(this.refreshWithCrossTabLock(startRefresh, onAlreadyRefreshed)).pipe(
         finalize(() => { this.inFlight$ = null; }),
         shareReplay(1),
       );
@@ -53,7 +72,10 @@ export class TokenRefreshCoordinator {
     return this.inFlight$ as Observable<T>;
   }
 
-  private refreshWithCrossTabLock<T>(startRefresh: () => Observable<T>): Promise<T | undefined> {
+  private async refreshWithCrossTabLock<T>(
+    startRefresh: () => Observable<T>,
+    onAlreadyRefreshed?: () => Observable<T>,
+  ): Promise<T | undefined> {
     const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
     if (!locks) {
       // No Web Locks API (very old browser) — falls back to the single-tab-only coalescing this
@@ -61,17 +83,62 @@ export class TokenRefreshCoordinator {
       return firstValueFrom(startRefresh());
     }
 
-    return locks.request(TokenRefreshCoordinator.LOCK_NAME, async () => {
-      const lastRefreshAt = Number(localStorage.getItem(TokenRefreshCoordinator.LAST_REFRESH_KEY) ?? 0);
-      if (Date.now() - lastRefreshAt < TokenRefreshCoordinator.RECENT_REFRESH_WINDOW_MS) {
-        // Another tab refreshed while we were waiting for the lock — nothing to do; the interceptor's
-        // retry of the original request will succeed against the already-fresh cookie.
-        return undefined;
-      }
+    try {
+      return await locks.request(
+        TokenRefreshCoordinator.LOCK_NAME,
+        { signal: AbortSignal.timeout(TokenRefreshCoordinator.LOCK_WAIT_TIMEOUT_MS) },
+        async () => {
+          if (Date.now() - TokenRefreshCoordinator.readLastRefreshAt() < TokenRefreshCoordinator.RECENT_REFRESH_WINDOW_MS) {
+            // Another tab refreshed while we were waiting for the lock. The cookie is already fresh —
+            // the interceptor's retry of the original request will succeed against it — but this tab's
+            // own AuthStore still needs whatever side effect startRefresh() would have applied.
+            if (onAlreadyRefreshed) {
+              return await firstValueFrom(onAlreadyRefreshed());
+            }
+            return undefined;
+          }
 
-      const result = await firstValueFrom(startRefresh());
+          const result = await firstValueFrom(startRefresh());
+          TokenRefreshCoordinator.writeLastRefreshAt();
+          return result;
+        },
+      );
+    } catch (error) {
+      // Signal-abort rejections should surface as the timeout's own TimeoutError per the Web Locks spec,
+      // but AbortError is accepted too — belt-and-braces against an implementation that reports the
+      // abort itself rather than its reason.
+      if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+        // The lock never became available within the bound above (most likely another tab is stuck
+        // holding it) — refresh unlocked rather than hang this tab's request forever. This reopens the
+        // cross-tab race for this one call, same as the no-Locks-API fallback above; better than a
+        // permanently stuck spinner over a session that is otherwise fine.
+        return firstValueFrom(startRefresh());
+      }
+      throw error;
+    }
+  }
+
+  /** Guarded the same way TokenService treats every localStorage access: some browsers/enterprise
+   *  policies (Safari's "Block All Cookies", certain embedded webviews) throw SecurityError on
+   *  PROPERTY ACCESS, not just on read/write failure. That throw would otherwise reject the lock
+   *  promise and, through the interceptor's catchError, force-log-out a user whose session is
+   *  perfectly fine — the exact regression this class exists to prevent, just from a new angle. */
+  private static readLastRefreshAt(): number {
+    try {
+      return Number(localStorage.getItem(TokenRefreshCoordinator.LAST_REFRESH_KEY) ?? 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Failing silently here just means the skip-window never engages for this tab (every refresh
+   *  proceeds as if no other tab had just refreshed) — degraded, not broken: the lock alone still
+   *  serializes the calls, so the worst case is one harmless extra refresh, never a spurious logout. */
+  private static writeLastRefreshAt(): void {
+    try {
       localStorage.setItem(TokenRefreshCoordinator.LAST_REFRESH_KEY, String(Date.now()));
-      return result;
-    });
+    } catch {
+      /* see doc comment above */
+    }
   }
 }
