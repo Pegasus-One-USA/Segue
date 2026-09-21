@@ -1,0 +1,23 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_174e16661bf66d::t_4d62b1b69063a3 5
+  s_174e16661bf66d::t_1e897a652363ba 172-179
+  s_174e16661bf66d::t_9c2bb67bb68968 194-205
+src/FHIRBridge.Infrastructure/Destinations/RelationalDestinationWriterBase.cs
+  s_174e16661bf66d::t_68f8d74301576c 384-391,399-404
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "12c7caed1db016077cbc7462cca7d49407a7626f",
+  "prompts": {},
+  "sessions": {
+    "s_174e16661bf66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a051edf-3c44-4555-8dea-ae48ca7f4ff9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
