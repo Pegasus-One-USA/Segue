@@ -102,14 +102,29 @@ public sealed class FabricDestinationSettingsTests
         act.Should().Throw<NotSupportedException>().WithMessage("*Data Lake Webhook destination*");
     }
 
-    [Fact]
-    public void Warehouse_mode_fails_fast_rather_than_half_writing()
+    /// <summary>
+    /// Parsing no longer decides which modes are implemented — that is the landing-strategy registry's job, and
+    /// an unregistered mode fails there. Parse only still refuses Eventstream (above), because that one is not
+    /// unbuilt but served elsewhere. So a Warehouse configuration must now parse cleanly.
+    /// </summary>
+    [Theory]
+    [InlineData("warehouseTable", FabricLandingMode.WarehouseTable)]
+    [InlineData("lakehouseTable", FabricLandingMode.LakehouseTable)]
+    public void Table_landing_modes_parse_and_leave_implementation_to_the_strategy_registry(
+        string configured, FabricLandingMode expected)
     {
-        var act = () => FabricDestinationSettings.Parse(Destination(
+        // Warehouse mode's own two required settings are supplied here so this case tests mode parsing rather than
+        // re-testing those checks — WarehouseTableLandingStrategyTests covers their absence.
+        var settings = FabricDestinationSettings.Parse(Destination(
             null,
-            """{"dest_fabricWorkspace":"Analytics","dest_fabricItemName":"L","dest_fabricMode":"warehouseTable"}"""));
+            $$"""
+              {"dest_fabricWorkspace":"Analytics","dest_fabricItemName":"L","dest_fabricItemType":"Warehouse",
+               "dest_fabricMode":"{{configured}}",
+               "dest_fabricWarehouseSqlEndpoint":"Server=x;Database=y",
+               "dest_fabricWarehouseStagingLakehouse":"Stage"}
+              """));
 
-        act.Should().Throw<NotSupportedException>().WithMessage("*not implemented yet*");
+        settings.Mode.Should().Be(expected);
     }
 
     [Theory]
@@ -136,6 +151,59 @@ public sealed class FabricDestinationSettingsTests
             """{"dest_fabricWorkspace":"A","dest_fabricItemName":"L","dest_fabricItemType":"Notebook"}"""));
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*unsupported Fabric item type*");
+    }
+
+    /// <summary>
+    /// Both of these used to parse successfully and then fail at write time, mid-pipeline, because neither item
+    /// type has a Files area to land a blob in. The rejection moved to parse time, and each carries the reason
+    /// rather than only the supported list — a bare "unsupported" leaves the user retrying the same thing.
+    /// </summary>
+    [Theory]
+    [InlineData("KQLDatabase", "*Kusto ingestion*")]
+    [InlineData("MirroredDatabase", "*read-only replica*")]
+    public void Item_types_with_no_writable_Files_area_are_rejected_at_parse_time(
+        string itemType, string expectedReason)
+    {
+        var act = () => FabricDestinationSettings.Parse(Destination(
+            null,
+            $$"""{"dest_fabricWorkspace":"A","dest_fabricItemName":"L","dest_fabricItemType":"{{itemType}}"}"""));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage(expectedReason);
+    }
+
+    /// <summary>
+    /// Regression: the wizard posts every optional field it renders, so an untouched override arrives as "" and
+    /// not as an absent key. AccountUrl used a plain null-coalesce, so the empty string won and produced an empty
+    /// account URL — which threw UriFormatException ("The URI is empty") deep inside the write, while Test
+    /// Connection (which blank-checked correctly) still reported Connected. Blank optional fields are now
+    /// normalized to null at parse time so no consumer has to remember the difference.
+    /// </summary>
+    [Fact]
+    public void Blank_optional_overrides_fall_back_to_their_defaults_rather_than_winning()
+    {
+        var settings = FabricDestinationSettings.Parse(Destination(
+            null,
+            """
+            {"dest_fabricWorkspace":"Analytics","dest_fabricItemName":"ClinicalLake",
+             "dest_fabricAccountUrl":"","dest_fabricEndpointSuffix":"",
+             "dest_fabricAuthorityHost":"","dest_fabricManagedIdentityClientId":""}
+            """));
+
+        settings.AccountUrlOverride.Should().BeNull("a blank override is absent, not a value");
+        settings.AccountUrl.Should().Be("https://onelake.blob.fabric.microsoft.com");
+        settings.EndpointSuffix.Should().Be("fabric.microsoft.com");
+        settings.AuthorityHost.Should().BeNull();
+        settings.ManagedIdentityClientId.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_real_account_url_override_still_wins()
+    {
+        var settings = FabricDestinationSettings.Parse(Destination(
+            null,
+            """{"dest_fabricWorkspace":"A","dest_fabricItemName":"L","dest_fabricAccountUrl":"https://mystorage.blob.core.windows.net"}"""));
+
+        settings.AccountUrl.Should().Be("https://mystorage.blob.core.windows.net");
     }
 
     // ---------------------------------------------------------------- path normalization

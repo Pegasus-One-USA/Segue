@@ -82,8 +82,16 @@ public sealed class MappedDataFabricDestinationWriterTests
 
     private static PipelineWriteContext Context() => new(false, "Fabric Export Workflow", DateTimeOffset.UtcNow);
 
-    private MappedDataFabricDestinationWriter CreateWriter() =>
-        new(_clientFactory.Object, NullLogger<MappedDataFabricDestinationWriter>.Instance);
+    /// <summary>
+    /// Built through the real registry and real OneLakeFilesLandingStrategy rather than a stub, so these tests
+    /// keep covering the whole dispatch path — writer → registry → strategy → OneLake client — end to end.
+    /// </summary>
+    private MappedDataFabricDestinationWriter CreateWriter()
+    {
+        var strategy = new OneLakeFilesLandingStrategy(
+            _clientFactory.Object, NullLogger<OneLakeFilesLandingStrategy>.Instance);
+        return new MappedDataFabricDestinationWriter(new FabricLandingStrategyRegistry([strategy]));
+    }
 
     private string UploadedText() => Encoding.UTF8.GetString(_uploadedContent!.ToArray());
 
@@ -214,7 +222,7 @@ public sealed class MappedDataFabricDestinationWriterTests
     {
         var settings = FabricDestinationSettings.Parse(Destination());
 
-        var path = MappedDataFabricDestinationWriter.BuildFilePath(
+        var path = OneLakeFilesLandingStrategy.BuildFilePath(
             settings, Mapping(destinationObject: "Patient;mode=upsert"), new DateTime(2026, 9, 8, 12, 0, 0, DateTimeKind.Utc));
 
         path.Should().EndWith("Patient_20260908120000000.ndjson");
@@ -226,7 +234,7 @@ public sealed class MappedDataFabricDestinationWriterTests
     {
         var settings = FabricDestinationSettings.Parse(Destination());
 
-        var path = MappedDataFabricDestinationWriter.BuildFilePath(
+        var path = OneLakeFilesLandingStrategy.BuildFilePath(
             settings, Mapping(destinationObject: "patients.csv"), new DateTime(2026, 9, 8, 12, 0, 0, DateTimeKind.Utc));
 
         path.Should().EndWith("patients_20260908120000000.ndjson");
@@ -237,7 +245,7 @@ public sealed class MappedDataFabricDestinationWriterTests
     {
         var settings = FabricDestinationSettings.Parse(Destination());
 
-        var path = MappedDataFabricDestinationWriter.BuildFilePath(
+        var path = OneLakeFilesLandingStrategy.BuildFilePath(
             settings, Mapping(destinationObject: "?"), new DateTime(2026, 9, 8, 12, 0, 0, DateTimeKind.Utc));
 
         path.Should().EndWith("Patient_20260908120000000.ndjson");

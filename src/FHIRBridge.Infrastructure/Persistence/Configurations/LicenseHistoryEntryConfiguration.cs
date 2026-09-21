@@ -17,5 +17,6 @@ public sealed class LicenseHistoryEntryConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.State).HasMaxLength(20).IsRequired();
 
         builder.HasIndex(x => x.AppliedUtc);
+        builder.HasIndex(x => x.IsDeleted);
     }
 }

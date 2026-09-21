@@ -220,6 +220,23 @@ public sealed class DataFabricAzureDestinationNodeExecutor : DestinationNodeExec
     }
 }
 
+/// <summary>
+/// Microsoft Fabric Warehouse destination — rows into a Warehouse table via staged Parquet + COPY INTO.
+/// Listed in MultiTableRelationalDestinationTypes alongside the other relational destinations: a Warehouse load
+/// targets one table per resource type, so a mixed batch is split per resource type by the base executor first.
+/// </summary>
+public sealed class DataFabricWarehouseDestinationNodeExecutor : DestinationNodeExecutor
+{
+    public DataFabricWarehouseDestinationNodeExecutor(
+        IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null,
+        IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.DataFabricWarehouseDestination, DestinationType.DataFabricWarehouse, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+    {
+    }
+}
+
 public sealed class CsvDestinationNodeExecutor : DestinationNodeExecutor
 {
     public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
@@ -631,6 +648,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         // header and envelope metadata — so a mixed batch arriving in one call would land under a folder, or
         // be announced to the lake, as a resource type most of its records are not.
         DestinationType.DataFabricAzure,
+        DestinationType.DataFabricWarehouse,
         DestinationType.DataLakeWebhook,
     ];
 
@@ -1216,6 +1234,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     private static bool WriteModeSuffixIsMeaningless(DestinationType destinationType)
         => destinationType is DestinationType.BlobStorage
             or DestinationType.DataFabricAzure
+            or DestinationType.DataFabricWarehouse
             or DestinationType.DataLakeWebhook;
 
     private static string? BuildWriteModeSuffix(WorkflowNode node)

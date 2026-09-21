@@ -41,9 +41,13 @@ export interface DestinationConnectionDialogData {
 const CREATE_TYPES: DestinationType[] = [
   'SqlServer', 'PostgreSql', 'MySql', 'Mongo', 'BlobStorage', 'Csv', 'FhirRepository', 'Medplum', 'AzureFhirService',
   'DataLakeWebhook',
-  // 'DataFabricAzure' — hidden alongside its phase-config entry (see phase-config.service.ts). Note this
-  // list is gated by permission only, NOT by isTransformEnabled, so removing it from the phase config
-  // alone would still leave the New Connection card visible here.
+  // Enabled alongside its phase-config entry (see phase-config.service.ts). Note this list is gated by
+  // permission only, NOT by isTransformEnabled, so this entry — not the phase config — is what puts the
+  // New Connection card on screen here.
+  'DataFabricAzure',
+  // The Warehouse surface is its own destination type, so it is its own card here — same reasoning as the
+  // Node Library tile split (see DestinationType.DataFabricWarehouse).
+  'DataFabricWarehouse',
 ];
 
 /** Types whose connection secret can be replaced from the Edit flow (their form loads here). Superset of

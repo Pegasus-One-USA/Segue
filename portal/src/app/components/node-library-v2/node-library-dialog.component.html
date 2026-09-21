@@ -169,9 +169,14 @@
                ("DESTINATION", "MAPPING", ...) said less than the items themselves. -->
           @for (cat of filteredCategories(); track cat.rank) {
             @for (item of cat.items; track item.id) {
+              @if (!item.parentId || isParentExpanded(item.parentId)) {
               <button
                 class="nld-item"
                 type="button"
+                [class.is-child]="!!item.parentId"
+                [class.is-parent]="item.isParent"
+                [class.is-expanded]="item.isParent && isParentExpanded(item.id)"
+                [attr.aria-expanded]="item.isParent ? isParentExpanded(item.id) : null"
                 [class.is-selected]="selectedId() === item.id"
                 [class.status-show]="item.status === 'show' || item.status === 'enabled'"
                 [class.status-caveat]="item.status === 'caveat'"
@@ -202,7 +207,11 @@
                 @if (item.isMerge) {
                   <span class="nld-merge-tag">⊕</span>
                 }
+                @if (item.isParent) {
+                  <span class="nld-item-chevron" aria-hidden="true">{{ isParentExpanded(item.id) ? '⌄' : '›' }}</span>
+                }
               </button>
+              }
             }
           }
 

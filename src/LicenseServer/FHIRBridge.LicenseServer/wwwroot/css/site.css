@@ -235,6 +235,10 @@ tbody tr:last-child td {
     border-bottom: none;
 }
 
+.clickable-row {
+    cursor: pointer;
+}
+
 /* ── Installation cards (dashboard) ─────────────────────────────────────── */
 
 .install-grid {
@@ -474,6 +478,16 @@ button.secondary:hover {
     border-color: var(--accent);
 }
 
+button.btn-danger {
+    background: #fff;
+    color: var(--danger);
+    border: 1px solid #f0c6c2;
+}
+
+button.btn-danger:hover {
+    background: var(--danger-soft);
+}
+
 .error {
     color: var(--danger);
     background: var(--danger-soft);
@@ -509,6 +523,11 @@ button.secondary:hover {
 .badge-pending {
     background: var(--warn-soft);
     color: var(--warn);
+}
+
+.badge-suspended {
+    background: var(--danger-soft);
+    color: var(--danger);
 }
 
 .nav-badge {

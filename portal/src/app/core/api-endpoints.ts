@@ -150,6 +150,7 @@ export const DESTINATION_ENDPOINTS = {
   medplumTest:         `${API_V1_BASE}/destinations/medplum-test`,
   mongoTest:           `${API_V1_BASE}/destinations/mongo-test`,
   blobTest:            `${API_V1_BASE}/destinations/blob-test`,
+  fabricTest:          `${API_V1_BASE}/destinations/fabric-test`,
   // WorkflowEndpoints, not ConfigurationsController — same reasoning as SOURCE_CONNECTIONS_ENDPOINTS.usage: the
   // usage check has to walk every workflow's Destination nodes, which only the Runtime workflow store can answer.
   usage:               `${API_V1_BASE}/workflows/destination-usage`,
@@ -271,15 +272,19 @@ export const LICENSE_ENDPOINTS = {
   get:     `${API_V1_BASE}/license`,
   apply:   `${API_V1_BASE}/license`,
   history: `${API_V1_BASE}/license/history`,
+  // TESTING/SUPPORT UTILITY ONLY — see LicenseController.Clear/ClearHistory.
+  clear:        `${API_V1_BASE}/license`,
+  clearHistory: `${API_V1_BASE}/license/history`,
 };
 
 // ─── License Request (LicenseRequestController — api/v1/license-request) ────
-// UnifiedAdmin-only: this install's own outbound request for a license from the licensor. One request per
-// install, ever — resubmit re-sends the same stored details rather than creating a new one.
+// UnifiedAdmin-only: this install's own outbound requests for a license from the licensor. Any number can
+// exist — `get` lists them all; `update`/`delete` act on one specific request by id.
 export const LICENSE_REQUEST_ENDPOINTS = {
   get:      `${API_V1_BASE}/license-request`,
   create:   `${API_V1_BASE}/license-request`,
-  resubmit: `${API_V1_BASE}/license-request/resubmit`,
+  update:   (id: string) => `${API_V1_BASE}/license-request/${id}`,
+  delete:   (id: string) => `${API_V1_BASE}/license-request/${id}`,
   // Narrow read/write of just License:LicensorApplicationUrl — deliberately NOT the general-purpose
   // system-settings endpoints, which the license gate does not allowlist while unlicensed.
   licensorUrl: `${API_V1_BASE}/license-request/licensor-url`,
@@ -412,6 +417,9 @@ export const EXECUTION_HISTORY_ENDPOINTS = {
   lineageNodeBreakdown: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/lineage/node-breakdown`,
   configuredRules: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/configured-rules`,
   configuredDeIdRules: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/configured-deid-rules`,
+  // Live read of the run's FHIR Bulk Data $export job, proxied server-side (the source's bearer token never
+  // reaches the browser) — backs the Status column's "Bulk Data Status Request" popup.
+  bulkExportStatus: (id: string) => `${API_V1_BASE}/workflow-runs/${id}/bulk-export-status`,
   statusCounts: `${API_V1_BASE}/workflow-runs/stats`,
 };
 

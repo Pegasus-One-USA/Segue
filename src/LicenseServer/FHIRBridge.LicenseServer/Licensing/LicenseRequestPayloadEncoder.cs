@@ -8,7 +8,8 @@ namespace FHIRBridge.LicenseServer.Licensing;
 /// own <c>LicenseRequestPayload</c> record (src/FHIRBridge.Infrastructure/Licensing/LicenseRequestPayloadEncoder.cs),
 /// field for field, since this decodes the same blob that record's <c>Encode</c> produced.</summary>
 public sealed record LicenseRequestPayload(
-    string ClientName, string Email, string? CompanyName, string? Address, string PhoneNumber, string UniqueKey);
+    string ClientName, string Email, string? CompanyName, string? Address, string PhoneNumber, string UniqueKey,
+    string? RequestHost = null);
 
 /// <summary>
 /// Decodes the copy-pasteable manual-fallback blob a customer shares with support when their install's

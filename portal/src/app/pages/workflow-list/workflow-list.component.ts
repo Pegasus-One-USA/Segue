@@ -19,7 +19,14 @@ import { ToastService } from '../../services/toast.service';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
 import { PermissionService } from '../../auth/services/permission.service';
 import { AuthStore } from '../../auth/store/auth.store';
-import { sourceSystemDisplayName } from '../../data/source-system-display-names.data';
+import {
+  sourceTypeLabel,
+  destinationTypeLabel,
+  sourceTypeOptions,
+  destinationTypeOptions,
+  resourceTypeOptions,
+} from '../../data/connection-type-labels.util';
+import { PhaseConfigService } from '../../services/phase-config.service';
 import {
   IntegrationDetails,
   buildIntegrationDetails,
@@ -47,7 +54,7 @@ interface DataModal {
 type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun' | 'actionOn';
 type SortDirection = 'asc' | 'desc';
 /** Multi-select filter categories shown in the filter bar — see filterDefs/signalFor. */
-type FilterCategory = 'status' | 'audience' | 'source';
+type FilterCategory = 'status' | 'audience' | 'source' | 'destination' | 'lastRunStatus' | 'resourceType';
 
 @Component({
   selector: 'app-workflow-list',
@@ -63,6 +70,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly runStatusHub = inject(RunStatusHubService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly permissions = inject(PermissionService);
+  private readonly phaseCfg = inject(PhaseConfigService);
   private readonly authStore = inject(AuthStore);
 
   // ── RBAC: workflow.view (the route guard already reached here) only grants VIEW access — these four
@@ -137,19 +145,49 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  category's checkboxes disappear. */
   readonly availableStatuses = signal<string[]>([]);
   readonly availableAudiences = signal<string[]>([]);
-  readonly availableSources = signal<string[]>([]);
+  readonly availableLastRunStatuses = signal<string[]>([]);
+
+  // Source, Destination and Resource Type come from the CATALOGS the connection masters and the destination
+  // wizard build their own pickers from — not from the workflows that happen to exist. A filter answers "which
+  // of the things I can configure do I want to see", so it offers what those screens offer; deriving it from
+  // current rows meant the Destination filter listed five types while Destination Connections listed twenty,
+  // and a vendor with no connection yet was unfilterable. Gated exactly as the masters gate their dropdowns
+  // (phase config + the vendor's own `{prefix}.view`), so a role never sees a vendor it cannot access.
+  private readonly hasPermission = (code: string) => this.permissions.hasPermission(code);
+
+  readonly availableSources = computed(() =>
+    sourceTypeOptions({
+      isEnabled: (id: string) => this.phaseCfg.isSourceEnabled(id),
+      hasPermission: this.hasPermission,
+    }).map(o => o.value),
+  );
+
+  readonly availableDestinations = computed(() =>
+    destinationTypeOptions({
+      isEnabled: (id: string) => this.phaseCfg.isTransformEnabled(id),
+      hasPermission: this.hasPermission,
+    }).map(o => o.value),
+  );
+
+  readonly availableResourceTypes = computed(() => resourceTypeOptions().map(o => o.value));
 
   readonly selectedStatuses = signal<Set<string>>(new Set());
   readonly selectedAudiences = signal<Set<string>>(new Set());
   readonly selectedSources = signal<Set<string>>(new Set());
+  readonly selectedDestinations = signal<Set<string>>(new Set());
+  readonly selectedLastRunStatuses = signal<Set<string>>(new Set());
+  readonly selectedResourceTypes = signal<Set<string>>(new Set());
 
   /** Which filter dropdown panel is open, if any — see toggleFilterMenu/closeFilterMenus. */
   readonly openFilterMenu = signal<FilterCategory | null>(null);
 
   readonly filterDefs: { category: FilterCategory; label: string }[] = [
     { category: 'status', label: 'Status' },
+    { category: 'lastRunStatus', label: 'Last Run Status' },
     { category: 'audience', label: 'Audience' },
     { category: 'source', label: 'Source' },
+    { category: 'destination', label: 'Destination' },
+    { category: 'resourceType', label: 'Resource Type' },
   ];
 
   constructor() {
@@ -181,9 +219,12 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   optionsFor(category: FilterCategory): string[] {
     switch (category) {
-      case 'status':   return this.availableStatuses();
-      case 'audience': return this.availableAudiences();
-      case 'source':   return this.availableSources();
+      case 'status':        return this.availableStatuses();
+      case 'audience':      return this.availableAudiences();
+      case 'source':        return this.availableSources();
+      case 'destination':   return this.availableDestinations();
+      case 'lastRunStatus': return this.availableLastRunStatuses();
+      case 'resourceType':  return this.availableResourceTypes();
     }
   }
 
@@ -193,27 +234,45 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (category === 'audience') return this.audienceLabel(value);
     // The filter's VALUE stays the enum member the API filters on; only the text changes.
     if (category === 'source') return this.sourceSystemLabel(value);
+    if (category === 'destination') return destinationTypeLabel(value);
+    // Last Run Status offers every WorkflowRunStatus, including the two the run list never shows as-is:
+    // AwaitingBulkExport reads as "Running" there, so spelling it out here keeps the filter honest about
+    // being a distinct stored value rather than appearing to duplicate Running.
+    if (category === 'lastRunStatus') return this.lastRunStatusLabel(value);
     return value;
   }
 
-  /** Brand name for a source system — the Source badge and the Source filter must agree. */
+  /** Same PascalCase split, plus the one status whose stored name is not what the rest of the UI calls it. */
+  lastRunStatusLabel(status: string): string {
+    if (status === 'AwaitingBulkExport') return 'Awaiting Bulk Export';
+    return status.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  }
+
+  /** The name the Source Connections master shows for this vendor — the Source badge, the Source filter and
+   *  that master all read the same SOURCES catalog, so none of them can drift from the others. */
   sourceSystemLabel(sourceSystemType: string | null | undefined): string {
-    return sourceSystemDisplayName(sourceSystemType);
+    return sourceTypeLabel(sourceSystemType);
   }
 
   selectedSetFor(category: FilterCategory): Set<string> {
     switch (category) {
-      case 'status':   return this.selectedStatuses();
-      case 'audience': return this.selectedAudiences();
-      case 'source':   return this.selectedSources();
+      case 'status':        return this.selectedStatuses();
+      case 'audience':      return this.selectedAudiences();
+      case 'source':        return this.selectedSources();
+      case 'destination':   return this.selectedDestinations();
+      case 'lastRunStatus': return this.selectedLastRunStatuses();
+      case 'resourceType':  return this.selectedResourceTypes();
     }
   }
 
   private signalForCategory(category: FilterCategory) {
     switch (category) {
-      case 'status':   return this.selectedStatuses;
-      case 'audience': return this.selectedAudiences;
-      case 'source':   return this.selectedSources;
+      case 'status':        return this.selectedStatuses;
+      case 'audience':      return this.selectedAudiences;
+      case 'source':        return this.selectedSources;
+      case 'destination':   return this.selectedDestinations;
+      case 'lastRunStatus': return this.selectedLastRunStatuses;
+      case 'resourceType':  return this.selectedResourceTypes;
     }
   }
 
@@ -227,6 +286,35 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   toggleFilterMenu(category: FilterCategory): void {
     this.openFilterMenu.set(this.openFilterMenu() === category ? null : category);
+    // Each panel opens with an empty box — a term left over from the last time this filter was opened would
+    // silently hide options the user never chose to exclude.
+    this.filterOptionSearch.set('');
+  }
+
+  // ── In-panel option search ────────────────────────────────────────────────
+  // Resource Type can carry ~36 FHIR types and Destination ~24 — well past what is findable by eye in a 280px
+  // scrolling panel. The box appears only once a panel actually has enough options to be worth searching, so
+  // the short lists (Status has three) are not cluttered by a control they don't need.
+  private static readonly OPTION_SEARCH_THRESHOLD = 8;
+
+  /** The term typed into the open panel's search box. Reset whenever a panel opens or closes. */
+  readonly filterOptionSearch = signal('');
+
+  showOptionSearch(category: FilterCategory): boolean {
+    return this.optionsFor(category).length > WorkflowListComponent.OPTION_SEARCH_THRESHOLD;
+  }
+
+  /** The options actually rendered in the open panel — matched on the LABEL the user can see, not the raw enum
+   *  value behind it, so typing "Sql" finds "Sql Server" and typing "eCW" finds the Healow option. A selected
+   *  option is always kept visible even when it doesn't match, so narrowing the list can never hide a box that
+   *  is currently ticked (and is silently filtering the table) from the person trying to untick it. */
+  visibleOptionsFor(category: FilterCategory): string[] {
+    const options = this.optionsFor(category);
+    const term = this.filterOptionSearch().trim().toLowerCase();
+    if (!term || !this.showOptionSearch(category)) return options;
+    return options.filter(value =>
+      this.isFilterSelected(category, value)
+      || this.displayLabelFor(category, value).toLowerCase().includes(term));
   }
 
   // Centralized "click outside closes it" check — reads the click's actual target instead of relying
@@ -238,6 +326,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private closeFilterMenuIfOutside(event: MouseEvent): void {
     if (!(event.target as HTMLElement).closest('.filter-dropdown')) {
       this.openFilterMenu.set(null);
+      this.filterOptionSearch.set('');
     }
   }
 
@@ -262,6 +351,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.selectedStatuses.set(new Set());
     this.selectedAudiences.set(new Set());
     this.selectedSources.set(new Set());
+    this.selectedDestinations.set(new Set());
+    this.selectedLastRunStatuses.set(new Set());
+    this.selectedResourceTypes.set(new Set());
     this.sortColumn.set('lastRun');
     this.sortDirection.set('desc');
     this.pageIndex.set(0);
@@ -319,6 +411,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
           statuses: [...this.selectedStatuses()],
           applicationTypes: [...this.selectedAudiences()],
           sourceSystemTypes: [...this.selectedSources()],
+          destinationTypes: [...this.selectedDestinations()],
+          lastRunStatuses: [...this.selectedLastRunStatuses()],
+          resourceTypes: [...this.selectedResourceTypes()],
         },
         silent,
       )
@@ -328,7 +423,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
           this.totalCount.set(result.totalCount);
           this.availableStatuses.set(result.availableStatuses);
           this.availableAudiences.set(result.availableApplicationTypes);
-          this.availableSources.set(result.availableSourceSystemTypes);
+          this.availableLastRunStatuses.set(result.availableLastRunStatuses ?? []);
           this.loading.set(false);
           this.searching.set(false);
           // A delete/copy (or a filter/page-size change) can shrink the matching set out from under a page index
@@ -450,6 +545,16 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  unreached from this screen now that mode always defaults from an explicit 'async' call. */
   onAction(row: WorkflowSummary, mode: 'sync' | 'async' = 'sync'): void {
     if (this.busyId() || !this.canRun()) return;
+
+    // Only a Ready workflow is runnable — a Draft has no destination to write to and a Disabled one is
+    // paused. The menu item is already disabled for both (see the row menu's Run item), so this is a
+    // defensive guard for a row whose status went stale between render and click, e.g. after a Disable
+    // toggle elsewhere in the session. Launch is deliberately exempt: an interactive launch produces a URL
+    // and does not depend on a configured destination.
+    if (row.action === 'Run' && row.status !== 'Ready') {
+      this.toast.error(this.statusHint(row.status));
+      return;
+    }
 
     if (row.action === 'Launch') {
       this.busyId.set(row.workflowId);
@@ -840,6 +945,20 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       Ready: 'Source and destination are configured — this workflow will run.',
       Disabled: 'Deliberately paused. Enable it from the row menu to make it runnable again.',
     }[status];
+  }
+
+  /** Tooltip for the row menu's Run item. Only a Ready workflow can run — a Draft has no destination wired
+   *  up and a Disabled one is deliberately paused — so when Run is disabled this explains WHICH of the two
+   *  it is (and how to fix it) rather than leaving a greyed-out item with no reason. Reuses statusHint so the
+   *  explanation matches the one on the status badge itself instead of drifting into a second wording. */
+  runDisabledHint(row: WorkflowSummary): string {
+    if (row.status !== 'Ready') {
+      return this.statusHint(row.status);
+    }
+
+    return this.busyId() === row.workflowId
+      ? 'This workflow is already running.'
+      : 'Run this workflow in the background.';
   }
 
   /** Deliberately mirrors ExecutionHistoryListComponent's statusClass so the same run never renders as two

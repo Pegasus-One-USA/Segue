@@ -53,6 +53,7 @@ import {
   WizardDestinationFormApi,
   SqlFamilyFormApi,
   isSqlFamilyForm,
+  isFabricForm,
   isMongoForm,
 } from './destination-forms/destination-form-api';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
@@ -726,6 +727,10 @@ export class DestinationWizardComponent implements OnInit {
         !this.hasExistingChanged(),
       existingDestinationId:
         this.selectedExistingId() ?? this.resolvedDestinationId(),
+      // Which concrete destination type this form is serving. Only forms shared by more than one type read
+      // it — the Fabric form uses it to pin its landing mode, since DataFabricWarehouse IS the Warehouse
+      // surface and must not present a mode choice that could contradict the type.
+      destinationType: this.resolveDestinationTypeForRules(),
     };
   }
 
@@ -1449,6 +1454,13 @@ export class DestinationWizardComponent implements OnInit {
   /** Ad-hoc connection details from Step 1's SQL form — powers the canvas's real ALTER TABLE / CREATE TABLE calls. */
   connectionInfo(): DestinationProbeRequest | null {
     const form = this.activeForm();
+    // Fabric Warehouse is relational and supports the same live probe and DDL authoring, but describes its
+    // connection with a workspace + TDS endpoint + Entra identity rather than server/database/password — so
+    // it builds its own request shape. Without this it returned null here, and the canvas Create table /
+    // Add column handlers (which bail on a null connection) silently did nothing.
+    if (this.isFabricWarehouse() && isFabricForm(form)) {
+      return form.getFabricProbeRequest();
+    }
     if (!this.isSql() || !isSqlFamilyForm(form)) return null;
     return form.getProbeRequest();
   }
@@ -1817,6 +1829,18 @@ export class DestinationWizardComponent implements OnInit {
       this.destType() === 'mysql' ||
       this.destType() === 'postgres',
   );
+  /**
+   * Whether this destination has a LIVE RELATIONAL SCHEMA — real tables and columns that can be probed, mapped
+   * against, and authored with ALTER/CREATE TABLE.
+   *
+   * Deliberately distinct from isSql(), which means something narrower: "collects server/database/username/
+   * password and tests with those". Fabric Warehouse is the first type where the two diverge — it is a SQL
+   * Server over TDS with a full schema, but authenticates with an Entra token through the Fabric form, so it
+   * belongs here and NOT in isSql(). Conflating them is what left the Warehouse mapping canvas with no table
+   * list, no Add column and no Create table.
+   */
+  readonly hasLiveRelationalSchema = computed(() => this.isSql() || this.isFabricWarehouse());
+
   readonly isMySql = computed(() => this.destType() === 'mysql');
   readonly isPostgres = computed(() => this.destType() === 'postgres');
   readonly isMongo = computed(() => this.destType() === 'mongo');
@@ -1837,6 +1861,8 @@ export class DestinationWizardComponent implements OnInit {
   readonly isDataLake = computed(() => this.destType() === 'datalake');
   /** Microsoft Fabric (OneLake Files) — same file-shaped mapping as isBlob(). */
   readonly isFabric = computed(() => this.destType() === 'fabric');
+  /** Microsoft Fabric (Warehouse) — the relational surface, distinct from isFabric()'s file surface. */
+  readonly isFabricWarehouse = computed(() => this.destType() === 'fabricwarehouse');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
 
@@ -2412,6 +2438,15 @@ export class DestinationWizardComponent implements OnInit {
         this.sqlTables.set(form.sqlTables());
         this.probeState.set('ok');
       }
+      // Fabric Warehouse is relational but is NOT an isSqlFamilyForm (it authenticates with an Entra token,
+      // so it has no getProbeRequest()/server/database/password to offer). Its own Test Connection already
+      // returns the Warehouse's tables, so take them the same way the SQL branch above does — otherwise the
+      // mapping canvas gets an empty table picker on a connection that tested fine.
+      if (this.isFabricWarehouse() && isFabricForm(form) && form.probeState() === 'ok') {
+        this.sqlTables.set(form.sqlTables());
+        this.probeState.set('ok');
+        this.schemaLoadState.set('loaded');
+      }
       const metadata = form.getMetadata();
       if (!metadata) return;
       this.provisionDestinationConnection(metadata, () =>
@@ -2513,6 +2548,7 @@ export class DestinationWizardComponent implements OnInit {
     if (this.isAzureFhir()) return 'AzureFhirService';
     if (this.isBlob()) return 'BlobStorage';
     if (this.isDataLake()) return 'DataLakeWebhook';
+    if (this.isFabricWarehouse()) return 'DataFabricWarehouse';
     if (this.isFabric()) return 'DataFabricAzure';
     if (!this.isSql()) return 'Csv';
     return this.isMySql()
@@ -2663,7 +2699,9 @@ export class DestinationWizardComponent implements OnInit {
   private _resolveDestinationObjectForCanvas(
     destinationObject: string,
   ): string | null {
-    if (!this.isSql()) return destinationObject; // CSV/Mongo targets are never schema-qualified
+    // Fabric Warehouse IS schema-qualified (dbo by default), so it resolves against the probed schema
+    // exactly as the SQL engines do — see hasLiveRelationalSchema.
+    if (!this.hasLiveRelationalSchema()) return destinationObject; // CSV/Mongo targets are never schema-qualified
     const table = this.sqlTables().find(
       (t) =>
         t.fullName.toLowerCase() === destinationObject.toLowerCase() ||
@@ -3531,7 +3569,7 @@ export class DestinationWizardComponent implements OnInit {
     this._existingBaseline = null;
     const form = this.activeForm();
     form?.reset();
-    if (this.isSql()) {
+    if (this.hasLiveRelationalSchema()) {
       this.probeState.set('idle');
       this.sqlTables.set([]);
       if (isSqlFamilyForm(form)) form.resetProbe();
@@ -3813,8 +3851,12 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   hasSqlTables(): boolean {
+    // hasLiveRelationalSchema(), not isSql(): a Fabric Warehouse has real probed tables too, and gating this
+    // on isSql() left every table-picker affordance off for it — including isPrimaryTargetValid's
+    // "only show a card for a table that really exists" check, which then short-circuited to true and
+    // displayed a guessed table that had never been created.
     return (
-      this.isSql() && this.probeState() === 'ok' && this.sqlTables().length > 0
+      this.hasLiveRelationalSchema() && this.probeState() === 'ok' && this.sqlTables().length > 0
     );
   }
 
@@ -4143,6 +4185,9 @@ export class DestinationWizardComponent implements OnInit {
       targets[r] =
         type === 'csv'
           ? def.csvFile
+          // 'fabric' (OneLake Files) lands FILES, so it takes a stripped file stem like blob/datalake.
+          // 'fabricwarehouse' deliberately does NOT appear here — it writes to a real, schema-qualified
+          // table and so falls through to _qualifyDefaultTable below, exactly like the SQL engines.
           : type === 'blob' || type === 'datalake' || type === 'fabric'
             ? def.csvFile.replace(/\.csv$/i, '')
             : this._qualifyDefaultTable(def.sqlTable, type);
@@ -4396,7 +4441,7 @@ export class DestinationWizardComponent implements OnInit {
     // supports all three (SqlDestinationSchemaService.IsSupported), so this used to silently skip the
     // live-schema refresh for MySQL/PostgreSQL destinations, leaving their mapping canvas showing whatever
     // stale table/column list the last saved mapping summary happened to restore.
-    if (!this.isSql()) return;
+    if (!this.hasLiveRelationalSchema()) return;
 
     // selectedExistingId() (set by selectExisting() — picking an already-saved connection from the "Existing
     // connection" dropdown) and resolvedDestinationId() (set by _populateFromNode()/provisionDestinationConnection()
@@ -4615,6 +4660,7 @@ export class DestinationWizardComponent implements OnInit {
     const isBlob = this.isBlob();
     const isDataLake = this.isDataLake();
     const isFabric = this.isFabric();
+    const isFabricWarehouse = this.isFabricWarehouse();
     const name =
       metadata.fields['dest_name'] ||
       (isSql
@@ -4633,7 +4679,9 @@ export class DestinationWizardComponent implements OnInit {
                     ? 'Data Lake Webhook Destination'
                     : isFabric
                       ? 'Microsoft Fabric Destination'
-                      : 'File Destination');
+                      : isFabricWarehouse
+                        ? 'Microsoft Fabric Warehouse Destination'
+                        : 'File Destination');
     const secretName = newSecretName(name);
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
@@ -4740,6 +4788,21 @@ export class DestinationWizardComponent implements OnInit {
                   // DataLakeWebhookDestinationFormComponent.getMetadata() already folds the "auth mode
                   // none needs no credential" rule into metadata.secret — no extra check needed here,
                   // mirroring the Blob branch above.
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
+              : isFabricWarehouse
+              ? {
+                  name,
+                  // Same metadata shape as the Files branch below — workspace/item/Entra auth — differing only
+                  // in the type, which is what carries "this is the Warehouse surface" to the backend. Without
+                  // this branch a Warehouse destination fell through to the Csv default at the end of this
+                  // chain and was rejected for a missing dest_filePattern, a field it has no concept of.
+                  destinationType: 'DataFabricWarehouse',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  target: metadata.fields['dest_fabricWorkspace'] || null,
                   inlineSecret: metadata.secret ?? '',
                   connectionMetadataJson: JSON.stringify(metadata.fields),
                   deIdentificationProfileId,
@@ -4999,9 +5062,11 @@ export class DestinationWizardComponent implements OnInit {
                           ? 'dest-blob'
                           : type === 'datalake'
                             ? 'dest-datalake-webhook'
-                            : type === 'fabric'
-                              ? 'dest-fabric'
-                              : 'dest-csv',
+                            : type === 'fabricwarehouse'
+                              ? 'dest-fabric-warehouse'
+                              : type === 'fabric'
+                                ? 'dest-fabric'
+                                : 'dest-csv',
         status: 'enabled',
         config,
       });

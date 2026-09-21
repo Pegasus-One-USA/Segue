@@ -23,16 +23,21 @@ export class LicenseService {
     return this.http.get<LicenseHistoryEntry[]>(LICENSE_ENDPOINTS.history);
   }
 
-  getRequest(): Observable<LicenseRequestStatus> {
-    return this.http.get<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.get);
+  getRequests(): Observable<LicenseRequestStatus[]> {
+    return this.http.get<LicenseRequestStatus[]>(LICENSE_REQUEST_ENDPOINTS.get);
   }
 
   createRequest(request: CreateLicenseRequestRequest): Observable<LicenseRequestStatus> {
     return this.http.post<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.create, request);
   }
 
-  resubmitRequest(): Observable<LicenseRequestStatus> {
-    return this.http.post<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.resubmit, {});
+  updateRequest(id: string, request: CreateLicenseRequestRequest): Observable<LicenseRequestStatus> {
+    return this.http.put<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.update(id), request);
+  }
+
+  /** Hides the request from the list without physically deleting it (soft delete). */
+  deleteRequest(id: string): Observable<void> {
+    return this.http.delete<void>(LICENSE_REQUEST_ENDPOINTS.delete(id));
   }
 
   // Narrow read/write of just the licensor URL — reachable while unlicensed (see the endpoint's own
@@ -44,5 +49,15 @@ export class LicenseService {
 
   setLicensorUrl(url: string): Observable<LicensorApplicationUrl> {
     return this.http.put<LicensorApplicationUrl>(LICENSE_REQUEST_ENDPOINTS.licensorUrl, { url });
+  }
+
+  // TESTING/SUPPORT UTILITY ONLY — see LicenseController.Clear/ClearHistory. Never called from the
+  // normal apply flow.
+  clear(): Observable<LicenseStatus> {
+    return this.http.delete<LicenseStatus>(LICENSE_ENDPOINTS.clear);
+  }
+
+  clearHistory(): Observable<void> {
+    return this.http.delete<void>(LICENSE_ENDPOINTS.clearHistory);
   }
 }

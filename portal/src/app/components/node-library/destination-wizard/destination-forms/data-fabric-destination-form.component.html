@@ -1,9 +1,28 @@
 <form [formGroup]="fabricForm" class="dw-form" autocomplete="off">
   <div class="dw-grid-2">
 
+    <!-- Landing mode decides the whole shape of this form, so it comes first. Only rendered when the phase
+         offers more than one mode; with a single mode there is no choice to present. -->
+    @if (showModeSelector()) {
+      <div class="dw-field dw-field--full">
+        <label class="dw-label" for="dw-fab-mode">Landing mode</label>
+        <div class="dw-select-wrap">
+          <select id="dw-fab-mode" class="dw-select" formControlName="mode">
+            @for (m of availableModes(); track m.value) {
+              <option [value]="m.value">{{ m.label }}</option>
+            }
+          </select>
+        </div>
+        @if (isWarehouse()) {
+          <span class="dw-hint">Rows are staged as Parquet in a Lakehouse, then loaded with COPY INTO. The target table must already exist — FHIRBridge never creates or alters it.</span>
+        } @else {
+          <span class="dw-hint">Files land in the Lakehouse Files area. Promote them to a table afterwards with a Fabric shortcut, notebook or pipeline.</span>
+        }
+      </div>
+    }
     <div class="dw-field" [class.dw-field--error]="fabricForm.get('name')!.invalid && fabricForm.get('name')!.touched">
       <label class="dw-label" for="dw-fab-name">Destination name <span class="dw-req">*</span></label>
-      <input id="dw-fab-name" class="dw-input" formControlName="name" placeholder="e.g. Clinical Lakehouse" />
+      <input id="dw-fab-name" class="dw-input" formControlName="name" [attr.placeholder]="isWarehouse() ? 'e.g. Clinical Warehouse' : 'e.g. Clinical Lakehouse'" />
       @if (fabricForm.get('name')!.invalid && fabricForm.get('name')!.touched) {
         <span class="dw-error">Destination name is required.</span>
       }
@@ -20,65 +39,22 @@
     </div>
 
     <div class="dw-field" [class.dw-field--error]="fabricForm.get('itemName')!.invalid && fabricForm.get('itemName')!.touched">
-      <label class="dw-label" for="dw-fab-itemName">Lakehouse name <span class="dw-req">*</span></label>
-      <input id="dw-fab-itemName" class="dw-input" formControlName="itemName" placeholder="e.g. ClinicalLake" />
+      <label class="dw-label" for="dw-fab-itemName">{{ isWarehouse() ? 'Warehouse name' : 'Lakehouse name' }} <span class="dw-req">*</span></label>
+      <input id="dw-fab-itemName" class="dw-input" formControlName="itemName" [attr.placeholder]="isWarehouse() ? 'e.g. ClinicalWarehouse' : 'e.g. ClinicalLake'" />
       @if (fabricForm.get('itemName')!.hasError('required') && fabricForm.get('itemName')!.touched) {
-        <span class="dw-error">Lakehouse name is required.</span>
+        <span class="dw-error">{{ isWarehouse() ? 'Warehouse name' : 'Lakehouse name' }} is required.</span>
       } @else if (fabricForm.get('itemName')!.hasError('pattern') && fabricForm.get('itemName')!.touched) {
         <span class="dw-error">Cannot contain a slash or control characters — the name only, without the ".Lakehouse" suffix.</span>
       }
     </div>
 
+    <!-- Item type is derived from the landing mode rather than chosen: a Warehouse COPY INTO aimed at a
+         Lakehouse cannot work (a Lakehouse's SQL analytics endpoint is read-only), and a file drop aimed at a
+         Warehouse has no Files area to land in. Shown read-only so the addressing stays visible. -->
     <div class="dw-field">
       <label class="dw-label" for="dw-fab-itemType">Item type</label>
-      <div class="dw-select-wrap">
-        <select id="dw-fab-itemType" class="dw-select" formControlName="itemType">
-          <option value="Lakehouse">Lakehouse</option>
-          <option value="Warehouse">Warehouse</option>
-          <option value="KQLDatabase">KQL Database</option>
-          <option value="MirroredDatabase">Mirrored Database</option>
-        </select>
-      </div>
-      <span class="dw-hint">Almost always Lakehouse — this is the OneLake item that owns the Files area written to.</span>
-    </div>
-
-    <div class="dw-field dw-field--full" [class.dw-field--error]="fabricForm.get('path')!.invalid && fabricForm.get('path')!.touched">
-      <label class="dw-label" for="dw-fab-path">Path under Files</label>
-      <input id="dw-fab-path" class="dw-input" formControlName="path" placeholder="Default: fhirbridge" />
-      @if (fabricForm.get('path')!.hasError('pattern') && fabricForm.get('path')!.touched) {
-        <span class="dw-error">Must be a relative path inside the Files area — not a full URL, not a "Tables/" path, and without "." or ".." segments. A Fabric table is a Delta table, so plain files written under Tables/ would never register as one.</span>
-      } @else {
-        <span class="dw-hint">Files land here; promote them to a table afterwards with a Fabric shortcut, notebook or pipeline (one-time setup, not per run).</span>
-      }
-    </div>
-
-    <div class="dw-field">
-      <label class="dw-label" for="dw-fab-fileFormat">File format</label>
-      <div class="dw-select-wrap">
-        <select id="dw-fab-fileFormat" class="dw-select" formControlName="fileFormat">
-          <option value="ndjson">NDJSON — schema-flexible</option>
-          <option value="parquet">Parquet — columnar</option>
-          <option value="csv">CSV</option>
-        </select>
-      </div>
-      @if (fabricForm.get('fileFormat')!.value === 'parquet') {
-        <span class="dw-hint">What a Spark or Warehouse consumer wants at analytics volume. Every column is written as a nullable string; readers cast on load.</span>
-      } @else if (fabricForm.get('fileFormat')!.value === 'ndjson') {
-        <span class="dw-hint">A later mapping change adds fields without breaking files already written.</span>
-      }
-    </div>
-
-    <div class="dw-field">
-      <label class="dw-label" for="dw-fab-partitionBy">Partition folders</label>
-      <div class="dw-select-wrap">
-        <select id="dw-fab-partitionBy" class="dw-select" formControlName="partitionBy">
-          <option value="resourceType">By resource type</option>
-          <option value="ingestDate">By ingest date</option>
-          <option value="resourceTypeAndIngestDate">By resource type, then ingest date</option>
-          <option value="none">None — everything in one folder</option>
-        </select>
-      </div>
-      <span class="dw-hint">Hive-style "key=value" folders, which Spark, a Fabric shortcut and Warehouse OPENROWSET all recognize as partition columns automatically.</span>
+      <input id="dw-fab-itemType" class="dw-input" formControlName="itemType" readonly />
+      <span class="dw-hint">Fixed by the destination type — a Warehouse load needs a Warehouse item, and a file drop needs a Lakehouse.</span>
     </div>
 
     <div class="dw-field">
@@ -128,30 +104,162 @@
       </div>
     }
 
+    @if (isWarehouse()) {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="fabricForm.get('warehouseSqlEndpoint')!.invalid && fabricForm.get('warehouseSqlEndpoint')!.touched">
+        <label class="dw-label" for="dw-fab-whEndpoint">Warehouse SQL connection string <span class="dw-req">*</span></label>
+        <input id="dw-fab-whEndpoint" class="dw-input" formControlName="warehouseSqlEndpoint"
+          placeholder="xxx.datawarehouse.fabric.microsoft.com" />
+        @if (fabricForm.get('warehouseSqlEndpoint')!.hasError('required') && fabricForm.get('warehouseSqlEndpoint')!.touched) {
+          <span class="dw-error">Warehouse SQL connection string is required.</span>
+        } @else {
+          <span class="dw-hint">Paste the SQL connection string exactly as Fabric shows it (Warehouse → Settings → SQL connection string) — the server name on its own is enough. Leave credentials out; the identity chosen below is used. This is a different endpoint from OneLake, so it cannot be derived from the workspace.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="fabricForm.get('warehouseStagingLakehouse')!.invalid && fabricForm.get('warehouseStagingLakehouse')!.touched">
+        <label class="dw-label" for="dw-fab-whStaging">Staging lakehouse <span class="dw-req">*</span></label>
+        <input id="dw-fab-whStaging" class="dw-input" formControlName="warehouseStagingLakehouse" placeholder="e.g. Stage" />
+        @if (fabricForm.get('warehouseStagingLakehouse')!.hasError('required') && fabricForm.get('warehouseStagingLakehouse')!.touched) {
+          <span class="dw-error">Staging lakehouse is required.</span>
+        } @else {
+          <span class="dw-hint">A Warehouse has no Files area, so rows stage here as Parquet first. Files are deleted after each load.</span>
+        }
+      </div>
+
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-fab-whWriteMode">Write mode</label>
+        <div class="dw-select-wrap">
+          <select id="dw-fab-whWriteMode" class="dw-select" formControlName="warehouseWriteMode">
+            <option value="append">Append — every run adds rows</option>
+            <option value="upsert">Upsert — match on the key, else insert</option>
+          </select>
+        </div>
+        @if (fabricForm.get('warehouseWriteMode')!.value === 'upsert') {
+          <span class="dw-hint">Matches on the mapping field flagged as the upsert key, falling back to SourceResourceId — the same key a SQL Server destination uses.</span>
+        }
+      </div>
+    }
+    <!-- Test Connection sits with the credentials it exercises, not at the foot of the form: the failure it
+         reports is almost always an auth or permission problem, and the fix is in the fields just above. -->
     <div class="dw-field dw-field--full">
-      <label class="dw-label" for="dw-fab-accountUrl">Storage account URL override</label>
-      <input id="dw-fab-accountUrl" class="dw-input" formControlName="accountUrl"
-        placeholder="Leave blank for OneLake — e.g. https://mystorage.blob.core.windows.net" />
-      <span class="dw-hint">Leave blank for real Fabric. Set it to write to an ordinary ADLS Gen2 / Blob account instead — same paths, partitioning and Entra auth, useful for rehearsing before a Fabric tenant is available. Workspace then means the container name, so it must follow Azure container rules (lowercase).</span>
+      <button type="button" class="dw-btn"
+        [disabled]="!canTestConnection() || probeState() === 'testing'" (click)="testConnection()">
+        @if (probeState() === 'testing') { Testing… } @else { Test Connection }
+      </button>
+      @if (probeState() === 'ok') {
+        <span class="dw-hint">Connected.{{ isWarehouse() ? ' OneLake and the Warehouse endpoint both responded.' : '' }}</span>
+      }
+      @if (probeState() === 'error') {
+        <span class="dw-error">{{ probeError() }}</span>
+        @if (probePermissionHint()) {
+          <span class="dw-hint">{{ probePermissionHint() }}</span>
+        }
+      }
+    </div>
+    <!-- Everything below has a working default, so it stays collapsed until asked for. It force-opens when one
+         of its own controls is invalid — otherwise a pattern violation in here would block Save with the
+         offending field hidden and no visible reason why. -->
+    <div class="dw-field dw-field--full dlw-adv">
+      <button type="button" class="dlw-adv-toggle" (click)="toggleAdvanced()"
+        [attr.aria-expanded]="advancedOpen() || hasAdvancedError()">
+        <span class="dlw-adv-caret" [class.dlw-adv-caret--open]="advancedOpen() || hasAdvancedError()">&#9656;</span>
+        Advanced options
+        @if (hasAdvancedError()) {
+          <span class="dlw-adv-badge">needs attention</span>
+        } @else if (!advancedOpen()) {
+          <span class="dlw-adv-sub">layout, format, endpoints</span>
+        }
+      </button>
     </div>
 
-    <div class="dw-field">
-      <label class="dw-label" for="dw-fab-endpointSuffix">OneLake endpoint suffix</label>
-      <input id="dw-fab-endpointSuffix" class="dw-input" formControlName="endpointSuffix"
-        placeholder="fabric.microsoft.com" />
-      <span class="dw-hint">Change only for a sovereign or government Fabric cloud.</span>
-    </div>
+    @if (advancedOpen() || hasAdvancedError()) {      @if (!isWarehouse()) {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="fabricForm.get('path')!.invalid && fabricForm.get('path')!.touched">
+        <label class="dw-label" for="dw-fab-path">Path under Files</label>
+        <input id="dw-fab-path" class="dw-input" formControlName="path" placeholder="Default: fhirbridge" />
+        @if (fabricForm.get('path')!.hasError('pattern') && fabricForm.get('path')!.touched) {
+          <span class="dw-error">Must be a relative path inside the Files area — not a full URL, not a "Tables/" path, and without "." or ".." segments. A Fabric table is a Delta table, so plain files written under Tables/ would never register as one.</span>
+        } @else {
+          <span class="dw-hint">Files land here; promote them to a table afterwards with a Fabric shortcut, notebook or pipeline (one-time setup, not per run).</span>
+        }
+      </div>
 
-    <div class="dw-field">
-      <label class="dw-label" for="dw-fab-authorityHost">Entra authority host</label>
-      <input id="dw-fab-authorityHost" class="dw-input" formControlName="authorityHost"
-        placeholder="Default: https://login.microsoftonline.com" />
-    </div>
 
-    <div class="dw-field dw-field--full">
-      <span class="dw-label">Files will be written to</span>
-      <span class="dw-hint">{{ resolvedPathPreview() }}</span>
-    </div>
+      <div class="dw-field">
+        <label class="dw-label" for="dw-fab-fileFormat">File format</label>
+        <div class="dw-select-wrap">
+          <select id="dw-fab-fileFormat" class="dw-select" formControlName="fileFormat">
+            <option value="ndjson">NDJSON — schema-flexible</option>
+            <option value="parquet">Parquet — columnar</option>
+            <option value="csv">CSV</option>
+          </select>
+        </div>
+        @if (fabricForm.get('fileFormat')!.value === 'parquet') {
+          <span class="dw-hint">What a Spark or Warehouse consumer wants at analytics volume. Every column is written as a nullable string; readers cast on load.</span>
+        } @else if (fabricForm.get('fileFormat')!.value === 'ndjson') {
+          <span class="dw-hint">A later mapping change adds fields without breaking files already written.</span>
+        }
+      </div>
 
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-fab-partitionBy">Partition folders</label>
+        <div class="dw-select-wrap">
+          <select id="dw-fab-partitionBy" class="dw-select" formControlName="partitionBy">
+            <option value="resourceType">By resource type</option>
+            <option value="ingestDate">By ingest date</option>
+            <option value="resourceTypeAndIngestDate">By resource type, then ingest date</option>
+            <option value="none">None — everything in one folder</option>
+          </select>
+        </div>
+        <span class="dw-hint">Hive-style "key=value" folders, which Spark, a Fabric shortcut and Warehouse OPENROWSET all recognize as partition columns automatically.</span>
+      </div>
+
+
+      }
+
+      @if (isWarehouse()) {
+        <div class="dw-field">
+          <label class="dw-label" for="dw-fab-whSchema">Warehouse schema</label>
+          <input id="dw-fab-whSchema" class="dw-input" formControlName="warehouseSchema" placeholder="dbo" />
+        </div>
+
+        <div class="dw-field">
+          <label class="dw-label" for="dw-fab-whStagePath">Staging folder</label>
+          <input id="dw-fab-whStagePath" class="dw-input" formControlName="warehouseStagingPath" placeholder="_staging" />
+          <span class="dw-hint">Folder under the staging lakehouse's Files area. Cleaned up after each load.</span>
+        </div>
+      }
+      <div class="dw-field dw-field--full">
+        <label class="dw-label" for="dw-fab-accountUrl">Storage account URL override</label>
+        <input id="dw-fab-accountUrl" class="dw-input" formControlName="accountUrl"
+          placeholder="Leave blank for OneLake — e.g. https://mystorage.blob.core.windows.net" />
+        <span class="dw-hint">Leave blank for real Fabric. Set it to write to an ordinary ADLS Gen2 / Blob account instead — same paths, partitioning and Entra auth, useful for rehearsing before a Fabric tenant is available. Workspace then means the container name, so it must follow Azure container rules (lowercase).</span>
+      </div>
+
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-fab-endpointSuffix">OneLake endpoint suffix</label>
+        <input id="dw-fab-endpointSuffix" class="dw-input" formControlName="endpointSuffix"
+          placeholder="fabric.microsoft.com" />
+        <span class="dw-hint">Change only for a sovereign or government Fabric cloud.</span>
+      </div>
+
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-fab-authorityHost">Entra authority host</label>
+        <input id="dw-fab-authorityHost" class="dw-input" formControlName="authorityHost"
+          placeholder="Default: https://login.microsoftonline.com" />
+      </div>
+
+
+    }
+
+    @if (!isWarehouse()) {
+      <div class="dw-field dw-field--full">
+        <span class="dw-label">Files will be written to</span>
+        <span class="dw-hint">{{ resolvedPathPreview() }}</span>
+      </div>
+    }
   </div>
 </form>

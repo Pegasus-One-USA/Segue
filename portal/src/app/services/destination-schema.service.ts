@@ -55,6 +55,21 @@ export interface DestinationProbeRequest {
   // Set when forking from an already-saved destination with the password left blank — lets the backend
   // inherit that destination's stored password (see DestinationConnectionProbeRequest.ExistingDestinationId).
   existingDestinationId?: string | null;
+  // ── Fabric Warehouse only ──────────────────────────────────────────────────────────────────────────────
+  // A Fabric Warehouse is relational but has no server/database/username/password: it authenticates with an
+  // Entra token against a TDS endpoint. These carry what that connection needs, so the same probe and DDL
+  // endpoints serve it — which is what lets Create table / Add column work on a not-yet-saved Warehouse node
+  // exactly as they already do for SQL Server, PostgreSQL and MySQL.
+  fabricWorkspace?: string;
+  fabricItemName?: string;
+  fabricWarehouseSqlEndpoint?: string;
+  fabricAuthMode?: string;
+  fabricTenantId?: string;
+  fabricClientId?: string;
+  fabricManagedIdentityClientId?: string;
+  fabricSecret?: string;
+  fabricEndpointSuffix?: string;
+  fabricAuthorityHost?: string;
 }
 
 export interface SchemaMutationResult {
@@ -204,6 +219,43 @@ export interface BlobConnectionTestRequest {
   destinationId?: string;
 }
 
+export interface FabricConnectionTestRequest {
+  /** "oneLakeFiles" or "warehouseTable" — decides which endpoints the backend probes. */
+  mode: string;
+  authMode: string;
+  workspace: string;
+  itemName: string;
+  itemType?: string;
+  secret?: string;
+  tenantId?: string;
+  clientId?: string;
+  managedIdentityClientId?: string;
+  endpointSuffix?: string;
+  authorityHost?: string;
+  accountUrl?: string;
+  warehouseSqlEndpoint?: string;
+  warehouseStagingLakehouse?: string;
+  /** When re-testing an already-saved destination without retyping its secret, carries the destination's id so
+   *  the backend can resolve the stored one instead. */
+  destinationId?: string;
+}
+
+/**
+ * Fabric test result. Reports OneLake and the Warehouse endpoint separately because they authenticate against
+ * different token audiences and fail independently — a single pass/fail hides which half is misconfigured.
+ */
+export interface FabricConnectionTestResult extends ConnectionTestResult {
+  oneLakeReachable: boolean;
+  /** Null when the landing mode never touches the Warehouse endpoint. */
+  warehouseReachable: boolean | null;
+  /** Set when the identity authenticated but was refused — names the Fabric workspace role to grant. */
+  permissionHint: string | null;
+  /** The Warehouse's live tables, read on the same TDS connection the test opened. Empty for OneLake Files
+   *  (no tables) and whenever the Warehouse probe failed. Mirrors DestinationSchemaProbeDto.tables, and is
+   *  what lets a brand-new Warehouse node show a real table picker before it is provisioned. */
+  tables: DestinationTable[];
+}
+
 /** FHIR-specific test result — adds the discovered token endpoint so the wizard can persist it into the
  *  (now-hidden) tokenEndpoint form control exactly as if the user had typed it in. */
 export interface FhirConnectionTestResult extends ConnectionTestResult {
@@ -272,5 +324,14 @@ export class DestinationSchemaService {
    *  client for the auth mode and does a reachability round-trip server-side. */
   testBlob(request: BlobConnectionTestRequest): Observable<ConnectionTestResult> {
     return this.http.post<ConnectionTestResult>(DESTINATION_ENDPOINTS.blobTest, request);
+  }
+
+  /**
+   * Tests a Microsoft Fabric connection. The result is richer than the shared ConnectionTestResult because
+   * Fabric has two endpoints that fail independently (OneLake, and a Warehouse TDS endpoint) using different
+   * token audiences — reporting them apart is what makes a failure actionable.
+   */
+  testFabric(request: FabricConnectionTestRequest): Observable<FabricConnectionTestResult> {
+    return this.http.post<FabricConnectionTestResult>(DESTINATION_ENDPOINTS.fabricTest, request);
   }
 }
