@@ -62,10 +62,21 @@
 
           @if (openFilterMenu() === def.category) {
             <div class="filter-dropdown-panel">
+              @if (showOptionSearch(def.category)) {
+                <input
+                  type="search"
+                  class="filter-option-search"
+                  [placeholder]="'Search ' + def.label.toLowerCase() + '...'"
+                  [value]="filterOptionSearch()"
+                  (input)="filterOptionSearch.set($any($event.target).value)"
+                />
+              }
               @if (optionsFor(def.category).length === 0) {
                 <div class="filter-dropdown-empty">No values yet</div>
+              } @else if (visibleOptionsFor(def.category).length === 0) {
+                <div class="filter-dropdown-empty">No matches</div>
               } @else {
-                @for (value of optionsFor(def.category); track value) {
+                @for (value of visibleOptionsFor(def.category); track value) {
                   <label class="filter-checkbox-row">
                     <input
                       type="checkbox"

@@ -47,7 +47,7 @@ interface DataModal {
 type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun' | 'actionOn';
 type SortDirection = 'asc' | 'desc';
 /** Multi-select filter categories shown in the filter bar — see filterDefs/signalFor. */
-type FilterCategory = 'status' | 'audience' | 'source';
+type FilterCategory = 'status' | 'audience' | 'source' | 'destination' | 'lastRunStatus' | 'resourceType';
 
 @Component({
   selector: 'app-workflow-list',
@@ -138,18 +138,27 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   readonly availableStatuses = signal<string[]>([]);
   readonly availableAudiences = signal<string[]>([]);
   readonly availableSources = signal<string[]>([]);
+  readonly availableDestinations = signal<string[]>([]);
+  readonly availableLastRunStatuses = signal<string[]>([]);
+  readonly availableResourceTypes = signal<string[]>([]);
 
   readonly selectedStatuses = signal<Set<string>>(new Set());
   readonly selectedAudiences = signal<Set<string>>(new Set());
   readonly selectedSources = signal<Set<string>>(new Set());
+  readonly selectedDestinations = signal<Set<string>>(new Set());
+  readonly selectedLastRunStatuses = signal<Set<string>>(new Set());
+  readonly selectedResourceTypes = signal<Set<string>>(new Set());
 
   /** Which filter dropdown panel is open, if any — see toggleFilterMenu/closeFilterMenus. */
   readonly openFilterMenu = signal<FilterCategory | null>(null);
 
   readonly filterDefs: { category: FilterCategory; label: string }[] = [
     { category: 'status', label: 'Status' },
+    { category: 'lastRunStatus', label: 'Last Run Status' },
     { category: 'audience', label: 'Audience' },
     { category: 'source', label: 'Source' },
+    { category: 'destination', label: 'Destination' },
+    { category: 'resourceType', label: 'Resource Type' },
   ];
 
   constructor() {
@@ -181,9 +190,12 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   optionsFor(category: FilterCategory): string[] {
     switch (category) {
-      case 'status':   return this.availableStatuses();
-      case 'audience': return this.availableAudiences();
-      case 'source':   return this.availableSources();
+      case 'status':        return this.availableStatuses();
+      case 'audience':      return this.availableAudiences();
+      case 'source':        return this.availableSources();
+      case 'destination':   return this.availableDestinations();
+      case 'lastRunStatus': return this.availableLastRunStatuses();
+      case 'resourceType':  return this.availableResourceTypes();
     }
   }
 
@@ -193,7 +205,25 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (category === 'audience') return this.audienceLabel(value);
     // The filter's VALUE stays the enum member the API filters on; only the text changes.
     if (category === 'source') return this.sourceSystemLabel(value);
+    if (category === 'destination') return this.destinationTypeLabel(value);
+    // Last Run Status offers every WorkflowRunStatus, including the two the run list never shows as-is:
+    // AwaitingBulkExport reads as "Running" there, so spelling it out here keeps the filter honest about
+    // being a distinct stored value rather than appearing to duplicate Running.
+    if (category === 'lastRunStatus') return this.lastRunStatusLabel(value);
     return value;
+  }
+
+  /** Splits a PascalCase enum name into words for display (SqlServer -> "Sql Server"), leaving the VALUE —
+   *  which the API filters on — untouched. Destination types have no brand-name table of their own the way
+   *  source systems do, and the raw enum names are close enough to their product names to read correctly. */
+  destinationTypeLabel(destinationType: string): string {
+    return destinationType.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  }
+
+  /** Same PascalCase split, plus the one status whose stored name is not what the rest of the UI calls it. */
+  lastRunStatusLabel(status: string): string {
+    if (status === 'AwaitingBulkExport') return 'Awaiting Bulk Export';
+    return status.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
   }
 
   /** Brand name for a source system — the Source badge and the Source filter must agree. */
@@ -203,17 +233,23 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   selectedSetFor(category: FilterCategory): Set<string> {
     switch (category) {
-      case 'status':   return this.selectedStatuses();
-      case 'audience': return this.selectedAudiences();
-      case 'source':   return this.selectedSources();
+      case 'status':        return this.selectedStatuses();
+      case 'audience':      return this.selectedAudiences();
+      case 'source':        return this.selectedSources();
+      case 'destination':   return this.selectedDestinations();
+      case 'lastRunStatus': return this.selectedLastRunStatuses();
+      case 'resourceType':  return this.selectedResourceTypes();
     }
   }
 
   private signalForCategory(category: FilterCategory) {
     switch (category) {
-      case 'status':   return this.selectedStatuses;
-      case 'audience': return this.selectedAudiences;
-      case 'source':   return this.selectedSources;
+      case 'status':        return this.selectedStatuses;
+      case 'audience':      return this.selectedAudiences;
+      case 'source':        return this.selectedSources;
+      case 'destination':   return this.selectedDestinations;
+      case 'lastRunStatus': return this.selectedLastRunStatuses;
+      case 'resourceType':  return this.selectedResourceTypes;
     }
   }
 
@@ -227,6 +263,35 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   toggleFilterMenu(category: FilterCategory): void {
     this.openFilterMenu.set(this.openFilterMenu() === category ? null : category);
+    // Each panel opens with an empty box — a term left over from the last time this filter was opened would
+    // silently hide options the user never chose to exclude.
+    this.filterOptionSearch.set('');
+  }
+
+  // ── In-panel option search ────────────────────────────────────────────────
+  // Resource Type can carry ~36 FHIR types and Destination ~24 — well past what is findable by eye in a 280px
+  // scrolling panel. The box appears only once a panel actually has enough options to be worth searching, so
+  // the short lists (Status has three) are not cluttered by a control they don't need.
+  private static readonly OPTION_SEARCH_THRESHOLD = 8;
+
+  /** The term typed into the open panel's search box. Reset whenever a panel opens or closes. */
+  readonly filterOptionSearch = signal('');
+
+  showOptionSearch(category: FilterCategory): boolean {
+    return this.optionsFor(category).length > WorkflowListComponent.OPTION_SEARCH_THRESHOLD;
+  }
+
+  /** The options actually rendered in the open panel — matched on the LABEL the user can see, not the raw enum
+   *  value behind it, so typing "Sql" finds "Sql Server" and typing "eCW" finds the Healow option. A selected
+   *  option is always kept visible even when it doesn't match, so narrowing the list can never hide a box that
+   *  is currently ticked (and is silently filtering the table) from the person trying to untick it. */
+  visibleOptionsFor(category: FilterCategory): string[] {
+    const options = this.optionsFor(category);
+    const term = this.filterOptionSearch().trim().toLowerCase();
+    if (!term || !this.showOptionSearch(category)) return options;
+    return options.filter(value =>
+      this.isFilterSelected(category, value)
+      || this.displayLabelFor(category, value).toLowerCase().includes(term));
   }
 
   // Centralized "click outside closes it" check — reads the click's actual target instead of relying
@@ -238,6 +303,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private closeFilterMenuIfOutside(event: MouseEvent): void {
     if (!(event.target as HTMLElement).closest('.filter-dropdown')) {
       this.openFilterMenu.set(null);
+      this.filterOptionSearch.set('');
     }
   }
 
@@ -262,6 +328,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.selectedStatuses.set(new Set());
     this.selectedAudiences.set(new Set());
     this.selectedSources.set(new Set());
+    this.selectedDestinations.set(new Set());
+    this.selectedLastRunStatuses.set(new Set());
+    this.selectedResourceTypes.set(new Set());
     this.sortColumn.set('lastRun');
     this.sortDirection.set('desc');
     this.pageIndex.set(0);
@@ -319,6 +388,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
           statuses: [...this.selectedStatuses()],
           applicationTypes: [...this.selectedAudiences()],
           sourceSystemTypes: [...this.selectedSources()],
+          destinationTypes: [...this.selectedDestinations()],
+          lastRunStatuses: [...this.selectedLastRunStatuses()],
+          resourceTypes: [...this.selectedResourceTypes()],
         },
         silent,
       )
@@ -329,6 +401,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
           this.availableStatuses.set(result.availableStatuses);
           this.availableAudiences.set(result.availableApplicationTypes);
           this.availableSources.set(result.availableSourceSystemTypes);
+          this.availableDestinations.set(result.availableDestinationTypes ?? []);
+          this.availableLastRunStatuses.set(result.availableLastRunStatuses ?? []);
+          this.availableResourceTypes.set(result.availableResourceTypes ?? []);
           this.loading.set(false);
           this.searching.set(false);
           // A delete/copy (or a filter/page-size change) can shrink the matching set out from under a page index
