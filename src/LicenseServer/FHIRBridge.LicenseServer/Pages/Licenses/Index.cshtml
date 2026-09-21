@@ -33,6 +33,7 @@ else
                     <tr><th>Max Processed Records / Month</th><td>@(license.MaxProcessedRecordsPerMonth == -1 ? "unlimited" : license.MaxProcessedRecordsPerMonth.ToString())</td></tr>
                     <tr><th>Max Successful Workflow Executions / Month</th><td>@(license.MaxSuccessfulWorkflowExecutionsPerMonth == -1 ? "unlimited" : license.MaxSuccessfulWorkflowExecutionsPerMonth.ToString())</td></tr>
                     <tr><th>Activation Window</th><td>@(license.ActivationWindowMinutes is null ? "no deadline" : $"{license.ActivationWindowMinutes} minutes")</td></tr>
+                    <tr><th>Requesting URL</th><td>@(license.RequestHost ?? "(not requested via this server)")</td></tr>
                     <tr><th>Allowed Source Types</th><td>@license.AllowedSourceTypesSummary</td></tr>
                     <tr><th>Allowed Resource Types</th><td>@license.AllowedResourceTypesSummary</td></tr>
                     <tr><th>Allowed Destination Types</th><td>@license.AllowedDestinationTypesSummary</td></tr>

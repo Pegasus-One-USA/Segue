@@ -1,23 +1,21 @@
 @page
-@model FHIRBridge.LicenseServer.Pages.LicenseRequests.IndexModel
+@model FHIRBridge.LicenseServer.Pages.LicenseRequests.HistoryModel
 @{
-    ViewData["Title"] = "License Requests";
+    ViewData["Title"] = "Request History";
 }
 
 <div class="page-header">
-    <h1>License Requests</h1>
+    <h1>Request History</h1>
     <p class="page-subtitle">
-        Customer installs currently waiting on a license — direct API calls and manually pasted codes both
-        land here. Click a row for full details. Already-minted requests are on the
-        <a href="/LicenseRequests/History">Request History</a> page.
+        Every license request this server has ever received, pending and fulfilled alike. Click a row for
+        full details. Still-pending requests also show on <a href="/LicenseRequests">License Requests</a>.
     </p>
 </div>
 
 @if (Model.Requests.Count == 0)
 {
     <div class="panel empty-state">
-        <p>No license requests are waiting right now.</p>
-        <p class="hint">See <code>README.md</code> for the <code>/api/license-requests</code> request shape.</p>
+        <p>No license requests yet.</p>
     </div>
 }
 else
@@ -30,7 +28,7 @@ else
                 <th>Contact</th>
                 <th>Received</th>
                 <th>Source</th>
-                <th></th>
+                <th>Status</th>
             </tr>
         </thead>
         <tbody>
@@ -54,41 +52,28 @@ else
                         @if (request.SubmissionCount > 1)
                         {
                             <div class="muted">
-                                resent @request.LastSubmittedUtc.ToString("u")
+                                last @request.LastSubmittedUtc.ToString("u")
                                 (@request.SubmissionCount submissions total)
                             </div>
                         }
                     </td>
                     <td>@(request.ReceivedManually ? "Manual code" : "Direct API")</td>
                     <td>
-                        <a href="/Licenses/Create?RequestId=@request.Id" onclick="event.stopPropagation()">Create License</a>
-                        &middot;
-                        <a href="/LicenseRequests/Details/@request.Id" onclick="event.stopPropagation()">Deny</a>
+                        @if (request.FulfilledAtUtc is not null)
+                        {
+                            <span class="badge">Fulfilled</span>
+                        }
+                        else if (request.DeniedAtUtc is not null)
+                        {
+                            <span class="badge badge-suspended">Denied</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-pending">Pending</span>
+                        }
                     </td>
                 </tr>
             }
         </tbody>
     </table>
 }
-
-<div class="panel" style="margin-top:24px;">
-    <h2>Have a manually shared code instead?</h2>
-    <p class="muted">
-        When a customer's install couldn't reach this server directly, its License Request screen shows an
-        encrypted code for them to send you (email, support ticket). Paste it below to add it to the list
-        above.
-    </p>
-
-    @if (Model.DecodeErrorMessage is not null)
-    {
-        <p class="error">@Model.DecodeErrorMessage</p>
-    }
-
-    <form method="post" asp-page-handler="Decode">
-        <div class="field">
-            <label for="EncodedPayload">Encrypted Data</label>
-            <textarea id="EncodedPayload" asp-for="EncodedPayload" rows="3" placeholder="Paste the code here…"></textarea>
-        </div>
-        <button type="submit">Decode &amp; Add</button>
-    </form>
-</div>

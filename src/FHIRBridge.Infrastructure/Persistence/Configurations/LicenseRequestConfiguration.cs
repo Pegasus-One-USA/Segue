@@ -21,17 +21,9 @@ public sealed class LicenseRequestConfiguration : IEntityTypeConfiguration<Licen
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(x => x.SubmissionError).HasMaxLength(500);
 
-        builder.HasIndex(x => x.UniqueKey);
-
-        // One-row-per-install, enforced at the schema level (not just LicenseRequestService's
-        // GetAsync-then-insert check, which two concurrent POST /api/v1/license-request calls could
-        // both pass before either commits): a shadow column fixed to the same constant value on every
-        // row, with a plain (non-filtered) unique index on it. A second insert violates the index
-        // regardless of that row's own real columns — this needs no provider-specific filtered-index
-        // syntax, so it's identical across the SqlServer and PostgreSQL migration projects.
-        // LicenseRequestService.CreateAndSubmitAsync catches the resulting DbUpdateException and turns
-        // it into the same "already exists" InvalidOperationException the pre-check throws.
-        builder.Property<int>("SingletonGuard").HasDefaultValue(1);
-        builder.HasIndex("SingletonGuard").IsUnique();
+        // Unique, not just indexed — UniqueKey is generated fresh per submission and is what a minted
+        // license's requestKey claim is matched against (see LicenseService.ApplyAsync), so two rows
+        // must never share one.
+        builder.HasIndex(x => x.UniqueKey).IsUnique();
     }
 }

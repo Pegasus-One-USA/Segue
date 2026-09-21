@@ -23,16 +23,16 @@ export class LicenseService {
     return this.http.get<LicenseHistoryEntry[]>(LICENSE_ENDPOINTS.history);
   }
 
-  getRequest(): Observable<LicenseRequestStatus> {
-    return this.http.get<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.get);
+  getRequests(): Observable<LicenseRequestStatus[]> {
+    return this.http.get<LicenseRequestStatus[]>(LICENSE_REQUEST_ENDPOINTS.get);
   }
 
   createRequest(request: CreateLicenseRequestRequest): Observable<LicenseRequestStatus> {
     return this.http.post<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.create, request);
   }
 
-  resubmitRequest(): Observable<LicenseRequestStatus> {
-    return this.http.post<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.resubmit, {});
+  updateRequest(id: string, request: CreateLicenseRequestRequest): Observable<LicenseRequestStatus> {
+    return this.http.put<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.update(id), request);
   }
 
   // Narrow read/write of just the licensor URL — reachable while unlicensed (see the endpoint's own

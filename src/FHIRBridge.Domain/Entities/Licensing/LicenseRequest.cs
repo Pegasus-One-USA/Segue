@@ -25,9 +25,10 @@ public enum LicenseRequestStatus
 /// <c>requestKey</c> claim doesn't match this row's key — proving the license being activated was minted
 /// for THIS install's request, not one copied from a different customer.
 ///
-/// Contact details are fixed at creation time (see <see cref="Resubmit"/>): a renewal resends the exact
-/// same details rather than letting an admin change them, since the whole point of <see cref="UniqueKey"/>
-/// is that it keeps identifying the same install/customer across its entire license lifetime.
+/// Contact details can be corrected later via <see cref="UpdateDetails"/> (e.g. a typo'd email) without
+/// ever touching <see cref="UniqueKey"/> — that's the one thing that must never change, since it's what
+/// keeps identifying the same install/customer across its entire license lifetime, embedded as the
+/// <c>requestKey</c> claim in whatever gets minted against it.
 /// </summary>
 public sealed class LicenseRequest : Entity<Guid>
 {
@@ -60,11 +61,12 @@ public sealed class LicenseRequest : Entity<Guid>
     /// <summary>Generated once at creation, never regenerated — see this class's remarks.</summary>
     public string UniqueKey { get; private set; } = default!;
 
-    /// <summary>The domain and, when non-default, port this install's API was reached on when the request
-    /// was created (the inbound HTTP request's Host header, e.g. "fhirbridge.acmehealth.com" or
-    /// "localhost:5000") — lets the licensor tell which deployment a request came from. Captured once at
-    /// creation, never re-derived on <see cref="Resubmit"/> (a renewal always runs on the same install).
-    /// Null if the request predates this field or the Host header was somehow absent.</summary>
+    /// <summary>The admin's own browser origin at submit time (e.g. "https://fhirbridge.acmehealth.com" or
+    /// "http://localhost:4200"), captured client-side since the API's own Host header only reflects where
+    /// the API itself is bound, never the portal's port — lets the licensor tell which deployment a
+    /// request came from. Refreshed on every <see cref="Resubmit"/>, same as the other contact fields via
+    /// <see cref="UpdateDetails"/> — unlike <see cref="UniqueKey"/>, this isn't an identity anchor, just the
+    /// most recently observed origin, so a later resend correcting a wrong earlier value is expected.</summary>
     public string? RequestHost { get; private set; }
 
     public LicenseRequestStatus Status { get; private set; }
@@ -89,7 +91,31 @@ public sealed class LicenseRequest : Entity<Guid>
         SubmissionError = error;
     }
 
-    /// <summary>Called on a renewal attempt — re-tries the outbound call with the SAME stored details and
-    /// <see cref="UniqueKey"/>, never accepting new contact details from the caller.</summary>
-    public void Resubmit() => Status = LicenseRequestStatus.Pending;
+    /// <summary>Resets status to Pending ahead of a fresh outbound attempt — used internally by
+    /// <see cref="UpdateDetails"/>'s caller after a correction, so the licensor's copy picks up the edit
+    /// too. <paramref name="requestHost"/> refreshes <see cref="RequestHost"/> with the current browser
+    /// origin when supplied; a null/blank value (a non-browser caller) leaves the existing one alone
+    /// rather than clearing it.</summary>
+    public void Resubmit(string? requestHost = null)
+    {
+        Status = LicenseRequestStatus.Pending;
+        if (!string.IsNullOrWhiteSpace(requestHost))
+        {
+            RequestHost = requestHost.Trim();
+        }
+    }
+
+    /// <summary>Corrects the contact details this install originally submitted — e.g. a typo'd email or a
+    /// changed phone number — before or after the licensor has looked at it. Never touches
+    /// <see cref="UniqueKey"/>. Doesn't itself re-attempt the outbound call; the caller follows up with
+    /// <see cref="Resubmit"/> so the licensor's copy picks up the correction too.</summary>
+    public void UpdateDetails(
+        string clientName, string email, string? companyName, string? address, string phoneNumber)
+    {
+        ClientName = clientName;
+        Email = email;
+        CompanyName = companyName;
+        Address = address;
+        PhoneNumber = phoneNumber;
+    }
 }

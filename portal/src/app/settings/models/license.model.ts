@@ -93,34 +93,40 @@ export interface LicenseHistoryEntry {
  *  `LicenseRequestStatus` enum. */
 export type LicenseRequestState = 'Pending' | 'Submitted' | 'Failed';
 
-/** Mirrors LicenseRequestStatusResult, the wire shape returned by GET/POST api/v1/license-request. */
+/** Mirrors LicenseRequestStatusResult, one row from `GET /api/v1/license-request` — this install can have
+ *  any number of these, each independent and identified by `id`. */
 export interface LicenseRequestStatus {
-  exists: boolean;
-  clientName: string | null;
-  email: string | null;
+  id: string;
+  clientName: string;
+  email: string;
   companyName: string | null;
   address: string | null;
-  phoneNumber: string | null;
-  status: LicenseRequestState | null;
-  createdUtc: string | null;
+  phoneNumber: string;
+  status: LicenseRequestState;
+  createdUtc: string;
   lastAttemptUtc: string | null;
   submissionError: string | null;
   /** Populated only when `status` is 'Failed' — a single copy-pasteable string to share with the
    *  licensor manually instead of the direct API call that didn't succeed. */
   encodedPayload: string | null;
-  /** The domain (and port, when non-default) this install's API was reached on when the request was
-   *  created — captured server-side from the inbound request, never entered by the admin. */
+  /** The admin's own browser origin (`window.location.origin`) at the most recent submission —
+   *  informational only, shown to the licensor, never back to this install. */
   requestHost: string | null;
 }
 
-/** Body of `POST /api/v1/license-request` — the blank first-time request form. Never re-collected on a
- *  renewal (`POST /api/v1/license-request/resubmit` takes no body). */
+/** Body of `POST /api/v1/license-request` (the blank first-time request form) and, unchanged, of
+ *  `PUT /api/v1/license-request` (editing an existing request's details). */
 export interface CreateLicenseRequestRequest {
   clientName: string;
   email: string;
   companyName: string | null;
   address: string | null;
   phoneNumber: string;
+  /** `window.location.origin` at submit time — the URL this admin was actually looking at, which the API
+   *  itself has no way to know (its own Host header only reflects where the API is bound, e.g.
+   *  localhost:5000, never the portal's own port). Purely informational for the licensor; never shown
+   *  back to this install. */
+  requestedFromUrl: string;
 }
 
 /** Mirrors LicensorApplicationUrlDto, the wire shape for GET/PUT

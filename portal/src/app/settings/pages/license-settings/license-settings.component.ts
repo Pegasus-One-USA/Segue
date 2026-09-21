@@ -62,13 +62,34 @@ export class LicenseSettingsComponent implements OnInit {
     token: ['', Validators.required],
   });
 
-  // ── License request (this install's own outbound request to the licensor) ─────────────────────
+  // ── License requests (this install's own outbound requests to the licensor — any number of them,
+  // each independent; "Submit Request" always creates a new one, never blocked by an existing one) ──
   protected readonly requestLoading = signal(true);
-  protected readonly request = signal<LicenseRequestStatus | null>(null);
+  protected readonly requests = signal<LicenseRequestStatus[]>([]);
   protected readonly submittingRequest = signal(false);
   protected readonly requestError = signal<string | null>(null);
 
+  // The blank submit form starts collapsed behind a "New Request" button — most visits to this tab are
+  // to check on past requests, not to start another one.
+  protected readonly showRequestForm = signal(false);
+
   protected readonly requestForm = this.fb.nonNullable.group({
+    clientName:  ['', Validators.required],
+    email:       ['', [Validators.required, Validators.email]],
+    companyName: [''],
+    address:     [''],
+    phoneNumber: ['', Validators.required],
+  });
+
+  // Which request (by id) is currently being re-sent as a new request, so only that row's button shows
+  // "Sending…" instead of every row in the list at once.
+  protected readonly resubmittingRequestId = signal<string | null>(null);
+
+  // Editing one existing request's details (e.g. a typo'd email) — tracked by id (not a plain boolean)
+  // since any row in the list can be the one being edited, and only one at a time.
+  protected readonly editingRequestId = signal<string | null>(null);
+  protected readonly savingRequestEdit = signal(false);
+  protected readonly editRequestForm = this.fb.nonNullable.group({
     clientName:  ['', Validators.required],
     email:       ['', [Validators.required, Validators.email]],
     companyName: [''],
@@ -97,7 +118,7 @@ export class LicenseSettingsComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
-    this.loadRequest();
+    this.loadRequests();
     this.loadLicensorUrl();
     this.loadHistory();
   }
@@ -150,16 +171,16 @@ export class LicenseSettingsComponent implements OnInit {
     });
   }
 
-  private loadRequest(): void {
+  private loadRequests(): void {
     this.requestLoading.set(true);
-    this.licenseSvc.getRequest().subscribe({
+    this.licenseSvc.getRequests().subscribe({
       next: (r) => {
-        this.request.set(r);
+        this.requests.set(r);
         this.requestLoading.set(false);
       },
       error: () => {
         this.requestLoading.set(false);
-        this.toast.error('Failed to load license request status');
+        this.toast.error('Failed to load license requests');
       },
     });
   }
@@ -179,6 +200,26 @@ export class LicenseSettingsComponent implements OnInit {
     });
   }
 
+  /** Replaces one request in the list with its freshly-returned state, or prepends a brand-new one —
+   *  avoids a full reload after every submit/resend/edit. */
+  private upsertRequestInList(r: LicenseRequestStatus): void {
+    const current = this.requests();
+    const index = current.findIndex((x) => x.id === r.id);
+    this.requests.set(
+      index === -1 ? [r, ...current] : current.map((x, i) => (i === index ? r : x)),
+    );
+  }
+
+  protected openRequestForm(): void {
+    this.requestForm.reset({ clientName: '', email: '', companyName: '', address: '', phoneNumber: '' });
+    this.requestError.set(null);
+    this.showRequestForm.set(true);
+  }
+
+  protected cancelRequestForm(): void {
+    this.showRequestForm.set(false);
+  }
+
   protected submitRequest(): void {
     if (this.requestForm.invalid) { this.requestForm.markAllAsTouched(); return; }
     this.requestError.set(null);
@@ -186,15 +227,17 @@ export class LicenseSettingsComponent implements OnInit {
 
     const raw = this.requestForm.getRawValue();
     this.licenseSvc.createRequest({
-      clientName:  raw.clientName.trim(),
-      email:       raw.email.trim(),
-      companyName: raw.companyName.trim() || null,
-      address:     raw.address.trim() || null,
-      phoneNumber: raw.phoneNumber.trim(),
+      clientName:       raw.clientName.trim(),
+      email:            raw.email.trim(),
+      companyName:      raw.companyName.trim() || null,
+      address:          raw.address.trim() || null,
+      phoneNumber:      raw.phoneNumber.trim(),
+      requestedFromUrl: window.location.origin,
     }).subscribe({
       next: (r) => {
         this.submittingRequest.set(false);
-        this.request.set(r);
+        this.showRequestForm.set(false);
+        this.upsertRequestInList(r);
         this.toast.success(
           r.status === 'Submitted' ? 'License request sent' : 'License request saved',
           r.status === 'Submitted'
@@ -209,28 +252,79 @@ export class LicenseSettingsComponent implements OnInit {
     });
   }
 
-  protected resendRequest(): void {
-    this.submittingRequest.set(true);
-    this.licenseSvc.resubmitRequest().subscribe({
-      next: (r) => {
-        this.submittingRequest.set(false);
-        this.request.set(r);
+  /** "Resend" submits a brand-new request carrying this row's same details — every request is
+   *  independent now, so re-sending shows up as its own new entry (its own timestamp and key) rather
+   *  than mutating the original. */
+  protected resendRequest(r: LicenseRequestStatus): void {
+    this.resubmittingRequestId.set(r.id);
+    this.licenseSvc.createRequest({
+      clientName:       r.clientName,
+      email:            r.email,
+      companyName:      r.companyName,
+      address:          r.address,
+      phoneNumber:      r.phoneNumber,
+      requestedFromUrl: window.location.origin,
+    }).subscribe({
+      next: (created) => {
+        this.resubmittingRequestId.set(null);
+        this.upsertRequestInList(created);
         this.toast.success(
-          r.status === 'Submitted' ? 'License request re-sent' : 'License request saved',
-          r.status === 'Submitted'
+          created.status === 'Submitted' ? 'License request re-sent' : 'License request saved',
+          created.status === 'Submitted'
             ? "We'll be in touch once it's ready."
             : 'Could not reach the licensor directly — share the code below with them instead.'
         );
       },
       error: (err: HttpErrorResponse) => {
-        this.submittingRequest.set(false);
+        this.resubmittingRequestId.set(null);
         this.toast.error(err.error?.error_description ?? 'Failed to resend the license request.');
       },
     });
   }
 
-  protected copyEncodedPayload(): void {
-    const payload = this.request()?.encodedPayload;
+  protected startEditRequest(r: LicenseRequestStatus): void {
+    this.editRequestForm.setValue({
+      clientName:  r.clientName,
+      email:       r.email,
+      companyName: r.companyName ?? '',
+      address:     r.address ?? '',
+      phoneNumber: r.phoneNumber,
+    });
+    this.editingRequestId.set(r.id);
+  }
+
+  protected cancelEditRequest(): void {
+    this.editingRequestId.set(null);
+  }
+
+  protected saveRequestEdit(): void {
+    const id = this.editingRequestId();
+    if (!id || this.editRequestForm.invalid) { this.editRequestForm.markAllAsTouched(); return; }
+    this.savingRequestEdit.set(true);
+
+    const raw = this.editRequestForm.getRawValue();
+    this.licenseSvc.updateRequest(id, {
+      clientName:       raw.clientName.trim(),
+      email:            raw.email.trim(),
+      companyName:      raw.companyName.trim() || null,
+      address:          raw.address.trim() || null,
+      phoneNumber:      raw.phoneNumber.trim(),
+      requestedFromUrl: window.location.origin,
+    }).subscribe({
+      next: (r) => {
+        this.savingRequestEdit.set(false);
+        this.editingRequestId.set(null);
+        this.upsertRequestInList(r);
+        this.toast.success('License request updated');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.savingRequestEdit.set(false);
+        this.toast.error(err.error?.error_description ?? 'Failed to update the license request.');
+      },
+    });
+  }
+
+  protected copyEncodedPayload(payload: string | null): void {
     if (!payload) return;
     navigator.clipboard?.writeText(payload).then(
       () => this.toast.success('Copied to clipboard'),

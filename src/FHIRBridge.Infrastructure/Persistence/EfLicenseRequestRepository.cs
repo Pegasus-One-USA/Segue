@@ -13,8 +13,14 @@ public sealed class EfLicenseRequestRepository : ILicenseRequestRepository
         _db = db;
     }
 
-    public async Task<LicenseRequest?> GetAsync(CancellationToken cancellationToken) =>
-        await _db.LicenseRequests.OrderBy(x => x.CreatedUtc).FirstOrDefaultAsync(cancellationToken);
+    public async Task<IReadOnlyList<LicenseRequest>> ListAsync(CancellationToken cancellationToken) =>
+        await _db.LicenseRequests.OrderByDescending(x => x.CreatedUtc).ToListAsync(cancellationToken);
+
+    public async Task<LicenseRequest?> GetAsync(Guid id, CancellationToken cancellationToken) =>
+        await _db.LicenseRequests.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+    public async Task<LicenseRequest?> GetByUniqueKeyAsync(string uniqueKey, CancellationToken cancellationToken) =>
+        await _db.LicenseRequests.FirstOrDefaultAsync(x => x.UniqueKey == uniqueKey, cancellationToken);
 
     public async Task AddAsync(LicenseRequest request, CancellationToken cancellationToken)
     {

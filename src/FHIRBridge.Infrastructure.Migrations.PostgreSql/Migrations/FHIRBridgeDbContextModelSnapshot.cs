@@ -1672,11 +1672,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
-                    b.Property<int>("SingletonGuard")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1);
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1693,10 +1688,8 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SingletonGuard")
+                    b.HasIndex("UniqueKey")
                         .IsUnique();
-
-                    b.HasIndex("UniqueKey");
 
                     b.ToTable("LicenseRequests", (string)null);
                 });

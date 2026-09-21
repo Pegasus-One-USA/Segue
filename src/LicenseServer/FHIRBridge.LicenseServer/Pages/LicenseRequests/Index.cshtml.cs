@@ -49,7 +49,7 @@ public sealed class IndexModel : PageModel
             _db,
             new LicenseRequestIntakeBody(
                 payload.ClientName, payload.Email, payload.CompanyName, payload.Address, payload.PhoneNumber,
-                payload.UniqueKey),
+                payload.UniqueKey, payload.RequestHost),
             receivedManually: true,
             CancellationToken.None);
 
@@ -58,14 +58,11 @@ public sealed class IndexModel : PageModel
 
     private async Task LoadRequestsAsync()
     {
+        // Only what still needs action — a fulfilled or denied request is decided and belongs on the full
+        // /LicenseRequests/History list instead of competing for space here.
         Requests = await _db.LicenseRequests
-            // Pending first (most-recently-active first within that group, so a just-in resend/renewal
-            // surfaces at the top rather than wherever its original ask's timestamp would sort it), then
-            // fulfilled most-recent-first — a fulfilled request is done and just here for the record, so
-            // it doesn't need to compete with what still needs action for the top of the list.
-            .OrderBy(r => r.FulfilledAtUtc != null)
-            .ThenByDescending(r => r.FulfilledAtUtc == null ? r.LastSubmittedUtc : (DateTime?)null)
-            .ThenByDescending(r => r.FulfilledAtUtc)
+            .Where(r => r.FulfilledAtUtc == null && r.DeniedAtUtc == null)
+            .OrderByDescending(r => r.LastSubmittedUtc)
             .ToListAsync();
     }
 }

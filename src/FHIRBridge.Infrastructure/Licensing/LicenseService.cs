@@ -80,15 +80,15 @@ public sealed class LicenseService : ILicenseService
         using (var scope = _scopeFactory.CreateScope())
         {
             // A license minted against a specific LicenseRequest (requestKey claim present) must match
-            // THIS install's own stored request key, proving it was minted for this install's request and
-            // not one copied from a different customer. A token with no requestKey claim at all skips this
-            // entirely — every license minted before this feature existed, or one deliberately minted
-            // without a request tied to it, keeps working unchanged.
+            // one of THIS install's own past requests, proving it was minted for a request this install
+            // actually made and not one copied from a different customer. A token with no requestKey
+            // claim at all skips this entirely — every license minted before this feature existed, or one
+            // deliberately minted without a request tied to it, keeps working unchanged.
             if (!string.IsNullOrEmpty(status.RequestKey))
             {
                 var requestRepository = scope.ServiceProvider.GetRequiredService<ILicenseRequestRepository>();
-                var ourRequest = await requestRepository.GetAsync(cancellationToken);
-                if (ourRequest is null || !string.Equals(ourRequest.UniqueKey, status.RequestKey, StringComparison.Ordinal))
+                var ourRequest = await requestRepository.GetByUniqueKeyAsync(status.RequestKey, cancellationToken);
+                if (ourRequest is null)
                 {
                     return new LicenseApplyResult(
                         false,

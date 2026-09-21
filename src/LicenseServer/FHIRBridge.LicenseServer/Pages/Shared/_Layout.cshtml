@@ -9,7 +9,7 @@
     // Only queried when there's an authenticated session to show the nav for at all — matches the
     // condition the nav bar itself is already wrapped in below.
     var pendingRequestCount = User.Identity?.IsAuthenticated == true
-        ? await Db.LicenseRequests.CountAsync(r => r.FulfilledAtUtc == null)
+        ? await Db.LicenseRequests.CountAsync(r => r.FulfilledAtUtc == null && r.DeniedAtUtc == null)
         : 0;
 }
 <!DOCTYPE html>
@@ -36,6 +36,7 @@
                             <span class="nav-badge">@pendingRequestCount</span>
                         }
                     </a>
+                    <a class="@NavClass("/LicenseRequests/History")" href="/LicenseRequests/History">Request History</a>
                     <a class="@NavClass("/Licenses/Create")" href="/Licenses/Create">Mint License</a>
                     <a class="@NavClass("/Licenses")" href="/Licenses">Issued Licenses</a>
                     <a class="@NavClass("/Guide")" href="/Guide">Guide</a>

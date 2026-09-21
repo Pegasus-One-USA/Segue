@@ -25,6 +25,7 @@
         <table>
             <tbody>
                 <tr><th>Client Name</th><td>@Model.LinkedRequest.ClientName</td></tr>
+                <tr><th>Requesting URL</th><td>@(Model.LinkedRequest.RequestHost ?? "(unknown)")</td></tr>
                 <tr><th>Email</th><td>@Model.LinkedRequest.Email</td></tr>
                 @if (Model.LinkedRequest.CompanyName is not null)
                 {

@@ -3,6 +3,7 @@ using System;
 using FHIRBridge.LicenseServer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FHIRBridge.LicenseServer.Migrations
 {
     [DbContext(typeof(LicenseServerDbContext))]
-    partial class LicenseServerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260921132542_AddLicenseRequestAndIssuedLicenseRequestHost")]
+    partial class AddLicenseRequestAndIssuedLicenseRequestHost
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -213,12 +216,6 @@ namespace FHIRBridge.LicenseServer.Migrations
 
                     b.Property<string>("CompanyName")
                         .HasColumnType("text");
-
-                    b.Property<string>("DenialReason")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("DeniedAtUtc")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Email")
                         .IsRequired()
