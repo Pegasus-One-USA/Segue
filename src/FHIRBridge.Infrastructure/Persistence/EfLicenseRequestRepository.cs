@@ -14,7 +14,10 @@ public sealed class EfLicenseRequestRepository : ILicenseRequestRepository
     }
 
     public async Task<IReadOnlyList<LicenseRequest>> ListAsync(CancellationToken cancellationToken) =>
-        await _db.LicenseRequests.OrderByDescending(x => x.CreatedUtc).ToListAsync(cancellationToken);
+        await _db.LicenseRequests
+            .Where(x => !x.IsDeleted)
+            .OrderByDescending(x => x.CreatedUtc)
+            .ToListAsync(cancellationToken);
 
     public async Task<LicenseRequest?> GetAsync(Guid id, CancellationToken cancellationToken) =>
         await _db.LicenseRequests.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);

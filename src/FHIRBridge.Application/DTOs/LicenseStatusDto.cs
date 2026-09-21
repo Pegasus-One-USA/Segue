@@ -54,7 +54,22 @@ public sealed record LicenseStatusDto(
 public sealed record ApplyLicenseRequest(string Token);
 
 /// <summary>Wire shape for one row returned by <c>GET /api/v1/license/history</c> — mirrors
-/// <c>FHIRBridge.Domain.Entities.Licensing.LicenseHistoryEntry</c>, minus the raw token (no UI need to
-/// expose it here).</summary>
+/// <c>FHIRBridge.Domain.Entities.Licensing.LicenseHistoryEntry</c>, plus every quota/restriction dimension
+/// re-parsed from that entry's own stored token (never the raw token itself — no UI need to expose that),
+/// so the portal can show a full detail view for any past license, not just the currently-active one.</summary>
 public sealed record LicenseHistoryEntryDto(
-    DateTime AppliedUtc, string? CustomerName, string? Edition, string State, DateTime? ExpiresUtc, bool IsCurrent);
+    Guid Id,
+    DateTime AppliedUtc,
+    string? CustomerName,
+    string? Edition,
+    string State,
+    DateTime? ExpiresUtc,
+    bool IsCurrent,
+    /// <summary>When this token was minted (its <c>nbf</c> claim) — distinct from <see cref="AppliedUtc"/>
+    /// (when THIS install activated it), which can be well after issuance.</summary>
+    DateTime? IssuedUtc,
+    LicenseLimitsDto? Limits,
+    IReadOnlyList<string> Features,
+    /// <summary>The <c>requestKey</c> claim, when this license was minted against a specific License
+    /// Request — null if it wasn't.</summary>
+    string? RequestKey);

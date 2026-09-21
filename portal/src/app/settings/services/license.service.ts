@@ -35,6 +35,11 @@ export class LicenseService {
     return this.http.put<LicenseRequestStatus>(LICENSE_REQUEST_ENDPOINTS.update(id), request);
   }
 
+  /** Hides the request from the list without physically deleting it (soft delete). */
+  deleteRequest(id: string): Observable<void> {
+    return this.http.delete<void>(LICENSE_REQUEST_ENDPOINTS.delete(id));
+  }
+
   // Narrow read/write of just the licensor URL — reachable while unlicensed (see the endpoint's own
   // comment); the general-purpose ISystemSettingsService.getAll()/set() is NOT, since the license gate
   // does not allowlist /api/v1/system/settings.

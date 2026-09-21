@@ -63,4 +63,10 @@ public interface ILicenseRequestService
     /// own requests.</summary>
     Task<LicenseRequestStatusResult> UpdateAsync(
         Guid id, LicenseRequestInput input, string? requestHost, CancellationToken cancellationToken);
+
+    /// <summary>Hides one request from <see cref="ListAsync"/> without physically deleting it (see
+    /// <c>LicenseRequest.SoftDelete</c>) — its key stays resolvable if a license was already minted
+    /// against it. Fails with <see cref="InvalidOperationException"/> if <paramref name="id"/> doesn't
+    /// match one of this install's own requests.</summary>
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

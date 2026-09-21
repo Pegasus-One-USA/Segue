@@ -25,5 +25,6 @@ public sealed class LicenseRequestConfiguration : IEntityTypeConfiguration<Licen
         // license's requestKey claim is matched against (see LicenseService.ApplyAsync), so two rows
         // must never share one.
         builder.HasIndex(x => x.UniqueKey).IsUnique();
+        builder.HasIndex(x => x.IsDeleted);
     }
 }

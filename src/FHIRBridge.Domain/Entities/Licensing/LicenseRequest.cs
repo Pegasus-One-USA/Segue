@@ -118,4 +118,19 @@ public sealed class LicenseRequest : Entity<Guid>
         Address = address;
         PhoneNumber = phoneNumber;
     }
+
+    /// <summary>Set once a whole outbound request no longer matters to this install — e.g. after it was
+    /// fulfilled/abandoned and is just cluttering the list. Hides it from
+    /// <c>ILicenseRequestRepository.ListAsync</c> without physically deleting it, since its
+    /// <see cref="UniqueKey"/> may still be embedded as a <c>requestKey</c> claim in an already-issued
+    /// license — <c>LicenseService.ApplyAsync</c>'s <c>GetByUniqueKeyAsync</c> lookup still finds it.</summary>
+    public bool IsDeleted { get; private set; }
+
+    public DateTime? DeletedOnUtc { get; private set; }
+
+    public void SoftDelete(DateTime utcNow)
+    {
+        IsDeleted = true;
+        DeletedOnUtc = utcNow;
+    }
 }

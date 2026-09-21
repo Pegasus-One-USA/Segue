@@ -20,10 +20,24 @@ public sealed class EfLicenseHistoryRepository : ILicenseHistoryRepository
     }
 
     public async Task<IReadOnlyList<LicenseHistoryEntry>> GetAllAsync(CancellationToken cancellationToken) =>
-        await _db.LicenseHistoryEntries.OrderByDescending(x => x.AppliedUtc).ToListAsync(cancellationToken);
+        await _db.LicenseHistoryEntries
+            .Where(x => !x.IsDeleted)
+            .OrderByDescending(x => x.AppliedUtc)
+            .ToListAsync(cancellationToken);
 
-    // ExecuteDeleteAsync bypasses the change tracker (and AuditingSaveChangesInterceptor) for a genuine
-    // hard delete — same pattern EfUserAccessRepository uses for its own bulk-clear operations.
-    public async Task ClearAllAsync(CancellationToken cancellationToken) =>
-        await _db.LicenseHistoryEntries.ExecuteDeleteAsync(cancellationToken);
+    // ExecuteUpdateAsync bypasses the change tracker (and AuditingSaveChangesInterceptor) — same pattern
+    // EfUserAccessRepository uses for its own bulk operations — but sets IsDeleted rather than physically
+    // removing the rows, so a "Clear License History" that turns out to have been a mistake is recoverable
+    // directly from the database.
+    public async Task ClearAllAsync(CancellationToken cancellationToken)
+    {
+        var nowUtc = DateTime.UtcNow;
+        await _db.LicenseHistoryEntries
+            .Where(x => !x.IsDeleted)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.IsDeleted, true)
+                    .SetProperty(x => x.DeletedOnUtc, nowUtc),
+                cancellationToken);
+    }
 }

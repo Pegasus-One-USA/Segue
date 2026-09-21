@@ -259,63 +259,13 @@
     </section>
 
     <section class="settings-card">
-      @if (!showRequestForm()) {
-        <div class="card-row">
-          <div>
-            <h2 class="card-title">Request a License</h2>
-            <p class="card-sub">Submit your details and we'll follow up with a license for Segue.</p>
-          </div>
-          <button type="button" class="btn-primary" (click)="openRequestForm()">New Request</button>
+      <div class="card-row">
+        <div>
+          <h2 class="card-title">Request a License</h2>
+          <p class="card-sub">Submit your details and we'll follow up with a license for Segue.</p>
         </div>
-      } @else {
-        <h2 class="card-title">Request a License</h2>
-        <p class="card-sub">Submit your details and we'll follow up with a license for Segue. Each submission is independent — submit as many as you need (e.g. one per renewal).</p>
-
-        <form [formGroup]="requestForm" (ngSubmit)="submitRequest()">
-          <div class="form-field">
-            <label for="req-name">Client Name <span class="req">*</span></label>
-            <input id="req-name" type="text" formControlName="clientName" />
-            @if (requestForm.controls.clientName.touched && requestForm.controls.clientName.invalid) {
-              <p class="field-error">Client name is required.</p>
-            }
-          </div>
-          <div class="form-field">
-            <label for="req-email">Email Address <span class="req">*</span></label>
-            <input id="req-email" type="email" formControlName="email" />
-            @if (requestForm.controls.email.touched && requestForm.controls.email.invalid) {
-              <p class="field-error">A valid email address is required.</p>
-            }
-          </div>
-          <div class="form-field">
-            <label for="req-company">Company Name</label>
-            <input id="req-company" type="text" formControlName="companyName" />
-          </div>
-          <div class="form-field">
-            <label for="req-phone">Phone Number <span class="req">*</span></label>
-            <input id="req-phone" type="tel" formControlName="phoneNumber" />
-            @if (requestForm.controls.phoneNumber.touched && requestForm.controls.phoneNumber.invalid) {
-              <p class="field-error">A phone number is required.</p>
-            }
-          </div>
-          <div class="form-field form-field--full">
-            <label for="req-address">Address</label>
-            <input id="req-address" type="text" formControlName="address" />
-          </div>
-
-          @if (requestError()) {
-            <p class="field-error">{{ requestError() }}</p>
-          }
-
-          <div class="form-actions">
-            <button type="submit" class="btn-primary" [disabled]="submittingRequest()">
-              {{ submittingRequest() ? 'Submitting…' : 'Submit Request' }}
-            </button>
-            <button type="button" class="btn-outline" [disabled]="submittingRequest()" (click)="cancelRequestForm()">
-              Cancel
-            </button>
-          </div>
-        </form>
-      }
+        <button type="button" class="btn-primary" (click)="openNewRequestDialog()">New Request</button>
+      </div>
     </section>
 
     @if (requestLoading()) {
@@ -323,114 +273,66 @@
         <p class="card-sub">Loading…</p>
       </section>
     } @else if (requests().length > 0) {
-      <h2 class="card-title" style="margin: 24px 0 12px;">Your Requests History</h2>
-      @for (r of requests(); track r.id) {
-        <section class="settings-card" style="margin-bottom: 12px;">
-          <div class="card-row">
-            <div>
-              <p class="card-sub">Submitted {{ r.createdUtc | date: 'medium' }}</p>
-            </div>
-            <span class="badge"
-                  [class.badge-active]="r.status === 'Submitted'"
-                  [class.badge-suspended]="r.status === 'Failed'">
-              {{ r.status }}
-            </span>
-          </div>
+      <section class="settings-card">
+        <h2 class="card-title">Your Requests History</h2>
+        <p class="card-sub">Every request this install has made to the licensor.</p>
 
-          @if (editingRequestId() !== r.id) {
-            <div class="license-grid">
-              <div class="stat-field">
-                <span class="stat-label">Client Name</span>
-                <span class="stat-value">{{ r.clientName }}</span>
-              </div>
-              <div class="stat-field">
-                <span class="stat-label">Email</span>
-                <span class="stat-value">{{ r.email }}</span>
-              </div>
-              @if (r.companyName) {
-                <div class="stat-field">
-                  <span class="stat-label">Company</span>
-                  <span class="stat-value">{{ r.companyName }}</span>
-                </div>
-              }
-              <div class="stat-field">
-                <span class="stat-label">Phone</span>
-                <span class="stat-value">{{ r.phoneNumber }}</span>
-              </div>
-              @if (r.address) {
-                <div class="stat-field">
-                  <span class="stat-label">Address</span>
-                  <span class="stat-value">{{ r.address }}</span>
-                </div>
-              }
-            </div>
-
-            @if (r.status === 'Failed') {
-              <div class="form-field form-field--full">
-                <p class="field-error">
-                  We couldn't reach Segue directly{{ r.submissionError ? ': ' + r.submissionError : '.' }}
-                  Please pass the following details to Segue support for your license request:
-                </p>
-                <textarea rows="4" readonly (click)="$any($event.target).select()">{{ r.encodedPayload }}</textarea>
-                <div class="form-actions">
-                  <button type="button" class="btn-outline" (click)="copyEncodedPayload(r.encodedPayload)">Copy Code</button>
-                </div>
-              </div>
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Submitted</th>
+              <th>Client</th>
+              <th>Contact</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of requests(); track r.id) {
+              <tr>
+                <td>{{ r.createdUtc | date: 'medium' }}</td>
+                <td>
+                  {{ r.clientName }}
+                  @if (r.companyName) {
+                    <div class="card-sub">{{ r.companyName }}</div>
+                  }
+                </td>
+                <td>
+                  {{ r.email }}
+                  <div class="card-sub">{{ r.phoneNumber }}</div>
+                </td>
+                <td>
+                  <span class="badge"
+                        [class.badge-active]="r.status === 'Submitted'"
+                        [class.badge-suspended]="r.status === 'Failed'">
+                    {{ r.status }}
+                  </span>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    @if (r.status === 'Failed') {
+                      <button type="button" class="btn-icon-sm" (click)="copyEncodedPayload(r.encodedPayload)">
+                        Copy Code
+                      </button>
+                    }
+                    <button type="button" class="btn-icon-sm" [disabled]="resubmittingRequestId() === r.id"
+                            (click)="resendRequest(r)">
+                      {{ resubmittingRequestId() === r.id ? 'Sending…' : 'Resend' }}
+                    </button>
+                    <button type="button" class="btn-icon-sm" (click)="openEditRequestDialog(r)">
+                      Edit
+                    </button>
+                    <button type="button" class="btn-icon-sm btn-icon-sm--danger" [disabled]="deletingRequestId() === r.id"
+                            (click)="deleteRequest(r)">
+                      {{ deletingRequestId() === r.id ? 'Deleting…' : 'Delete' }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
             }
-
-            <div class="form-actions">
-              <button type="button" class="btn-outline" [disabled]="resubmittingRequestId() === r.id"
-                      (click)="resendRequest(r)">
-                {{ resubmittingRequestId() === r.id ? 'Sending…' : 'Resend Request' }}
-              </button>
-              <button type="button" class="btn-outline" (click)="startEditRequest(r)">
-                Edit License Request
-              </button>
-            </div>
-          } @else {
-            <form [formGroup]="editRequestForm" (ngSubmit)="saveRequestEdit()">
-              <div class="form-field">
-                <label for="edit-req-name-{{ r.id }}">Client Name <span class="req">*</span></label>
-                <input id="edit-req-name-{{ r.id }}" type="text" formControlName="clientName" />
-                @if (editRequestForm.controls.clientName.touched && editRequestForm.controls.clientName.invalid) {
-                  <p class="field-error">Client name is required.</p>
-                }
-              </div>
-              <div class="form-field">
-                <label for="edit-req-email-{{ r.id }}">Email Address <span class="req">*</span></label>
-                <input id="edit-req-email-{{ r.id }}" type="email" formControlName="email" />
-                @if (editRequestForm.controls.email.touched && editRequestForm.controls.email.invalid) {
-                  <p class="field-error">A valid email address is required.</p>
-                }
-              </div>
-              <div class="form-field">
-                <label for="edit-req-company-{{ r.id }}">Company Name</label>
-                <input id="edit-req-company-{{ r.id }}" type="text" formControlName="companyName" />
-              </div>
-              <div class="form-field">
-                <label for="edit-req-phone-{{ r.id }}">Phone Number <span class="req">*</span></label>
-                <input id="edit-req-phone-{{ r.id }}" type="tel" formControlName="phoneNumber" />
-                @if (editRequestForm.controls.phoneNumber.touched && editRequestForm.controls.phoneNumber.invalid) {
-                  <p class="field-error">A phone number is required.</p>
-                }
-              </div>
-              <div class="form-field form-field--full">
-                <label for="edit-req-address-{{ r.id }}">Address</label>
-                <input id="edit-req-address-{{ r.id }}" type="text" formControlName="address" />
-              </div>
-
-              <div class="form-actions">
-                <button type="submit" class="btn-primary" [disabled]="savingRequestEdit()">
-                  {{ savingRequestEdit() ? 'Saving…' : 'Save Changes' }}
-                </button>
-                <button type="button" class="btn-outline" [disabled]="savingRequestEdit()" (click)="cancelEditRequest()">
-                  Cancel
-                </button>
-              </div>
-            </form>
-          }
-        </section>
-      }
+          </tbody>
+        </table>
+      </section>
     }
   }
 
@@ -443,7 +345,7 @@
     } @else {
       <section class="settings-card">
         <h2 class="card-title">License History</h2>
-        <p class="card-sub">Every license this install has applied — the current one is marked below.</p>
+        <p class="card-sub">Every license this install has applied — the current one is marked below. Click a row for full details.</p>
 
         @if (!history().length) {
           <p class="card-sub" style="margin-top: 12px;">
@@ -463,8 +365,8 @@
               </tr>
             </thead>
             <tbody>
-              @for (entry of history(); track entry.appliedUtc) {
-                <tr [class.history-row--current]="entry.isCurrent">
+              @for (entry of history(); track entry.id) {
+                <tr class="clickable-row" [class.history-row--current]="entry.isCurrent" (click)="openHistoryDetail(entry)">
                   <td>{{ entry.appliedUtc | date: 'medium' }}</td>
                   <td>{{ entry.customerName || '—' }}</td>
                   <td>{{ entry.edition || '—' }}</td>

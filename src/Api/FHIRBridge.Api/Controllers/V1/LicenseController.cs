@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Security;
+using FHIRBridge.Infrastructure.Licensing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -72,7 +73,9 @@ public sealed class LicenseController : ControllerBase
 
     /// <summary>Every license this install has ever successfully applied, newest first — the current one
     /// (same token <see cref="ILicenseService.CurrentRawToken"/> holds) is flagged
-    /// <see cref="LicenseHistoryEntryDto.IsCurrent"/>.</summary>
+    /// <see cref="LicenseHistoryEntryDto.IsCurrent"/>. Each row's own stored token is re-parsed (never
+    /// re-verified against anything live — it already applied successfully once) so the portal can show
+    /// every quota/restriction dimension for any past license, not just the current one.</summary>
     [HttpGet("history")]
     [ProducesResponseType(typeof(IReadOnlyList<LicenseHistoryEntryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetHistory(CancellationToken cancellationToken)
@@ -80,9 +83,14 @@ public sealed class LicenseController : ControllerBase
         var entries = await _licenseHistoryRepository.GetAllAsync(cancellationToken);
         var currentToken = _licenseService.CurrentRawToken;
 
-        return Ok(entries.Select(e => new LicenseHistoryEntryDto(
-            e.AppliedUtc, e.CustomerName, e.Edition, e.State, e.ExpiresUtc,
-            currentToken is not null && e.Token == currentToken)));
+        return Ok(entries.Select(e =>
+        {
+            var parsed = SignedLicenseValidator.Validate(e.Token);
+            return new LicenseHistoryEntryDto(
+                e.Id, e.AppliedUtc, e.CustomerName, e.Edition, e.State, e.ExpiresUtc,
+                currentToken is not null && e.Token == currentToken,
+                parsed.IssuedUtc, LicenseStatusMapper.ToLimitsDto(parsed.Limits), parsed.Features, parsed.RequestKey);
+        }));
     }
 
     /// <summary>TESTING/SUPPORT UTILITY ONLY — removes the currently-applied license entirely, reverting
@@ -99,8 +107,9 @@ public sealed class LicenseController : ControllerBase
         return Ok(LicenseStatusMapper.ToDto(_licenseService.Current, usageCounts, executionStats));
     }
 
-    /// <summary>TESTING/SUPPORT UTILITY ONLY — wipes every <see cref="LicenseHistoryEntryDto"/> row.
-    /// Does not touch the currently-applied license itself — see <see cref="Clear"/> for that.</summary>
+    /// <summary>TESTING/SUPPORT UTILITY ONLY — soft-deletes every <see cref="LicenseHistoryEntryDto"/> row
+    /// (hidden from the History tab, but recoverable directly from the database, never hard-deleted). Does
+    /// not touch the currently-applied license itself — see <see cref="Clear"/> for that.</summary>
     [HttpDelete("history")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> ClearHistory(CancellationToken cancellationToken)

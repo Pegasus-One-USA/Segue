@@ -16,11 +16,15 @@ public sealed class InMemoryLicenseHistoryRepository : ILicenseHistoryRepository
 
     public Task<IReadOnlyList<LicenseHistoryEntry>> GetAllAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<LicenseHistoryEntry>>(
-            _entries.OrderByDescending(x => x.AppliedUtc).ToArray());
+            _entries.Where(x => !x.IsDeleted).OrderByDescending(x => x.AppliedUtc).ToArray());
 
     public Task ClearAllAsync(CancellationToken cancellationToken)
     {
-        _entries.Clear();
+        var nowUtc = DateTime.UtcNow;
+        foreach (var entry in _entries.Where(x => !x.IsDeleted))
+        {
+            entry.SoftDelete(nowUtc);
+        }
         return Task.CompletedTask;
     }
 }

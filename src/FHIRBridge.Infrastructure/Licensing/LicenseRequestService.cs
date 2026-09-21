@@ -97,6 +97,15 @@ public sealed class LicenseRequestService : ILicenseRequestService
         return ToResult(request);
     }
 
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var request = await _repository.GetAsync(id, cancellationToken)
+            ?? throw new InvalidOperationException("That license request could not be found.");
+
+        request.SoftDelete(DateTime.UtcNow);
+        await _repository.SaveAsync(request, cancellationToken);
+    }
+
     private async Task AttemptSubmitAsync(LicenseRequest request, CancellationToken cancellationToken)
     {
         var attemptedUtc = DateTime.UtcNow;

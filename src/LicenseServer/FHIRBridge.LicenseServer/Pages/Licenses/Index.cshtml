@@ -40,6 +40,10 @@ else
                     <tr><th>Features</th><td>@license.FeaturesSummary</td></tr>
                 </tbody>
             </table>
+            @if (Model.RequestIdByLicenseId.TryGetValue(license.Id, out var requestId))
+            {
+                <p style="margin-top:16px;"><a href="/LicenseRequests/Details/@requestId">View License Request</a></p>
+            }
             <h2 style="margin-top:20px;">Claims JSON</h2>
             <textarea class="token-output" readonly onclick="this.select()">@license.ClaimsJson</textarea>
             <h2>Token</h2>

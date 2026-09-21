@@ -278,11 +278,12 @@ export const LICENSE_ENDPOINTS = {
 
 // ─── License Request (LicenseRequestController — api/v1/license-request) ────
 // UnifiedAdmin-only: this install's own outbound requests for a license from the licensor. Any number can
-// exist — `get` lists them all; `update`/`resubmit` act on one specific request by id.
+// exist — `get` lists them all; `update`/`delete` act on one specific request by id.
 export const LICENSE_REQUEST_ENDPOINTS = {
   get:      `${API_V1_BASE}/license-request`,
   create:   `${API_V1_BASE}/license-request`,
   update:   (id: string) => `${API_V1_BASE}/license-request/${id}`,
+  delete:   (id: string) => `${API_V1_BASE}/license-request/${id}`,
   // Narrow read/write of just License:LicensorApplicationUrl — deliberately NOT the general-purpose
   // system-settings endpoints, which the license gate does not allowlist while unlicensed.
   licensorUrl: `${API_V1_BASE}/license-request/licensor-url`,

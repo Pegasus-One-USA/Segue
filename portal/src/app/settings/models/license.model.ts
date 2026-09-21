@@ -78,8 +78,10 @@ export interface ApplyLicenseRequest {
 }
 
 /** Mirrors LicenseHistoryEntryDto, one row from `GET /api/v1/license/history` — every license this
- *  install has ever successfully applied, newest first. */
+ *  install has ever successfully applied, newest first, including every quota/restriction dimension
+ *  re-parsed from that entry's own stored token, for the row-click detail modal. */
 export interface LicenseHistoryEntry {
+  id: string;
   appliedUtc: string;
   customerName: string | null;
   edition: string | null;
@@ -87,6 +89,13 @@ export interface LicenseHistoryEntry {
   expiresUtc: string | null;
   /** True for exactly one row — whichever token matches the currently-active license. */
   isCurrent: boolean;
+  /** When this token was minted (its `nbf` claim) — distinct from `appliedUtc` (when THIS install
+   *  activated it), which can be well after issuance. */
+  issuedUtc: string | null;
+  limits: LicenseLimits | null;
+  features: string[];
+  /** The `requestKey` claim, when this license was minted against a specific License Request. */
+  requestKey: string | null;
 }
 
 /** Lifecycle of this install's own outbound license request — mirrors the backend's

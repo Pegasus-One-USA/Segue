@@ -87,6 +87,25 @@ public sealed class LicenseRequestController : ControllerBase
         }
     }
 
+    /// <summary>Hides one request from the list without physically deleting it — see
+    /// <see cref="ILicenseRequestService.DeleteAsync"/>. Fails with 400 if <paramref name="id"/> doesn't
+    /// match one of this install's own requests.</summary>
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _service.DeleteAsync(id, cancellationToken);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = "invalid_request", error_description = ex.Message });
+        }
+    }
+
     /// <summary>The admin's own browser URL at submit time (e.g. <c>https://portal.example.com</c>,
     /// captured client-side as <c>window.location.origin</c>) — the API's own Host header only reflects
     /// where the API itself is bound (e.g. <c>localhost:5000</c>), never the portal's port, so it can't be

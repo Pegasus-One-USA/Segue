@@ -1619,12 +1619,18 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Edition")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("ExpiresUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<string>("State")
                         .IsRequired()
@@ -1638,6 +1644,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AppliedUtc");
+
+                    b.HasIndex("IsDeleted");
 
                     b.ToTable("LicenseHistoryEntries", (string)null);
                 });
@@ -1664,10 +1672,16 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(320)
                         .HasColumnType("nvarchar(320)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime?>("LastAttemptUtc")
                         .HasColumnType("datetime2");
@@ -1696,6 +1710,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted");
 
                     b.HasIndex("UniqueKey")
                         .IsUnique();

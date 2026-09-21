@@ -11,7 +11,7 @@ public sealed class InMemoryLicenseRequestRepository : ILicenseRequestRepository
 
     public Task<IReadOnlyList<LicenseRequest>> ListAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<LicenseRequest>>(
-            _requests.OrderByDescending(r => r.CreatedUtc).ToList());
+            _requests.Where(r => !r.IsDeleted).OrderByDescending(r => r.CreatedUtc).ToList());
 
     public Task<LicenseRequest?> GetAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(_requests.FirstOrDefault(r => r.Id == id));
