@@ -389,7 +389,11 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
     // refuses to implicitly cast text to integer/numeric on INSERT (42804), even when the string is numeric —
     // e.g. JsonMappingEngine.ConvertInteger already hands back a real int for an Integer-typed field, and this
     // switch used to stringify it right back before it ever reached the provider.
-    private static object Stringify(object? value) => value switch
+    // internal, not private: MappedSqlServerDestinationWriter.AddColumnParameter follows the same seam for its
+    // own unit tests (see MappedSqlServerDestinationWriterTests) — a direct, reflection-free regression guard on
+    // exactly the arms that decide what gets sent to the provider is cheaper than exercising it through a real
+    // connection, and it's what stops someone "tidying" the numeric arms back into the string fallback unnoticed.
+    internal static object Stringify(object? value) => value switch
     {
         null => DBNull.Value,
         DateTime dateTime => dateTime,
