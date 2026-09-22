@@ -4,6 +4,7 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Entities.Licensing;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 
 namespace FHIRBridge.Infrastructure.Licensing;
 
@@ -14,14 +15,29 @@ namespace FHIRBridge.Infrastructure.Licensing;
 /// <c>CachedCurrentTenantResolver</c> use to let a singleton reach scoped, DB-backed state safely.
 ///
 /// <see cref="Current"/> starts as <see cref="LicenseStatus.Unlicensed"/> and stays that way until
-/// something calls <see cref="ReloadAsync"/> — the constructor deliberately does no I/O. Program.cs (both
-/// the Api and Worker hosts) calls <see cref="ReloadAsync"/> once at startup, right after
-/// <c>AppSecretProvisioner.ProvisionAsync</c>.
+/// something calls <see cref="ReloadAsync"/> — the constructor deliberately does no I/O beyond wiring up
+/// the cross-replica invalidation below. Program.cs (both the Api and Worker hosts) calls
+/// <see cref="ReloadAsync"/> once at startup, right after <c>AppSecretProvisioner.ProvisionAsync</c>.
+///
+/// <see cref="Current"/>/<see cref="CurrentRawToken"/> are per-PROCESS in-memory state — on a deployment
+/// scaled to multiple replicas (e.g. Azure Container Apps' minReplicas/maxReplicas), an admin applying a
+/// license through whichever replica handled that request would otherwise leave every OTHER replica
+/// reporting the license it had at ITS OWN last startup/reload forever, since nothing ever told them to
+/// re-check — the exact "activated for me, everyone else still sees no active license, even though
+/// License History shows it applied (that table IS shared, via the DB)" symptom this closes. Same two-layer
+/// fix as <c>InProcessAllowedCorsOriginsCache</c> (which already depends on the same Redis connection):
+///  1. When <see cref="IConnectionMultiplexer"/> is available, <see cref="ApplyAsync"/>/<see cref="ClearAsync"/>
+///     publish to a Redis channel every replica subscribes to on construction — every OTHER replica
+///     re-reads the license within about a round-trip, not indefinitely.
+///  2. A periodic timer re-runs <see cref="ReloadAsync"/> regardless, so every replica is never more than
+///     <see cref="ReloadInterval"/> stale even if Redis is unavailable or a publish is missed — mirroring
+///     that cache's MaxAge fallback, just re-polling on a timer instead of on next-read, since
+///     <see cref="Current"/> is read synchronously off the hot request path and can't await a DB check.
 ///
 /// This stage is verification/reporting only: nothing here blocks or gates any product behavior on the
 /// resolved <see cref="LicenseStatus"/>.
 /// </summary>
-public sealed class LicenseService : ILicenseService
+public sealed class LicenseService : ILicenseService, IDisposable
 {
     /// <summary>SystemSetting key the currently-applied license token is persisted under.</summary>
     private const string LicenseTokenSettingKey = "License:Token";
@@ -32,13 +48,66 @@ public sealed class LicenseService : ILicenseService
     /// <summary>Env var naming a file whose contents are the token — checked last.</summary>
     private const string LicenseTokenFileEnvVar = "FHIRBRIDGE_LICENSE_FILE";
 
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly object _lock = new();
+    private static readonly RedisChannel InvalidationChannel = RedisChannel.Literal("fhirbridge:license-invalidated");
 
-    public LicenseService(IServiceScopeFactory scopeFactory)
+    // Bounds cross-replica staleness when Redis pub/sub isn't available or a publish is missed — same
+    // 5-minute bound InProcessAllowedCorsOriginsCache already advertises to operators for the same class
+    // of cross-replica propagation delay.
+    private static readonly TimeSpan ReloadInterval = TimeSpan.FromMinutes(5);
+
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IConnectionMultiplexer? _redis;
+    private readonly object _lock = new();
+    private volatile bool _subscribedToInvalidation;
+    private readonly Timer _reloadTimer;
+
+    public LicenseService(IServiceScopeFactory scopeFactory, IConnectionMultiplexer? redis = null)
     {
         _scopeFactory = scopeFactory;
+        _redis = redis;
+
+        if (_redis is not null)
+        {
+            // ConnectionRestored retries the subscribe so a replica that started during a Redis outage
+            // still picks up cross-replica invalidation once Redis is back, rather than relying on the
+            // reload timer for the rest of its life. Same reasoning as InProcessAllowedCorsOriginsCache.
+            _redis.ConnectionRestored += (_, _) => TrySubscribeToInvalidation();
+            TrySubscribeToInvalidation();
+        }
+
+        // Deliberately does NOT call ReloadAsync here — the class doc's "constructor does no I/O" contract
+        // stays true for the FIRST load (Program.cs controls exactly when that happens at startup); this
+        // timer only re-runs it periodically AFTER that, so a replica that never gets a publish still
+        // self-heals within ReloadInterval instead of staying wrong until its next restart.
+        _reloadTimer = new Timer(
+            _ => _ = ReloadAsync(CancellationToken.None), null, ReloadInterval, ReloadInterval);
     }
+
+    // Fire-and-forget async, not the synchronous Subscribe — see InProcessAllowedCorsOriginsCache's
+    // identical method for why (a slow-but-reachable Redis must never block whichever caller constructs
+    // this singleton), and why the catch is bare Exception rather than a narrower Redis-specific type.
+    private void TrySubscribeToInvalidation()
+    {
+        if (_redis is null || _subscribedToInvalidation) return;
+        _ = SubscribeAsyncCore();
+
+        async Task SubscribeAsyncCore()
+        {
+            try
+            {
+                await _redis.GetSubscriber().SubscribeAsync(
+                    InvalidationChannel, (_, _) => _ = ReloadAsync(CancellationToken.None));
+                _subscribedToInvalidation = true;
+            }
+            catch (Exception)
+            {
+                // Still down/hung — ConnectionRestored will call this again; the reload timer bounds
+                // staleness meanwhile.
+            }
+        }
+    }
+
+    public void Dispose() => _reloadTimer.Dispose();
 
     public LicenseStatus Current { get; private set; } = LicenseStatus.Unlicensed;
 
@@ -117,6 +186,7 @@ public sealed class LicenseService : ILicenseService
             Current = status;
             CurrentRawToken = licenseToken;
         }
+        PublishInvalidation();
 
         return new LicenseApplyResult(true, null, status);
     }
@@ -146,7 +216,15 @@ public sealed class LicenseService : ILicenseService
             Current = LicenseStatus.Unlicensed;
             CurrentRawToken = null;
         }
+        PublishInvalidation();
     }
+
+    /// <summary>Tells every OTHER replica to re-run <see cref="ReloadAsync"/> — see the class doc's
+    /// cross-replica remarks. Fire-and-forget: this replica already has the fresh state in Current above,
+    /// and a Redis hiccup here must never turn a successful apply/clear into a failed request — the
+    /// reload timer still bounds every other replica's staleness regardless of whether this lands.</summary>
+    private void PublishInvalidation() =>
+        _redis?.GetSubscriber().Publish(InvalidationChannel, RedisValue.EmptyString, CommandFlags.FireAndForget);
 
     /// <summary>Checks, in order: (a) the SystemSetting row, (b) <see cref="LicenseTokenEnvVar"/>, (c) the
     /// file named by <see cref="LicenseTokenFileEnvVar"/>. First one found wins.</summary>
