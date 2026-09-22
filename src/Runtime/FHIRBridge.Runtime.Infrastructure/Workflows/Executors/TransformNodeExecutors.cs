@@ -1348,7 +1348,10 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             // way JsonMappingEngine's own MappingValueType.Json case stores a JSON column as a string.
             transformed[destinationField] = currentValue is System.Text.Json.Nodes.JsonNode jsonNode
                 ? jsonNode.ToJsonString()
-                : CoerceToExpectedValueType(currentValue, rules[^1].ExpectedValueType);
+                : CoerceToExpectedValueType(
+                    currentValue,
+                    rules.LastOrDefault(r => r.ExpectedValueType is not null)?.ExpectedValueType,
+                    destinationType.Value);
         }
 
         // A configured field whose source path matched nothing in this resource never reaches `row` at all, so
@@ -1398,24 +1401,42 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     /// FieldMappingJoinPopoverComponent.resolveExpectedValueType and CreateMappingProfileRequestValidator on the
     /// portal side — same value, already validated to match the destination column at save time). Only ever
     /// narrows a string; every other CLR shape (already-native DateTime/int/decimal, null, JsonNode-turned-string
-    /// from the branch above) passes through unchanged, so a node that already self-types (DateMathAge →
-    /// int, BooleanConversion → bool) is untouched.
+    /// from the branch above) passes through unchanged, so a node that already self-types (DateMathAge's "age"
+    /// operation → int, BooleanConversion → bool) is untouched.
+    ///
+    /// Scoped to a relational destination only: MappedDestinationSerialization.ToMappedOnlyCsv/ToCsv format a
+    /// value with a bare `.ToString()`, so coercing a Date/DateTime field to a native DateTime here would make a
+    /// CSV/Blob export silently switch from DateTimeFormatNode's "2026-03-14" to .NET's culture-formatted
+    /// "3/14/2026 12:00:00 AM" — a destination-format regression this coercion must never cause, since it exists
+    /// solely to satisfy a relational engine's strict column typing.
     /// </summary>
-    private static object? CoerceToExpectedValueType(object? value, MappingValueType? expectedValueType)
+    internal static object? CoerceToExpectedValueType(
+        object? value, MappingValueType? expectedValueType, DestinationType destinationType)
     {
-        if (value is not string text || expectedValueType is null)
+        if (value is not string text || expectedValueType is null || !IsRelationalDestination(destinationType))
         {
             return value;
         }
 
         return expectedValueType switch
         {
+            // Parsed with the same "assume UTC if the string carries no offset, then adjust to it" pair used
+            // below for DateTime — an offset-bearing input (e.g. a raw FHIR instant) must resolve to the same
+            // calendar date regardless of the host machine's local time zone, not silently roll to the next/
+            // previous day depending on where this process happens to be running.
             MappingValueType.Date => DateTime.TryParse(
-                text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+                text, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var date)
                 ? date.Date
                 : value,
+            // AssumeUniversal ALONE (Kind=Local) — deliberately NOT combined with AdjustToUniversal, to match
+            // JsonMappingEngine.ConvertDate's own parsing exactly (the no-transform-rule path this mirrors).
+            // Npgsql (no EnableLegacyTimestampBehavior in this repo) infers "timestamptz" from a Kind=Utc
+            // DateTime and "timestamp" from Kind=Local/Unspecified; a destination column normalized from
+            // "datetime2"/"datetime" is a plain "timestamp" (see PostgreSqlDdlTypeValidator), so a Kind=Utc value
+            // here would trip the exact 42804 this coercion exists to prevent.
             MappingValueType.DateTime => DateTime.TryParse(
-                text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dateTime)
+                text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dateTime)
                 ? dateTime
                 : value,
             MappingValueType.Integer => long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer)
@@ -1428,6 +1449,13 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             _ => value,
         };
     }
+
+    /// <summary>The relational engines RelationalDestinationWriterBase/MappedSqlServerDestinationWriter actually
+    /// write to — mirrors SqlDestinationSchemaService.IsRelational (that class lives in the non-Runtime
+    /// Infrastructure project, which this one doesn't reference).</summary>
+    private static bool IsRelationalDestination(DestinationType destinationType) => destinationType is
+        DestinationType.SqlServer or DestinationType.AzureSql or DestinationType.PostgreSql
+        or DestinationType.MySql or DestinationType.DataFabricWarehouse;
 
     /// <summary>Best-effort JSON serialization of a hop's before/after value for lineage storage — a lineage
     /// record that fails to serialize a value (e.g. an unexpected CLR type) should still record the hop with

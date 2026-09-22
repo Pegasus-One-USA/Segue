@@ -211,6 +211,15 @@ export class FieldMappingJoinPopoverComponent {
       const resolved = targetType ? FieldMappingJoinPopoverComponent.TARGET_TYPE_VALUE_TYPES[targetType] : undefined;
       if (resolved) return resolved;
     }
+    // DateMathAge's static default (Integer) only holds for its "age" operation — DateMathAgeNode's "add" and
+    // "shift" operations both return a "yyyy-MM-dd" date STRING instead (a de-identification date-shift, not an
+    // age calculation), so a rule configured for either must declare Date, or the runtime coercion this powers
+    // (TransformNodeExecutors.CoerceToExpectedValueType) tries to long.TryParse a date string, fails, and the
+    // unconverted string still hits Postgres's 42804 on a date-typed destination column.
+    if (this.ruleNodeType() === 'DateMathAge') {
+      const operation = this.ruleConfig()['operation'] as string | undefined;
+      if (operation === 'add' || operation === 'shift') return 'Date';
+    }
     return TRANSFORM_NODE_DEFAULT_VALUE_TYPES[this.ruleNodeType()] ?? null;
   }
 
