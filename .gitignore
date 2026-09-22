@@ -50,6 +50,8 @@ ScaffoldingReadMe.txt
 # Environment files
 # dotenv environment variables file
 .env
+.env.*
+!.env.example
 
 # Local CLI/runtime artifacts
 .azure-cli/
