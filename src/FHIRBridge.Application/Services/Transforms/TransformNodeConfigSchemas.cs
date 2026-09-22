@@ -42,8 +42,10 @@ public static class TransformNodeConfigSchemas
     private static TransformConfigFieldVisibility OnlyWhen(string key, params string[] values) =>
         new(key, values);
 
-    private static TransformConfigFieldSchema Select(string key, string label, string[] options, string defaultValue, bool advanced = false) =>
-        new(key, label, "select", options, defaultValue, IsAdvanced: advanced);
+    private static TransformConfigFieldSchema Select(
+        string key, string label, string[] options, string defaultValue, bool advanced = false,
+        TransformConfigFieldVisibility? visibleWhen = null) =>
+        new(key, label, "select", options, defaultValue, IsAdvanced: advanced, VisibleWhen: visibleWhen);
 
     // A from/to lookup table (add row / key / value) instead of a raw-JSON textarea — the UI builds and
     // parses the same `{"from":"to", ...}` JSON object string this key has always held (ValueCodeMappingNode
@@ -223,9 +225,14 @@ public static class TransformNodeConfigSchemas
                 Combo("typeCode", "Identifier type code (e.g. MR, NPI, SSN)", CommonIdentifierTypeCodes, placeholder: "NPI"),
                 Number("padLength", "Zero-pad to length (optional)", "0", advanced: true),
             ]),
-            [TransformNodeType.HumanNameParsing] = new(TransformNodeType.HumanNameParsing, "HumanName Parsing",
+            [TransformNodeType.HumanNameParsing] = new(TransformNodeType.HumanNameParsing, "HumanName Parsing & Formatting",
             [
-                Select("pattern", "Input pattern", ["FirstLast", "LastFirstMiddle"], "FirstLast"),
+                Select("pattern", "Mode / input pattern", ["FirstLast", "FirstLastMiddle", "LastFirstMiddle", "RoundTrip"], "FirstLast"),
+                Select("roundTripPattern", "Round trip — pattern to parse the incoming string with",
+                    ["FirstLast", "FirstLastMiddle", "LastFirstMiddle"], "FirstLast",
+                    visibleWhen: OnlyWhen("pattern", "RoundTrip")),
+                Text("format", "Output format (HumanName → string)", "First Middle Last Suffix",
+                    visibleWhen: OnlyWhen("pattern", "RoundTrip")),
                 Checkbox("setText", "Set HumanName.text", true, advanced: true),
                 Select("use", "Use (optional)", ["", "official", "usual", "nickname", "maiden"], "", advanced: true),
                 Text("prefixTokens", "Recognized prefixes (comma-separated)", "Dr,Mr,Mrs,Ms,Miss", advanced: true),

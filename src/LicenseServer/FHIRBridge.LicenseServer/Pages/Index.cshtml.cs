@@ -26,7 +26,8 @@ public sealed class IndexModel : PageModel
             .OrderByDescending(x => x.LastSeenUtc)
             .ToListAsync();
 
-        PendingLicenseRequestCount = await _db.LicenseRequests.CountAsync(r => r.FulfilledAtUtc == null);
+        PendingLicenseRequestCount = await _db.LicenseRequests
+            .CountAsync(r => r.FulfilledAtUtc == null && r.DeniedAtUtc == null);
     }
 
     /// <summary>Renders one quota dimension as "used / limit" (or "used / Unlimited" when the license's

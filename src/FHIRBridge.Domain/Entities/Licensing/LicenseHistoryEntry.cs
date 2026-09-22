@@ -41,4 +41,18 @@ public sealed class LicenseHistoryEntry : Entity<Guid>
     public string State { get; private set; } = default!;
 
     public DateTime? ExpiresUtc { get; private set; }
+
+    /// <summary>Set by "Clear License History" instead of a hard delete, so a support reset can be undone
+    /// later if it turns out to have been a mistake. Soft-deleted rows are excluded from
+    /// <c>ILicenseHistoryRepository.GetAllAsync</c> (and therefore the portal's History tab) but still
+    /// exist in the database.</summary>
+    public bool IsDeleted { get; private set; }
+
+    public DateTime? DeletedOnUtc { get; private set; }
+
+    public void SoftDelete(DateTime utcNow)
+    {
+        IsDeleted = true;
+        DeletedOnUtc = utcNow;
+    }
 }

@@ -18,6 +18,7 @@
         </svg>
         <input
           type="search"
+          data-testid="ehr-search"
           class="search-input"
           placeholder="Search by name or FHIR base URL..."
           [value]="searchQuery()"
@@ -29,7 +30,7 @@
       </div>
 
       <div class="type-filter-wrap">
-        <select class="type-filter-select" [value]="sourceFilter()" (change)="onSourceFilterChange($any($event.target).value)">
+        <select class="type-filter-select" data-testid="ehr-filter-source" [value]="sourceFilter()" (change)="onSourceFilterChange($any($event.target).value)">
           <option value="">All sources</option>
           @for (o of sourceOptions(); track o.value) {
             <option [value]="o.value">{{ o.label }}</option>
@@ -38,7 +39,7 @@
       </div>
 
       <div class="type-filter-wrap">
-        <select class="type-filter-select" [value]="statusFilter()" (change)="onStatusFilterChange($any($event.target).value)">
+        <select class="type-filter-select" data-testid="ehr-filter-status" [value]="statusFilter()" (change)="onStatusFilterChange($any($event.target).value)">
           <option value="">All statuses</option>
           <option value="true">Active</option>
           <option value="false">Inactive</option>
@@ -46,14 +47,14 @@
       </div>
 
       <div class="filter-actions">
-        <button class="btn-reset" type="button" (click)="reset()">
+        <button class="btn-reset" type="button" data-testid="ehr-reset" (click)="reset()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
             <path d="M3 3v5h5"></path>
           </svg>
           Reset
         </button>
-        <button class="btn-add" type="button" *appHideWithoutPermission="'ehrendpoints.create'" (click)="openAdd()">
+        <button class="btn-add" type="button" data-testid="ehr-add" *appHideWithoutPermission="'ehrendpoints.create'" (click)="openAdd()">
           New
         </button>
       </div>
@@ -70,7 +71,7 @@
 
       <!-- Table meta row -->
       <div class="table-meta">
-        <span class="entries-info">
+        <span class="entries-info" data-testid="ehr-entries-info">
           @if (totalCount() > 0) {
             Showing {{ showingFrom() }} to {{ showingTo() }} of {{ totalCount() }}
             {{ totalCount() === 1 ? 'entry' : 'entries' }}
@@ -154,7 +155,7 @@
             <td mat-cell *matCellDef="let e" class="col-actions">
               <div class="actions-cell">
                 @if (hasRowMenu()) {
-                <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
+                <button mat-icon-button class="btn-more" data-testid="ehr-row-menu" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
@@ -166,11 +167,11 @@
                     <mat-icon>visibility</mat-icon>
                     View (Coming Soon)
                   </button>
-                  <button mat-menu-item *appHideWithoutPermission="'ehrendpoints.edit'" (click)="openEdit(e)">
+                  <button mat-menu-item data-testid="ehr-row-edit" *appHideWithoutPermission="'ehrendpoints.edit'" (click)="openEdit(e)">
                     <mat-icon>edit</mat-icon>
                     Edit
                   </button>
-                  <button mat-menu-item class="menu-item-danger" *appHideWithoutPermission="'ehrendpoints.delete'" (click)="confirmDelete(e)">
+                  <button mat-menu-item class="menu-item-danger" data-testid="ehr-row-delete" *appHideWithoutPermission="'ehrendpoints.delete'" (click)="confirmDelete(e)">
                     <mat-icon>delete_outline</mat-icon>
                     Delete
                   </button>
@@ -181,7 +182,8 @@
           </ng-container>
 
           <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"
+              data-testid="ehr-row" [attr.data-row-name]="row.name"></tr>
 
         </table>
       </div>

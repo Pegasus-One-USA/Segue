@@ -487,6 +487,22 @@ public static class DependencyInjection
         services.AddScoped<Destinations.Webhook.IDataLakeWebhookSender, Destinations.Webhook.DataLakeWebhookSender>();
         services.AddScoped<MappedDataLakeWebhookDestinationWriter>();
 
+        // API Endpoint: general-purpose, fully configurable outbound REST API — same writer/sender split as
+        // Data Lake Webhook, with the widest auth surface of any destination writer (see ApiEndpointAuthMode).
+        // ApiEndpointSender governs its own per-attempt timeout via a linked CancellationTokenSource
+        // (settings.TimeoutSeconds, up to 600s) — HttpClient's own default 100s Timeout must be disabled
+        // here, or it fires first for any configured timeout above 100s, aborting the request early AND
+        // making the sender misreport the elapsed bound as the (never-actually-honored) configured value.
+        services.AddHttpClient(nameof(Destinations.ApiEndpoint.ApiEndpointSender))
+            .ConfigureHttpClient(client => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
+        services.AddScoped<Destinations.ApiEndpoint.IApiEndpointSender, Destinations.ApiEndpoint.ApiEndpointSender>();
+        // Singleton: the multi-resource accumulator must survive across the several scoped WriteAsync calls (one
+        // per resource type) that make up a single pipeline run — see IApiEndpointMultiResourceAccumulator remarks.
+        services.AddSingleton<
+            Destinations.ApiEndpoint.IApiEndpointMultiResourceAccumulator,
+            Destinations.ApiEndpoint.ApiEndpointMultiResourceAccumulator>();
+        services.AddScoped<MappedApiEndpointDestinationWriter>();
+
         // Microsoft Fabric / OneLake: reuses the singleton BlobContainerClientCache registered above (OneLake
         // speaks the blob protocol), with its own Entra-only credential dispatch.
         services.AddScoped<Destinations.Fabric.IOneLakeClientFactory, Destinations.Fabric.OneLakeClientFactory>();

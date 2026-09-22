@@ -46,6 +46,13 @@ public sealed class IssuedLicense
     /// <summary>Comma-joined list, for display in the audit table without re-parsing JSON.</summary>
     public string? AllowedDestinationTypesSummary { get; set; }
 
+    /// <summary>Copied from the linked <see cref="LicenseRequest.RequestHost"/> at mint time, if this
+    /// license was minted against a request (see <c>Pages/Licenses/Create</c>) — null for a license minted
+    /// without a linked request, or one minted before this field existed. Denormalized here (rather than
+    /// looked up via <see cref="LicenseRequest.FulfilledIssuedLicenseId"/>) so the audit trail shows which
+    /// deployment asked for a license even if that request row is later removed.</summary>
+    public string? RequestHost { get; set; }
+
     /// <summary>The exact JSON claim set that was signed into the token — the full audit fidelity record
     /// the spec asked for, beyond just the summary columns above.</summary>
     public required string ClaimsJson { get; set; }

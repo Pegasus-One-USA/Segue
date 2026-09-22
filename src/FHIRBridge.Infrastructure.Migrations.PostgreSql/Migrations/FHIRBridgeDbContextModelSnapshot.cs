@@ -1610,12 +1610,18 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Edition")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
                     b.Property<DateTime?>("ExpiresUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("State")
                         .IsRequired()
@@ -1629,6 +1635,8 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AppliedUtc");
+
+                    b.HasIndex("IsDeleted");
 
                     b.ToTable("LicenseHistoryEntries", (string)null);
                 });
@@ -1655,10 +1663,16 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime?>("LastAttemptUtc")
                         .HasColumnType("timestamp with time zone");
@@ -1671,11 +1685,6 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<string>("RequestHost")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
-
-                    b.Property<int>("SingletonGuard")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1);
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1693,10 +1702,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SingletonGuard")
-                        .IsUnique();
+                    b.HasIndex("IsDeleted");
 
-                    b.HasIndex("UniqueKey");
+                    b.HasIndex("UniqueKey")
+                        .IsUnique();
 
                     b.ToTable("LicenseRequests", (string)null);
                 });

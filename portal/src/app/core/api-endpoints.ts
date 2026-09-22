@@ -272,15 +272,19 @@ export const LICENSE_ENDPOINTS = {
   get:     `${API_V1_BASE}/license`,
   apply:   `${API_V1_BASE}/license`,
   history: `${API_V1_BASE}/license/history`,
+  // TESTING/SUPPORT UTILITY ONLY — see LicenseController.Clear/ClearHistory.
+  clear:        `${API_V1_BASE}/license`,
+  clearHistory: `${API_V1_BASE}/license/history`,
 };
 
 // ─── License Request (LicenseRequestController — api/v1/license-request) ────
-// UnifiedAdmin-only: this install's own outbound request for a license from the licensor. One request per
-// install, ever — resubmit re-sends the same stored details rather than creating a new one.
+// UnifiedAdmin-only: this install's own outbound requests for a license from the licensor. Any number can
+// exist — `get` lists them all; `update`/`delete` act on one specific request by id.
 export const LICENSE_REQUEST_ENDPOINTS = {
   get:      `${API_V1_BASE}/license-request`,
   create:   `${API_V1_BASE}/license-request`,
-  resubmit: `${API_V1_BASE}/license-request/resubmit`,
+  update:   (id: string) => `${API_V1_BASE}/license-request/${id}`,
+  delete:   (id: string) => `${API_V1_BASE}/license-request/${id}`,
   // Narrow read/write of just License:LicensorApplicationUrl — deliberately NOT the general-purpose
   // system-settings endpoints, which the license gate does not allowlist while unlicensed.
   licensorUrl: `${API_V1_BASE}/license-request/licensor-url`,

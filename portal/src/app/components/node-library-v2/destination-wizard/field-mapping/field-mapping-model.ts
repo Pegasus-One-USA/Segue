@@ -35,7 +35,9 @@ export type MappingDestType =
   // Warehouse is a SQL Server over TDS with a real, probeable table/column schema, so it joins
   // SQL_FAMILY_TYPES below and gets the live table picker and schema authoring the SQL engines get.
   // 'fabric' above remains the FILE surface (OneLake Files) and stays out, exactly as before.
-  | 'fabricwarehouse';
+  | 'fabricwarehouse'
+  // Same "no live schema, no table qualification" category as datalake/fabric above.
+  | 'apiendpoint';
 
 /** Outcome of the live destination-schema read that populates the SQL table list. Distinguishes the three
  *  states an empty table list can mean, which an empty array alone cannot: never attempted ('idle'), in

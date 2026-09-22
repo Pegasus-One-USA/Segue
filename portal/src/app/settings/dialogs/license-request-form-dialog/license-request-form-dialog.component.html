@@ -1,0 +1,56 @@
+<div class="form-container">
+  <h2 class="dialog-title">{{ isEdit ? 'Edit License Request' : 'Request a License' }}</h2>
+  <p class="dialog-sub">
+    @if (isEdit) {
+      Correct anything that was wrong when this was submitted, then re-send it to the licensor.
+    } @else {
+      Submit your details and we'll follow up with a license for Segue. Each submission is independent —
+      submit as many as you need (e.g. one per renewal).
+    }
+  </p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()">
+    <div class="form-field">
+      <label for="lr-name">Client Name <span class="req">*</span></label>
+      <input id="lr-name" type="text" formControlName="clientName" />
+      @if (form.controls.clientName.touched && form.controls.clientName.invalid) {
+        <p class="field-error">Client name is required.</p>
+      }
+    </div>
+    <div class="form-field">
+      <label for="lr-email">Email Address <span class="req">*</span></label>
+      <input id="lr-email" type="email" formControlName="email" />
+      @if (form.controls.email.touched && form.controls.email.invalid) {
+        <p class="field-error">A valid email address is required.</p>
+      }
+    </div>
+    <div class="form-field">
+      <label for="lr-company">Company Name</label>
+      <input id="lr-company" type="text" formControlName="companyName" />
+    </div>
+    <div class="form-field">
+      <label for="lr-phone">Phone Number <span class="req">*</span></label>
+      <input id="lr-phone" type="tel" formControlName="phoneNumber" />
+      @if (form.controls.phoneNumber.touched && form.controls.phoneNumber.invalid) {
+        <p class="field-error">A phone number is required.</p>
+      }
+    </div>
+    <div class="form-field form-field--full">
+      <label for="lr-address">Address</label>
+      <input id="lr-address" type="text" formControlName="address" />
+    </div>
+
+    @if (submitError()) {
+      <p class="field-error">{{ submitError() }}</p>
+    }
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary" [disabled]="submitting()">
+        {{ submitting() ? (isEdit ? 'Saving…' : 'Submitting…') : (isEdit ? 'Save Changes' : 'Submit Request') }}
+      </button>
+      <button type="button" class="btn-outline" [disabled]="submitting()" (click)="dialogRef.attemptClose()">
+        Cancel
+      </button>
+    </div>
+  </form>
+</div>

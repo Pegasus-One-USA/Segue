@@ -56,7 +56,7 @@ public sealed class CreateModel : PageModel
     public static readonly IReadOnlyList<string> DestinationTypes = new[]
     {
         "SqlServer", "PostgreSql", "MySql", "Mongo", "BlobStorage", "Csv", "FhirRepository", "Medplum",
-        "AzureFhirService", "DataLakeWebhook",
+        "AzureFhirService", "DataLakeWebhook", "DataFabricAzure", "DataFabricWarehouse", "ApiEndpoint",
     };
 
     private readonly LicenseServerDbContext _db;
@@ -225,6 +225,7 @@ public sealed class CreateModel : PageModel
             AllowedDestinationTypesSummary = fields.AllowedDestinationTypes is null ? "(all)" : string.Join(", ", fields.AllowedDestinationTypes),
             ClaimsJson = claimsJson,
             Token = token,
+            RequestHost = LinkedRequest?.RequestHost,
         };
         _db.IssuedLicenses.Add(issuedLicense);
 

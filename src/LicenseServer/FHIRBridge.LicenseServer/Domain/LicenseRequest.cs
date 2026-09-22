@@ -27,6 +27,14 @@ public sealed class LicenseRequest
     /// which is why this row is upserted by <see cref="UniqueKey"/> rather than inserted fresh each time.</summary>
     public required string UniqueKey { get; set; }
 
+    /// <summary>The admin's own browser origin (e.g. "http://localhost:4200") at the most recent
+    /// submission (the main repo's <c>LicenseRequest.RequestHost</c>) — lets whoever mints the license see
+    /// which deployment asked, without relying on <see cref="Email"/> or <see cref="ClientName"/> alone.
+    /// Refreshed on every resend/renewal that supplies one, unlike <see cref="UniqueKey"/> — this isn't an
+    /// identity anchor, just the most recently observed origin. Null for a request received before this
+    /// field existed, or one submitted by a caller that didn't supply it.</summary>
+    public string? RequestHost { get; set; }
+
     public DateTime ReceivedAtUtc { get; set; }
 
     /// <summary>Set (again) on every resubmission — lets the list surface "just resent" separately from
@@ -51,4 +59,15 @@ public sealed class LicenseRequest
     public Guid? FulfilledIssuedLicenseId { get; set; }
 
     public IssuedLicense? FulfilledIssuedLicense { get; set; }
+
+    /// <summary>Set when an admin declines this ask instead of minting against it (see
+    /// <c>Pages/LicenseRequests/Details</c>) — removes it from the pending/action-needed list without
+    /// pretending a license was issued. Cleared back to null on every new submission, same as
+    /// <see cref="FulfilledAtUtc"/> — a resend/renewal is a fresh ask that deserves a fresh look, even one
+    /// previously turned down.</summary>
+    public DateTime? DeniedAtUtc { get; set; }
+
+    /// <summary>Short, operator-facing note on why this was denied (e.g. "contract lapsed", "unverifiable
+    /// company") — shown on the details page, never sent back to the requesting install.</summary>
+    public string? DenialReason { get; set; }
 }

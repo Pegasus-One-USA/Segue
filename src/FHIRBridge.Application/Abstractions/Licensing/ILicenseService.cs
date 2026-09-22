@@ -48,4 +48,13 @@ public interface ILicenseService
     /// <summary>Re-runs the same source-resolution-and-verification flow used at startup, refreshing
     /// <see cref="Current"/> from whichever source (DB setting / env var / file) currently wins.</summary>
     Task ReloadAsync(CancellationToken cancellationToken);
+
+    /// <summary>Testing/support utility only — removes the currently-applied license entirely (deletes
+    /// the <c>SystemSetting["License:Token"]</c> row and resets <see cref="Current"/> to
+    /// <see cref="LicenseStatus.Unlicensed"/>). Never called from the normal apply flow; see
+    /// <c>LicenseController</c>'s dedicated "Clear License" endpoint. Leaves <c>LicenseHistoryEntry</c>
+    /// rows untouched — that's
+    /// <see cref="FHIRBridge.Application.Abstractions.Persistence.ILicenseHistoryRepository.ClearAllAsync"/>'s
+    /// job.</summary>
+    Task ClearAsync(CancellationToken cancellationToken);
 }

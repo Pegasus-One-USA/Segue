@@ -1,0 +1,405 @@
+using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Application.DTOs;
+using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Infrastructure.Destinations;
+using FHIRBridge.Infrastructure.Destinations.ApiEndpoint;
+using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+
+namespace FHIRBridge.UnitTests.Destinations.ApiEndpoint;
+
+/// <summary>
+/// Exercises the writer against a stubbed <see cref="IApiEndpointSender"/> — the seam that exists precisely so
+/// batching, framing and failure handling can be asserted without a live HTTP endpoint.
+/// </summary>
+public sealed class MappedApiEndpointDestinationWriterTests
+{
+    private readonly Mock<IApiEndpointSender> _sender = new();
+    private readonly List<ApiEndpointBatch> _sent = [];
+
+    private static readonly Guid RunId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+
+    private static DestinationConfiguration Destination(string? connectionMetadataJson = null) =>
+        new(
+            "Partner API",
+            DestinationType.ApiEndpoint,
+            new SecretReference("kv", "secret"),
+            "https://api.example.com/records",
+            connectionMetadataJson);
+
+    private static MappingProfile Mapping(string resourceType = "Patient", string destinationObject = "Patient") =>
+        new("Api Mapping", resourceType, Guid.NewGuid(), Guid.NewGuid(), destinationObject, []);
+
+    private static MappedDestinationRecord Record(string id) =>
+        new(RunId, "Patient", "Patient", id, new Dictionary<string, object?> { ["Name"] = "Alice" }, null);
+
+    private static MappedDestinationRecord RecordWithValues(string id, Dictionary<string, object?> values) =>
+        new(RunId, "Patient", "Patient", id, values, null);
+
+    private static PipelineWriteContext Context() =>
+        new(false, "Partner Export Workflow", DateTimeOffset.UtcNow, "corr-1", PipelineRunId: RunId);
+
+    private MappedApiEndpointDestinationWriter CreateWriter() =>
+        new(
+            _sender.Object,
+            new ApiEndpointMultiResourceAccumulator(NullLogger<ApiEndpointMultiResourceAccumulator>.Instance),
+            NullLogger<MappedApiEndpointDestinationWriter>.Instance);
+
+    private void SetupSender(bool delivered = true, string? error = null)
+        => _sender
+            .Setup(s => s.SendAsync(
+                It.IsAny<DestinationConfiguration>(),
+                It.IsAny<ApiEndpointSettings>(),
+                It.IsAny<ApiEndpointBatch>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<DestinationConfiguration, ApiEndpointSettings, ApiEndpointBatch, CancellationToken>(
+                (_, _, batch, _) => _sent.Add(batch))
+            .ReturnsAsync(new ApiEndpointSendResult(delivered, delivered ? 202 : 500, 1, error));
+
+    [Fact]
+    public async Task An_empty_batch_sends_nothing_at_all()
+    {
+        SetupSender();
+
+        var result = await CreateWriter().WriteAsync(Destination(), Mapping(), [], Context(), CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        _sent.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Records_are_framed_as_a_single_json_array_by_default()
+    {
+        SetupSender();
+
+        var result = await CreateWriter().WriteAsync(
+            Destination(), Mapping(), [Record("p1"), Record("p2"), Record("p3")], Context(), CancellationToken.None);
+
+        result.Count.Should().Be(3);
+        _sent.Should().HaveCount(1);
+        _sent[0].Body.Should().StartWith("[").And.EndWith("]");
+        _sent[0].RecordCount.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task The_batch_is_split_when_the_configured_record_count_is_reached()
+    {
+        SetupSender();
+        var records = Enumerable.Range(1, 5).Select(i => Record($"p{i}")).ToArray();
+
+        var result = await CreateWriter().WriteAsync(
+            Destination("""{"dest_apiBatchSize":"2"}"""), Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(5);
+        _sent.Select(batch => batch.RecordCount).Should().BeEquivalentTo([2, 2, 1], options => options.WithStrictOrdering());
+    }
+
+    [Fact]
+    public async Task RecordPerRequest_sends_one_request_per_record_regardless_of_batch_size()
+    {
+        SetupSender();
+
+        var result = await CreateWriter().WriteAsync(
+            Destination("""{"dest_apiPayloadShape":"recordPerRequest"}"""),
+            Mapping(),
+            [Record("p1"), Record("p2")],
+            Context(),
+            CancellationToken.None);
+
+        result.Count.Should().Be(2);
+        _sent.Should().HaveCount(2);
+        _sent.Should().OnlyContain(batch => batch.RecordCount == 1);
+    }
+
+    [Fact]
+    public async Task A_failed_batch_throws_by_default_so_data_loss_is_never_silent()
+    {
+        SetupSender(delivered: false, error: "HTTP 500 Internal Server Error");
+
+        var act = () => CreateWriter().WriteAsync(
+            Destination(), Mapping(), [Record("p1")], Context(), CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*not delivered*");
+    }
+
+    [Fact]
+    public async Task A_body_template_substitutes_mapped_values_with_their_real_types_preserved()
+    {
+        SetupSender();
+        var record = RecordWithValues("p1", new Dictionary<string, object?> { ["Age"] = 42, ["Name"] = "Alice" });
+        var template = """{"patient":{"fullName":"{{Name}}","age":"{{Age}}","externalId":"{{sourceResourceId}}"}}""";
+        var connectionMetadataJson = JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiBodyTemplateJson"] = template,
+        });
+
+        await CreateWriter().WriteAsync(
+            Destination(connectionMetadataJson),
+            Mapping(),
+            [record],
+            Context(),
+            CancellationToken.None);
+
+        _sent.Should().HaveCount(1);
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        var patient = body.RootElement[0].GetProperty("patient");
+        patient.GetProperty("fullName").GetString().Should().Be("Alice");
+        patient.GetProperty("age").GetInt32().Should().Be(42, "a template value that is exactly one placeholder keeps its real JSON type, not a stringified \"42\"");
+        patient.GetProperty("externalId").GetString().Should().Be("p1", "sourceResourceId is addressable in a template alongside mapped field names");
+    }
+
+    [Fact]
+    public async Task A_body_template_interpolates_a_placeholder_embedded_in_a_larger_string()
+    {
+        SetupSender();
+        var record = RecordWithValues("p1", new Dictionary<string, object?> { ["Age"] = 42 });
+        var template = """{"summary":"Patient is {{Age}} years old"}""";
+        var connectionMetadataJson = JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiBodyTemplateJson"] = template,
+        });
+
+        await CreateWriter().WriteAsync(
+            Destination(connectionMetadataJson),
+            Mapping(),
+            [record],
+            Context(),
+            CancellationToken.None);
+
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        body.RootElement[0].GetProperty("summary").GetString().Should().Be("Patient is 42 years old");
+    }
+
+    [Fact]
+    public async Task IsolateBatch_reports_the_failure_as_a_RecordError_instead_of_throwing()
+    {
+        SetupSender(delivered: false, error: "HTTP 500 Internal Server Error");
+
+        var result = await CreateWriter().WriteAsync(
+            Destination("""{"dest_apiOnFailure":"isolateBatch"}"""),
+            Mapping(),
+            [Record("p1")],
+            Context(),
+            CancellationToken.None);
+
+        result.Count.Should().Be(0);
+        result.RecordErrors.Should().ContainSingle().Which.Should().Contain("not delivered");
+    }
+
+    [Fact]
+    public async Task Multi_resource_flat_mode_waits_for_every_resource_type_then_sends_one_combined_document()
+    {
+        SetupSender();
+        var destination = Destination(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiMultiResourceMode"] = "flat",
+            ["dest_apiResourceRelationsJson"] = """
+                [
+                    {"resourceType":"Patient","nestKey":"patients"},
+                    {"resourceType":"Encounter","nestKey":"encounters"}
+                ]
+                """,
+        }));
+        var writer = CreateWriter();
+
+        var patientResult = await writer.WriteAsync(
+            destination, Mapping("Patient", "Patient"), [Record("p1")], Context(), CancellationToken.None);
+
+        // 0, not 1: these records are only ACCEPTED into the accumulator here — nothing has left this process
+        // yet, so reporting them as written would tell the caller they were delivered when they weren't (see
+        // PR #210's review — this was the actual bug: reporting the pre-fix records.Count here made an
+        // incomplete/never-completing set look like a successful write).
+        patientResult.Count.Should().Be(0, "nothing is sent (or reportable as written) until every resource type lands");
+        _sent.Should().BeEmpty();
+
+        var encounterResult = await writer.WriteAsync(
+            destination, Mapping("Encounter", "Encounter"), [Record("e1")], Context(), CancellationToken.None);
+
+        encounterResult.Count.Should().Be(1);
+        _sent.Should().HaveCount(1, "the last resource type to land triggers exactly one combined send");
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        body.RootElement.GetProperty("patients").GetArrayLength().Should().Be(1);
+        body.RootElement.GetProperty("encounters").GetArrayLength().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task An_expected_resource_type_with_zero_records_this_run_still_completes_the_set()
+    {
+        // The exact regression PR #210's review caught: a participating resource type producing no records
+        // this cycle (a patient with no Observations today, a resource type the source returned nothing for)
+        // is an ordinary run shape, not a failure — it must still complete the expected set so the OTHER
+        // resource types' already-accepted records actually get sent, instead of sitting accumulated forever
+        // while the run reports success.
+        SetupSender();
+        var destination = Destination(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiMultiResourceMode"] = "flat",
+            ["dest_apiResourceRelationsJson"] = """
+                [
+                    {"resourceType":"Patient","nestKey":"patients"},
+                    {"resourceType":"Encounter","nestKey":"encounters"}
+                ]
+                """,
+        }));
+        var writer = CreateWriter();
+
+        var patientResult = await writer.WriteAsync(
+            destination, Mapping("Patient", "Patient"), [Record("p1")], Context(), CancellationToken.None);
+        patientResult.Count.Should().Be(0);
+        _sent.Should().BeEmpty();
+
+        var encounterResult = await writer.WriteAsync(
+            destination, Mapping("Encounter", "Encounter"), [], Context(), CancellationToken.None);
+
+        encounterResult.Count.Should().Be(0);
+        _sent.Should().HaveCount(
+            1, "an expected-but-empty resource type must still complete the set and trigger the combined send " +
+               "— otherwise the Patient records above are silently never sent while the run reports success");
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        body.RootElement.GetProperty("patients").GetArrayLength().Should().Be(1);
+        body.RootElement.GetProperty("encounters").GetArrayLength().Should().Be(0, "this resource type genuinely had no records this run");
+    }
+
+    [Fact]
+    public async Task Multi_resource_nested_mode_correlates_children_under_their_parent_record()
+    {
+        SetupSender();
+        var destination = Destination(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiMultiResourceMode"] = "nested",
+            ["dest_apiResourceRelationsJson"] = """
+                [
+                    {"resourceType":"Patient","nestKey":"patients"},
+                    {"resourceType":"Encounter","parentResourceType":"Patient","correlationColumn":"PatientId","parentKeyColumn":"Id","nestKey":"encounters"}
+                ]
+                """,
+        }));
+        var writer = CreateWriter();
+
+        await writer.WriteAsync(
+            destination,
+            Mapping("Patient", "Patient"),
+            [RecordWithValues("p1", new Dictionary<string, object?> { ["Id"] = "pat-1" })],
+            Context(),
+            CancellationToken.None);
+        await writer.WriteAsync(
+            destination,
+            Mapping("Encounter", "Encounter"),
+            [RecordWithValues("e1", new Dictionary<string, object?> { ["PatientId"] = "pat-1" })],
+            Context(),
+            CancellationToken.None);
+
+        _sent.Should().HaveCount(1);
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        var patients = body.RootElement.GetProperty("patients");
+        patients.GetArrayLength().Should().Be(1);
+        var encounters = patients[0].GetProperty("encounters");
+        encounters.GetArrayLength().Should().Be(1, "the encounter record is nested under the patient it correlates to, not left top-level");
+        body.RootElement.TryGetProperty("encounters", out _).Should().BeFalse("a non-root resource type is nested only, never also emitted top-level");
+    }
+
+    [Fact]
+    public async Task Multi_resource_nested_mode_supports_three_levels_regardless_of_declaration_order()
+    {
+        SetupSender();
+        // Declared top-down (Patient, then Encounter, then Observation) — the natural order, and exactly the
+        // order that broke a naive "nest in array order" implementation: without resolving nesting depth-first,
+        // Encounter would be cloned into Patient BEFORE Observation was nested into Encounter, silently dropping
+        // the observation from the final document.
+        var destination = Destination(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiMultiResourceMode"] = "nested",
+            ["dest_apiResourceRelationsJson"] = """
+                [
+                    {"resourceType":"Patient","nestKey":"patients"},
+                    {"resourceType":"Encounter","parentResourceType":"Patient","correlationColumn":"PatientId","parentKeyColumn":"Id","nestKey":"encounters"},
+                    {"resourceType":"Observation","parentResourceType":"Encounter","correlationColumn":"EncounterId","parentKeyColumn":"Id","nestKey":"observations"}
+                ]
+                """,
+        }));
+        var writer = CreateWriter();
+
+        await writer.WriteAsync(
+            destination,
+            Mapping("Patient", "Patient"),
+            [RecordWithValues("p1", new Dictionary<string, object?> { ["Id"] = "pat-1" })],
+            Context(),
+            CancellationToken.None);
+        await writer.WriteAsync(
+            destination,
+            Mapping("Encounter", "Encounter"),
+            [RecordWithValues("e1", new Dictionary<string, object?> { ["Id"] = "enc-1", ["PatientId"] = "pat-1" })],
+            Context(),
+            CancellationToken.None);
+        await writer.WriteAsync(
+            destination,
+            Mapping("Observation", "Observation"),
+            [RecordWithValues("o1", new Dictionary<string, object?> { ["EncounterId"] = "enc-1" })],
+            Context(),
+            CancellationToken.None);
+
+        _sent.Should().HaveCount(1);
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        var patients = body.RootElement.GetProperty("patients");
+        patients.GetArrayLength().Should().Be(1);
+        var encounters = patients[0].GetProperty("encounters");
+        encounters.GetArrayLength().Should().Be(1, "the encounter is nested under its patient");
+        var observations = encounters[0].GetProperty("observations");
+        observations.GetArrayLength().Should().Be(
+            1, "the observation must reach its grandparent's document — nested two levels deep, not dropped or left top-level");
+        body.RootElement.TryGetProperty("encounters", out _).Should().BeFalse();
+        body.RootElement.TryGetProperty("observations", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Multi_resource_nested_mode_has_no_hardcoded_depth_limit()
+    {
+        SetupSender();
+        // Patient -> Encounter -> Observation -> Component: nesting depth is resolved generically by walking
+        // ParentResourceType, so a 4th level (or a 5th, or an Nth) works exactly the same way a 2nd or 3rd does —
+        // nothing in MappedApiEndpointDestinationWriter caps how many relations can chain off one another.
+        var destination = Destination(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiMultiResourceMode"] = "nested",
+            ["dest_apiResourceRelationsJson"] = """
+                [
+                    {"resourceType":"Patient","nestKey":"patients"},
+                    {"resourceType":"Encounter","parentResourceType":"Patient","correlationColumn":"PatientId","parentKeyColumn":"Id","nestKey":"encounters"},
+                    {"resourceType":"Observation","parentResourceType":"Encounter","correlationColumn":"EncounterId","parentKeyColumn":"Id","nestKey":"observations"},
+                    {"resourceType":"Component","parentResourceType":"Observation","correlationColumn":"ObservationId","parentKeyColumn":"Id","nestKey":"components"}
+                ]
+                """,
+        }));
+        var writer = CreateWriter();
+
+        await writer.WriteAsync(
+            destination, Mapping("Patient", "Patient"),
+            [RecordWithValues("p1", new Dictionary<string, object?> { ["Id"] = "pat-1" })],
+            Context(), CancellationToken.None);
+        await writer.WriteAsync(
+            destination, Mapping("Encounter", "Encounter"),
+            [RecordWithValues("e1", new Dictionary<string, object?> { ["Id"] = "enc-1", ["PatientId"] = "pat-1" })],
+            Context(), CancellationToken.None);
+        await writer.WriteAsync(
+            destination, Mapping("Observation", "Observation"),
+            [RecordWithValues("o1", new Dictionary<string, object?> { ["Id"] = "obs-1", ["EncounterId"] = "enc-1" })],
+            Context(), CancellationToken.None);
+        await writer.WriteAsync(
+            destination, Mapping("Component", "Component"),
+            [RecordWithValues("c1", new Dictionary<string, object?> { ["ObservationId"] = "obs-1" })],
+            Context(), CancellationToken.None);
+
+        _sent.Should().HaveCount(1);
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        var components = body.RootElement
+            .GetProperty("patients")[0]
+            .GetProperty("encounters")[0]
+            .GetProperty("observations")[0]
+            .GetProperty("components");
+        components.GetArrayLength().Should().Be(1, "a 4th nesting level reaches the document exactly like a 2nd or 3rd does");
+    }
+}

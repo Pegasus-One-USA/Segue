@@ -1,0 +1,379 @@
+<form [formGroup]="apiForm" class="dw-form" autocomplete="off">
+  <div class="dw-grid-2">
+
+    <div class="dw-field" [class.dw-field--error]="apiForm.get('name')!.invalid && apiForm.get('name')!.touched">
+      <label class="dw-label" for="dw-ae-name">Destination name <span class="dw-req">*</span></label>
+      <input id="dw-ae-name" class="dw-input" formControlName="name" placeholder="e.g. Partner API" />
+      @if (apiForm.get('name')!.invalid && apiForm.get('name')!.touched) {
+        <span class="dw-error">Destination name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-ae-httpMethod">HTTP method</label>
+      <div class="dw-select-wrap">
+        <select id="dw-ae-httpMethod" class="dw-select" formControlName="httpMethod">
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="PATCH">PATCH</option>
+          <option value="DELETE">DELETE</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('endpointUrl')!.invalid && apiForm.get('endpointUrl')!.touched">
+      <label class="dw-label" for="dw-ae-endpointUrl">Endpoint URL <span class="dw-req">*</span></label>
+      <input id="dw-ae-endpointUrl" class="dw-input" formControlName="endpointUrl"
+        placeholder="https://api.partner.com/v1/records" />
+      @if (apiForm.get('endpointUrl')!.hasError('required') && apiForm.get('endpointUrl')!.touched) {
+        <span class="dw-error">Endpoint URL is required.</span>
+      } @else if (apiForm.get('endpointUrl')!.hasError('pattern') && apiForm.get('endpointUrl')!.touched) {
+        <span class="dw-error">Must be an http(s) URL.</span>
+      }
+    </div>
+
+    <div class="dw-field dw-field--checkbox">
+      <label class="dw-label">
+        <input type="checkbox" formControlName="requireHttps" />
+        Require HTTPS
+      </label>
+      <span class="dw-hint">Off by default (plain http is allowed for an internal/test endpoint). Turn this on for any integration that carries PHI.</span>
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-ae-authMode">Authentication</label>
+      <div class="dw-select-wrap">
+        <select id="dw-ae-authMode" class="dw-select" formControlName="authMode">
+          <option value="none">None</option>
+          <option value="bearer">Bearer token</option>
+          <option value="apiKeyHeader">API key header</option>
+          <option value="apiKeyQuery">API key query parameter</option>
+          <option value="basic">Basic</option>
+          <option value="hmacSha256">HMAC-SHA256 body signature</option>
+          <option value="oauth2ClientCredentials">OAuth2 client credentials</option>
+          <option value="clientCertificate">Client certificate (mutual TLS)</option>
+        </select>
+      </div>
+      @if (apiForm.get('authMode')!.value === 'hmacSha256') {
+        <span class="dw-hint">Each request body is signed as "{{ '{timestamp}' }}.{{ '{body}' }}" and the timestamp is sent in its own header, so a captured request can't be replayed indefinitely.</span>
+      } @else if (apiForm.get('authMode')!.value === 'clientCertificate') {
+        <span class="dw-hint">The certificate is presented during the TLS handshake instead of any header-based credential.</span>
+      }
+    </div>
+
+    @if (apiForm.get('authMode')!.value !== 'none') {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('secretValue')!.invalid && apiForm.get('secretValue')!.touched">
+        <label class="dw-label" for="dw-ae-secret">
+          {{ secretLabel() }}
+          @if (secretRequired()) { <span class="dw-req">*</span> }
+        </label>
+        <input id="dw-ae-secret" class="dw-input" type="password" formControlName="secretValue" autocomplete="new-password" />
+        @if (apiForm.get('secretValue')!.hasError('required') && apiForm.get('secretValue')!.touched) {
+          <span class="dw-error">{{ secretLabel() }} is required.</span>
+        } @else {
+          <span class="dw-hint">Stored encrypted in the key vault — never returned to this form again once saved.</span>
+        }
+      </div>
+    }
+
+    @if (apiForm.get('authMode')!.value === 'apiKeyHeader') {
+      <div class="dw-field" [class.dw-field--error]="apiForm.get('authHeaderName')!.invalid && apiForm.get('authHeaderName')!.touched">
+        <label class="dw-label" for="dw-ae-authHeaderName">Header name <span class="dw-req">*</span></label>
+        <input id="dw-ae-authHeaderName" class="dw-input" formControlName="authHeaderName" placeholder="X-Api-Key" />
+        @if (apiForm.get('authHeaderName')!.hasError('required') && apiForm.get('authHeaderName')!.touched) {
+          <span class="dw-error">Header name is required for API key (header) authentication.</span>
+        }
+      </div>
+    }
+
+    @if (apiForm.get('authMode')!.value === 'apiKeyQuery') {
+      <div class="dw-field">
+        <label class="dw-label" for="dw-ae-apiKeyQueryParamName">Query parameter name</label>
+        <input id="dw-ae-apiKeyQueryParamName" class="dw-input" formControlName="apiKeyQueryParamName" placeholder="Default: api_key" />
+      </div>
+    }
+
+    @if (apiForm.get('authMode')!.value === 'oauth2ClientCredentials') {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('tokenEndpoint')!.invalid && apiForm.get('tokenEndpoint')!.touched">
+        <label class="dw-label" for="dw-ae-tokenEndpoint">Token endpoint <span class="dw-req">*</span></label>
+        <input id="dw-ae-tokenEndpoint" class="dw-input" formControlName="tokenEndpoint"
+          placeholder="https://login.example.com/oauth2/v2.0/token" />
+        @if (apiForm.get('tokenEndpoint')!.hasError('required') && apiForm.get('tokenEndpoint')!.touched) {
+          <span class="dw-error">Token endpoint is required for OAuth2 client credentials.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="apiForm.get('clientId')!.invalid && apiForm.get('clientId')!.touched">
+        <label class="dw-label" for="dw-ae-clientId">Client ID <span class="dw-req">*</span></label>
+        <input id="dw-ae-clientId" class="dw-input" formControlName="clientId" />
+        @if (apiForm.get('clientId')!.hasError('required') && apiForm.get('clientId')!.touched) {
+          <span class="dw-error">Client ID is required for OAuth2 client credentials.</span>
+        }
+      </div>
+    }
+
+    @if (apiForm.get('multiResourceMode')!.value === 'none') {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('bodyTemplateJson')!.invalid && apiForm.get('bodyTemplateJson')!.touched">
+        <label class="dw-label" for="dw-ae-bodyTemplateJson">Request body template (JSON)</label>
+        <textarea id="dw-ae-bodyTemplateJson" class="dw-input" rows="4" formControlName="bodyTemplateJson"
+          placeholder="e.g. your API's own JSON shape, with a value like &quot;{{ '{' }}{{ '{' }}PatientName{{ '}' }}{{ '}' }}&quot;"></textarea>
+        @if (apiForm.get('bodyTemplateJson')!.hasError('json') && apiForm.get('bodyTemplateJson')!.touched) {
+          <span class="dw-error">Must be valid JSON.</span>
+        } @else {
+          <span class="dw-hint">Paste the exact JSON body your API expects. Anywhere inside it, write <code>{{ '{' }}{{ '{' }}fieldName{{ '}' }}{{ '}' }}</code> using the same field/column names assigned on the Mapping Profile screen — a value that is <em>exactly</em> one placeholder (e.g. a quoted <code>"{{ '{' }}{{ '{' }}Age{{ '}' }}{{ '}' }}"</code>) is replaced with that field's real type (a number stays a number); a placeholder inside a longer string is text-substituted. <code>sourceResourceId</code>, <code>resourceType</code>, <code>destinationObject</code> and <code>pipelineRunId</code> are also available. Leave blank to use the default envelope (pipelineRunId/resourceType/.../values).</span>
+        }
+      </div>
+    }
+    <!-- Hidden once multi-resource is on: dest_apiBodyTemplateJson is never read by the backend in that mode
+         (MappedApiEndpointDestinationWriter uses dest_apiRecordTemplatesByResourceType per resource type instead —
+         see the multi-resource section below), so showing it would just be a dead field someone might fill in
+         and never see take effect. -->
+
+    <div class="dw-field dw-field--full">
+      <label class="dw-label" for="dw-ae-multiResourceMode">Multiple resources in one document</label>
+      <div class="dw-select-wrap">
+        <select id="dw-ae-multiResourceMode" class="dw-select" formControlName="multiResourceMode">
+          <option value="none">No — one resource type per write (default)</option>
+          <option value="flat">Flat — each resource type as its own sibling array</option>
+          <option value="nested">Nested — child records nested inside their parent record</option>
+        </select>
+      </div>
+      <span class="dw-hint">Combines more than one mapped resource type (e.g. Patient + Encounter) into a single outgoing document instead of sending each separately. Leave "No" unless your API expects a combined payload.</span>
+    </div>
+
+    @if (apiForm.get('multiResourceMode')!.value !== 'none') {
+      <div class="dw-field dw-field--full">
+        <span class="dw-label" id="dw-ae-relations-label">Participating resource types</span>
+        <div class="ae-relations-builder" role="group" aria-labelledby="dw-ae-relations-label">
+          @for (row of relationRows(); track $index) {
+            <div class="ae-relation-row">
+              <input class="dw-input" placeholder="Resource type (e.g. Patient)"
+                [value]="row.resourceType" (input)="updateRelationRow($index, { resourceType: $any($event.target).value })" />
+              <input class="dw-input" placeholder="Nest key (default: {{ row.resourceType ? (row.resourceType.charAt(0).toLowerCase() + row.resourceType.slice(1)) + 's' : 'e.g. patients' }})"
+                [value]="row.nestKey" (input)="updateRelationRow($index, { nestKey: $any($event.target).value })" />
+              @if (apiForm.get('multiResourceMode')!.value === 'nested') {
+                <span class="ae-relation-row-label">Parent:</span>
+                <div class="dw-select-wrap" style="flex:1 1 140px;">
+                  <select class="dw-select" [value]="row.parentResourceType"
+                    (change)="updateRelationRow($index, { parentResourceType: $any($event.target).value })">
+                    <option value="">— root (no parent) —</option>
+                    @for (candidate of parentCandidatesFor($index); track candidate) {
+                      <option [value]="candidate">{{ candidate }}</option>
+                    }
+                  </select>
+                </div>
+                @if (row.parentResourceType) {
+                  <input class="dw-input" placeholder="Correlation column (on this resource)"
+                    [value]="row.correlationColumn" (input)="updateRelationRow($index, { correlationColumn: $any($event.target).value })" />
+                  <input class="dw-input" placeholder="Parent key column (on {{ row.parentResourceType }})"
+                    [value]="row.parentKeyColumn" (input)="updateRelationRow($index, { parentKeyColumn: $any($event.target).value })" />
+                }
+              }
+              <button type="button" class="ae-relation-remove" title="Remove this resource" aria-label="Remove this resource" (click)="removeRelationRow($index)">✕</button>
+            </div>
+          }
+          <button type="button" class="ae-relation-add" (click)="addRelationRow()">+ Add resource</button>
+        </div>
+        <span class="dw-hint">One row per resource type combined into this document — Resource type must exactly match a resource selected on the Mapping step. For "Nested", pick each non-root resource's Parent, then the mapped column that correlates it (on this resource) and the mapped column it matches against (on the parent).</span>
+      </div>
+
+      <div class="dw-field dw-field--full">
+        <span class="dw-label" id="dw-ae-templates-label">Per-resource-type record template</span>
+        <div class="ae-templates-summary" role="group" aria-labelledby="dw-ae-templates-label">
+          @if (configuredRecordTemplateResourceTypes().length > 0) {
+            Configured for:
+            @for (rt of configuredRecordTemplateResourceTypes(); track rt) {
+              <span class="ae-templates-pill">{{ rt }}</span>
+            }
+          } @else {
+            <span class="ae-templates-empty">None configured yet — every resource type uses the default record shape.</span>
+          }
+        </div>
+        <span class="dw-hint">Set automatically when you use "⇩ Load JSON payload" on each resource's own card in the mapping canvas — no need to type this by hand. Use the raw editor below only for a shape the mapping canvas can't produce for you.</span>
+        <details class="ae-raw-json">
+          <summary>Edit raw JSON (advanced)</summary>
+          <div [class.dw-field--error]="apiForm.get('recordTemplatesByResourceTypeJson')!.invalid && apiForm.get('recordTemplatesByResourceTypeJson')!.touched">
+            <textarea id="dw-ae-recordTemplatesByResourceTypeJson" class="dw-input" rows="3" formControlName="recordTemplatesByResourceTypeJson"
+              placeholder="e.g. a JSON object of resourceType to that resource type's own Request Body Template string"></textarea>
+            @if (apiForm.get('recordTemplatesByResourceTypeJson')!.hasError('jsonObject') && apiForm.get('recordTemplatesByResourceTypeJson')!.touched) {
+              <span class="dw-error">Must be a JSON object mapping resource type to a JSON-template string.</span>
+            }
+          </div>
+        </details>
+      </div>
+
+      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('batchTemplateJson')!.invalid && apiForm.get('batchTemplateJson')!.touched">
+        <label class="dw-label" for="dw-ae-batchTemplateJson">Combined document template (JSON, optional)</label>
+        <textarea id="dw-ae-batchTemplateJson" class="dw-input" rows="3" formControlName="batchTemplateJson"
+          placeholder="e.g. the outer document shape, with each root nestKey as a placeholder"></textarea>
+        @if (apiForm.get('batchTemplateJson')!.hasError('json') && apiForm.get('batchTemplateJson')!.touched) {
+          <span class="dw-error">Must be valid JSON.</span>
+        } @else {
+          <span class="dw-hint">The outer document shape. Reference each root-level <code>nestKey</code> from above as a <code>{{ '{' }}{{ '{' }}nestKey{{ '}' }}{{ '}' }}</code> placeholder to place its array. Leave blank to send a plain object keyed by each root <code>nestKey</code>.</span>
+        }
+      </div>
+    }
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-ae-payloadShape">Payload shape</label>
+      <div class="dw-select-wrap">
+        <select id="dw-ae-payloadShape" class="dw-select" formControlName="payloadShape">
+          <option value="jsonArray">JSON array</option>
+          <option value="ndjson">NDJSON — one record per line</option>
+          <option value="envelope">Envelope — run metadata plus records</option>
+          <option value="recordPerRequest">One request per record (bare object, ignores batch settings)</option>
+        </select>
+      </div>
+      @if (apiForm.get('payloadShape')!.value === 'recordPerRequest') {
+        <span class="dw-hint">Sends each record as a bare JSON object and pins the batch to one record — "Records per request" and "Max request size" no longer apply.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="apiForm.get('batchSize')!.invalid && apiForm.get('batchSize')!.touched">
+      <label class="dw-label" for="dw-ae-batchSize">Records per request</label>
+      <input id="dw-ae-batchSize" class="dw-input" type="number" min="1" max="50000" formControlName="batchSize" />
+      @if (apiForm.get('batchSize')!.invalid && apiForm.get('batchSize')!.touched) {
+        <span class="dw-error">Must be between 1 and 50000.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-ae-onFailure">If a batch still fails</label>
+      <div class="dw-select-wrap">
+        <select id="dw-ae-onFailure" class="dw-select" formControlName="onFailure">
+          <option value="fail">Fail the run</option>
+          <option value="isolateBatch">Skip the batch and continue</option>
+        </select>
+      </div>
+      @if (apiForm.get('onFailure')!.value === 'isolateBatch') {
+        <span class="dw-hint">The run finishes as Partial Success and the skipped batch is recorded in execution history.</span>
+      }
+    </div>
+
+    <div class="dw-field dw-field--checkbox">
+      <label class="dw-label">
+        <input type="checkbox" formControlName="includeSourceJson" />
+        Include the full source FHIR resource in each record
+      </label>
+      <span class="dw-hint">Off by default. Mapped values have already been through this destination's mapping and de-identification profiles.</span>
+    </div>
+
+    <!-- ── Advanced ───────────────────────────────────────────────────────────────────────────── -->
+    <div class="dw-field dw-field--full ae-adv">
+      <button type="button" class="ae-adv-toggle" (click)="toggleAdvanced()"
+        [attr.aria-expanded]="advancedOpen() || hasAdvancedError()">
+        <span class="ae-adv-caret" [class.ae-adv-caret--open]="advancedOpen() || hasAdvancedError()">▸</span>
+        Advanced options
+        @if (hasAdvancedError()) {
+          <span class="ae-adv-badge">needs attention</span>
+        } @else if (!advancedOpen()) {
+          <span class="ae-adv-sub">transport, retries, headers, query params</span>
+        }
+      </button>
+    </div>
+
+    @if (advancedOpen() || hasAdvancedError()) {
+      <div class="dw-field">
+        <label class="dw-label" for="dw-ae-compression">Compression</label>
+        <div class="dw-select-wrap">
+          <select id="dw-ae-compression" class="dw-select" formControlName="compression">
+            <option value="none">None</option>
+            <option value="gzip">gzip</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="apiForm.get('maxRequestBytes')!.invalid && apiForm.get('maxRequestBytes')!.touched">
+        <label class="dw-label" for="dw-ae-maxRequestBytes">Max request size (bytes)</label>
+        <input id="dw-ae-maxRequestBytes" class="dw-input" type="number" min="1024" max="100663296" formControlName="maxRequestBytes" />
+        @if (apiForm.get('maxRequestBytes')!.invalid && apiForm.get('maxRequestBytes')!.touched) {
+          <span class="dw-error">Must be between 1024 (1 KB) and 100663296 (96 MB).</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="apiForm.get('timeoutSeconds')!.invalid && apiForm.get('timeoutSeconds')!.touched">
+        <label class="dw-label" for="dw-ae-timeoutSeconds">Timeout (seconds)</label>
+        <input id="dw-ae-timeoutSeconds" class="dw-input" type="number" min="1" max="600" formControlName="timeoutSeconds" />
+        @if (apiForm.get('timeoutSeconds')!.invalid && apiForm.get('timeoutSeconds')!.touched) {
+          <span class="dw-error">Must be between 1 and 600 seconds.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="apiForm.get('retryCount')!.invalid && apiForm.get('retryCount')!.touched">
+        <label class="dw-label" for="dw-ae-retryCount">Retries per batch</label>
+        <input id="dw-ae-retryCount" class="dw-input" type="number" min="0" max="10" formControlName="retryCount" />
+        @if (apiForm.get('retryCount')!.invalid && apiForm.get('retryCount')!.touched) {
+          <span class="dw-error">Must be between 0 and 10.</span>
+        } @else {
+          <span class="dw-hint">Only transport errors, timeouts, 429 and 5xx are retried.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="apiForm.get('retryBackoffSeconds')!.invalid && apiForm.get('retryBackoffSeconds')!.touched">
+        <label class="dw-label" for="dw-ae-retryBackoffSeconds">Retry backoff (seconds)</label>
+        <input id="dw-ae-retryBackoffSeconds" class="dw-input" type="number" min="0" max="60" formControlName="retryBackoffSeconds" />
+        @if (apiForm.get('retryBackoffSeconds')!.invalid && apiForm.get('retryBackoffSeconds')!.touched) {
+          <span class="dw-error">Must be between 0 and 60 seconds.</span>
+        } @else {
+          <span class="dw-hint">Doubles each attempt. A Retry-After header from the endpoint takes precedence.</span>
+        }
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-ae-contentType">Content type override</label>
+        <input id="dw-ae-contentType" class="dw-input" formControlName="contentType"
+          placeholder="Default: application/x-ndjson for NDJSON, else application/json" />
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-ae-expectedStatusCodes">Accepted status codes</label>
+        <input id="dw-ae-expectedStatusCodes" class="dw-input" formControlName="expectedStatusCodes" placeholder="Default: any 2xx" />
+        <span class="dw-hint">Comma-separated, e.g. "200, 202, 204".</span>
+      </div>
+
+      @if (apiForm.get('authMode')!.value === 'oauth2ClientCredentials') {
+        <div class="dw-field">
+          <label class="dw-label" for="dw-ae-scope">Scope</label>
+          <input id="dw-ae-scope" class="dw-input" formControlName="scope" placeholder="e.g. https://api.partner.com/.default" />
+        </div>
+      }
+
+      @if (apiForm.get('authMode')!.value === 'hmacSha256') {
+        <div class="dw-field">
+          <label class="dw-label" for="dw-ae-signatureHeaderName">Signature header</label>
+          <input id="dw-ae-signatureHeaderName" class="dw-input" formControlName="signatureHeaderName"
+            placeholder="Default: X-Signature-256" />
+        </div>
+
+        <div class="dw-field">
+          <label class="dw-label" for="dw-ae-timestampHeaderName">Timestamp header</label>
+          <input id="dw-ae-timestampHeaderName" class="dw-input" formControlName="timestampHeaderName"
+            placeholder="Default: X-Signature-Timestamp" />
+        </div>
+      }
+
+      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('headersJson')!.invalid && apiForm.get('headersJson')!.touched">
+        <label class="dw-label" for="dw-ae-headersJson">Static headers (JSON)</label>
+        <input id="dw-ae-headersJson" class="dw-input" formControlName="headersJson"
+          placeholder='e.g. {{ "{" }}"X-Tenant":"acme"{{ "}" }}' />
+        @if (apiForm.get('headersJson')!.hasError('jsonObject') && apiForm.get('headersJson')!.touched) {
+          <span class="dw-error">Must be a JSON object of header name to value.</span>
+        } @else {
+          <span class="dw-hint">Sent on every request. Each request also carries an idempotency key that stays stable across retries.</span>
+        }
+      </div>
+
+      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('queryParamsJson')!.invalid && apiForm.get('queryParamsJson')!.touched">
+        <label class="dw-label" for="dw-ae-queryParamsJson">Static query parameters (JSON)</label>
+        <input id="dw-ae-queryParamsJson" class="dw-input" formControlName="queryParamsJson"
+          placeholder='e.g. {{ "{" }}"version":"2"{{ "}" }}' />
+        @if (apiForm.get('queryParamsJson')!.hasError('jsonObject') && apiForm.get('queryParamsJson')!.touched) {
+          <span class="dw-error">Must be a JSON object of parameter name to value.</span>
+        } @else {
+          <span class="dw-hint">Appended to the endpoint URL on every request.</span>
+        }
+      </div>
+    }
+
+  </div>
+</form>

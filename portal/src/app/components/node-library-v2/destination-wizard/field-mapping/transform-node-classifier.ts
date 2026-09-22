@@ -14,7 +14,7 @@ export const ALL_NODE_TYPE_OPTIONS: { value: TransformNodeType; label: string }[
   { value: 'StatusEnumCoercion', label: 'Status/Enum Coercion' },
   { value: 'ReferenceConstruction', label: 'Reference Construction' },
   { value: 'IdentifierFormatting', label: 'Identifier Formatting' },
-  { value: 'HumanNameParsing', label: 'HumanName Parsing' },
+  { value: 'HumanNameParsing', label: 'HumanName Parsing & Formatting' },
   { value: 'AddressParsing', label: 'Address Parsing' },
   { value: 'TelecomNormalization', label: 'Telecom Normalization' },
   { value: 'StringNormalization', label: 'String Normalization' },

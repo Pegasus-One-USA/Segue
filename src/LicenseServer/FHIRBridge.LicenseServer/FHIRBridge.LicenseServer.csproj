@@ -9,7 +9,10 @@
     SignedLicenseValidator and tools/FHIRBridge.LicenseMinter, by hand, so tokens minted here are
     byte-for-byte compatible with what the product already validates — never by referencing those
     projects directly. Keep the dependency surface to ASP.NET Core (Razor Pages + minimal APIs),
-    EF Core/PostgreSQL, and the IdentityModel token libraries only.
+    EF Core/PostgreSQL, Windows Service hosting (matching Api/Worker/Gateway's own
+    Microsoft.Extensions.Hosting.WindowsServices + UseWindowsService usage — without it, Windows
+    Service Control Manager reports a bare "CouldNotStartService" with no further detail), and the
+    IdentityModel token libraries only.
   -->
 
   <PropertyGroup>
@@ -21,6 +24,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.8" />
+    <!-- UseWindowsService() activates a Windows Event Log logging provider when actually running
+         as a service, which needs this package (Api/Worker/Gateway all carry the same reference for
+         the same reason). Without it, the very first log call crashes the whole process with a
+         FileNotFoundException on System.Threading.AccessControl, confirmed on the real deployment
+         VM, where it took the service down before it ever signaled "running" to the SCM. -->
+    <PackageReference Include="System.Threading.AccessControl" Version="10.0.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
       <PrivateAssets>all</PrivateAssets>
@@ -28,6 +38,14 @@
     </PackageReference>
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.2.1" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.2.1" />
+    <!-- Same reasoning as System.Threading.AccessControl above, not a relaxation of the "no dependency
+         on the product" isolation: as a Windows Service there is no attached console, and the Event Log
+         provider is deliberately silenced (see Program.cs's remarks on that), so without a file sink a
+         misbehaving deployed service has nowhere to be diagnosed from at all. Serilog is already this
+         product's standard logging framework (FHIRBridge.Observability) — used here directly, by
+         reference to the NuGet packages only, never to that project. -->
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
   </ItemGroup>
 
 </Project>

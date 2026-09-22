@@ -93,10 +93,24 @@ export function buildFhirSecretBlob(f: Record<string, string>): string {
  */
 export function buildConnectionMetadata(
   f: Record<string, string>,
-  kind: 'sql' | 'csv' | 'fhir' | 'blob' | 'datalake' | 'fabric',
+  kind: 'sql' | 'csv' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'apiendpoint',
 ): string {
   const keys =
-    // Data Lake Webhook — every field here is non-secret transport/framing configuration. The credential
+    // API Endpoint — the general-purpose REST destination. Every field here is non-secret transport/framing
+    // configuration; the credential (bearer token / API key / "user:password" / HMAC shared secret / OAuth2
+    // client secret / base64 PFX for client certificates) is dest_apiSecret and is deliberately absent from this
+    // list. dest_apiEndpointUrl IS carried here even though it also becomes DestinationConfiguration.target, for
+    // the same reason dest_dlwEndpointUrl is (see the datalake branch below).
+    kind === 'apiendpoint'
+      ? ['dest_name', 'dest_apiEndpointUrl', 'dest_apiHttpMethod', 'dest_apiAuthMode', 'dest_apiAuthHeaderName',
+         'dest_apiKeyQueryParamName', 'dest_apiSignatureHeaderName', 'dest_apiTimestampHeaderName',
+         'dest_apiTokenEndpoint', 'dest_apiClientId', 'dest_apiScope',
+         'dest_apiPayloadShape', 'dest_apiContentType', 'dest_apiCompression', 'dest_apiRequireHttps',
+         'dest_apiBatchSize', 'dest_apiMaxRequestBytes', 'dest_apiTimeoutSeconds',
+         'dest_apiRetryCount', 'dest_apiRetryBackoffSeconds', 'dest_apiExpectedStatusCodes',
+         'dest_apiHeadersJson', 'dest_apiQueryParamsJson', 'dest_apiBodyTemplateJson',
+         'dest_apiIncludeSourceJson', 'dest_apiOnFailure']
+    : // Data Lake Webhook — every field here is non-secret transport/framing configuration. The credential
     // (bearer token / API key / "user:password" / HMAC shared secret / OAuth2 client secret) is dest_dlwSecret
     // and is deliberately absent from this list: it only ever lives in the encrypted secret. Note that
     // dest_dlwEndpointUrl IS carried here even though it also becomes DestinationConfiguration.target, for the

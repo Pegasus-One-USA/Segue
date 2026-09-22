@@ -78,7 +78,8 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
         // Same writer as DataFabricAzure on purpose: it resolves an IFabricLandingStrategy from the configured
         // mode and delegates, and FabricDestinationSettings.Parse pins this type to WarehouseTable — so the two
         // types share one implementation rather than duplicating the COPY INTO path.
-        new(DestinationType.DataFabricWarehouse, typeof(MappedDataFabricDestinationWriter))
+        new(DestinationType.DataFabricWarehouse, typeof(MappedDataFabricDestinationWriter)),
+        new(DestinationType.ApiEndpoint, typeof(MappedApiEndpointDestinationWriter))
     ];
 
     private static IReadOnlyDictionary<DestinationType, Type> BuildRegistry(

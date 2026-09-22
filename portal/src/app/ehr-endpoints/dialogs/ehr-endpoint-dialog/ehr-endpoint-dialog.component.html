@@ -15,7 +15,7 @@
   <mat-dialog-content>
 
     @if (errorMessage()) {
-      <div class="notice error-notice">
+      <div class="notice error-notice" data-testid="ehr-dialog-error">
         <mat-icon>error_outline</mat-icon>
         <span>{{ errorMessage() }}</span>
       </div>
@@ -24,7 +24,7 @@
     <form [formGroup]="form" novalidate class="dialog-form">
 
       <div class="form-row">
-        <div class="form-field" [class.form-field--error]="hasError('vendor', 'required')">
+        <div class="form-field" [class.form-field--error]="hasError('vendor', 'required')" [attr.data-invalid]="(hasError('vendor', 'required')) ? 'true' : null">
           <label for="ehr-vendor">Vendor <span class="req">*</span></label>
           <select id="ehr-vendor" formControlName="vendor">
             @for (option of vendorOptions; track option.value) {
@@ -33,7 +33,7 @@
           </select>
         </div>
 
-        <div class="form-field" [class.form-field--error]="hasError('endpointType', 'required')">
+        <div class="form-field" [class.form-field--error]="hasError('endpointType', 'required')" [attr.data-invalid]="(hasError('endpointType', 'required')) ? 'true' : null">
           <label for="ehr-endpointType">Endpoint Type <span class="req">*</span></label>
           <select id="ehr-endpointType" formControlName="endpointType">
             @for (option of endpointTypeOptions; track option.value) {
@@ -44,7 +44,7 @@
       </div>
 
       <div class="form-row">
-        <div class="form-field" [class.form-field--error]="hasError('vendorEndpointId', 'required') || hasError('vendorEndpointId', 'maxlength')">
+        <div class="form-field" [class.form-field--error]="hasError('vendorEndpointId', 'required') || hasError('vendorEndpointId', 'maxlength')" [attr.data-invalid]="(hasError('vendorEndpointId', 'required') || hasError('vendorEndpointId', 'maxlength')) ? 'true' : null">
           <label for="ehr-vendorEndpointId">Vendor Endpoint Id <span class="req">*</span></label>
           <input
             id="ehr-vendorEndpointId"
@@ -54,7 +54,7 @@
           />
         </div>
 
-        <div class="form-field" [class.form-field--error]="hasError('name', 'required') || hasError('name', 'maxlength')">
+        <div class="form-field" [class.form-field--error]="hasError('name', 'required') || hasError('name', 'maxlength')" [attr.data-invalid]="(hasError('name', 'required') || hasError('name', 'maxlength')) ? 'true' : null">
           <label for="ehr-name">Name <span class="req">*</span></label>
           <input
             id="ehr-name"
@@ -65,7 +65,7 @@
         </div>
       </div>
 
-      <div class="form-field form-field--full" [class.form-field--error]="hasError('fhirBaseUrl', 'required') || hasError('fhirBaseUrl', 'maxlength')">
+      <div class="form-field form-field--full" [class.form-field--error]="hasError('fhirBaseUrl', 'required') || hasError('fhirBaseUrl', 'maxlength')" [attr.data-invalid]="(hasError('fhirBaseUrl', 'required') || hasError('fhirBaseUrl', 'maxlength')) ? 'true' : null">
         <label for="ehr-fhirBaseUrl">FHIR Base URL <span class="req">*</span></label>
         <input
           id="ehr-fhirBaseUrl"
@@ -76,7 +76,7 @@
       </div>
 
       <div class="form-row">
-        <div class="form-field" [class.form-field--error]="hasError('formatType', 'required')">
+        <div class="form-field" [class.form-field--error]="hasError('formatType', 'required')" [attr.data-invalid]="(hasError('formatType', 'required')) ? 'true' : null">
           <label for="ehr-formatType">Format Type <span class="req">*</span></label>
           <input
             id="ehr-formatType"
@@ -86,7 +86,7 @@
           />
         </div>
 
-        <div class="form-field" [class.form-field--error]="hasError('status', 'required')">
+        <div class="form-field" [class.form-field--error]="hasError('status', 'required')" [attr.data-invalid]="(hasError('status', 'required')) ? 'true' : null">
           <label for="ehr-status">Status <span class="req">*</span></label>
           <input
             id="ehr-status"
@@ -105,6 +105,7 @@
     <div class="dialog-actions">
       <button
         mat-flat-button
+        data-testid="ehr-dialog-save"
         class="btn-save"
         [disabled]="saving()"
         (click)="save()"

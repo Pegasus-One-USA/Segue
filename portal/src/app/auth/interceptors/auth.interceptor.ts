@@ -76,7 +76,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         return throwError(() => err);
       }
 
-      return coordinator.refresh(() => authService.refreshToken()).pipe(
+      return coordinator.refresh(
+        () => authService.refreshToken(),
+        () => authService.syncCurrentUser(),
+      ).pipe(
         switchMap(() => next(cloned)),
         catchError(() => forceLogout(err)),
       );

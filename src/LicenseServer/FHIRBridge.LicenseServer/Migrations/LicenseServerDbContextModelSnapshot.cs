@@ -184,6 +184,9 @@ namespace FHIRBridge.LicenseServer.Migrations
                     b.Property<int>("MaxWorkflows")
                         .HasColumnType("integer");
 
+                    b.Property<string>("RequestHost")
+                        .HasColumnType("text");
+
                     b.Property<string>("Token")
                         .IsRequired()
                         .HasColumnType("text");
@@ -211,6 +214,12 @@ namespace FHIRBridge.LicenseServer.Migrations
                     b.Property<string>("CompanyName")
                         .HasColumnType("text");
 
+                    b.Property<string>("DenialReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeniedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
@@ -233,6 +242,9 @@ namespace FHIRBridge.LicenseServer.Migrations
 
                     b.Property<bool>("ReceivedManually")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("RequestHost")
+                        .HasColumnType("text");
 
                     b.Property<int>("SubmissionCount")
                         .HasColumnType("integer");

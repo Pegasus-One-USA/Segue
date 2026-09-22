@@ -293,6 +293,10 @@ public sealed class HealthAppDbContext : DbContext
 
     public DbSet<DataLakeRecordValueEntity> DataLakeRecordValues => Set<DataLakeRecordValueEntity>();
 
+    // Landing table for the ApiEndpoint destination's sample test APIs (ApiEndpointTestEndpoints). Created on
+    // startup by DatabaseSchemaReconciler from this model — no migration needed.
+    public DbSet<ApiTestCallEntity> ApiTestCalls => Set<ApiTestCallEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Table/key mapping only — these 11 tables already exist in HealthAppDb (created outside EnsureCreated,

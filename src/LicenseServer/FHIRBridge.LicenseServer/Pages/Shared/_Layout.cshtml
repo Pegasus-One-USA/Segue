@@ -9,7 +9,7 @@
     // Only queried when there's an authenticated session to show the nav for at all — matches the
     // condition the nav bar itself is already wrapped in below.
     var pendingRequestCount = User.Identity?.IsAuthenticated == true
-        ? await Db.LicenseRequests.CountAsync(r => r.FulfilledAtUtc == null)
+        ? await Db.LicenseRequests.CountAsync(r => r.FulfilledAtUtc == null && r.DeniedAtUtc == null)
         : 0;
 }
 <!DOCTYPE html>
@@ -17,14 +17,14 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>@ViewData["Title"] - FHIRBridge License Server</title>
+    <title>@ViewData["Title"] - Segue License Server</title>
     <link rel="stylesheet" href="~/css/site.css" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f6e5f'/%3E%3Ctext x='16' y='22' font-size='17' font-family='Segoe UI,Arial,sans-serif' font-weight='700' fill='white' text-anchor='middle'%3EL%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
     <header class="topbar">
         <div class="topbar-inner">
-            <a class="brand" href="/">FHIRBridge License Server</a>
+            <a class="brand" href="/">Segue License Server</a>
             @if (User.Identity?.IsAuthenticated == true)
             {
                 <nav class="nav">
@@ -36,6 +36,7 @@
                             <span class="nav-badge">@pendingRequestCount</span>
                         }
                     </a>
+                    <a class="@NavClass("/LicenseRequests/History")" href="/LicenseRequests/History">Request History</a>
                     <a class="@NavClass("/Licenses/Create")" href="/Licenses/Create">Mint License</a>
                     <a class="@NavClass("/Licenses")" href="/Licenses">Issued Licenses</a>
                     <a class="@NavClass("/Guide")" href="/Guide">Guide</a>
@@ -51,7 +52,7 @@
     {
         <div class="dev-key-banner">
             DEV SIGNING KEY ACTIVE — no production PFX configured. Licenses minted right now will NOT
-            verify against a real deployed FHIRBridge instance's embedded production public key.
+            verify against a real deployed Segue instance's embedded production public key.
         </div>
     }
 
