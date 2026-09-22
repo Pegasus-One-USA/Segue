@@ -279,7 +279,32 @@ export const JSON_WRITE_MODE_DOCUMENT_MARKER = 'json=document';
  *  comes back with no source valueType at all (sourceRefFromPath doesn't round-trip it), so without this
  *  a restored 'value' row would drop the user's choice the next time it was saved. */
 export function supportsJsonWriteMode(row: MappingRow): boolean {
+  // A join's value is `string.Join(delimiter, pieces)` on the backend (JsonMappingEngine.ResolveJoinedFields)
+  // — a delimited string by construction, never a JSON document, whatever its first source's own type says.
+  // Checked before everything else so a single-source Json row that later gains a second source stops
+  // offering (and stops sending) a choice that could no longer mean anything.
+  if (row.sources.length > 1) return false;
   return effectiveMappingValueType(row) === 'Json' || row.jsonWriteMode !== undefined;
+}
+
+/** The JSON write mode a backend field's `format` marker bag selects — the client-side mirror of the
+ *  backend's MappingFieldFormat.ReadJsonWriteMode, and deliberately the same substring test rather than an
+ *  equality check: `format` carries a ';'-separated BAG of markers, so the real stored values include
+ *  "json=document" alone AND compound forms like "wholeNodeAsJson;json=document" (see
+ *  formatWithJsonWriteMode, which preserves whatever markers were already there, and
+ *  MappingImportService.BuildJsonPathAndFormat, which stamps the column-mode marker). Anything without the
+ *  marker — a null/blank format included — is 'string'.
+ *
+ *  Matches whole ';'-separated SEGMENTS, not a raw substring of the joined value, mirroring the backend's
+ *  ReadJsonWriteMode and JsonMappingEngine.ParseDelimiter. A segment can carry arbitrary user text — a
+ *  "joinedFields;delimiter=X" field takes everything after the first '=' as its delimiter — so a substring
+ *  test would let a delimiter of "json=document" flip an unrelated column into document storage. */
+export function jsonWriteModeFromFormat(format: string | null | undefined): JsonColumnWriteMode {
+  return (format ?? '')
+    .split(';')
+    .some(segment => segment.trim().toLowerCase() === JSON_WRITE_MODE_DOCUMENT_MARKER)
+    ? 'document'
+    : 'string';
 }
 
 /** `row`'s effective JSON write mode, defaulting to today's behaviour ('string') for every row that has
@@ -446,7 +471,16 @@ export function serializeRowsFlat(
       target: targetTableName,
       column: row.targetName,
       jsonPath: isDefault ? (row.defaultToken ?? '@default') : primary?.jsonPath,
-      valueType: isDefault ? row.defaultValueType : (arrayPolicy === 'StoreJson' ? 'Json' : primary?.valueType),
+      // `format && 'Json'`: emitting the document marker and declaring anything but Json would be
+      // self-contradictory, and the backend reads BOTH — MappedMongoDestinationWriter.ResolveDocumentJsonColumns
+      // only honours the marker on a ValueType=Json field, and JsonMappingEngine.ConvertElement only hands the
+      // value through as raw JSON text for that same type. This matters for a row rebuilt from the Mapping JSON
+      // summary, which doesn't round-trip a source's valueType (sourceRefFromPath): such a row still carries the
+      // user's 'document' choice but would otherwise fall back to the assembler's path-guessed 'String',
+      // silently downgrading to escaped text while the UI kept showing "JSON document".
+      valueType: format
+        ? 'Json'
+        : (isDefault ? row.defaultValueType : (arrayPolicy === 'StoreJson' ? 'Json' : primary?.valueType)),
       arrays: primary?.arrays,
       arrayPolicy,
       approximated,

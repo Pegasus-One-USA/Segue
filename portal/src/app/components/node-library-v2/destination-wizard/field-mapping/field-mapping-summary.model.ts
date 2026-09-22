@@ -255,14 +255,19 @@ function toSummaryColumn(
     };
   }
   if (row.mode === 'default') {
+    // A default column CAN be Json-valued (defaultValueType), and serializeRowsFlat sends that as its
+    // ValueType, so a 'document' choice is as real here as on a mapped column and has to round-trip too.
     return {
       column: row.targetName, mode: 'default',
       defaultToken: row.defaultToken ?? '@default', defaultValue: row.defaultValue ?? null, defaultValueType: row.defaultValueType,
-      instance, ...referenceLookup, ...upsertKey,
+      instance, ...referenceLookup, ...upsertKey, ...jsonWriteMode,
     };
   }
   const sources = row.sources.map(s => s.fhirPath);
   if (sources.length > 1) {
+    // No jsonWriteMode: a join's value is a delimited string by construction (JsonMappingEngine.
+    // ResolveJoinedFields), so there is no such choice to make for one — supportsJsonWriteMode() returns
+    // false for a multi-source row, which is what keeps `jsonWriteMode` above empty here in the first place.
     return { column: row.targetName, mode: 'joinedFields', sources, delimiter: row.delimiter ?? ', ', instance, ...referenceLookup, ...upsertKey };
   }
   return { column: row.targetName, mode: 'directField', sources, instance, ...referenceLookup, ...upsertKey, ...jsonWriteMode };
@@ -686,6 +691,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
             defaultToken: col.defaultToken ?? '@default', defaultValue: col.defaultValue ?? null, defaultValueType: col.defaultValueType,
             instance, targetName: col.column, tableName: fullName,
             ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
+            ...(col.jsonWriteMode ? { jsonWriteMode: col.jsonWriteMode } : {}),
           });
           continue;
         }

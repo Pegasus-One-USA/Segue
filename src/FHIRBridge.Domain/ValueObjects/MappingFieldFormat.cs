@@ -28,9 +28,28 @@ public static class MappingFieldFormat
     /// The JSON write mode this field's <paramref name="format"/> selects. Anything without an explicit
     /// marker — including a null/blank format, which is what every field authored before this option
     /// carries — is <see cref="JsonColumnWriteMode.JsonString"/>.
+    ///
+    /// Matches whole ';'-separated segments, exactly as <c>JsonMappingEngine.ParseDelimiter</c> reads its own
+    /// marker out of this same string — NOT a raw substring search over the whole value. Format is a marker
+    /// bag whose segments can carry arbitrary user text: "joinedFields;delimiter=X" takes everything after
+    /// the first '=' as the delimiter, so a delimiter of "json=document" would otherwise flip an unrelated
+    /// joined-string column into document storage.
     /// </summary>
     public static JsonColumnWriteMode ReadJsonWriteMode(string? format)
-        => format is not null && format.Contains(JsonWriteModeDocumentMarker, StringComparison.OrdinalIgnoreCase)
-            ? JsonColumnWriteMode.Document
-            : JsonColumnWriteMode.JsonString;
+    {
+        if (string.IsNullOrWhiteSpace(format))
+        {
+            return JsonColumnWriteMode.JsonString;
+        }
+
+        foreach (var segment in format.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (segment.Equals(JsonWriteModeDocumentMarker, StringComparison.OrdinalIgnoreCase))
+            {
+                return JsonColumnWriteMode.Document;
+            }
+        }
+
+        return JsonColumnWriteMode.JsonString;
+    }
 }

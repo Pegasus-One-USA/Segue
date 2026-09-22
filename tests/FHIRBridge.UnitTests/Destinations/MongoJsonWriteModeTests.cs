@@ -29,8 +29,23 @@ public sealed class MongoJsonWriteModeTests
     [InlineData("json=document")]
     [InlineData("wholeNodeAsJson;json=document")]
     [InlineData("WholeNodeAsJson;JSON=DOCUMENT")]
+    [InlineData("directField; json=document ")]
     public void ReadJsonWriteMode_reads_the_document_marker(string format)
         => MappingFieldFormat.ReadJsonWriteMode(format).Should().Be(JsonColumnWriteMode.Document);
+
+    /// <summary>
+    /// Format is a ';'-separated marker BAG whose segments carry arbitrary text — "joinedFields;delimiter=X"
+    /// takes everything after the first '=' as the delimiter (JsonMappingEngine.ParseDelimiter) — so the
+    /// marker must be matched as a whole segment. A raw substring search over the joined value would turn an
+    /// unrelated joined-string column into document storage.
+    /// </summary>
+    [Theory]
+    [InlineData("joinedFields;delimiter=json=document")]
+    [InlineData("joinedFields;delimiter=|json=document")]
+    [InlineData("notjson=document")]
+    [InlineData("json=documentary")]
+    public void ReadJsonWriteMode_does_not_match_the_marker_inside_another_segment(string format)
+        => MappingFieldFormat.ReadJsonWriteMode(format).Should().Be(JsonColumnWriteMode.JsonString);
 
     [Fact]
     public void TryParse_turns_a_resource_into_a_nested_document()

@@ -69,6 +69,7 @@ import {
   reconcileTargetsForDestTypeSwitch,
   checkColumnTypeCompatibility,
   DefaultValueToken,
+  jsonWriteModeFromFormat,
 } from './field-mapping/field-mapping-model';
 import { computePendingTableNames, runQueuedOpsSequentially } from './field-mapping/field-mapping-schema-ops.util';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
@@ -3043,6 +3044,19 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     const newRows: MappingRow[] = profile.fields.map((f) => {
+      // The MongoDB "store this JSON as a real sub-document" choice lives on the saved field's `format`
+      // marker bag (see field-mapping-model.ts's jsonWriteModeFromFormat / the backend's MappingFieldFormat),
+      // so it has to be read back out of it here. This is the third load path into MappingRow[], alongside
+      // dest_mappings_v2 (carries the full row verbatim) and the canonical Mapping JSON summary
+      // (applyMappingSummaryDocument, which round-trips its own jsonWriteMode key) — copying `format` alone,
+      // as this used to, left the row defaulting to 'string': the popover showed "JSON string" for a field
+      // saved as a document, and the very next serializeRowsFlat dropped the json=document marker outright.
+      // Spread rather than always assigned, matching the summary path's own convention: only a real
+      // 'document' choice is stamped, because an explicit 'string' would make supportsJsonWriteMode() true
+      // for EVERY field and surface the Mongo-only dropdown on plain String columns that have no such choice.
+      const jsonWriteMode = jsonWriteModeFromFormat(f.format);
+      const jsonWriteModeEntry = jsonWriteMode === 'document' ? { jsonWriteMode } : {};
+
       // A "@token" JsonPath (JsonMappingEngine.IsSystemToken) has no real source at all — reconstructing
       // it as an ordinary mode: 'value' row (as every field below unconditionally used to) produced a
       // broken row with a fabricated fhirPath and, worse, silently lost defaultValue/defaultValueType on
@@ -3061,6 +3075,7 @@ export class DestinationWizardComponent implements OnInit {
           isRequired: f.isRequired,
           format: f.format ?? null,
           isUpsertKey: f.isUpsertKey ?? false,
+          ...jsonWriteModeEntry,
         };
       }
       const resolved = this._resolveFhirPath(resource, f);
@@ -3086,6 +3101,7 @@ export class DestinationWizardComponent implements OnInit {
         defaultValue: f.defaultValue ?? null,
         format: f.format ?? null,
         isUpsertKey: f.isUpsertKey ?? false,
+        ...jsonWriteModeEntry,
       };
     });
 
