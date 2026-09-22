@@ -78,6 +78,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'dest-azurefhir': 'AzureFhirServiceDestinationNode',
   'dest-blob': 'BlobDestinationNode',
   'dest-datalake-webhook': 'DataLakeWebhookDestinationNode',
+  'dest-apiendpoint': 'ApiEndpointDestinationNode',
   'dest-fabric': 'DataFabricAzureDestinationNode',
   'dest-fabric-warehouse': 'DataFabricWarehouseDestinationNode',
   'dest-csv': 'CsvDestinationNode',
@@ -97,6 +98,8 @@ const SECRET_FIELD_KEYS = new Set([
   // secret) and the Fabric service-principal client secret. Both live only in the provisioned Key
   // Vault entry — never on the node.
   'dest_dlwSecret', 'dest_fabricSecret',
+  // API Endpoint's single secret control — same "never on the node" rule as the two above.
+  'dest_apiSecret',
 ]);
 
 @Injectable({ providedIn: 'root' })

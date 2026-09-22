@@ -202,6 +202,23 @@ public sealed class DataLakeWebhookDestinationNodeExecutor : DestinationNodeExec
 }
 
 /// <summary>
+/// General-purpose, fully configurable outbound REST API destination — see
+/// <see cref="Domain.Enums.DestinationType.ApiEndpoint"/>. Same DAG shape as every other destination node: consumes
+/// MappedRecordBatch and requires an upstream Mapping node.
+/// </summary>
+public sealed class ApiEndpointDestinationNodeExecutor : DestinationNodeExecutor
+{
+    public ApiEndpointDestinationNodeExecutor(
+        IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null,
+        IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.ApiEndpointDestination, DestinationType.ApiEndpoint, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+    {
+    }
+}
+
+/// <summary>
 /// Microsoft Fabric destination (OneLake Files). Listed in MultiTableRelationalDestinationTypes for the same
 /// reason Blob is: <c>MappedDataFabricDestinationWriter.BuildFilePath</c> takes both the file name and the
 /// hive-style <c>resourceType=</c> partition folder from the PROFILE's resource type, so a mixed batch has to be
@@ -644,12 +661,13 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         // Same reason as BlobStorage, one layer up: neither of these writers groups by resource type
         // internally either. MappedDataFabricDestinationWriter names its file (and its hive-style
         // resourceType= partition folder) from the PROFILE's resource type, and
-        // MappedDataLakeWebhookDestinationWriter stamps the profile's resource type onto each batch's routing
-        // header and envelope metadata — so a mixed batch arriving in one call would land under a folder, or
-        // be announced to the lake, as a resource type most of its records are not.
+        // MappedDataLakeWebhookDestinationWriter/MappedApiEndpointDestinationWriter stamp the profile's resource
+        // type onto each batch's routing header and envelope metadata — so a mixed batch arriving in one call
+        // would land under a folder, or be announced downstream, as a resource type most of its records are not.
         DestinationType.DataFabricAzure,
         DestinationType.DataFabricWarehouse,
         DestinationType.DataLakeWebhook,
+        DestinationType.ApiEndpoint,
     ];
 
     // NodeType -> RuntimeSourceType for every source node executor's own hardcoded mapping (see SourceNodeExecutors.cs
@@ -1235,7 +1253,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         => destinationType is DestinationType.BlobStorage
             or DestinationType.DataFabricAzure
             or DestinationType.DataFabricWarehouse
-            or DestinationType.DataLakeWebhook;
+            or DestinationType.DataLakeWebhook
+            or DestinationType.ApiEndpoint;
 
     private static string? BuildWriteModeSuffix(WorkflowNode node)
     {

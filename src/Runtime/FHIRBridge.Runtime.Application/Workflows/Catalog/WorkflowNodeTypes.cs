@@ -72,6 +72,12 @@ public static class WorkflowNodeTypes
     /// <see cref="DataFabricAzureDestination"/> (the file surface) because the two land in different places over
     /// different protocols; see DestinationType.DataFabricWarehouse.</summary>
     public const string DataFabricWarehouseDestination = "DataFabricWarehouseDestinationNode";
+
+    /// <summary>General-purpose, fully configurable outbound REST API — the "bring your own endpoint" destination.
+    /// Widest auth surface of any destination node (see <c>ApiEndpointAuthMode</c>); unlike
+    /// <see cref="RestApiDestination"/> it supports batching, retry and every auth mode a real integration needs.</summary>
+    public const string ApiEndpointDestination = "ApiEndpointDestinationNode";
+
     /// <summary>Phase 2 example: a Destination-category node whose input is a previous destination's write result,
     /// not fresh mapped records — demonstrates chaining a destination into another node via a bespoke catalog rank
     /// tier (71, above Destination's 70) rather than relaxing the graph validator. See

@@ -56,7 +56,7 @@ public sealed class CreateModel : PageModel
     public static readonly IReadOnlyList<string> DestinationTypes = new[]
     {
         "SqlServer", "PostgreSql", "MySql", "Mongo", "BlobStorage", "Csv", "FhirRepository", "Medplum",
-        "AzureFhirService", "DataLakeWebhook",
+        "AzureFhirService", "DataLakeWebhook", "DataFabricAzure", "DataFabricWarehouse", "ApiEndpoint",
     };
 
     private readonly LicenseServerDbContext _db;

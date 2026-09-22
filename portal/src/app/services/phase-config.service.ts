@@ -66,6 +66,9 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-fabric-group',
     'dest-fabric',
     'dest-fabric-warehouse',
+    // General-purpose, fully configurable outbound REST API — writer, sender, validator, Step 1 form and
+    // wizard family are all in place (see MappedApiEndpointDestinationWriter).
+    'dest-apiendpoint',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
     // Phase 2+ destinations: 'dest-azuresql',

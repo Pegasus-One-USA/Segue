@@ -30,7 +30,8 @@ export type DestinationType =
   | 'DataFabricAzure'
   /** Microsoft Fabric Warehouse — see DestinationTypeV2's own note; kept in step with that union and with the
    *  backend DestinationType enum, which all three must agree on. */
-  | 'DataFabricWarehouse';
+  | 'DataFabricWarehouse'
+  | 'ApiEndpoint';
 
 /** Must match the backend's ArtifactDeliveryMode enum member names. Stored as `dest_deliveryMode` in
  *  ConnectionMetadataJson for Csv destinations — replaces the old `dest_storageType` field. */

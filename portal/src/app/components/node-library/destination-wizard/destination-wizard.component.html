@@ -682,7 +682,7 @@
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
           <span class="dw-section-hint">
-            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : isFhir() ? 'Map FHIR paths to FHIR repository resource fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : isDataLake() ? 'Map FHIR paths to the fields sent in each webhook record.' : isFabric() ? 'Map FHIR paths to OneLake file columns.' : 'Map FHIR paths to CSV file columns.' }}
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : isFhir() ? 'Map FHIR paths to FHIR repository resource fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : isDataLake() ? 'Map FHIR paths to the fields sent in each webhook record.' : isFabric() ? 'Map FHIR paths to OneLake file columns.' : isApiEndpoint() ? 'Map FHIR paths to the fields sent in each request.' : 'Map FHIR paths to CSV file columns.' }}
             Choose a data group to map.
           </span>
         </div>
@@ -995,6 +995,23 @@
           <div class="dw-review-card">
             <span class="dw-review-key">Authentication</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_fabricAuthMode'] === 'servicePrincipal' ? 'Service principal' : 'Managed identity' }}</span>
+          </div>
+        } @else if (isApiEndpoint()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Endpoint</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_apiHttpMethod'] }} {{ activeFormConfig()['dest_apiEndpointUrl'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Authentication</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_apiAuthMode'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Payload</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_apiPayloadShape'] }}, up to {{ activeFormConfig()['dest_apiBatchSize'] }} records per request{{ activeFormConfig()['dest_apiBodyTemplateJson'] ? ' (custom body template)' : '' }}</span>
           </div>
         } @else if (isAzureFhir()) {
           <div class="dw-review-card">

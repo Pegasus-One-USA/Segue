@@ -67,5 +67,17 @@ public enum DestinationType
     /// resolves an <c>IFabricLandingStrategy</c> from the configured mode and delegates, so the split is a
     /// classification change, not a second implementation of the same protocol.</para>
     /// </summary>
-    DataFabricWarehouse = 26
+    DataFabricWarehouse = 26,
+
+    /// <summary>
+    /// General-purpose, fully configurable outbound REST API — the "bring your own endpoint" destination. Unlike
+    /// <see cref="RestApi"/> (one record per request, no auth beyond a raw secret, no batching, no retry), this
+    /// type exposes every option a real integration needs: HTTP method, seven auth modes (none/basic/bearer/API
+    /// key header or query/HMAC-SHA256/OAuth2 client credentials/client certificate mTLS), custom headers and
+    /// query parameters, batching with byte and count caps, gzip, retry with backoff, and a configurable
+    /// success/failure contract. Also distinct from <see cref="DataLakeWebhook"/>, which is purpose-built for
+    /// data-lake ingestion front doors (Fabric/Databricks/HEC) and always PHI-carrying/https-only; this type is
+    /// the general destination for an arbitrary customer- or partner-owned HTTP API. See <c>ApiEndpointSettings</c>.
+    /// </summary>
+    ApiEndpoint = 27
 }

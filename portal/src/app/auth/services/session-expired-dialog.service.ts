@@ -33,8 +33,19 @@ export class SessionExpiredDialogService {
   private readonly store   = inject(AuthStore);
   private isOpen = false;
 
-  show(message: string = DEFAULT_MESSAGE): void {
+  /**
+   * @param alreadyOnLoginPage Set by SessionService.onIdle(), which navigates to /auth/login itself
+   *   BEFORE calling show() (so the prompt sits over a blank login page rather than PHI-bearing
+   *   content) — for that caller, router.url already being '/auth/login' is expected, not a reason
+   *   to suppress. Every other caller (the interceptor's 401 path) hits this from whatever page the
+   *   user was actually on, so for those, router.url already being '/auth/login' means there is
+   *   nothing to expire: a stray request left over from before the user navigated here (or from a
+   *   still-arming idle timer in another tab) shouldn't pop this prompt over the login form the user
+   *   is actively looking at.
+   */
+  show(message: string = DEFAULT_MESSAGE, alreadyOnLoginPage = false): void {
     if (this.isOpen) { return; }
+    if (!alreadyOnLoginPage && this.router.url.split(/[?#]/)[0] === '/auth/login') { return; }
     this.isOpen = true;
     // Every page that has its own error handler on the failing request still runs it (spinners
     // stop, etc.) and many of them toast whatever message the backend sent back for the 401 — often

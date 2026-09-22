@@ -26,6 +26,7 @@ import { ProtobufDestinationFormComponent } from './protobuf-destination-form.co
 import { DatabricksDestinationFormComponent } from './databricks-destination-form.component';
 import { DataLakeWebhookDestinationFormComponent } from './data-lake-webhook-destination-form.component';
 import { DataFabricDestinationFormComponent } from './data-fabric-destination-form.component';
+import { ApiEndpointDestinationFormComponent } from './api-endpoint-destination-form.component';
 
 /**
  * Single source of truth mapping every DestinationType to the standalone component that configures it —
@@ -64,4 +65,5 @@ export const DESTINATION_FORM_REGISTRY: DestinationFormRegistry<DestinationType>
   // Same form as the Files surface: one Fabric connection shape (workspace/item/Entra auth), with the
   // Warehouse-only fields it already carries. The landing mode is implied by the destination type.
   DataFabricWarehouse: DataFabricDestinationFormComponent,
+  ApiEndpoint: ApiEndpointDestinationFormComponent,
 };
