@@ -140,8 +140,7 @@
 
     <div class="dw-field" [class.dw-field--error]="apiForm.get('batchSize')!.invalid && apiForm.get('batchSize')!.touched">
       <label class="dw-label" for="dw-ae-batchSize">Records per request</label>
-      <input id="dw-ae-batchSize" class="dw-input" type="number" min="1" max="50000" formControlName="batchSize"
-        [attr.disabled]="apiForm.get('payloadShape')!.value === 'recordPerRequest' ? true : null" />
+      <input id="dw-ae-batchSize" class="dw-input" type="number" min="1" max="50000" formControlName="batchSize" />
       @if (apiForm.get('batchSize')!.invalid && apiForm.get('batchSize')!.touched) {
         <span class="dw-error">Must be between 1 and 50000.</span>
       }

@@ -36,6 +36,14 @@ public sealed class ApiEndpointSender : IApiEndpointSender, IDisposable
     private readonly Dictionary<Guid, HttpClient> _certificateClients = new();
     private readonly object _certificateClientsLock = new();
 
+    // Ceiling on the exponential backoff between attempts. Unbounded, the doubling against the top of
+    // RetryBackoffSeconds's/RetryCount's own allowed ranges (60s base, 10 retries) reaches roughly 17
+    // hours of cumulative Task.Delay for a single batch — blocking the run and holding its scope (and
+    // this sender's cached mTLS HttpClient, if any) open the whole time. 60s keeps every retry within a
+    // sane wait while still giving Retry-After (checked separately, uncapped) priority when the server
+    // states one explicitly.
+    private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(60);
+
     public ApiEndpointSender(
         ISecretProvider secretProvider,
         IHttpClientFactory httpClientFactory,
@@ -145,7 +153,8 @@ public sealed class ApiEndpointSender : IApiEndpointSender, IDisposable
             {
                 var backoff = retryAfter is { } wait && wait > TimeSpan.Zero
                     ? wait
-                    : TimeSpan.FromSeconds(settings.RetryBackoffSeconds * Math.Pow(2, attempt - 1));
+                    : TimeSpan.FromSeconds(
+                        Math.Min(settings.RetryBackoffSeconds * Math.Pow(2, attempt - 1), MaxBackoff.TotalSeconds));
 
                 await Task.Delay(backoff, cancellationToken);
             }
@@ -190,7 +199,20 @@ public sealed class ApiEndpointSender : IApiEndpointSender, IDisposable
         var existingQuery = HttpUtility.ParseQueryString(builder.Query);
         foreach (string? key in existingQuery)
         {
-            if (key is not null && query[key] is null)
+            if (key is null)
+            {
+                // Valueless flags on the original URL (e.g. "?debug", "?debug&trace") are filed by
+                // ParseQueryString under the null key, with each flag name as one of ITS values — not as
+                // separate string keys — so they'd otherwise be silently dropped by the "key is not null"
+                // check below every time this merge runs.
+                foreach (var flag in existingQuery.GetValues(null) ?? [])
+                {
+                    query.Add(null, flag);
+                }
+                continue;
+            }
+
+            if (query[key] is null)
             {
                 query[key] = existingQuery[key];
             }
@@ -381,7 +403,12 @@ public sealed class ApiEndpointSender : IApiEndpointSender, IDisposable
         // HttpClientHandler.Dispose() does not dispose certificates added to ClientCertificates — it only holds a
         // reference, not ownership — so the certificate (private key material) would otherwise outlive this call
         // until finalized by the GC. This subclass disposes it alongside the handler/HttpClient.
-        return new CertificateOwningHttpClient(handler, certificate);
+        return new CertificateOwningHttpClient(handler, certificate)
+        {
+            // Same reasoning as the named HttpClientFactory client's own Timeout override above: only the
+            // per-attempt linked CancellationTokenSource in SendAsync should govern how long a request runs.
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+        };
     }
 
     /// <summary>An <see cref="HttpClient"/> that also disposes the client certificate it was built with, once,

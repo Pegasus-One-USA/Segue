@@ -137,6 +137,27 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
     });
     this.apiForm.controls.authMode.valueChanges.subscribe(v =>
       this._syncAuthModeValidators(v, this.reusingExisting()));
+
+    this._syncBatchSizeDisabled(this.apiForm.controls.payloadShape.value);
+    this.apiForm.controls.payloadShape.valueChanges.subscribe(v => this._syncBatchSizeDisabled(v));
+  }
+
+  /** "One request per record" pins the batch to a single record and ignores batchSize entirely (see
+   *  ApiEndpointPayloadShape.RecordPerRequest) — the field is disabled, not just visually greyed out, via
+   *  the control itself (Reactive Forms disallows an [attr.disabled]/[disabled] binding alongside
+   *  formControlName; the template previously used [attr.disabled], which styled the input but left the
+   *  FormControl itself — and its Validators.min/max — enrolled in apiForm's validity. A pre-existing
+   *  out-of-range value from a saved config, or one entered before switching payload shape, then kept the
+   *  whole form invalid with its error hidden behind a disabled-looking field and no visible cause). A
+   *  disabled control is excluded from its parent's validity outright, which is what actually needs to
+   *  happen here — greying it out is just the visible side effect Angular applies for free. */
+  private _syncBatchSizeDisabled(payloadShape: string | null): void {
+    const ctrl = this.apiForm.get('batchSize')!;
+    if (payloadShape === 'recordPerRequest') {
+      ctrl.disable({ emitEvent: false });
+    } else {
+      ctrl.enable({ emitEvent: false });
+    }
   }
 
   /** Mirrors the backend's ApiEndpointSettings.Parse rules: API-key-header mode needs a header name, OAuth2 needs
@@ -186,7 +207,12 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
   }
 
   getFullConfig(): Record<string, string> {
-    const v = this.apiForm.value;
+    // getRawValue(), not .value: batchSize is disabled (not just visually greyed out — see
+    // _syncBatchSizeDisabled) while payloadShape is 'recordPerRequest', and FormGroup.value omits
+    // disabled controls entirely. Reading it via .value here would silently reset a previously-
+    // configured batchSize back to the 500 fallback below on every save made while recordPerRequest is
+    // selected, even though the field's actual (just-inactive) value is sitting right there.
+    const v = this.apiForm.getRawValue();
     return {
       dest_name: v.name ?? '',
       dest_apiEndpointUrl: v.endpointUrl ?? '',
@@ -258,6 +284,7 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       onFailure: fields['dest_apiOnFailure'] || 'fail',
     });
     this._syncAuthModeValidators(this.apiForm.value.authMode ?? null, this.reusingExisting());
+    this._syncBatchSizeDisabled(this.apiForm.get('payloadShape')!.value);
   }
 
   reset(): void {
@@ -271,5 +298,6 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       includeSourceJson: false, onFailure: 'fail',
     });
     this._syncAuthModeValidators(this.apiForm.value.authMode ?? null, this.reusingExisting());
+    this._syncBatchSizeDisabled(this.apiForm.get('payloadShape')!.value);
   }
 }

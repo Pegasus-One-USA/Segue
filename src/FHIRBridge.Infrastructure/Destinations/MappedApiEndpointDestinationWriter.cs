@@ -100,9 +100,14 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
     }
 
     /// <summary>Stable across retries and across re-runs of the same batch, so an endpoint that honors it can
-    /// de-duplicate a re-driven run instead of landing every record twice.</summary>
+    /// de-duplicate a re-driven run instead of landing every record twice. Includes the MappingProfile's own id
+    /// — not just its ResourceType/DestinationObject — because two different routes in the SAME run can share
+    /// both of those (e.g. two source connections each mapping their own "Patient" resources to the same
+    /// destination table/object name): without the profile id disambiguating them, their batch-0/1/2... keys
+    /// would collide, and an endpoint that honors idempotency keys would silently drop the second route's
+    /// records as duplicates of the first's.</summary>
     private static string BuildIdempotencyKey(Guid pipelineRunId, MappingProfile mappingProfile, int batchIndex)
-        => $"{pipelineRunId:N}:{mappingProfile.ResourceType}:{mappingProfile.DestinationObject}:{batchIndex}"
+        => $"{pipelineRunId:N}:{mappingProfile.Id:N}:{mappingProfile.ResourceType}:{mappingProfile.DestinationObject}:{batchIndex}"
             .ToLowerInvariant();
 
     /// <summary>

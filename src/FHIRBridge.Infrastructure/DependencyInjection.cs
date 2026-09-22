@@ -489,7 +489,12 @@ public static class DependencyInjection
 
         // API Endpoint: general-purpose, fully configurable outbound REST API — same writer/sender split as
         // Data Lake Webhook, with the widest auth surface of any destination writer (see ApiEndpointAuthMode).
-        services.AddHttpClient(nameof(Destinations.ApiEndpoint.ApiEndpointSender));
+        // ApiEndpointSender governs its own per-attempt timeout via a linked CancellationTokenSource
+        // (settings.TimeoutSeconds, up to 600s) — HttpClient's own default 100s Timeout must be disabled
+        // here, or it fires first for any configured timeout above 100s, aborting the request early AND
+        // making the sender misreport the elapsed bound as the (never-actually-honored) configured value.
+        services.AddHttpClient(nameof(Destinations.ApiEndpoint.ApiEndpointSender))
+            .ConfigureHttpClient(client => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
         services.AddScoped<Destinations.ApiEndpoint.IApiEndpointSender, Destinations.ApiEndpoint.ApiEndpointSender>();
         services.AddScoped<MappedApiEndpointDestinationWriter>();
 
