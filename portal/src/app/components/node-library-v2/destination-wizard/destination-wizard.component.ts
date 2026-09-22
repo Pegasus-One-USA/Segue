@@ -1536,8 +1536,8 @@ export class DestinationWizardComponent implements OnInit {
    *  "+ Add a table"/"+ Add a collection". Sourced from sqlTables() for SQL, mongoCollections() for Mongo —
    *  deliberately NOT gated through hasSqlTables()/sqlTableOptions() (the canvas's own hasSqlTables input,
    *  which also drives isPrimaryTargetValid's "must be a known table" check): a not-yet-created Mongo
-   *  collection is a valid primary target (paired with "Create collection if not exists"), so Mongo must
-   *  never flip that check on. */
+   *  collection is a valid primary target — the pipeline always creates a missing one on its first write —
+   *  so Mongo must never flip that check on. */
   readonly availableTablesToAddFn = (group: string): string[] => {
     const used = new Set([
       this.targetFor(group),
@@ -3915,6 +3915,8 @@ export class DestinationWizardComponent implements OnInit {
     // _pendingFormPatch for why the form itself might not). Self-guards on isSql()/destination type, so
     // this is a no-op for every non-SQL destination.
     this._refreshSqlTablesFromLiveSchema();
+    // Mongo's equivalent — same reason, same self-guard (see its own doc comment).
+    this._refreshMongoCollectionsFromLiveConnection();
 
     // The de-identification policy is NOT read off the destination any more: it belongs to the workflow, not
     // to the connection, and a reused connection may already carry another workflow's policy in that column.
@@ -4563,6 +4565,10 @@ export class DestinationWizardComponent implements OnInit {
     // nothing on reopen (everything it knew about was already used). Re-probe the live database now that
     // the connection form above is populated — must run before any of the early returns below, not after.
     this._refreshSqlTablesFromLiveSchema();
+    // Mongo's equivalent. Matters most here: this is the path a Mapping/Transformation/De-identification
+    // node takes, opening straight on Step 3, where Step 1's form (the only thing that ever filled
+    // mongoCollections() before) is never mounted at all.
+    this._refreshMongoCollectionsFromLiveConnection();
     if (f['dest_resources']) {
       this.selectedResources.set(
         f['dest_resources'].split(',').filter(Boolean),
@@ -4764,10 +4770,55 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
+  /**
+   * Mongo's counterpart to _refreshSqlTablesFromLiveSchema — loads the database's real collection names for
+   * the mapping canvas's "+ Add a collection…" picker (availableTablesToAddFn reads mongoCollections() for
+   * Mongo the way it reads sqlTables() for SQL).
+   *
+   * Needed because mongoCollections() was previously only ever filled by next()'s Step 1 Mongo branch, from
+   * the connection form's own Test Connection result. A chain node — Mapping / Transformation /
+   * De-identification — opens straight on Step 3 against an already-configured destination (see the
+   * initialStep effect), so Step 1 and its form are never visited and next() never runs: the picker opened
+   * with an empty list. Going in via the destination node instead happens to work only because that route
+   * does pass through Step 1.
+   *
+   * Uses the saved destination's own id rather than a connection string: reopening a persisted node never has
+   * the plaintext connection string (workflow-graph-mapper.service.ts's SECRET_FIELD_KEYS strips it before
+   * persisting), and MongoDestinationConnectionTestService already resolves the stored secret from the vault
+   * when ConnectionString is blank and DestinationId is set — the same id-based path the Mongo form's own
+   * "Test connection" uses when re-testing a saved destination. Collection/createIfNotExists are deliberately
+   * omitted: this only wants the collection list, not the form's "does my target collection exist?" check,
+   * which would report a failure for a collection the pipeline is set to auto-create.
+   */
+  private _refreshMongoCollectionsFromLiveConnection(): void {
+    if (!this.isMongo()) return;
+
+    // Same two independent records of "which saved destination is this?" _refreshSqlTablesFromLiveSchema
+    // reconciles — selectedExistingId() from the "Existing connection" picker, resolvedDestinationId() from
+    // editing a saved node or one provisioned earlier this session.
+    const destinationId = this.selectedExistingId() ?? this.resolvedDestinationId();
+    if (!destinationId) return;
+
+    this.schemaSvc.testMongo({ connectionString: '', destinationId }).subscribe({
+      // Never clobber a list already loaded from the form with an empty one — a failed/unreachable connection
+      // leaves the picker exactly as it was rather than emptying it.
+      next: (res) => {
+        if (res.connected && res.collections?.length) {
+          this.mongoCollections.set(res.collections);
+        }
+      },
+      error: () => {
+        /* Non-blocking, same contract as the SQL reload above: the canvas stays usable, and a collection
+           name can still be typed by hand (Mongo's picker always allows a new name). */
+      },
+    });
+  }
+
   /** Re-attempts the live schema read behind the mapping canvas's "Retry" — the same call ngOnInit makes,
    *  so a transient failure no longer needs a full close/reopen of the wizard to clear. */
   retrySchemaLoad(): void {
     this._refreshSqlTablesFromLiveSchema();
+    this._refreshMongoCollectionsFromLiveConnection();
   }
 
   // FHIR is hand-rolled, not registry-routed (see isFhir()'s doc comment), so it needs its own getFullConfig()/

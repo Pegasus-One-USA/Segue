@@ -1,7 +1,10 @@
 import { Component, HostBinding, computed, inject, input, output, signal, effect } from '@angular/core';
 import { A11yModule } from '@angular/cdk/a11y';
 import { FormsModule } from '@angular/forms';
-import { MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCandidate } from './field-mapping-model';
+import {
+  MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCandidate,
+  JsonColumnWriteMode, supportsJsonWriteMode, resolveJsonWriteMode,
+} from './field-mapping-model';
 import { MappingValueType } from '../../../../mapping-profiles/models/mapping-profile.model';
 import { DestinationTypeV2 as DestinationType } from '../../../../models/destination-configuration-v2.model';
 import { ToastService } from '../../../../services/toast.service';
@@ -50,6 +53,11 @@ export class FieldMappingJoinPopoverComponent {
    *  0 so a host that never passes it (there are none today) just never shows "Show all sources" rather
    *  than throwing on a missing required input. */
   readonly totalSourceCount = input<number>(0);
+  /** Whether this destination stores structure natively, i.e. is MongoDB — the one destination family where
+   *  a JSON value has a choice to make ("keep it as one escaped string" vs "expand it into a real BSON
+   *  sub-document"). Every other destination writes JSON as text with no alternative, so the control is
+   *  hidden there rather than offering a choice that would do nothing. */
+  readonly isDocumentDestination = input<boolean>(false);
 
   readonly save = output<MappingRow>();
   readonly remove = output<void>();
@@ -299,6 +307,25 @@ export class FieldMappingJoinPopoverComponent {
     if (!d) return undefined;
     return this.dataTypeForTable()(d.tableName, d.targetName);
   });
+
+  /** Whether to offer the "store as JSON string / as a JSON document" choice: only where it changes
+   *  anything — a destination that can store structure (MongoDB) AND a row whose value actually is JSON
+   *  text (a whole-node mapping, or a Json-typed source field). */
+  showJsonWriteMode = computed(() => {
+    const d = this.draft();
+    return !!d && this.isDocumentDestination() && supportsJsonWriteMode(d);
+  });
+
+  /** Current selection, defaulted to today's behaviour for a row that has never made the choice. */
+  jsonWriteMode = computed<JsonColumnWriteMode>(() => {
+    const d = this.draft();
+    return d ? resolveJsonWriteMode(d) : 'string';
+  });
+
+  onJsonWriteModeChange(value: string): void {
+    const mode: JsonColumnWriteMode = value === 'document' ? 'document' : 'string';
+    this.draft.update(d => (d ? { ...d, jsonWriteMode: mode } : d));
+  }
 
   approximationNote = computed(() => {
     const d = this.draft();

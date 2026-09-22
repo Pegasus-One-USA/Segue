@@ -901,8 +901,8 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   /** Whether the "+ Add a table" slot should render the searchable-list UI (vs. SQL's plain "+ Create a
    *  new table…" @else branch, or nothing at all). Deliberately separate from the hasSqlTables INPUT —
    *  that one also drives isPrimaryTargetValid's "primary target must be a known table" gate below, which
-   *  must stay false for Mongo (a not-yet-created collection is a valid primary target, paired with
-   *  "Create collection if not exists" on the destination). Mongo always gets the searchable UI regardless
+   *  must stay false for Mongo (a not-yet-created collection is a valid primary target — the writer creates
+   *  a missing one on its first write). Mongo always gets the searchable UI regardless
    *  of hasSqlTables()/whether any collections were loaded yet, since its own "type a new collection name"
    *  option (see the template) needs the search box open even against a brand-new, empty database. */
   showAddTablePicker(): boolean {
@@ -2133,7 +2133,13 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       const sources = edited
         ? original.sources.map(s => (s.fhirPath === focus ? edited : s))
         : original.sources.filter(s => s.fhirPath !== focus);
-      this.updateRow({ ...original, instance: row.instance, referencesResource: row.referencesResource, sources });
+      this.updateRow({
+        ...original,
+        instance: row.instance,
+        referencesResource: row.referencesResource,
+        jsonWriteMode: row.jsonWriteMode,
+        sources,
+      });
       this.closePopover();
       return;
     }

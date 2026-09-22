@@ -250,6 +250,57 @@ export interface MappingRow {
    * being forced onto whichever column the schema happens to flag as the physical primary key.
    */
   isUpsertKey?: boolean;
+  /**
+   * How this row's JSON value is materialized in the destination column — only meaningful when the row's
+   * effective ValueType is 'Json' (see effectiveMappingValueType) AND the destination stores structure
+   * natively, which today means MongoDB only. Undefined everywhere else, and undefined means 'string':
+   * every mapping authored before this option existed keeps the single, escaped-text behaviour it had.
+   * Round-trips through dest_mappings_v2 (the full MappingRow) and reaches the backend as the
+   * "json=document" marker serializeRowsFlat appends to `format` (see MappingFieldFormat on the backend).
+   */
+  jsonWriteMode?: JsonColumnWriteMode;
+}
+
+/** See MappingRow.jsonWriteMode — mirrors the backend's JsonColumnWriteMode enum. */
+export type JsonColumnWriteMode = 'string' | 'document';
+
+/** The marker serializeRowsFlat appends to a field's `format` to select 'document' — read back by the
+ *  backend's MappingFieldFormat.ReadJsonWriteMode, which treats its absence as 'string'. */
+export const JSON_WRITE_MODE_DOCUMENT_MARKER = 'json=document';
+
+/** True when `row` is one the MongoDB "store as JSON string / as a JSON document" choice applies to: its
+ *  value reaches the destination as JSON text (a whole-node mapping, or any Json-typed source field), so
+ *  there is something to either keep as text or expand into a real sub-document.
+ *
+ *  A row already carrying an explicit jsonWriteMode counts too, whatever its sources currently declare:
+ *  only a Json-valued row can ever have been given one, and a row rebuilt from the Mapping JSON summary
+ *  comes back with no source valueType at all (sourceRefFromPath doesn't round-trip it), so without this
+ *  a restored 'value' row would drop the user's choice the next time it was saved. */
+export function supportsJsonWriteMode(row: MappingRow): boolean {
+  return effectiveMappingValueType(row) === 'Json' || row.jsonWriteMode !== undefined;
+}
+
+/** `row`'s effective JSON write mode, defaulting to today's behaviour ('string') for every row that has
+ *  never made the choice. */
+export function resolveJsonWriteMode(row: MappingRow): JsonColumnWriteMode {
+  return row.jsonWriteMode === 'document' ? 'document' : 'string';
+}
+
+/** The `format` value carrying `mode`, preserving whatever other markers `format` already held (e.g. the
+ *  "wholeNodeAsJson"/"aggregate=csv" column-mode markers the mapping-profiles import path stamps).
+ *  Returns undefined when there is nothing to record — a 'string' row with no pre-existing format keeps
+ *  sending no `format` at all, exactly as before this option existed. */
+export function formatWithJsonWriteMode(
+  format: string | null | undefined,
+  mode: JsonColumnWriteMode,
+): string | undefined {
+  const base = (format ?? '')
+    .split(';')
+    .map(part => part.trim())
+    .filter(part => part.length > 0 && !/^json=/i.test(part));
+
+  if (mode === 'document') base.push(JSON_WRITE_MODE_DOCUMENT_MARKER);
+  return base.length > 0 ? base.join(';') : undefined;
 }
 
 /** The legacy flat shape already round-tripped through node.fields['dest_mappings']. */
@@ -314,6 +365,7 @@ export function serializeRowsFlat(
 ): (LegacyMappingRow & {
   arrayPolicy: string; approximated: boolean; isUpsertKey: boolean; isRequired?: boolean;
   defaultValue?: string | null;
+  format?: string;
   parentTable?: string; parentKeyColumn?: string; foreignKeyColumn?: string;
   referencesResource?: string;
 })[] {
@@ -372,6 +424,16 @@ export function serializeRowsFlat(
     const targetColumn = targetTable?.columns.find(c => c.name === row.targetName);
     const isRequired = row.isRequired ?? (targetColumn?.isNullable === false ? true : undefined);
     const isDefault = row.mode === 'default';
+    // The MongoDB "store this JSON as a real sub-document, not as escaped text" choice rides the same
+    // `format` marker channel the mapping-profiles import path already uses for column-mode markers, so it
+    // needs no new field anywhere on the wire (see formatWithJsonWriteMode / the backend's
+    // MappingFieldFormat). A row that never made the choice — i.e. every row saved before this existed, and
+    // every row on a non-Mongo destination — produces undefined here and so sends no `format` at all,
+    // leaving the request byte-for-byte what it was. Strictly additive for that reason: this is the only
+    // condition under which serializeRowsFlat has ever emitted `format`.
+    const format = supportsJsonWriteMode(row) && resolveJsonWriteMode(row) === 'document'
+      ? formatWithJsonWriteMode(row.format, 'document')
+      : undefined;
     return {
       resource: row.resource,
       // A default column has no real source field — the token itself (e.g. "@now") stands in as both the
@@ -387,6 +449,7 @@ export function serializeRowsFlat(
       arrayPolicy,
       approximated,
       isUpsertKey,
+      ...(format ? { format } : {}),
       ...(isRequired ? { isRequired: true } : {}),
       // Previously dropped here even though MappingRow already carried it (see its own doc comment) — every
       // caller downstream (workflow-build-assembler.service.ts's MappingFieldRequest.defaultValue,

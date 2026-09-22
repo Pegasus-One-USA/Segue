@@ -25,7 +25,12 @@
     <div class="fm-popover-body">
       @if (d.mode === 'childJson') {
         <p class="fm-popover-hint">
-          Fetches the entire <strong>{{ d.childNodeId }}</strong> node and stores it as a JSON string in this column.
+          Fetches the entire <strong>{{ d.childNodeId }}</strong> node and stores it
+          @if (showJsonWriteMode() && jsonWriteMode() === 'document') {
+            as a nested JSON document in this column.
+          } @else {
+            as a JSON string in this column.
+          }
         </p>
       } @else {
         <div class="fm-popover-section">
@@ -120,6 +125,34 @@
             }
           </div>
         }
+      }
+
+      <!-- MongoDB only (showJsonWriteMode) — every other destination family stores JSON as text with no
+           alternative, so offering the choice there would be offering one that does nothing. -->
+      @if (showJsonWriteMode()) {
+        <div class="fm-popover-section">
+          <label class="fm-popover-section-title" for="fm-json-write-mode">Store in MongoDB as</label>
+          <!-- [ngModel], not [value]: a plain [value] binding on a <select> only assigns the DOM property
+               and does not survive the option list being (re)rendered, which is what left this showing
+               "JSON string" while the row was actually set to "document". Same accessor-backed pattern the
+               transformation-rule select below already uses. -->
+          <select
+            id="fm-json-write-mode" class="fm-popover-select"
+            [ngModel]="jsonWriteMode()"
+            (ngModelChange)="onJsonWriteModeChange($event)"
+          >
+            <option value="string">JSON string</option>
+            <option value="document">JSON document (MongoDB native)</option>
+          </select>
+          <p class="fm-popover-hint">
+            @if (jsonWriteMode() === 'document') {
+              Stored as a real nested BSON document, so MongoDB can index and query inside it with dotted
+              paths such as “{{ d.targetName }}.id”.
+            } @else {
+              Stored as one escaped text value — queryable only as a whole string.
+            }
+          </p>
+        </div>
       }
 
       @if (approximationNote(); as note) {

@@ -3,6 +3,7 @@ import {
   MappingRow, LegacyMappingRow,
   qualifyTableName, defaultSchemaFor, splitTableName, reconcileTargetsForDestTypeSwitch,
   effectiveMappingValueType, checkColumnTypeCompatibility,
+  supportsJsonWriteMode, resolveJsonWriteMode, formatWithJsonWriteMode,
 } from './field-mapping-model';
 import { DestinationTable } from '../../../../services/destination-schema.service';
 
@@ -185,6 +186,82 @@ describe('serializeRowsFlat', () => {
     expect(flat[0].arrayPolicy).toBe('StoreJson');
     expect(flat[0].valueType).toBe('Json');
     expect(flat[0].approximated).toBeFalse();
+  });
+
+  // MongoDB "store this JSON as a real sub-document" — carried to the backend on `format` (read there by
+  // MappingFieldFormat.ReadJsonWriteMode), which serializeRowsFlat emits ONLY for this, so every other row
+  // keeps producing exactly the payload it always has.
+  describe('jsonWriteMode', () => {
+    function jsonRow(overrides: Partial<MappingRow> = {}): MappingRow {
+      return {
+        resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient',
+        targetName: 'Patient', tableName: 'patients_local',
+        ...overrides,
+      };
+    }
+
+    it('omits format entirely when the row never made the choice (every pre-existing mapping)', () => {
+      expect(serializeRowsFlat([jsonRow()], {})[0].format).toBeUndefined();
+    });
+
+    it("omits format for an explicit 'string' choice too — that IS the default behaviour", () => {
+      expect(serializeRowsFlat([jsonRow({ jsonWriteMode: 'string' })], {})[0].format).toBeUndefined();
+    });
+
+    it("emits the json=document marker for a 'document' choice", () => {
+      expect(serializeRowsFlat([jsonRow({ jsonWriteMode: 'document' })], {})[0].format)
+        .toBe('json=document');
+    });
+
+    it('preserves any other markers already on the row format', () => {
+      const flat = serializeRowsFlat(
+        [jsonRow({ jsonWriteMode: 'document', format: 'wholeNodeAsJson' })], {});
+      expect(flat[0].format).toBe('wholeNodeAsJson;json=document');
+    });
+
+    it('never emits the marker for an ordinary non-Json row', () => {
+      const valueRow: MappingRow = {
+        resource: 'Patient',
+        sources: [{ fhirPath: 'Patient.gender', label: 'Gender', valueType: 'String' }],
+        mode: 'value', instance: { type: 'first' },
+        targetName: 'Gender', tableName: 'patients_local',
+      };
+      expect(serializeRowsFlat([valueRow], {})[0].format).toBeUndefined();
+    });
+
+    it('supportsJsonWriteMode follows the row\'s effective ValueType', () => {
+      expect(supportsJsonWriteMode(jsonRow())).toBeTrue();
+      expect(supportsJsonWriteMode({
+        resource: 'Patient', sources: [{ fhirPath: 'Patient.gender', label: 'Gender', valueType: 'String' }],
+        mode: 'value', targetName: 'Gender', tableName: 'patients_local',
+      })).toBeFalse();
+    });
+
+    // A row rebuilt from the Mapping JSON summary comes back with no source valueType (sourceRefFromPath
+    // doesn't round-trip it), so the choice it explicitly carries has to be enough on its own — otherwise
+    // reopening and re-saving silently drops it.
+    it('honours an explicitly-carried mode even when the source type is unknown', () => {
+      const restored: MappingRow = {
+        resource: 'Patient',
+        sources: [{ fhirPath: 'Patient.extension', label: 'extension' }],
+        mode: 'value', instance: { type: 'first' },
+        targetName: 'Extension', tableName: 'patients_local',
+        jsonWriteMode: 'document',
+      };
+      expect(supportsJsonWriteMode(restored)).toBeTrue();
+      expect(serializeRowsFlat([restored], {})[0].format).toBe('json=document');
+    });
+
+    it('resolveJsonWriteMode defaults to "string"', () => {
+      expect(resolveJsonWriteMode(jsonRow())).toBe('string');
+      expect(resolveJsonWriteMode(jsonRow({ jsonWriteMode: 'document' }))).toBe('document');
+    });
+
+    it('formatWithJsonWriteMode replaces a previously-stored json= marker rather than stacking one', () => {
+      expect(formatWithJsonWriteMode('wholeNodeAsJson;json=document', 'string')).toBe('wholeNodeAsJson');
+      expect(formatWithJsonWriteMode('json=document', 'string')).toBeUndefined();
+      expect(formatWithJsonWriteMode('json=document', 'document')).toBe('json=document');
+    });
   });
 
   describe('isUpsertKey', () => {

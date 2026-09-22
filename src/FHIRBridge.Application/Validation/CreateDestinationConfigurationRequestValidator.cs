@@ -53,10 +53,6 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
             RequireField(context, metadata, "dest_database", "Database is required.");
             RequireField(context, metadata, "dest_auth", "Authentication mode is required.");
         }
-        else if (request.DestinationType == DestinationType.Mongo)
-        {
-            RequireField(context, metadata, "dest_collection", "Collection is required.");
-        }
         else if (request.DestinationType == DestinationType.Csv)
         {
             ValidateCsvMetadata(context, metadata);
