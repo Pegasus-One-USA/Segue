@@ -1,0 +1,58 @@
+portal/src/app/pages/workflow-list/integration-details.util.spec.ts
+  s_fcc69352592b43::t_e5861a25e51db5 104-118,123-127,129-131,180-193,392,397-398
+  s_fcc69352592b43::t_2fb0e46030f1b8 148-165
+  s_fcc69352592b43::t_e2b868f620b09c 331-366
+  s_fcc69352592b43::t_9b44df4a300c34 367,371-372,376-388,393-396
+  s_fcc69352592b43::t_27cff4ffc61ce7 119-122,128
+  s_fcc69352592b43::t_61775bf6890c4c 132-147
+  s_fcc69352592b43::t_e5c1d587b79040 389-391
+  s_fcc69352592b43::t_d59d5e3bed6845 166-179
+portal/src/app/pages/workflow-list/integration-details.util.ts
+  s_fcc69352592b43::t_347df6157e989c 112-116,118-124,128-135
+  s_fcc69352592b43::t_1b6e3552610e95 398
+  s_fcc69352592b43::t_215b443bedc336 621
+  s_fcc69352592b43::t_61fde2e1a5b12b 211-219
+  s_fcc69352592b43::t_6a16b036a1a724 220-222,225,233-234
+  s_fcc69352592b43::t_fc5d6ca2337547 427-428
+  s_fcc69352592b43::t_e0af88e1db0859 489
+  s_fcc69352592b43::t_34c15c95aaa446 533
+  s_fcc69352592b43::t_cef1148985d3a4 534-535
+  s_fcc69352592b43::t_8a7c56800a7b57 627
+  s_fcc69352592b43::t_22bdf3f8d6d7b2 529-531
+  s_fcc69352592b43::t_2b6f299b038f87 499
+  s_fcc69352592b43::t_fc302adfdf7d8f 363
+  s_fcc69352592b43::t_5f581ef9400b73 136,453-464,476,558
+  s_fcc69352592b43::t_fc5cb959d35227 559-569
+  s_fcc69352592b43::t_2df1c385ba1a51 589-592
+  s_fcc69352592b43::t_7e3ce63bd98553 492
+  s_fcc69352592b43::t_958352bd2c7546 320-343,345-350
+  s_fcc69352592b43::t_762a7127bfd9c7 406
+  s_fcc69352592b43::t_fa4c5aebf0dbca 539-551
+  s_fcc69352592b43::t_493992883eebf8 570-580
+  s_fcc69352592b43::t_692a288bbfb2fb 493-495
+  s_fcc69352592b43::t_48f1b8c6381e33 370-371,373-379
+  s_fcc69352592b43::t_0ea4df10158476 465-475
+  s_fcc69352592b43::t_46d25b8e7c4e12 383,385,387-390
+  s_fcc69352592b43::t_8c594c1fe1e608 169-210
+  s_fcc69352592b43::t_b6ca6c7fc71729 509-510,512-514,521-523,527
+  s_fcc69352592b43::t_6cf644a3e2497f 515-520
+  s_fcc69352592b43::t_014534e2c30f3a 223-224,226-231
+  s_fcc69352592b43::t_a7f3d51a755724 552,554
+  s_fcc69352592b43::t_1f3fec0ec1882b 354,356
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7feed0b6943aa60664dd5735acfbdc90dcfe84a2",
+  "prompts": {},
+  "sessions": {
+    "s_fcc69352592b43": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19267393-203a-4638-a147-1420f4f513a7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
