@@ -1,0 +1,105 @@
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_824d9c08f7a4fc::t_c5f55149bf5b92 21
+  s_824d9c08f7a4fc::t_3447bf03aad58f 33,42,185-186
+  s_824d9c08f7a4fc::t_64e763ec1d28ec 158,170,174
+  s_824d9c08f7a4fc::t_d903485e4a4261 50,57,74
+portal/e2e/pages/ehr-endpoint-dialog.page.ts
+  s_824d9c08f7a4fc::t_03466177f006ae 1-29,46-83
+  s_824d9c08f7a4fc::t_cdc124af6ad1aa 30-45
+portal/e2e/tests/ehr-endpoints-server-validation.spec.ts
+  s_824d9c08f7a4fc::t_8094e7ad6c0cd2 1-14,24-70,73-101,103-138
+  s_824d9c08f7a4fc::t_2ceb0a79053cfa 15-23,71-72,102
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_824d9c08f7a4fc::t_c629d6fdeb6e8c 282-283
+  s_824d9c08f7a4fc::t_bc09ccef810d20 193
+  s_824d9c08f7a4fc::t_ca0a544987e5c4 14,26,35,44,67,189,201,211
+  s_824d9c08f7a4fc::t_b0649c9e6b0008 223-224
+portal/src/app/auth/pages/login/login.component.html
+  s_824d9c08f7a4fc::t_63e29d4b589dda 142,164,213
+portal/e2e/fixtures/env.ts
+  s_824d9c08f7a4fc::t_d5c7588d2fb710 1-32,64-80
+  s_824d9c08f7a4fc::t_07cc2fb3a499f2 33-43,58-63
+  s_824d9c08f7a4fc::t_b37ad373707caa 44-57
+portal/e2e/tests/ehr-endpoints.spec.ts
+  s_824d9c08f7a4fc::t_6ee3b083093482 1-3,5-20,23,25-26,33-149
+  s_824d9c08f7a4fc::t_24c33d37e101be 4,21-22,24,27-32
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.html
+  s_824d9c08f7a4fc::t_17887996016c6e 27,36,47,57,68,79,89
+  s_824d9c08f7a4fc::t_6f066f948de20f 108
+  s_824d9c08f7a4fc::t_6afa0f3e29c648 18
+portal/e2e/pages/ehr-endpoints.page.ts
+  s_824d9c08f7a4fc::t_4b3ae5d00047a4 49,51,60
+  s_824d9c08f7a4fc::t_32d4ce7d155b70 50,52-59,62-68,70-71,77
+  s_824d9c08f7a4fc::t_76abd980a180a1 1-48,61,78-97
+  s_824d9c08f7a4fc::t_967825b2d30768 69
+  s_824d9c08f7a4fc::t_f9e8f03cc0a42a 72-76
+portal/e2e/pages/epic-backend-form.page.ts
+  s_824d9c08f7a4fc::t_3ee7d96899beda 122
+  s_824d9c08f7a4fc::t_bca45bd198d670 45-53
+  s_824d9c08f7a4fc::t_ff693dd52c8bcb 1-44,54-93,112,114-115,119-120,123-144
+  s_824d9c08f7a4fc::t_b37ad373707caa 94-111,116-118
+  s_824d9c08f7a4fc::t_de259f766798cf 113,121
+portal/e2e/package.json
+  s_824d9c08f7a4fc::t_ab48d8e77e4c0d 11-12
+  s_824d9c08f7a4fc::t_e452477346b951 1-10,13-18
+.gitignore
+  s_824d9c08f7a4fc::t_b7f3dcc384cef3 53-54
+portal/src/app/core/components/confirm-dialog/confirm-dialog.component.html
+  s_824d9c08f7a4fc::t_c5f55149bf5b92 13
+  s_824d9c08f7a4fc::t_019a0d922da188 10
+portal/e2e/pages/source-connections.page.ts
+  s_824d9c08f7a4fc::t_fa3aa882dd5f76 1-53
+portal/e2e/playwright.config.ts
+  s_824d9c08f7a4fc::t_839c2a30e27e52 1-51
+portal/e2e/.gitignore
+  s_824d9c08f7a4fc::t_ab48d8e77e4c0d 6
+  s_824d9c08f7a4fc::t_9fff594f62ae7c 1-5
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_824d9c08f7a4fc::t_d6b28029722769 659,672,676
+  s_824d9c08f7a4fc::t_bca45bd198d670 383-384
+  s_824d9c08f7a4fc::t_4dccc0f4f62f61 195,205,421,435,438
+  s_824d9c08f7a4fc::t_a0225d82254b9e 167
+  s_824d9c08f7a4fc::t_8e1360d45aec45 921,927,934
+portal/e2e/tests/walkthrough.spec.ts
+  s_824d9c08f7a4fc::t_2f180c6ee0930d 1-76
+portal/e2e/README.md
+  s_824d9c08f7a4fc::t_7626d866a0b844 1-93
+portal/e2e/tests/auth.setup.ts
+  s_824d9c08f7a4fc::t_9fff594f62ae7c 1-26
+portal/e2e/fixtures/no-write.ts
+  s_824d9c08f7a4fc::t_0c26e5c430803d 1-27
+portal/e2e/tests/ehr-endpoints-validation.spec.ts
+  s_824d9c08f7a4fc::t_bf1ac56696b73d 1-5,7-35,37-46,48-53,55-73,75-85,87-104,110-140
+  s_824d9c08f7a4fc::t_217c59efda2de4 6,36,47,54,74,86,105-109
+portal/e2e/fixtures/cleanup.ts
+  s_824d9c08f7a4fc::t_18946adf45ad71 1,21-26,28,30-32,34-41,44-54,57,59-63,65,67,70,73-76
+  s_824d9c08f7a4fc::t_c068b3ee006d4a 4-20,64,68
+  s_824d9c08f7a4fc::t_7084082b1d281d 2-3,27,29,33,42-43,55-56,58,66,69,71-72,77
+  s_824d9c08f7a4fc::t_2224e85a4e6b79 78-108
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_824d9c08f7a4fc::t_e4a7a09f039db7 200,205,235-236
+portal/e2e/tests/source-connection-epic-backend.spec.ts
+  s_824d9c08f7a4fc::t_ae82af98f6daf3 133,135,138-141,152
+  s_824d9c08f7a4fc::t_5aa263c78d2e62 1-40,42-48,57,71-125,160-202
+  s_824d9c08f7a4fc::t_bca45bd198d670 153,156
+  s_824d9c08f7a4fc::t_35324e0bdfb358 41,49-56,58-70
+  s_824d9c08f7a4fc::t_ee52ba29c7fe1e 126-132,134,136-137,142-151,154-155,157-159
+portal/e2e/package-lock.json
+  s_824d9c08f7a4fc::t_476eebb5b3665a 1-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f5f1f57f17fdb71e7bd4265c2c71598e7584a2cb",
+  "prompts": {},
+  "sessions": {
+    "s_824d9c08f7a4fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b812e9d1-c339-4187-8a00-aecad014ea66",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
