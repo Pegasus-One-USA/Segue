@@ -1,0 +1,36 @@
+tests/FHIRBridge.Runtime.UnitTests/Workflows/CoerceToExpectedValueTypeTests.cs
+  s_174e16661bf66d::t_a1728b7c8abab7 18,20-24,26,29,33,35-49,54,58-75,117-119,133-141
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.ts
+  s_174e16661bf66d::t_959ac854183879 1
+  s_174e16661bf66d::t_47cd5b39595ec7 58-69,76-80
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.ts
+  s_174e16661bf66d::t_3aea22848258ae 1
+  s_174e16661bf66d::t_475f4d1d83b254 58-69,76-80
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_174e16661bf66d::t_86e56670325cf0 857-865,867-872,876
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineDateTimeZoneTests.cs
+  s_174e16661bf66d::t_4facfbe30ddb3a 1-73
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_174e16661bf66d::t_e97ad95d3f85a2 1422-1441
+  s_174e16661bf66d::t_012eb72da38dea 1241-1245,1249-1253
+  s_174e16661bf66d::t_0d4c3f26abd2de 1456,1459-1461,1469,1474-1506
+  s_174e16661bf66d::t_711373150970e2 1363
+src/FHIRBridge.Infrastructure/Destinations/PostgreSqlDdlTypeValidator.cs
+  s_174e16661bf66d::t_fee343531db8fa 103-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "35e3e463b0d811fe6b796ce7f37b4c661abb0034",
+  "prompts": {},
+  "sessions": {
+    "s_174e16661bf66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a051edf-3c44-4555-8dea-ae48ca7f4ff9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
