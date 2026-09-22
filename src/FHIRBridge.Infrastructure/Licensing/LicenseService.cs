@@ -4,6 +4,7 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Entities.Licensing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
 namespace FHIRBridge.Infrastructure.Licensing;
@@ -34,6 +35,21 @@ namespace FHIRBridge.Infrastructure.Licensing;
 ///     that cache's MaxAge fallback, just re-polling on a timer instead of on next-read, since
 ///     <see cref="Current"/> is read synchronously off the hot request path and can't await a DB check.
 ///
+/// <see cref="ReloadAsync"/> now running periodically (not just once, at startup, as it always did before
+/// the timer above was added) changes what a transient database failure means. <see cref="ResolveTokenAsync"/>
+/// has always tolerated a <see cref="DbException"/> reading the token — originally so the genuine
+/// migrations-haven't-run-yet race at startup falls through to the env-var/file sources instead of failing
+/// the whole first load. Left unchanged, that same tolerance would let a later, purely transient failure
+/// (a connection reset, failover, or pool exhaustion — SqlException/NpgsqlException both derive from
+/// DbException) resolve to "no token", downgrade <see cref="Current"/> to <see cref="LicenseStatus.Unlicensed"/>,
+/// and 403 every <c>/api/v1</c> request behind Program.cs's license gate for up to <see cref="ReloadInterval"/>
+/// on that replica — trading the cross-replica staleness bug this class fixes for an intermittent full-API
+/// outage, which is worse. <see cref="ResolveTokenAsync"/> therefore reports a DB read failure distinctly
+/// (<see cref="TokenResolution.DbReadFailed"/>), and <see cref="ReloadAsync"/> only tolerates it on the
+/// process's first load; every later reload leaves <see cref="Current"/> untouched instead and logs a
+/// warning, so a replica rides out a database blip on its last-known-good license state rather than locking
+/// itself out.
+///
 /// This stage is verification/reporting only: nothing here blocks or gates any product behavior on the
 /// resolved <see cref="LicenseStatus"/>.
 /// </summary>
@@ -57,13 +73,21 @@ public sealed class LicenseService : ILicenseService, IDisposable
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConnectionMultiplexer? _redis;
+    private readonly ILogger<LicenseService> _logger;
     private readonly object _lock = new();
+    // Serializes every ReloadAsync call — timer-triggered, Redis-invalidation-triggered, and Program.cs's
+    // own startup call can otherwise race, and the later one to finish would win regardless of which
+    // actually read newer data.
+    private readonly SemaphoreSlim _reloadGate = new(1, 1);
     private volatile bool _subscribedToInvalidation;
+    private volatile bool _hasLoadedOnce;
     private readonly Timer _reloadTimer;
+    private readonly EventHandler<ConnectionFailedEventArgs>? _onConnectionRestored;
 
-    public LicenseService(IServiceScopeFactory scopeFactory, IConnectionMultiplexer? redis = null)
+    public LicenseService(IServiceScopeFactory scopeFactory, ILogger<LicenseService> logger, IConnectionMultiplexer? redis = null)
     {
         _scopeFactory = scopeFactory;
+        _logger = logger;
         _redis = redis;
 
         if (_redis is not null)
@@ -71,16 +95,49 @@ public sealed class LicenseService : ILicenseService, IDisposable
             // ConnectionRestored retries the subscribe so a replica that started during a Redis outage
             // still picks up cross-replica invalidation once Redis is back, rather than relying on the
             // reload timer for the rest of its life. Same reasoning as InProcessAllowedCorsOriginsCache.
-            _redis.ConnectionRestored += (_, _) => TrySubscribeToInvalidation();
+            // Kept as a named field (not a lambda) so Dispose can detach it.
+            _onConnectionRestored = (_, _) => TrySubscribeToInvalidation();
+            _redis.ConnectionRestored += _onConnectionRestored;
             TrySubscribeToInvalidation();
         }
 
         // Deliberately does NOT call ReloadAsync here — the class doc's "constructor does no I/O" contract
-        // stays true for the FIRST load (Program.cs controls exactly when that happens at startup); this
-        // timer only re-runs it periodically AFTER that, so a replica that never gets a publish still
-        // self-heals within ReloadInterval instead of staying wrong until its next restart.
-        _reloadTimer = new Timer(
-            _ => _ = ReloadAsync(CancellationToken.None), null, ReloadInterval, ReloadInterval);
+        // stays true for the FIRST load (Program.cs controls exactly when that happens at startup). Re-armed
+        // as a one-shot after each run completes (see OnReloadTimerTick) rather than a single recurring
+        // interval, so a reload that runs long (e.g. a hung DB call) can never overlap itself — the interval
+        // is the gap AFTER completion, not a fixed wall-clock cadence.
+        _reloadTimer = new Timer(_ => OnReloadTimerTick(), null, ReloadInterval, Timeout.InfiniteTimeSpan);
+    }
+
+    private void OnReloadTimerTick()
+    {
+        _ = RunAndRearmAsync();
+
+        async Task RunAndRearmAsync()
+        {
+            try
+            {
+                await ReloadAsync(CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                // ReloadAsync's own DB-read tolerance means this should be rare (an unexpected failure
+                // outside that path) — logged rather than silently swallowed, since Current gates the
+                // whole API and a reload failing with no trace anywhere would be invisible otherwise.
+                _logger.LogWarning(exception, "Periodic license reload failed; will retry in {ReloadInterval}.", ReloadInterval);
+            }
+            finally
+            {
+                try
+                {
+                    _reloadTimer.Change(ReloadInterval, Timeout.InfiniteTimeSpan);
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Disposed mid-flight (host shutting down) — nothing to re-arm.
+                }
+            }
+        }
     }
 
     // Fire-and-forget async, not the synchronous Subscribe — see InProcessAllowedCorsOriginsCache's
@@ -95,8 +152,7 @@ public sealed class LicenseService : ILicenseService, IDisposable
         {
             try
             {
-                await _redis.GetSubscriber().SubscribeAsync(
-                    InvalidationChannel, (_, _) => _ = ReloadAsync(CancellationToken.None));
+                await _redis.GetSubscriber().SubscribeAsync(InvalidationChannel, (_, _) => _ = ReloadFromInvalidationAsync());
                 _subscribedToInvalidation = true;
             }
             catch (Exception)
@@ -105,9 +161,43 @@ public sealed class LicenseService : ILicenseService, IDisposable
                 // staleness meanwhile.
             }
         }
+
+        async Task ReloadFromInvalidationAsync()
+        {
+            try
+            {
+                await ReloadAsync(CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "License reload triggered by cross-replica invalidation failed.");
+            }
+        }
     }
 
-    public void Dispose() => _reloadTimer.Dispose();
+    public void Dispose()
+    {
+        _reloadTimer.Dispose();
+        if (_redis is not null)
+        {
+            if (_onConnectionRestored is not null)
+            {
+                _redis.ConnectionRestored -= _onConnectionRestored;
+            }
+            // Fire-and-forget, same reasoning as PublishInvalidation — a hung/down Redis must never block
+            // disposal, and this is a process-lifetime singleton unsubscribing on host shutdown, not a
+            // correctness-critical cleanup.
+            try
+            {
+                _ = _redis.GetSubscriber().UnsubscribeAsync(InvalidationChannel);
+            }
+            catch (Exception)
+            {
+                // Best-effort — the process is going away regardless.
+            }
+        }
+        _reloadGate.Dispose();
+    }
 
     public LicenseStatus Current { get; private set; } = LicenseStatus.Unlicensed;
 
@@ -193,13 +283,38 @@ public sealed class LicenseService : ILicenseService, IDisposable
 
     public async Task ReloadAsync(CancellationToken cancellationToken)
     {
-        var token = await ResolveTokenAsync(cancellationToken);
-        var status = SignedLicenseValidator.Validate(token);
-
-        lock (_lock)
+        await _reloadGate.WaitAsync(cancellationToken);
+        try
         {
-            Current = status;
-            CurrentRawToken = status.State == LicenseState.Invalid ? null : token;
+            // Read before resolving, not after: this call's own outcome is what sets it for every call
+            // after it, so the decision below must reflect whether this is the FIRST load, not whatever
+            // it becomes once this call finishes.
+            var isFirstLoad = !_hasLoadedOnce;
+            var resolution = await ResolveTokenAsync(cancellationToken);
+
+            if (resolution.DbReadFailed && !isFirstLoad)
+            {
+                // A transient DB failure (connection reset, failover, pool exhaustion) on anything after
+                // the first load must NOT be treated as "no token configured" — see the class doc for why.
+                // Leave Current exactly as it was; the timer/next invalidation will try again.
+                _logger.LogWarning(
+                    "License reload could not read the license token from the database; leaving the " +
+                    "current in-memory license state unchanged rather than treating this as unlicensed.");
+                return;
+            }
+
+            var status = SignedLicenseValidator.Validate(resolution.Token);
+
+            lock (_lock)
+            {
+                Current = status;
+                CurrentRawToken = status.State == LicenseState.Invalid ? null : resolution.Token;
+            }
+            _hasLoadedOnce = true;
+        }
+        finally
+        {
+            _reloadGate.Release();
         }
     }
 
@@ -226,11 +341,20 @@ public sealed class LicenseService : ILicenseService, IDisposable
     private void PublishInvalidation() =>
         _redis?.GetSubscriber().Publish(InvalidationChannel, RedisValue.EmptyString, CommandFlags.FireAndForget);
 
+    /// <summary><see cref="ResolveTokenAsync"/>'s result. <see cref="DbReadFailed"/> distinguishes "the
+    /// database read itself failed" from "the read succeeded and there's genuinely no SystemSetting row" —
+    /// <see cref="ReloadAsync"/> treats the two very differently after the first load (see the class doc).
+    /// Deliberately still reports a resolved <see cref="Token"/> alongside a true <see cref="DbReadFailed"/>
+    /// when the env var/file fallback found one despite the DB read failing, matching the pre-existing
+    /// tolerant behavior for that combination on the first load.</summary>
+    private readonly record struct TokenResolution(string? Token, bool DbReadFailed);
+
     /// <summary>Checks, in order: (a) the SystemSetting row, (b) <see cref="LicenseTokenEnvVar"/>, (c) the
     /// file named by <see cref="LicenseTokenFileEnvVar"/>. First one found wins.</summary>
-    private async Task<string?> ResolveTokenAsync(CancellationToken cancellationToken)
+    private async Task<TokenResolution> ResolveTokenAsync(CancellationToken cancellationToken)
     {
         SystemSetting? setting = null;
+        var dbReadFailed = false;
         using (var scope = _scopeFactory.CreateScope())
         {
             var repository = scope.ServiceProvider.GetRequiredService<ISystemSettingRepository>();
@@ -240,30 +364,33 @@ public sealed class LicenseService : ILicenseService, IDisposable
             }
             catch (DbException)
             {
-                // The SystemSettings table doesn't exist yet (e.g. this reload runs during startup before
-                // migrations apply) — fall through to the env var / file sources below instead of failing
-                // the whole reload. Mirrors InProcessSystemSettingsCache's handling of the same race.
+                // Tolerated only on the process's first load (ReloadAsync enforces that) — the genuine race
+                // this exists for is the SystemSettings table not existing yet because this reload runs
+                // during startup before migrations apply. Mirrors InProcessSystemSettingsCache's handling
+                // of the same race.
+                dbReadFailed = true;
             }
         }
 
         if (!string.IsNullOrWhiteSpace(setting?.Value))
         {
-            return setting.Value;
+            return new TokenResolution(setting.Value, dbReadFailed);
         }
 
         var envToken = Environment.GetEnvironmentVariable(LicenseTokenEnvVar);
         if (!string.IsNullOrWhiteSpace(envToken))
         {
-            return envToken;
+            return new TokenResolution(envToken, dbReadFailed);
         }
 
         var licenseFilePath = Environment.GetEnvironmentVariable(LicenseTokenFileEnvVar);
         if (!string.IsNullOrWhiteSpace(licenseFilePath) && File.Exists(licenseFilePath))
         {
             var fileContents = await File.ReadAllTextAsync(licenseFilePath, cancellationToken);
-            return string.IsNullOrWhiteSpace(fileContents) ? null : fileContents.Trim();
+            return new TokenResolution(
+                string.IsNullOrWhiteSpace(fileContents) ? null : fileContents.Trim(), dbReadFailed);
         }
 
-        return null;
+        return new TokenResolution(null, dbReadFailed);
     }
 }
