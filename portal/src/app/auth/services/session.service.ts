@@ -10,10 +10,15 @@ import { SessionExpiredDialogService } from './session-expired-dialog.service';
 
  const IDLE_MS = 30 * 60 * 1000; // 30-minute idle timeout
 // Deliberately excludes 'mousemove' — that fires dozens of times a second while the user's hand merely
-// rests near the mouse, far too noisy a signal for "the user is actively working" even throttled. These
-// five already cover every real interaction (clicking a button, typing a field, a canvas drag starting
-// with mousedown, scrolling a list/canvas) without needing to throttle a firehose event.
-const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'touchstart', 'scroll', 'click'] as const;
+// rests near the mouse, far too noisy a signal for "the user is actively working" even throttled.
+// Includes 'pointerdown'/'wheel' alongside the legacy 'mousedown'/'touchstart'/'scroll': the workflow
+// and field-mapping canvases drive node dragging, panning and zoom entirely off Pointer Events, and a
+// canvas that calls preventDefault() on its own pointerdown (several do, to suppress touch scrolling/
+// text-selection while dragging) also suppresses the browser's synthetic 'mousedown' compatibility
+// event — so a user who spends 30+ minutes only dragging/connecting/zooming nodes, never touching a
+// button or a keyboard, would otherwise silently register as idle. These seven cover every real
+// interaction without needing to throttle a firehose event.
+const ACTIVITY_EVENTS = ['mousedown', 'pointerdown', 'keydown', 'touchstart', 'scroll', 'wheel', 'click'] as const;
 // Re-touch at most once a minute — plenty to keep the idle timer perpetually reset during any real
 // activity (a 60s cadence against a 30-minute timeout has enormous margin) without spamming an AuthStore
 // write (and the resulting resetIdleTimer() churn) on every single click/keystroke.
@@ -138,7 +143,8 @@ export class SessionService {
         // first so the routed content is actually gone, then show the same unified prompt over the now-
         // blank login page.
         void this.router.navigate(['/auth/login']).then(() => {
-          this.sessionExpiredDialog.show('Your session has expired due to inactivity. Please log in again to continue.');
+          this.sessionExpiredDialog.show(
+            'Your session has expired due to inactivity. Please log in again to continue.', true);
         });
       }),
     ).subscribe();
