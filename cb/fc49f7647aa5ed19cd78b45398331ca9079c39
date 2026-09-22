@@ -1,0 +1,31 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-add-column-modal.component.ts
+  s_174e16661bf66d::t_17819739233a12 14
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_174e16661bf66d::t_85ac41225ffe75 194-207,209-212
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.ts
+  s_174e16661bf66d::t_f3a5aff45b78b4 14
+src/FHIRBridge.Infrastructure/Destinations/SqlServerDdlTypeValidator.cs
+  s_174e16661bf66d::t_3d1c9741b57f0f 62-65
+src/FHIRBridge.Infrastructure/Destinations/PostgreSqlDdlTypeValidator.cs
+  s_174e16661bf66d::t_3d800cc2e959fe 103-108
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_174e16661bf66d::t_9fe3fc5a81d54a 2
+  s_174e16661bf66d::t_f0829c8915ea12 1387-1431
+  s_174e16661bf66d::t_4a95342869fcd3 1351
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "cbfc49f7647aa5ed19cd78b45398331ca9079c39",
+  "prompts": {},
+  "sessions": {
+    "s_174e16661bf66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a051edf-3c44-4555-8dea-ae48ca7f4ff9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
