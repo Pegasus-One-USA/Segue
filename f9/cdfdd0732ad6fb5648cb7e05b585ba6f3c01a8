@@ -1,0 +1,101 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-summary.model.spec.ts
+  s_1ce8281d293dd3::t_ad12a834c6f61c 17-59
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/mongo-destination-form.component.html
+  s_1ce8281d293dd3::t_e7fb649266b5be 50
+src/FHIRBridge.Domain/Enums/JsonColumnWriteMode.cs
+  s_1ce8281d293dd3::t_ee5111185229b5 1-23
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_1ce8281d293dd3::t_499f8efd513004 25-28,43-49,75-77,82-88
+  s_1ce8281d293dd3::t_399ba82774607d 140-143
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_1ce8281d293dd3::t_a4d4ed7b988a3f 1075-1078
+src/FHIRBridge.Infrastructure/Destinations/MongoDestinationConnectionTestService.cs
+  s_1ce8281d293dd3::t_aafde0e263cb5b 92
+tests/FHIRBridge.UnitTests/Validation/CreateDestinationConfigurationRequestValidatorTests.cs
+  s_1ce8281d293dd3::t_77db9577a168b1 76-79,81,83
+tests/FHIRBridge.UnitTests/Destinations/MongoJsonWriteModeTests.cs
+  s_1ce8281d293dd3::t_204bfc14b5bd0b 1-89
+portal/src/app/services/destination-schema.service.ts
+  s_1ce8281d293dd3::t_aafde0e263cb5b 192-193
+src/FHIRBridge.Infrastructure/Destinations/MongoJsonValueConverter.cs
+  s_1ce8281d293dd3::t_4ccf54a2c809bf 1-65
+src/FHIRBridge.Domain/ValueObjects/MappingFieldFormat.cs
+  s_1ce8281d293dd3::t_2bd6de1c1b9ed4 1-36
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_1ce8281d293dd3::t_537d7a652b1e35 2136-2142
+  s_1ce8281d293dd3::t_b6ee5aadeb9f18 904-905
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_1ce8281d293dd3::t_9ba1707272bb3f 89
+  s_1ce8281d293dd3::t_b6ee5aadeb9f18 188-190
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_1ce8281d293dd3::t_34263f21e33c66 368
+  s_1ce8281d293dd3::t_3fe6563193cecf 427-431
+  s_1ce8281d293dd3::t_45ec319e3a5470 273-278,280
+  s_1ce8281d293dd3::t_1eb0dfaa835c94 253-272,279,281-303
+  s_1ce8281d293dd3::t_20ee23f71f1fa0 432-436
+  s_1ce8281d293dd3::t_5198cbaa340112 452
+src/FHIRBridge.Application/DTOs/MongoConnectionTestRequest.cs
+  s_1ce8281d293dd3::t_aafde0e263cb5b 13-17
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_7e6564e8b9ed48::t_0588f90d5d76de 9,77,173,190,220,227-242
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_1ce8281d293dd3::t_ad12a834c6f61c 14-17,106-112,243-249,252-255,268,679,703
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_1ce8281d293dd3::t_d39cc22d7c0086 130-134,139-140,143,146-148,151-157
+  s_1ce8281d293dd3::t_8b5867d254fd06 149-150
+  s_1ce8281d293dd3::t_1aba4c98bc8cc8 28-33
+  s_1ce8281d293dd3::t_881da4f162fef6 135-138,141-142,144-145
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_1ce8281d293dd3::t_d40c96120f17d5 311-329
+  s_1ce8281d293dd3::t_2a755309d76ae9 56-60
+  s_1ce8281d293dd3::t_cd769c603dc1c0 4-7
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_1ce8281d293dd3::t_3cd9e0c2d53aa2 6
+  s_1ce8281d293dd3::t_a9fe84672a0ac8 222,238-252
+  s_1ce8281d293dd3::t_ae40638cb9b541 191-221,223-237,253-266
+src/FHIRBridge.Infrastructure/Destinations/MappedMongoDestinationWriter.cs
+  s_1ce8281d293dd3::t_326dbc0ce30935 69-70,75
+  s_1ce8281d293dd3::t_81a57cbb406d64 60,92,140,186-198,200
+  s_1ce8281d293dd3::t_33a61f4165440f 118-119
+  s_1ce8281d293dd3::t_1680fa6cba935c 254-257,262,273,279-296
+  s_1ce8281d293dd3::t_33ff4a3c9b4fa4 142-145,150-151
+  s_1ce8281d293dd3::t_b8dee90a854f73 344-375
+  s_1ce8281d293dd3::t_6ec9a9d16c643b 64
+  s_1ce8281d293dd3::t_81955835145b65 5
+  s_1ce8281d293dd3::t_9cfd9e2be84ce4 24-30,297-298
+  s_1ce8281d293dd3::t_d4c37ab44bcc93 226-229,231-232,237
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_1ce8281d293dd3::t_c17bc811becf2d 4773-4816,4821
+  s_1ce8281d293dd3::t_8abdc950f52503 4568-4571
+  s_1ce8281d293dd3::t_d1c8830449488c 3918-3919
+  s_1ce8281d293dd3::t_b6ee5aadeb9f18 1539-1540
+tests/FHIRBridge.UnitTests/Sources/EpicSourceConnectionScopeSyncServiceTests.cs
+  s_7e6564e8b9ed48::t_6ae9f35ccc0290 45-65,203-267
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_1ce8281d293dd3::t_ca10860d492c63 2-4
+  s_1ce8281d293dd3::t_91facd97ddd0a3 627-631
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f9cdfdd0732ad6fb5648cb7e05b585ba6f3c01a8",
+  "prompts": {},
+  "sessions": {
+    "s_1ce8281d293dd3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b05e4f0b-b278-4be0-b49e-442eb2585b1e",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    },
+    "s_7e6564e8b9ed48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1686ffa8-a822-4a26-bff3-5a76fa12dc2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
