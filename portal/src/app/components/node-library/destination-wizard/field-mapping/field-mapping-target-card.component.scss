@@ -519,6 +519,34 @@
   &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-primary-mid); }
 }
 
+// Distinct from the plain "+" / "Add" affordances (still .fm-target-add-btn--icon, still the brand teal) —
+// loading a whole JSON payload is a much bigger action than adding one column by hand, so it gets its own
+// color (the platform's fixed --color-info blue, same family the source-side toolbar's own "⇩ Load JSON
+// payload" button reads as prominent) and enough size/weight to actually stand out on the card instead of
+// blending into the tiny icon-button row next to it.
+.fm-target-loadjson-btn {
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-info);
+  color: var(--color-on-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+
+  &:hover { background: var(--color-info-strong); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-info-soft), 0 0 0 4px var(--color-info); }
+  &:active { transform: scale(0.97); }
+}
+
 .fm-target-add-btn--icon {
   flex: 0 0 auto;
   height: 22px;

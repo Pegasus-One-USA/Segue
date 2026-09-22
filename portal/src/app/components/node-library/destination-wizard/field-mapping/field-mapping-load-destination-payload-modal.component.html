@@ -1,0 +1,40 @@
+<div
+  class="fm-loadpayload-backdrop"
+  tabindex="0"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="fm-loaddestpayload-title"
+  (click)="onBackdropClick($event)"
+  (keydown.escape)="onEscape()"
+>
+  <div class="fm-loadpayload-dialog" tabindex="-1" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+    <h3 class="fm-loadpayload-title" id="fm-loaddestpayload-title">Load JSON payload — {{ tableLabel() }}</h3>
+    <p class="fm-loadpayload-subtitle">
+      Paste a sample of the JSON body your destination expects (one record). Every nested object and
+      array becomes a column here — replacing {{ tableLabel() }}'s current column list — so you can build
+      the target shape from a real example instead of typing each field name by hand.
+    </p>
+
+    <textarea
+      #payloadInput
+      class="fm-loadpayload-textarea"
+      [value]="raw()"
+      (input)="onInput($any($event.target).value)"
+      placeholder="Paste your destination's JSON body here…"
+      [disabled]="submitting()"
+      spellcheck="false"
+    ></textarea>
+
+    @if (error()) {
+      <p class="fm-loadpayload-error">{{ error() }}</p>
+    }
+
+    <div class="fm-loadpayload-actions">
+      <span class="fm-loadpayload-actions-spacer"></span>
+      <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="cancelled.emit()">Cancel</button>
+      <button type="button" class="btn btn-primary" [disabled]="!canSubmit()" (click)="submit()">
+        {{ submitting() ? 'Loading…' : 'Load payload' }}
+      </button>
+    </div>
+  </div>
+</div>
