@@ -246,8 +246,11 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  placeholder). Only meaningful for the ApiEndpoint destination — the parent (DestinationWizardComponent)
    *  pushes this straight into that destination's own form, so the user never hand-writes placeholders
    *  matching column names themselves. Every other file-shaped destination type has no template concept
-   *  and the parent simply ignores this for them. */
-  readonly destinationTemplateGenerated = output<string>();
+   *  and the parent simply ignores this for them. Carries `resource` (which card this came from) so the
+   *  parent can route it correctly in a multi-resource ApiEndpoint destination — where EVERY participating
+   *  resource type needs its OWN template (see ApiEndpointDestinationFormComponent.setRecordTemplateForResource)
+   *  rather than all of them colliding into the one single-resource dest_apiBodyTemplateJson field. */
+  readonly destinationTemplateGenerated = output<{ resource: string; templateJson: string }>();
   /** A table created via "Create a new table…" was given a parent/FK relationship — the parent wizard
    *  owns this globally (it outlives any one resource's canvas instance) so it survives navigating
    *  between resources, node reload, and the Mapping JSON export/import. */
@@ -1549,7 +1552,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       r => r.resource === resource && r.tableName === tableName && !newColumnSet.has(r.targetName)).length;
     this.mappingRowsChange.emit(
       rowsBefore.filter(r => !(r.resource === resource && r.tableName === tableName) || newColumnSet.has(r.targetName)));
-    this.destinationTemplateGenerated.emit(result.templateJson);
+    this.destinationTemplateGenerated.emit({ resource, templateJson: result.templateJson });
 
     this.loadDestinationPayloadTarget.set(null);
     this.loadDestinationPayloadError.set(null);

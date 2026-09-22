@@ -255,4 +255,105 @@ public sealed class MappedApiEndpointDestinationWriterTests
         encounters.GetArrayLength().Should().Be(1, "the encounter record is nested under the patient it correlates to, not left top-level");
         body.RootElement.TryGetProperty("encounters", out _).Should().BeFalse("a non-root resource type is nested only, never also emitted top-level");
     }
+
+    [Fact]
+    public async Task Multi_resource_nested_mode_supports_three_levels_regardless_of_declaration_order()
+    {
+        SetupSender();
+        // Declared top-down (Patient, then Encounter, then Observation) — the natural order, and exactly the
+        // order that broke a naive "nest in array order" implementation: without resolving nesting depth-first,
+        // Encounter would be cloned into Patient BEFORE Observation was nested into Encounter, silently dropping
+        // the observation from the final document.
+        var destination = Destination(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiMultiResourceMode"] = "nested",
+            ["dest_apiResourceRelationsJson"] = """
+                [
+                    {"resourceType":"Patient","nestKey":"patients"},
+                    {"resourceType":"Encounter","parentResourceType":"Patient","correlationColumn":"PatientId","parentKeyColumn":"Id","nestKey":"encounters"},
+                    {"resourceType":"Observation","parentResourceType":"Encounter","correlationColumn":"EncounterId","parentKeyColumn":"Id","nestKey":"observations"}
+                ]
+                """,
+        }));
+        var writer = CreateWriter();
+
+        await writer.WriteAsync(
+            destination,
+            Mapping("Patient", "Patient"),
+            [RecordWithValues("p1", new Dictionary<string, object?> { ["Id"] = "pat-1" })],
+            Context(),
+            CancellationToken.None);
+        await writer.WriteAsync(
+            destination,
+            Mapping("Encounter", "Encounter"),
+            [RecordWithValues("e1", new Dictionary<string, object?> { ["Id"] = "enc-1", ["PatientId"] = "pat-1" })],
+            Context(),
+            CancellationToken.None);
+        await writer.WriteAsync(
+            destination,
+            Mapping("Observation", "Observation"),
+            [RecordWithValues("o1", new Dictionary<string, object?> { ["EncounterId"] = "enc-1" })],
+            Context(),
+            CancellationToken.None);
+
+        _sent.Should().HaveCount(1);
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        var patients = body.RootElement.GetProperty("patients");
+        patients.GetArrayLength().Should().Be(1);
+        var encounters = patients[0].GetProperty("encounters");
+        encounters.GetArrayLength().Should().Be(1, "the encounter is nested under its patient");
+        var observations = encounters[0].GetProperty("observations");
+        observations.GetArrayLength().Should().Be(
+            1, "the observation must reach its grandparent's document — nested two levels deep, not dropped or left top-level");
+        body.RootElement.TryGetProperty("encounters", out _).Should().BeFalse();
+        body.RootElement.TryGetProperty("observations", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Multi_resource_nested_mode_has_no_hardcoded_depth_limit()
+    {
+        SetupSender();
+        // Patient -> Encounter -> Observation -> Component: nesting depth is resolved generically by walking
+        // ParentResourceType, so a 4th level (or a 5th, or an Nth) works exactly the same way a 2nd or 3rd does —
+        // nothing in MappedApiEndpointDestinationWriter caps how many relations can chain off one another.
+        var destination = Destination(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiMultiResourceMode"] = "nested",
+            ["dest_apiResourceRelationsJson"] = """
+                [
+                    {"resourceType":"Patient","nestKey":"patients"},
+                    {"resourceType":"Encounter","parentResourceType":"Patient","correlationColumn":"PatientId","parentKeyColumn":"Id","nestKey":"encounters"},
+                    {"resourceType":"Observation","parentResourceType":"Encounter","correlationColumn":"EncounterId","parentKeyColumn":"Id","nestKey":"observations"},
+                    {"resourceType":"Component","parentResourceType":"Observation","correlationColumn":"ObservationId","parentKeyColumn":"Id","nestKey":"components"}
+                ]
+                """,
+        }));
+        var writer = CreateWriter();
+
+        await writer.WriteAsync(
+            destination, Mapping("Patient", "Patient"),
+            [RecordWithValues("p1", new Dictionary<string, object?> { ["Id"] = "pat-1" })],
+            Context(), CancellationToken.None);
+        await writer.WriteAsync(
+            destination, Mapping("Encounter", "Encounter"),
+            [RecordWithValues("e1", new Dictionary<string, object?> { ["Id"] = "enc-1", ["PatientId"] = "pat-1" })],
+            Context(), CancellationToken.None);
+        await writer.WriteAsync(
+            destination, Mapping("Observation", "Observation"),
+            [RecordWithValues("o1", new Dictionary<string, object?> { ["Id"] = "obs-1", ["EncounterId"] = "enc-1" })],
+            Context(), CancellationToken.None);
+        await writer.WriteAsync(
+            destination, Mapping("Component", "Component"),
+            [RecordWithValues("c1", new Dictionary<string, object?> { ["ObservationId"] = "obs-1" })],
+            Context(), CancellationToken.None);
+
+        _sent.Should().HaveCount(1);
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        var components = body.RootElement
+            .GetProperty("patients")[0]
+            .GetProperty("encounters")[0]
+            .GetProperty("observations")[0]
+            .GetProperty("components");
+        components.GetArrayLength().Should().Be(1, "a 4th nesting level reaches the document exactly like a 2nd or 3rd does");
+    }
 }

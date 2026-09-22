@@ -228,7 +228,31 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
 
         if (settings.MultiResourceMode == ApiEndpointMultiResourceMode.Nested)
         {
-            foreach (var relation in settings.ResourceRelations.Where(r => !r.IsRoot))
+            // Deepest first: a grandchild (e.g. Observation under Encounter under Patient) must be nested into
+            // its immediate parent's node BEFORE that parent is itself cloned into ITS OWN parent — otherwise the
+            // clone taken for the outer nesting step would be missing the inner one. Depth is measured by walking
+            // ParentResourceType back to a root; declaration order in dest_apiResourceRelationsJson never matters.
+            var relationsByType = settings.ResourceRelations.ToDictionary(r => r.ResourceType, StringComparer.OrdinalIgnoreCase);
+            int DepthOf(ApiEndpointResourceRelation relation)
+            {
+                var depth = 0;
+                var current = relation;
+                for (var guard = 0; !current.IsRoot && guard < relationsByType.Count; guard++)
+                {
+                    if (current.ParentResourceType is null
+                        || !relationsByType.TryGetValue(current.ParentResourceType, out var parent))
+                    {
+                        break;
+                    }
+
+                    depth++;
+                    current = parent;
+                }
+
+                return depth;
+            }
+
+            foreach (var relation in settings.ResourceRelations.Where(r => !r.IsRoot).OrderByDescending(DepthOf))
             {
                 if (relation.ParentResourceType is null
                     || string.IsNullOrWhiteSpace(relation.CorrelationColumn)

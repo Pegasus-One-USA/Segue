@@ -13,7 +13,10 @@ namespace FHIRBridge.Infrastructure.Destinations.ApiEndpoint;
 /// <param name="ResourceType">The FHIR resource type this entry describes — must match a MappingProfile's own
 /// ResourceType for one of the mapping profiles routed at this destination.</param>
 /// <param name="ParentResourceType">Null for a flat/root resource (Nested mode's actual root, or any resource in
-/// Flat mode). Set to another entry's ResourceType to nest this resource's records under that parent instead.</param>
+/// Flat mode). Set to another entry's ResourceType to nest this resource's records under that parent instead —
+/// that parent's own ParentResourceType may in turn be set too, so nesting is not limited to two levels (e.g.
+/// Observation under Encounter under Patient); MappedApiEndpointDestinationWriter resolves nesting depth-first by
+/// walking this chain back to its root, so declaration order in dest_apiResourceRelationsJson never matters.</param>
 /// <param name="CorrelationColumn">Nested only: the mapped column ON THIS resource holding the value that links
 /// each of its records to one parent record — typically a flattened reference field (e.g. Encounter's mapped
 /// "PatientId" column, holding the value from Encounter.subject.reference).</param>

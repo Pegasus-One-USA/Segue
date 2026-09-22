@@ -112,16 +112,22 @@
       </div>
     }
 
-    <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('bodyTemplateJson')!.invalid && apiForm.get('bodyTemplateJson')!.touched">
-      <label class="dw-label" for="dw-ae-bodyTemplateJson">Request body template (JSON)</label>
-      <textarea id="dw-ae-bodyTemplateJson" class="dw-input" rows="4" formControlName="bodyTemplateJson"
-        placeholder="e.g. your API's own JSON shape, with a value like &quot;{{ '{' }}{{ '{' }}PatientName{{ '}' }}{{ '}' }}&quot;"></textarea>
-      @if (apiForm.get('bodyTemplateJson')!.hasError('json') && apiForm.get('bodyTemplateJson')!.touched) {
-        <span class="dw-error">Must be valid JSON.</span>
-      } @else {
-        <span class="dw-hint">Paste the exact JSON body your API expects. Anywhere inside it, write <code>{{ '{' }}{{ '{' }}fieldName{{ '}' }}{{ '}' }}</code> using the same field/column names assigned on the Mapping Profile screen — a value that is <em>exactly</em> one placeholder (e.g. a quoted <code>"{{ '{' }}{{ '{' }}Age{{ '}' }}{{ '}' }}"</code>) is replaced with that field's real type (a number stays a number); a placeholder inside a longer string is text-substituted. <code>sourceResourceId</code>, <code>resourceType</code>, <code>destinationObject</code> and <code>pipelineRunId</code> are also available. Leave blank to use the default envelope (pipelineRunId/resourceType/.../values).</span>
-      }
-    </div>
+    @if (apiForm.get('multiResourceMode')!.value === 'none') {
+      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('bodyTemplateJson')!.invalid && apiForm.get('bodyTemplateJson')!.touched">
+        <label class="dw-label" for="dw-ae-bodyTemplateJson">Request body template (JSON)</label>
+        <textarea id="dw-ae-bodyTemplateJson" class="dw-input" rows="4" formControlName="bodyTemplateJson"
+          placeholder="e.g. your API's own JSON shape, with a value like &quot;{{ '{' }}{{ '{' }}PatientName{{ '}' }}{{ '}' }}&quot;"></textarea>
+        @if (apiForm.get('bodyTemplateJson')!.hasError('json') && apiForm.get('bodyTemplateJson')!.touched) {
+          <span class="dw-error">Must be valid JSON.</span>
+        } @else {
+          <span class="dw-hint">Paste the exact JSON body your API expects. Anywhere inside it, write <code>{{ '{' }}{{ '{' }}fieldName{{ '}' }}{{ '}' }}</code> using the same field/column names assigned on the Mapping Profile screen — a value that is <em>exactly</em> one placeholder (e.g. a quoted <code>"{{ '{' }}{{ '{' }}Age{{ '}' }}{{ '}' }}"</code>) is replaced with that field's real type (a number stays a number); a placeholder inside a longer string is text-substituted. <code>sourceResourceId</code>, <code>resourceType</code>, <code>destinationObject</code> and <code>pipelineRunId</code> are also available. Leave blank to use the default envelope (pipelineRunId/resourceType/.../values).</span>
+        }
+      </div>
+    }
+    <!-- Hidden once multi-resource is on: dest_apiBodyTemplateJson is never read by the backend in that mode
+         (MappedApiEndpointDestinationWriter uses dest_apiRecordTemplatesByResourceType per resource type instead —
+         see the multi-resource section below), so showing it would just be a dead field someone might fill in
+         and never see take effect. -->
 
     <div class="dw-field dw-field--full">
       <label class="dw-label" for="dw-ae-multiResourceMode">Multiple resources in one document</label>
@@ -136,26 +142,64 @@
     </div>
 
     @if (apiForm.get('multiResourceMode')!.value !== 'none') {
-      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('resourceRelationsJson')!.invalid && apiForm.get('resourceRelationsJson')!.touched">
-        <label class="dw-label" for="dw-ae-resourceRelationsJson">Participating resource types (JSON)</label>
-        <textarea id="dw-ae-resourceRelationsJson" class="dw-input" rows="4" formControlName="resourceRelationsJson"
-          placeholder="e.g. one entry per resource type: resourceType, optional parentResourceType, correlationColumn, parentKeyColumn, and nestKey"></textarea>
-        @if (apiForm.get('resourceRelationsJson')!.hasError('jsonArray') && apiForm.get('resourceRelationsJson')!.touched) {
-          <span class="dw-error">Must be a JSON array.</span>
-        } @else {
-          <span class="dw-hint">One entry per resource type routed to this destination. <code>nestKey</code> is the array/object key it's written under. For "Nested", every non-root entry also needs <code>parentResourceType</code>, <code>correlationColumn</code> (this resource's mapped column carrying its parent's key) and <code>parentKeyColumn</code> (the parent's own mapped key column).</span>
-        }
+      <div class="dw-field dw-field--full">
+        <span class="dw-label" id="dw-ae-relations-label">Participating resource types</span>
+        <div class="ae-relations-builder" role="group" aria-labelledby="dw-ae-relations-label">
+          @for (row of relationRows(); track $index) {
+            <div class="ae-relation-row">
+              <input class="dw-input" placeholder="Resource type (e.g. Patient)"
+                [value]="row.resourceType" (input)="updateRelationRow($index, { resourceType: $any($event.target).value })" />
+              <input class="dw-input" placeholder="Nest key (default: {{ row.resourceType ? (row.resourceType.charAt(0).toLowerCase() + row.resourceType.slice(1)) + 's' : 'e.g. patients' }})"
+                [value]="row.nestKey" (input)="updateRelationRow($index, { nestKey: $any($event.target).value })" />
+              @if (apiForm.get('multiResourceMode')!.value === 'nested') {
+                <span class="ae-relation-row-label">Parent:</span>
+                <div class="dw-select-wrap" style="flex:1 1 140px;">
+                  <select class="dw-select" [value]="row.parentResourceType"
+                    (change)="updateRelationRow($index, { parentResourceType: $any($event.target).value })">
+                    <option value="">— root (no parent) —</option>
+                    @for (candidate of parentCandidatesFor($index); track candidate) {
+                      <option [value]="candidate">{{ candidate }}</option>
+                    }
+                  </select>
+                </div>
+                @if (row.parentResourceType) {
+                  <input class="dw-input" placeholder="Correlation column (on this resource)"
+                    [value]="row.correlationColumn" (input)="updateRelationRow($index, { correlationColumn: $any($event.target).value })" />
+                  <input class="dw-input" placeholder="Parent key column (on {{ row.parentResourceType }})"
+                    [value]="row.parentKeyColumn" (input)="updateRelationRow($index, { parentKeyColumn: $any($event.target).value })" />
+                }
+              }
+              <button type="button" class="ae-relation-remove" title="Remove this resource" aria-label="Remove this resource" (click)="removeRelationRow($index)">✕</button>
+            </div>
+          }
+          <button type="button" class="ae-relation-add" (click)="addRelationRow()">+ Add resource</button>
+        </div>
+        <span class="dw-hint">One row per resource type combined into this document — Resource type must exactly match a resource selected on the Mapping step. For "Nested", pick each non-root resource's Parent, then the mapped column that correlates it (on this resource) and the mapped column it matches against (on the parent).</span>
       </div>
 
-      <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('recordTemplatesByResourceTypeJson')!.invalid && apiForm.get('recordTemplatesByResourceTypeJson')!.touched">
-        <label class="dw-label" for="dw-ae-recordTemplatesByResourceTypeJson">Per-resource-type record template (JSON, optional)</label>
-        <textarea id="dw-ae-recordTemplatesByResourceTypeJson" class="dw-input" rows="3" formControlName="recordTemplatesByResourceTypeJson"
-          placeholder="e.g. a JSON object of resourceType to that resource type's own Request Body Template string"></textarea>
-        @if (apiForm.get('recordTemplatesByResourceTypeJson')!.hasError('jsonObject') && apiForm.get('recordTemplatesByResourceTypeJson')!.touched) {
-          <span class="dw-error">Must be a JSON object mapping resource type to a JSON-template string.</span>
-        } @else {
-          <span class="dw-hint">Maps a resource type to its own Request Body Template (same <code>{{ '{' }}{{ '{' }}fieldName{{ '}' }}{{ '}' }}</code> syntax as above). Leave blank for any resource type to use the default per-record shape.</span>
-        }
+      <div class="dw-field dw-field--full">
+        <span class="dw-label" id="dw-ae-templates-label">Per-resource-type record template</span>
+        <div class="ae-templates-summary" role="group" aria-labelledby="dw-ae-templates-label">
+          @if (configuredRecordTemplateResourceTypes().length > 0) {
+            Configured for:
+            @for (rt of configuredRecordTemplateResourceTypes(); track rt) {
+              <span class="ae-templates-pill">{{ rt }}</span>
+            }
+          } @else {
+            <span class="ae-templates-empty">None configured yet — every resource type uses the default record shape.</span>
+          }
+        </div>
+        <span class="dw-hint">Set automatically when you use "⇩ Load JSON payload" on each resource's own card in the mapping canvas — no need to type this by hand. Use the raw editor below only for a shape the mapping canvas can't produce for you.</span>
+        <details class="ae-raw-json">
+          <summary>Edit raw JSON (advanced)</summary>
+          <div [class.dw-field--error]="apiForm.get('recordTemplatesByResourceTypeJson')!.invalid && apiForm.get('recordTemplatesByResourceTypeJson')!.touched">
+            <textarea id="dw-ae-recordTemplatesByResourceTypeJson" class="dw-input" rows="3" formControlName="recordTemplatesByResourceTypeJson"
+              placeholder="e.g. a JSON object of resourceType to that resource type's own Request Body Template string"></textarea>
+            @if (apiForm.get('recordTemplatesByResourceTypeJson')!.hasError('jsonObject') && apiForm.get('recordTemplatesByResourceTypeJson')!.touched) {
+              <span class="dw-error">Must be a JSON object mapping resource type to a JSON-template string.</span>
+            }
+          </div>
+        </details>
       </div>
 
       <div class="dw-field dw-field--full" [class.dw-field--error]="apiForm.get('batchTemplateJson')!.invalid && apiForm.get('batchTemplateJson')!.touched">

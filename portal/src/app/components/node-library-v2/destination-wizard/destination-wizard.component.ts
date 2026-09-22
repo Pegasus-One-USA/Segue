@@ -1699,14 +1699,30 @@ export class DestinationWizardComponent implements OnInit {
   /** A DESTINATION JSON payload was loaded on the mapping canvas (FieldMappingCanvasComponent.
    *  submitLoadDestinationPayload) — carries a Request Body Template already built with {{ColumnName}}
    *  placeholders matching the columns that same load just created, so the user never hand-writes them.
-   *  Only ApiEndpointDestinationFormComponent declares setBodyTemplateFromMapping (every other file-shaped
-   *  type has no template concept) — duck-typed exactly like isSqlFamilyForm/isMongoForm above, since
-   *  WizardDestinationFormApi has no reason to carry a method only one destination type implements. The
-   *  outlet stays mounted for the wizard's whole lifetime (see activeFormInputs()'s own doc comment), so
-   *  this reaches the form's live FormGroup even while Step 3 (not Step 1) is on screen. */
-  onDestinationTemplateGenerated(templateJson: string): void {
-    const form = this.activeForm() as { setBodyTemplateFromMapping?: (json: string) => void } | null;
-    form?.setBodyTemplateFromMapping?.(templateJson);
+   *  Only ApiEndpointDestinationFormComponent declares setBodyTemplateFromMapping/setRecordTemplateForResource
+   *  (every other file-shaped type has no template concept) — duck-typed exactly like isSqlFamilyForm/
+   *  isMongoForm above, since WizardDestinationFormApi has no reason to carry a method only one destination
+   *  type implements. The outlet stays mounted for the wizard's whole lifetime (see activeFormInputs()'s own
+   *  doc comment), so this reaches the form's live FormGroup even while Step 3 (not Step 1) is on screen.
+   *
+   *  Routes by whether the form's OWN multiResourceMode is currently "none": single-resource destinations
+   *  (or a not-yet-multi-resource one) get the old behavior — the ONE dest_apiBodyTemplateJson field, whoever
+   *  last ran Load JSON payload wins, same as always. Once multi-resource is on, dest_apiBodyTemplateJson is
+   *  never read by the backend at all (see ApiEndpointSettings/MappedApiEndpointDestinationWriter) — every
+   *  participating resource type needs its OWN entry in dest_apiRecordTemplatesByResourceType instead, so
+   *  this writes there, keyed by the resource that actually triggered the load, leaving every other resource
+   *  type's own template untouched. */
+  onDestinationTemplateGenerated(e: { resource: string; templateJson: string }): void {
+    const form = this.activeForm() as {
+      setBodyTemplateFromMapping?: (json: string) => void;
+      setRecordTemplateForResource?: (resource: string, json: string) => void;
+      isMultiResourceModeActive?: () => boolean;
+    } | null;
+    if (form?.isMultiResourceModeActive?.()) {
+      form.setRecordTemplateForResource?.(e.resource, e.templateJson);
+    } else {
+      form?.setBodyTemplateFromMapping?.(e.templateJson);
+    }
   }
 
   // ── deferred schema DDL (create table / add / drop / alter column) ─────────────────────────
