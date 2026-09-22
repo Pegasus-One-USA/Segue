@@ -52,6 +52,7 @@
           [externalQuery]="searchQuery()"
           (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
           (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
+          (loadDestinationPayload)="openLoadDestinationPayloadModal(card.resource, card.tableName)"
           (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
           (columnClick)="onTargetFieldClick(card.resource, card.tableName, $event)"
           (positionChange)="onCardPositionChange(card.tableName, $event)"
@@ -352,6 +353,16 @@
       (submitted)="submitLoadPayload($event)"
       (resetToOriginal)="onResetToOriginalPayload()"
       (cancelled)="closeLoadPayloadModal()"
+    />
+  }
+
+  @if (loadDestinationPayloadTarget(); as target) {
+    <app-field-mapping-load-destination-payload-modal
+      [tableLabel]="target.tableName || target.resource"
+      [submitting]="loadDestinationPayloadSubmitting()"
+      [error]="loadDestinationPayloadError()"
+      (submitted)="submitLoadDestinationPayload($event)"
+      (cancelled)="closeLoadDestinationPayloadModal()"
     />
   }
 

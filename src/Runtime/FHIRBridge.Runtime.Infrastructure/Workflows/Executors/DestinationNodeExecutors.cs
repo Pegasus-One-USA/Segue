@@ -885,7 +885,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             DateTimeOffset.UtcNow,
             CorrelationId: context.CorrelationId,
             FetchMissingReferenceAsync: fetchMissingReferenceAsync,
-            SourceBaseUrl: sourceBaseUrl);
+            SourceBaseUrl: sourceBaseUrl,
+            PipelineRunId: context.WorkflowRunId);
 
         int written;
         string? downloadUrl;
