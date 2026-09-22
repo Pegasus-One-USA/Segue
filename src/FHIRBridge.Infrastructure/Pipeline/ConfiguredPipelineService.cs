@@ -493,7 +493,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                         request.AllowInlineDownload,
                         route.MappingProfile.Name,
                         runStartedAtUtc,
-                        request.CorrelationId);
+                        request.CorrelationId,
+                        PipelineRunId: pipelineRunId);
 
                     var result = await ExecuteRouteAsync(
                         config,
@@ -682,7 +683,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
                     AllowInlineDelivery: false,
                     route.MappingProfile.Name,
                     runStartedAtUtc,
-                    request.CorrelationId);
+                    request.CorrelationId,
+                    PipelineRunId: pipelineRunId);
 
                 var result = await ExecuteRouteAsync(
                     config,

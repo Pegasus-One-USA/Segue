@@ -36,10 +36,24 @@ public sealed record ApiEndpointSettings(
     string? Scope,
     bool IncludeSourceJson,
     bool RequireHttps,
-    string? BodyTemplateJson)
+    string? BodyTemplateJson,
+    ApiEndpointMultiResourceMode MultiResourceMode,
+    IReadOnlyList<ApiEndpointResourceRelation> ResourceRelations,
+    IReadOnlyDictionary<string, string> RecordTemplatesByResourceType,
+    string? BatchTemplateJson)
 {
     /// <summary>True for every mode whose credential is resolved out of Key Vault.</summary>
     public bool RequiresSecret => AuthMode != ApiEndpointAuthMode.None;
+
+    /// <summary>True when this destination combines more than one resource type into a single outgoing document
+    /// (<see cref="ApiEndpointMultiResourceMode.Flat"/> or <see cref="ApiEndpointMultiResourceMode.Nested"/>).
+    /// False — today's only behavior before this setting existed — for every destination that hasn't opted in.</summary>
+    public bool IsMultiResource => MultiResourceMode != ApiEndpointMultiResourceMode.None && ResourceRelations.Count > 0;
+
+    /// <summary>Every resource type <see cref="MappedApiEndpointDestinationWriter"/> must accumulate before it can
+    /// emit a combined multi-resource write — empty when <see cref="IsMultiResource"/> is false.</summary>
+    public IReadOnlyCollection<string> ExpectedResourceTypes =>
+        ResourceRelations.Select(r => r.ResourceType).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
     /// <summary>
     /// True when the caller supplied their own request-body shape instead of using the fixed
@@ -165,7 +179,14 @@ public sealed record ApiEndpointSettings(
             Scope: ConnectionMetadataReader.GetString(json, "dest_apiScope"),
             IncludeSourceJson: ConnectionMetadataReader.GetBool(json, "dest_apiIncludeSourceJson", false),
             RequireHttps: requireHttps,
-            BodyTemplateJson: bodyTemplateJson);
+            BodyTemplateJson: bodyTemplateJson,
+            MultiResourceMode: ParseEnum(
+                ConnectionMetadataReader.GetString(json, "dest_apiMultiResourceMode"), ApiEndpointMultiResourceMode.None),
+            ResourceRelations: ApiEndpointResourceRelation.ParseList(
+                ConnectionMetadataReader.GetString(json, "dest_apiResourceRelationsJson")),
+            RecordTemplatesByResourceType: ParseDictionary(
+                ConnectionMetadataReader.GetString(json, "dest_apiRecordTemplatesByResourceType")),
+            BatchTemplateJson: ConnectionMetadataReader.GetString(json, "dest_apiBatchTemplateJson"));
     }
 
     internal static void ValidateEndpointUrl(string endpointUrl, string destinationName, bool requireHttps)

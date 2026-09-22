@@ -164,7 +164,7 @@
                      [placeholder]="baseUrlPlaceholder()" />
               <button class="eaf-discover-btn" type="button"
                       [disabled]="discStatus() === 'loading' || isReadonly"
-                      (click)="runDiscover()">
+                      data-testid="src-discover" (click)="runDiscover()">
                 @if (discStatus() === 'loading') {
                   <span class="eaf-spin"></span>&nbsp;Discovering…
                 } @else {
@@ -192,7 +192,7 @@
             <p class="eaf-hint">Authenticating with {{ displayVendor() }} (system/*.*)…</p>
           }
           @if (grantedScopesStatus() === 'done') {
-            <div class="eaf-granted-scopes">
+            <div class="eaf-granted-scopes" data-testid="src-granted-scopes">
               <p class="eaf-granted-scopes-title">Scopes allowed for this {{ displayVendor() }} app:</p>
               <ul class="eaf-granted-scopes-list">
                 @for (scope of grantedScopes(); track scope) {
@@ -202,7 +202,7 @@
             </div>
           }
           @if (grantedScopesStatus() === 'error') {
-            <div class="eaf-granted-scopes eaf-granted-scopes--error">
+            <div class="eaf-granted-scopes eaf-granted-scopes--error" data-testid="src-granted-scopes-error">
               Could not determine granted scopes: {{ grantedScopesError() }}
             </div>
           }
@@ -380,8 +380,8 @@
                 <div class="eaf-field eaf-field--full">
                   <div class="eaf-existing-key-panel">
                     <p class="eaf-hint"><strong>Signing key already configured for this connection.</strong></p>
-                    <dl class="eaf-key-summary">
-                      <div><dt>Key ID</dt><dd>{{ form.controls.jwtKid.value }}</dd></div>
+                    <dl class="eaf-key-summary" data-testid="src-existing-key">
+                      <div><dt>Key ID</dt><dd data-testid="src-existing-kid">{{ form.controls.jwtKid.value }}</dd></div>
                       <div><dt>Key Vault Name</dt><dd>{{ form.controls.privateKeyRef.value }}</dd></div>
                       <div><dt>Secret Name</dt><dd>{{ form.controls.privateKeySecretName.value }}</dd></div>
                     </dl>
@@ -418,7 +418,7 @@
                 @if (isGenKey()) {
                   <div class="eaf-field eaf-field--full">
                     <div class="eaf-inline-actions">
-                      <button type="button" class="eaf-btn eaf-btn--ghost" (click)="generateKeyPair()"
+                      <button type="button" class="eaf-btn eaf-btn--ghost" data-testid="src-key-generate" (click)="generateKeyPair()"
                               [disabled]="keyGenStatus() === 'generating'">
                         {{ keyGenStatus() === 'generating' ? 'Generating…' : 'Generate Key Pair' }}
                       </button>
@@ -432,10 +432,10 @@
                     <div class="eaf-inline-actions">
                       <label class="eaf-btn eaf-btn--ghost eaf-file-btn">
                         Choose Private Key File
-                        <input type="file" accept=".pem,.key,.txt" class="eaf-file-input"
+                        <input type="file" accept=".pem,.key,.txt" class="eaf-file-input" data-testid="src-key-file"
                                (change)="onPrivateKeyFileSelected($event)" />
                       </label>
-                      <button type="button" class="eaf-btn eaf-btn--ghost" (click)="importPrivateKey()"
+                      <button type="button" class="eaf-btn eaf-btn--ghost" data-testid="src-key-import" (click)="importPrivateKey()"
                               [disabled]="keyGenStatus() === 'generating' || !selectedFileName()">
                         {{ keyGenStatus() === 'generating' ? 'Importing…' : 'Import Private Key' }}
                       </button>
@@ -656,7 +656,7 @@
           <div class="eaf-test-row">
             <button class="eaf-test-btn" type="button"
                     [disabled]="testStatus() === 'running' || isReadonly"
-                    (click)="runTestConnection()">
+                    data-testid="src-test-connection" (click)="runTestConnection()">
               @if (testStatus() === 'running') {
                 <span class="eaf-spin eaf-spin--dark"></span>&nbsp;Testing…
               } @else if (testStatus() === 'ok') {
@@ -669,11 +669,11 @@
             </button>
 
             @if (testStatus() === 'ok') {
-              <span class="eaf-test-result eaf-test-result--ok">
+              <span class="eaf-test-result eaf-test-result--ok" data-testid="src-test-ok">
                 Token endpoint reachable and responding.
               </span>
             } @else if (testStatus() === 'fail') {
-              <span class="eaf-test-result eaf-test-result--fail">
+              <span class="eaf-test-result eaf-test-result--fail" data-testid="src-test-fail">
                 Connection failed. Check the token endpoint URL and credentials.
               </span>
             } @else {
@@ -918,19 +918,20 @@
   <!-- ── Sticky footer ─────────────────────────────────────────────────────── -->
   <div class="eaf-footer">
     @if (!isReadonly && form.invalid && missingRequiredFields().length > 0) {
-      <span class="eaf-missing-hint" [title]="missingRequiredFields().join(', ')">
+      <span class="eaf-missing-hint" data-testid="src-missing-hint" [title]="missingRequiredFields().join(', ')">
         {{ missingRequiredFields().length === 1
           ? '1 required field left: ' + missingRequiredFields()[0]
           : missingRequiredFields().length + ' required fields left: ' + missingRequiredFields().slice(0, 2).join(', ') + (missingRequiredFields().length > 2 ? ', …' : '') }}
       </span>
     }
-    <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
+    <button class="eaf-btn eaf-btn--ghost" type="button" (click)="cancel()" data-testid="src-cancel">{{ isReadonly ? 'Close' : 'Cancel' }}</button>
     @if (!isReadonly) {
       <button
         class="eaf-btn eaf-btn--primary"
         type="button"
         [class.eaf-btn--invalid]="form.invalid"
         [title]="form.invalid ? 'Some required fields are still empty — click to jump to the first one' : ''"
+        data-testid="src-save"
         (click)="save()"
       >
         {{ isEditing ? 'Update' : (wiz.wizardMode() === 'entity' ? 'Save' : 'Add to Workflow') }}

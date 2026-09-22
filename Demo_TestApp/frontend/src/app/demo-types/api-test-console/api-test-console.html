@@ -12,6 +12,8 @@
         (click)="activeTab.set('calls')">API Calls</button>
       <button type="button" class="console__tab" [class.console__tab--active]="activeTab() === 'docs'"
         (click)="activeTab.set('docs')">How to use each API</button>
+      <button type="button" class="console__tab" [class.console__tab--active]="activeTab() === 'auth'"
+        (click)="activeTab.set('auth')">Auth modes</button>
     </nav>
   </header>
 
@@ -52,7 +54,11 @@
                 [class.call-card__badge--invalid]="!call.isValid">
                 {{ call.isValid ? 'Valid' : 'Invalid' }}
               </span>
+              <span class="call-card__method">{{ call.httpMethod }}</span>
               <span class="call-card__api-name">{{ call.apiName }}</span>
+              @if (call.authMode) {
+                <span class="call-card__auth-mode">auth: {{ call.authMode }}</span>
+              }
               <span class="call-card__id">#{{ call.id }}</span>
               <span class="call-card__received">{{ call.receivedOnUtc }} UTC</span>
               <span class="call-card__caret" [class.call-card__caret--open]="expandedCallId() === call.id">▸</span>
@@ -81,7 +87,9 @@
     <section class="panel">
       <p class="panel__intro">
         Backend base URL: <code>{{ backendBaseUrl }}</code>. Every endpoint below is anonymous (no login/session
-        required) — point a destination's Endpoint URL straight at the full path and run the workflow.
+        required) — point a destination's Endpoint URL straight at the full path and run the workflow. Every one of
+        them also accepts <code>{{ acceptedMethods }}</code>, matching the HTTP methods FHIRBridge's ApiEndpoint
+        destination itself supports — pick whichever one the destination's "HTTP method" setting uses.
       </p>
 
       @for (api of sampleApis; track api.apiName) {
@@ -116,6 +124,72 @@
               <p class="api-doc__invalid-reason">Rejected because: {{ api.invalidReason }}</p>
             </div>
           </div>
+        </article>
+      }
+    </section>
+  }
+
+  @if (activeTab() === 'auth') {
+    <section class="panel">
+      <p class="panel__intro">
+        One endpoint per auth mode FHIRBridge's <code>ApiEndpoint</code> destination itself supports, each always
+        live with a fixed, documented test credential — configure a destination's Auth mode + Endpoint URL to
+        match one below, run the workflow, then check the API Calls tab (auth mode and result show on every row).
+        Every endpoint also accepts <code>{{ acceptedMethods }}</code>.
+      </p>
+
+      @for (mode of authModeDocs; track mode.authMode) {
+        <article class="api-doc">
+          <h2 class="api-doc__title">{{ mode.title }}</h2>
+          <p class="api-doc__description">{{ mode.description }}</p>
+
+          <dl class="api-doc__meta">
+            <dt>Endpoint</dt>
+            <dd><code>{{ backendBaseUrl }}{{ mode.path }}</code></dd>
+            <dt>Matching ApiEndpoint destination Auth mode</dt>
+            <dd>{{ mode.matchingDestinationAuthMode }}</dd>
+            <dt>Credential</dt>
+            <dd><code>{{ mode.credential }}</code></dd>
+          </dl>
+
+          <div class="api-doc__example">
+            <div class="api-doc__example-header">
+              <span class="api-doc__example-label">curl example</span>
+              <button type="button" class="btn btn--ghost btn--small" (click)="copyToClipboard(curlFor(mode))">Copy</button>
+            </div>
+            <pre class="api-doc__code">{{ curlFor(mode) }}</pre>
+          </div>
+
+          @if (mode.authMode === 'ClientCertificate') {
+            <div class="api-doc__cert">
+              <button type="button" class="btn btn--ghost" (click)="fetchClientCertificate()" [disabled]="clientCertificateLoading()">
+                {{ clientCertificateLoading() ? 'Fetching…' : 'Get current test certificate' }}
+              </button>
+
+              @if (clientCertificateError()) {
+                <p class="error-banner">{{ clientCertificateError() }}</p>
+              }
+
+              @if (clientCertificate(); as cert) {
+                <dl class="api-doc__meta api-doc__cert-meta">
+                  <dt>Thumbprint</dt>
+                  <dd><code>{{ cert.thumbprint }}</code></dd>
+                  <dt>PFX password</dt>
+                  <dd><code>{{ cert.password }}</code></dd>
+                </dl>
+                <div class="api-doc__example">
+                  <div class="api-doc__example-header">
+                    <span class="api-doc__example-label">Destination secret value (pfxBase64|password)</span>
+                    <button type="button" class="btn btn--ghost btn--small" (click)="copyToClipboard(cert.formattedSecret)">Copy</button>
+                  </div>
+                  <pre class="api-doc__code">{{ cert.formattedSecret }}</pre>
+                </div>
+                <p class="api-doc__invalid-reason api-doc__cert-note">
+                  Regenerated every backend restart — re-fetch after restarting if a destination call starts failing.
+                </p>
+              }
+            </div>
+          }
         </article>
       }
     </section>

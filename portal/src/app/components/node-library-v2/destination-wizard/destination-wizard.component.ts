@@ -564,6 +564,14 @@ export class DestinationWizardComponent implements OnInit {
     Record<string, ResourceFieldDef[]>
   >({});
 
+  /** Free-text destination columns (CSV/Blob/Data Lake/Fabric/API Endpoint) that don't have a mapping
+   *  yet, keyed by "resource::tableName" — see FieldMappingCanvasComponent.pendingFreeColumns' own doc
+   *  comment for why this is lifted up here instead of owned locally by the canvas: without persisting
+   *  it (dest_pendingColumns below), a column created via "+ Add column" or "Load JSON payload" but never
+   *  actually mapped would silently vanish the moment the canvas instance is torn down (leaving Step 3,
+   *  reopening the node), even though its saved data never actually depended on it existing. */
+  readonly pendingFreeColumnsByCard = signal<Record<string, string[]>>({});
+
   readonly destType = input.required<WizardDestType>();
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode = input<CanvasNode | null>(null);
@@ -1460,6 +1468,7 @@ export class DestinationWizardComponent implements OnInit {
       extraTablesByGroup: this.extraTablesByGroup(),
       destinationTables: this.sqlTables(),
       payloadFieldsByResource: this.payloadFieldsByResource(),
+      pendingFreeColumnsByCard: this.pendingFreeColumnsByCard(),
       mappingRows: this.mappingRows(),
       childTableRelationsByTable: this.childTableRelationsByTable(),
     };
@@ -1509,6 +1518,7 @@ export class DestinationWizardComponent implements OnInit {
     this.targetByResource.set(s.targetByResource);
     this.extraTablesByGroup.set(s.extraTablesByGroup);
     this.payloadFieldsByResource.set(s.payloadFieldsByResource);
+    this.pendingFreeColumnsByCard.set(s.pendingFreeColumnsByCard ?? {});
     this.sqlTables.set(s.destinationTables);
     // So hasSqlTables()/sqlTableOptions() behave as if a real probe just succeeded, without one.
     if (s.destinationTables.length) this.probeState.set('ok');
@@ -1710,6 +1720,35 @@ export class DestinationWizardComponent implements OnInit {
       delete rest[resource];
       return rest;
     });
+  }
+
+  /** A DESTINATION JSON payload was loaded on the mapping canvas (FieldMappingCanvasComponent.
+   *  submitLoadDestinationPayload) — carries a Request Body Template already built with {{ColumnName}}
+   *  placeholders matching the columns that same load just created, so the user never hand-writes them.
+   *  Only ApiEndpointDestinationFormComponent declares setBodyTemplateFromMapping/setRecordTemplateForResource
+   *  (every other file-shaped type has no template concept) — duck-typed exactly like isSqlFamilyForm/
+   *  isMongoForm above, since WizardDestinationFormApi has no reason to carry a method only one destination
+   *  type implements. The outlet stays mounted for the wizard's whole lifetime (see activeFormInputs()'s own
+   *  doc comment), so this reaches the form's live FormGroup even while Step 3 (not Step 1) is on screen.
+   *
+   *  Routes by whether the form's OWN multiResourceMode is currently "none": single-resource destinations
+   *  (or a not-yet-multi-resource one) get the old behavior — the ONE dest_apiBodyTemplateJson field, whoever
+   *  last ran Load JSON payload wins, same as always. Once multi-resource is on, dest_apiBodyTemplateJson is
+   *  never read by the backend at all (see ApiEndpointSettings/MappedApiEndpointDestinationWriter) — every
+   *  participating resource type needs its OWN entry in dest_apiRecordTemplatesByResourceType instead, so
+   *  this writes there, keyed by the resource that actually triggered the load, leaving every other resource
+   *  type's own template untouched. */
+  onDestinationTemplateGenerated(e: { resource: string; templateJson: string }): void {
+    const form = this.activeForm() as {
+      setBodyTemplateFromMapping?: (json: string) => void;
+      setRecordTemplateForResource?: (resource: string, json: string) => void;
+      isMultiResourceModeActive?: () => boolean;
+    } | null;
+    if (form?.isMultiResourceModeActive?.()) {
+      form.setRecordTemplateForResource?.(e.resource, e.templateJson);
+    } else {
+      form?.setBodyTemplateFromMapping?.(e.templateJson);
+    }
   }
 
   // ── deferred schema DDL (create table / add / drop / alter column) ─────────────────────────
@@ -4397,6 +4436,21 @@ export class DestinationWizardComponent implements OnInit {
   // ⇄ SQL-family switch (see reconcileTargetsForDestTypeSwitch) tell "the destination type just changed"
   // apart from "resources changed" without needing a second effect/signal.
   private _previousDestType: MappingDestType | null = null;
+  // Last `resources` _rebuildRows actually ran with — null only before its first call. Reopening a saved
+  // node (especially a full page load via the Workflows list "Edit" action, not a same-session reopen)
+  // populates selectedResources/mappingRows/targetByResource via SEVERAL separate signal writes spread
+  // across _populateFromNode/loadMappingSummary (dest_resources sets selectedResources once outright,
+  // loadMappingSummary sets it again to its own derived value, then dest_resources is unioned back in) —
+  // each write is a fresh array reference the constructor's "rebuild mapping rows" effect reacts to, and
+  // on a cold page load those writes are no longer guaranteed to land inside one synchronous batch the way
+  // they do reopening within the same session. Diffing against the PREVIOUS resources (below) rather than
+  // filtering rows against whatever `resources` happens to be on THIS particular firing is what makes that
+  // firing order irrelevant: a resource this method has never seen selected/deselected before is left
+  // alone regardless of whether it's in the current list yet, so a saved mapping can never be wiped by a
+  // still-settling restore — only an EXPLICIT deselect (a resource this ran with last time, no longer
+  // present now) drops its rows, exactly the "drops rows for resources the user has deselected" contract
+  // this always documented but didn't actually implement.
+  private _previousSelectedResources: string[] | null = null;
 
   // Seeds the per-resource target (file name / table) for newly-selected resources
   // and drops rows for resources the user has deselected. Deliberately does NOT
@@ -4441,9 +4495,19 @@ export class DestinationWizardComponent implements OnInit {
             : this._qualifyDefaultTable(def.sqlTable, type);
     }
     this.targetByResource.set(targets);
+    // Only a resource present in the PREVIOUS run but missing from this one was actually deselected —
+    // see _previousSelectedResources' own doc comment for why this is a diff against last time, not a
+    // filter against `resources` as it stands right now. On the very first call (previous === null)
+    // nothing has been explicitly deselected yet, so nothing is dropped, however incomplete `resources`
+    // itself happens to be at that moment.
+    const previousResources = this._previousSelectedResources;
+    const explicitlyDeselected = previousResources
+      ? new Set(previousResources.filter((r) => !resources.includes(r)))
+      : new Set<string>();
+    this._previousSelectedResources = resources;
     this.mappingRows.update((rows) =>
       rows
-        .filter((row) => resources.includes(row.resource))
+        .filter((row) => !explicitlyDeselected.has(row.resource))
         .map((row) => {
           // Only re-sync rows that were on the resource's OLD primary table — never touch rows on an
           // extra/child table, which the resource's primary-target rename doesn't affect.
@@ -4608,6 +4672,13 @@ export class DestinationWizardComponent implements OnInit {
         this.payloadFieldsByResource.set(
           JSON.parse(f['dest_sourcePayloadFields']),
         );
+      } catch {
+        /* ignore malformed */
+      }
+    }
+    if (f['dest_pendingColumns']) {
+      try {
+        this.pendingFreeColumnsByCard.set(JSON.parse(f['dest_pendingColumns']));
       } catch {
         /* ignore malformed */
       }
@@ -5262,6 +5333,11 @@ export class DestinationWizardComponent implements OnInit {
     config['dest_sourcePayloadFields'] = JSON.stringify(
       this.payloadFieldsByResource(),
     );
+    // dest_pendingColumns is the only thing that restores pendingFreeColumnsByCard on reopen — without it,
+    // an unmapped column created via "+ Add column" or "Load JSON payload" (CSV/Blob/Data Lake/Fabric/API
+    // Endpoint) would vanish the moment the mapping canvas is torn down, since dest_mapping_summary_v1's
+    // mapping rows only ever record columns that actually got a source field dragged onto them.
+    config['dest_pendingColumns'] = JSON.stringify(this.pendingFreeColumnsByCard());
     config['dest_mappings'] = JSON.stringify(
       serializeRowsFlat(
         this.mappingRows(),

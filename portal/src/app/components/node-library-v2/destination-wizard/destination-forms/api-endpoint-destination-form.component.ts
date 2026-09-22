@@ -35,6 +35,37 @@ import { WizardDestinationFormApi } from './destination-form-api';
       font-weight: 600; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
       color: var(--color-error, #b32020);
     }
+    .ae-relations-builder { display: flex; flex-direction: column; gap: 8px; }
+    .ae-relation-row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      background: var(--color-surface-subtle, #f8fafc); border: 1px solid var(--color-border);
+      border-radius: 8px; padding: 8px;
+    }
+    .ae-relation-row .dw-input, .ae-relation-row .dw-select { flex: 1 1 140px; min-width: 0; }
+    .ae-relation-row-label { font-size: 11px; font-weight: 600; color: var(--color-text-muted, #6b7280); flex: 0 0 auto; white-space: nowrap; }
+    .ae-relation-remove {
+      flex: 0 0 auto; width: 24px; height: 24px; border-radius: 999px; border: none; cursor: pointer;
+      background: var(--color-error-soft, #fee2e2); color: var(--color-error, #b32020);
+      font-size: 12px; font-weight: 700; display: grid; place-items: center;
+    }
+    .ae-relation-remove:hover { opacity: 0.85; }
+    .ae-relation-add {
+      align-self: flex-start; background: none; border: 1px dashed var(--color-border);
+      border-radius: 8px; padding: 6px 12px; font-size: 12.5px; font-weight: 600;
+      color: var(--color-primary, #00A89D); cursor: pointer;
+    }
+    .ae-relation-add:hover { background: var(--color-primary-soft, #e6f7f5); }
+    .ae-templates-summary { font-size: 12.5px; margin: 4px 0 8px; }
+    .ae-templates-pill {
+      display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+      background: var(--color-primary-soft, #e6f7f5); color: var(--color-primary-dark, #007a72);
+      margin: 2px 4px 2px 0;
+    }
+    .ae-templates-empty { color: var(--color-text-muted, #6b7280); font-style: italic; }
+    details.ae-raw-json { margin-top: 4px; }
+    details.ae-raw-json summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--color-text-muted, #6b7280); }
+    details.ae-raw-json summary:hover { color: var(--color-primary, #00A89D); }
+    details.ae-raw-json .dw-input { margin-top: 8px; }
   `],
 })
 export class ApiEndpointDestinationFormComponent implements WizardDestinationFormApi {
@@ -76,6 +107,12 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
     bodyTemplateJson: ['', [ApiEndpointDestinationFormComponent.jsonValidator]],
     includeSourceJson: [false, []],
     onFailure: ['fail', [Validators.required]],
+    // Multi-resource (flat/nested parent-child) combining — opt-in, defaults to 'none' so every destination that
+    // doesn't use this behaves exactly as it always has. See ApiEndpointMultiResourceMode/ApiEndpointResourceRelation.
+    multiResourceMode: ['none', []],
+    resourceRelationsJson: ['', [ApiEndpointDestinationFormComponent.jsonArrayValidator]],
+    recordTemplatesByResourceTypeJson: ['', [ApiEndpointDestinationFormComponent.jsonObjectValidator]],
+    batchTemplateJson: ['', [ApiEndpointDestinationFormComponent.jsonValidator]],
   });
 
   /** Blank passes — an empty box means "none configured", not "invalid". */
@@ -87,6 +124,19 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? null : { jsonObject: true };
     } catch {
       return { jsonObject: true };
+    }
+  }
+
+  /** Blank passes. Used for resourceRelationsJson — a JSON array of { resourceType, parentResourceType?,
+   *  correlationColumn?, parentKeyColumn?, nestKey } entries, mirroring ApiEndpointResourceRelation. */
+  private static jsonArrayValidator(control: { value: unknown }): Record<string, boolean> | null {
+    const raw = (control.value ?? '') as string;
+    if (!raw.trim()) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? null : { jsonArray: true };
+    } catch {
+      return { jsonArray: true };
     }
   }
 
@@ -106,11 +156,58 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
   /** True while the host is reusing a previously-saved connection unchanged — the secret is never repopulated
    *  when patching from an existing connection, so requiring it would block reuse unless the user retyped it. */
   readonly reusingExisting = input<boolean>(false);
+  /** Set by DestinationWizardComponent.activeFormInputs() on every registry-routed form (see its own doc
+   *  comment) — declaring it here is what stops NG0303 ("Can't set value of the 'existingDestinationId'
+   *  input") from throwing on every change-detection pass once this form is mounted. Not otherwise read by
+   *  this form (its own Test Connection resolves credentials from the form fields directly, not a stored
+   *  secret server-side, unlike the SQL-family forms this pattern originates from). */
+  readonly existingDestinationId = input<string | null>(null);
 
   readonly advancedOpen = signal(false);
 
   toggleAdvanced(): void {
     this.advancedOpen.update(open => !open);
+  }
+
+  /** Called by DestinationWizardComponent.onDestinationTemplateGenerated (duck-typed — see its own doc
+   *  comment) after the mapping canvas's "Load JSON payload" on the destination side builds a Request Body
+   *  Template with {{ColumnName}} placeholders already matching the columns that same load just created.
+   *  Overwrites whatever was here before, same "replaces" semantics as the columns it was built from. Only
+   *  reached for a single-resource destination — see isMultiResourceModeActive/setRecordTemplateForResource
+   *  below for the multi-resource routing this same event takes instead. */
+  setBodyTemplateFromMapping(json: string): void {
+    this.apiForm.controls.bodyTemplateJson.setValue(json);
+  }
+
+  /** Tells DestinationWizardComponent.onDestinationTemplateGenerated which of the two template fields a
+   *  "Load JSON payload" load should land in. */
+  isMultiResourceModeActive(): boolean {
+    return this.apiForm.controls.multiResourceMode.value !== 'none';
+  }
+
+  /** Multi-resource counterpart to setBodyTemplateFromMapping — every participating resource type needs its
+   *  OWN Request Body Template (dest_apiBodyTemplateJson is never read once multi-resource is on), so this
+   *  merges just THIS resource's freshly-built template into dest_apiRecordTemplatesByResourceType, keyed by
+   *  resource type, leaving every other already-configured resource type's own template untouched — the same
+   *  "only touch what this load actually affected" contract setBodyTemplateFromMapping already has for the
+   *  single-resource case, just scoped to one entry in a dictionary instead of the whole field. Malformed
+   *  existing JSON is treated as empty rather than failing the load, matching every other tolerant-parse
+   *  convention this form already follows (see jsonObjectValidator). */
+  setRecordTemplateForResource(resource: string, json: string): void {
+    const raw = this.apiForm.controls.recordTemplatesByResourceTypeJson.value ?? '';
+    let existing: Record<string, string> = {};
+    if (raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          existing = parsed as Record<string, string>;
+        }
+      } catch {
+        // Malformed — treated as empty, same tolerance as everywhere else this field is parsed.
+      }
+    }
+    existing[resource] = json;
+    this.apiForm.controls.recordTemplatesByResourceTypeJson.setValue(JSON.stringify(existing));
   }
 
   private static readonly ADVANCED_CONTROLS = [
@@ -140,6 +237,11 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
 
     this._syncBatchSizeDisabled(this.apiForm.controls.payloadShape.value);
     this.apiForm.controls.payloadShape.valueChanges.subscribe(v => this._syncBatchSizeDisabled(v));
+
+    // Flat <-> Nested changes which fields _syncRelationRowsToControl serializes (parentResourceType/
+    // correlationColumn/parentKeyColumn only apply to Nested) — re-sync so switching modes updates
+    // dest_apiResourceRelationsJson immediately rather than waiting for the next row edit.
+    this.apiForm.controls.multiResourceMode.valueChanges.subscribe(() => this._syncRelationRowsToControl());
   }
 
   /** "One request per record" pins the batch to a single record and ignores batchSize entirely (see
@@ -241,6 +343,10 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       dest_apiBodyTemplateJson: v.bodyTemplateJson ?? '',
       dest_apiIncludeSourceJson: String(v.includeSourceJson ?? false),
       dest_apiOnFailure: v.onFailure ?? 'fail',
+      dest_apiMultiResourceMode: v.multiResourceMode ?? 'none',
+      dest_apiResourceRelationsJson: v.resourceRelationsJson ?? '',
+      dest_apiRecordTemplatesByResourceType: v.recordTemplatesByResourceTypeJson ?? '',
+      dest_apiBatchTemplateJson: v.batchTemplateJson ?? '',
     };
   }
 
@@ -282,9 +388,14 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       bodyTemplateJson: fields['dest_apiBodyTemplateJson'] || '',
       includeSourceJson: fields['dest_apiIncludeSourceJson'] === 'true',
       onFailure: fields['dest_apiOnFailure'] || 'fail',
+      multiResourceMode: fields['dest_apiMultiResourceMode'] || 'none',
+      resourceRelationsJson: fields['dest_apiResourceRelationsJson'] || '',
+      recordTemplatesByResourceTypeJson: fields['dest_apiRecordTemplatesByResourceType'] || '',
+      batchTemplateJson: fields['dest_apiBatchTemplateJson'] || '',
     });
     this._syncAuthModeValidators(this.apiForm.value.authMode ?? null, this.reusingExisting());
     this._syncBatchSizeDisabled(this.apiForm.get('payloadShape')!.value);
+    this._parseRelationRowsFromControl();
   }
 
   reset(): void {
@@ -296,8 +407,121 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       batchSize: 500, maxRequestBytes: 4194304, timeoutSeconds: 30, retryCount: 3, retryBackoffSeconds: 2,
       expectedStatusCodes: '', headersJson: '', queryParamsJson: '', bodyTemplateJson: '',
       includeSourceJson: false, onFailure: 'fail',
+      multiResourceMode: 'none', resourceRelationsJson: '', recordTemplatesByResourceTypeJson: '', batchTemplateJson: '',
     });
     this._syncAuthModeValidators(this.apiForm.value.authMode ?? null, this.reusingExisting());
     this._syncBatchSizeDisabled(this.apiForm.get('payloadShape')!.value);
+    this.relationRows.set([]);
   }
+
+  // ── multi-resource "Participating resource types" builder ─────────────────────────────────────
+  // A friendlier alternative to hand-typing dest_apiResourceRelationsJson's raw JSON array syntax
+  // (escaped quotes, exact key names) — a row per resource type, kept in sync with the SAME
+  // resourceRelationsJson FormControl getFullConfig()/validation already use, so nothing downstream
+  // needs to know this builder exists. The raw textarea stays available (collapsed, see the template)
+  // for anyone who already has JSON to paste or needs something the builder doesn't expose.
+  readonly relationRows = signal<ResourceRelationRow[]>([]);
+
+  addRelationRow(): void {
+    this.relationRows.update(rows => [
+      ...rows,
+      { resourceType: '', nestKey: '', parentResourceType: '', correlationColumn: '', parentKeyColumn: '' },
+    ]);
+    this._syncRelationRowsToControl();
+  }
+
+  removeRelationRow(index: number): void {
+    this.relationRows.update(rows => rows.filter((_, i) => i !== index));
+    this._syncRelationRowsToControl();
+  }
+
+  updateRelationRow(index: number, patch: Partial<ResourceRelationRow>): void {
+    this.relationRows.update(rows => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+    this._syncRelationRowsToControl();
+  }
+
+  /** Every other row's resourceType — the candidate list for "Parent resource" (a row can't be its own
+   *  parent, and a blank resourceType isn't a usable parent yet). */
+  parentCandidatesFor(index: number): string[] {
+    return this.relationRows()
+      .filter((r, i) => i !== index && r.resourceType.trim())
+      .map(r => r.resourceType.trim());
+  }
+
+  /** Lowercase-plural default so a row with an empty Nest key still produces valid JSON — "Patient" ->
+   *  "patients", "Encounter" -> "encounters". Only applied at serialization time; the input itself stays
+   *  blank until the user types something, so it's obvious this is a placeholder default, not a real value. */
+  private _defaultNestKey(resourceType: string): string {
+    const t = resourceType.trim();
+    if (!t) return '';
+    const lower = t.charAt(0).toLowerCase() + t.slice(1);
+    return lower.endsWith('s') ? lower : `${lower}s`;
+  }
+
+  private _syncRelationRowsToControl(): void {
+    const isNested = this.apiForm.controls.multiResourceMode.value === 'nested';
+    const entries = this.relationRows()
+      .filter(r => r.resourceType.trim())
+      .map(r => {
+        const entry: Record<string, string> = {
+          resourceType: r.resourceType.trim(),
+          nestKey: r.nestKey.trim() || this._defaultNestKey(r.resourceType),
+        };
+        if (isNested && r.parentResourceType.trim()) {
+          entry['parentResourceType'] = r.parentResourceType.trim();
+          entry['correlationColumn'] = r.correlationColumn.trim();
+          entry['parentKeyColumn'] = r.parentKeyColumn.trim();
+        }
+        return entry;
+      });
+    this.apiForm.controls.resourceRelationsJson.setValue(entries.length ? JSON.stringify(entries) : '');
+  }
+
+  /** Reverse of _syncRelationRowsToControl — reached from patchFrom (reopening a saved destination) so the
+   *  builder shows real rows instead of starting empty even though resourceRelationsJson already has content.
+   *  Malformed/non-array JSON leaves the builder empty rather than throwing — same tolerance every other
+   *  parse in this form already has; the raw textarea still shows the actual saved value either way. */
+  private _parseRelationRowsFromControl(): void {
+    const raw = this.apiForm.controls.resourceRelationsJson.value ?? '';
+    if (!raw.trim()) {
+      this.relationRows.set([]);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        this.relationRows.set(parsed.map((e: Record<string, unknown>) => ({
+          resourceType: typeof e?.['resourceType'] === 'string' ? e['resourceType'] : '',
+          nestKey: typeof e?.['nestKey'] === 'string' ? e['nestKey'] : '',
+          parentResourceType: typeof e?.['parentResourceType'] === 'string' ? e['parentResourceType'] : '',
+          correlationColumn: typeof e?.['correlationColumn'] === 'string' ? e['correlationColumn'] : '',
+          parentKeyColumn: typeof e?.['parentKeyColumn'] === 'string' ? e['parentKeyColumn'] : '',
+        })));
+      }
+    } catch {
+      // Malformed — builder starts empty; the raw textarea below still shows what's actually saved.
+    }
+  }
+
+  /** Resource types that currently have their own entry in dest_apiRecordTemplatesByResourceType — shown
+   *  as a quick-glance pill summary above the raw textarea so "did my Load JSON payload actually save?" is
+   *  answerable without reading escaped JSON. Malformed JSON reads as "none configured", not an error. */
+  configuredRecordTemplateResourceTypes(): string[] {
+    const raw = this.apiForm.controls.recordTemplatesByResourceTypeJson.value ?? '';
+    if (!raw.trim()) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed) : [];
+    } catch {
+      return [];
+    }
+  }
+}
+
+interface ResourceRelationRow {
+  resourceType: string;
+  nestKey: string;
+  parentResourceType: string;
+  correlationColumn: string;
+  parentKeyColumn: string;
 }

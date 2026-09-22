@@ -18,7 +18,8 @@ import { FieldMappingAddColumnModalComponent, FmAddColumnSubmit } from './field-
 import { FieldMappingEditColumnModalComponent, FmEditColumnSubmit } from './field-mapping-edit-column-modal.component';
 import { FieldMappingCreateTableModalComponent, FmCreateTableSubmit } from './field-mapping-create-table-modal.component';
 import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payload-modal.component';
-import { parseSourcePayloadJson, reconstructPayloadJsonFor } from './field-mapping-payload.util';
+import { FieldMappingLoadDestinationPayloadModalComponent } from './field-mapping-load-destination-payload-modal.component';
+import { parseSourcePayloadJson, reconstructPayloadJsonFor, parseDestinationPayloadJson } from './field-mapping-payload.util';
 import { ChildTableRelation } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest, DestinationSchemaService } from '../../../../services/destination-schema.service';
@@ -73,6 +74,7 @@ export interface FmMappingChoice {
     FieldMappingEditColumnModalComponent,
     FieldMappingCreateTableModalComponent,
     FieldMappingLoadPayloadModalComponent,
+    FieldMappingLoadDestinationPayloadModalComponent,
   ],
   providers: [FieldMappingAnchorService],
   templateUrl: './field-mapping-canvas.component.html',
@@ -239,6 +241,16 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  pasted-payload override (payloadFieldsByResource lives on the parent, not here) so availableFields()
    *  falls back through to the real catalog again, same as defaultAvailableFields already does. */
   readonly sourcePayloadReset = output<string>();
+  /** A DESTINATION JSON payload was successfully parsed (submitLoadDestinationPayload) — carries the
+   *  ready-to-use Request Body Template built from it (every leaf replaced by its own {{ColumnName}}
+   *  placeholder). Only meaningful for the ApiEndpoint destination — the parent (DestinationWizardComponent)
+   *  pushes this straight into that destination's own form, so the user never hand-writes placeholders
+   *  matching column names themselves. Every other file-shaped destination type has no template concept
+   *  and the parent simply ignores this for them. Carries `resource` (which card this came from) so the
+   *  parent can route it correctly in a multi-resource ApiEndpoint destination — where EVERY participating
+   *  resource type needs its OWN template (see ApiEndpointDestinationFormComponent.setRecordTemplateForResource)
+   *  rather than all of them colliding into the one single-resource dest_apiBodyTemplateJson field. */
+  readonly destinationTemplateGenerated = output<{ resource: string; templateJson: string }>();
   /** A table created via "Create a new table…" was given a parent/FK relationship — the parent wizard
    *  owns this globally (it outlives any one resource's canvas instance) so it survives navigating
    *  between resources, node reload, and the Mapping JSON export/import. */
@@ -291,8 +303,18 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     style: { top?: number; bottom?: number; left: number; width: number; maxHeight: number };
   } | null>(null);
   readonly drawerOpen = signal(false);
-  /** Free-text column names typed via "+ Add column" that don't have a mapping yet (CSV / un-probed SQL only), keyed by "resource::tableName". */
-  private readonly pendingFreeColumns = signal<Record<string, string[]>>({});
+  /** Free-text column names typed via "+ Add column", or loaded in bulk via "Load JSON payload" (CSV /
+   *  un-probed SQL only), keyed by "resource::tableName" — INCLUDES columns with no mapping yet, not just
+   *  mapped ones (columnsForCardFn unions this with the mapped-column names, so an unmapped column stays
+   *  visible on the card for the user to map later instead of silently disappearing). Lifted to the host
+   *  (like mappingRows/targetByResource above) rather than owned locally, specifically so
+   *  DestinationWizardComponent can persist it (dest_pendingColumns) and restore it on reopen — a purely
+   *  local signal here would reset to empty on every fresh canvas instance, which is exactly what used to
+   *  make an unmapped column loaded via "Load JSON payload" vanish the moment you left and reopened the
+   *  node. A host that doesn't care (e.g. the Mapping Profiles dialog) simply never reads the change output
+   *  and lets it default to {}. */
+  readonly pendingFreeColumns = input<Record<string, string[]>>({});
+  readonly pendingFreeColumnsChange = output<Record<string, string[]>>();
 
   // Drop-target sentinel for a free-text card's own "+ Add column" row (see
   // field-mapping-target-card's template) — lets a payload field be dropped straight onto an empty
@@ -755,7 +777,16 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    */
   private registerPendingColumn(resource: string, tableName: string, column: string): void {
     const key = `${resource}::${tableName}`;
-    this.pendingFreeColumns.update(m => ({ ...m, [key]: [...(m[key] ?? []), column] }));
+    this.updatePendingFreeColumns(m => ({ ...m, [key]: [...(m[key] ?? []), column] }));
+  }
+
+  /** pendingFreeColumns is host-owned (see its own doc comment) — every mutation here reads the current
+   *  input value, applies `updater`, and emits the result rather than calling a local .update(), so the
+   *  host's signal (and whatever persists it) always reflects the latest state. */
+  private updatePendingFreeColumns(
+    updater: (m: Record<string, string[]>) => Record<string, string[]>,
+  ): void {
+    this.pendingFreeColumnsChange.emit(updater(this.pendingFreeColumns()));
   }
 
   /** Renames a free-text column (CSV, or SQL before a live schema is known) — no real ALTER COLUMN
@@ -770,7 +801,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       return;
     }
     const key = `${resource}::${tableName}`;
-    this.pendingFreeColumns.update(m => ({
+    this.updatePendingFreeColumns(m => ({
       ...m,
       [key]: (m[key] ?? []).map(c => (c === oldName ? trimmed : c)),
     }));
@@ -1310,7 +1341,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
 
   private unregisterPendingColumn(resource: string, tableName: string, column: string): void {
     const key = `${resource}::${tableName}`;
-    this.pendingFreeColumns.update(m => ({ ...m, [key]: (m[key] ?? []).filter(c => c !== column) }));
+    this.updatePendingFreeColumns(m => ({ ...m, [key]: (m[key] ?? []).filter(c => c !== column) }));
   }
 
   // ── add column (real ALTER TABLE) ───────────────────────────────────────
@@ -1513,6 +1544,65 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     this.sourcePayloadReset.emit(resource);
     this.loadPayloadError.set(null);
     this.toast.info('Reset to original', `Mappings for ${resource} were cleared.`);
+  }
+
+  // ── load destination payload (paste the target system's own JSON body, rebuild this card's column
+  // list from its actual shape) — the destination-side counterpart to "Load JSON payload" above. Only
+  // ever offered for a file-shaped card (see field-mapping-target-card.component.html's isSqlFamily()
+  // branch: a real SQL table's columns come from a live schema probe, not free text) ─────────────────
+  readonly loadDestinationPayloadTarget = signal<{ resource: string; tableName: string } | null>(null);
+  readonly loadDestinationPayloadError = signal<string | null>(null);
+  readonly loadDestinationPayloadSubmitting = signal(false);
+
+  openLoadDestinationPayloadModal(resource: string, tableName: string): void {
+    this.loadDestinationPayloadTarget.set({ resource, tableName });
+    this.loadDestinationPayloadError.set(null);
+  }
+
+  closeLoadDestinationPayloadModal(): void {
+    this.loadDestinationPayloadTarget.set(null);
+    this.loadDestinationPayloadError.set(null);
+  }
+
+  submitLoadDestinationPayload(raw: string): void {
+    const target = this.loadDestinationPayloadTarget();
+    if (!target) return;
+
+    const result = parseDestinationPayloadJson(raw);
+    if (!result.ok) {
+      this.loadDestinationPayloadError.set(result.error);
+      return;
+    }
+
+    const { resource, tableName } = target;
+    const key = `${resource}::${tableName}`;
+    // A fresh column list reflecting the newly pasted structure. Unlike a full wipe, a mapping row is only
+    // dropped when its OWN target column is no longer part of the new structure — re-pasting JSON to tweak
+    // or add one field must not silently discard every other already-configured mapping on this card, which
+    // is exactly what re-loading used to do (every column's row was dropped regardless of whether that
+    // column still existed afterward). A row whose column survives the reload keeps its mapping untouched.
+    const newColumns = Array.from(new Set(result.columns));
+    this.updatePendingFreeColumns(m => ({ ...m, [key]: newColumns }));
+    const newColumnSet = new Set(newColumns);
+    const rowsBefore = this.mappingRows();
+    const droppedCount = rowsBefore.filter(
+      r => r.resource === resource && r.tableName === tableName && !newColumnSet.has(r.targetName)).length;
+    this.mappingRowsChange.emit(
+      rowsBefore.filter(r => !(r.resource === resource && r.tableName === tableName) || newColumnSet.has(r.targetName)));
+    this.destinationTemplateGenerated.emit({ resource, templateJson: result.templateJson });
+
+    this.loadDestinationPayloadTarget.set(null);
+    this.loadDestinationPayloadError.set(null);
+    const count = `${result.columns.length} column${result.columns.length === 1 ? '' : 's'}`;
+    const droppedNote = droppedCount > 0
+      ? ` ${droppedCount} mapping${droppedCount === 1 ? '' : 's'} for column${droppedCount === 1 ? '' : 's'} no longer in the new structure ${droppedCount === 1 ? 'was' : 'were'} dropped.`
+      : ' Existing mappings for columns still present were kept.';
+    this.toast.success(
+      'Payload loaded',
+      `${count} found in the pasted JSON for ${tableName || resource}.${droppedNote} `
+        + `Drag each source field onto any new column, then Save — the request body template updates itself.`
+        + (result.note ? ` ${result.note}` : ''),
+    );
   }
 
   // ── rank color per resource ─────────────────────────────────────────────

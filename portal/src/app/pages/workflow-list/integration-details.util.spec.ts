@@ -101,6 +101,96 @@ describe('buildIntegrationDetails', () => {
       }
     });
 
+    // Ordering, not just presence: validate-run listed after the sign-in steps reads as an afterthought, and a
+    // partner following the panel top-to-bottom then bounces someone through an EHR sign-in for a run that was
+    // never going to be accepted — and has no correlation id to send on the legs before it. The reference client
+    // (Demo_TestApp) and WorkflowEndpoints' own contract both put it first.
+    it('puts validate-run before the sign-in check on the interactive audiences', () => {
+      for (const applicationType of ['Standalone', 'Patient']) {
+        const values = valuesOf(buildIntegrationDetails(
+          row({ action: 'Launch', applicationType }), ORIGIN, applicationType));
+
+        expect(values.indexOf('/validate-run')).toBeGreaterThanOrEqual(0);
+        expect(values.indexOf('/validate-run')).toBeLessThan(values.indexOf('/token-status'));
+      }
+    });
+
+    // A correlation id held in a page variable is gone by the time the full-page sign-in returns, so the legs
+    // after the return land under a different id than the ones before it — silently defeating the header. The
+    // same wipe takes the site they picked and anything they typed, so the fetch that runs on the return is not
+    // the one they asked for — the reference client persists all three.
+    it('warns that the correlation id and in-flight input must survive the sign-in round trip', () => {
+      for (const applicationType of ['Standalone', 'Patient']) {
+        const hints = hintsOf(buildIntegrationDetails(
+          row({ action: 'Launch', applicationType }), ORIGIN, applicationType));
+
+        expect(hints).toContain('sessionStorage');
+        expect(hints).toContain('search terms');
+      }
+    });
+
+    // Without the response shapes a partner reverse-engineers them from Swagger or guesses. Two details cost real
+    // debugging time: a refusal is a 200 with isValid:false (treating it as a transport error discards the run id
+    // and the errors), and each resource's own payload is a JSON STRING needing a second parse.
+    it('shows what validate-run and run send back', () => {
+      for (const applicationType of ['Standalone', 'Patient']) {
+        const details = buildIntegrationDetails(
+          row({ action: 'Launch', applicationType }), ORIGIN, applicationType);
+        const text = valuesOf(details) + '\n' + hintsOf(details);
+
+        expect(text).toContain('isValid');
+        expect(text).toContain('outputsByNodeId');
+        expect(text).toContain('payload.resources');
+        expect(text).toContain('workflowRun.status');
+      }
+    });
+
+    // PatientScopeRequiredRule refuses a Provider Standalone attempt carrying neither patientSearchCriteria nor
+    // patientId — a clinician's sign-in establishes no patient of its own. Undocumented, a partner discovers it as
+    // Epic business rule 59108 or an empty bundle, and only after putting someone through a full sign-in. The
+    // patient audience has the opposite situation (the token carries the patient), so the note must NOT appear
+    // there, where it would just be wrong.
+    it('tells the provider audience it must supply search criteria or a patient id', () => {
+      const provider = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'Standalone' }), ORIGIN, 'Provider Standalone');
+      const providerText = valuesOf(provider) + '\n' + hintsOf(provider);
+
+      expect(providerText).toContain('patientSearchCriteria');
+      expect(providerText).toContain('59108');
+
+      const patient = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'Patient' }), ORIGIN, 'Patient Standalone');
+      expect(hintsOf(patient)).not.toContain('59108');
+    });
+
+    // A sign-in expires (or is withdrawn at the EHR), so a run that worked earlier starts failing. Without these
+    // two phrases a partner cannot tell "send them back through sign-in" from "show the error and let them
+    // retry" — and gets it wrong in one direction or the other. Both come from SmartAuthorizationCodeTokenProvider.
+    it('tells the partner how to recognise an expired sign-in', () => {
+      for (const applicationType of ['Standalone', 'Patient']) {
+        const details = buildIntegrationDetails(
+          row({ action: 'Launch', applicationType }), ORIGIN, applicationType);
+        const text = valuesOf(details) + '\n' + hintsOf(details);
+
+        expect(text).toContain('has no authorized token');
+        expect(text).toContain('Re-authorize the source');
+      }
+    });
+
+    // Handling only workflowRunId/signedIn leaves the two launchError markers to be discovered in production —
+    // and context_mismatch in particular means no token was saved, so proceeding to a run is wrong.
+    it('documents all four return markers, including both launchError values', () => {
+      for (const applicationType of ['Standalone', 'Patient']) {
+        const hints = hintsOf(buildIntegrationDetails(
+          row({ action: 'Launch', applicationType }), ORIGIN, applicationType));
+
+        expect(hints).toContain('workflowRunId');
+        expect(hints).toContain('signedIn=1');
+        expect(hints).toContain('launchError=workflow_failed');
+        expect(hints).toContain('launchError=context_mismatch');
+      }
+    });
+
     // Passing endpointType=Epic for a Patient workflow is refused as a bare 404, so this is exactly the mistake
     // the panel exists to prevent.
     it('sends Patient Standalone to the MyChart directory and the patient mint endpoint', () => {
@@ -238,16 +328,72 @@ ${v.hint ?? ''}`).join('\n');
       ['EHR Launch', { action: 'Launch', applicationType: 'EhrLaunch' }],
     ];
 
-    it('spells out the cookie, CSRF and correlation requirements for every audience', () => {
+    // EHR Launch's correlation line has always pointed at "correlationId from validate-run" while its own steps
+    // never mentioned the call. The reference client (Demo_TestApp's backend mint) does call it — server-side,
+    // before minting the context, and ONLY on the inbound leg carrying iss: validating the return leg too mints a
+    // second id and strands an orphaned Execution History row per launch.
+    it('documents validate-run on EHR Launch, gated to the inbound leg', () => {
+      const details = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch');
+      const values = valuesOf(details);
+      const text = values + '\n' + hintsOf(details);
+
+      expect(values).toContain('/validate-run');
+      expect(values.indexOf('/validate-run')).toBeLessThan(values.indexOf('/public-launch-context'));
+      expect(text).toContain('iss and launch');
+      expect(text).toContain('isValid');
+    });
+
+    // userIdentity is what the EHR access is permanently tied to, and the mint endpoint reads it — but the panel
+    // only ever mentioned it in the framed-page note, never in the call that takes it.
+    it('shows userIdentity on the EHR Launch mint call', () => {
+      const details = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch');
+
+      expect(valuesOf(details)).toContain('public-launch-context?callerId={yourAppUrl}&userIdentity={accountId}');
+    });
+
+    // context_mismatch means the sign-in was rejected and nothing was saved — a different branch from
+    // workflow_failed, which the panel previously presented as the only failure marker on this audience.
+    it('documents context_mismatch on EHR Launch, not just workflow_failed', () => {
+      const details = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch');
+      const text = valuesOf(details) + '\n' + hintsOf(details);
+
+      expect(text).toContain('launchError=context_mismatch');
+      expect(text).toContain('replaceState');
+    });
+
+    it('spells out the correlation requirement for every audience', () => {
       for (const [label, overrides] of AUDIENCES) {
         const details = buildIntegrationDetails(row(overrides), ORIGIN, label);
-        const values = valuesOf(details);
 
-        expect(values).toContain('X-CSRF-Token');
-        expect(values).toContain('X-Correlation-Id');
-        expect(values.toLowerCase()).toContain('cookies');
-        expect(details.checks.some(check => check.label === 'Sign-in required to run')).toBeTrue();
+        expect(valuesOf(details)).toContain('X-Correlation-Id');
+        expect(valuesOf(details).toLowerCase() + hintsOf(details).toLowerCase()).toContain('cookies');
       }
+    });
+
+    // POST /run is AllowAnonymous with [CsrfExempt]; a launch partner presents NO Segue credential — the run is
+    // gated on IsPubliclyLaunchable plus the unguessable callerId. The panel used to tell every audience it needed
+    // a workflow.run sign-in "sent as cookies", which for a launch partner means asking an admin for a credential
+    // that neither exists nor is needed, and hunting a CSRF cookie the exempt endpoint never reads. Backend is the
+    // one audience where the cookie/CSRF requirement is real.
+    it('does not tell launch partners they need a Segue sign-in', () => {
+      for (const [label, overrides] of AUDIENCES.slice(1)) {
+        const details = buildIntegrationDetails(row(overrides), ORIGIN, label);
+        const text = valuesOf(details) + '\n' + hintsOf(details);
+
+        expect(details.checks.some(check => check.label === 'No Segue sign-in needed')).toBeTrue();
+        expect(details.checks.some(check => check.label === 'Sign-in required to run')).toBeFalse();
+        expect(text).toContain('callerId is the credential');
+        // The CSRF header may be MENTIONED (to say it is not needed), but never presented as a requirement.
+        expect(details.values.some(value => value.label.startsWith('Header — X-CSRF-Token'))).toBeFalse();
+        expect(text).toContain('no X-CSRF-Token needed');
+      }
+
+      const backend = buildIntegrationDetails(row(), ORIGIN, 'Backend Service');
+      expect(backend.checks.some(check => check.label === 'Sign-in required to run')).toBeTrue();
+      expect(valuesOf(backend)).toContain('X-CSRF-Token');
     });
 
     // callerId / sessionId / userIdentity are three different things that all look like "an id for the caller".
