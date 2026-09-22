@@ -15,31 +15,62 @@ namespace FHIRBridge.Runtime.UnitTests.Workflows;
 public sealed class CoerceToExpectedValueTypeTests
 {
     [Fact]
-    public void DateTime_arm_produces_Kind_Local_not_Utc()
+    public void DateTime_arm_produces_Kind_Unspecified_not_Utc_or_Local()
     {
-        // Kind drives Npgsql's wire type: Utc -> "timestamptz", Local/Unspecified -> "timestamp". A destination
-        // column normalized from "datetime2"/"datetime" is a plain "timestamp" (PostgreSqlDdlTypeValidator), so
-        // Kind must match JsonMappingEngine.ConvertDate's own AssumeUniversal-alone parsing (Kind=Local) exactly
-        // — not AdjustToUniversal|AssumeUniversal (Kind=Utc), which would reintroduce the 42804 this exists to
-        // prevent.
+        // Kind drives Npgsql's wire type: Utc -> "timestamptz" (a plain "timestamp" column then throws
+        // 42804); Local and Unspecified both -> "timestamp", but Local is reached by parsing straight into
+        // the HOST MACHINE's own time zone (host-dependent — two hosts store two different instants for the
+        // same input). Unspecified, reached only after first resolving the true UTC instant, is the one
+        // Kind that is both accepted by a plain "timestamp" column AND deterministic across hosts.
         var result = MappingNodeExecutor.CoerceToExpectedValueType(
-            "2026-03-14T10:00:00", MappingValueType.DateTime, DestinationType.PostgreSql);
+            "2026-03-14T22:00:00Z", MappingValueType.DateTime, DestinationType.PostgreSql);
 
         var dateTime = result.Should().BeOfType<DateTime>().Subject;
-        dateTime.Kind.Should().Be(DateTimeKind.Local);
+        dateTime.Kind.Should().Be(DateTimeKind.Unspecified);
     }
 
     [Fact]
-    public void Date_arm_resolves_the_UTC_calendar_date_regardless_of_an_explicit_offset()
+    public void DateTime_arm_resolves_the_true_UTC_instant_regardless_of_an_explicit_offset()
     {
-        // An offset-bearing input must land on the same calendar date no matter which time zone this process
-        // happens to run in — DateTimeStyles.None would instead convert to server-local first, making the
-        // stored date depend on the host machine (UTC+05:30 rolls this to the 15th, a UTC host keeps the 14th).
+        // Parsing must land on the UTC wall-clock reading of the instant, not the offset stripped verbatim
+        // or converted to whatever time zone the host process happens to run in.
+        var result = MappingNodeExecutor.CoerceToExpectedValueType(
+            "2026-03-14T22:00:00Z", MappingValueType.DateTime, DestinationType.PostgreSql);
+
+        var dateTime = result.Should().BeOfType<DateTime>().Subject;
+        dateTime.Should().Be(new DateTime(2026, 3, 14, 22, 0, 0));
+    }
+
+    [Fact]
+    public void Date_arm_produces_Kind_Unspecified_and_resolves_the_UTC_calendar_date()
+    {
+        // Same reasoning as the DateTime arm, truncated to the calendar date: an offset-bearing input must
+        // land on the same date no matter which time zone this process happens to run in (DateTimeStyles.None
+        // would instead convert to server-local first, making the stored date depend on the host machine).
         var result = MappingNodeExecutor.CoerceToExpectedValueType(
             "2026-03-14T22:00:00Z", MappingValueType.Date, DestinationType.PostgreSql);
 
         var date = result.Should().BeOfType<DateTime>().Subject;
+        date.Kind.Should().Be(DateTimeKind.Unspecified);
         date.Should().Be(new DateTime(2026, 3, 14));
+    }
+
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("0", false)]
+    [InlineData("yes", true)]
+    [InlineData("no", false)]
+    [InlineData("Y", true)]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void Boolean_arm_accepts_BooleanConversionNodes_own_default_spellings(string raw, bool expected)
+    {
+        // bool.TryParse alone only recognizes literal "True"/"False" — BooleanConversionNode's own defaults
+        // ("y,yes,1,t,true,+" / "n,no,0,f,false,-") must also be accepted, or the exact spellings that node is
+        // configured to treat as a boolean still 42804 into a Postgres boolean column.
+        var result = MappingNodeExecutor.CoerceToExpectedValueType(raw, MappingValueType.Boolean, DestinationType.PostgreSql);
+
+        result.Should().Be(expected);
     }
 
     [Theory]
@@ -83,8 +114,9 @@ public sealed class CoerceToExpectedValueTypeTests
     [Fact]
     public void A_non_string_value_passes_through_unchanged_even_with_a_relational_destination()
     {
-        // A node that already self-types (DateMathAge's "age" operation -> int, BooleanConversion -> bool) must
-        // never be re-coerced — only a rule chain's raw string output is ever a coercion candidate.
+        // A node that already self-types (DateMathAge's "age" operation -> int, BooleanConversion -> a
+        // native bool straight from its own Execute) must never be re-coerced — only a rule chain's raw
+        // string output is ever a coercion candidate.
         var result = MappingNodeExecutor.CoerceToExpectedValueType(7, MappingValueType.Integer, DestinationType.PostgreSql);
 
         result.Should().Be(7);
@@ -97,5 +129,14 @@ public sealed class CoerceToExpectedValueTypeTests
             "not-a-number", MappingValueType.Integer, DestinationType.PostgreSql);
 
         result.Should().Be("not-a-number");
+    }
+
+    [Fact]
+    public void An_unrecognized_boolean_spelling_is_returned_unchanged_rather_than_throwing()
+    {
+        var result = MappingNodeExecutor.CoerceToExpectedValueType(
+            "maybe", MappingValueType.Boolean, DestinationType.PostgreSql);
+
+        result.Should().Be("maybe");
     }
 }

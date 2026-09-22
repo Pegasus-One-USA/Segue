@@ -100,6 +100,12 @@ internal static partial class PostgreSqlDdlTypeValidator
         ["datetime2"] = "timestamp",
         ["datetime"] = "timestamp",
         ["timestamp"] = "timestamp",
+        // The Edit-column modal feeds a column's own live-probed type straight back as a candidate value
+        // (see field-mapping-edit-column-modal.component.ts) — for a plain Postgres timestamp column, that
+        // probed spelling is literally "timestamp without time zone" (information_schema's ANSI-standard
+        // name for it), never bare "timestamp". Without this, re-saving (or editing) an existing timestamp
+        // column untouched throws "'timestamp without time zone' is not an allowed data type."
+        ["timestamp without time zone"] = "timestamp",
         // "datetimeoffset" is SQL Server's timezone-aware type — PostgreSQL's equivalent is "timestamptz"
         // (timestamp with time zone), which stores an unambiguous instant rather than a naive local value.
         // Also accepts Postgres's own two spellings for it unchanged.

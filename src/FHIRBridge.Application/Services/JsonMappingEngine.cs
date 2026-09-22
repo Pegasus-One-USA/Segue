@@ -854,13 +854,26 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             format.StartsWith("joinedFields", StringComparison.OrdinalIgnoreCase) ||
             format.StartsWith("wholeNodeAsJson", StringComparison.OrdinalIgnoreCase));
 
+        // AdjustToUniversal|AssumeUniversal (not AssumeUniversal alone) resolves the true UTC instant an
+        // offset-bearing source value (e.g. a FHIR instant/dateTime) actually represents — AssumeUniversal
+        // alone instead converts it to THIS PROCESS's own local system time zone, so the exact same input
+        // parses to a different value depending on which machine happens to run it (verified empirically:
+        // "2026-03-14T22:00:00Z" -> 2026-03-15T03:30 local on a UTC+05:30 host — a full day later, since the
+        // caller directly below truncates a Date-typed field to `.Date`). Kind is then reset to Unspecified
+        // so this native pass-through DateTime binds identically regardless of destination — Npgsql only
+        // treats a bare Kind=Utc DateTime as "timestamptz" (see
+        // MappingNodeExecutor.CoerceToExpectedValueType's identical fix, which this mirrors).
         var isParsed = string.IsNullOrWhiteSpace(format) || isModeMarker
-            ? DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedDate)
-            : DateTime.TryParseExact(value, format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsedDate);
+            ? DateTime.TryParse(
+                value, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsedDate)
+            : DateTime.TryParseExact(
+                value, format, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out parsedDate);
 
         if (isParsed)
         {
-            return parsedDate;
+            return DateTime.SpecifyKind(parsedDate, DateTimeKind.Unspecified);
         }
 
         errors.Add($"Field '{targetField}' could not be converted to a date/time.");

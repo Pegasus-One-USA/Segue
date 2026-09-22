@@ -1238,9 +1238,19 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     ? rawItems
                     : value;
             string? writeBackPath = null;
+            // The last rule the loop actually reached whose config declares a type — NOT rules.LastOrDefault
+            // over the whole static chain, which would also count a rule after an early Fail/RouteToDeadLetter
+            // break (see below) that this run never got to execute at all, coercing currentValue (whatever an
+            // earlier, differently-typed rule left it as) into a type nothing downstream ever produced.
+            TransformationRule? lastReachedTypedRule = null;
             foreach (var rule in rules)
             {
                 var hopIndex = nodeOrder++;
+                if (rule.ExpectedValueType is not null)
+                {
+                    lastReachedTypedRule = rule;
+                }
+
                 if (!string.IsNullOrWhiteSpace(rule.FhirWriteBackJsonPath))
                 {
                     writeBackPath = rule.FhirWriteBackJsonPath;
@@ -1350,7 +1360,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 ? jsonNode.ToJsonString()
                 : CoerceToExpectedValueType(
                     currentValue,
-                    rules.LastOrDefault(r => r.ExpectedValueType is not null)?.ExpectedValueType,
+                    lastReachedTypedRule?.ExpectedValueType,
                     destinationType.Value);
         }
 
@@ -1409,6 +1419,26 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     /// CSV/Blob export silently switch from DateTimeFormatNode's "2026-03-14" to .NET's culture-formatted
     /// "3/14/2026 12:00:00 AM" — a destination-format regression this coercion must never cause, since it exists
     /// solely to satisfy a relational engine's strict column typing.
+    ///
+    /// Date/DateTime both parse with AdjustToUniversal|AssumeUniversal (resolving the true UTC instant
+    /// regardless of which host this process runs on, so two hosts never disagree on the result) and then
+    /// force Kind=Unspecified before returning. Npgsql only ever binds a Kind=Utc DateTime as "timestamptz" —
+    /// Unspecified (like Local) always binds as plain "timestamp", sending those UTC-anchored field values
+    /// verbatim with no further conversion by Npgsql OR, since a Kind-less value carries no timezone to
+    /// reinterpret, by PostgreSQL either. That is also why this does NOT return DateOnly for Date, despite
+    /// DateOnly being the more obvious "no Kind ambiguity at all" fix: RelationalDestinationWriterBase.Stringify
+    /// re-serializes a DateOnly back into a formatted "yyyy-MM-dd" STRING (its own legacy FHIR-string-output
+    /// path), which would silently reintroduce the exact 42804 this coercion exists to prevent — DateTime
+    /// passes through Stringify natively, DateOnly does not.
+    ///
+    /// This does not yet distinguish a plain "timestamp" destination column from a genuinely tz-aware
+    /// "timestamptz" one — MappingValueType has no separate tier for that (both fold into DateTime; see
+    /// FieldMappingJoinPopoverComponent.TARGET_TYPE_VALUE_TYPES's own instant->DateTime comment). Postgres's
+    /// timestamp->timestamptz assignment cast still lets this write into a genuine timestamptz column without
+    /// throwing, but it does so by interpreting these UTC-anchored digits in the destination session's own
+    /// TimeZone setting — correct when that session is UTC (the common convention), a known limitation
+    /// otherwise. Fully closing that gap needs a distinct Instant/DateTimeOffset-shaped tier threaded through
+    /// MappingValueType end to end, which is out of scope here.
     /// </summary>
     internal static object? CoerceToExpectedValueType(
         object? value, MappingValueType? expectedValueType, DestinationType destinationType)
@@ -1420,24 +1450,15 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 
         return expectedValueType switch
         {
-            // Parsed with the same "assume UTC if the string carries no offset, then adjust to it" pair used
-            // below for DateTime — an offset-bearing input (e.g. a raw FHIR instant) must resolve to the same
-            // calendar date regardless of the host machine's local time zone, not silently roll to the next/
-            // previous day depending on where this process happens to be running.
             MappingValueType.Date => DateTime.TryParse(
                 text, CultureInfo.InvariantCulture,
                 DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var date)
-                ? date.Date
+                ? DateTime.SpecifyKind(date.Date, DateTimeKind.Unspecified)
                 : value,
-            // AssumeUniversal ALONE (Kind=Local) — deliberately NOT combined with AdjustToUniversal, to match
-            // JsonMappingEngine.ConvertDate's own parsing exactly (the no-transform-rule path this mirrors).
-            // Npgsql (no EnableLegacyTimestampBehavior in this repo) infers "timestamptz" from a Kind=Utc
-            // DateTime and "timestamp" from Kind=Local/Unspecified; a destination column normalized from
-            // "datetime2"/"datetime" is a plain "timestamp" (see PostgreSqlDdlTypeValidator), so a Kind=Utc value
-            // here would trip the exact 42804 this coercion exists to prevent.
             MappingValueType.DateTime => DateTime.TryParse(
-                text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dateTime)
-                ? dateTime
+                text, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dateTime)
+                ? DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified)
                 : value,
             MappingValueType.Integer => long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer)
                 ? integer
@@ -1445,10 +1466,43 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             MappingValueType.Decimal => decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var dec)
                 ? dec
                 : value,
-            MappingValueType.Boolean => bool.TryParse(text, out var boolean) ? boolean : value,
+            MappingValueType.Boolean => TryParseBoolean(text, out var boolean) ? boolean : value,
             _ => value,
         };
     }
+
+    // BooleanConversionNode's OWN default trueValues/falseValues ("y,yes,1,t,true,+" / "n,no,0,f,false,-") —
+    // its Execute already yields a native bool for these, so this arm only matters when a chain's LAST
+    // typed rule is BooleanConversion but a raw source spelling like "1"/"Y" reaches here as a plain string
+    // (e.g. the node's own match failed for a casing/whitespace variant, or a later untyped rule in the
+    // chain re-stringified it). bool.TryParse alone only recognizes literal "True"/"False", so without this
+    // fallback the exact spellings BooleanConversion is configured to accept would still 42804 into a
+    // Postgres boolean column.
+    private static bool TryParseBoolean(string text, out bool result)
+    {
+        if (bool.TryParse(text, out result))
+        {
+            return true;
+        }
+
+        if (TrueSpellings.Contains(text))
+        {
+            result = true;
+            return true;
+        }
+
+        if (FalseSpellings.Contains(text))
+        {
+            result = false;
+            return true;
+        }
+
+        result = false;
+        return false;
+    }
+
+    private static readonly HashSet<string> TrueSpellings = new(StringComparer.OrdinalIgnoreCase) { "y", "yes", "1", "t", "+" };
+    private static readonly HashSet<string> FalseSpellings = new(StringComparer.OrdinalIgnoreCase) { "n", "no", "0", "f", "-" };
 
     /// <summary>The relational engines RelationalDestinationWriterBase/MappedSqlServerDestinationWriter actually
     /// write to — mirrors SqlDestinationSchemaService.IsRelational (that class lives in the non-Runtime
