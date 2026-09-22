@@ -33,7 +33,8 @@ export type DestinationTypeV2 =
    *  live queryable schema and takes field mapping, while OneLake Files has neither. Keeping them as one type
    *  meant every gate below had to re-derive the landing mode from connection metadata to answer a question the
    *  type itself should answer. See DestinationType.DataFabricWarehouse for the full reasoning. */
-  | 'DataFabricWarehouse';
+  | 'DataFabricWarehouse'
+  | 'ApiEndpoint';
 
 /** SQL-family destinations are the only ones Mapping applies to in the V2 chain (Source → Destination →
  *  [Mapping →] Transformation → De-identification). "NoSQL" in the product spec maps to Mongo — the only

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Endpoint Destination — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+    --hidden: #64748B;
+    --hidden-bg: #F1F5F9;
+    --api: #DB2777;
+    --api-bg: #FCE7F3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  h4 { font-size: 14.5px; font-weight: 700; margin: 24px 0 8px; }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 12px 0 20px;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-active   { color: var(--new);      background: var(--new-bg); }
+  .pill-hidden   { color: var(--hidden);   background: var(--hidden-bg); }
+  .pill-required { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-optional { color: var(--muted);    background: var(--hidden-bg); }
+  .pill-api      { color: var(--api);      background: var(--api-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  table.file-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 28px;
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.file-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.file-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.file-table tr:last-child td { border-bottom: none; }
+  table.file-table tr:hover td { background: #FAFBFC; }
+  table.file-table td.file-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; color: #0F172A; }
+  table.file-table td.why { color: #475569; }
+  table.file-table td.status { text-align: center; width: 90px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.danger { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .auth-mode {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 20px;
+  }
+  .auth-mode .auth-mode-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .auth-mode .auth-mode-head h3, .auth-mode .auth-mode-head h4 { margin: 0; }
+  .auth-mode .auth-mode-value { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  table.spec-table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 13px; }
+  table.spec-table th {
+    text-align: left;
+    padding: 8px 10px;
+    background: #F1F5F9;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    width: 190px;
+  }
+  table.spec-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: #334155; }
+  table.spec-table tr:last-child td, table.spec-table tr:last-child th { border-bottom: none; }
+
+  table.config-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 24px;
+    font-size: 12.8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.config-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 9px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.config-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.config-table tr:last-child td { border-bottom: none; }
+  table.config-table tr:hover td { background: #FAFBFC; }
+  table.config-table td.key { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; color: #0F172A; }
+  table.config-table td.default { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  details.trace {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    padding: 0;
+  }
+  details.trace summary {
+    cursor: pointer;
+    padding: 12px 18px;
+    font-weight: 700;
+    font-size: 13.5px;
+    list-style: none;
+  }
+  details.trace summary::-webkit-details-marker { display: none; }
+  details.trace summary::before { content: "▸ "; color: var(--primary); }
+  details.trace[open] summary::before { content: "▾ "; }
+  details.trace .trace-body { padding: 0 18px 16px; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+    details.trace { break-inside: avoid; }
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { columns: 1; }
+    table.file-table, table.spec-table, table.config-table { font-size: 12px; }
+    table.spec-table th { width: 120px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>API Endpoint Destination</h1>
+    <p class="subtitle">FHIRBridge Portal &amp; API — complete configuration reference for <code>DestinationType.ApiEndpoint</code>: every <code>dest_api*</code> key, all eight auth modes, payload shaping, batching/retry, and every file touched</p>
+    <div class="meta">
+      <div><strong>Branch</strong> feature/APIDestination</div>
+      <div><strong>Scope</strong> Backend (.NET 9) + Frontend (Angular 20, V1 &amp; V2 node libraries)</div>
+      <div><strong>Status</strong> Implemented, phase-enabled (<code>dest-apiendpoint</code> in both phase configs)</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#features">What was built</a></li>
+      <li><a href="#config-reference">Complete configuration key reference</a></li>
+      <li><a href="#auth-modes">Authentication modes</a></li>
+      <li><a href="#payload-shapes">Payload shapes</a></li>
+      <li><a href="#body-template">Request body template &amp; placeholder substitution</a></li>
+      <li><a href="#batching">Batching, retry &amp; failure handling</a></li>
+      <li><a href="#request-wire">What goes out on the wire</a></li>
+      <li><a href="#architecture">Architecture &amp; write flow</a></li>
+      <li><a href="#backend-files">Backend — files</a></li>
+      <li><a href="#frontend-files">Frontend — files</a></li>
+      <li><a href="#test-files">Tests</a></li>
+      <li><a href="#permissions">Permissions &amp; phase gating</a></li>
+      <li><a href="#comparison">How this differs from RestApi and DataLakeWebhook</a></li>
+      <li><a href="#limitations">Known limitations</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    <code>ApiEndpoint</code> (<code>DestinationType.ApiEndpoint</code>, enum value <code>27</code>) is the
+    general-purpose, "bring your own endpoint" outbound REST destination. It exists so an arbitrary customer- or
+    partner-owned HTTP API never forces a workaround: it exposes the widest configuration surface of any
+    destination type in FHIRBridge — HTTP method, eight authentication modes, custom headers/query parameters,
+    a caller-supplied request body shape with placeholder substitution, byte- and count-bounded batching, gzip
+    compression, retry with exponential backoff, and a configurable success/failure contract. It is registered
+    to its own writer, <code>MappedApiEndpointDestinationWriter</code>, and its own wire-level sender,
+    <code>ApiEndpointSender</code> — unlike some destinations (e.g. <code>AzureFhirService</code>), it does not
+    reuse another type's writer.
+  </p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="num">8</div><div class="label">auth modes — none/bearer/API key (header or query)/basic/HMAC/OAuth2/mTLS</div></div>
+    <div class="card"><div class="num">4</div><div class="label">payload shapes — JSON array, NDJSON, envelope, record-per-request</div></div>
+    <div class="card"><div class="num">26</div><div class="label"><code>dest_api*</code> configuration keys</div></div>
+    <div class="card"><div class="num">2</div><div class="label">execution planes — Configured Pipeline &amp; Runtime DAG canvas</div></div>
+    <div class="card"><div class="num">2</div><div class="label">node libraries wired — V1 and V2 destination wizards</div></div>
+    <div class="card"><div class="num">1</div><div class="label">dedicated writer + sender (no shared/reused writer)</div></div>
+  </div>
+
+  <h2 id="features"><span class="num">2.</span>What was built</h2>
+  <ul class="feature-list">
+    <li><strong>New <code>DestinationType.ApiEndpoint</code></strong> enum value, registered to a dedicated <code>MappedApiEndpointDestinationWriter</code> in <code>ConfiguredDestinationWriterFactory</code>.</li>
+    <li><strong><code>ApiEndpointSettings</code></strong> — parses the flat <code>dest_api*</code>-keyed <code>ConnectionMetadataJson</code> bag (the same convention every other writer's wizard fields use) into a strongly-typed, validated settings record. Credential material is never in this bag — it lives only in <code>DestinationConfiguration.SecretReference</code>'s Key Vault entry.</li>
+    <li><strong><code>ApiEndpointSender</code></strong> — the wire half: resolves the secret, applies the configured auth scheme, optionally gzips and/or HMAC-signs the body, and sends with bounded exponential-backoff retry (transport faults, timeouts, 429 and 5xx are retried; any other 4xx is not).</li>
+    <li><strong><code>MappedApiEndpointDestinationWriter</code></strong> — splits mapped records into batches bounded by both record count and serialized byte size, frames each batch per the configured payload shape, and either uses the fixed envelope every other writer produces or the caller's own <code>{{fieldName}}</code>-templated body.</li>
+    <li><strong>A dedicated Angular form</strong> (<code>ApiEndpointDestinationFormComponent</code>), duplicated identically across the V1 (<code>node-library</code>) and V2 (<code>node-library-v2</code>) destination wizards — same pattern every other destination form follows in this codebase.</li>
+    <li><strong>Full workflow-canvas wiring</strong> — appears in the Node Library palette as <code>dest-apiendpoint</code> (<code>ApiEndpointDestinationNode</code>), opens its own configuration form, saves/edits/runs correctly, and is phase-enabled in both <code>phase-config.service.ts</code> and <code>phase-config-v2.service.ts</code>.</li>
+    <li><strong>Runtime DAG node</strong> — <code>ApiEndpointDestinationNodeExecutor</code>, same shape as every other destination node: consumes <code>MappedRecordBatch</code> and requires an upstream Mapping node.</li>
+    <li><strong>Admin "New Connection" card</strong> — <code>ApiEndpoint</code> added to <code>destination-connections</code>'s <code>CREATE_TYPES</code>/<code>EDITABLE_TYPES</code>, with <code>dest_apiEndpointUrl</code> added to its <code>TARGET_FIELD_KEYS</code> resolver.</li>
+  </ul>
+
+  <h2 id="config-reference"><span class="num">3.</span>Complete configuration key reference</h2>
+  <p class="section-intro">
+    Every key below lives in <code>DestinationConfiguration.ConnectionMetadataJson</code> as a flat string-keyed
+    JSON object — the same <code>dest_*</code> convention every other destination's wizard fields use. Parsed by
+    <code>ApiEndpointSettings.Parse</code> (backend) and produced by <code>ApiEndpointDestinationFormComponent.getFullConfig()</code>
+    (frontend). Credential material is <strong>never</strong> one of these keys — it is written to
+    <code>DestinationConfiguration.SecretReference</code>'s Key Vault entry instead.
+  </p>
+
+  <table class="config-table">
+    <thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="key">dest_apiEndpointUrl</td><td>string (URL)</td><td class="default">—</td><td>Required. The outbound URL. Falls back to <code>DestinationConfiguration.Target</code> when blank (the "existing connection" reuse path stamps <code>Target</code> instead). Must be an absolute URI or the destination fails to parse.</td></tr>
+      <tr><td class="key">dest_apiHttpMethod</td><td>string</td><td class="default">POST</td><td>One of <code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code> (case-insensitive, upper-cased on parse). Any other value throws.</td></tr>
+      <tr><td class="key">dest_apiAuthMode</td><td>enum</td><td class="default">none</td><td>One of <code>none</code>, <code>bearer</code>, <code>apiKeyHeader</code>, <code>apiKeyQuery</code>, <code>basic</code>, <code>hmacSha256</code>, <code>oauth2ClientCredentials</code>, <code>clientCertificate</code>. See §4.</td></tr>
+      <tr><td class="key">dest_apiAuthHeaderName</td><td>string</td><td class="default">X-Api-Key</td><td>Header name used when <code>authMode = apiKeyHeader</code>. Defaults to <code>X-Api-Key</code> when blank for that mode.</td></tr>
+      <tr><td class="key">dest_apiKeyQueryParamName</td><td>string</td><td class="default">api_key</td><td>Query parameter name used when <code>authMode = apiKeyQuery</code>. Defaults to <code>api_key</code> when blank for that mode.</td></tr>
+      <tr><td class="key">dest_apiSignatureHeaderName</td><td>string</td><td class="default">X-Signature-256</td><td>Header the HMAC signature is sent in, for <code>authMode = hmacSha256</code>.</td></tr>
+      <tr><td class="key">dest_apiTimestampHeaderName</td><td>string</td><td class="default">X-Signature-Timestamp</td><td>Header the replay-guarding unix timestamp is sent in, for <code>authMode = hmacSha256</code>.</td></tr>
+      <tr><td class="key">dest_apiTokenEndpoint</td><td>string (URL)</td><td class="default">—</td><td>Required when <code>authMode = oauth2ClientCredentials</code>. The OAuth2 token endpoint.</td></tr>
+      <tr><td class="key">dest_apiClientId</td><td>string</td><td class="default">—</td><td>Required when <code>authMode = oauth2ClientCredentials</code>.</td></tr>
+      <tr><td class="key">dest_apiScope</td><td>string</td><td class="default">—</td><td>Optional OAuth2 scope, for <code>authMode = oauth2ClientCredentials</code>.</td></tr>
+      <tr><td class="key">dest_apiPayloadShape</td><td>enum</td><td class="default">jsonArray</td><td>One of <code>jsonArray</code>, <code>ndjson</code>, <code>envelope</code>, <code>recordPerRequest</code>. See §5.</td></tr>
+      <tr><td class="key">dest_apiContentType</td><td>string</td><td class="default">application/json (application/x-ndjson for NDJSON)</td><td>Request <code>Content-Type</code>. Auto-selected from <code>payloadShape</code> when blank.</td></tr>
+      <tr><td class="key">dest_apiCompression</td><td>enum</td><td class="default">none</td><td><code>none</code> or <code>gzip</code>. HMAC signatures (if used) are computed over the uncompressed body.</td></tr>
+      <tr><td class="key">dest_apiRequireHttps</td><td>bool</td><td class="default">false</td><td>When <code>true</code>, only <code>https://</code> (or loopback <code>http://</code>) endpoint URLs are accepted; anything else throws at parse time. Off by default — unlike <code>DataLakeWebhook</code>, an arbitrary customer API is not assumed to always carry PHI.</td></tr>
+      <tr><td class="key">dest_apiBatchSize</td><td>int</td><td class="default">500</td><td>Max records per batch. Clamped to <code>[1, 50000]</code>.</td></tr>
+      <tr><td class="key">dest_apiMaxRequestBytes</td><td>int</td><td class="default">4194304 (4 MiB)</td><td>Max serialized body size per batch. Clamped to <code>[1024, 100663296]</code> (96 MiB hard cap). A single record that alone exceeds this is still sent as its own batch rather than dropped.</td></tr>
+      <tr><td class="key">dest_apiTimeoutSeconds</td><td>int</td><td class="default">30</td><td>Per-attempt HTTP timeout. Clamped to <code>[1, 600]</code>.</td></tr>
+      <tr><td class="key">dest_apiRetryCount</td><td>int</td><td class="default">3</td><td>Additional attempts after the first (so 3 = 4 total attempts). Clamped to <code>[0, 10]</code>.</td></tr>
+      <tr><td class="key">dest_apiRetryBackoffSeconds</td><td>double</td><td class="default">2</td><td>Base backoff; actual wait is <code>backoff × 2^(attempt-1)</code>, or the response's <code>Retry-After</code> value when present. Clamped to <code>[0, 60]</code>.</td></tr>
+      <tr><td class="key">dest_apiExpectedStatusCodes</td><td>string (CSV of ints)</td><td class="default">(empty = any 2xx)</td><td>Explicit list of HTTP status codes treated as success, e.g. <code>"200,201,202"</code>. Empty means "accept any 2xx".</td></tr>
+      <tr><td class="key">dest_apiHeadersJson</td><td>string (JSON object)</td><td class="default">{}</td><td>Static headers sent on every request, applied last so they can override a provenance default (see §7). Malformed JSON yields an empty map rather than failing the destination.</td></tr>
+      <tr><td class="key">dest_apiQueryParamsJson</td><td>string (JSON object)</td><td class="default">{}</td><td>Static query parameters appended to every request URL.</td></tr>
+      <tr><td class="key">dest_apiBodyTemplateJson</td><td>string (JSON document)</td><td class="default">(empty = use fixed envelope)</td><td>The caller's own request body shape with <code>{{fieldName}}</code> placeholders. See §6. Must be valid JSON when non-blank, or the destination fails to parse.</td></tr>
+      <tr><td class="key">dest_apiIncludeSourceJson</td><td>bool</td><td class="default">false</td><td>When <code>true</code>, includes the raw source FHIR resource under <code>resource</code> in the fixed-envelope payload (ignored when a body template is configured). Off by default — the mapped values already reflect mapping + de-identification, while the raw resource is the full FHIR document.</td></tr>
+      <tr><td class="key">dest_apiOnFailure</td><td>enum</td><td class="default">fail</td><td><code>fail</code> (throw, failing the run) or <code>isolateBatch</code> (record the batch's error and keep going — the run lands as PartialSuccess). See §7.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>Secret storage</strong>
+    The single credential control in the Angular form (<code>secretValue</code> / <code>dest_apiSecret</code> in
+    <code>getFullConfig()</code>) is <strong>not</strong> written into <code>ConnectionMetadataJson</code> — it is
+    passed separately as <code>inlineSecret</code>/<code>metadata.secret</code> to
+    <code>CreateDestinationConfigurationRequest</code>, which stores it via <code>DestinationConfiguration.SecretReference</code>
+    in Key Vault. What that one control means depends on <code>dest_apiAuthMode</code>: a bearer token, a static
+    API key, <code>"username:password"</code> for Basic, the HMAC shared secret, the OAuth2 client secret, or a
+    base64-encoded PFX (optionally suffixed <code>|&lt;password&gt;</code>) for client-certificate mTLS. It is
+    never repopulated when editing/reusing an existing connection.
+  </div>
+
+  <h2 id="auth-modes"><span class="num">4.</span>Authentication modes</h2>
+  <p class="section-intro">
+    <code>ApiEndpointAuthMode</code> is deliberately the widest auth surface of any destination writer in
+    FHIRBridge, so an arbitrary customer- or partner-owned API never forces a workaround.
+  </p>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>None</h3><span class="pill pill-hidden">none</span></div>
+    <div class="auth-mode-value">No credential attached at all — an already-public or network-restricted endpoint. No secret required; <code>RequiresSecret</code> is <code>false</code>.</div>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>Bearer</h3><span class="pill pill-frontend">bearer</span></div>
+    <div class="auth-mode-value">Secret sent verbatim as <code>Authorization: Bearer &lt;secret&gt;</code>.</div>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>API Key — Header</h3><span class="pill pill-frontend">apiKeyHeader</span></div>
+    <div class="auth-mode-value">Secret sent in a configurable header (<code>dest_apiAuthHeaderName</code>, default <code>X-Api-Key</code>).</div>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>API Key — Query</h3><span class="pill pill-frontend">apiKeyQuery</span></div>
+    <div class="auth-mode-value">Secret appended to the request URL as a query parameter (<code>dest_apiKeyQueryParamName</code>, default <code>api_key</code>) — the shape a number of public/partner APIs still require.</div>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>Basic</h3><span class="pill pill-frontend">basic</span></div>
+    <div class="auth-mode-value">Secret is stored pre-formatted as <code>"username:password"</code> and sent as <code>Authorization: Basic &lt;base64&gt;</code> — the same convention used across every other Basic-auth destination in this codebase.</div>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>HMAC-SHA256</h3><span class="pill pill-frontend">hmacSha256</span></div>
+    <div class="auth-mode-value">Body signed with HMAC-SHA256 over <code>"{unix timestamp}.{uncompressed body}"</code> (not the body alone, so a captured request cannot be replayed outside the verifier's freshness window). Signature sent as <code>sha256=&lt;hex&gt;</code> in <code>dest_apiSignatureHeaderName</code> (default <code>X-Signature-256</code>); the timestamp is sent separately in <code>dest_apiTimestampHeaderName</code> (default <code>X-Signature-Timestamp</code>). Same convention as <code>DataLakeWebhookAuthMode.HmacSha256</code>.</div>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>OAuth2 Client Credentials</h3><span class="pill pill-frontend">oauth2ClientCredentials</span></div>
+    <div class="auth-mode-value">Requires <code>dest_apiTokenEndpoint</code> and <code>dest_apiClientId</code> (optional <code>dest_apiScope</code>). The access token is acquired and cached through the shared destination token provider (<code>IFhirDestinationTokenProvider</code>, Redis-backed in production) — a workflow writing hundreds of batches acquires one token, not one per request. Sent as <code>Authorization: Bearer &lt;token&gt;</code>.</div>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>Client Certificate (mTLS)</h3><span class="pill pill-frontend">clientCertificate</span></div>
+    <div class="auth-mode-value">The secret holds a base64-encoded PFX, optionally suffixed <code>|&lt;password&gt;</code> when the PFX itself is password-protected. Presented at the TLS handshake, not as a header. Because this needs its own <code>HttpClient</code> carrying that specific certificate, it builds a fresh, disposable handler per call rather than pulling from the shared named <code>HttpClientFactory</code> pool every other auth mode uses — an accepted tradeoff since this destination type is expected to be low-volume relative to the batched destinations (Blob/S3/lake) that actually need pooling.</div>
+  </div>
+
+  <h2 id="payload-shapes"><span class="num">5.</span>Payload shapes</h2>
+  <p class="section-intro"><code>ApiEndpointPayloadShape</code> controls how a batch of mapped records is framed in the request body.</p>
+  <table class="spec-table">
+    <tbody>
+      <tr><th>jsonArray <span class="pill pill-active">default</span></th><td>A single JSON array of record objects — <code>[{...},{...}]</code>. The most broadly accepted shape for a generic API.</td></tr>
+      <tr><th>ndjson</th><td>One JSON object per line, joined with <code>\n</code> (not <code>Environment.NewLine</code> — a reader parsing line-delimited JSON expects LF regardless of which OS produced the file). Content-Type defaults to <code>application/x-ndjson</code>.</td></tr>
+      <tr><th>envelope</th><td>Wraps the array with run/route provenance: <code>{ meta: { resourceType, destinationObject, recordCount, routeName, correlationId, emittedOnUtc }, records: [...] }</code>.</td></tr>
+      <tr><th>recordPerRequest</th><td>One HTTP request per record — for an endpoint that cannot accept a batch at all. Every other batching setting (<code>dest_apiBatchSize</code>, <code>dest_apiMaxRequestBytes</code>) is then ignored, matching <code>DestinationType.RestApi</code>'s own behavior.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="body-template"><span class="num">6.</span>Request body template &amp; placeholder substitution</h2>
+  <p class="section-intro">
+    Most partner/customer APIs expect a specific body shape that already has meaning to their own system (an
+    order schema, a specific event contract) — hand-mapping every one of those fields onto new per-destination
+    settings-table columns would be unworkable. Instead, <code>dest_apiBodyTemplateJson</code> lets the caller
+    paste the exact JSON their API expects, with <code>{{fieldName}}</code> placeholders anywhere inside it.
+  </p>
+  <ul class="feature-list">
+    <li><strong>Exact match</strong> — a string value that is <em>exactly</em> one placeholder (e.g. <code>"{{Age}}"</code>) is replaced with the field's own typed JSON value: a number stays a number, not the string <code>"42"</code>.</li>
+    <li><strong>Embedded match</strong> — anything else (e.g. <code>"id-{{Age}}"</code>) has its placeholders string-interpolated in place; static text with no placeholder at all is copied through verbatim.</li>
+    <li><strong>Non-string values</strong> (numbers, booleans, <code>null</code>) in the template are copied through untouched — a template can mix fixed, static fields with mapped ones.</li>
+    <li><strong>Field resolution</strong> — most placeholder names resolve against the record's mapped <code>Values</code> (the same fields the Mapping Profile screen already assigns for every other destination — SQL columns, CSV headers, etc.), but four envelope fields are also addressable by name without needing a redundant mapping: <code>pipelineRunId</code>, <code>resourceType</code>, <code>destinationObject</code>, <code>sourceResourceId</code>.</li>
+    <li>When <strong>no template is configured</strong>, the writer falls back to the fixed envelope every other destination writer uses: <code>{ pipelineRunId, resourceType, destinationObject, sourceResourceId, writtenOnUtc, values: {...} }</code>, plus <code>resource</code> (the raw source JSON) when <code>dest_apiIncludeSourceJson</code> is on.</li>
+    <li>The template field deliberately sits <strong>outside</strong> the form's "Advanced" disclosure — unlike every other advanced control, it can be the reason someone chose this destination type at all.</li>
+  </ul>
+  <p class="section-intro">Example template mapping a Patient record onto a hypothetical partner event contract:</p>
+  <pre><code>{
+  "event": "patient.sync",
+  "externalId": "{{sourceResourceId}}",
+  "patient": {
+    "firstName": "{{FirstName}}",
+    "lastName": "{{LastName}}",
+    "dob": "{{DateOfBirth}}"
+  },
+  "meta": { "source": "fhirbridge", "runId": "{{pipelineRunId}}" }
+}</code></pre>
+
+  <h2 id="batching"><span class="num">7.</span>Batching, retry &amp; failure handling</h2>
+  <ul class="feature-list">
+    <li><strong>Dual-bounded batching</strong> — a batch closes when either <code>dest_apiBatchSize</code> (record count) or <code>dest_apiMaxRequestBytes</code> (serialized bytes) is hit first, because a record count safe for a 20-column Patient row can be far too large for an Observation batch. A single record that alone exceeds the byte cap is still sent as its own batch — truncating or dropping it would lose data.</li>
+    <li><strong>Idempotency key</strong> — <code>X-Idempotency-Key</code> is stable across retries and across re-runs of the same batch (<code>{pipelineRunId}:{resourceType}:{destinationObject}:{batchIndex}</code>, lower-cased), so an endpoint that honors it can de-duplicate a re-driven run instead of landing every record twice.</li>
+    <li><strong>Provenance headers</strong> sent on every request, before any configured static headers (which can override them): <code>X-Idempotency-Key</code>, <code>X-FHIRBridge-Resource-Type</code>, <code>X-FHIRBridge-Destination-Object</code>, <code>X-FHIRBridge-Record-Count</code>, <code>X-FHIRBridge-Attempt</code>.</li>
+    <li><strong>Retry classification</strong> mirrors <code>DataLakeWebhookSender</code>: only transport faults, timeouts, HTTP 429 and 5xx are retried. Any other 4xx means the endpoint is telling us this exact request is unacceptable — retrying just burns the budget. A 429's <code>Retry-After</code> header (delta-seconds or an absolute date) is honored when present; otherwise backoff is <code>dest_apiRetryBackoffSeconds × 2^(attempt-1)</code>.</li>
+    <li><strong>Success</strong> is any status in <code>dest_apiExpectedStatusCodes</code> when configured, otherwise any 2xx.</li>
+    <li><strong>On exhausted retries</strong>, <code>dest_apiOnFailure</code> decides the outcome for that batch:
+      <table class="spec-table">
+        <tbody>
+          <tr><th>fail <span class="pill pill-required">default</span></th><td>Throws, failing the destination node and the whole run — the safe default, since a silently dropped batch is invisible data loss.</td></tr>
+          <tr><th>isolateBatch</th><td>Records the batch's failure reason in <code>DestinationWriteResult.RecordErrors</code> and keeps going with the remaining batches — the run lands as <code>PartialSuccess</code>.</td></tr>
+        </tbody>
+      </table>
+    </li>
+  </ul>
+
+  <h2 id="request-wire"><span class="num">8.</span>What goes out on the wire</h2>
+  <table class="spec-table">
+    <tbody>
+      <tr><th>Method &amp; URL</th><td><code>dest_apiHttpMethod</code> against <code>dest_apiEndpointUrl</code> (or <code>Target</code>), with <code>dest_apiQueryParamsJson</code> plus the API key (for <code>apiKeyQuery</code>) appended as query parameters.</td></tr>
+      <tr><th>Content-Type</th><td><code>dest_apiContentType</code>, or auto-selected from the payload shape (<code>application/json</code>, or <code>application/x-ndjson</code> for NDJSON), UTF-8.</td></tr>
+      <tr><th>Content-Encoding</th><td><code>gzip</code> header added when <code>dest_apiCompression = gzip</code>. HMAC signatures (if used) are always computed over the <em>uncompressed</em> body, so a verifier reconstructing the signature from the JSON it parsed doesn't need to know which transfer encoding was negotiated.</td></tr>
+      <tr><th>Headers</th><td>Provenance headers (see §7), then any <code>dest_apiHeadersJson</code> entries — applied last, so a customer-supplied header can override a provenance default if their API needs a specific name for it — then the auth-mode-specific header (Bearer/API-key/Basic/HMAC), when applicable.</td></tr>
+      <tr><th>Body</th><td>Framed per <code>dest_apiPayloadShape</code> (§5), built from either the fixed envelope or the <code>dest_apiBodyTemplateJson</code> template (§6).</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="architecture"><span class="num">9.</span>Architecture &amp; write flow</h2>
+  <p class="section-intro">
+    <code>MappedApiEndpointDestinationWriter.WriteAsync</code> is invoked the same way every
+    <code>IConfiguredDestinationWriter</code> is, from both execution planes described in the top-level
+    <code>CLAUDE.md</code>: the Configured Pipeline (<code>IConfiguredDestinationWriter</code> via
+    <code>ConfiguredDestinationWriterFactory</code>) and the Runtime DAG
+    (<code>ApiEndpointDestinationNodeExecutor</code> → <code>DestinationNodeExecutor</code> base → the same
+    factory). Both planes resolve the same writer, so behavior is identical regardless of which pipeline runs it.
+  </p>
+  <ol>
+    <li><code>ApiEndpointSettings.Parse(destination)</code> reads and validates the <code>dest_api*</code> bag.</li>
+    <li><code>BuildBatches</code> splits <code>records</code> into count/byte-bounded batches (or one batch per record, for <code>recordPerRequest</code>), building each record's line via <code>BuildRecordLine</code> — either the substituted template or the fixed envelope — then <code>Frame</code>s the batch per payload shape.</li>
+    <li>Each batch is handed to <code>ApiEndpointSender.SendAsync</code>, which resolves the secret (if any), applies compression/signing/auth, and sends with retry.</li>
+    <li>Per-batch results roll up into one <code>DestinationWriteResult</code>: written count, written resource ids, and (for <code>isolateBatch</code>) any per-batch failure reasons in <code>RecordErrors</code>.</li>
+  </ol>
+
+  <h2 id="backend-files"><span class="num">10.</span>Backend — files</h2>
+  <table class="file-table">
+    <thead><tr><th>File</th><th>Status</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="file-path">src/FHIRBridge.Domain/Enums/DestinationType.cs</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Adds <code>ApiEndpoint = 27</code>.</td></tr>
+      <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/ApiEndpoint/ApiEndpointEnums.cs</td><td class="status"><span class="pill pill-new">new</span></td><td class="why"><code>ApiEndpointAuthMode</code>, <code>ApiEndpointPayloadShape</code>, <code>ApiEndpointFailureMode</code>, <code>ApiEndpointCompression</code>.</td></tr>
+      <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/ApiEndpoint/ApiEndpointSettings.cs</td><td class="status"><span class="pill pill-new">new</span></td><td class="why">Parses and validates the <code>dest_api*</code> configuration bag (§3).</td></tr>
+      <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/ApiEndpoint/IApiEndpointSender.cs</td><td class="status"><span class="pill pill-new">new</span></td><td class="why">Sender contract — <code>SendAsync(destination, settings, batch, ct)</code> and the <code>ApiEndpointBatch</code>/<code>ApiEndpointSendResult</code> DTOs.</td></tr>
+      <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/ApiEndpoint/ApiEndpointSender.cs</td><td class="status"><span class="pill pill-new">new</span></td><td class="why">Wire-level sender: auth application, gzip, HMAC signing, retry with backoff (§4, §7).</td></tr>
+      <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/MappedApiEndpointDestinationWriter.cs</td><td class="status"><span class="pill pill-new">new</span></td><td class="why">The <code>IConfiguredDestinationWriter</code>: batching, framing, template substitution (§6, §9).</td></tr>
+      <tr><td class="file-path">src/FHIRBridge.Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Registers <code>DestinationType.ApiEndpoint → MappedApiEndpointDestinationWriter</code>.</td></tr>
+      <tr><td class="file-path">src/FHIRBridge.Infrastructure/DependencyInjection.cs</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">DI registration for <code>IApiEndpointSender → ApiEndpointSender</code> and the named <code>HttpClient</code>.</td></tr>
+      <tr><td class="file-path">src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Adds <code>ApiEndpointDestination = "ApiEndpointDestinationNode"</code>.</td></tr>
+      <tr><td class="file-path">src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Palette entry, <code>transformId</code> (<code>dest-apiendpoint</code>), display name, description.</td></tr>
+      <tr><td class="file-path">src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">New <code>ApiEndpointDestinationNodeExecutor</code>; added to <code>MultiTableRelationalDestinationTypes</code> and the write-mode-suffix-is-meaningless set.</td></tr>
+      <tr><td class="file-path">src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Registers <code>ApiEndpointDestinationNodeExecutor</code> as an <code>IWorkflowNodeExecutor</code>.</td></tr>
+      <tr><td class="file-path">src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Validation rules for the new destination type.</td></tr>
+      <tr><td class="file-path">Demo_TestApp/backend/Program.cs</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">ApiEndpoint destination test console for manual end-to-end verification.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="frontend-files"><span class="num">11.</span>Frontend — files</h2>
+  <table class="file-table">
+    <thead><tr><th>File</th><th>Status</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="file-path">portal/src/app/models/destination-configuration-v2.model.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Adds <code>'ApiEndpoint'</code> to <code>DestinationTypeV2</code>.</td></tr>
+      <tr><td class="file-path">portal/src/app/destination-connections/models/destination-configuration.model.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Adds <code>'ApiEndpoint'</code> to the admin-screen <code>DestinationType</code> union.</td></tr>
+      <tr><td class="file-path">portal/src/app/components/node-library-v2/destination-wizard/destination-forms/api-endpoint-destination-form.component.ts / .html</td><td class="status"><span class="pill pill-new">new</span></td><td class="why">V2 wizard form — all 26 fields (§3), auth-mode-conditional validators, Advanced disclosure.</td></tr>
+      <tr><td class="file-path">portal/src/app/components/node-library/destination-wizard/destination-forms/api-endpoint-destination-form.component.ts / .html</td><td class="status"><span class="pill pill-new">new</span></td><td class="why">Identical V1 wizard form (V1's node-library is kept as shared infrastructure — see main_v2's "retire V1 builder" note; this form still backs V1's Destination step).</td></tr>
+      <tr><td class="file-path">portal/src/app/components/node-library-v2/destination-wizard/destination-forms/destination-form.registry.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Registers <code>ApiEndpoint: ApiEndpointDestinationFormComponent</code>.</td></tr>
+      <tr><td class="file-path">portal/src/app/components/node-library/destination-wizard/destination-forms/destination-form.registry.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Same registration, V1 registry.</td></tr>
+      <tr><td class="file-path">portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why"><code>isApiEndpoint()</code>, <code>registryKey()</code>/<code>destLabel</code> cases, <code>APIENDPOINT_TYPES</code>, provisioning branch, default-target seeding.</td></tr>
+      <tr><td class="file-path">portal/src/app/components/node-library/destination-wizard/destination-wizard.component.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Same wiring, V1 wizard.</td></tr>
+      <tr><td class="file-path">portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Adds <code>'apiendpoint'</code> to <code>MappingDestType</code> — file-shaped mapping (typed target fields, no live schema), same category as <code>datalake</code>/<code>fabric</code>.</td></tr>
+      <tr><td class="file-path">portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-model.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Same addition, V1 mapping model.</td></tr>
+      <tr><td class="file-path">portal/src/app/components/node-library-v2/node-library-dialog.component.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Palette tile (<code>dest-apiendpoint</code>, abbr <code>API</code>), type-switch guards, permission prefix, label.</td></tr>
+      <tr><td class="file-path">portal/src/app/components/node-library/node-library-dialog.component.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Same wiring, V1 dialog.</td></tr>
+      <tr><td class="file-path">portal/src/app/services/workflow-build-assembler-v2.service.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why"><code>isApiEndpoint</code> detection, destination name, and the <code>ApiEndpoint</code> build branch (target = endpoint URL, auth-mode-aware secret handling) + <code>buildConnectionMetadata</code>'s <code>apiendpoint</code> key list.</td></tr>
+      <tr><td class="file-path">portal/src/app/services/phase-config.service.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Adds <code>'dest-apiendpoint'</code> to <code>PHASE_1_CONFIG.enabledTransformIds</code> (V1).</td></tr>
+      <tr><td class="file-path">portal/src/app/services/phase-config-v2.service.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Same phase-enablement, V2.</td></tr>
+      <tr><td class="file-path">portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Adds <code>'ApiEndpoint'</code> to <code>CREATE_TYPES</code> and <code>dest_apiEndpointUrl</code> to <code>TARGET_FIELD_KEYS</code>.</td></tr>
+      <tr><td class="file-path">portal/src/app/core/api-endpoints.ts</td><td class="status"><span class="pill pill-modified">modified</span></td><td class="why">Shared API route constants (unrelated naming collision with this destination — this file predates it and lists the portal's own backend REST routes).</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="test-files"><span class="num">12.</span>Tests</h2>
+  <table class="file-table">
+    <thead><tr><th>File</th><th>What it covers</th></tr></thead>
+    <tbody>
+      <tr><td class="file-path">tests/FHIRBridge.UnitTests/Destinations/ApiEndpoint/ApiEndpointSettingsTests.cs</td><td class="why">Parsing/validation of the <code>dest_api*</code> bag — defaults, clamping, required-field enforcement per auth mode, endpoint URL and HTTPS validation, status-code list parsing.</td></tr>
+      <tr><td class="file-path">tests/FHIRBridge.UnitTests/Destinations/ApiEndpoint/MappedApiEndpointDestinationWriterTests.cs</td><td class="why">Batching (count and byte bounds), payload framing per shape, body-template substitution, failure-mode behavior (fail vs. isolateBatch).</td></tr>
+    </tbody>
+  </table>
+  <p class="section-intro">Run with: <code>dotnet test tests/FHIRBridge.UnitTests --filter "FullyQualifiedName~ApiEndpoint"</code></p>
+
+  <h2 id="permissions"><span class="num">13.</span>Permissions &amp; phase gating</h2>
+  <ul class="feature-list">
+    <li><strong>Permission group</strong> — like the other lake/webhook destinations, <code>ApiEndpoint</code> has no dedicated <code>PermissionGroupCode</code> member, so it resolves through the generic <code>sourceconnections</code> fallback (<code>SourceSystemPermissionGroups.GroupFor</code>) both in the wizard's client-side gate (<code>destWizardPermissionPrefixes</code>) and on the backend (<code>ControllerAuthorizationExtensions.HasPermissionAsync</code>).</li>
+    <li><strong>Phase gating</strong> — <code>'dest-apiendpoint'</code> is listed in <code>PHASE_1_CONFIG.enabledTransformIds</code> in both <code>phase-config.service.ts</code> (V1) and <code>phase-config-v2.service.ts</code> (V2), so the destination is visible in the Node Library palette today (not held back like the Phase 2+ types, e.g. <code>AzureSql</code>, <code>Snowflake</code>).</li>
+  </ul>
+
+  <h2 id="comparison"><span class="num">14.</span>How this differs from RestApi and DataLakeWebhook</h2>
+  <table class="spec-table">
+    <tbody>
+      <tr><th>DestinationType.RestApi</th><td>One record per request, no auth beyond a raw secret, no batching, no retry. The bare-bones predecessor.</td></tr>
+      <tr><th>DestinationType.DataLakeWebhook</th><td>Purpose-built for data-lake ingestion front doors (Fabric Eventstream, Databricks/Snowpipe Streaming, an API-Gateway/Lambda front door, Event Grid, Splunk HEC). Always assumed to carry PHI, so it is https-only by design with no opt-out.</td></tr>
+      <tr><th>DestinationType.ApiEndpoint</th><td>The general destination for an arbitrary customer- or partner-owned HTTP API. Widest configuration surface of the three (8 auth modes vs. DataLakeWebhook's smaller set), plain http allowed by default (opt into <code>dest_apiRequireHttps</code> for a PHI-carrying integration), and the only one of the three offering a caller-supplied request body template.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="limitations"><span class="num">15.</span>Known limitations</h2>
+  <ul class="feature-list">
+    <li><strong>No live schema / no field-mapping table picker</strong> — like Blob/DataLakeWebhook/DataFabricAzure, this is a file/record-shaped destination: mapping targets are typed strings, not columns read from a live schema.</li>
+    <li><strong>Client-certificate mode is not connection-pooled</strong> — each send with <code>authMode = clientCertificate</code> builds a fresh <code>HttpClientHandler</code>/<code>HttpClient</code> rather than reusing the shared named client pool, an accepted tradeoff for what is expected to be a low-volume auth mode.</li>
+    <li><strong>Body template only reads mapped values</strong> — a template placeholder can address a mapped field or one of the four envelope fields (<code>pipelineRunId</code>/<code>resourceType</code>/<code>destinationObject</code>/<code>sourceResourceId</code>); it cannot reach into the raw source FHIR JSON directly (use <code>dest_apiIncludeSourceJson</code> with the fixed envelope for that instead, which is mutually exclusive with a template).</li>
+    <li><strong>No Test Connection probe</strong> — unlike SQL-family and some FHIR-native destinations, the wizard does not offer a live "Test Connection" call before saving; the first real signal of a misconfiguration is the first pipeline run.</li>
+  </ul>
+
+  <footer>
+    FHIRBridge — API Endpoint Destination configuration reference. Generated from the implementation on
+    <code>feature/APIDestination</code>.
+  </footer>
+
+</div>
+
+</body>
+</html>
