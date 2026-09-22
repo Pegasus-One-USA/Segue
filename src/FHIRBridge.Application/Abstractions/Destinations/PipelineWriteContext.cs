@@ -26,10 +26,20 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// part in reference resolution/auto-fetch instead of being skipped as external. Null when the source is ambiguous
 /// or unknown, in which case every absolute reference keeps being treated as external, exactly as before.
 /// </param>
+/// <param name="PipelineRunId">
+/// This run's own id. Exists specifically for <c>MappedApiEndpointDestinationWriter</c>'s multi-resource
+/// accumulator, which needs to identify the run even when <c>records</c> is empty (a resource type this run
+/// genuinely produced zero records for still has to register that fact with the accumulator, or that resource
+/// type's slot never completes — see that writer's own remarks) — every other writer instead reads it off
+/// <c>MappedDestinationRecord.PipelineRunId</c>, which only exists when there's at least one record. Defaults to
+/// <see cref="Guid.Empty"/> for every caller that hasn't been updated to pass the real one; only
+/// <c>ConfiguredPipelineService</c> and the Runtime plane's destination executors currently do.
+/// </param>
 public sealed record PipelineWriteContext(
     bool AllowInlineDelivery,
     string RouteName,
     DateTimeOffset RunStartedAtUtc,
     string? CorrelationId = null,
     Func<string, string, CancellationToken, Task<string?>>? FetchMissingReferenceAsync = null,
-    string? SourceBaseUrl = null);
+    string? SourceBaseUrl = null,
+    Guid PipelineRunId = default);

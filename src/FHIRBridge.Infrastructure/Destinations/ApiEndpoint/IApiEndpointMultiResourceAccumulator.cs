@@ -12,6 +12,13 @@ namespace FHIRBridge.Infrastructure.Destinations.ApiEndpoint;
 /// not persisted; a run that's interrupted mid-way (process restart between resource types landing) simply never
 /// completes and its accumulated records are dropped, exactly as any other in-flight, not-yet-durable write
 /// would be if the process died before it happened.
+///
+/// The same "never completes" outcome also happens WITHOUT a restart, whenever a resource type this run
+/// genuinely expected contributes zero records this cycle (see MappedApiEndpointDestinationWriter.WriteAsync)
+/// — an ordinary, non-exotic run shape, not a failure. Left unbounded, every such run would hold its mapped
+/// PHI in process memory for the rest of the process's life. The concrete implementation therefore sweeps
+/// entries older than a plausible run lifetime and caps the number of distinct pending entries, logging when
+/// either discards one, so an abandoned entry is bounded and observable rather than a silent, permanent leak.
 /// </summary>
 public interface IApiEndpointMultiResourceAccumulator
 {

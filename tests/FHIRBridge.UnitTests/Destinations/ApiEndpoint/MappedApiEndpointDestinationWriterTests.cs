@@ -40,10 +40,14 @@ public sealed class MappedApiEndpointDestinationWriterTests
     private static MappedDestinationRecord RecordWithValues(string id, Dictionary<string, object?> values) =>
         new(RunId, "Patient", "Patient", id, values, null);
 
-    private static PipelineWriteContext Context() => new(false, "Partner Export Workflow", DateTimeOffset.UtcNow, "corr-1");
+    private static PipelineWriteContext Context() =>
+        new(false, "Partner Export Workflow", DateTimeOffset.UtcNow, "corr-1", PipelineRunId: RunId);
 
     private MappedApiEndpointDestinationWriter CreateWriter() =>
-        new(_sender.Object, new ApiEndpointMultiResourceAccumulator(), NullLogger<MappedApiEndpointDestinationWriter>.Instance);
+        new(
+            _sender.Object,
+            new ApiEndpointMultiResourceAccumulator(NullLogger<ApiEndpointMultiResourceAccumulator>.Instance),
+            NullLogger<MappedApiEndpointDestinationWriter>.Instance);
 
     private void SetupSender(bool delivered = true, string? error = null)
         => _sender
@@ -205,7 +209,11 @@ public sealed class MappedApiEndpointDestinationWriterTests
         var patientResult = await writer.WriteAsync(
             destination, Mapping("Patient", "Patient"), [Record("p1")], Context(), CancellationToken.None);
 
-        patientResult.Count.Should().Be(1, "the first resource type's records are accepted but nothing is sent until every resource type lands");
+        // 0, not 1: these records are only ACCEPTED into the accumulator here — nothing has left this process
+        // yet, so reporting them as written would tell the caller they were delivered when they weren't (see
+        // PR #210's review — this was the actual bug: reporting the pre-fix records.Count here made an
+        // incomplete/never-completing set look like a successful write).
+        patientResult.Count.Should().Be(0, "nothing is sent (or reportable as written) until every resource type lands");
         _sent.Should().BeEmpty();
 
         var encounterResult = await writer.WriteAsync(
@@ -216,6 +224,44 @@ public sealed class MappedApiEndpointDestinationWriterTests
         using var body = JsonDocument.Parse(_sent[0].Body);
         body.RootElement.GetProperty("patients").GetArrayLength().Should().Be(1);
         body.RootElement.GetProperty("encounters").GetArrayLength().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task An_expected_resource_type_with_zero_records_this_run_still_completes_the_set()
+    {
+        // The exact regression PR #210's review caught: a participating resource type producing no records
+        // this cycle (a patient with no Observations today, a resource type the source returned nothing for)
+        // is an ordinary run shape, not a failure — it must still complete the expected set so the OTHER
+        // resource types' already-accepted records actually get sent, instead of sitting accumulated forever
+        // while the run reports success.
+        SetupSender();
+        var destination = Destination(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["dest_apiMultiResourceMode"] = "flat",
+            ["dest_apiResourceRelationsJson"] = """
+                [
+                    {"resourceType":"Patient","nestKey":"patients"},
+                    {"resourceType":"Encounter","nestKey":"encounters"}
+                ]
+                """,
+        }));
+        var writer = CreateWriter();
+
+        var patientResult = await writer.WriteAsync(
+            destination, Mapping("Patient", "Patient"), [Record("p1")], Context(), CancellationToken.None);
+        patientResult.Count.Should().Be(0);
+        _sent.Should().BeEmpty();
+
+        var encounterResult = await writer.WriteAsync(
+            destination, Mapping("Encounter", "Encounter"), [], Context(), CancellationToken.None);
+
+        encounterResult.Count.Should().Be(0);
+        _sent.Should().HaveCount(
+            1, "an expected-but-empty resource type must still complete the set and trigger the combined send " +
+               "— otherwise the Patient records above are silently never sent while the run reports success");
+        using var body = JsonDocument.Parse(_sent[0].Body);
+        body.RootElement.GetProperty("patients").GetArrayLength().Should().Be(1);
+        body.RootElement.GetProperty("encounters").GetArrayLength().Should().Be(0, "this resource type genuinely had no records this run");
     }
 
     [Fact]

@@ -49,20 +49,28 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
         PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
-        if (records.Count == 0)
-        {
-            return new DestinationWriteResult(0);
-        }
-
         var settings = ApiEndpointSettings.Parse(destination);
 
         // Multi-resource destinations (dest_apiMultiResourceMode) accumulate every participating resource type's
         // records in-process until the last one lands for this pipeline run, then send ONE combined document —
         // entirely inside this writer, so ConfiguredPipelineService keeps calling WriteAsync exactly as it always
         // has (once per resource type per route) and every other destination type is completely untouched.
+        //
+        // Checked BEFORE the empty-records return below, deliberately: an ordinary, non-exotic run shape is a
+        // participating resource type producing zero records this cycle (a patient with no Observations today,
+        // a resource type the source returned nothing for, one filtered out before the write). That call must
+        // still register with the accumulator — an empty contribution completes its slot in the expected set
+        // just as a non-empty one does — or that resource type's slot never completes, the combined document
+        // never sends, and (see below) nothing reports an error either. A single-resource write with zero
+        // records has nothing to accumulate against, so it keeps the immediate empty-batch return.
         if (settings.IsMultiResource)
         {
-            return await WriteMultiResourceAsync(destination, mappingProfile, records, settings, cancellationToken);
+            return await WriteMultiResourceAsync(destination, mappingProfile, records, context, settings, cancellationToken);
+        }
+
+        if (records.Count == 0)
+        {
+            return new DestinationWriteResult(0);
         }
 
         var batches = BuildBatches(mappingProfile, records, context, settings);
@@ -126,27 +134,44 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
             .ToLowerInvariant();
 
     /// <summary>
-    /// Holds this resource type's records until every resource type declared in
-    /// <see cref="ApiEndpointSettings.ResourceRelations"/> has landed for the same pipeline run, then sends ONE
-    /// combined document built by <see cref="BuildMultiResourceBody"/>. The call that completes the set is the one
-    /// that actually delivers — every earlier call for the same run simply hands its records to the accumulator
-    /// and reports them as accepted, since (by design, see <see cref="IApiEndpointMultiResourceAccumulator"/>)
-    /// nothing outside this writer changes how often or in what order WriteAsync is invoked per resource type.
+    /// Holds this resource type's records (possibly zero of them — see the call site's remarks) until every
+    /// resource type declared in <see cref="ApiEndpointSettings.ResourceRelations"/> has landed for the same
+    /// pipeline run, then sends ONE combined document built by <see cref="BuildMultiResourceBody"/>. The call
+    /// that completes the set is the one that actually delivers; every earlier call for the same run reports 0
+    /// written — its records are only ACCEPTED into the accumulator, not yet sent anywhere, so reporting them as
+    /// written here would tell the caller records were delivered when nothing has left this process. Nothing
+    /// outside this writer changes how often or in what order WriteAsync is invoked per resource type.
     /// </summary>
     private async Task<DestinationWriteResult> WriteMultiResourceAsync(
         DestinationConfiguration destination,
         MappingProfile mappingProfile,
         IReadOnlyCollection<MappedDestinationRecord> records,
+        PipelineWriteContext context,
         ApiEndpointSettings settings,
         CancellationToken cancellationToken)
     {
-        var pipelineRunId = records.First().PipelineRunId;
+        // context.PipelineRunId, not records.First().PipelineRunId: this call can legitimately have zero
+        // records (a participating resource type that produced nothing this cycle still has to register an
+        // empty contribution so its slot in the expected set completes — see the call site), and an empty
+        // collection has no record to read a run id off of.
+        var pipelineRunId = context.PipelineRunId != Guid.Empty
+            ? context.PipelineRunId
+            : records.FirstOrDefault()?.PipelineRunId
+                ?? throw new InvalidOperationException(
+                    $"API Endpoint multi-resource write for destination '{destination.Name}' has no pipeline " +
+                    "run id available — PipelineWriteContext.PipelineRunId was not supplied and there are no " +
+                    "records to read it from.");
+
         _multiResourceAccumulator.Add(destination.Id, pipelineRunId, mappingProfile, records);
 
         if (!_multiResourceAccumulator.TryTakeComplete(
                 destination.Id, pipelineRunId, settings.ExpectedResourceTypes, out var batches))
         {
-            return new DestinationWriteResult(records.Count);
+            // Not yet delivered anywhere — reporting records.Count here (as an earlier version of this writer
+            // did) would tell the caller these records were written when nothing has left this process. A run
+            // whose set never completes (a resource type that never arrives) must surface as unwritten, not as
+            // a false success — see ApiEndpointMultiResourceAccumulator for how an abandoned set is bounded.
+            return new DestinationWriteResult(0);
         }
 
         var body = BuildMultiResourceBody(settings, batches);
@@ -179,7 +204,9 @@ public sealed class MappedApiEndpointDestinationWriter : IConfiguredDestinationW
             destination.Id,
             reason);
 
-        return new DestinationWriteResult(records.Count, RecordErrors: [reason]);
+        // 0, not records.Count: the combined send explicitly failed (result.Delivered is false) — nothing was
+        // written anywhere. Same principle as the incomplete-set return above.
+        return new DestinationWriteResult(0, RecordErrors: [reason]);
     }
 
     /// <summary>
