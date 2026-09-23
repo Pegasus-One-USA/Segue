@@ -33,13 +33,23 @@ public sealed class HapiLocalTerminologyLookupService
             join version in _dbContext.TrmCodeSystemVers on codeSystem.CurrentVersionPid equals version.Pid
             join concept in _dbContext.TrmConcepts on version.Pid equals concept.CodeSystemPid
             where concept.CodeVal == trimmedCode
-            select new { concept.Display, version.CsVersionId })
+            select new
+            {
+                concept.Display,
+                concept.ShortDescription,
+                concept.LongDescription,
+                concept.LongCommonName,
+                concept.IsActive,
+                version.CsVersionId
+            })
             .AsNoTracking()
             .SingleOrDefaultAsync(cancellationToken);
 
         return result is null
             ? null
-            : new TerminologyLookupResult(trimmedSystem, trimmedCode, result.Display, result.CsVersionId, "HapiLocalTerminologyDatabase");
+            : new TerminologyLookupResult(
+                trimmedSystem, trimmedCode, result.Display, result.CsVersionId, "HapiLocalTerminologyDatabase",
+                result.ShortDescription, result.LongDescription, result.LongCommonName, result.IsActive);
     }
 
     /// <summary>Searches every synced code system's current version for a matching code, ignoring which
@@ -62,12 +72,23 @@ public sealed class HapiLocalTerminologyLookupService
             join concept in _dbContext.TrmConcepts on version.Pid equals concept.CodeSystemPid
             where concept.CodeVal == trimmedCode
             orderby codeSystem.CodeSystemUri
-            select new { codeSystem.CodeSystemUri, concept.Display, version.CsVersionId })
+            select new
+            {
+                codeSystem.CodeSystemUri,
+                concept.Display,
+                concept.ShortDescription,
+                concept.LongDescription,
+                concept.LongCommonName,
+                concept.IsActive,
+                version.CsVersionId
+            })
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
 
         return result is null
             ? null
-            : new TerminologyLookupResult(result.CodeSystemUri, trimmedCode, result.Display, result.CsVersionId, "HapiLocalTerminologyDatabase");
+            : new TerminologyLookupResult(
+                result.CodeSystemUri, trimmedCode, result.Display, result.CsVersionId, "HapiLocalTerminologyDatabase",
+                result.ShortDescription, result.LongDescription, result.LongCommonName, result.IsActive);
     }
 }

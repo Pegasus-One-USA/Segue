@@ -57,8 +57,23 @@ public sealed record HapiTerminologyVersionCheckResultDto(
 
 /// <summary>One code/description row from a HAPI terminology system's local store (TRM_CONCEPT),
 /// browsable/editable from Settings → General → Terminology's "View All Codes" screen.</summary>
-public sealed record TerminologyConceptDto(long Pid, string Code, string? Display);
+public sealed record TerminologyConceptDto(
+    long Pid,
+    string Code,
+    string? Display,
+    string? ShortDescription,
+    string? LongDescription,
+    string? LongCommonName,
+    bool IsActive);
 
 /// <summary>Adds or edits one code/description row for a given HAPI terminology system, stored the
 /// same way (TRM_CODESYSTEM/TRM_CODESYSTEM_VER/TRM_CONCEPT) as a synced code, e.g. ICD-10-CM.</summary>
-public sealed record UpsertTerminologyConceptRequest(string Code, string? Display);
+public sealed record UpsertTerminologyConceptRequest(
+    string Code,
+    string? Display,
+    string? ShortDescription = null,
+    string? LongDescription = null,
+    string? LongCommonName = null,
+    // Defaulted true so an older client that posts only Code+Display still creates an active concept,
+    // matching the rule applied to sources that publish no status signal.
+    bool IsActive = true);

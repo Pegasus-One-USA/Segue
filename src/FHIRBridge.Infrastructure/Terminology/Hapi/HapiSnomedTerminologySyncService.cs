@@ -65,7 +65,15 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
         var (version, concepts) = ParseSnomedRf2(zipPath);
         _logger.LogInformation("Parsed {Total} active SNOMED CT concepts from release {Version}.", concepts.Count, version);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "SNOMEDCT", version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "SNOMEDCT",
+            version,
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                LongCommonName: c.LongCommonName,
+                IsActive: c.IsActive)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -145,23 +153,33 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
 
             var row = conceptLine.Split('\t');
             var id = Get(conceptIndex, row, "id");
-            if (string.IsNullOrWhiteSpace(id) || Get(conceptIndex, row, "active") != "1")
+            if (string.IsNullOrWhiteSpace(id))
             {
                 continue;
             }
 
-            var display = ptByConcept.TryGetValue(id, out var pt) ? pt : fsnByConcept.GetValueOrDefault(id);
+            // Inactive (retired) concepts are now RETAINED and flagged rather than skipped — the US
+            // 20260901 edition has 152,447 of them against 390,812 active. A historical resource can
+            // legitimately reference one, and storing no row makes that indistinguishable from an
+            // unrecognised code.
+            var isActive = Get(conceptIndex, row, "active") == "1";
+
+            var preferredTerm = ptByConcept.GetValueOrDefault(id);
+            var fullySpecifiedName = fsnByConcept.GetValueOrDefault(id);
+            var display = preferredTerm ?? fullySpecifiedName;
             if (string.IsNullOrEmpty(display))
             {
                 continue;
             }
 
-            concepts.Add(new Concept(id, display));
+            // The FSN is SNOMED's unambiguous canonical name ("Cholera (disorder)") and is the closest
+            // equivalent to LOINC's LONG_COMMON_NAME; the preferred synonym stays the display.
+            concepts.Add(new Concept(id, display, fullySpecifiedName, isActive));
         }
 
         if (concepts.Count == 0)
         {
-            throw new InvalidDataException("The release contains no active SNOMED CT concepts.");
+            throw new InvalidDataException("The release contains no SNOMED CT concepts.");
         }
 
         return (version, concepts);
@@ -189,5 +207,5 @@ public sealed class HapiSnomedTerminologySyncService : IHapiSnomedTerminologySyn
     private static string Get(Dictionary<string, int> index, string[] row, string field) =>
         index.TryGetValue(field, out var i) && i < row.Length ? row[i] : string.Empty;
 
-    private sealed record Concept(string Code, string Display);
+    private sealed record Concept(string Code, string Display, string? LongCommonName, bool IsActive);
 }
