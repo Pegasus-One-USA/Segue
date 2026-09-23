@@ -92,6 +92,17 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
                         m.Indices))
                     .ToList();
 
+            // "index=N" is the payload's own signal for "Nth instance" (see field-mapping-model.ts) — narrows
+            // down to just the N-th distinct occurrence of the repeating parent BEFORE the resolved.Count == 0
+            // check below, so an out-of-range N (e.g. Instance #5 picked but only 3 telecom entries exist)
+            // falls through to the exact same DefaultValue/IsRequired/null handling a genuinely absent optional
+            // sub-field already gets, rather than needing its own duplicate branch.
+            var instanceIndex = ParseInstanceIndex(field.Format);
+            if (instanceIndex is int selectedInstance)
+            {
+                resolved = SelectInstance(resolved, selectedInstance);
+            }
+
             if (resolved.Count == 0)
             {
                 if (policy == ArrayPolicy.SeparateDestination)
@@ -305,9 +316,14 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// <summary>
     /// Selects the value among <paramref name="indices"/>/<paramref name="values"/> (same order, one per array item)
     /// whose sibling code element — resolved via <see cref="MappingFieldDto.CorrelationCodeJsonPath"/>, sharing the
-    /// same outermost array index as <paramref name="indices"/> — equals <see cref="MappingFieldDto.CorrelationCodeValue"/>.
-    /// This is how e.g. a blood-pressure Observation's systolic/diastolic <c>component[]</c> entries are told apart:
-    /// position alone isn't reliable, but each component carries a LOINC code identifying which reading it is.
+    /// same array index CHAIN (every level, not merely the outermost — see <see cref="IsIndexChainMatch"/>) as
+    /// <paramref name="indices"/> — satisfies <see cref="MappingFieldDto.CorrelationCodeOperator"/> (default/null:
+    /// exact match) against <see cref="MappingFieldDto.CorrelationCodeValue"/>. This is how e.g. a blood-pressure
+    /// Observation's systolic/diastolic <c>component[]</c> entries are told apart (one repeating level: position
+    /// alone isn't reliable, but each component carries a LOINC code identifying which reading it is), and equally
+    /// how a specific <c>Patient.contact[].telecom[].value</c> is picked by that SAME telecom item's own
+    /// <c>system</c>/<c>use</c> (two repeating levels: matching on the outer "which contact" index alone would
+    /// return that contact's FIRST telecom value, not necessarily the one whose own sibling actually matched).
     /// </summary>
     private static object? ResolveCorrelatedValue(
         JsonElement root,
@@ -323,27 +339,69 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         }
 
         var codeMatches = ResolveAll(root, field.CorrelationCodeJsonPath);
-        var matchingOuterIndices = codeMatches
+        var matchingIndexChains = codeMatches
             .Where(m => m.Element.ValueKind == JsonValueKind.String &&
-                        string.Equals(m.Element.GetString(), field.CorrelationCodeValue, StringComparison.OrdinalIgnoreCase))
-            .Where(m => m.Indices.Count > 0)
-            .Select(m => m.Indices[0])
-            .ToHashSet();
+                        MatchesCorrelationOperator(field.CorrelationCodeOperator, m.Element.GetString()!, field.CorrelationCodeValue))
+            .Select(m => m.Indices)
+            .Where(ix => ix.Count > 0)
+            .ToList();
 
-        if (matchingOuterIndices.Count == 0)
+        if (matchingIndexChains.Count == 0)
         {
             return null;
         }
 
         for (var i = 0; i < indices.Count; i++)
         {
-            if (indices[i].Count > 0 && matchingOuterIndices.Contains(indices[i][0]))
+            if (matchingIndexChains.Any(chain => IsIndexChainMatch(chain, indices[i])))
             {
                 return values[i];
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The comparison a "Match criteria" row's op selects — null/"Equals" (every CorrelateByCode field saved
+    /// before this operator existed relied on exact match, so that must stay the default), "Contains" (case-
+    /// insensitive substring) or "NotEquals". Unrecognized operator text falls back to "Equals" the same way
+    /// a null one does, rather than silently matching nothing.
+    /// </summary>
+    private static bool MatchesCorrelationOperator(string? operatorName, string siblingValue, string targetValue) =>
+        operatorName switch
+        {
+            "Contains" => siblingValue.Contains(targetValue, StringComparison.OrdinalIgnoreCase),
+            "NotEquals" => !string.Equals(siblingValue, targetValue, StringComparison.OrdinalIgnoreCase),
+            _ => string.Equals(siblingValue, targetValue, StringComparison.OrdinalIgnoreCase),
+        };
+
+    /// <summary>
+    /// Whether a correlation match's index chain and a resolved value's own index chain agree on every level
+    /// they both have — a single-repeating-level correlation (e.g. Observation.component's LOINC code, chain
+    /// length 1) only ever needs to agree on that one outer index, exactly as before this compared full
+    /// chains; a two-level correlation (e.g. Patient.contact[].telecom[]'s own sibling, chain length 2) must
+    /// agree on BOTH the contact index AND the telecom index — agreeing on the outer index alone would
+    /// return the right CONTACT's FIRST telecom value rather than the specific telecom item whose own
+    /// sibling actually satisfied the criteria.
+    /// </summary>
+    private static bool IsIndexChainMatch(IReadOnlyList<int> matchIndices, IReadOnlyList<int> valueIndices)
+    {
+        var depth = Math.Min(matchIndices.Count, valueIndices.Count);
+        if (depth == 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < depth; i++)
+        {
+            if (matchIndices[i] != valueIndices[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static List<IReadOnlyDictionary<string, object?>> BuildParentRows(
@@ -425,6 +483,79 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         }
 
         return kept.Count > 0 ? kept : values;
+    }
+
+    /// <summary>True when the field's Format carries the "index=N" marker the "Nth instance" instance
+    /// selection stamps (see field-mapping-model.ts) — the counterpart to <see cref="HasCsvAggregate"/>,
+    /// mutually exclusive with it (the UI's instance-selection control offers First/All/Nth/Criteria as one
+    /// choice, never two at once). 0-based: 0 means the first occurrence — the same occurrence "First"
+    /// (no marker at all) already picks — so a row switched from "First" to "Nth instance" at N=0 behaves
+    /// identically.</summary>
+    private static int? ParseInstanceIndex(string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+        {
+            return null;
+        }
+
+        foreach (var part in format.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var equalsIndex = part.IndexOf('=', StringComparison.Ordinal);
+            if (equalsIndex > 0
+                && part[..equalsIndex].Equals("index", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(part[(equalsIndex + 1)..], out var n))
+            {
+                return n;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Narrows `resolved` down to just the values belonging to the (0-based) <paramref name="n"/>-th DISTINCT
+    /// instance of the outermost repeating parent — i.e. the n-th entry of the ordered set of
+    /// resolved[i].Indices[0] values, NOT literally resolved[n] (a field nested under a second array, e.g.
+    /// "name.given" over two names, resolves multiple "given" values per name; "instance 1" must mean
+    /// name[1]'s own given list, not the second given value overall — generalizes
+    /// <see cref="TakeFirstInstance"/>'s identical framing to any n, not just the first).
+    ///
+    /// A non-repeating field (resolved[0].Indices is empty — there is only ever one instance) returns
+    /// `resolved` unchanged for n == 0 and empty for n &gt; 0: there is no second instance to pick. Empty is
+    /// also returned when n has no matching instance at all (out of range) — the caller's existing
+    /// "resolved.Count == 0" branch (DefaultValue / IsRequired / null) then applies exactly as it does for a
+    /// genuinely absent optional sub-field, rather than this needing its own duplicate fallback.
+    /// </summary>
+    private static List<(object? Value, IReadOnlyList<int> Indices)> SelectInstance(
+        List<(object? Value, IReadOnlyList<int> Indices)> resolved, int n)
+    {
+        if (resolved.Count == 0)
+        {
+            return resolved;
+        }
+
+        if (resolved[0].Indices.Count == 0)
+        {
+            return n == 0 ? resolved : [];
+        }
+
+        var distinctInstances = new List<int>();
+        foreach (var (_, indices) in resolved)
+        {
+            var outer = indices[0];
+            if (!distinctInstances.Contains(outer))
+            {
+                distinctInstances.Add(outer);
+            }
+        }
+
+        if (n < 0 || n >= distinctInstances.Count)
+        {
+            return [];
+        }
+
+        var target = distinctInstances[n];
+        return resolved.Where(r => r.Indices.Count > 0 && r.Indices[0] == target).ToList();
     }
 
     /// <summary>

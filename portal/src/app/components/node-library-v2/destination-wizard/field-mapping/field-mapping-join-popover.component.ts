@@ -360,6 +360,15 @@ export class FieldMappingJoinPopoverComponent {
     this.draft.update(d => (d ? { ...d, instance: { ...(d.instance ?? { type: 'first' }), ...patch } } : d));
   }
 
+  /** Parses the "Instance #" input into a valid 1-based instance number (1 = first). Falls back to 1
+   *  (rather than a bare `+value || 1`, which would be fine here since 0 was never a meaningful typed
+   *  value for a 1-based field — kept as its own named method anyway to match
+   *  field-mapping-list.component.ts's identical helper and stay consistent if the minimum ever changes). */
+  parseInstanceNumber(raw: string): number {
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 1 ? Math.trunc(n) : 1;
+  }
+
   onReferenceResourceChange(value: string): void {
     this.draft.update(d => (d ? { ...d, referencesResource: value || undefined } : d));
   }
