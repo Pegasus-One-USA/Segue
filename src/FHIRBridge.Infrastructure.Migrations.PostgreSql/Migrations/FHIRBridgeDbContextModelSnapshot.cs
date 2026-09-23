@@ -4214,6 +4214,20 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<string>("Display")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("LongCommonName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("LongDescription")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ShortDescription")
+                        .HasColumnType("text");
+
                     b.HasKey("Pid");
 
                     b.HasIndex("CodeVal");

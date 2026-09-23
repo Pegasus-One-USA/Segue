@@ -62,7 +62,16 @@ public sealed class HapiCvxTerminologySyncService : IHapiCvxTerminologySyncServi
         _logger.LogInformation(
             "Parsed {Total} CVX codes ({Active} active) from the official table.", concepts.Count, activeCount);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "CVX", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "CVX",
+            version: null,
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                ShortDescription: c.ShortDescription,
+                LongDescription: c.Display,
+                IsActive: c.Active)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -96,11 +105,14 @@ public sealed class HapiCvxTerminologySyncService : IHapiCvxTerminologySyncServi
             }
 
             var active = string.Equals(cells[3].Trim(), "Active", StringComparison.OrdinalIgnoreCase);
-            results.Add(new Concept(code, display, active));
+            // Column 0 is CDC's own short description, distinct from the full vaccine name in column 1
+            // that this service uses as the display.
+            var shortDescription = cells[0].Trim();
+            results.Add(new Concept(code, display, string.IsNullOrWhiteSpace(shortDescription) ? null : shortDescription, active));
         }
 
         return results;
     }
 
-    private sealed record Concept(string Code, string Display, bool Active);
+    private sealed record Concept(string Code, string Display, string? ShortDescription, bool Active);
 }
