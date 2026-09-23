@@ -289,4 +289,96 @@ public sealed class FhirComplexTypeNodesTests
         contact["system"]!.GetValue<string>().Should().Be("fax");
         contact["rank"]!.GetValue<int>().Should().Be(1);
     }
+
+    // The dropdown only ever emits lowercase, but an imported mapping profile or an API-set config can carry
+    // "FAX" or " fax ". Those used to miss the override branch silently and fall through to phone parsing.
+    [Theory]
+    [InlineData("FAX")]
+    [InlineData("Fax")]
+    [InlineData(" fax ")]
+    public void TelecomNormalizationNode_matches_the_system_override_regardless_of_case_or_padding(string configured)
+    {
+        var config = new Dictionary<string, string> { ["system"] = configured };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["system"]!.GetValue<string>().Should().Be("fax");
+        contact["value"]!.GetValue<string>().Should().Be("(313) 555-0142");
+    }
+
+    [Theory]
+    [InlineData("sms")]
+    [InlineData("pager")]
+    [InlineData("other")]
+    public void TelecomNormalizationNode_supports_the_remaining_contact_point_systems(string configured)
+    {
+        var config = new Dictionary<string, string> { ["system"] = configured };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        ((System.Text.Json.Nodes.JsonObject)result.Value!)["system"]!.GetValue<string>().Should().Be(configured);
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_pins_the_phone_branch_when_system_is_phone()
+    {
+        var config = new Dictionary<string, string> { ["system"] = "phone" };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        ((System.Text.Json.Nodes.JsonObject)result.Value!)["value"]!.GetValue<string>().Should().Be("+13135550142");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_rejects_an_unrecognized_system()
+    {
+        var config = new Dictionary<string, string> { ["system"] = "bogus" };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("not a recognized ContactPoint system");
+    }
+
+    // An email value short-circuits before the override is consulted, so a forced fax/url cannot relabel it.
+    [Fact]
+    public void TelecomNormalizationNode_detects_email_even_when_a_system_override_is_set()
+    {
+        var config = new Dictionary<string, string> { ["system"] = "fax" };
+        var result = new TelecomNormalizationNode().Execute("jane@example.com", config, null);
+        ((System.Text.Json.Nodes.JsonObject)result.Value!)["system"]!.GetValue<string>().Should().Be("email");
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("1.5")]
+    [InlineData("abc")]
+    [InlineData("99999999999999999999")]
+    public void TelecomNormalizationNode_fails_for_a_rank_that_is_not_a_positive_int(string rank)
+    {
+        var config = new Dictionary<string, string> { ["rank"] = rank };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        result.Success.Should().BeFalse();
+    }
+
+    // A blank rank means "not configured" — the key must be absent, not written as null.
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TelecomNormalizationNode_omits_rank_when_it_is_blank(string rank)
+    {
+        var config = new Dictionary<string, string> { ["rank"] = rank };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        ((System.Text.Json.Nodes.JsonObject)result.Value!).ContainsKey("rank").Should().BeFalse();
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_skips_an_invalid_number_when_configured_to_skip()
+    {
+        var config = new Dictionary<string, string> { ["onInvalid"] = "skip" };
+        var result = new TelecomNormalizationNode().Execute("123", config, null);
+        result.Success.Should().BeTrue();
+        result.Value.Should().BeNull();
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_rejects_an_invalid_number_by_default()
+    {
+        var result = new TelecomNormalizationNode().Execute("123", new Dictionary<string, string>(), null);
+        result.Success.Should().BeFalse();
+    }
 }

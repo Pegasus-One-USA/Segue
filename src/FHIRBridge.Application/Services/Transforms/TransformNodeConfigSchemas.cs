@@ -273,8 +273,9 @@ public static class TransformNodeConfigSchemas
             [TransformNodeType.TelecomNormalization] = new(TransformNodeType.TelecomNormalization, "Telecom Normalization",
             [
                 Select("use", "Use", ["home", "work", "mobile", "temp", "old"], "mobile"),
-                Select("system", "Force system (optional — overrides phone/email auto-detect)", ["", "fax", "url"], "", advanced: true),
+                Select("system", "Force system (optional — overrides phone/email auto-detect)", ["", "phone", "fax", "url", "sms", "pager", "other"], "", advanced: true),
                 Select("region", "Region for parsing phone numbers (ISO-3166 alpha-2)", Iso3166Alpha2Countries, "US"),
+                Select("onInvalid", "When the number is invalid", ["reject", "skip"], "reject", advanced: true),
                 Number("rank", "Rank (optional — order when this is one of several)", placeholder: "e.g. 1", advanced: true),
             ]),
             [TransformNodeType.StringNormalization] = new(TransformNodeType.StringNormalization, "String Normalization",
