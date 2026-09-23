@@ -20,7 +20,8 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// Source: ftp://medical.nema.org/MEDICAL/Dicom/Resources/Ontology/DCM/dcm.owl — public, no
 /// credentials (anonymous FTP). RDF/XML: each &lt;rdf:Description rdf:about="...DCM/{code}"&gt;
 /// with a &lt;skos:notation&gt; (code) and &lt;skos:prefLabel&gt; (display); entries marked
-/// &lt;owl:deprecated&gt;true&lt;/owl:deprecated&gt; are retired and excluded, same filtering
+/// &lt;owl:deprecated&gt;true&lt;/owl:deprecated&gt; are retired and stored with IsActive=false rather
+/// than excluded, and &lt;skos:definition&gt; is kept as the long description. Same filtering
 /// approach as LOINC's STATUS=DEPRECATED / SNOMED's inactive concepts.
 /// </summary>
 #pragma warning disable SYSLIB0014, SYSLIB0025 // FtpWebRequest/WebRequest.Create are obsolete; see remarks above.
@@ -59,7 +60,15 @@ public sealed class HapiDcmTerminologySyncService : IHapiDcmTerminologySyncServi
         var concepts = await DownloadAndParseAsync(cancellationToken);
         _logger.LogInformation("Parsed {Total} active DCM concepts from the official ontology.", concepts.Count);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "DCM", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "DCM",
+            version: null,
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                LongDescription: c.LongDescription,
+                IsActive: c.IsActive)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -83,11 +92,10 @@ public sealed class HapiDcmTerminologySyncService : IHapiDcmTerminologySyncServi
         var results = new List<Concept>(6_000);
         foreach (var description in document.Root!.Elements(Rdf + "Description"))
         {
+            // Deprecated concepts are now RETAINED and flagged rather than excluded (213 of the 5,165
+            // in the real ontology) — a stored archive can reference one, and holding no row makes that
+            // look like an unknown code rather than a known-retired one.
             var deprecated = description.Element(Owl + "deprecated")?.Value == "true";
-            if (deprecated)
-            {
-                continue;
-            }
 
             var code = description.Element(Skos + "notation")?.Value;
             var display = description.Element(Skos + "prefLabel")?.Value;
@@ -96,12 +104,13 @@ public sealed class HapiDcmTerminologySyncService : IHapiDcmTerminologySyncServi
                 continue;
             }
 
-            results.Add(new Concept(code, display));
+            // skos:definition is a real prose definition, present on 5,115 of the 5,165 concepts.
+            results.Add(new Concept(code, display, description.Element(Skos + "definition")?.Value, !deprecated));
         }
 
         return results;
     }
 
-    private sealed record Concept(string Code, string Display);
+    private sealed record Concept(string Code, string Display, string? LongDescription, bool IsActive);
 }
 #pragma warning restore SYSLIB0014, SYSLIB0025

@@ -209,9 +209,15 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         var descriptor = _registry.Get(code);
         var storedVersion = await GetStoredVersionAsync(descriptor, cancellationToken);
 
+        // A system whose source publishes no discoverable "latest version" pointer still needs an update
+        // when it has never actually been downloaded. Reporting updateAvailable:false unconditionally here
+        // made the portal claim "All code systems are up to date" while 7 of the 13 had never run at all —
+        // "we cannot check for a NEWER version" is not the same claim as "what we hold is current".
         if (descriptor.CheckLatestVersionAsync is null)
         {
-            return new HapiTerminologyVersionCheckResultDto(descriptor.Code, false, storedVersion, null, false, null);
+            var hasConcepts = await HasStoredConceptsAsync(descriptor, cancellationToken);
+            return new HapiTerminologyVersionCheckResultDto(
+                descriptor.Code, false, storedVersion, null, !hasConcepts, null);
         }
 
         try
@@ -232,7 +238,10 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
             // were later cleared (or whose import wrote history but no data) would otherwise report no update
             // available and never auto-sync, leaving the system permanently empty and silently claiming to be
             // current. Treat "nothing actually stored" as needing a sync regardless of what history says.
-            if (!updateAvailable && storedVersion is not null && !await HasStoredConceptsAsync(descriptor, cancellationToken))
+            // Note the deliberate absence of a "storedVersion is not null" guard: a system that has NEVER
+            // been downloaded has no history row at all, so requiring one skipped precisely the systems
+            // most in need of a sync and reported them as up to date.
+            if (!updateAvailable && !await HasStoredConceptsAsync(descriptor, cancellationToken))
             {
                 updateAvailable = true;
             }
@@ -242,7 +251,14 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "ScanForNewVersionAsync: {Code} version check failed.", code);
-            return new HapiTerminologyVersionCheckResultDto(descriptor.Code, true, storedVersion, null, false, exception.Message);
+
+            // A failed check (bad/absent credentials, source unreachable) tells us nothing about whether
+            // what we hold is current. If nothing is stored at all we still know an update is needed, so
+            // don't let the failure mask that — otherwise a credential-less system reports "Scan failed"
+            // and is simultaneously counted as up to date.
+            var hasConceptsAfterFailure = await HasStoredConceptsAsync(descriptor, cancellationToken);
+            return new HapiTerminologyVersionCheckResultDto(
+                descriptor.Code, true, storedVersion, null, !hasConceptsAfterFailure, exception.Message);
         }
     }
 
@@ -294,7 +310,11 @@ public sealed class HapiTerminologyConfigurationService : IHapiTerminologyConfig
     private async Task<HapiTerminologyConfigurationDto> BuildDtoAsync(HapiTerminologySystemDescriptor descriptor, CancellationToken cancellationToken)
     {
         var prefix = descriptor.SettingsKeyPrefix;
-        var schedulerEnabled = await _settings.GetBoolAsync($"{prefix}:SchedulerEnabled", false, cancellationToken);
+        // Defaults to enabled: a terminology system that is never synced is of no use, and every one of
+        // the 13 is expected to be kept current. An operator who genuinely wants one off still turns it
+        // off explicitly, and that stored "false" is honoured here — only the ABSENCE of a setting means
+        // enabled, so this does not silently re-enable anything anybody has deliberately disabled.
+        var schedulerEnabled = await _settings.GetBoolAsync($"{prefix}:SchedulerEnabled", true, cancellationToken);
         var frequency = await _settings.GetStringAsync($"{prefix}:Frequency", "Monthly", cancellationToken);
         var executionTime = await _settings.GetStringAsync($"{prefix}:ExecutionTime", "00:00", cancellationToken);
         var lastRunRaw = await _settings.GetStringAsync($"{prefix}:LastRunUtc", string.Empty, cancellationToken);

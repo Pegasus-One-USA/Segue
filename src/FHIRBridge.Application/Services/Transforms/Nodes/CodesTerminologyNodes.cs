@@ -90,6 +90,12 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
         ["CVX"] = "http://hl7.org/fhir/sid/cvx",
         ["UCUM"] = "http://unitsofmeasure.org",
         ["CPT"] = "http://www.ama-assn.org/go/cpt",
+        // The four systems that are synced by the terminology server but were missing here, so a rule
+        // authored against them fell through to using the literal dropdown key as the system URI.
+        ["ICD11MMS"] = "http://id.who.int/icd/release/11/mms",
+        ["ICPC3"] = "http://terminology.hl7.org/CodeSystem/ICPC-3",
+        ["DCM"] = "http://dicom.nema.org/resources/ontology/DCM",
+        ["MESH"] = "https://www.nlm.nih.gov/mesh",
     };
 
     private readonly ITerminologyLookupService? _terminologyLookupService;
@@ -100,6 +106,54 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
     }
 
     public TransformNodeType NodeType => TransformNodeType.CodeableConceptBuilder;
+
+    /// <summary>Which of the three description fields an output shape asks for, or null when the shape is
+    /// not a description shape at all ("object"/"displayTextOnly").</summary>
+    private static DescriptionField? TryGetDescriptionShape(string outputShape) => outputShape.ToLowerInvariant() switch
+    {
+        "shortdescription" => DescriptionField.Short,
+        "longdescription" => DescriptionField.Long,
+        "longcommonname" => DescriptionField.LongCommonName,
+        _ => null,
+    };
+
+    private enum DescriptionField
+    {
+        Short,
+        Long,
+        LongCommonName,
+    }
+
+    /// <summary>
+    /// Picks the requested description field, falling back across the other two when it is null for this
+    /// concept, then to the resolved display, then to the bare code.
+    ///
+    /// The fallback ORDER is deliberate and differs per requested field: it runs from the most similar
+    /// alternative to the least. A request for the short description falls back to the long common name
+    /// before the long description (a common name is closer to a label than a full definition is), while a
+    /// request for a long form prefers the other long form before dropping to the short one. Without this,
+    /// asking for a short description on a source that has none would return a multi-sentence definition
+    /// into a column sized for a label.
+    /// </summary>
+    private static string ResolveDescription(
+        DescriptionField requested, TerminologyLookupResult? lookup, string? display, string code)
+    {
+        var shortDescription = NullIfBlank(lookup?.ShortDescription);
+        var longDescription = NullIfBlank(lookup?.LongDescription);
+        var longCommonName = NullIfBlank(lookup?.LongCommonName);
+
+        var candidate = requested switch
+        {
+            DescriptionField.Short => shortDescription ?? longCommonName ?? longDescription,
+            DescriptionField.Long => longDescription ?? longCommonName ?? shortDescription,
+            DescriptionField.LongCommonName => longCommonName ?? longDescription ?? shortDescription,
+            _ => null,
+        };
+
+        return candidate ?? NullIfBlank(display) ?? code;
+    }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret) =>
         ExecuteAsync(value, config, secret).GetAwaiter().GetResult();
@@ -117,6 +171,9 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
         var systemUri = SystemUris.GetValueOrDefault(systemKey, systemKey);
         var display = config.GetOrNull("display");
         string? resolvedSystemOverride = null;
+        // Held beyond the display-resolution block below so the description output shapes can read the
+        // extra fields off the same lookup instead of issuing a second identical query.
+        TerminologyLookupResult? lookupForDescriptions = null;
 
         // Display resolution order: (1) an author-hand-typed value always wins outright; (2) the local
         // terminology DB, when lookup isn't explicitly disabled; (3) whatever display the SOURCE resource's own
@@ -147,6 +204,7 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
             }
 
             lookup ??= await _terminologyLookupService.LookupAsync(systemUri, code, cancellationToken);
+            lookupForDescriptions = lookup;
             if (!string.IsNullOrWhiteSpace(lookup?.Display))
             {
                 display = lookup.Display;
@@ -163,9 +221,24 @@ public sealed class CodeableConceptBuilderNode : ITransformNode
         // ValueCodeMappingNode's emitCoding checkbox, just defaulting the opposite way since this node's whole
         // purpose is normally to BUILD the structured concept. Skips building the coding array/additionalCodings
         // entirely rather than building it and discarding it.
-        if (string.Equals(config.Get("outputShape", "object"), "displayTextOnly", StringComparison.OrdinalIgnoreCase))
+        var outputShape = config.Get("outputShape", "object");
+
+        if (string.Equals(outputShape, "displayTextOnly", StringComparison.OrdinalIgnoreCase))
         {
             return TransformResult.Ok(display ?? code, resolvedSystemOverride);
+        }
+
+        // The three description shapes emit one plain string drawn from the local terminology store,
+        // rather than the resolved display. Field availability genuinely varies by source (LOINC
+        // publishes a short name, a long common name and a definition; UCUM publishes only a unit name),
+        // so the requested field is often null for a perfectly valid code. Rather than emit a blank
+        // column, fall back across the other two description fields, then the display, then the code —
+        // so the output is always the most specific text actually available for that concept.
+        if (TryGetDescriptionShape(outputShape) is { } requestedField)
+        {
+            var descriptions = lookupForDescriptions;
+            var resolved = ResolveDescription(requestedField, descriptions, display, code);
+            return TransformResult.Ok(resolved, resolvedSystemOverride);
         }
 
         var primaryCoding = new JsonObject { ["system"] = systemUri, ["code"] = code };
