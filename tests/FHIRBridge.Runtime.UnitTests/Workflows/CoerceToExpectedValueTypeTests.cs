@@ -42,17 +42,46 @@ public sealed class CoerceToExpectedValueTypeTests
     }
 
     [Fact]
-    public void Date_arm_produces_Kind_Unspecified_and_resolves_the_UTC_calendar_date()
+    public void Date_arm_produces_Kind_Unspecified()
     {
-        // Same reasoning as the DateTime arm, truncated to the calendar date: an offset-bearing input must
-        // land on the same date no matter which time zone this process happens to run in (DateTimeStyles.None
-        // would instead convert to server-local first, making the stored date depend on the host machine).
         var result = MappingNodeExecutor.CoerceToExpectedValueType(
             "2026-03-14T22:00:00Z", MappingValueType.Date, DestinationType.PostgreSql);
 
         var date = result.Should().BeOfType<DateTime>().Subject;
         date.Kind.Should().Be(DateTimeKind.Unspecified);
+    }
+
+    /// <summary>
+    /// Unlike DateTime, the Date arm must NOT normalize through UTC — a FHIR `date` has no time zone at all,
+    /// so the calendar date the source wrote IS the value. Regression guard for a bug introduced by the very
+    /// first version of this fix: parsing with AdjustToUniversal converted an offset-bearing input to UTC
+    /// first, which changes the CALENDAR DAY itself for a non-zero offset ("2026-03-14T20:00:00-05:00" would
+    /// incorrectly resolve to 2026-03-15).
+    /// </summary>
+    [Fact]
+    public void Date_arm_keeps_the_calendar_date_as_written_not_UTC_normalized()
+    {
+        var result = MappingNodeExecutor.CoerceToExpectedValueType(
+            "2026-03-14T20:00:00-05:00", MappingValueType.Date, DestinationType.PostgreSql);
+
+        var date = result.Should().BeOfType<DateTime>().Subject;
         date.Should().Be(new DateTime(2026, 3, 14));
+    }
+
+    [Theory]
+    [InlineData("2020")]
+    [InlineData("2020-05")]
+    public void Date_arm_passes_a_partial_FHIR_date_through_unconverted_rather_than_fabricating_a_day(string partial)
+    {
+        // "2020"/"2020-05" are valid FHIR `date` precision on their own — DateTimeFormatNode deliberately
+        // emits them unchanged rather than invent a day (or month). Coercing them into a full date here
+        // would silently fabricate real patient data, so the raw partial string must survive instead — a
+        // strict `date` column genuinely can't hold partial precision without fabricating it, and surfacing
+        // that as a visible 42804 is more honest than a fabricated day that reads as if it were real.
+        var result = MappingNodeExecutor.CoerceToExpectedValueType(
+            partial, MappingValueType.Date, DestinationType.PostgreSql);
+
+        result.Should().Be(partial);
     }
 
     [Theory]
@@ -138,5 +167,27 @@ public sealed class CoerceToExpectedValueTypeTests
             "maybe", MappingValueType.Boolean, DestinationType.PostgreSql);
 
         result.Should().Be("maybe");
+    }
+
+    [Fact]
+    public void Boolean_arm_reads_a_rules_own_custom_spellings_from_its_ConfigJson()
+    {
+        // BooleanConversion's trueValues/falseValues are per-rule configurable (see its own Execute) — a rule
+        // customized to accept "oui"/"non" must not fall back to the node's stock "y,yes,1,..." defaults.
+        var configJson = """{"trueValues":"oui","falseValues":"non"}""";
+
+        var result = MappingNodeExecutor.CoerceToExpectedValueType(
+            "oui", MappingValueType.Boolean, DestinationType.PostgreSql, configJson);
+
+        result.Should().Be(true);
+    }
+
+    [Fact]
+    public void Boolean_arm_falls_back_to_defaults_when_no_rule_config_is_supplied()
+    {
+        var result = MappingNodeExecutor.CoerceToExpectedValueType(
+            "yes", MappingValueType.Boolean, DestinationType.PostgreSql, typedRuleConfigJson: null);
+
+        result.Should().Be(true);
     }
 }
