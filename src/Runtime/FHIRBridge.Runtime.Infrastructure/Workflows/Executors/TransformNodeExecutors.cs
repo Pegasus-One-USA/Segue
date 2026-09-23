@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
@@ -1237,6 +1238,16 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     ? rawItems
                     : value;
             string? writeBackPath = null;
+            // The last rule that actually SUCCEEDED and declares a type — assigned only once its own
+            // Execute() call has genuinely returned Success (see below), never merely because the loop
+            // reached it. NOT rules.LastOrDefault over the whole static chain (which would also count a rule
+            // after an early Fail/RouteToDeadLetter break this run never reached at all), and not assigned
+            // the moment the loop reaches a rule either (which would still count one skipped by a null
+            // short-circuit or a bad ConfigJson, OR one that itself failed with PassThrough — reverting
+            // currentValue back to whatever an EARLIER, differently-typed step left it as, which that failed
+            // rule's own declared type does not actually describe). Either way, coercing currentValue into a
+            // type nothing that actually ran ever produced.
+            TransformationRule? lastReachedTypedRule = null;
             foreach (var rule in rules)
             {
                 var hopIndex = nodeOrder++;
@@ -1317,6 +1328,10 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 if (result.Success)
                 {
                     currentValue = result.Value;
+                    if (rule.ExpectedValueType is not null)
+                    {
+                        lastReachedTypedRule = rule;
+                    }
                     continue;
                 }
 
@@ -1347,7 +1362,13 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             // way JsonMappingEngine's own MappingValueType.Json case stores a JSON column as a string.
             transformed[destinationField] = currentValue is System.Text.Json.Nodes.JsonNode jsonNode
                 ? jsonNode.ToJsonString()
-                : currentValue;
+                : CoerceToExpectedValueType(
+                    currentValue,
+                    lastReachedTypedRule?.ExpectedValueType,
+                    destinationType.Value,
+                    lastReachedTypedRule?.NodeType == TransformNodeType.BooleanConversion
+                        ? lastReachedTypedRule.ConfigJson
+                        : null);
         }
 
         // A configured field whose source path matched nothing in this resource never reaches `row` at all, so
@@ -1382,6 +1403,186 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 
         return (transformed ?? row, fhirWriteBackPatches, lineageEntries);
     }
+
+    /// <summary>
+    /// A transform node's job is to produce a valid FHIR value — for most Date/DateTime/Integer/Decimal-declared
+    /// fields that means a formatted STRING (e.g. DateTimeFormatNode always returns "2026-03-14", never a native
+    /// DateTime), because that's what a FHIR-native destination needs. A relational destination needs the
+    /// opposite: RelationalDestinationWriterBase.Stringify only avoids re-stringifying a value that already
+    /// arrives as a native CLR DateTime/DateOnly/int/decimal/etc. (see its own doc comment) — a plain string gets
+    /// sent as an untyped ADO `text` parameter, which PostgreSQL then refuses to implicitly cast back to the
+    /// destination column's real `date`/`integer`/`numeric` type (42804), even though the string is
+    /// well-formed. JsonMappingEngine.ConvertValue already solves exactly this for a field with NO transform
+    /// rule (coercing straight to a native CLR type from ValueType); this mirrors that same coercion for a
+    /// field whose value just came OUT of a rule chain, using the chain's own declared ExpectedValueType (see
+    /// FieldMappingJoinPopoverComponent.resolveExpectedValueType and CreateMappingProfileRequestValidator on the
+    /// portal side — same value, already validated to match the destination column at save time). Only ever
+    /// narrows a string; every other CLR shape (already-native DateTime/int/decimal, null, JsonNode-turned-string
+    /// from the branch above) passes through unchanged, so a node that already self-types (DateMathAge's "age"
+    /// operation → int, BooleanConversion → bool) is untouched.
+    ///
+    /// Scoped to a relational destination only: MappedDestinationSerialization.ToMappedOnlyCsv/ToCsv format a
+    /// value with a bare `.ToString()`, so coercing a Date/DateTime field to a native DateTime here would make a
+    /// CSV/Blob export silently switch from DateTimeFormatNode's "2026-03-14" to .NET's culture-formatted
+    /// "3/14/2026 12:00:00 AM" — a destination-format regression this coercion must never cause, since it exists
+    /// solely to satisfy a relational engine's strict column typing.
+    ///
+    /// DateTime parses with AdjustToUniversal|AssumeUniversal (resolving the true UTC instant regardless of
+    /// which host this process runs on, so two hosts never disagree on the result) and then forces
+    /// Kind=Unspecified before returning — a genuine dateTime/instant has real timezone semantics (the same
+    /// moment written with two different offsets must store identically), so normalizing through UTC is
+    /// correct here. Npgsql only ever binds a Kind=Utc DateTime as "timestamptz" — Unspecified (like Local)
+    /// always binds as plain "timestamp", sending those UTC-anchored field values verbatim with no further
+    /// conversion by Npgsql OR, since a Kind-less value carries no timezone to reinterpret, by PostgreSQL
+    /// either.
+    ///
+    /// Date is handled differently — see CoerceDate's own doc comment for why UTC-normalizing a
+    /// timezone-less FHIR `date` is itself a bug, not the fix. Neither arm returns DateOnly, despite DateOnly
+    /// being the more obvious "no Kind ambiguity at all" choice: RelationalDestinationWriterBase.Stringify
+    /// re-serializes a DateOnly back into a formatted "yyyy-MM-dd" STRING (its own legacy FHIR-string-output
+    /// path), which would silently reintroduce the exact 42804 this coercion exists to prevent — DateTime
+    /// passes through Stringify natively, DateOnly does not.
+    ///
+    /// This does not yet distinguish a plain "timestamp" destination column from a genuinely tz-aware
+    /// "timestamptz" one — MappingValueType has no separate tier for that (both fold into DateTime; see
+    /// FieldMappingJoinPopoverComponent.TARGET_TYPE_VALUE_TYPES's own instant->DateTime comment). Postgres's
+    /// timestamp->timestamptz assignment cast still lets this write into a genuine timestamptz column without
+    /// throwing, but it does so by interpreting these UTC-anchored digits in the destination session's own
+    /// TimeZone setting — correct when that session is UTC (the common convention), a known limitation
+    /// otherwise. Fully closing that gap needs a distinct Instant/DateTimeOffset-shaped tier threaded through
+    /// MappingValueType end to end, which is out of scope here.
+    /// </summary>
+    internal static object? CoerceToExpectedValueType(
+        object? value, MappingValueType? expectedValueType, DestinationType destinationType,
+        string? typedRuleConfigJson = null)
+    {
+        if (value is not string text || expectedValueType is null || !IsRelationalDestination(destinationType))
+        {
+            return value;
+        }
+
+        return expectedValueType switch
+        {
+            MappingValueType.Date => CoerceDate(text),
+            MappingValueType.DateTime => DateTime.TryParse(
+                text, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dateTime)
+                ? DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified)
+                : value,
+            MappingValueType.Integer => long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer)
+                ? integer
+                : value,
+            MappingValueType.Decimal => decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var dec)
+                ? dec
+                : value,
+            MappingValueType.Boolean => TryParseBoolean(text, typedRuleConfigJson, out var boolean) ? boolean : value,
+            _ => value,
+        };
+    }
+
+    /// <summary>
+    /// A FHIR `date` has no time zone at all — unlike `dateTime`/`instant`, there is no "true UTC instant" to
+    /// normalize through, and DateTimeFormatNode's own "date" output (a DateTimeOffset formatted straight to
+    /// "yyyy-MM-dd", never adjusted to UTC — see its own TryParse/Execute) already reflects that. Parsing with
+    /// DateTime.TryParse's AdjustToUniversal instead converts the value to UTC first, then truncates — for an
+    /// offset-bearing input this changes the CALENDAR DAY itself (e.g. "2026-03-14T20:00:00-05:00" becomes
+    /// 2026-03-15), which is wrong for a type that is only ever a calendar date. DateTimeOffset.TryParse
+    /// (unlike DateTime.TryParse) never converts to this process's own system time zone even without
+    /// AdjustToUniversal, so taking its own .Date is host-independent without doing any UTC conversion at all.
+    ///
+    /// A bare year ("2020") or year-month ("2020-05") is valid FHIR date precision on its own —
+    /// DateTimeFormatNode deliberately emits it unchanged rather than fabricate a day (see its own identical
+    /// regex guard). Coercing it into a full date here would silently invent a day for real patient data, so
+    /// this returns it as-is instead: a strict `date` column genuinely can't hold partial precision without
+    /// fabricating it, and surfacing that as a visible 42804 is more honest than a fabricated day that reads
+    /// as if it were real.
+    /// </summary>
+    private static object CoerceDate(string text)
+    {
+        if (PartialDatePattern.IsMatch(text))
+        {
+            return text;
+        }
+
+        return DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dateTimeOffset)
+            ? DateTime.SpecifyKind(dateTimeOffset.Date, DateTimeKind.Unspecified)
+            : text;
+    }
+
+    // Mirrors DateTimeFormatNode's own identical partial-FHIR-date guard exactly.
+    private static readonly System.Text.RegularExpressions.Regex PartialDatePattern = new(@"^\d{4}(-\d{2})?$");
+
+    // Falls back to BooleanConversionNode's own trueValues/falseValues — read from typedRuleConfigJson (the
+    // authoritative rule's OWN ConfigJson, passed only when that rule is genuinely BooleanConversion) when
+    // available, since those are per-rule configurable ("trueValues"/"falseValues" — see its Execute) and a
+    // rule customized to accept e.g. "oui"/"non" must not silently fall back to the node's stock defaults.
+    // Without any rule context (typedRuleConfigJson null — e.g. called directly, as every existing unit test
+    // does), or when its config can't be read, uses the node's own documented defaults. bool.TryParse alone
+    // only recognizes literal "True"/"False", so without this fallback the exact spellings BooleanConversion
+    // is configured to accept would still 42804 into a Postgres boolean column.
+    private static bool TryParseBoolean(string text, string? typedRuleConfigJson, out bool result)
+    {
+        if (bool.TryParse(text, out result))
+        {
+            return true;
+        }
+
+        var (trueValues, falseValues) = ResolveBooleanSpellings(typedRuleConfigJson);
+
+        if (trueValues.Any(t => string.Equals(t, text, StringComparison.OrdinalIgnoreCase)))
+        {
+            result = true;
+            return true;
+        }
+
+        if (falseValues.Any(f => string.Equals(f, text, StringComparison.OrdinalIgnoreCase)))
+        {
+            result = false;
+            return true;
+        }
+
+        result = false;
+        return false;
+    }
+
+    private static (string[] TrueValues, string[] FalseValues) ResolveBooleanSpellings(string? typedRuleConfigJson)
+    {
+        if (typedRuleConfigJson is not null)
+        {
+            try
+            {
+                var config = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(typedRuleConfigJson);
+                if (config is not null)
+                {
+                    var trueRaw = config.TryGetValue("trueValues", out var t) ? t : DefaultTrueValuesConfig;
+                    var falseRaw = config.TryGetValue("falseValues", out var f) ? f : DefaultFalseValuesConfig;
+                    return (
+                        trueRaw.Split(',', StringSplitOptions.TrimEntries),
+                        falseRaw.Split(',', StringSplitOptions.TrimEntries));
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // A corrupted ConfigJson here is the same "data-integrity problem with the rule row, not this
+                // record" the main loop already treats as non-fatal elsewhere — fall back to the node's
+                // documented defaults rather than fail this field's coercion over it.
+            }
+        }
+
+        return (DefaultTrueValuesConfig.Split(','), DefaultFalseValuesConfig.Split(','));
+    }
+
+    // Exactly BooleanConversionNode's own Execute defaults — kept as the literal config strings (not a
+    // pre-split array) so a config lookup miss and no-config-at-all fall back through the identical parse.
+    private const string DefaultTrueValuesConfig = "y,yes,1,t,true,+";
+    private const string DefaultFalseValuesConfig = "n,no,0,f,false,-";
+
+    /// <summary>The relational engines RelationalDestinationWriterBase/MappedSqlServerDestinationWriter actually
+    /// write to — mirrors SqlDestinationSchemaService.IsRelational (that class lives in the non-Runtime
+    /// Infrastructure project, which this one doesn't reference).</summary>
+    private static bool IsRelationalDestination(DestinationType destinationType) => destinationType is
+        DestinationType.SqlServer or DestinationType.AzureSql or DestinationType.PostgreSql
+        or DestinationType.MySql or DestinationType.DataFabricWarehouse;
 
     /// <summary>Best-effort JSON serialization of a hop's before/after value for lineage storage — a lineage
     /// record that fails to serialize a value (e.g. an unexpected CLR type) should still record the hop with

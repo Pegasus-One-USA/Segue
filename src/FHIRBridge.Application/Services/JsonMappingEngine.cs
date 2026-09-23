@@ -6,7 +6,7 @@ using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services;
 
-public sealed class JsonMappingEngine : IJsonMappingEngine
+public sealed partial class JsonMappingEngine : IJsonMappingEngine
 {
     public MappingTestResultDto Map(
         string sourceJson,
@@ -696,7 +696,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             MappingValueType.Integer => ConvertInteger(element.ToString(), targetField, errors),
             MappingValueType.Decimal => ConvertDecimal(element.ToString(), targetField, errors, precision, scale),
             MappingValueType.Boolean => ConvertBoolean(element.ToString(), targetField, errors),
-            MappingValueType.Date => ConvertDate(element.ToString(), format, targetField, errors)?.Date,
+            MappingValueType.Date => ConvertDateOnly(element.ToString(), format, targetField, errors),
             MappingValueType.DateTime => ConvertDate(element.ToString(), format, targetField, errors),
             MappingValueType.Json => element.GetRawText(),
             _ => element.ToString()
@@ -749,7 +749,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             MappingValueType.Integer => ConvertInteger(value, targetField, errors),
             MappingValueType.Decimal => ConvertDecimal(value, targetField, errors, precision, scale),
             MappingValueType.Boolean => ConvertBoolean(value, targetField, errors),
-            MappingValueType.Date => ConvertDate(value, format, targetField, errors)?.Date,
+            MappingValueType.Date => ConvertDateOnly(value, format, targetField, errors),
             MappingValueType.DateTime => ConvertDate(value, format, targetField, errors),
             MappingValueType.Json => value,
             _ => value
@@ -854,16 +854,87 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             format.StartsWith("joinedFields", StringComparison.OrdinalIgnoreCase) ||
             format.StartsWith("wholeNodeAsJson", StringComparison.OrdinalIgnoreCase));
 
+        // Only ever called for a DateTime/instant-typed field now (a Date-typed one uses ConvertDateOnly
+        // below instead — a plain calendar date has no time zone to normalize through UTC at all).
+        // AdjustToUniversal|AssumeUniversal (not AssumeUniversal alone) resolves the true UTC instant an
+        // offset-bearing source value (e.g. a FHIR instant/dateTime) actually represents — AssumeUniversal
+        // alone instead converts it to THIS PROCESS's own local system time zone, so the exact same input
+        // parses to a different value depending on which machine happens to run it (verified empirically:
+        // "2026-03-14T22:00:00Z" -> 2026-03-15T03:30 local on a UTC+05:30 host). Kind is then reset to
+        // Unspecified so this native pass-through DateTime binds identically regardless of destination —
+        // Npgsql only treats a bare Kind=Utc DateTime as "timestamptz" (see
+        // MappingNodeExecutor.CoerceToExpectedValueType's identical fix, which this mirrors).
         var isParsed = string.IsNullOrWhiteSpace(format) || isModeMarker
-            ? DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedDate)
-            : DateTime.TryParseExact(value, format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsedDate);
+            ? DateTime.TryParse(
+                value, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsedDate)
+            : DateTime.TryParseExact(
+                value, format, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out parsedDate);
 
         if (isParsed)
         {
-            return parsedDate;
+            return DateTime.SpecifyKind(parsedDate, DateTimeKind.Unspecified);
         }
 
         errors.Add($"Field '{targetField}' could not be converted to a date/time.");
         return null;
     }
+
+    /// <summary>
+    /// A FHIR `date` has no time zone at all — unlike `dateTime`/`instant`, there is no "true UTC instant" to
+    /// normalize through, and DateTimeFormatNode's own "date" output (a DateTimeOffset formatted straight to
+    /// "yyyy-MM-dd", never adjusted to UTC — see its own TryParse/Execute) already reflects that.
+    /// DateTimeOffset.TryParse (unlike DateTime.TryParse, which ConvertDate above uses) never converts to
+    /// this process's own system time zone even without AdjustToUniversal, so taking its own .Date is
+    /// host-independent without doing any UTC conversion at all — unlike ConvertDate's old shared behavior,
+    /// which (before this method existed) normalized through UTC first and so changed the CALENDAR DAY itself
+    /// for an offset-bearing input (e.g. "2026-03-14T20:00:00-05:00" became 2026-03-15).
+    ///
+    /// A bare year ("2020") or year-month ("2020-05") is valid FHIR date precision on its own —
+    /// DateTimeFormatNode deliberately emits it unchanged rather than fabricate a day (see its own identical
+    /// regex guard). Coercing it into a full date here would silently invent a day for real patient data, so
+    /// this records why and returns null instead — the caller's existing "don't let a type mismatch silently
+    /// become null" fallback (see ConvertElement/ConvertValue) then passes the raw partial-precision string
+    /// through unconverted, same as it already does for any other unparseable Date input, rather than writing
+    /// a fabricated day that reads as if it were real.
+    /// </summary>
+    private static DateTime? ConvertDateOnly(
+        string? value,
+        string? format,
+        string targetField,
+        List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (PartialDatePattern().IsMatch(value))
+        {
+            errors.Add($"Field '{targetField}' has only year/year-month precision.");
+            return null;
+        }
+
+        var isModeMarker = format is not null && (
+            format.StartsWith("directField", StringComparison.OrdinalIgnoreCase) ||
+            format.StartsWith("joinedFields", StringComparison.OrdinalIgnoreCase) ||
+            format.StartsWith("wholeNodeAsJson", StringComparison.OrdinalIgnoreCase));
+
+        var isParsed = string.IsNullOrWhiteSpace(format) || isModeMarker
+            ? DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedDate)
+            : DateTimeOffset.TryParseExact(value, format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsedDate);
+
+        if (isParsed)
+        {
+            return DateTime.SpecifyKind(parsedDate.Date, DateTimeKind.Unspecified);
+        }
+
+        errors.Add($"Field '{targetField}' could not be converted to a date.");
+        return null;
+    }
+
+    // Mirrors MappingNodeExecutor.CoerceDate's (and DateTimeFormatNode's) identical partial-FHIR-date guard.
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\d{4}(-\d{2})?$")]
+    private static partial System.Text.RegularExpressions.Regex PartialDatePattern();
 }

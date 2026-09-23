@@ -191,14 +191,34 @@ export class FieldMappingJoinPopoverComponent {
       });
   }
 
-  // NumberCast's "targetType" config value ("integer" | "decimal" — see TransformNodeConfigSchemas.cs) overrides
-  // the node type's static default when present, since it's the field the author actually used to pick the
-  // output type in this popover. Every other node type keeps using the static per-node-type default.
+  // Both NumberCast and DateTimeFormat have a "targetType" config field (see TransformNodeConfigSchemas.cs)
+  // that is what the author actually used to pick the output type in this popover, and it overrides the node
+  // type's static default when present. Every other node type has no such ambiguity (its output type is fixed
+  // by the node type alone) and keeps using the static per-node-type default.
+  private static readonly TARGET_TYPE_VALUE_TYPES: Partial<Record<string, MappingValueType>> = {
+    integer: 'Integer',
+    decimal: 'Decimal',
+    date: 'Date',
+    dateTime: 'DateTime',
+    // MappingValueType has no separate 'Instant' tier — an instant-typed column is validated the same as
+    // DateTime (see MappingImportService's DB-type mapping), so both targetType values fold to the same tier.
+    instant: 'DateTime',
+  };
+
   private resolveExpectedValueType(): MappingValueType | null {
-    if (this.ruleNodeType() === 'NumberCast') {
-      const targetType = this.ruleConfig()['targetType'];
-      if (targetType === 'integer') return 'Integer';
-      if (targetType === 'decimal') return 'Decimal';
+    if (this.ruleNodeType() === 'NumberCast' || this.ruleNodeType() === 'DateTimeFormat') {
+      const targetType = this.ruleConfig()['targetType'] as string | undefined;
+      const resolved = targetType ? FieldMappingJoinPopoverComponent.TARGET_TYPE_VALUE_TYPES[targetType] : undefined;
+      if (resolved) return resolved;
+    }
+    // DateMathAge's static default (Integer) only holds for its "age" operation — DateMathAgeNode's "add" and
+    // "shift" operations both return a "yyyy-MM-dd" date STRING instead (a de-identification date-shift, not an
+    // age calculation), so a rule configured for either must declare Date, or the runtime coercion this powers
+    // (TransformNodeExecutors.CoerceToExpectedValueType) tries to long.TryParse a date string, fails, and the
+    // unconverted string still hits Postgres's 42804 on a date-typed destination column.
+    if (this.ruleNodeType() === 'DateMathAge') {
+      const operation = this.ruleConfig()['operation'] as string | undefined;
+      if (operation === 'add' || operation === 'shift') return 'Date';
     }
     return TRANSFORM_NODE_DEFAULT_VALUE_TYPES[this.ruleNodeType()] ?? null;
   }
