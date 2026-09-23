@@ -1,0 +1,93 @@
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiNdcTerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 1,58-66,90,118-133,136,139
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_b265c90deec3a2::t_48e9da45c54f7d 65-68,323-324
+  s_b265c90deec3a2::t_e1eba9eb1a7ba4 1,80-83,163-167,178-183,212-220,224-230,314-319,325-330
+src/FHIRBridge.Application/Services/Transforms/Nodes/CodesTerminologyNodes.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 93-98,110-157,174-176,207,224-226,231-243
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcpc3TerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 15-18,57-65,80-83,86-92,98-104,106,110-115,121-125
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10PcsTerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 70-79,138-140,148,154
+src/FHIRBridge.Domain/Entities/Terminology/HapiLocalTerminologyEntities.cs
+  s_b265c90deec3a2::t_270d630b6d21ce 56-67,72-75,83-101,107-119
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiLoincTerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 61-71,115,128,133-149,152,155-161
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiCvxTerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 65-74,108-111,117
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260923033723_AddTrmConceptDescriptionColumns.Designer.cs
+  s_b265c90deec3a2::t_daec21bb0ebda4 1-6173
+src/FHIRBridge.Infrastructure/Terminology/Hapi/TerminologyConceptRecord.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 1-28
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiDcmTerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 23-24,63-71,95-97,107-108,114
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_b265c90deec3a2::t_b5424c866dcf6f 4249-4262
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiHcpcsTerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 1,75-84,153-157,169-175,194-195,206-207,217
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260923033656_AddTrmConceptDescriptionColumns.Designer.cs
+  s_b265c90deec3a2::t_b5424c866dcf6f 1-6209
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_b265c90deec3a2::t_daec21bb0ebda4 4217-4230
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.ts
+  s_b265c90deec3a2::t_641021c6023b48 187-194,196,198-206
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10TerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 64-75,111-114,123,129
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiRxNormTerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 63-71,95-97,123-135,145-149,163,165
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/HapiLocalTerminologyConfigurations.cs
+  s_b265c90deec3a2::t_a6a00c14bb8dad 53-61
+portal/src/app/system-settings/dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component.ts
+  s_b265c90deec3a2::t_4661f88543941e 56-58
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiSnomedTerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 68-76,156,161-169,175-177,182,210
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiLocalTerminologyWriter.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 35-38,43-55,113,115-122
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiMeshTerminologySyncService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 18-20,65-73,131,150-153,155-159,167-168,175
+portal/src/app/system-settings/services/hapi-terminology-configuration.service.ts
+  s_b265c90deec3a2::t_47af35b6e1762d 21-31,37-40,77-84
+portal/src/app/system-settings/dialogs/hapi-terminology-code-dialog/hapi-terminology-code-dialog.component.html
+  s_b265c90deec3a2::t_eff7ffd23d9d80 54-96
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260923033723_AddTrmConceptDescriptionColumns.cs
+  s_b265c90deec3a2::t_daec21bb0ebda4 1-67
+portal/src/app/system-settings/dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component.scss
+  s_b265c90deec3a2::t_c25fbcd4a4ff34 276-295,299-308
+  s_b265c90deec3a2::t_2fac4bdd130c7e 296-298
+portal/src/app/system-settings/dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component.html
+  s_b265c90deec3a2::t_4661f88543941e 85-114
+src/FHIRBridge.Infrastructure/Terminology/HapiLocalTerminologyLookupService.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 36-44,50-52,75-84,90-92
+src/FHIRBridge.Application/DTOs/HapiTerminologyConfigurationDtos.cs
+  s_b265c90deec3a2::t_a484487569b7c0 60-67,71-79
+portal/src/app/system-settings/dialogs/hapi-terminology-code-dialog/hapi-terminology-code-dialog.component.ts
+  s_b265c90deec3a2::t_c2f1d011b6b515 10,33
+  s_b265c90deec3a2::t_be7685870e9ea4 57-65,81-89,92-100,102-103
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260923033656_AddTrmConceptDescriptionColumns.cs
+  s_b265c90deec3a2::t_b5424c866dcf6f 1-67
+src/FHIRBridge.Application/DTOs/TerminologyLookupResult.cs
+  s_b265c90deec3a2::t_67fe6fc45201f6 8-20
+src/FHIRBridge.Infrastructure/Terminology/Hapi/TerminologyConceptService.cs
+  s_b265c90deec3a2::t_a484487569b7c0 49-52,60-61,81-88,92-94,121-122,125-127
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiTerminologyConfigurationService.cs
+  s_b265c90deec3a2::t_9347567ea0262c 241-244
+  s_b265c90deec3a2::t_f2a7b34f0fcb8f 313-317
+  s_b265c90deec3a2::t_71c62c9418cd3e 212-215,218-220
+  s_b265c90deec3a2::t_155b52e6ecb286 254-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fbb218bee5939b1089aef34934e3748a3502c6b4",
+  "prompts": {},
+  "sessions": {
+    "s_b265c90deec3a2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eaeaad66-c904-4497-bfee-07eb39ae1cfe",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
