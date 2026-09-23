@@ -1,0 +1,47 @@
+tests/FHIRBridge.UnitTests/Destinations/LiveProbeDdlTypeValidatorTests.cs
+  s_174e16661bf66d::t_52ed742f999ead 1-41
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_174e16661bf66d::t_a8ea9132b339ce 571-636
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_174e16661bf66d::t_882d74303cd16d 1430-1441,1466,1573-1574
+  s_174e16661bf66d::t_1858dcfd1fdeb7 1483-1501,1503-1511,1514
+  s_174e16661bf66d::t_c1d5f97b4b6826 1331-1334
+  s_174e16661bf66d::t_eafa5f6041220d 1515-1523,1530-1532,1538,1548-1572,1575-1578
+  s_174e16661bf66d::t_53618a036d6175 1241-1249
+  s_174e16661bf66d::t_d67b1ecd545735 1456-1457,1478
+  s_174e16661bf66d::t_5875447b57ae9f 1368-1371
+  s_174e16661bf66d::t_278cd12873978f 1502,1512-1513
+src/FHIRBridge.Infrastructure/Destinations/PostgreSqlDdlTypeValidator.cs
+  s_174e16661bf66d::t_62dd6b36470e04 116-118,126-135
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_174e16661bf66d::t_f0df5476c148d9 9
+  s_174e16661bf66d::t_b0273e038a5de4 857-858,863-865
+  s_174e16661bf66d::t_e27454e9aa7d94 883-939
+  s_174e16661bf66d::t_717cea9abd9320 699
+  s_174e16661bf66d::t_d6dcb34da365c0 752
+tests/FHIRBridge.Runtime.UnitTests/Workflows/CoerceToExpectedValueTypeTests.cs
+  s_174e16661bf66d::t_4c4d25bbd56fa8 45,52-67,71-84
+  s_174e16661bf66d::t_30ec04e5e9cd4d 85,171-192
+  s_174e16661bf66d::t_ac40a87d6b56b1 86
+src/FHIRBridge.Infrastructure/Destinations/MySqlDdlTypeValidator.cs
+  s_174e16661bf66d::t_656615cf2c15f8 97-106
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineDateTimeZoneTests.cs
+  s_174e16661bf66d::t_373a0199486501 10-11,14-22
+  s_174e16661bf66d::t_5eb3b6b17e3f92 51,53,55,59,62-68,70,72,74,78-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "705af16b29b3af78ed7a65a94ddb17c2e5e4ebe4",
+  "prompts": {},
+  "sessions": {
+    "s_174e16661bf66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a051edf-3c44-4555-8dea-ae48ca7f4ff9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
