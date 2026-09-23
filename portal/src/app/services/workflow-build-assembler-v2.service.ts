@@ -1414,7 +1414,7 @@ export class WorkflowBuildAssemblerServiceV2 {
       // to the naive toJsonPath conversion) — so the sibling path is derived here instead, off the one
       // jsonPath value both this field and its sibling actually share an outermost array with.
       const correlationCodeJsonPath = row.correlationSiblingField
-        ? this.siblingCorrelationJsonPath(jsonPath, row.correlationSiblingField)
+        ? this.siblingCorrelationJsonPath(arrays, resource, row.correlationSiblingField)
         : undefined;
       // A "Match criteria" row whose sibling path couldn't be derived (jsonPath has no repeating ancestor at
       // all) has nothing to correlate against — CorrelateByCode with a missing CorrelationCodeJsonPath is a
@@ -1558,11 +1558,24 @@ export class WorkflowBuildAssemblerServiceV2 {
    * index chain this produces, not just its first level — see that method's own doc comment. Undefined
    * when `jsonPath` has no repeating ancestor at all ("$.gender") — nothing to correlate against.
    */
-  private siblingCorrelationJsonPath(jsonPath: string, siblingField: string): string | undefined {
-    if (!jsonPath.includes('[*]')) return undefined;
-    const lastDot = jsonPath.lastIndexOf('.');
-    if (lastDot === -1) return undefined;
-    return `${jsonPath.slice(0, lastDot)}.${siblingField}`;
+  private siblingCorrelationJsonPath(
+    arrays: readonly string[], resourceType: string, siblingField: string,
+  ): string | undefined {
+    if (arrays.length === 0) return undefined;
+    // arrays[length - 1] is the row's own INNERMOST repeating ancestor (the same one
+    // arrayAncestorLabel() in the join-popover shows as "<X> repeats — which instance?") — e.g.
+    // "contact.telecom" for a field nested two levels deep, or plain "contact" for one mapped straight
+    // onto a contact-level property. Running it back through toJsonPath's own wildcarding gives exactly
+    // the fully-wildcarded PARENT path this field's sibling shares, at whatever depth that really is —
+    // "$.contact[*].telecom[*]" or "$.contact[*]" respectively — regardless of how many further
+    // non-repeating segments (e.g. a nested "address" object) the mapped field's OWN path goes on to
+    // cross past that point. Appending the bare sibling field name onto THAT (not onto the mapped
+    // field's own full path) is what a naive "swap the last path segment" string trick got wrong for
+    // "contact[*].address.city" correlated by a contact-level "relationship": that produced
+    // "contact[*].address.relationship" (address has no such property) instead of
+    // "contact[*].relationship".
+    const innermostAncestor = arrays[arrays.length - 1];
+    return `${this.toJsonPath(innermostAncestor, resourceType, arrays)}.${siblingField}`;
   }
 
   private toJsonPath(path: string, resourceType: string, arrays: readonly string[] = []): string {
