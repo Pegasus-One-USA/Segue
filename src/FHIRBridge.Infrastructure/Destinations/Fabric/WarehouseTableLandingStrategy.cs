@@ -141,13 +141,16 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
             throw new InvalidOperationException(
                 $"Destination '{destination.Name}': the Warehouse could not read the staging file at {stagingBlobPath}. "
                     + (settings.WarehouseUseWorkspaceIdentity
-                        ? "COPY INTO ran as the workspace identity, so confirm that identity exists (Fabric > "
-                            + "Workspace settings > Workspace identity) and has access to the staging lakehouse "
-                            + $"'{settings.WarehouseStagingLakehouse}'."
-                        : "COPY INTO ran with no credential, so the Warehouse authenticated as nobody — the token "
-                            + "that authenticated this connection is not passed on to it. Enable 'Use workspace "
-                            + "identity' on this destination, and make sure the workspace identity exists in Fabric "
-                            + $"and can read the staging lakehouse '{settings.WarehouseStagingLakehouse}'.")
+                        ? "COPY INTO asked Fabric to impersonate the WORKSPACE identity, which is a separate "
+                            + "provisioned principal from the one this connection authenticated with. Fabric could "
+                            + "not get a token for it. Either provision it (Fabric > Workspace settings > Workspace "
+                            + "identity) and give it Contributor on the workspace holding the staging lakehouse, or "
+                            + "turn off 'Load staged files as the workspace identity' so the read runs as the "
+                            + "configured identity instead — that is the documented default for a OneLake source."
+                        : "COPY INTO read as the identity configured on this destination, which is the documented "
+                            + "default for a OneLake source. That identity needs the Contributor role on BOTH "
+                            + "workspaces: the one holding the staging lakehouse and the one holding the Warehouse. "
+                            + "Workspace membership is what grants this — an Azure RBAC role on storage does not.")
                     + " The staging file itself uploaded successfully, so OneLake access from FHIRBridge is fine.",
                 exception);
         }

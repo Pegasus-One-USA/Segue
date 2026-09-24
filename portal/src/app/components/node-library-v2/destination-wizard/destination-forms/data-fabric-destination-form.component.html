@@ -146,9 +146,9 @@
           Load staged files as the workspace identity
         </label>
         @if (fabricForm.get('warehouseUseWorkspaceIdentity')!.value) {
-          <span class="dw-hint">On by default, and needed in almost every case. COPY INTO runs inside the Warehouse, which reads the staged file with its own identity — the credentials above authenticate this connection, not that read. Create the workspace identity in Fabric (Workspace settings &rarr; Workspace identity) and give it access to the staging lakehouse.</span>
+          <span class="dw-hint">Only turn this on if the identity above cannot be given Contributor on the workspace holding the staging lakehouse. It asks Fabric to impersonate the workspace identity for the source read, which must already be provisioned (Workspace settings &rarr; Workspace identity) and hold Contributor there. Leave it off and COPY INTO reads as the identity above, which is the documented default.</span>
         } @else {
-          <span class="dw-hint">Off means COPY INTO runs with no credential, so the Warehouse authenticates as nobody and the load fails with "Access token couldn't be fetched". Only turn this off if your Warehouse reaches OneLake some other way.</span>
+          <span class="dw-hint">Off is correct for almost every setup: COPY INTO reads the staged file as the identity configured above, which needs Contributor on both the workspace holding the staging lakehouse and the one holding the Warehouse.</span>
         }
       </div>
     }
