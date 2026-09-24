@@ -507,6 +507,10 @@ public sealed class TelecomNormalizationNode : ITransformNode
     private static readonly Regex EmailPattern = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled);
     private static readonly PhoneNumberUtil PhoneUtil = PhoneNumberUtil.GetInstance();
 
+    /// <summary>Bound on a single user-supplied regex evaluation, so a pathological pattern fails one value
+    /// loudly instead of hanging the pipeline thread that is processing the batch.</summary>
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+
     /// <summary>
     /// ContactPoint.system codes that bypass phone parsing: their values have no canonical format this node
     /// could normalize to, so the raw value is carried through. Mirrors the FHIR ContactPointSystem value set
@@ -532,9 +536,26 @@ public sealed class TelecomNormalizationNode : ITransformNode
             return TransformResult.Fail(rankError!);
         }
 
-        if (EmailPattern.IsMatch(raw))
+        // Regex replace runs on the raw incoming contact value, BEFORE email detection and phone parsing —
+        // it is a cleanup pass for source data libphonenumber cannot make sense of on its own (an "x203"
+        // extension suffix, a "Tel: " label, a "/" separating two numbers in one field). Running it after
+        // E.164 formatting instead would only corrupt the very normalization this node exists to produce.
+        // Whatever the pattern leaves behind is what gets detected, parsed and validated.
+        if (!TryApplyRegex(raw, config, out var cleaned, out var regexError))
         {
-            return TransformResult.Ok(BuildContactPoint("email", raw, config.Get("use", "home"), rank));
+            return TransformResult.Fail(regexError!);
+        }
+
+        // The pattern is free to erase the value entirely (e.g. stripping a placeholder like "N/A"), which is
+        // treated exactly like a blank input rather than handed to the parser as an empty string.
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            return TransformResult.Ok(null);
+        }
+
+        if (EmailPattern.IsMatch(cleaned))
+        {
+            return TransformResult.Ok(BuildContactPoint("email", cleaned, config.Get("use", "home"), rank));
         }
 
         // "system" config can explicitly force a non-phone system instead of the phone-vs-email auto-detection
@@ -549,7 +570,7 @@ public sealed class TelecomNormalizationNode : ITransformNode
             var match = NonPhoneSystems.FirstOrDefault(s => string.Equals(s, explicitSystem, StringComparison.OrdinalIgnoreCase));
             if (match is not null)
             {
-                return TransformResult.Ok(BuildContactPoint(match, raw, config.Get("use", "work"), rank));
+                return TransformResult.Ok(BuildContactPoint(match, cleaned, config.Get("use", "work"), rank));
             }
 
             // "phone" is a legitimate, meaningful setting — it pins the phone branch for a value that would
@@ -565,17 +586,17 @@ public sealed class TelecomNormalizationNode : ITransformNode
         string normalized;
         try
         {
-            var parsedNumber = PhoneUtil.Parse(raw, region);
+            var parsedNumber = PhoneUtil.Parse(cleaned, region);
             if (!PhoneUtil.IsValidNumber(parsedNumber))
             {
-                return InvalidNumber($"'{raw}' is not a valid phone number for region '{region}'.", config);
+                return InvalidNumber($"'{cleaned}' is not a valid phone number for region '{region}'.", config);
             }
 
             normalized = PhoneUtil.Format(parsedNumber, PhoneNumberFormat.E164);
         }
         catch (NumberParseException ex)
         {
-            return InvalidNumber($"Unable to parse '{raw}' as a phone number: {ex.Message}", config);
+            return InvalidNumber($"Unable to parse '{cleaned}' as a phone number: {ex.Message}", config);
         }
 
         return TransformResult.Ok(BuildContactPoint("phone", normalized, config.Get("use", "mobile"), rank));
@@ -601,6 +622,44 @@ public sealed class TelecomNormalizationNode : ITransformNode
         }
 
         return contactPoint;
+    }
+
+    /// <summary>
+    /// Applies the optional <c>regexPattern</c>/<c>regexReplacement</c> pair to the raw contact value. Mirrors
+    /// <c>StringNormalizationNode</c>'s regex step, including treating an unparseable pattern as a
+    /// configuration mistake that fails the node explicitly (routed through the rule's own ErrorPolicy)
+    /// rather than letting the exception escape and take down the rest of the batch. A blank pattern skips
+    /// the step, and a blank replacement deletes the matched text — which is the common case here, since most
+    /// telecom cleanups are about removing junk (labels, extensions, separators) rather than rewriting it.
+    /// </summary>
+    private static bool TryApplyRegex(string raw, IReadOnlyDictionary<string, string> config, out string result, out string? error)
+    {
+        result = raw;
+        error = null;
+
+        var pattern = config.GetOrNull("regexPattern");
+        if (pattern is null)
+        {
+            return true;
+        }
+
+        try
+        {
+            result = Regex.Replace(raw, pattern, config.Get("regexReplacement"), RegexOptions.None, RegexTimeout).Trim();
+            return true;
+        }
+        catch (RegexParseException ex)
+        {
+            error = $"Invalid regex pattern '{pattern}': {ex.Message}";
+            return false;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // A catastrophically-backtracking pattern is still a configuration mistake, but one that only
+            // shows up against certain values — bounded here so a single bad row cannot stall the pipeline.
+            error = $"Regex pattern '{pattern}' timed out while matching this value.";
+            return false;
+        }
     }
 
     private static bool TryReadRank(IReadOnlyDictionary<string, string> config, out int? rank, out string? error)

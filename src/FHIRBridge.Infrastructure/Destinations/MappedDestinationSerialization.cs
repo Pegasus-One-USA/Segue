@@ -87,6 +87,21 @@ internal static class MappedDestinationSerialization
     }
 
     /// <summary>Resolves a single cell value (as string) for a record + column, used by tabular outputs.</summary>
+    /// <summary>
+    /// The mapped business columns only — no PipelineRunId/ResourceType/DestinationObject/SourceResourceId/
+    /// WrittenOnUtc lineage columns. This is what a customer-owned destination table actually contains: per
+    /// docs/backend/11-destination-schema-ownership-plan.md the relational writers stopped injecting those system
+    /// columns, so a table provisioned from a mapping has exactly the mapped fields and nothing else. Any writer
+    /// that loads INTO such a table needs this list rather than <see cref="GetColumns"/>, whose extra columns
+    /// would not exist in the target.
+    /// </summary>
+    public static IReadOnlyList<string> GetMappedColumns(IReadOnlyCollection<MappedDestinationRecord> records)
+        => records
+            .SelectMany(record => record.Values.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(column => column, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
     public static string GetCell(MappedDestinationRecord record, string column)
     {
         var value = column switch

@@ -1122,6 +1122,7 @@ export class WorkflowBuildAssemblerServiceV2 {
             'dest_fabricWarehouseSchema',
             'dest_fabricWarehouseWriteMode',
             'dest_fabricWarehouseStagingPath',
+            'dest_fabricWarehouseUseWorkspaceIdentity',
           ]
         : kind === 'sql'
         ? [

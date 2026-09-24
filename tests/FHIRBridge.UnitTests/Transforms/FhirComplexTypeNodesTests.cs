@@ -381,4 +381,69 @@ public sealed class FhirComplexTypeNodesTests
         var result = new TelecomNormalizationNode().Execute("123", new Dictionary<string, string>(), null);
         result.Success.Should().BeFalse();
     }
+
+    [Fact]
+    public void TelecomNormalizationNode_applies_the_regex_to_the_contact_value_before_parsing()
+    {
+        // The extension suffix is what makes this unparseable as-is; stripping it is the whole point of the option.
+        var config = new Dictionary<string, string> { ["regexPattern"] = @"\s*(?:ext|x)\.?\s*\d+$" };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142 ext. 203", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["value"]!.GetValue<string>().Should().Be("+13135550142");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_uses_the_regex_replacement_when_one_is_configured()
+    {
+        var config = new Dictionary<string, string> { ["regexPattern"] = "^Tel: ", ["regexReplacement"] = "+1 " };
+        var result = new TelecomNormalizationNode().Execute("Tel: 3135550142", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["value"]!.GetValue<string>().Should().Be("+13135550142");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_runs_the_regex_before_email_detection()
+    {
+        var config = new Dictionary<string, string> { ["regexPattern"] = @"^mailto:" };
+        var result = new TelecomNormalizationNode().Execute("mailto:jane@example.com", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["system"]!.GetValue<string>().Should().Be("email");
+        contact["value"]!.GetValue<string>().Should().Be("jane@example.com");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_applies_the_regex_to_a_non_phone_system_value()
+    {
+        var config = new Dictionary<string, string> { ["system"] = "url", ["regexPattern"] = @"\s+", ["regexReplacement"] = "" };
+        var result = new TelecomNormalizationNode().Execute("https://example.com/ contact", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["value"]!.GetValue<string>().Should().Be("https://example.com/contact");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_treats_a_value_fully_erased_by_the_regex_as_blank()
+    {
+        var config = new Dictionary<string, string> { ["regexPattern"] = "^N/A$" };
+        var result = new TelecomNormalizationNode().Execute("N/A", config, null);
+        result.Success.Should().BeTrue();
+        result.Value.Should().BeNull();
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_fails_cleanly_on_an_invalid_regex_instead_of_throwing()
+    {
+        var config = new Dictionary<string, string> { ["regexPattern"] = "(unclosed" };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        result.Success.Should().BeFalse();
+        result.Error.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_leaves_the_value_untouched_when_no_regex_is_configured()
+    {
+        var config = new Dictionary<string, string> { ["regexReplacement"] = "ignored-without-a-pattern" };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["value"]!.GetValue<string>().Should().Be("+13135550142");
+    }
 }
