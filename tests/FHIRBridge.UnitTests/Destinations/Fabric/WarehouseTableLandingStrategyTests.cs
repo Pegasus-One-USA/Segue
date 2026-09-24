@@ -1,6 +1,8 @@
+using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Infrastructure.Destinations;
 using FHIRBridge.Infrastructure.Destinations.Fabric;
 using FluentAssertions;
 
@@ -175,6 +177,30 @@ public sealed class WarehouseTableLandingStrategyTests
         WarehouseTableLandingStrategy.BuildStagingUrl(settings, path).Should().StartWith(
             "https://onelake.dfs.fabric.microsoft.com/21fe9b8f-2349-4667-8608-3547317ea11f/"
                 + "8f14e45f-ceea-467a-9f3a-3d3d3d3d3d3d/Files/_staging/");
+    }
+
+    /// <summary>
+    /// Regression: COPY INTO named PipelineRunId/ResourceType/DestinationObject/SourceResourceId/WrittenOnUtc
+    /// alongside the mapped fields, because the shared GetColumns helper prepends those lineage columns. A
+    /// customer-owned table has none of them — the relational writers stopped injecting system columns per
+    /// docs/backend/11-destination-schema-ownership-plan.md — so Fabric rejected the load with "invalid metadata
+    /// for column 'PipelineRunId'". The Warehouse load must use the mapped columns only.
+    /// </summary>
+    [Fact]
+    public void Only_mapped_columns_are_loaded_never_the_lineage_columns()
+    {
+        var record = new MappedDestinationRecord(
+            Guid.NewGuid(), "Patient", "Patients", "p1",
+            new Dictionary<string, object?> { ["Id"] = "1", ["Family"] = "Smith" });
+
+        var mapped = MappedDestinationSerialization.GetMappedColumns([record]);
+
+        mapped.Should().BeEquivalentTo(["Family", "Id"]);
+        mapped.Should().NotContain("PipelineRunId", "a customer-owned table has no lineage columns");
+        mapped.Should().NotContain("ResourceType").And.NotContain("WrittenOnUtc");
+
+        // The unfiltered helper still carries them, for the writers that legitimately want an audit trail.
+        MappedDestinationSerialization.GetColumns([record]).Should().Contain("PipelineRunId");
     }
 
     [Fact]

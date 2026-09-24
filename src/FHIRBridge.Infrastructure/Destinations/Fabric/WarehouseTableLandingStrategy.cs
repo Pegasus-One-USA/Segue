@@ -64,7 +64,12 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
         PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
-        var columns = MappedDestinationSerialization.GetColumns(records);
+        // Mapped columns only. GetColumns prepends PipelineRunId/ResourceType/DestinationObject/
+        // SourceResourceId/WrittenOnUtc, which a customer-owned table does not have — the relational writers
+        // stopped injecting those per docs/backend/11-destination-schema-ownership-plan.md, so a table built from
+        // a mapping holds exactly the mapped fields. Naming them in COPY INTO fails on the column that does not
+        // exist ("invalid metadata for column 'PipelineRunId'").
+        var columns = MappedDestinationSerialization.GetMappedColumns(records);
         if (columns.Count == 0)
         {
             // No mapped columns means nothing to COPY INTO; creating an empty table would be worse than saying so.
@@ -80,7 +85,8 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
         var workspace = await _clientFactory.GetWorkspaceAsync(destination, settings, cancellationToken);
         var stagingBlob = workspace.Container.GetBlobClient(stagingBlobPath);
 
-        var payload = await MappedDestinationParquetSerializer.SerializeAsync(records, cancellationToken);
+        // Staged file carries exactly the columns COPY INTO will name, in the same order.
+        var payload = await MappedDestinationParquetSerializer.SerializeAsync(records, columns, cancellationToken);
         using (var stream = new MemoryStream(payload))
         {
             await stagingBlob.UploadAsync(stream, overwrite: true, cancellationToken);
