@@ -133,6 +133,50 @@ public sealed class WarehouseTableLandingStrategyTests
         settings.WarehouseConnectionString.Should().EndWith(";Database=ClinicalWh");
     }
 
+    /// <summary>
+    /// Some tenants disable OneLake friendly names, so workspaces and items must be addressed by GUID. An item
+    /// GUID takes NO ".Lakehouse" suffix — OneLake addresses an item either by name-plus-type or by id, never by
+    /// id with a type appended. Getting this wrong is invisible until COPY INTO runs: the blob endpoint accepts a
+    /// friendly name so the staging upload succeeds, while the DFS endpoint COPY INTO reads through rejects it as
+    /// an "unsupported URL" (FriendlyNameSupportDisabled on a direct call).
+    /// </summary>
+    [Fact]
+    public void A_staging_lakehouse_given_as_a_guid_is_addressed_without_the_item_type_suffix()
+    {
+        var metadata = System.Text.Json.Nodes.JsonNode.Parse(WarehouseMetadata)!.AsObject();
+        metadata["dest_fabricWarehouseStagingLakehouse"] = "8f14e45f-ceea-467a-9f3a-3d3d3d3d3d3d";
+
+        var settings = FabricDestinationSettings.Parse(Destination(metadata.ToJsonString()));
+
+        settings.WarehouseStagingRootPath.Should()
+            .Be("8f14e45f-ceea-467a-9f3a-3d3d3d3d3d3d/Files/_staging")
+            .And.NotContain(".Lakehouse", "an item id is not suffixed with its type");
+    }
+
+    [Fact]
+    public void A_staging_lakehouse_given_as_a_name_keeps_its_item_type_suffix()
+    {
+        var settings = FabricDestinationSettings.Parse(Destination(WarehouseMetadata));
+
+        settings.WarehouseStagingRootPath.Should().Be("Stage.Lakehouse/Files/_staging");
+    }
+
+    /// <summary>The workspace half of the same URL — it is passed through verbatim, name or GUID.</summary>
+    [Fact]
+    public void A_workspace_guid_flows_into_the_staging_url_unchanged()
+    {
+        var metadata = System.Text.Json.Nodes.JsonNode.Parse(WarehouseMetadata)!.AsObject();
+        metadata["dest_fabricWorkspace"] = "21fe9b8f-2349-4667-8608-3547317ea11f";
+        metadata["dest_fabricWarehouseStagingLakehouse"] = "8f14e45f-ceea-467a-9f3a-3d3d3d3d3d3d";
+
+        var settings = FabricDestinationSettings.Parse(Destination(metadata.ToJsonString()));
+        var path = WarehouseTableLandingStrategy.BuildStagingBlobPath(settings, Mapping(), DateTime.UtcNow);
+
+        WarehouseTableLandingStrategy.BuildStagingUrl(settings, path).Should().StartWith(
+            "https://onelake.dfs.fabric.microsoft.com/21fe9b8f-2349-4667-8608-3547317ea11f/"
+                + "8f14e45f-ceea-467a-9f3a-3d3d3d3d3d3d/Files/_staging/");
+    }
+
     [Fact]
     public void Staging_path_lands_under_the_staging_lakehouses_Files_area()
     {

@@ -116,6 +116,28 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
             // Without a CREDENTIAL clause it has no identity for OneLake, and Fabric reports that as "unsupported
             // URL or ... transient error", which points at the URL and sends people to re-check a path that is
             // fine. Restate it as the credential problem it is, and name the setting that fixes it.
+            // Friendly names first, because this is the cause that looks least like itself: OneLake's DFS endpoint
+            // rejects display names on a tenant with friendly-name support disabled, and reports it as an
+            // "unsupported URL", which reads like a malformed path rather than a naming-mode problem. The blob
+            // endpoint is more forgiving, so the staging upload succeeds by name moments earlier and makes the
+            // path look proven. Only mention identity once the addressing is already by id.
+            var namedByFriendlyName =
+                !FabricDestinationSettings.IsItemId(settings.Workspace)
+                || !FabricDestinationSettings.IsItemId(settings.WarehouseStagingLakehouse);
+
+            if (namedByFriendlyName)
+            {
+                throw new InvalidOperationException(
+                    $"Destination '{destination.Name}': the Warehouse could not read the staging file at "
+                        + $"{stagingBlobPath}. The workspace and staging lakehouse are addressed by name, and some "
+                        + "tenants disable OneLake friendly names — the file drop succeeds by name while COPY INTO, "
+                        + "which reads through the DFS endpoint, does not (it reports this as 'unsupported URL', and "
+                        + "a direct call returns FriendlyNameSupportDisabled). Put the workspace GUID and the "
+                        + "staging lakehouse's item GUID in this destination instead of their names. Both are in "
+                        + "the Fabric URL when the item is open.",
+                    exception);
+            }
+
             throw new InvalidOperationException(
                 $"Destination '{destination.Name}': the Warehouse could not read the staging file at {stagingBlobPath}. "
                     + (settings.WarehouseUseWorkspaceIdentity
