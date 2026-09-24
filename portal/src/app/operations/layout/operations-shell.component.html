@@ -1,3 +1,5 @@
+<!-- No title of its own — every tab's own page already carries one right underneath, same
+     reasoning as settings-shell.component.html. -->
 <nav class="shell-tabs">
   @for (tab of tabs(); track tab.route) {
     <a class="shell-tab" [routerLink]="tab.route" routerLinkActive="active">

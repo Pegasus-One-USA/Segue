@@ -1,5 +1,9 @@
 <aside class="sidebar" [class.collapsed]="collapsed()">
-  <div class="sidebar-logo">
+  <!-- Focused, collapsed: the 64px rail can't fit the logo and the toggle side by side (see
+       .sidebar-logo--stacked below), so they stack — logo on top, toggle underneath — instead of
+       either one disappearing. Every other combination (Standard, or Focused expanded) keeps the
+       original single row. -->
+  <div class="sidebar-logo" [class.sidebar-logo--stacked]="layout() === 'focused' && collapsed()">
     @if (branding.effectiveLogoUrl()) {
       <img class="logo-image" [src]="branding.effectiveLogoUrl()" [alt]="branding.current().companyName" />
     } @else {
@@ -13,6 +17,15 @@
     }
     @if (!collapsed()) {
       <span class="logo-text">{{ branding.current().companyName }}</span>
+    }
+
+    <!-- Focused has no topbar hamburger — the sidebar drives its own collapse toggle instead. -->
+    @if (layout() === 'focused') {
+      <button class="sidebar-toggle" type="button" (click)="toggle.emit()" [attr.aria-label]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'">
+        <span class="h-line"></span>
+        <span class="h-line"></span>
+        <span class="h-line"></span>
+      </button>
     }
   </div>
 
@@ -91,4 +104,11 @@
       }
     }
   </nav>
+
+  <!-- Focused only: account menu lives at the foot of the sidebar instead of the topbar. -->
+  @if (layout() === 'focused') {
+    <div class="sidebar-footer">
+      <app-user-menu anchor="sidebar" [collapsed]="collapsed()" />
+    </div>
+  }
 </aside>

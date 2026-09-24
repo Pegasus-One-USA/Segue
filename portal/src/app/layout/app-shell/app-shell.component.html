@@ -3,7 +3,7 @@
   <div class="shell-body">
 
     <!-- ── Sidebar ───────────────────────────────────────────────────────── -->
-    <app-sidebar [collapsed]="sidebarCollapsed()" />
+    <app-sidebar [collapsed]="sidebarCollapsed()" (toggle)="toggleSidebar()" />
 
     <!-- ── Main area ─────────────────────────────────────────────────────── -->
     <div class="shell-main">
@@ -24,27 +24,30 @@
         </div>
       }
 
-      <!-- Topbar -->
-      <header class="shell-topbar">
+      <!-- Topbar — v1 only; v2 drops it entirely (see SidebarComponent's own toggle + footer
+           account menu, which take over both jobs this bar did). -->
+      @if (!layoutFocused()) {
+        <header class="shell-topbar">
 
-        <button
-          class="shell-hamburger"
-          type="button"
-          (click)="toggleSidebar()"
-          aria-label="Toggle sidebar"
-        >
-          <span class="h-line"></span>
-          <span class="h-line"></span>
-          <span class="h-line"></span>
-        </button>
+          <button
+            class="shell-hamburger"
+            type="button"
+            (click)="toggleSidebar()"
+            aria-label="Toggle sidebar"
+          >
+            <span class="h-line"></span>
+            <span class="h-line"></span>
+            <span class="h-line"></span>
+          </button>
 
-        <span class="shell-page-title">{{ pageTitle() }}</span>
+          <span class="shell-page-title">{{ pageTitle() }}</span>
 
-        <div class="shell-actions">
-          <!-- User menu -->
-          <app-user-menu />
-        </div>
-      </header>
+          <div class="shell-actions">
+            <!-- User menu -->
+            <app-user-menu />
+          </div>
+        </header>
+      }
 
       <!-- Page content (router outlet) -->
       <main
@@ -75,7 +78,9 @@
     </div>
   </div>
 
-  <!-- ── Global footer — full browser width, spans beneath sidebar + content ── -->
-  <app-footer />
+  <!-- ── Global footer — full browser width, spans beneath sidebar + content — v1 only. ── -->
+  @if (!layoutFocused()) {
+    <app-footer />
+  }
 
 </div>

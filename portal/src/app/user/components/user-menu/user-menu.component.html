@@ -1,17 +1,25 @@
-<div class="um-wrap" [class.open]="menuOpen()">
+<div class="um-wrap" [class.open]="menuOpen()" [class.um-wrap--sidebar]="anchor() === 'sidebar'">
 
   <!-- ── Trigger ─────────────────────────────────────────────────── -->
-  <button class="um-trigger" type="button" (click)="toggleMenu($event)" title="Account menu">
+  <button
+    class="um-trigger"
+    [class.um-trigger--collapsed]="anchor() === 'sidebar' && collapsed()"
+    type="button"
+    (click)="toggleMenu($event)"
+    [title]="anchor() === 'sidebar' && collapsed() ? fullName() : 'Account menu'"
+  >
     <span class="um-avatar" [style.background]="profile().avatarColor">
       {{ initials() }}
     </span>
-    <div class="um-trigger-info">
-      <span class="um-trigger-name">{{ fullName() }}</span>
-      <span class="um-trigger-role">{{ profile().roleLabel }}</span>
-    </div>
-    <svg class="um-chevron" [class.rotated]="menuOpen()" viewBox="0 0 16 16" fill="none">
-      <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>
+    @if (!(anchor() === 'sidebar' && collapsed())) {
+      <div class="um-trigger-info">
+        <span class="um-trigger-name">{{ fullName() }}</span>
+        <span class="um-trigger-role">{{ profile().roleLabel }}</span>
+      </div>
+      <svg class="um-chevron" [class.rotated]="menuOpen()" viewBox="0 0 16 16" fill="none">
+        <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    }
   </button>
 
   <!-- ── Backdrop ──────────────────────────────────────────────── -->
@@ -21,7 +29,7 @@
 
   <!-- ── Dropdown Panel ──────────────────────────────────────────── -->
   @if (menuOpen()) {
-    <div class="um-panel" (click)="$event.stopPropagation()">
+    <div class="um-panel" [class.um-panel--sidebar]="anchor() === 'sidebar'" (click)="$event.stopPropagation()">
 
       <!-- Header -->
       <div class="um-header">
@@ -66,6 +74,58 @@
           </div>
           <svg class="um-item-arrow" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </button>
+      </div>
+
+      <div class="um-divider"></div>
+
+      <!-- Layout -->
+      <div class="um-section um-section--layout">
+        <div class="um-layout-label">
+          <span class="um-item-icon">
+            <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.5"/></svg>
+          </span>
+          Layout
+        </div>
+        <div class="um-layout-row">
+          <button
+            type="button"
+            class="um-layout-btn"
+            [class.active]="layout() === 'standard'"
+            (click)="setLayout('standard')"
+          >Standard</button>
+          <button
+            type="button"
+            class="um-layout-btn"
+            [class.active]="layout() === 'focused'"
+            (click)="setLayout('focused')"
+          >Focused</button>
+        </div>
+      </div>
+
+      <div class="um-divider"></div>
+
+      <!-- Density -->
+      <div class="um-section um-section--layout">
+        <div class="um-layout-label">
+          <span class="um-item-icon">
+            <svg viewBox="0 0 20 20" fill="none"><path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </span>
+          Density
+        </div>
+        <div class="um-layout-row">
+          <button
+            type="button"
+            class="um-layout-btn"
+            [class.active]="density() === 'normal'"
+            (click)="setDensity('normal')"
+          >Normal</button>
+          <button
+            type="button"
+            class="um-layout-btn"
+            [class.active]="density() === 'compact'"
+            (click)="setDensity('compact')"
+          >Compact</button>
+        </div>
       </div>
 
       <div class="um-divider"></div>
