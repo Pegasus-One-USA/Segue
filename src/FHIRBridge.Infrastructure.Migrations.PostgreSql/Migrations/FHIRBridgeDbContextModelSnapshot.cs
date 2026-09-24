@@ -5428,6 +5428,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                                 .HasMaxLength(500)
                                 .HasColumnType("character varying(500)");
 
+                            b1.Property<string>("CorrelationCodeOperator")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
                             b1.Property<string>("CorrelationCodeValue")
                                 .HasMaxLength(100)
                                 .HasColumnType("character varying(100)");

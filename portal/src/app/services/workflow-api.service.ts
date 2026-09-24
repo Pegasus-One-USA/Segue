@@ -221,6 +221,10 @@ export interface MappingFieldRequest {
   // items by position. Ignored for every other arrayPolicy.
   correlationCodeJsonPath?: string | null;
   correlationCodeValue?: string | null;
+  // How correlationCodeValue is compared against the sibling element — "Equals" (the default, including
+  // null/omitted: every CorrelateByCode field saved before this operator existed relied on exact match),
+  // "Contains" (case-insensitive substring), or "NotEquals". Ignored for every other arrayPolicy.
+  correlationCodeOperator?: string | null;
   // Mirrors the remaining MappingFieldDto members (docs/backend/14-mapping-profile-master-screen-plan.md §3.2) —
   // MaxLength/Precision/Scale are deliberately excluded, since the backend documents them as never persisted on
   // the profile itself, only filled in at pipeline run time from the destination's live schema.

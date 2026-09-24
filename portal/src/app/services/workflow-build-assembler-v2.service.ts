@@ -44,8 +44,17 @@ interface DestMappingRow {
   terminologyCodeJsonPath?: string;
   arrayPolicy?: string;
   cardinality?: string;
-  correlationCodeJsonPath?: string;
+  // Set by field-mapping-model.ts's serializeRowsFlat for a "Match criteria" row — a bare sibling field NAME
+  // (e.g. "use"), not yet an absolute JsonPath: that layer frequently has no catalog jsonPath to build one
+  // from (see MappingSourceRef.jsonPath), so buildMappingForResource derives the real
+  // MappingFieldRequest.correlationCodeJsonPath itself, off this row's OWN already-resolved `jsonPath`.
+  correlationSiblingField?: string;
   correlationCodeValue?: string;
+  // "Equals" | "Contains" | "NotEquals" — how correlationCodeValue is compared against the sibling field's
+  // own value. Forwarded to MappingFieldRequest.correlationCodeOperator as-is; omitted (undefined) means
+  // JsonMappingEngine's own default, exact match, same as every CorrelateByCode field saved before this
+  // operator existed.
+  correlationOperator?: string;
   isEnabled?: boolean;
   // True when this row's field-mapping metadata (JsonPath/arrayPolicy/etc.) was derived by naive path
   // conversion rather than the backend FHIR catalog's own authoritative shape — see field-mapping-model.ts.
@@ -1398,6 +1407,23 @@ export class WorkflowBuildAssemblerServiceV2 {
       const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource, arrays);
       this.assertArrayWildcardsIntact(resource, row.column, jsonPath, arrays);
       const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
+      // field-mapping-model.ts only ever hands this row a bare sibling field NAME ("use"), not an absolute
+      // JsonPath — the catalog-derived jsonPath a "Match criteria" row's own field needs to build
+      // "$.telecom[*].use" from is frequently unavailable at that layer (see MappingSourceRef.jsonPath's own
+      // "when present" doc comment), but THIS row's `jsonPath` above is always present by now (falling back
+      // to the naive toJsonPath conversion) — so the sibling path is derived here instead, off the one
+      // jsonPath value both this field and its sibling actually share an outermost array with.
+      const correlationCodeJsonPath = row.correlationSiblingField
+        ? this.siblingCorrelationJsonPath(arrays, resource, row.correlationSiblingField)
+        : undefined;
+      // A "Match criteria" row whose sibling path couldn't be derived (jsonPath has no repeating ancestor at
+      // all) has nothing to correlate against — CorrelateByCode with a missing CorrelationCodeJsonPath is a
+      // run-time mapping ERROR (JsonMappingEngine.ResolveCorrelatedValue), not a silent no-op, so this falls
+      // back to the same safe default an unresolved instance selection already gets rather than shipping a
+      // half-configured policy.
+      const arrayPolicy = row.arrayPolicy === 'CorrelateByCode' && !correlationCodeJsonPath
+        ? 'FirstItem'
+        : (row.arrayPolicy ?? (isArrayPath ? 'FirstItem' : 'Scalar'));
       // A row whose own table differs from this resource's baseDestinationObject is a genuine child-table
       // field (e.g. Patient.name.use -> dbo.PatientName) — route it there explicitly via a per-field
       // destinationObject override, same as MappingImportService.BuildFieldAsync does for mapping-profiles
@@ -1436,11 +1462,12 @@ export class WorkflowBuildAssemblerServiceV2 {
         cardinality: row.cardinality,
         // A flat destination column takes the first match when the path crosses an array; multi-value
         // fan-out (RepeatParent / SeparateDestination) is a deliberate per-field choice, not the default.
-        arrayPolicy: row.arrayPolicy ?? (isArrayPath ? 'FirstItem' : 'Scalar'),
+        arrayPolicy,
         arrayAncestors: arrays.length > 0 ? arrays : null,
         isUpsertKey: row.isUpsertKey ?? row === idRow,
-        correlationCodeJsonPath: row.correlationCodeJsonPath ?? null,
+        correlationCodeJsonPath: correlationCodeJsonPath ?? null,
         correlationCodeValue: row.correlationCodeValue ?? null,
+        correlationCodeOperator: row.correlationOperator ?? null,
         isEnabled: row.isEnabled,
       };
     });
@@ -1518,6 +1545,39 @@ export class WorkflowBuildAssemblerServiceV2 {
    * silently went NULL. Each save→reload cycle re-applied the degradation, which is why a field could work
    * once and then stop the moment any unrelated field was added to the same mapping node.
    */
+  /**
+   * Builds the absolute JsonPath MappingFieldRequest.correlationCodeJsonPath needs for a "Match criteria"
+   * row's sibling field — the mapped field's own JsonPath with its trailing leaf segment swapped for the
+   * criteria's bare field name ("$.telecom[*].value" + "use" -> "$.telecom[*].use"). This is a genuine
+   * SIBLING within the mapped field's own immediately-enclosing object, at whatever nesting depth that is —
+   * "$.contact[*].telecom[*].value" + "system" correlates within the SAME telecom item
+   * ("$.contact[*].telecom[*].system"), not merely within the same contact (a bug this fixes: matching
+   * only on the outermost "[*]" let a "system contains mail" criteria match ANY contact that happened to
+   * have SOME matching telecom, then return that contact's FIRST telecom value — not necessarily the one
+   * whose own system actually matched). JsonMappingEngine.ResolveCorrelatedValue correlates on the full
+   * index chain this produces, not just its first level — see that method's own doc comment. Undefined
+   * when `jsonPath` has no repeating ancestor at all ("$.gender") — nothing to correlate against.
+   */
+  private siblingCorrelationJsonPath(
+    arrays: readonly string[], resourceType: string, siblingField: string,
+  ): string | undefined {
+    if (arrays.length === 0) return undefined;
+    // arrays[length - 1] is the row's own INNERMOST repeating ancestor (the same one
+    // arrayAncestorLabel() in the join-popover shows as "<X> repeats — which instance?") — e.g.
+    // "contact.telecom" for a field nested two levels deep, or plain "contact" for one mapped straight
+    // onto a contact-level property. Running it back through toJsonPath's own wildcarding gives exactly
+    // the fully-wildcarded PARENT path this field's sibling shares, at whatever depth that really is —
+    // "$.contact[*].telecom[*]" or "$.contact[*]" respectively — regardless of how many further
+    // non-repeating segments (e.g. a nested "address" object) the mapped field's OWN path goes on to
+    // cross past that point. Appending the bare sibling field name onto THAT (not onto the mapped
+    // field's own full path) is what a naive "swap the last path segment" string trick got wrong for
+    // "contact[*].address.city" correlated by a contact-level "relationship": that produced
+    // "contact[*].address.relationship" (address has no such property) instead of
+    // "contact[*].relationship".
+    const innermostAncestor = arrays[arrays.length - 1];
+    return `${this.toJsonPath(innermostAncestor, resourceType, arrays)}.${siblingField}`;
+  }
+
   private toJsonPath(path: string, resourceType: string, arrays: readonly string[] = []): string {
     let p = path.trim();
     if (p.startsWith(`${resourceType}.`)) p = p.slice(resourceType.length + 1);
