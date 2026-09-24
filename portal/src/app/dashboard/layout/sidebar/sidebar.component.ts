@@ -93,9 +93,11 @@ const NAV_ENTRIES: NavEntry[] = [
 })
 export class SidebarComponent {
   readonly collapsed = input(false);
-  /** Emits when the user clicks the sidebar's own collapse toggle — only rendered in layout v2,
-   *  which has no topbar hamburger to drive AppShellComponent's sidebarCollapsed signal instead. */
-  readonly toggle = output<void>();
+  /** Emits when the user clicks the sidebar's own collapse toggle — only rendered in the 'focused'
+   *  layout, which has no topbar hamburger to drive AppShellComponent's sidebarCollapsed signal
+   *  instead. Named sidebarToggle, not toggle: `toggle` collides with the native DOM `<details>`
+   *  toggle event (@angular-eslint/no-output-native). */
+  readonly sidebarToggle = output<void>();
 
   private readonly store = inject(AuthStore);
   private readonly permissions = inject(PermissionService);

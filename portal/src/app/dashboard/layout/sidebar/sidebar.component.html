@@ -21,7 +21,7 @@
 
     <!-- Focused has no topbar hamburger — the sidebar drives its own collapse toggle instead. -->
     @if (layout() === 'focused') {
-      <button class="sidebar-toggle" type="button" (click)="toggle.emit()" [attr.aria-label]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'">
+      <button class="sidebar-toggle" type="button" (click)="sidebarToggle.emit()" [attr.aria-label]="collapsed() ? 'Expand sidebar' : 'Collapse sidebar'">
         <span class="h-line"></span>
         <span class="h-line"></span>
         <span class="h-line"></span>
