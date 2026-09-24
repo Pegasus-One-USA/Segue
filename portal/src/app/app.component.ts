@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { Router, RouterOutlet, NavigationStart, NavigationEnd, NavigationCancel, NavigationError, NavigationSkipped } from '@angular/router';
 import { ThemeService } from './services/theme.service';
+import { DensityService } from './services/density.service';
 import { CrossTabAuthSyncService } from './auth/services/cross-tab-auth-sync.service';
 import { BrandingService } from './services/branding.service';
 import { ToastComponent } from './components/shared/toast/toast.component';
@@ -34,6 +35,9 @@ import { BlockingConfirmService } from './core/services/blocking-confirm.service
 export class AppComponent {
   // Instantiate ThemeService at startup so the persisted theme is applied.
   private readonly theme = inject(ThemeService);
+  // Same reason: applies the persisted [data-density] attribute before first paint, not only once
+  // the user menu (the one place that reads/sets it) happens to be opened.
+  private readonly density = inject(DensityService);
   // Instantiate eagerly so the cross-tab `storage` listener is registered from the
   // first paint, not only once some other component happens to inject it.
   private readonly crossTabAuthSync = inject(CrossTabAuthSyncService);

@@ -1,3 +1,6 @@
+<!-- No title of its own — the active tab below already reads as one, and each tab's own page
+     (Branding, ...) carries its own specific title right underneath. A second, generic "Settings"
+     title here just restated that with less information and ate the vertical space doing it. -->
 <nav class="shell-tabs">
   @for (tab of tabs(); track tab.route) {
     <a class="shell-tab" [routerLink]="tab.route" routerLinkActive="active">

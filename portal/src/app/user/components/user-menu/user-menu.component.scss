@@ -1,4 +1,6 @@
-:host { position: relative; display: flex; }
+// display:contents so .um-wrap below (not :host) is the real flex-item box — the topbar's
+// .shell-actions sizes it to content, while the sidebar can stretch it to the rail's full width.
+:host { display: contents; }
 
 /* ── Backdrop ─────────────────────────────────────────────────────── */
 .um-backdrop {
@@ -11,9 +13,11 @@
 
 /* ── Trigger ──────────────────────────────────────────────────────── */
 .um-wrap { position: relative; }
+.um-wrap--sidebar { width: 100%; }
 
 .um-trigger {
   display: flex; align-items: center; gap: 10px;
+  width: 100%;
   padding: 6px 10px 6px 6px;
   background: none; border: 1px solid transparent;
   border-radius: 10px; cursor: pointer;
@@ -21,6 +25,14 @@
 
   &:hover { background: color-mix(in srgb, var(--color-primary) 7%, transparent); border-color: color-mix(in srgb, var(--color-primary) 20%, transparent); }
   .um-wrap.open & { background: color-mix(in srgb, var(--color-primary) 10%, transparent); border-color: color-mix(in srgb, var(--color-primary) 30%, transparent); }
+
+  // Sidebar-anchored + the sidebar itself collapsed to its 64px rail — avatar-only chip, same
+  // footprint as a collapsed .nav-item above it.
+  &.um-trigger--collapsed {
+    width: auto;
+    padding: 6px;
+    justify-content: center;
+  }
 }
 
 .um-avatar {
@@ -60,11 +72,32 @@
   box-shadow:    0 24px 60px rgba(15,23,42,.18), 0 4px 16px rgba(15,23,42,.08);
   z-index:       9001;
   animation:     um-slide-in .18s cubic-bezier(.22,.68,0,1.2) both;
+
+  // Anchored off the sidebar-foot trigger instead of the topbar one — opens upward, sitting right
+  // above the trigger row rather than pinned to the viewport's own bottom edge. bottom:16px (the
+  // viewport-relative value this used to use) undershot the trigger's actual top by a wide margin —
+  // .sidebar's own bottom padding (24px) + .sidebar-footer's padding (10px top, 10px bottom) + the
+  // trigger row itself (~46px: 34px avatar + 6px top/bottom padding) put the trigger's top edge
+  // roughly 90px up from the viewport bottom, not 16px — so the panel's bottom half rendered behind/
+  // past the trigger instead of stopping above it, reading as two disconnected floating pieces.
+  &.um-panel--sidebar {
+    top:        auto;
+    right:      auto;
+    bottom:     96px;
+    left:       16px;
+    max-height: calc(100vh - 112px);
+    animation:  um-slide-in-up .18s cubic-bezier(.22,.68,0,1.2) both;
+  }
 }
 
 @keyframes um-slide-in {
   from { opacity: 0; transform: translateY(-6px) scale(.97); }
   to   { opacity: 1; transform: translateY(0)    scale(1);   }
+}
+
+@keyframes um-slide-in-up {
+  from { opacity: 0; transform: translateY(6px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);   }
 }
 
 /* ── Header ──────────────────────────────────────────────────────── */
@@ -163,6 +196,33 @@
   &.active {
     border-color: var(--color-primary); background: var(--color-primary-soft);
     color: var(--color-primary); font-weight: 600;
+  }
+}
+
+/* ── Layout section ───────────────────────────────────────────────── */
+.um-section--layout { padding: 10px 14px 12px; }
+
+.um-layout-label {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 600; color: var(--color-ink); margin-bottom: 8px;
+
+  .um-item-icon { width: 28px; height: 28px; }
+  svg { width: 15px; height: 15px; }
+}
+
+.um-layout-row {
+  display: flex; gap: 6px; padding-left: 38px;
+}
+
+.um-layout-btn {
+  flex: 1; padding: 6px 8px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--color-border); background: var(--color-side); color: var(--color-muted);
+  cursor: pointer; transition: all .12s;
+
+  &:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+  &.active {
+    border-color: var(--color-primary); background: var(--color-primary-soft);
+    color: var(--color-primary);
   }
 }
 
