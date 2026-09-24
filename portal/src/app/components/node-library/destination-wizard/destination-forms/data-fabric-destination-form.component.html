@@ -139,6 +139,18 @@
           <span class="dw-hint">Matches on the mapping field flagged as the upsert key, falling back to SourceResourceId — the same key a SQL Server destination uses.</span>
         }
       </div>
+
+      <div class="dw-field dw-field--full dw-field--checkbox">
+        <label class="dw-label">
+          <input type="checkbox" formControlName="warehouseUseWorkspaceIdentity" />
+          Load staged files as the workspace identity
+        </label>
+        @if (fabricForm.get('warehouseUseWorkspaceIdentity')!.value) {
+          <span class="dw-hint">On by default, and needed in almost every case. COPY INTO runs inside the Warehouse, which reads the staged file with its own identity — the credentials above authenticate this connection, not that read. Create the workspace identity in Fabric (Workspace settings &rarr; Workspace identity) and give it access to the staging lakehouse.</span>
+        } @else {
+          <span class="dw-hint">Off means COPY INTO runs with no credential, so the Warehouse authenticates as nobody and the load fails with "Access token couldn't be fetched". Only turn this off if your Warehouse reaches OneLake some other way.</span>
+        }
+      </div>
     }
     <!-- Test Connection sits with the credentials it exercises, not at the foot of the form: the failure it
          reports is almost always an auth or permission problem, and the fix is in the fields just above. -->

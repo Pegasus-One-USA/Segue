@@ -137,7 +137,8 @@ export function buildConnectionMetadata(
          // the save, so omitting these made the form post them and the server reject the request as missing.
          'dest_fabricWarehouseSqlEndpoint', 'dest_fabricWarehouseStagingLakehouse',
          'dest_fabricWarehouseTable', 'dest_fabricWarehouseSchema',
-         'dest_fabricWarehouseWriteMode', 'dest_fabricWarehouseStagingPath']
+         'dest_fabricWarehouseWriteMode', 'dest_fabricWarehouseStagingPath',
+         'dest_fabricWarehouseUseWorkspaceIdentity']
     : kind === 'sql'
       ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
       : kind === 'fhir'

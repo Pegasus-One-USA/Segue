@@ -109,6 +109,26 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
 
             return new DestinationWriteResult(loaded);
         }
+        catch (SqlException exception) when (
+            exception.Message.Contains("Access token couldn't be fetched", StringComparison.OrdinalIgnoreCase))
+        {
+            // The Warehouse engine reads the staging file ITSELF — it does not inherit this connection's token.
+            // Without a CREDENTIAL clause it has no identity for OneLake, and Fabric reports that as "unsupported
+            // URL or ... transient error", which points at the URL and sends people to re-check a path that is
+            // fine. Restate it as the credential problem it is, and name the setting that fixes it.
+            throw new InvalidOperationException(
+                $"Destination '{destination.Name}': the Warehouse could not read the staging file at {stagingBlobPath}. "
+                    + (settings.WarehouseUseWorkspaceIdentity
+                        ? "COPY INTO ran as the workspace identity, so confirm that identity exists (Fabric > "
+                            + "Workspace settings > Workspace identity) and has access to the staging lakehouse "
+                            + $"'{settings.WarehouseStagingLakehouse}'."
+                        : "COPY INTO ran with no credential, so the Warehouse authenticated as nobody — the token "
+                            + "that authenticated this connection is not passed on to it. Enable 'Use workspace "
+                            + "identity' on this destination, and make sure the workspace identity exists in Fabric "
+                            + $"and can read the staging lakehouse '{settings.WarehouseStagingLakehouse}'.")
+                    + " The staging file itself uploaded successfully, so OneLake access from FHIRBridge is fine.",
+                exception);
+        }
         finally
         {
             // Staging files are pure intermediate state and carry PHI, so they are removed whether the load

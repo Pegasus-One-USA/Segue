@@ -127,6 +127,9 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
     warehouseTable: ['', []],
     warehouseSchema: ['dbo', []],
     warehouseWriteMode: ['append', []],
+    /** COPY INTO runs inside the Warehouse, which reads the staging file with its OWN identity rather than
+     *  the one that authenticated this connection. With no credential it authenticates as nobody. */
+    warehouseUseWorkspaceIdentity: [true, []],
     warehouseStagingPath: ['_staging', []],
   });
 
@@ -248,6 +251,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       dest_fabricWarehouseTable: v.warehouseTable ?? '',
       dest_fabricWarehouseSchema: v.warehouseSchema ?? 'dbo',
       dest_fabricWarehouseWriteMode: v.warehouseWriteMode ?? 'append',
+      dest_fabricWarehouseUseWorkspaceIdentity: v.warehouseUseWorkspaceIdentity ? 'true' : 'false',
       dest_fabricWarehouseStagingPath: v.warehouseStagingPath ?? '_staging',
     };
   }
@@ -285,6 +289,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       warehouseTable: fields['dest_fabricWarehouseTable'] || '',
       warehouseSchema: fields['dest_fabricWarehouseSchema'] || 'dbo',
       warehouseWriteMode: fields['dest_fabricWarehouseWriteMode'] || 'append',
+      warehouseUseWorkspaceIdentity: fields['dest_fabricWarehouseUseWorkspaceIdentity'] !== 'false',
       warehouseStagingPath: fields['dest_fabricWarehouseStagingPath'] || '_staging',
     });
     this._syncAuthModeValidators(this.fabricForm.value.authMode ?? null, this.reusingExisting());
@@ -416,7 +421,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       managedIdentityClientId: '', endpointSuffix: 'fabric.microsoft.com', authorityHost: '',
       accountUrl: '', mode: 'oneLakeFiles', warehouseSqlEndpoint: '',
       warehouseStagingLakehouse: '', warehouseTable: '', warehouseSchema: 'dbo',
-      warehouseWriteMode: 'append', warehouseStagingPath: '_staging',
+      warehouseWriteMode: 'append', warehouseUseWorkspaceIdentity: true, warehouseStagingPath: '_staging',
     });
     this._syncAuthModeValidators(this.fabricForm.value.authMode ?? null, this.reusingExisting());
     this.modeValue.set('oneLakeFiles');
