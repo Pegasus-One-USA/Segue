@@ -51,7 +51,6 @@ import { DestinationConfigFormComponent } from '../../shared-v2/config-form/conf
 import { DESTINATION_FORM_REGISTRY } from './destination-forms/destination-form.registry';
 import {
   WizardDestinationFormApi,
-  SqlFamilyFormApi,
   isSqlFamilyForm,
   isFabricForm,
   isMongoForm,
@@ -2699,7 +2698,7 @@ export class DestinationWizardComponent implements OnInit {
             this.selectedExistingId() ?? this.resolvedDestinationId(),
           targetByResource: this.targetByResource(),
         });
-        console.log(JSON.stringify(doc, null, 2));
+        console.info(JSON.stringify(doc, null, 2));
       }
       this.step.update((x) => x + 1);
       this._hasProgressed.set(true);
@@ -3879,8 +3878,11 @@ export class DestinationWizardComponent implements OnInit {
     const workflowId = this.currentWorkflowId();
 
     const dropLocally = () => {
+      // Omit-a-key destructuring: the named binding exists only so the rest object drops that key.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [resourceType]: _removed, ...rest } = this.criteriaByResourceType();
       this.criteriaByResourceType.set(rest);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [resourceType]: _buffered, ...restBuffer } = this.criteriaBuffer;
       this.criteriaBuffer = restBuffer;
     };
