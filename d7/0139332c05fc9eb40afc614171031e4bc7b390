@@ -1,0 +1,199 @@
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_f407b451007bcf::t_7abf9f82dd6e78 1217-1281
+  s_f407b451007bcf::t_5740abaee054a5 1282
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_f407b451007bcf::t_e4e20f51c4348d 2,1228-1237,1318-1321
+  s_f407b451007bcf::t_11a0e40a917559 1350-1364,1400-1579
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_f407b451007bcf::t_0b9e4ab8901a00 105,107
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_f407b451007bcf::t_5a62e716d402ad 399
+  s_f407b451007bcf::t_0a9bb10d9d7abc 319-320,355-363,412-413,430,433-454,561-568,571-607
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_f407b451007bcf::t_0e8e8277e1a0d0 6
+  s_f407b451007bcf::t_ebd4040c4057c6 395-458,548,550,553,555,558-620,648-652
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_f407b451007bcf::t_ce73f8f7f9e43d 142-153
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_f407b451007bcf::t_922d1ec34c2fa2 130-135,257,295,427
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-add-column-modal.component.ts
+  s_f407b451007bcf::t_69c4fec2cd3f5f 8-10,15,31-61,63-66
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_f407b451007bcf::t_45cffe537047a8 1309-1315,1317-1341
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.ts
+  s_f407b451007bcf::t_98b9cb139e52b0 1,58-69,76-80
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_f407b451007bcf::t_8bb866ca28af51 216-229,231-243,434-442
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_f407b451007bcf::t_466cf095b20535 289,291
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_f407b451007bcf::t_c1f1d00fb5092c 661,664,668-674
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_f407b451007bcf::t_26e082b469e722 142-153
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_f407b451007bcf::t_56dea75595c74a 130-135,257,295,427
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-add-column-modal.component.ts
+  s_f407b451007bcf::t_e823f436c335e4 8-10,15,31-61,63-66
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_f407b451007bcf::t_20fd33f481bdde 1299-1305,1307-1331
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-edit-column-modal.component.ts
+  s_f407b451007bcf::t_1926c778227692 1,58-69,76-80
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_f407b451007bcf::t_9f00fa23412e71 140-141
+portal/src/app/services/workflow-api.service.ts
+  s_f407b451007bcf::t_494a9e0cef8ee1 224-227
+portal/src/app/services/workflow-build-assembler-v2.correlate-by-code.spec.ts
+  s_f407b451007bcf::t_eb7ec132dde283 1-92
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_f407b451007bcf::t_048a62c12a002f 47-51,53-57,1125,1411-1427,1466,1469,1471,1549-1581
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.ts
+  s_f407b451007bcf::t_c6610fe15874c2 187-194,196,198-206
+portal/src/app/system-settings/dialogs/hapi-terminology-code-dialog/hapi-terminology-code-dialog.component.html
+  s_f407b451007bcf::t_6755aad28edd36 54-96
+portal/src/app/system-settings/dialogs/hapi-terminology-code-dialog/hapi-terminology-code-dialog.component.ts
+  s_f407b451007bcf::t_ac676cdd2c5eed 10,33,57-65,81-89,92-100,102-103
+portal/src/app/system-settings/dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component.html
+  s_f407b451007bcf::t_23311e9d1e460b 85-114
+portal/src/app/system-settings/dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component.scss
+  s_f407b451007bcf::t_fd7373863841e8 276-308
+portal/src/app/system-settings/dialogs/hapi-terminology-codes-dialog/hapi-terminology-codes-dialog.component.ts
+  s_f407b451007bcf::t_d94847da1a3f89 56-58
+portal/src/app/system-settings/services/hapi-terminology-configuration.service.ts
+  s_f407b451007bcf::t_0671dc1aa0fbde 21-31,37-40,77-84
+src/FHIRBridge.Application/DTOs/HapiTerminologyConfigurationDtos.cs
+  s_f407b451007bcf::t_8fab9d42971bac 60-67,71-79
+src/FHIRBridge.Application/DTOs/MappingFieldDto.cs
+  s_f407b451007bcf::t_7c2d8f0ab95e04 27-31
+src/FHIRBridge.Application/DTOs/TerminologyLookupResult.cs
+  s_f407b451007bcf::t_9aeb254a8fd849 8-20
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_f407b451007bcf::t_f6da61d3d4590a 192,254
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_f407b451007bcf::t_da81b87f16074f 9,95-105,319-326,342,344-347,349,356,365-406,488-560,918,971,1076-1085,1087-1092,1096,1102-1158
+src/FHIRBridge.Application/Services/Transforms/Nodes/CodesTerminologyNodes.cs
+  s_f407b451007bcf::t_aa525145287ab8 93-98,110-157,174-176,207,224-226,231-243
+src/FHIRBridge.Application/Services/Transforms/Nodes/FhirComplexTypeNodes.cs
+  s_f407b451007bcf::t_2e07cef6505394 1-2,626-636,647-653,655-660,662-663,665-669,672,674-687,689,692-698,705,708,715,718-734,737-803,806-807
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_f407b451007bcf::t_5c1246debe7828 1,65-68,80-83,163-167,178-183,212-220,224-230,276,278-282,319-324,328-335
+src/FHIRBridge.Domain/Entities/Terminology/HapiLocalTerminologyEntities.cs
+  s_f407b451007bcf::t_e0fa6b9b8e662e 56-67,72-75,83-101,107-119
+src/FHIRBridge.Domain/ValueObjects/MappingField.cs
+  s_f407b451007bcf::t_cab7b9ea2819dc 28-33
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260923033723_AddTrmConceptDescriptionColumns.Designer.cs
+  s_f407b451007bcf::t_f2f66e84bc5fc0 1-6173
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260923033723_AddTrmConceptDescriptionColumns.cs
+  s_f407b451007bcf::t_52e5e0bef896f3 1-67
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260923175415_AddMappingFieldCorrelationOperator.Designer.cs
+  s_f407b451007bcf::t_f34b4af1d47e82 1-6177
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260923175415_AddMappingFieldCorrelationOperator.cs
+  s_f407b451007bcf::t_2e789cb10278f5 1-29
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260924093623_MakeErrorLogMessageColumnsUnbounded.Designer.cs
+  s_f407b451007bcf::t_5fdb3d74fda215 1-6174
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260924093623_MakeErrorLogMessageColumnsUnbounded.cs
+  s_f407b451007bcf::t_5169fbed6942c5 1-82
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_f407b451007bcf::t_d74194106b5f37 1127,1150,1157,4214-4227,5428-5431
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricDestinationSettings.cs
+  s_f407b451007bcf::t_4a9587379a1489 87-92,94-108,183-187
+src/FHIRBridge.Infrastructure/Destinations/Fabric/WarehouseTableLandingStrategy.cs
+  s_f407b451007bcf::t_f1987759a20e66 67-72,88-89,118-162
+src/FHIRBridge.Infrastructure/Destinations/MappedDestinationParquetSerializer.cs
+  s_f407b451007bcf::t_972fed6dadaa6b 20,22-33
+src/FHIRBridge.Infrastructure/Destinations/MappedDestinationSerialization.cs
+  s_f407b451007bcf::t_9b4898d89da898 90-104
+src/FHIRBridge.Infrastructure/Destinations/MySqlDdlTypeValidator.cs
+  s_f407b451007bcf::t_0ffaac29546c00 97-106
+src/FHIRBridge.Infrastructure/Destinations/PostgreSqlDdlTypeValidator.cs
+  s_f407b451007bcf::t_7bb1f33683b2de 103-114,116-118,126-135
+src/FHIRBridge.Infrastructure/Destinations/SqlDestinationSchemaService.cs
+  s_f407b451007bcf::t_847f6d8721477c 1382-1387
+src/FHIRBridge.Infrastructure/Destinations/SqlServerDdlTypeValidator.cs
+  s_f407b451007bcf::t_3e40056482d7aa 62-65
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceLogger.cs
+  s_f407b451007bcf::t_51741285d31424 166-167,172
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Governance/ErrorLogConfiguration.cs
+  s_f407b451007bcf::t_3244ab591c7b0c 1,16-19,26
+src/FHIRBridge.Infrastructure/Persistence/Configurations/MappingProfileConfiguration.cs
+  s_f407b451007bcf::t_f5b583c86cc43f 61
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Terminology/HapiLocalTerminologyConfigurations.cs
+  s_f407b451007bcf::t_e998b223e3e2e4 53-61
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260923033656_AddTrmConceptDescriptionColumns.Designer.cs
+  s_f407b451007bcf::t_174966ef5d7ec3 1-6209
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260923033656_AddTrmConceptDescriptionColumns.cs
+  s_f407b451007bcf::t_f96c75832b6196 1-67
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260923175329_AddMappingFieldCorrelationOperator.Designer.cs
+  s_f407b451007bcf::t_dc164913ed4abf 1-6213
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260923175329_AddMappingFieldCorrelationOperator.cs
+  s_f407b451007bcf::t_b67f6620219bad 1-29
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260924093506_MakeErrorLogMessageColumnsUnbounded.Designer.cs
+  s_f407b451007bcf::t_8cb04626ba5d4c 1-6210
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260924093506_MakeErrorLogMessageColumnsUnbounded.cs
+  s_f407b451007bcf::t_3aa59f3f6dc570 1-81
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_f407b451007bcf::t_efe3579a2a8c06 1136,1159,1166,4246-4259,5464-5467
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiCvxTerminologySyncService.cs
+  s_f407b451007bcf::t_e157acf40ce951 65-74,108-111,117
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiDcmTerminologySyncService.cs
+  s_f407b451007bcf::t_790a8e029485ec 23-24,63-71,95-97,107-108,114
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiHcpcsTerminologySyncService.cs
+  s_f407b451007bcf::t_7eaebf282aac33 1,75-84,153-157,169-175,194-195,206-207,217
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10PcsTerminologySyncService.cs
+  s_f407b451007bcf::t_bd4c31eea3b9fb 70-79,138-140,148,154
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcd10TerminologySyncService.cs
+  s_f407b451007bcf::t_52df33d6e78cc3 64-75,111-114,123,129
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiIcpc3TerminologySyncService.cs
+  s_f407b451007bcf::t_4a39f7d9053a95 15-18,57-65,80-83,86-92,98-104,106,110-115,121-125
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiLocalTerminologyWriter.cs
+  s_f407b451007bcf::t_41b86a9427e299 35-38,43-55,113,115-122
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiLoincTerminologySyncService.cs
+  s_f407b451007bcf::t_f99ece6769cbfb 61-71,115,128,133-149,152,155-161
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiMeshTerminologySyncService.cs
+  s_f407b451007bcf::t_728aa25ebb22cf 18-20,65-73,131,150-153,155-159,167-168,175
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiNdcTerminologySyncService.cs
+  s_f407b451007bcf::t_e9a055a9db2698 1,58-66,90,118-133,136,139
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiRxNormTerminologySyncService.cs
+  s_f407b451007bcf::t_340f8935191b64 63-71,95-97,123-135,145-149,163,165
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiSnomedTerminologySyncService.cs
+  s_f407b451007bcf::t_97ac84c6d3aa55 68-76,156,161-169,175-177,182,210
+src/FHIRBridge.Infrastructure/Terminology/Hapi/HapiTerminologyConfigurationService.cs
+  s_f407b451007bcf::t_e9fcdec7cf03c1 212-215,218-220,241-244,254-261,313-317
+src/FHIRBridge.Infrastructure/Terminology/Hapi/TerminologyConceptRecord.cs
+  s_f407b451007bcf::t_ef150e28ab4975 1-28
+src/FHIRBridge.Infrastructure/Terminology/Hapi/TerminologyConceptService.cs
+  s_f407b451007bcf::t_d87bcc4b607600 49-52,60-61,81-88,92-94,121-122,125-127
+src/FHIRBridge.Infrastructure/Terminology/HapiLocalTerminologyLookupService.cs
+  s_f407b451007bcf::t_b9527a8644edf9 36-44,50-52,75-84,90-92
+tests/FHIRBridge.Runtime.UnitTests/Workflows/CoerceToExpectedValueTypeTests.cs
+  s_f407b451007bcf::t_6941b57d3fd618 1-193
+tests/FHIRBridge.UnitTests/Configuration/MappingFieldCorrelationCodeOperatorMappingTests.cs
+  s_f407b451007bcf::t_7431ad3e003cd0 1-62
+tests/FHIRBridge.UnitTests/Destinations/Fabric/WarehouseTableLandingStrategyTests.cs
+  s_f407b451007bcf::t_542640984cc9aa 1,5,138-205
+tests/FHIRBridge.UnitTests/Destinations/LiveProbeDdlTypeValidatorTests.cs
+  s_f407b451007bcf::t_73b730ce008def 1-41
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineArrayPolicyTests.cs
+  s_f407b451007bcf::t_ff0e4fd809f38e 140-403
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineDateTimeZoneTests.cs
+  s_f407b451007bcf::t_2a197ddbc5551d 1-96
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineNthInstanceTests.cs
+  s_f407b451007bcf::t_6bcfe9fa64314d 1-116
+tests/FHIRBridge.UnitTests/Transforms/FhirComplexTypeNodesTests.cs
+  s_f407b451007bcf::t_2052c844afb1e9 439-595
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d70139332c05fc9eb40afc614171031e4bc7b390",
+  "prompts": {},
+  "sessions": {
+    "s_f407b451007bcf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6e2805db-d97d-4fdb-842b-c27dcd40c2fb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
