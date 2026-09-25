@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Persistence;
@@ -569,6 +569,344 @@ public sealed class MappingNodeExecutorTests
     }
 
     /// <summary>
+    /// A rule on a field inside a repeating element must apply to EVERY instance of it, not only to whichever
+    /// one the parent row happened to carry. A field mapped with ArrayPolicy.SeparateDestination writes its
+    /// values into the array's own table instead of onto the parent row, and only the parent row was ever put
+    /// through the rule chain — so the same rule on the same field ran or did not run purely according to which
+    /// table the mapping targeted, and every row in dbo.PatientName kept the raw source value.
+    /// </summary>
+    [Fact]
+    public async Task Applies_a_resolved_transform_rule_to_every_child_table_row()
+    {
+        var destination = new DestinationConfiguration(
+            "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("Active", "$.active", MappingValueType.Boolean, IsRequired: false, DefaultValue: null,
+                Format: "directField", ResourceType: "Patient", DestinationObject: "Patient", ArrayPolicy: ArrayPolicy.Scalar),
+            new MappingFieldDto("Text", "$.name[*].text", MappingValueType.String, IsRequired: false, DefaultValue: null,
+                Format: "directField", ResourceType: "Patient", DestinationObject: "PatientName",
+                ArrayPolicy: ArrayPolicy.SeparateDestination, ParentTable: "Patient", ParentKeyColumn: "Id",
+                ForeignKeyColumn: "PatientId"),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["Active"] = true },
+            Errors: [],
+            Rows: null,
+            ChildTables:
+            [
+                new MappingChildTableDto("PatientName",
+                [
+                    new Dictionary<string, object?> { ["Text"] = "jane roe", ["RowIndex"] = "0" },
+                    new Dictionary<string, object?> { ["Text"] = "j. roe", ["RowIndex"] = "1" },
+                ]),
+            ]));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        var rule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.StringNormalization,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["case"] = "upper" }),
+            resourceType: "Patient", destinationField: "Text");
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        // Every other field (Active) still asks the resolver — without a catch-all it hands back a null task.
+        resolver
+            .Setup(r => r.ResolveAsync(
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
+        resolver
+            .Setup(r => r.ResolveAsync(
+                DestinationType.SqlServer, "Patient", "Text", It.IsAny<Guid?>(), null, "Patient.name.text",
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
+        var node = CreateNode("Patient", "Patient", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        var record = (MappedDestinationRecord)batch.Records.Single();
+        var childRows = record.ChildTables!.Single().Rows;
+        childRows.Select(r => r["Text"])
+            .Should().Equal(["JANE ROE", "J. ROE"], "every instance of the repeating field goes through the same chain");
+    }
+
+    /// <summary>
+    /// The child rows' rules must resolve against the child field's OWN source path. The executor's
+    /// parent-row source map is keyed by target field across every field of the resource, so a child column and
+    /// a parent column sharing a name collide there — reusing it would look the child's rule up under the
+    /// parent field's path and silently apply the wrong chain (or none).
+    /// </summary>
+    [Fact]
+    public async Task A_child_column_sharing_a_parent_columns_name_resolves_its_own_source_field()
+    {
+        var destination = new DestinationConfiguration(
+            "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            // Same column name on both tables, different source paths.
+            new MappingFieldDto("Text", "$.maritalStatus.text", MappingValueType.String, IsRequired: false,
+                DefaultValue: null, Format: "directField", ResourceType: "Patient", DestinationObject: "Patient",
+                ArrayPolicy: ArrayPolicy.Scalar),
+            new MappingFieldDto("Text", "$.name[*].text", MappingValueType.String, IsRequired: false,
+                DefaultValue: null, Format: "directField", ResourceType: "Patient", DestinationObject: "PatientName",
+                ArrayPolicy: ArrayPolicy.SeparateDestination, ParentTable: "Patient", ParentKeyColumn: "Id",
+                ForeignKeyColumn: "PatientId"),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["Text"] = "married" },
+            Errors: [],
+            Rows: null,
+            ChildTables:
+            [
+                new MappingChildTableDto("PatientName",
+                    [new Dictionary<string, object?> { ["Text"] = "jane roe", ["RowIndex"] = "0" }]),
+            ]));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        // Only the CHILD field's path has a rule; the parent's identically-named column has none.
+        var rule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.StringNormalization,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["case"] = "upper" }),
+            resourceType: "Patient", destinationField: "Text");
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        resolver
+            .Setup(r => r.ResolveAsync(
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
+        resolver
+            .Setup(r => r.ResolveAsync(
+                DestinationType.SqlServer, "Patient", "Text", It.IsAny<Guid?>(), null, "Patient.name.text",
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
+        var node = CreateNode("Patient", "Patient", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var record = (MappedDestinationRecord)((MappedRecordBatch)output.Payload!).Records.Single();
+        record.ChildTables!.Single().Rows.Single()["Text"].Should().Be("JANE ROE");
+        record.Values["Text"].Should().Be("married", "the parent column of the same name has no rule of its own");
+    }
+
+    /// <summary>
+    /// "All records" on a whole-node mapping with a transformation: the rule runs once per repeat and the
+    /// column receives one delimited string of the rendered names, not a JSON array of them. A column holding
+    /// `["Warren McGinnis","Warren McGinnis"]` reads as an encoding artefact where the delimited form reads as
+    /// the list it is.
+    /// </summary>
+    [Fact]
+    public async Task All_records_writes_every_transformed_name_as_one_delimited_string()
+    {
+        var destination = new DestinationConfiguration(
+            "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("NameConcat", "$.name", MappingValueType.Json, IsRequired: false, DefaultValue: null,
+                Format: "directField", ResourceType: "Patient", DestinationObject: "Patient",
+                ArrayPolicy: ArrayPolicy.StoreJson),
+        };
+
+        // What ArrayPolicy.StoreJson writes for a repeating element: the node's raw JSON text.
+        const string nameArray =
+            """[{"use":"official","text":"Warren James McGinnis III","family":"McGinnis","given":["Warren","James"]},{"use":"usual","text":"Warren James McGinnis III","family":"McGinnis","given":["Warren","James"]}]""";
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["NameConcat"] = nameArray }, Errors: []));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        var rule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.HumanNameParsing,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["pattern"] = "FirstLast" }),
+            resourceType: "Patient", destinationField: "NameConcat",
+            arrayMode: TransformArrayMode.PerItem);
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        resolver
+            .Setup(r => r.ResolveAsync(
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var registry = new TransformNodeRegistry([new HumanNameParsingNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
+        var node = CreateNode("Patient", "Patient", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var record = (MappedDestinationRecord)((MappedRecordBatch)output.Payload!).Records.Single();
+        record.Values["NameConcat"].Should().Be("Warren McGinnis, Warren McGinnis");
+    }
+
+    /// <summary>
+    /// A PerItem run over a one-element array is a single value, so it still reaches the ExpectedValueType
+    /// coercion a strictly-typed column needs — joining it into a string skipped that, and PostgreSQL/MySQL
+    /// parameter binding refuses a text value for an integer/date column.
+    /// </summary>
+    [Fact]
+    public async Task A_single_element_PerItem_result_is_still_coerced_to_the_expected_type()
+    {
+        var destination = new DestinationConfiguration(
+            "Test PG", DestinationType.PostgreSql, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("Score", "$.extension", MappingValueType.Json, IsRequired: false, DefaultValue: null,
+                Format: "directField", ResourceType: "Patient", DestinationObject: "Patient",
+                ArrayPolicy: ArrayPolicy.StoreJson),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["Score"] = """[" 42 "]""" }, Errors: []));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        var rule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.StringNormalization,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["trim"] = "true" }),
+            resourceType: "Patient", destinationField: "Score",
+            arrayMode: TransformArrayMode.PerItem, expectedValueType: MappingValueType.Integer);
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        resolver
+            .Setup(r => r.ResolveAsync(
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
+        var node = CreateNode("Patient", "Patient", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var record = (MappedDestinationRecord)((MappedRecordBatch)output.Payload!).Records.Single();
+        record.Values["Score"].Should().Be(42L);
+    }
+
+    /// <summary>
+    /// RawArrayValues spans every instance of the repeating element — it was built for the parent row. A child
+    /// row already IS one instance, so a chain led by ConcatenationTemplating must see that row's own value,
+    /// not the same cross-instance list substituted into every row.
+    /// </summary>
+    [Fact]
+    public async Task Child_rows_do_not_receive_the_parents_cross_instance_raw_array_values()
+    {
+        var destination = new DestinationConfiguration(
+            "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("Given", "$.name[*].given", MappingValueType.String, IsRequired: false, DefaultValue: null,
+                Format: "directField", ResourceType: "Patient", DestinationObject: "PatientName",
+                ArrayPolicy: ArrayPolicy.SeparateDestination, ParentTable: "Patient", ParentKeyColumn: "Id",
+                ForeignKeyColumn: "PatientId"),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?>(),
+            Errors: [],
+            Rows: null,
+            ChildTables:
+            [
+                new MappingChildTableDto("PatientName",
+                [
+                    new Dictionary<string, object?> { ["Given"] = "Camila", ["RowIndex"] = "0" },
+                    new Dictionary<string, object?> { ["Given"] = "Cami", ["RowIndex"] = "1" },
+                ]),
+            ],
+            RawArrayValues: new Dictionary<string, IReadOnlyList<object?>> { ["Given"] = ["Camila", "Maria", "Cami"] }));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        var rule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.ConcatenationTemplating,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["separator"] = " " }),
+            resourceType: "Patient", destinationField: "Given");
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        resolver
+            .Setup(r => r.ResolveAsync(
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
+
+        var registry = new TransformNodeRegistry([new ConcatenationTemplatingNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
+        var node = CreateNode("Patient", "Patient", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var record = (MappedDestinationRecord)((MappedRecordBatch)output.Payload!).Records.Single();
+        record.ChildTables!.Single().Rows.Select(r => r["Given"]).Should().Equal(["Camila", "Cami"]);
+    }
+
+    /// <summary>
     /// End-to-end proof that the real destination type reaches the node automatically — a Unit Conversion
     /// rule writing into a SQL destination gets just the plain number, never the full FHIR Quantity object,
     /// even though nothing in the rule's own saved config says "flatten this." The executor infers it from
@@ -998,5 +1336,71 @@ public sealed class MappingNodeExecutorTests
 
             return new MappingTestResultDto(values, []);
         }
+    }
+
+    /// <summary>
+    /// Regression test for a rule-authority bug: the final relational-type coercion must be driven only by the
+    /// last rule that actually SUCCEEDED, never by one the chain merely reached and then failed. Chain: a
+    /// NumberCast rule (declares ExpectedValueType=Boolean, which is nonsensical for it — a red herring meant
+    /// to look plausible if wrongly credited) fails on non-numeric input and PassesThrough; a StringNormalization
+    /// rule with NO declared type then actually produces the final value. Before this fix, the failed
+    /// NumberCast rule's Boolean type still got credited, so the final string "yes" (a real value, not a literal
+    /// boolean spelling coincidence) was silently miscoerced to the CLR `true` before being written.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_that_fails_never_dictates_the_final_coercion_type()
+    {
+        var destination = new DestinationConfiguration(
+            "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("FamilyName", "$.name.family", MappingValueType.String, IsRequired: false,
+                DefaultValue: null, Format: "directField", ResourceType: "Patient", DestinationObject: "Patient"),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["FamilyName"] = "YES" }, Errors: []));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        var failingTypedRule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.NumberCast, JsonSerializer.Serialize(new Dictionary<string, string>()),
+            resourceType: "Patient", destinationField: "FamilyName",
+            errorPolicy: TransformErrorPolicy.PassThrough, expectedValueType: MappingValueType.Boolean);
+        var succeedingUntypedRule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.StringNormalization,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["case"] = "lower" }),
+            resourceType: "Patient", destinationField: "FamilyName");
+
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        resolver
+            .Setup(r => r.ResolveAsync(
+                DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), null, "Patient.name.family",
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[failingTypedRule, succeedingUntypedRule]);
+
+        var registry = new TransformNodeRegistry([new NumberCastNode(), new StringNormalizationNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
+        var node = CreateNode("Patient", "Patient", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        var record = (MappedDestinationRecord)batch.Records.Single();
+        record.Values["FamilyName"].Should().Be("yes",
+            "the failed NumberCast rule's Boolean type must not be applied to a value it never produced — " +
+            "only the StringNormalization rule that actually ran wrote this value, and it declares no type");
     }
 }

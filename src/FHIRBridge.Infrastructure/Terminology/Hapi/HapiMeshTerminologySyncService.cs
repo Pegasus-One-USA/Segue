@@ -15,8 +15,9 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// Source: https://nlmpubs.nlm.nih.gov/projects/mesh/MESH_FILES/xmlmesh/ — public, no credentials;
 /// NLM's Terms and Conditions explicitly offer these files "without any restrictions" (linked open
 /// data). The descriptor file is large (~220MB+), so this streams it with XmlReader rather than
-/// loading it into a DOM. Only DescriptorRecord/DescriptorUI + DescriptorName/String are read (the
-/// preferred term) — qualifiers, concepts, scope notes, etc. are skipped for speed.
+/// loading it into a DOM. DescriptorRecord/DescriptorUI + DescriptorName/String (the preferred term)
+/// supply the code and display, and ScopeNote — MeSH's own prose definition — is kept as the long
+/// description; qualifiers and concept relations are still skipped.
 /// </summary>
 public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncService, IHapiVersionCheckable
 {
@@ -61,7 +62,15 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
         var concepts = await DownloadAndParseAsync(downloadClient, fileUrl, cancellationToken);
         _logger.LogInformation("Parsed {Total} MeSH descriptor concepts from the official release.", concepts.Count);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "MeSH", year, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "MeSH",
+            year,
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                LongDescription: c.LongDescription,
+                IsActive: true)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -119,6 +128,7 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
 
             string? code = null;
             string? display = null;
+            string? scopeNote = null;
             while (await record.ReadAsync())
             {
                 if (record.NodeType != XmlNodeType.Element)
@@ -137,8 +147,16 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
                         display = await record.ReadElementContentAsStringAsync();
                     }
                 }
+                else if (scopeNote is null && record.Name == "ScopeNote")
+                {
+                    scopeNote = await record.ReadElementContentAsStringAsync();
+                }
 
-                if (code is not null && display is not null)
+                // Deliberately no early break once code+display are known: ScopeNote sits further down
+                // the record (inside ConceptList), so stopping at the name would never reach it. The
+                // subtree reader still bounds this to one DescriptorRecord, so the extra reads are cheap
+                // relative to the ~220MB stream this already walks end to end.
+                if (code is not null && display is not null && scopeNote is not null)
                 {
                     break;
                 }
@@ -146,12 +164,13 @@ public sealed class HapiMeshTerminologySyncService : IHapiMeshTerminologySyncSer
 
             if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(display))
             {
-                results.Add(new Concept(code, display));
+                // MeSH publishes no status or expiry signal, so every descriptor is stored active.
+                results.Add(new Concept(code, display, string.IsNullOrWhiteSpace(scopeNote) ? null : scopeNote.Trim()));
             }
         }
 
         return results;
     }
 
-    private sealed record Concept(string Code, string Display);
+    private sealed record Concept(string Code, string Display, string? LongDescription);
 }

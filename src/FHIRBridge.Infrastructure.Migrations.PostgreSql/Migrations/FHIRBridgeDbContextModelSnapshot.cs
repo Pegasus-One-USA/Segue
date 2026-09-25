@@ -1124,8 +1124,7 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
 
                     b.Property<string>("Message")
                         .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("Module")
                         .HasMaxLength(100)
@@ -1148,16 +1147,14 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("character varying(32)");
 
                     b.Property<string>("StackTrace")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("TraceId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
                     b.Property<string>("UserFriendlyMessage")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("WorkflowId")
                         .HasMaxLength(100)
@@ -4214,6 +4211,20 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<string>("Display")
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("LongCommonName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("LongDescription")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ShortDescription")
+                        .HasColumnType("text");
+
                     b.HasKey("Pid");
 
                     b.HasIndex("CodeVal");
@@ -5413,6 +5424,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                             b1.Property<string>("CorrelationCodeJsonPath")
                                 .HasMaxLength(500)
                                 .HasColumnType("character varying(500)");
+
+                            b1.Property<string>("CorrelationCodeOperator")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
 
                             b1.Property<string>("CorrelationCodeValue")
                                 .HasMaxLength(100)

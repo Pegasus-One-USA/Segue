@@ -4,6 +4,7 @@ import {
   qualifyTableName, defaultSchemaFor, splitTableName, reconcileTargetsForDestTypeSwitch,
   effectiveMappingValueType, checkColumnTypeCompatibility,
   supportsJsonWriteMode, resolveJsonWriteMode, formatWithJsonWriteMode, jsonWriteModeFromFormat,
+  defaultInstanceType, wholeNodeInstanceIndex, wholeNodeJsonPath,
 } from './field-mapping-model';
 import { DestinationTable } from '../../../../services/destination-schema.service';
 
@@ -381,6 +382,68 @@ describe('serializeRowsFlat', () => {
     });
   });
 
+  // Which instance a whole-node mapping reads travels as an index in the JsonPath, not in the ArrayPolicy
+  // enum (which has no "the nth one, as JSON" member) -- see wholeNodeJsonPath.
+  describe('childJson instance selection', () => {
+    function wholeNodeRow(instance?: MappingRow['instance']): MappingRow {
+      return {
+        resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient.name',
+        instance, targetName: 'NameJson', tableName: 'dbo.Patient',
+      };
+    }
+
+    it('emits no explicit jsonPath when unset, so the whole node is still read as before', () => {
+      const flat = serializeRowsFlat([wholeNodeRow()], {});
+      expect(flat[0].jsonPath).toBeUndefined();
+      expect(flat[0].path).toBe('Patient.name');
+    });
+
+    it('"all records" also reads the whole node - no index', () => {
+      expect(serializeRowsFlat([wholeNodeRow({ type: 'all' })], {})[0].jsonPath).toBeUndefined();
+    });
+
+    it('"first instance" indexes the node, keeping StoreJson and Json', () => {
+      const flat = serializeRowsFlat([wholeNodeRow({ type: 'first' })], {});
+      expect(flat[0].jsonPath).toBe('$.name[0]');
+      expect(flat[0].arrayPolicy).toBe('StoreJson');
+      expect(flat[0].valueType).toBe('Json');
+      expect(flat[0].approximated).toBeFalse();
+    });
+
+    it('"nth instance" is exact - the 1-based UI number becomes a 0-based index', () => {
+      const flat = serializeRowsFlat([wholeNodeRow({ type: 'nth', n: 3 })], {});
+      expect(flat[0].jsonPath).toBe('$.name[2]');
+      expect(flat[0].approximated).toBeFalse();
+    });
+
+    it('"match criteria" becomes a filter on the node, not a position', () => {
+      const flat = serializeRowsFlat([wholeNodeRow({ type: 'criteria', field: 'use', op: '=', value: 'official' })], {});
+      expect(flat[0].jsonPath).toBe('$.name[?use=official]');
+      expect(flat[0].approximated).toBeFalse();
+    });
+
+    it('maps each criteria operator to its wire form', () => {
+      const of = (op: 'contains' | '!=' | '=') =>
+        serializeRowsFlat([wholeNodeRow({ type: 'criteria', field: 'use', op, value: 'official' })], {})[0].jsonPath;
+      expect(of('=')).toBe('$.name[?use=official]');
+      expect(of('!=')).toBe('$.name[?use!=official]');
+      expect(of('contains')).toBe('$.name[?use~official]');
+    });
+
+    it('selects nothing rather than everything while the criteria names no field yet', () => {
+      const flat = serializeRowsFlat([wholeNodeRow({ type: 'criteria', field: '', op: '=', value: 'official' })], {});
+      expect(flat[0].jsonPath).toBeUndefined();
+    });
+
+    it('never indexes the resource root - a resource object is not a repeating element', () => {
+      const wholePayload: MappingRow = {
+        resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient',
+        instance: { type: 'first' }, targetName: 'content', tableName: 'dbo.Patient',
+      };
+      expect(serializeRowsFlat([wholePayload], {})[0].jsonPath).toBeUndefined();
+    });
+  });
+
   describe('isUpsertKey', () => {
     function idRow(overrides: Partial<MappingRow> = {}): MappingRow {
       return {
@@ -523,6 +586,70 @@ describe('serializeRowsFlat', () => {
       );
       expect(flat[0].arrayPolicy).toBe('RepeatParent');
     });
+
+    it('a root-table csv-aggregate field carries the aggregate=csv Format marker JsonMappingEngine reads', () => {
+      const flat = serializeRowsFlat(
+        [{ resource: 'Patient', sources: [{ fhirPath: 'Patient.telecom.use', label: 'Use', arrays: ['telecom'] }], mode: 'value', instance: { type: 'all', aggregate: 'csv' }, targetName: 'telecom', tableName: 'dbo.Patient' }],
+        targetByResource, [], childRelations,
+      );
+      expect(flat[0].arrayPolicy).toBe('FirstItem');
+      expect(flat[0].format).toBe('directField;aggregate=csv');
+    });
+
+    it('a root-table Nth-instance field converts its 1-based instance.n to the 0-based index=N Format marker JsonMappingEngine reads', () => {
+      const flat = serializeRowsFlat(
+        // n=2 is the user-facing "2nd instance" — the wire Format marker is the 0-based array index (1).
+        [{ resource: 'Patient', sources: [{ fhirPath: 'Patient.telecom.use', label: 'Use', arrays: ['telecom'] }], mode: 'value', instance: { type: 'nth', n: 2 }, targetName: 'telecom', tableName: 'dbo.Patient' }],
+        targetByResource, [], childRelations,
+      );
+      expect(flat[0].arrayPolicy).toBe('FirstItem');
+      expect(flat[0].format).toBe('directField;index=1');
+    });
+
+    it('suppresses the csv-aggregate Format marker once the field is fanned out to its own child-table row per item', () => {
+      // Collapsing every occurrence into one delimited string only makes sense on the parent row; once
+      // isChildTable overrides the policy to SeparateDestination, each occurrence already becomes its own
+      // child-table row, so the marker must not survive onto it (see serializeRowsFlat's own `format` calc).
+      const flat = serializeRowsFlat(
+        [childRow({ sources: [{ fhirPath: 'Patient.name.given', label: 'Given', arrays: ['name'] }], instance: { type: 'all', aggregate: 'csv' } })],
+        targetByResource, [], childRelations,
+      );
+      expect(flat[0].arrayPolicy).toBe('SeparateDestination');
+      expect(flat[0].format).toBeUndefined();
+    });
+
+    it('a root-table criteria field emits CorrelateByCode plus the bare sibling field name — the absolute CorrelationCodeJsonPath is derived downstream, in workflow-build-assembler-v2.service.ts, off this row\'s own resolved jsonPath (frequently unavailable at this layer; see MappingSourceRef.jsonPath)', () => {
+      const flat = serializeRowsFlat(
+        [{
+          resource: 'Patient',
+          // Deliberately NO catalog jsonPath on the source — this is the common case in the live app
+          // (MappingSourceRef.jsonPath is only "when present"), and correlationSiblingField must still be
+          // emitted; only the FINAL absolute path build depends on a jsonPath, and that now happens later.
+          sources: [{ fhirPath: 'Patient.telecom.value', label: 'Value', arrays: ['telecom'] }],
+          mode: 'value', instance: { type: 'criteria', field: 'use', op: '=', value: 'mobile' },
+          targetName: 'telecom', tableName: 'dbo.Patient',
+        }],
+        targetByResource, [], childRelations,
+      );
+      expect(flat[0].arrayPolicy).toBe('CorrelateByCode');
+      expect(flat[0].correlationSiblingField).toBe('use');
+      expect(flat[0].correlationCodeValue).toBe('mobile');
+      expect(flat[0].correlationOperator).toBe('Equals');
+    });
+
+    it('suppresses the correlation fields once a criteria field is fanned out to its own child-table row per item', () => {
+      const flat = serializeRowsFlat(
+        [childRow({
+          sources: [{ fhirPath: 'Patient.name.given', label: 'Given', arrays: ['name'] }],
+          instance: { type: 'criteria', field: 'use', op: '=', value: 'official' },
+        })],
+        targetByResource, [], childRelations,
+      );
+      expect(flat[0].arrayPolicy).toBe('SeparateDestination');
+      expect(flat[0].correlationSiblingField).toBeUndefined();
+      expect(flat[0].correlationCodeValue).toBeUndefined();
+      expect(flat[0].correlationOperator).toBeUndefined();
+    });
   });
 
   describe('mode: default', () => {
@@ -584,6 +711,19 @@ describe('resolveArrayPolicy', () => {
       .toEqual({ arrayPolicy: 'StoreJson', approximated: false });
   });
 
+  it('childJson mode stays StoreJson for every exact instance selection', () => {
+    const exact: MappingRow['instance'][] = [{ type: 'all' }, { type: 'first' }, { type: 'nth', n: 2 }];
+    for (const instance of exact) {
+      expect(resolveArrayPolicy(row({ mode: 'childJson', sources: [], childNodeId: 'name', instance })))
+        .toEqual({ arrayPolicy: 'StoreJson', approximated: false });
+    }
+  });
+
+  it('childJson mode with "match criteria" -> StoreJson, exact (the filter rides in the JsonPath)', () => {
+    expect(resolveArrayPolicy(row({ mode: 'childJson', sources: [], childNodeId: 'name', instance: { type: 'criteria' } })))
+      .toEqual({ arrayPolicy: 'StoreJson', approximated: false });
+  });
+
   it('single source, instance "first" -> FirstItem, not approximated', () => {
     expect(resolveArrayPolicy(row({ instance: { type: 'first' } })))
       .toEqual({ arrayPolicy: 'FirstItem', approximated: false });
@@ -599,19 +739,79 @@ describe('resolveArrayPolicy', () => {
       .toEqual({ arrayPolicy: 'Scalar', approximated: false });
   });
 
-  it('single source, instance "all"/aggregate csv -> FirstItem, approximated', () => {
+  it('single source, instance "all"/aggregate csv -> FirstItem, NOT approximated, carries the aggregate=csv Format marker', () => {
     expect(resolveArrayPolicy(row({ instance: { type: 'all', aggregate: 'csv' } })))
-      .toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'directField;aggregate=csv' });
   });
 
-  it('single source, instance "nth" -> FirstItem, approximated', () => {
+  it('single source, instance "nth", 1-based n=2 (the second instance) -> FirstItem, NOT approximated, carries the 0-based index=1 Format marker', () => {
     expect(resolveArrayPolicy(row({ instance: { type: 'nth', n: 2 } })))
-      .toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'directField;index=1' });
   });
 
-  it('single source, instance "criteria" -> FirstItem, approximated', () => {
-    expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', op: '=', value: 'official' } })))
-      .toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+  it('instance "nth" with no explicit n defaults to n=1 (the first instance, index=0)', () => {
+    expect(resolveArrayPolicy(row({ instance: { type: 'nth' } })))
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'directField;index=0' });
+  });
+
+  it('instance "nth", n=1 (the first instance) -> index=0, identical to plain "First"', () => {
+    expect(resolveArrayPolicy(row({ instance: { type: 'nth', n: 1 } })))
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'directField;index=0' });
+  });
+
+  describe('instance "criteria"', () => {
+    it('op "=" -> CorrelateByCode, NOT approximated, hands over the bare sibling field name (no catalog jsonPath needed at this layer — see correlationSiblingField\'s own doc comment) and correlationOperator "Equals"', () => {
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', op: '=', value: 'mobile' } })))
+        .toEqual({
+          arrayPolicy: 'CorrelateByCode', approximated: false,
+          correlationSiblingField: 'use', correlationCodeValue: 'mobile', correlationOperator: 'Equals',
+        });
+    });
+
+    it('op omitted entirely (onInstanceTypeChange never seeds one; the "equals" shown is only the <select>\'s own display default) -> still resolves as "Equals", NOT approximated', () => {
+      // Regression guard for the exact bug reported live: switching "Which instance?" to "Match criteria"
+      // and typing straight into field/value, without ever re-selecting "equals" in the op dropdown (already
+      // showing it), left the real instance.op undefined — silently falling back to the approximation for
+      // what looked, on screen, like a fully configured "equals" criteria.
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', value: 'mobile' } })))
+        .toEqual({
+          arrayPolicy: 'CorrelateByCode', approximated: false,
+          correlationSiblingField: 'use', correlationCodeValue: 'mobile', correlationOperator: 'Equals',
+        });
+    });
+
+    it('op "contains" -> CorrelateByCode, NOT approximated, correlationOperator "Contains"', () => {
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', op: 'contains', value: 'mob' } })))
+        .toEqual({
+          arrayPolicy: 'CorrelateByCode', approximated: false,
+          correlationSiblingField: 'use', correlationCodeValue: 'mob', correlationOperator: 'Contains',
+        });
+    });
+
+    it('op "!=" -> CorrelateByCode, NOT approximated, correlationOperator "NotEquals"', () => {
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', op: '!=', value: 'home' } })))
+        .toEqual({
+          arrayPolicy: 'CorrelateByCode', approximated: false,
+          correlationSiblingField: 'use', correlationCodeValue: 'home', correlationOperator: 'NotEquals',
+        });
+    });
+
+    it('a criteria still being typed (no field yet) -> FirstItem, approximated', () => {
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: '', op: '=', value: 'mobile' } })))
+        .toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+    });
+
+    it('a criteria still being typed (no value yet) -> FirstItem, approximated', () => {
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', op: '=', value: '' } })))
+        .toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+    });
+
+    it('a source with no repeating ancestor at all -> FirstItem, approximated (no array to correlate within)', () => {
+      expect(resolveArrayPolicy(row({
+        sources: [scalarSource],
+        instance: { type: 'criteria', field: 'use', op: '=', value: 'mobile' },
+      }))).toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+    });
   });
 
   it('joined sources (>1) -> rules applied to sources[0], always approximated', () => {
@@ -639,7 +839,11 @@ describe('isApproximated', () => {
       resource: 'Patient', sources: [{ fhirPath: 'Patient.id', label: 'Patient ID' }],
       mode: 'value', instance: { type: 'first' }, targetName: 'SourcePatientId', tableName: 'dbo.Patient',
     };
-    const approx: MappingRow = { ...exact, instance: { type: 'nth', n: 1 } };
+    // 'nth' and a fully-configured 'criteria' (any op) are no longer approximations of their OWN accord
+    // (see the resolveArrayPolicy suite) — but `exact`'s own source has no array ancestors at all
+    // (Patient.id is scalar), so 'criteria' here still falls back: nothing to correlate against regardless
+    // of how complete the criteria itself is.
+    const approx: MappingRow = { ...exact, instance: { type: 'criteria', field: 'use', op: '=', value: 'official' } };
     expect(isApproximated(exact)).toBeFalse();
     expect(isApproximated(approx)).toBeTrue();
   });
@@ -822,5 +1026,52 @@ describe('checkColumnTypeCompatibility', () => {
     };
     const column = { dataType: 'character varying', mappingValueType: 'STRING' };
     expect(checkColumnTypeCompatibility(row, column)).toBeNull();
+  });
+});
+
+describe('whole-node instance helpers', () => {
+  function wholeNodeRow(instance?: MappingRow['instance']): MappingRow {
+    return {
+      resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient.name',
+      instance, targetName: 'NameJson', tableName: 'dbo.Patient',
+    };
+  }
+
+  const valueRow: MappingRow = {
+    resource: 'Patient', sources: [{ fhirPath: 'Patient.name.family', label: 'Family' }],
+    mode: 'value', targetName: 'Family', tableName: 'dbo.Patient',
+  };
+
+  it('an unset instance means "the whole node" for a childJson row, "first" for a value row', () => {
+    expect(defaultInstanceType(wholeNodeRow())).toBe('all');
+    expect(defaultInstanceType(valueRow)).toBe('first');
+  });
+
+  it('maps each POSITIONAL instance type to the index it reads, or null', () => {
+    expect(wholeNodeInstanceIndex(undefined)).toBeNull();
+    expect(wholeNodeInstanceIndex({ type: 'all' })).toBeNull();
+    expect(wholeNodeInstanceIndex({ type: 'first' })).toBe(0);
+    expect(wholeNodeInstanceIndex({ type: 'nth', n: 4 })).toBe(3);
+    // Criteria is not positional — it resolves to a filter instead (instanceCriteriaPredicate).
+    expect(wholeNodeInstanceIndex({ type: 'criteria' })).toBeNull();
+  });
+
+  it('clamps a nonsensical instance number rather than emitting a negative index', () => {
+    expect(wholeNodeInstanceIndex({ type: 'nth', n: 0 })).toBe(0);
+    expect(wholeNodeInstanceIndex({ type: 'nth', n: -5 })).toBe(0);
+    expect(wholeNodeJsonPath(wholeNodeRow({ type: 'nth', n: 0 }))).toBe('$.name[0]');
+  });
+
+  it('strips the resource prefix the node id carries, and leaves a value row alone', () => {
+    expect(wholeNodeJsonPath(wholeNodeRow({ type: 'first' }))).toBe('$.name[0]');
+    expect(wholeNodeJsonPath(valueRow)).toBeUndefined();
+  });
+
+  it('handles a nested node under a repeating parent', () => {
+    const nested: MappingRow = {
+      resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient.contact.name',
+      instance: { type: 'nth', n: 2 }, targetName: 'ContactNameJson', tableName: 'dbo.Patient',
+    };
+    expect(wholeNodeJsonPath(nested)).toBe('$.contact.name[1]');
   });
 });

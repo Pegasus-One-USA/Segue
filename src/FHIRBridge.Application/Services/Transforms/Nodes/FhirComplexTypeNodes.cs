@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.Globalization;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Enums;
 using PhoneNumbers;
@@ -143,10 +144,19 @@ public sealed class HumanNameParsingNode : ITransformNode
     /// "Middle" maps to the given names after the first, which is where a parsed middle name lands.</summary>
     private static readonly string[] FormatTokens = ["prefix", "first", "middle", "given", "last", "family", "suffix"];
 
+    /// <summary>The token order a structured name composes in when neither <c>format</c> nor <c>pattern</c>
+    /// names one.</summary>
+    private const string DefaultFormat = "First Middle Last Suffix";
+
     /// <summary>The <c>pattern</c> value selecting the one-rule parse-then-format mode.</summary>
     private const string RoundTripPattern = "RoundTrip";
 
     public TransformNodeType NodeType => TransformNodeType.HumanNameParsing;
+
+    /// <summary>Reads the element rather than only its display string: an element states its own family/given
+    /// parts, which the display string can only approximate, and an element with no <c>text</c> is the one
+    /// shape this node composes FROM, rather than parses.</summary>
+    public bool AcceptsStructuredValue => true;
 
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
     {
@@ -155,13 +165,67 @@ public sealed class HumanNameParsingNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
-        // Direction follows the shape of the input: an already-structured name formats, a plain string parses.
+        // Two independent halves, because they answer different questions and a single "pattern" could only
+        // ever answer one of them: FIRST resolve the name's parts (from an already-structured element, or by
+        // parsing a display string with `pattern`), THEN emit either those parts or a display string composed
+        // in the token order `format` names. Blank `format` means "emit the parts", which is why it is the
+        // default — a rule that names no output shape should not silently flatten a name into a string.
+        var resolved = ResolveName(value, config);
+        if (!resolved.Success || resolved.Value is not JsonObject name)
+        {
+            return resolved;
+        }
+
+        var format = config.GetOrNull("format");
+
+        // RoundTrip predates `format` being reachable on its own and has always meant parse-then-compose, so
+        // it still composes even when no format is named — with the shape it has always defaulted to.
+        if (string.IsNullOrWhiteSpace(format) && config.Get("pattern", "FirstLast") == RoundTripPattern)
+        {
+            format = DefaultFormat;
+        }
+
+        return string.IsNullOrWhiteSpace(format)
+            ? TransformResult.Ok(name)
+            : Format(name, new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase) { ["format"] = format });
+    }
+
+    /// <summary>
+    /// The name's parts, however they have to be arrived at. An already-structured element is authoritative
+    /// for the parts it states — the source system parsed its own data, and re-deriving family/given from the
+    /// display string instead discards that and makes the result depend on the author picking a `pattern` that
+    /// happens to match this record's name order. Its display string is still read for the affixes, which FHIR
+    /// routinely leaves only in `text`: a "III" or a "Dr" that the element itself never states.
+    /// </summary>
+    private static TransformResult ResolveName(object value, IReadOnlyDictionary<string, string> config)
+    {
         // TryReadStructuredName also accepts JSON object *text*, because an upstream node's JsonObject is
         // serialized to its JSON string on the way to a destination field (see TransformNodeExecutors), so a
         // re-read structured name arrives here as text rather than as a live node.
         if (TryReadStructuredName(value, out var structured))
         {
-            return Format(structured!, config);
+            // An element already states its own parts, so nothing is parsed out of the display string — the
+            // element IS the parse. `pattern` therefore selects the order those parts are composed in, and the
+            // result is a display string. See PatternFormats for the five orders. The element's `use`, `period`
+            // and `text` are not carried: the output is a display string, which has nowhere to put them.
+            //
+            // The display string is still read for the affixes, which FHIR routinely leaves only in `text`:
+            // "Warren James McGinnis III" carries a suffix the element itself never states, and RoundTrip is
+            // defined to include it.
+            //
+            // No `pattern` at all keeps the order a structured name has always composed in (Format's own
+            // default), so an existing `{}` rule still writes the middle name and suffix.
+            var name = EnrichAffixesFromText(structured!, ReadString(structured["text"]), config);
+            var format = config.GetOrNull("format") is { Length: > 0 } explicitFormat
+                ? explicitFormat
+                : config.GetOrNull("pattern") is { Length: > 0 } pattern
+                    ? PatternFormats.GetValueOrDefault(pattern, DefaultFormat)
+                    : DefaultFormat;
+
+            return Format(name, new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase)
+            {
+                ["format"] = format,
+            });
         }
 
         var raw = value.ToString()?.Trim();
@@ -170,34 +234,103 @@ public sealed class HumanNameParsingNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
-        // The RoundTrip pattern does both halves in ONE rule: parse the display string into a HumanName, then
-        // immediately compose it back out via `format`. It exists because a destination column carries a single
-        // rule fed by a single (string) source path, so the format direction is otherwise unreachable from the
-        // product — chaining a second rule to do it is not something an end user can express in the mapping UI.
-        // `roundTripPattern` names the parse order to use, keeping `pattern` free to select RoundTrip itself.
-        if (config.Get("pattern", "FirstLast") == RoundTripPattern)
-        {
-            var parseConfig = new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase)
+        // `roundTripPattern` names the order to read the string in when `pattern` is spent selecting RoundTrip.
+        var parseConfig = config.Get("pattern", "FirstLast") == RoundTripPattern
+            ? new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase)
             {
                 ["pattern"] = config.Get("roundTripPattern", "FirstLast"),
-            };
+            }
+            : config;
 
-            var parsed = Parse(raw, parseConfig);
-            return parsed.Success && parsed.Value is JsonObject parsedName
-                ? Format(parsedName, config)
-                : parsed;
-        }
-
-        return Parse(raw, config);
+        return Parse(raw, parseConfig);
     }
 
-    private static TransformResult Parse(string raw, IReadOnlyDictionary<string, string> config)
+    /// <summary>
+    /// What each mode composes from an element's own parts. "First" is the first given name, "Middle" the
+    /// given names after it, "Given" all of them, "Last"/"Family" the family name.
+    ///   FirstLast        -> Warren McGinnis
+    ///   FirstMiddleLast  -> Warren James McGinnis
+    ///   FirstLastMiddle  -> Warren McGinnis James
+    ///   LastFirstMiddle  -> McGinnis Warren James
+    ///   RoundTrip        -> Warren James McGinnis III   (prefix, given, family, suffix)
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> PatternFormats =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["FirstLast"] = "First Last",
+            ["FirstMiddleLast"] = "First Middle Last",
+            ["FirstLastMiddle"] = "First Last Middle",
+            ["LastFirstMiddle"] = "Last First Middle",
+            [RoundTripPattern] = "Prefix Given Family Suffix",
+        };
+
+    /// <summary>
+    /// The element's own parts, plus only the affixes it is missing, read out of its display string. Never
+    /// overwrites a prefix/suffix the element already states. The affixes are read from the string's first and
+    /// last tokens whatever order the rest of it is in — the name parts come from the element, so `pattern`
+    /// has nothing to say here, and "McGinnis, Warren III" carries its suffix as plainly as
+    /// "Warren McGinnis III" does.
+    /// </summary>
+    private static JsonObject EnrichAffixesFromText(
+        JsonObject name, string? text, IReadOnlyDictionary<string, string> config)
+    {
+        var enriched = new JsonObject
+        {
+            ["family"] = ReadString(name["family"]),
+            ["given"] = new JsonArray(ReadStrings(name["given"]).Select(g => (JsonNode)g).ToArray()),
+        };
+
+        string? prefixFromText = null;
+        string? suffixFromText = null;
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            var tokens = text.Split([' ', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+            (prefixFromText, suffixFromText) = StripAffixes(tokens, config);
+        }
+
+        foreach (var (affix, fromText) in new[] { ("prefix", prefixFromText), ("suffix", suffixFromText) })
+        {
+            var own = ReadStrings(name[affix]);
+            var values = own.Count > 0 ? own : fromText is null ? [] : [fromText];
+            if (values.Count > 0)
+            {
+                enriched[affix] = new JsonArray(values.Select(v => (JsonNode)v).ToArray());
+            }
+        }
+
+        return enriched;
+    }
+
+    /// <summary>Removes a recognized prefix token from the front of <paramref name="parts"/> and a recognized
+    /// suffix token from its end, returning what was removed. <paramref name="stripPrefix"/> is false for a
+    /// family part, whose leading token is the surname itself and never a title.</summary>
+    private static (string? Prefix, string? Suffix) StripAffixes(
+        List<string> parts, IReadOnlyDictionary<string, string> config, bool stripPrefix = true)
     {
         var prefixTokens = config.Get("prefixTokens", "Dr,Mr,Mrs,Ms,Miss")
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var suffixTokens = config.Get("suffixTokens", "Jr,Sr,II,III,IV,MD,PhD")
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
+        string? prefix = null;
+        string? suffix = null;
+        if (stripPrefix && parts.Count > 0 && prefixTokens.Contains(parts[0].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
+        {
+            prefix = parts[0];
+            parts.RemoveAt(0);
+        }
+
+        if (parts.Count > 0 && suffixTokens.Contains(parts[^1].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
+        {
+            suffix = parts[^1];
+            parts.RemoveAt(parts.Count - 1);
+        }
+
+        return (prefix, suffix);
+    }
+
+    private static TransformResult Parse(string raw, IReadOnlyDictionary<string, string> config)
+    {
         var pattern = config.Get("pattern", "FirstLast");
 
         string family;
@@ -210,8 +343,17 @@ public sealed class HumanNameParsingNode : ITransformNode
         if (pattern == "LastFirstMiddle" || raw.Contains(','))
         {
             var parts = raw.Split(',', 2, StringSplitOptions.TrimEntries);
-            family = parts[0];
+            // Affixes come off here too: "McGinnis, Dr Warren III" puts the prefix at the head of the given
+            // part and the suffix at its tail, and "McGinnis III, Warren" puts the suffix on the family part.
             given = parts.Length > 1 ? [.. parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries)] : [];
+            (prefix, suffix) = StripAffixes(given, config);
+            var familyParts = parts[0].Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (suffix is null && familyParts.Count > 1)
+            {
+                (_, suffix) = StripAffixes(familyParts, config, stripPrefix: false);
+            }
+
+            family = string.Join(' ', familyParts);
         }
         else
         {
@@ -219,19 +361,18 @@ public sealed class HumanNameParsingNode : ITransformNode
 
             // Affixes come off before any positional assignment, and in every pattern — otherwise a trailing
             // "III" occupies a name position and shifts every remaining token by one.
-            if (parts.Count > 0 && prefixTokens.Contains(parts[0].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
-            {
-                prefix = parts[0];
-                parts.RemoveAt(0);
-            }
+            (prefix, suffix) = StripAffixes(parts, config);
 
-            if (parts.Count > 0 && suffixTokens.Contains(parts[^1].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
+            if (pattern == "FirstMiddleLast" && parts.Count > 1)
             {
-                suffix = parts[^1];
-                parts.RemoveAt(parts.Count - 1);
+                // Positional: the LAST token is the surname and everything before it is a given name — the
+                // ordinary Western reading of "Warren James McGinnis". Distinct from FirstLast, which treats
+                // everything after the first token as one multi-word surname ("James McGinnis") and so cannot
+                // express a middle name at all.
+                family = parts[^1];
+                given = [.. parts[..^1]];
             }
-
-            if (pattern == "FirstLastMiddle" && parts.Count > 1)
+            else if (pattern == "FirstLastMiddle" && parts.Count > 1)
             {
                 // Positional: token 1 = first (given), token 2 = last (family), tokens 3+ = middle (given).
                 // A source that emits this order puts the surname in the *second* position, so the trailing
@@ -283,7 +424,7 @@ public sealed class HumanNameParsingNode : ITransformNode
     /// double space behind, so a name with no middle name or suffix still formats cleanly.</summary>
     private static TransformResult Format(JsonObject name, IReadOnlyDictionary<string, string> config)
     {
-        var format = config.Get("format", "First Middle Last Suffix");
+        var format = config.Get("format", DefaultFormat);
         var tokens = format.Split([' ', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (tokens.Length == 0)
         {
@@ -506,6 +647,17 @@ public sealed class TelecomNormalizationNode : ITransformNode
     private static readonly Regex EmailPattern = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled);
     private static readonly PhoneNumberUtil PhoneUtil = PhoneNumberUtil.GetInstance();
 
+    /// <summary>Bound on a single user-supplied regex evaluation, so a pathological pattern fails one value
+    /// loudly instead of hanging the pipeline thread that is processing the batch.</summary>
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// ContactPoint.system codes that bypass phone parsing: their values have no canonical format this node
+    /// could normalize to, so the raw value is carried through. Mirrors the FHIR ContactPointSystem value set
+    /// minus "phone" (parsed) and "email" (auto-detected above).
+    /// </summary>
+    private static readonly string[] NonPhoneSystems = ["fax", "url", "sms", "pager", "other"];
+
     public TransformNodeType NodeType => TransformNodeType.TelecomNormalization;
 
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
@@ -516,56 +668,166 @@ public sealed class TelecomNormalizationNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
-        var rank = config.GetOrNull("rank");
-
-        if (EmailPattern.IsMatch(raw))
+        // A rank that cannot become a positiveInt is a configuration error, not a per-value one: it would be
+        // wrong identically on every element the rule touches. Reported once, up front, rather than silently
+        // writing `"rank": null` into the ContactPoint (which is what a failed parse used to emit).
+        if (!TryReadRank(config, out var rank, out var rankError))
         {
-            var email = new JsonObject { ["system"] = "email", ["value"] = raw, ["use"] = config.Get("use", "home") };
-            if (rank is not null)
-            {
-                email["rank"] = int.TryParse(rank, out var emailRank) ? emailRank : null;
-            }
-
-            return TransformResult.Ok(email);
+            return TransformResult.Fail(rankError!);
         }
 
-        // "system" config can explicitly force fax/url instead of the phone-vs-email auto-detection above —
-        // there's no reliable free-text signal to detect fax/url from the raw value itself.
-        var explicitSystem = config.GetOrNull("system");
-        if (explicitSystem is "fax" or "url")
+        // Regex replace runs on the raw incoming contact value, BEFORE email detection and phone parsing —
+        // it is a cleanup pass for source data libphonenumber cannot make sense of on its own (an "x203"
+        // extension suffix, a "Tel: " label, a "/" separating two numbers in one field). Running it after
+        // E.164 formatting instead would only corrupt the very normalization this node exists to produce.
+        // Whatever the pattern leaves behind is what gets detected, parsed and validated.
+        if (!TryApplyRegex(raw, config, out var cleaned, out var regexError))
         {
-            var result = new JsonObject { ["system"] = explicitSystem, ["value"] = raw, ["use"] = config.Get("use", "work") };
-            if (rank is not null)
+            return TransformResult.Fail(regexError!);
+        }
+
+        // The pattern is free to erase the value entirely (e.g. stripping a placeholder like "N/A"), which is
+        // treated exactly like a blank input rather than handed to the parser as an empty string.
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            return TransformResult.Ok(null);
+        }
+
+        if (EmailPattern.IsMatch(cleaned))
+        {
+            return TransformResult.Ok(BuildContactPoint("email", cleaned, config.Get("use", "home"), rank));
+        }
+
+        // "system" config can explicitly force a non-phone system instead of the phone-vs-email auto-detection
+        // above — there's no reliable free-text signal to detect fax/url/sms/pager from the raw value itself.
+        // Compared case-insensitively and trimmed: the dropdown only ever emits lowercase, but an imported
+        // mapping profile or an API-set config can carry "FAX" or " fax ", and those used to miss this branch
+        // silently and fall through to phone parsing — producing either a mislabelled phone ContactPoint or a
+        // baffling "not a valid phone number" failure for a value that was never meant to be parsed as one.
+        var explicitSystem = config.GetOrNull("system")?.Trim();
+        if (explicitSystem is not null)
+        {
+            var match = NonPhoneSystems.FirstOrDefault(s => string.Equals(s, explicitSystem, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
             {
-                result["rank"] = int.TryParse(rank, out var explicitRank) ? explicitRank : null;
+                return TransformResult.Ok(BuildContactPoint(match, cleaned, config.Get("use", "work"), rank));
             }
 
-            return TransformResult.Ok(result);
+            // "phone" is a legitimate, meaningful setting — it pins the phone branch for a value that would
+            // otherwise be ambiguous — so it is accepted rather than rejected, and simply falls through below.
+            if (!string.Equals(explicitSystem, "phone", StringComparison.OrdinalIgnoreCase))
+            {
+                return TransformResult.Fail(
+                    $"'{explicitSystem}' is not a recognized ContactPoint system. Expected one of: phone, {string.Join(", ", NonPhoneSystems)}.");
+            }
         }
 
         var region = config.Get("region", "US");
         string normalized;
         try
         {
-            var parsedNumber = PhoneUtil.Parse(raw, region);
+            var parsedNumber = PhoneUtil.Parse(cleaned, region);
             if (!PhoneUtil.IsValidNumber(parsedNumber))
             {
-                return TransformResult.Fail($"'{raw}' is not a valid phone number for region '{region}'.");
+                return InvalidNumber($"'{cleaned}' is not a valid phone number for region '{region}'.", config);
             }
 
             normalized = PhoneUtil.Format(parsedNumber, PhoneNumberFormat.E164);
         }
         catch (NumberParseException ex)
         {
-            return TransformResult.Fail($"Unable to parse '{raw}' as a phone number: {ex.Message}");
+            return InvalidNumber($"Unable to parse '{cleaned}' as a phone number: {ex.Message}", config);
         }
 
-        var phone = new JsonObject { ["system"] = "phone", ["value"] = normalized, ["use"] = config.Get("use", "mobile") };
+        return TransformResult.Ok(BuildContactPoint("phone", normalized, config.Get("use", "mobile"), rank));
+    }
+
+    /// <summary>
+    /// How an unparseable/invalid number is reported. "reject" (the default) fails the field, which is the
+    /// safe choice for a scalar binding. "skip" drops just this element — necessary when the rule is bound
+    /// across a repeating array, where one malformed entry would otherwise take the whole field down with it
+    /// (matching how a blank input is already treated above).
+    /// </summary>
+    private static TransformResult InvalidNumber(string message, IReadOnlyDictionary<string, string> config) =>
+        string.Equals(config.Get("onInvalid", "reject"), "skip", StringComparison.OrdinalIgnoreCase)
+            ? TransformResult.Ok(null)
+            : TransformResult.Fail(message);
+
+    private static JsonObject BuildContactPoint(string system, string value, string use, int? rank)
+    {
+        var contactPoint = new JsonObject { ["system"] = system, ["value"] = value, ["use"] = use };
         if (rank is not null)
         {
-            phone["rank"] = int.TryParse(rank, out var phoneRank) ? phoneRank : null;
+            contactPoint["rank"] = rank.Value;
         }
 
-        return TransformResult.Ok(phone);
+        return contactPoint;
+    }
+
+    /// <summary>
+    /// Applies the optional <c>regexPattern</c>/<c>regexReplacement</c> pair to the raw contact value. Mirrors
+    /// <c>StringNormalizationNode</c>'s regex step, including treating an unparseable pattern as a
+    /// configuration mistake that fails the node explicitly (routed through the rule's own ErrorPolicy)
+    /// rather than letting the exception escape and take down the rest of the batch. A blank pattern skips
+    /// the step, and a blank replacement deletes the matched text — which is the common case here, since most
+    /// telecom cleanups are about removing junk (labels, extensions, separators) rather than rewriting it.
+    /// </summary>
+    private static bool TryApplyRegex(string raw, IReadOnlyDictionary<string, string> config, out string result, out string? error)
+    {
+        result = raw;
+        error = null;
+
+        var pattern = config.GetOrNull("regexPattern");
+        if (pattern is null)
+        {
+            return true;
+        }
+
+        try
+        {
+            result = Regex.Replace(raw, pattern, config.Get("regexReplacement"), RegexOptions.None, RegexTimeout).Trim();
+            return true;
+        }
+        catch (RegexParseException ex)
+        {
+            error = $"Invalid regex pattern '{pattern}': {ex.Message}";
+            return false;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // A catastrophically-backtracking pattern is still a configuration mistake, but one that only
+            // shows up against certain values — bounded here so a single bad row cannot stall the pipeline.
+            error = $"Regex pattern '{pattern}' timed out while matching this value.";
+            return false;
+        }
+    }
+
+    private static bool TryReadRank(IReadOnlyDictionary<string, string> config, out int? rank, out string? error)
+    {
+        rank = null;
+        error = null;
+
+        var configured = config.GetOrNull("rank");
+        if (configured is null)
+        {
+            return true;
+        }
+
+        if (!int.TryParse(configured, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            error = $"Rank '{configured}' is not a whole number.";
+            return false;
+        }
+
+        // FHIR types ContactPoint.rank as positiveInt — 1 and up. 0 and negatives used to pass straight
+        // through into the destination.
+        if (parsed < 1)
+        {
+            error = $"Rank '{configured}' must be 1 or greater (FHIR ContactPoint.rank is a positiveInt).";
+            return false;
+        }
+
+        rank = parsed;
+        return true;
     }
 }

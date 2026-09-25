@@ -88,6 +88,7 @@
         [dataTypeForTable]="dataTypeForTable()"
         [totalSourceCount]="(popoverRow()?.sources ?? []).length"
         [isDocumentDestination]="destType() === 'mongo'"
+        [childArrayLabel]="popoverChildArrayLabel()"
         (save)="onPopoverSave($event)"
         (remove)="onPopoverRemove()"
         (closed)="closePopover()"

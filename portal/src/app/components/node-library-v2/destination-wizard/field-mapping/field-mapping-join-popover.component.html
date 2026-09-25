@@ -25,7 +25,11 @@
     <div class="fm-popover-body">
       @if (d.mode === 'childJson') {
         <p class="fm-popover-hint">
-          Fetches the entire <strong>{{ d.childNodeId }}</strong> node and stores it
+          @if (readsWholeNode()) {
+            Fetches the entire <strong>{{ d.childNodeId }}</strong> node and stores it
+          } @else {
+            Fetches {{ instanceSummary() }} of <strong>{{ d.childNodeId }}</strong> and stores it
+          }
           @if (showJsonWriteMode() && jsonWriteMode() === 'document') {
             as a nested JSON document in this column.
           } @else {
@@ -89,42 +93,44 @@
             </select>
           </div>
         }
+      }
 
-        @if (hasArrayAncestors()) {
-          <div class="fm-popover-section">
-            <label class="fm-popover-section-title" for="fm-inst-type">{{ arrayAncestorLabel() }} repeats — which instance?</label>
-            <select id="fm-inst-type" class="fm-popover-select" [value]="d.instance?.type ?? 'first'" (change)="onInstanceTypeChange($any($event.target).value)">
-              <option value="all">All records</option>
-              <option value="first">First instance</option>
-              <option value="nth">Nth instance</option>
-              <option value="criteria">Match criteria</option>
-            </select>
+      @if (hasArrayAncestors()) {
+        <div class="fm-popover-section">
+          <label class="fm-popover-section-title" for="fm-inst-type">{{ arrayAncestorLabel() }} repeats — which instance?</label>
+          <select id="fm-inst-type" class="fm-popover-select" [value]="instanceType()" (change)="onInstanceTypeChange($any($event.target).value)">
+            <option value="all">All records</option>
+            <option value="first">First instance</option>
+            <option value="nth">Nth instance</option>
+            <option value="criteria">Match criteria</option>
+          </select>
 
-            @if (d.instance?.type === 'nth') {
-              <label class="fm-popover-inline-label">
-                Instance #
-                <input type="number" min="1" class="fm-popover-input fm-popover-input--sm" [value]="d.instance?.n ?? 1" (input)="onInstanceField({ n: +$any($event.target).value || 1 })" />
-              </label>
-            }
-            @if (d.instance?.type === 'criteria') {
-              <div class="fm-popover-criteria">
-                <input class="fm-popover-input" placeholder="field" [value]="d.instance?.field ?? ''" (input)="onInstanceField({ field: $any($event.target).value })" />
-                <select class="fm-popover-select" [value]="d.instance?.op ?? '='" (change)="onInstanceField({ op: $any($event.target).value })">
-                  <option value="=">equals</option>
-                  <option value="contains">contains</option>
-                  <option value="!=">not equals</option>
-                </select>
-                <input class="fm-popover-input" placeholder="value" [value]="d.instance?.value ?? ''" (input)="onInstanceField({ value: $any($event.target).value })" />
-              </div>
-            }
-            @if (d.instance?.type === 'all') {
-              <label class="fm-popover-inline-label" title="Always on for &quot;All records&quot; — the alternative would duplicate this entire destination row once per array item.">
-                <input type="checkbox" [checked]="d.instance?.aggregate === 'csv'" disabled />
-                Combine all values into one delimited string on a single row
-              </label>
-            }
-          </div>
-        }
+          @if (instanceType() === 'nth') {
+            <label class="fm-popover-inline-label" title="1-based: 1 is the first occurrence, 2 the second, and so on.">
+              Instance #
+              <input type="number" min="1" class="fm-popover-input fm-popover-input--sm" [value]="d.instance?.n ?? 1" (input)="onInstanceField({ n: parseInstanceNumber($any($event.target).value) })" />
+            </label>
+          }
+          @if (instanceType() === 'criteria') {
+            <div class="fm-popover-criteria">
+              <input class="fm-popover-input" placeholder="field" [value]="d.instance?.field ?? ''" (input)="onInstanceField({ field: $any($event.target).value })" />
+              <select class="fm-popover-select" [value]="d.instance?.op ?? '='" (change)="onInstanceField({ op: $any($event.target).value })">
+                <option value="=">equals</option>
+                <option value="contains">contains</option>
+                <option value="!=">not equals</option>
+              </select>
+              <input class="fm-popover-input" placeholder="value" [value]="d.instance?.value ?? ''" (input)="onInstanceField({ value: $any($event.target).value })" />
+            </div>
+          }
+          <!-- Aggregation is a scalar-row concern only: a whole-node row's "All records" already IS the
+               entire node written as one JSON array, with nothing to combine into a delimited string. -->
+          @if (!isChildJson() && instanceType() === 'all') {
+            <label class="fm-popover-inline-label" title="Always on for &quot;All records&quot; — the alternative would duplicate this entire destination row once per array item.">
+              <input type="checkbox" [checked]="d.instance?.aggregate === 'csv'" disabled />
+              Combine all values into one delimited string on a single row
+            </label>
+          }
+        </div>
       }
 
       <!-- MongoDB only (showJsonWriteMode) — every other destination family stores JSON as text with no
@@ -159,7 +165,7 @@
         <div class="fm-popover-caveat">⚠ {{ note }}</div>
       }
 
-      @if (rulesDestinationType() && d.mode !== 'childJson') {
+      @if (rulesDestinationType()) {
         <div class="fm-popover-section fm-popover-section--rule">
           <button type="button" class="fm-popover-rule-toggle" (click)="toggleRuleSection()">
             <span>{{ ruleSectionOpen() ? '▾' : '▸' }} Transformation</span>
@@ -174,6 +180,18 @@
 
           @if (ruleSectionOpen()) {
             <div class="fm-popover-rule-body">
+              @if (isChildJson()) {
+                <p class="fm-popover-hint">
+                  @if (readsWholeNode()) {
+                    The rule runs on the whole <strong>{{ d.childNodeId }}</strong> array as one JSON string, after it
+                    is read and before it is written. <strong>Array / list operations</strong> unwraps that JSON into
+                    real items first, so first / last / nth / count / join / dedupe / filter all operate per item.
+                  } @else {
+                    The rule runs on {{ instanceSummary() }} of <strong>{{ d.childNodeId }}</strong> as JSON,
+                    after it is read and before it is written.
+                  }
+                </p>
+              }
               <label class="fm-popover-section-title" for="fm-rule-node-type">Type</label>
               <select
                 id="fm-rule-node-type" class="fm-popover-select"

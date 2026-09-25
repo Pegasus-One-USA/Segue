@@ -13,7 +13,7 @@ import { DestinationTable, DestinationColumn } from '../../../../services/destin
 import type { ResourceFieldDef } from '../destination-wizard.component';
 import {
   MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType, DefaultValueToken,
-  JsonColumnWriteMode, qualifyTableName, resolveJsonWriteMode, supportsJsonWriteMode,
+  JsonColumnWriteMode, qualifyTableName, resolveJsonWriteMode, supportsJsonWriteMode, defaultInstanceType,
 } from './field-mapping-model';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { dependencyRankFor } from '../resource-dependency.config';
@@ -96,6 +96,13 @@ export interface MappingSummaryColumn {
    *  from. */
   defaultValueType?: string;
   instance: MappingSummaryInstance | null;
+  /** wholeNodeAsJson only. Marks a document written since the whole-node instance picker existed, so this
+   *  column's `instance` is a real choice. Older documents stamped {type:'first'} onto EVERY whole-node
+   *  column by default — inert then (the instance was neither shown nor serialized for this mode), but
+   *  indistinguishable from a deliberate "first instance" now that it is honoured. Absent therefore means
+   *  "that older document", and the stamp is dropped on load so the column keeps storing the node in full.
+   *  Same absent-means-an-older-document convention as isPrimary on MappingSummaryTable. */
+  instanceIsExplicit?: true;
   /** Set when this column is a FHIR reference that must be resolved against another mapped resource's
    *  own table + id column at write time — see MappingRow.referencesResource for how this is derived. */
   referenceLookup?: { table: string; keyColumn: string };
@@ -198,7 +205,7 @@ function arrayContextFor(row: MappingRow, forest: FmTreeNode[]): string | null {
 
 function toSummaryInstance(row: MappingRow, arrayContext: string | null): MappingSummaryInstance | null {
   if (!arrayContext) return null;
-  const instance = row.instance ?? { type: 'first' };
+  const instance = row.instance ?? { type: defaultInstanceType(row) };
   const out: MappingSummaryInstance = { arrayContext, type: instance.type };
   if (instance.n !== undefined) out.n = instance.n;
   if (instance.field !== undefined) out.field = instance.field;
@@ -251,7 +258,8 @@ function toSummaryColumn(
   if (row.mode === 'childJson') {
     return {
       column: row.targetName, mode: 'wholeNodeAsJson', sourceNode: row.childNodeId ?? '',
-      instance, ...referenceLookup, ...upsertKey, ...jsonWriteMode,
+      instance, ...(instance ? { instanceIsExplicit: true as const } : {}),
+      ...referenceLookup, ...upsertKey, ...jsonWriteMode,
     };
   }
   if (row.mode === 'default') {
@@ -679,7 +687,11 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
         if (col.mode === 'wholeNodeAsJson') {
           mappingRows.push({
             resource, sources: [], mode: 'childJson', childNodeId: col.sourceNode ?? '',
-            instance, targetName: col.column, tableName: fullName,
+            // See MappingSummaryColumn.instanceIsExplicit — without that marker this is an older document
+            // whose {type:'first'} was stamped by default rather than chosen, and honouring it would turn a
+            // mapping that has always stored the whole node into a first-instance-only one on reopen.
+            instance: col.instanceIsExplicit ? instance : undefined,
+            targetName: col.column, tableName: fullName,
             ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
             ...(col.jsonWriteMode ? { jsonWriteMode: col.jsonWriteMode } : {}),
           });

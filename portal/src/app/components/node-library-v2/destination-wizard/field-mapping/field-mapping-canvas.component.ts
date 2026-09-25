@@ -21,7 +21,7 @@ import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payl
 import { FieldMappingDefaultValueModalComponent, FmDefaultValueSubmit } from './field-mapping-default-value-modal.component';
 import { FieldMappingLoadDestinationPayloadModalComponent } from './field-mapping-load-destination-payload-modal.component';
 import { parseSourcePayloadJson, reconstructPayloadJsonFor, parseDestinationPayloadJson } from './field-mapping-payload.util';
-import { ChildTableRelation } from './field-mapping-summary.model';
+import { ChildTableRelation, nearestArrayGroupId } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest, DestinationSchemaService } from '../../../../services/destination-schema.service';
 import { DestinationTypeV2 as DestinationType, DeIdentificationProfileDto } from '../../../../models/destination-configuration-v2.model';
@@ -1306,11 +1306,39 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     this.pendingDropColumn.set(null);
   }
 
-  /** Mirrors SqlDestinationSchemaService.MapSqlServerType — used only to render an accurate local preview
-   *  of a column's mappingValueType before the real DDL runs (see schemaOpQueued); the deferred flush
-   *  later overwrites this with whatever the backend's own response says once it actually executes. */
-  private mapSqlServerType(dataType: string): string {
+  /** Local preview only — overwritten once the deferred flush's real response comes back (see callers'
+   *  comments). Mirrors SqlDestinationSchemaService's MapSqlServerType/MapPostgresType/MapMySqlType exactly
+   *  (same cases, same fallback), branching on destType the same way the backend branches on DestinationType,
+   *  so a MySQL "timestamp" or a Postgres "timestamptz" previews as the same MappingValueType the backend will
+   *  report on its next real schema read — not the generic "String" a SQL-Server-only mapping would fall back
+   *  to for a keyword it doesn't recognize. */
+  private mapSqlServerType(dataType: string, destType: MappingDestType = this.destType()): string {
     const family = dataType.trim().toLowerCase().split('(')[0];
+    if (destType === 'mysql') {
+      switch (family) {
+        case 'tinyint': case 'boolean': case 'bool': case 'bit': return 'Boolean';
+        case 'smallint': case 'mediumint': case 'int': case 'integer': case 'bigint': return 'Integer';
+        case 'decimal': case 'numeric': case 'float': case 'double': return 'Decimal';
+        case 'date': return 'Date';
+        case 'datetime': case 'timestamp': return 'DateTime';
+        default: return 'String';
+      }
+    }
+    if (destType === 'postgres') {
+      switch (family) {
+        case 'boolean': return 'Boolean';
+        // "int" (not "integer") is the raw string FM_ADD_COLUMN_DATA_TYPES_POSTGRES actually offers in the
+        // picker — this preview runs on that raw picked value, never on PostgreSqlDdlTypeValidator's normalized
+        // output (that normalization only happens server-side), so it must recognize the picker's own spelling
+        // even though MapPostgresType itself has no "int" case (a live-probed Postgres column never reports
+        // "int" as its data_type — only "integer" — so the backend never needs one).
+        case 'smallint': case 'integer': case 'int': case 'bigint': return 'Integer';
+        case 'numeric': case 'decimal': case 'real': case 'double precision': case 'money': return 'Decimal';
+        case 'date': return 'Date';
+        case 'timestamp': case 'timestamp with time zone': case 'timestamp without time zone': case 'timestamptz': return 'DateTime';
+        default: return 'String';
+      }
+    }
     switch (family) {
       case 'bit': return 'Boolean';
       case 'tinyint': case 'smallint': case 'int': case 'bigint': return 'Integer';
@@ -1887,6 +1915,21 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     if (!row || !focus || row.mode !== 'value' || row.sources.length <= 1) return row;
     const source = row.sources.find(s => s.fhirPath === focus);
     return source ? { ...row, sources: [source] } : row;
+  });
+
+  /**
+   * The repeating node a whole-node ('childJson') mapping actually reads, as a display label — the node
+   * itself when it is the array ("Name" for Patient.name), the nearest enclosing one when it is not
+   * ("Contact" for Patient.contact.name), and null when nothing on that path repeats, which is what hides
+   * the popover's instance picker. Resolved here because the source tree lives on this side and a
+   * childJson row carries no `sources` to read `arrays` metadata from; an ordinary field mapping needs no
+   * equivalent, since each of its sources carries its own array ancestry.
+   */
+  readonly popoverChildArrayLabel = computed<string | null>(() => {
+    const row = this.popoverDisplayRow();
+    if (!row || row.mode !== 'childJson' || !row.childNodeId) return null;
+    const arrayGroupId = nearestArrayGroupId(this.forest(), row.childNodeId);
+    return arrayGroupId ? (findNode(this.forest(), arrayGroupId)?.label ?? null) : null;
   });
 
   /** `e.sourceFhirPath` is the ACTUAL source the clicked wire was drawn for (FmWirePath.sourceFhirPath,

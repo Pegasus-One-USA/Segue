@@ -184,12 +184,26 @@ export class HapiTerminologyTableComponent implements OnInit {
       next: (results) => {
         this.scanning.set(false);
         this.versionChecks.set(new Map(results.map((r) => [r.code, r])));
-        const updateCount = results.filter((r) => r.updateAvailable).length;
-        if (updateCount > 0) {
-          this.toast.success(`${updateCount} code system${updateCount === 1 ? '' : 's'} ${updateCount === 1 ? 'has' : 'have'} a newer version available.`);
-        } else {
+        // A system that has never been downloaded and one holding a superseded release both need a sync,
+        // but they are not the same situation and lumping them under "a newer version is available" reads
+        // as wrong for a system that has no version at all. Distinguish them by whether anything is stored.
+        const needingSync = results.filter((r) => r.updateAvailable);
+        const neverDownloaded = needingSync.filter((r) => !r.storedVersion);
+        const outdated = needingSync.length - neverDownloaded.length;
+
+        if (needingSync.length === 0) {
           this.toast.success('All code systems are up to date.');
+          return;
         }
+
+        const parts: string[] = [];
+        if (outdated > 0) {
+          parts.push(`${outdated} ${outdated === 1 ? 'has' : 'have'} a newer version available`);
+        }
+        if (neverDownloaded.length > 0) {
+          parts.push(`${neverDownloaded.length} ${neverDownloaded.length === 1 ? 'has' : 'have'} never been downloaded`);
+        }
+        this.toast.success(`${needingSync.length} code system${needingSync.length === 1 ? '' : 's'} need${needingSync.length === 1 ? 's' : ''} a sync: ${parts.join('; ')}.`);
       },
       error: () => {
         this.scanning.set(false);

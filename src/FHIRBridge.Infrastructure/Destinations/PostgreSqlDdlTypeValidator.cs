@@ -100,7 +100,22 @@ internal static partial class PostgreSqlDdlTypeValidator
         ["datetime2"] = "timestamp",
         ["datetime"] = "timestamp",
         ["timestamp"] = "timestamp",
+        // The Edit-column modal feeds a column's own live-probed type straight back as a candidate value
+        // (see field-mapping-edit-column-modal.component.ts) — for a plain Postgres timestamp column, that
+        // probed spelling is literally "timestamp without time zone" (information_schema's ANSI-standard
+        // name for it), never bare "timestamp". Without this, re-saving (or editing) an existing timestamp
+        // column untouched throws "'timestamp without time zone' is not an allowed data type."
+        ["timestamp without time zone"] = "timestamp",
+        // "datetimeoffset" is SQL Server's timezone-aware type — PostgreSQL's equivalent is "timestamptz"
+        // (timestamp with time zone), which stores an unambiguous instant rather than a naive local value.
+        // Also accepts Postgres's own two spellings for it unchanged.
+        ["datetimeoffset"] = "timestamptz",
+        ["timestamptz"] = "timestamptz",
+        ["timestamp with time zone"] = "timestamptz",
         ["time"] = "time",
+        // Same live-probe reasoning as "timestamp without time zone" above — Postgres's own ANSI-standard
+        // name for an existing plain `time` column.
+        ["time without time zone"] = "time",
         // "uniqueidentifier" is SQL Server's GUID keyword — PostgreSQL has a native, equivalent UUID type.
         ["uniqueidentifier"] = "uuid",
         ["uuid"] = "uuid",
@@ -108,6 +123,16 @@ internal static partial class PostgreSqlDdlTypeValidator
         ["real"] = "real",
         ["double precision"] = "double precision",
         ["text"] = "text",
+        // Same live-probe reasoning again: Postgres's own information_schema.columns.data_type for an
+        // existing sized VARCHAR column is the bare word "character varying" — the actual length lives in a
+        // SEPARATE column (character_maximum_length) this validator is never handed, so there is no real size
+        // to recover here. "text" (unbounded) is the safe choice: it can hold anything the original bounded
+        // column could, so an untouched re-save only ever WIDENS the column, never truncates existing data.
+        ["character varying"] = "text",
+        // Same reasoning as "character varying": Postgres's own bare NUMERIC (no declared precision/scale) is
+        // itself a fully valid, unbounded-precision/scale type — not an approximation like the "text" case
+        // above, since this is exactly what the live probe's own name already means.
+        ["numeric"] = "numeric",
     };
 
     [GeneratedRegex(@"^(nvarchar|varchar|nchar|char)\((max|\d{1,4})\)$", RegexOptions.IgnoreCase)]

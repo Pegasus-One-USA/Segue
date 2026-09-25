@@ -664,11 +664,18 @@ export class FieldMappingListComponent {
     this.instanceChanged.emit({ resource: row.resource, tableName: row.tableName, targetName: row.targetName, instance: { ...row.instance, type } });
   }
 
-  onInstanceNChange(row: MappingRow, n: number): void {
+  onInstanceNChange(row: MappingRow, rawValue: string): void {
     this.instanceChanged.emit({
       resource: row.resource, tableName: row.tableName, targetName: row.targetName,
-      instance: { ...row.instance, type: 'nth', n: n || 1 },
+      instance: { ...row.instance, type: 'nth', n: this.parseInstanceNumber(rawValue) },
     });
+  }
+
+  /** Parses the "Instance #" input into a valid 1-based instance number (1 = first). Mirrors
+   *  field-mapping-join-popover.component.ts's identical helper. */
+  private parseInstanceNumber(raw: string): number {
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 1 ? Math.trunc(n) : 1;
   }
 
   onInstanceCriteriaChange(row: MappingRow, field: string, op: MappingInstanceSelection['op'], value: string): void {

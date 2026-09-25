@@ -286,8 +286,9 @@
                     @case ('nth') {
                       <input
                         type="number" min="1" class="fm-inline-input fm-inline-input--narrow"
+                        title="1-based: 1 is the first occurrence, 2 the second, and so on."
                         [value]="row.instance?.n ?? 1"
-                        (change)="onInstanceNChange(row, +$any($event.target).value)"
+                        (change)="onInstanceNChange(row, $any($event.target).value)"
                       />
                     }
                     @case ('criteria') {

@@ -67,7 +67,16 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
             "Parsed {Total} ICD-10-PCS codes ({Billable} billable) from the official release.", concepts.Count, billableCount);
         var version = VersionFromZipUrl(zipUrl);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "ICD10PCS", version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "ICD10PCS",
+            version,
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                ShortDescription: c.ShortDescription,
+                LongDescription: c.Display,
+                IsActive: true)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -126,6 +135,9 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
 
             var code = line.Substring(6, 7).Trim();
             var billable = line.Substring(14, 1) == "1";
+            // Same CMS order-file layout as ICD-10-CM: positions 17-76 hold the abbreviated title,
+            // genuinely different from the long one on 57,856 of the 80,174 codes in the FY2027 release.
+            var shortDescription = line.Substring(16, 60).Trim();
             var longDescription = line.Substring(76).Trim();
 
             if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(longDescription))
@@ -133,11 +145,11 @@ public sealed class HapiIcd10PcsTerminologySyncService : IHapiIcd10PcsTerminolog
                 continue;
             }
 
-            results.Add(new Concept(code, longDescription, billable));
+            results.Add(new Concept(code, longDescription, shortDescription, billable));
         }
 
         return results;
     }
 
-    private sealed record Concept(string Code, string Display, bool Billable);
+    private sealed record Concept(string Code, string Display, string? ShortDescription, bool Billable);
 }

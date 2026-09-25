@@ -1379,7 +1379,12 @@ public sealed class SqlDestinationSchemaService : IDestinationSchemaService
         // "timestamp without time zone"/"timestamp with time zone" are what a LIVE probe reports for an
         // already-existing column; plain "timestamp" is what PostgreSqlDdlTypeValidator normalizes a
         // newly-created column's type to (see CreateTableAsync/AddColumnAsync) — both mean the same thing.
-        "timestamp without time zone" or "timestamp with time zone" or "timestamp" => "DateTime",
+        // "timestamptz" is that same validator's own normalized spelling for "datetimeoffset"/"timestamptz"
+        // input (its timezone-aware case) — AddColumnAsync/CreateTableAsync feed this method the validator's
+        // literal NormalizedType string, never a live-probed "timestamp with time zone", so both spellings must
+        // be recognized here or a freshly-added timestamptz column falls to the "String" default below and
+        // reintroduces the exact false "expects String" mapping-save block this type was added to fix.
+        "timestamp without time zone" or "timestamp with time zone" or "timestamp" or "timestamptz" => "DateTime",
         _ => "String"
     };
 
