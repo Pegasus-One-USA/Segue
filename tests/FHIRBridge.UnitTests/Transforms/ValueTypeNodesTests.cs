@@ -219,6 +219,70 @@ public sealed class ValueTypeNodesTests
         quantity.ContainsKey("code").Should().BeFalse();
     }
 
+    /// <summary>A scored Observation: "score" is the human label, "1" is the UCUM code for a dimensionless
+    /// quantity. The two legitimately DIFFER, which is why the coding is matched against the source's unit
+    /// OR its code rather than the two being assumed equal.</summary>
+    private const string ScoreQuantityJson =
+        """{"value":11,"unit":"score","system":"http://unitsofmeasure.org","code":"1"}""";
+
+    [Theory]
+    // Rule configures nothing — the fallback emits the source's own unit, so the coding still describes it.
+    [InlineData(null, "score")]
+    // Rule restates the source's own unit, including sloppily. Retyping what the source said must not cost
+    // the author their coding.
+    [InlineData("score", "score")]
+    // Emitted VERBATIM, padding and all — trimming happens only for the comparison, so recognising this as
+    // the source's own unit costs nothing while the author still gets exactly the text they typed.
+    [InlineData("  SCORE ", "  SCORE ")]
+    // Rule states the UCUM code instead of the display unit — still the source's own unit, by its other name.
+    [InlineData("1", "1")]
+    public void QuantityRangeAssemblyNode_keeps_the_coding_when_it_still_describes_the_emitted_unit(
+        string? configuredUnit, string expectedUnit)
+    {
+        var config = new Dictionary<string, string>();
+        if (configuredUnit is not null)
+        {
+            config["unit"] = configuredUnit;
+        }
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(ScoreQuantityJson, config, null).Value!;
+
+        quantity["unit"]!.GetValue<string>().Should().Be(expectedUnit);
+        quantity["system"]!.GetValue<string>().Should().Be("http://unitsofmeasure.org");
+        quantity["code"]!.GetValue<string>().Should().Be("1");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_drops_the_coding_when_the_rule_overrides_the_unit()
+    {
+        // The node assembles, it does not convert — `value` stays 11 whatever the unit box says. Carrying the
+        // source's coding here emitted unit "mg/g" beside code "1": the machine-readable half asserting the
+        // opposite of the human-readable one, which misleads precisely the consumer the coding is kept for.
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(ScoreQuantityJson, new Dictionary<string, string> { ["unit"] = "mg/g" }, null).Value!;
+
+        quantity["value"]!.GetValue<int>().Should().Be(11);
+        quantity["unit"]!.GetValue<string>().Should().Be("mg/g");
+        quantity.ContainsKey("system").Should().BeFalse();
+        quantity.ContainsKey("code").Should().BeFalse();
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_keeps_a_comparator_even_when_the_unit_is_overridden()
+    {
+        // A comparator qualifies the VALUE, which an overridden unit leaves untouched — so unlike the coding
+        // it stays true and must survive.
+        var source = System.Text.Json.Nodes.JsonNode.Parse(
+            """{"value":187,"unit":"mg/dL","system":"http://unitsofmeasure.org","code":"mg/dL","comparator":"<"}""");
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(source, new Dictionary<string, string> { ["unit"] = "mmol/L" }, null).Value!;
+
+        quantity["comparator"]!.GetValue<string>().Should().Be("<");
+        quantity.ContainsKey("code").Should().BeFalse();
+    }
+
     [Fact]
     public void QuantityRangeAssemblyNode_falls_back_to_the_UCUM_code_when_a_Quantity_element_carries_no_unit()
     {

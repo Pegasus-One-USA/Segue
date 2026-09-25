@@ -364,16 +364,33 @@ public sealed class QuantityRangeAssemblyNode : ITransformNode
         // replaces it wholesale — so a FHIR-native destination would receive a measurement that can no longer
         // be unit-converted or compared programmatically, only read. UnitConversionNode emits both for the
         // same reason.
-        if (ReadString(source, "system") is { Length: > 0 } system)
+        //
+        // ONLY when the unit being emitted is still the source's own, though. This node assembles a Quantity,
+        // it does not convert one (that is UnitConversionNode) — so a rule that overrides the unit changes the
+        // LABEL while `value` stays exactly as the source sent it. Copying the coding anyway produced a
+        // self-contradictory Quantity: unit "mmol/L" beside code "mg/dL", asserting in machine-readable form
+        // the very thing the human-readable form denies. That is worse than emitting no coding, because the
+        // consumer this preservation exists FOR — one doing conversion or comparison off `code` — is the one
+        // it misleads. An overridden unit therefore drops both, leaving a plain value+unit the consumer can
+        // read but knows better than to compute with.
+        var emitsTheSourcesOwnUnit =
+            IsSameUnit(unit, ReadString(source, "unit")) || IsSameUnit(unit, ReadString(source, "code"));
+
+        if (emitsTheSourcesOwnUnit)
         {
-            quantity["system"] = system;
+            if (ReadString(source, "system") is { Length: > 0 } system)
+            {
+                quantity["system"] = system;
+            }
+
+            if (ReadString(source, "code") is { Length: > 0 } code)
+            {
+                quantity["code"] = code;
+            }
         }
 
-        if (ReadString(source, "code") is { Length: > 0 } code)
-        {
-            quantity["code"] = code;
-        }
-
+        // Unconditional, unlike system/code above: a comparator ("<", ">=") qualifies the VALUE, which this
+        // node never alters, so overriding the unit does not make it any less true.
         if (ReadString(source, "comparator") is { Length: > 0 } comparator)
         {
             quantity["comparator"] = comparator;
@@ -381,6 +398,14 @@ public sealed class QuantityRangeAssemblyNode : ITransformNode
 
         return quantity;
     }
+
+    /// <summary>Whether the unit about to be emitted is the same one the source already carried. Trimmed and
+    /// case-insensitive so a rule that retypes the source's own unit — "MG/DL", or with a stray space — is
+    /// still recognised as agreeing with it and keeps its coding, rather than being punished for restating
+    /// what the source said. A genuine synonym ("mg per dL") is not recognised and drops the coding: a
+    /// conservative miss (no coding) rather than a misleading one (wrong coding).</summary>
+    private static bool IsSameUnit(string unit, string? sourceValue) =>
+        sourceValue is not null && string.Equals(unit.Trim(), sourceValue.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private static string? ReadString(JsonObject source, string propertyName) =>
         source.TryGetPropertyValue(propertyName, out var node) && node is JsonValue value
