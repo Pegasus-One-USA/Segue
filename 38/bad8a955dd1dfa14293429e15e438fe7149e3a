@@ -1,0 +1,21 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_6fe240044cc58e::t_d0b2c61d81772e 1904-1912
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.spec.ts
+  s_6fe240044cc58e::t_87f479c3d467c2 158-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "38bad8a955dd1dfa14293429e15e438fe7149e3a",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
