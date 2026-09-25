@@ -138,7 +138,7 @@ export function buildConnectionMetadata(
          'dest_fabricWarehouseSqlEndpoint', 'dest_fabricWarehouseStagingLakehouse',
          'dest_fabricWarehouseTable', 'dest_fabricWarehouseSchema',
          'dest_fabricWarehouseWriteMode', 'dest_fabricWarehouseStagingPath',
-         'dest_fabricWarehouseUseWorkspaceIdentity']
+         'dest_fabricWarehouseUseWorkspaceIdentity', 'dest_fabricLakehouseSchema']
     : kind === 'sql'
       ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
       : kind === 'fhir'

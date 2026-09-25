@@ -45,6 +45,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       return [{ value: 'warehouseTable', label: 'Warehouse table (COPY INTO)' }];
     }
     return ([{ value: 'oneLakeFiles', label: 'Lakehouse files (OneLake)' },
+      { value: 'lakehouseTable', label: 'Lakehouse table (Delta)' },
       { value: 'warehouseTable', label: 'Warehouse table (COPY INTO)' }])
       .filter(mode => this.phase.isFabricModeEnabled(mode.value));
   });
@@ -80,6 +81,14 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
 
   /** True when the Warehouse landing mode is selected — drives which fields are required and shown. */
   readonly isWarehouse = computed(() => this.modeValue() === 'warehouseTable');
+
+  /** True when landing rows in a Lakehouse Delta table. Shares the Lakehouse item type with OneLake Files but
+   *  writes under Tables/ with a transaction log, so it shows the table fields rather than the file ones. */
+  readonly isLakehouseTable = computed(() => this.modeValue() === 'lakehouseTable');
+
+  /** File-layout controls (format, partitioning, path) only mean something for a file drop: a Delta table's
+   *  layout is decided by the protocol, and a Warehouse load stages Parquet it then deletes. */
+  readonly isFileSurface = computed(() => this.modeValue() === 'oneLakeFiles');
 
   /** Mode as a signal so computed()s above react to it (valueChanges keeps it in step). */
   private readonly modeValue = signal<string>('oneLakeFiles');
@@ -127,6 +136,11 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
     warehouseTable: ['', []],
     warehouseSchema: ['dbo', []],
     warehouseWriteMode: ['append', []],
+    /** Schema name for a SCHEMA-ENABLED Lakehouse, whose tables sit at Tables/{schema}/{table}. Blank means a
+     *  classic Lakehouse (Tables/{table}). Deliberately not defaulted to 'dbo': the two layouts are different
+     *  places, and writing to the wrong one produces a folder Fabric never registers as a table. */
+    lakehouseSchema: ['', []],
+
     /** OFF by default, which is what the COPY INTO docs specify for a OneLake source: with no CREDENTIAL
      *  clause the statement runs as the executing user's Entra identity — the service principal that opened
      *  this connection. That identity already needs Contributor on both workspaces. Turning this ON asks
@@ -182,8 +196,15 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       control.updateValueAndValidity({ emitEvent: false });
     }
 
+    // Delta lands in a Lakehouse, like OneLake Files — only the Warehouse surface needs the other item type.
     this.fabricForm.controls.itemType.setValue(
       isWarehouse ? 'Warehouse' : 'Lakehouse', { emitEvent: false });
+
+    // A Delta table's location comes from its name and schema, never from a file path, so the path control is
+    // cleared rather than left showing a value the writer ignores.
+    if (mode === 'lakehouseTable') {
+      this.fabricForm.controls.path.setValue('', { emitEvent: false });
+    }
   }
 
   /** Mirrors FabricDestinationSettings.Parse: service principal needs tenant id, client id and a secret;
@@ -256,6 +277,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       dest_fabricWarehouseWriteMode: v.warehouseWriteMode ?? 'append',
       dest_fabricWarehouseUseWorkspaceIdentity: v.warehouseUseWorkspaceIdentity ? 'true' : 'false',
       dest_fabricWarehouseStagingPath: v.warehouseStagingPath ?? '_staging',
+      dest_fabricLakehouseSchema: v.lakehouseSchema ?? '',
     };
   }
 
@@ -294,6 +316,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       warehouseWriteMode: fields['dest_fabricWarehouseWriteMode'] || 'append',
       warehouseUseWorkspaceIdentity: fields['dest_fabricWarehouseUseWorkspaceIdentity'] === 'true',
       warehouseStagingPath: fields['dest_fabricWarehouseStagingPath'] || '_staging',
+      lakehouseSchema: fields['dest_fabricLakehouseSchema'] || '',
     });
     this._syncAuthModeValidators(this.fabricForm.value.authMode ?? null, this.reusingExisting());
     this.modeValue.set(this.fabricForm.value.mode ?? 'oneLakeFiles');

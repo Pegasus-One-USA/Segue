@@ -85,12 +85,14 @@ const PHASE_1_CONFIG: PhaseConfig = {
     //   'dest-restapi', 'dest-inmemory'
   ],
 
-  // OneLake Files is verified end to end against a live Fabric tenant. Warehouse (staged Parquet + COPY INTO,
-  // MERGE on upsert) is listed alongside it but has NOT had a live write confirmed yet — its shape is the
-  // documented one, and the three things most likely to need adjusting on first contact are the COPY INTO
-  // credential clause, the abfss staging URL form, and whether the identity needs grants on the staging
-  // Lakehouse separately from the Warehouse. Note it also requires a pre-created target table: FHIRBridge
-  // never creates or alters destination schema.
+  // OneLake Files and Warehouse are both verified end to end against a live Fabric tenant. Warehouse requires a
+  // pre-created target table: FHIRBridge never creates or alters destination schema.
+  //
+  // 'lakehouseTable' (Delta) is deliberately NOT listed yet. It is implemented — it writes the _delta_log that
+  // registers a Tables/ folder as a real table — but no table written by it has been opened in Fabric, and a
+  // Delta log that a reader rejects fails in a particularly unhelpful way: the write reports success and the
+  // table simply never appears. Add it here once a live write has been confirmed, the same way Warehouse was
+  // held back until it had been.
   enabledFabricModes: ['oneLakeFiles', 'warehouseTable'],
 
   hiddenRanks: [],
