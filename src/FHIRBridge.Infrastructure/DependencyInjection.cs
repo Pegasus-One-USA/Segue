@@ -515,6 +515,7 @@ public static class DependencyInjection
         services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.OneLakeFilesLandingStrategy>();
         services.AddScoped<Destinations.Fabric.IFabricWarehouseConnectionFactory, Destinations.Fabric.FabricWarehouseConnectionFactory>();
         services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.WarehouseTableLandingStrategy>();
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.LakehouseTableLandingStrategy>();
         services.AddScoped<Destinations.Fabric.IFabricLandingStrategyRegistry, Destinations.Fabric.FabricLandingStrategyRegistry>();
         services.AddScoped<MappedDataFabricDestinationWriter>();
         services.AddScoped<MappedMongoDestinationWriter>();
