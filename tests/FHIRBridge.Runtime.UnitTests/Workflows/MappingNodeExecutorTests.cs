@@ -1214,4 +1214,70 @@ public sealed class MappingNodeExecutorTests
             return new MappingTestResultDto(values, []);
         }
     }
+
+    /// <summary>
+    /// Regression test for a rule-authority bug: the final relational-type coercion must be driven only by the
+    /// last rule that actually SUCCEEDED, never by one the chain merely reached and then failed. Chain: a
+    /// NumberCast rule (declares ExpectedValueType=Boolean, which is nonsensical for it — a red herring meant
+    /// to look plausible if wrongly credited) fails on non-numeric input and PassesThrough; a StringNormalization
+    /// rule with NO declared type then actually produces the final value. Before this fix, the failed
+    /// NumberCast rule's Boolean type still got credited, so the final string "yes" (a real value, not a literal
+    /// boolean spelling coincidence) was silently miscoerced to the CLR `true` before being written.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_that_fails_never_dictates_the_final_coercion_type()
+    {
+        var destination = new DestinationConfiguration(
+            "Test SQL", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        var destinationId = destination.Id;
+
+        var fields = new[]
+        {
+            new MappingFieldDto("FamilyName", "$.name.family", MappingValueType.String, IsRequired: false,
+                DefaultValue: null, Format: "directField", ResourceType: "Patient", DestinationObject: "Patient"),
+        };
+        var engine = new FakeJsonMappingEngine(new MappingTestResultDto(
+            Values: new Dictionary<string, object?> { ["FamilyName"] = "YES" }, Errors: []));
+
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetDestinationAsync(destinationId, It.IsAny<CancellationToken>())).ReturnsAsync(destination);
+
+        var failingTypedRule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.NumberCast, JsonSerializer.Serialize(new Dictionary<string, string>()),
+            resourceType: "Patient", destinationField: "FamilyName",
+            errorPolicy: TransformErrorPolicy.PassThrough, expectedValueType: MappingValueType.Boolean);
+        var succeedingUntypedRule = new TransformationRule(
+            TransformScope.Field, TransformNodeType.StringNormalization,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["case"] = "lower" }),
+            resourceType: "Patient", destinationField: "FamilyName");
+
+        var resolver = new Mock<IEffectiveRuleResolver>();
+        resolver
+            .Setup(r => r.ResolveAsync(
+                DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), null, "Patient.name.family",
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[failingTypedRule, succeedingUntypedRule]);
+
+        var registry = new TransformNodeRegistry([new NumberCastNode(), new StringNormalizationNode()]);
+        var settingsCache = new Mock<ISystemSettingsCache>();
+        settingsCache
+            .Setup(c => c.GetBoolAsync(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var executor = new MappingNodeExecutor(
+            engine, mappingMaterializer: null, configurationRepository: repository.Object,
+            ruleResolver: resolver.Object, transformNodeRegistry: registry, settingsCache: settingsCache.Object);
+        var node = CreateNode("Patient", "Patient", fields, extraConfig: new Dictionary<string, object>
+        {
+            ["destinationId"] = destinationId.ToString(),
+        });
+        var upstream = UpstreamWith(new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient"}"""));
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        var batch = (MappedRecordBatch)output.Payload!;
+        var record = (MappedDestinationRecord)batch.Records.Single();
+        record.Values["FamilyName"].Should().Be("yes",
+            "the failed NumberCast rule's Boolean type must not be applied to a value it never produced — " +
+            "only the StringNormalization rule that actually ran wrote this value, and it declares no type");
+    }
 }

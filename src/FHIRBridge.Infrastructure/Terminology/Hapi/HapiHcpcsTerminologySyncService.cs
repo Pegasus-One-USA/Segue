@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Caching;
@@ -71,7 +72,16 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
         _logger.LogInformation("Parsed {Total} HCPCS codes from the official release.", concepts.Count);
         var version = VersionFromZipUrl(zipUrl);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "HCPCS", version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "HCPCS",
+            version,
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                ShortDescription: c.ShortDescription,
+                LongDescription: c.Display,
+                IsActive: c.IsActive)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -140,6 +150,11 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
         var results = new List<Concept>(20_000);
         string? currentCode = null;
         var currentChunks = new List<string>();
+        // Per CMS's published record layout, the short description (field 8, positions 92-119) and the
+        // termination date (field 29, positions 285-292) live on a code's FIRST physical row only —
+        // continuation rows carry description text alone and are not padded to the full 320-char width.
+        string? currentShort = null;
+        string? currentTermination = null;
 
         void FlushCurrent()
         {
@@ -151,7 +166,13 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
             var display = string.Join(' ', currentChunks.Select(c => c.Trim()).Where(c => c.Length > 0));
             if (!string.IsNullOrEmpty(display))
             {
-                results.Add(new Concept(currentCode, display));
+                // A termination date in the past means CMS has retired the code; 1,342 codes in the
+                // October 2026 release carry one. Anything unparseable or absent leaves the code active.
+                var isActive = !(DateTime.TryParseExact(
+                        currentTermination, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var terminatedOn)
+                    && terminatedOn.Date <= DateTime.UtcNow.Date);
+
+                results.Add(new Concept(currentCode, display, currentShort, isActive));
             }
         }
 
@@ -170,6 +191,8 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
 
             var code = line.Substring(0, 5).Trim();
             var descriptionChunk = line.Length > 11 ? line.Substring(11, Math.Min(80, line.Length - 11)) : string.Empty;
+            var rowShort = line.Length >= 119 ? line.Substring(91, 28).Trim() : null;
+            var rowTermination = line.Length >= 292 ? line.Substring(284, 8).Trim() : null;
             if (string.IsNullOrEmpty(code))
             {
                 continue;
@@ -180,6 +203,8 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
                 FlushCurrent();
                 currentCode = code;
                 currentChunks = new List<string>();
+                currentShort = string.IsNullOrWhiteSpace(rowShort) ? null : rowShort;
+                currentTermination = string.IsNullOrWhiteSpace(rowTermination) ? null : rowTermination;
             }
 
             currentChunks.Add(descriptionChunk);
@@ -189,5 +214,5 @@ public sealed class HapiHcpcsTerminologySyncService : IHapiHcpcsTerminologySyncS
         return results;
     }
 
-    private sealed record Concept(string Code, string Display);
+    private sealed record Concept(string Code, string Display, string? ShortDescription, bool IsActive);
 }

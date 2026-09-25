@@ -1133,8 +1133,7 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Message")
                         .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Module")
                         .HasMaxLength(100)
@@ -1157,16 +1156,14 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("StackTrace")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TraceId")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("UserFriendlyMessage")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("WorkflowId")
                         .HasMaxLength(100)
@@ -4246,6 +4243,20 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<string>("Display")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("LongCommonName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LongDescription")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ShortDescription")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Pid");
 
                     b.HasIndex("CodeVal");
@@ -5449,6 +5460,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                             b1.Property<string>("CorrelationCodeJsonPath")
                                 .HasMaxLength(500)
                                 .HasColumnType("nvarchar(500)");
+
+                            b1.Property<string>("CorrelationCodeOperator")
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)");
 
                             b1.Property<string>("CorrelationCodeValue")
                                 .HasMaxLength(100)

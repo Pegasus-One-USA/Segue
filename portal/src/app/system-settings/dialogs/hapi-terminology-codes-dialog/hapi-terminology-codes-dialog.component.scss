@@ -273,6 +273,39 @@
   text-align: right;
 }
 
+// The three description columns can hold anything from a 28-character HCPCS short form to a
+// multi-sentence MeSH ScopeNote. Capped and ellipsised so one long definition cannot stretch a row
+// past the dialog width; the full text stays available via each cell's title attribute.
+.data-table .col-desc {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-table .col-status {
+  width: 96px;
+  text-align: center;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--color-success);
+  border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge--inactive {
+  background: color-mix(in srgb, var(--color-muted) 12%, transparent);
+  color: var(--color-muted);
+  border-color: color-mix(in srgb, var(--color-muted) 30%, transparent);
+}
+
 .code-badge {
   display: inline-flex;
   align-items: center;

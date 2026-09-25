@@ -316,6 +316,8 @@ export function serializeRowsFlat(
 ): (LegacyMappingRow & {
   arrayPolicy: string; approximated: boolean; isUpsertKey: boolean; isRequired?: boolean;
   defaultValue?: string | null;
+  format?: string;
+  correlationSiblingField?: string; correlationCodeValue?: string; correlationOperator?: string;
   parentTable?: string; parentKeyColumn?: string; foreignKeyColumn?: string;
   referencesResource?: string;
 })[] {
@@ -350,6 +352,15 @@ export function serializeRowsFlat(
     const arrayPolicy: string = (isChildTable && resolvedPolicy.arrayPolicy !== 'StoreJson')
       ? 'SeparateDestination'
       : resolvedPolicy.arrayPolicy;
+    // A csv-aggregate Format marker, or a criteria row's correlation fields, mean "collapse/pick among
+    // every array item for THIS one parent row" — meaningless once the field is instead fanned out into
+    // its own child-table row per item (the isChildTable override above), so neither must survive that
+    // override.
+    const survivesChildTableOverride = arrayPolicy === resolvedPolicy.arrayPolicy;
+    const format = survivesChildTableOverride ? resolvedPolicy.format : undefined;
+    const correlationSiblingField = survivesChildTableOverride ? resolvedPolicy.correlationSiblingField : undefined;
+    const correlationCodeValue = survivesChildTableOverride ? resolvedPolicy.correlationCodeValue : undefined;
+    const correlationOperator = survivesChildTableOverride ? resolvedPolicy.correlationOperator : undefined;
 
     // Without an explicit designation, fall back to whichever mapped field lands on the destination
     // table's REAL primary key column (e.g. PatientId, not necessarily a column named "Id") — not
@@ -385,7 +396,7 @@ export function serializeRowsFlat(
       column: row.targetName,
       jsonPath: isDefault
         ? (row.defaultToken ?? '@default')
-        : (criteriaJsonPath(row) ?? primary?.jsonPath ?? wholeNodeJsonPath(row)),
+        : (primary?.jsonPath ?? wholeNodeJsonPath(row)),
       valueType: isDefault ? row.defaultValueType : effectiveMappingValueType(row),
       arrays: primary?.arrays,
       arrayPolicy,
@@ -398,6 +409,8 @@ export function serializeRowsFlat(
       // profile-authored fallback default on an ordinary 'value' row round-trips correctly too, not just a
       // 'default'-mode row's own literal.
       ...(row.defaultValue ? { defaultValue: row.defaultValue } : {}),
+      ...(format ? { format } : {}),
+      ...(correlationSiblingField ? { correlationSiblingField, correlationCodeValue, correlationOperator } : {}),
       ...(genuineRelation ? {
         parentTable: genuineRelation.parentTable,
         parentKeyColumn: genuineRelation.parentColumn,
@@ -414,9 +427,31 @@ export function serializeRowsFlat(
 }
 
 export interface ArrayPolicyResolution {
-  arrayPolicy: 'Scalar' | 'FirstItem' | 'RepeatParent' | 'StoreJson';
+  arrayPolicy: 'Scalar' | 'FirstItem' | 'RepeatParent' | 'StoreJson' | 'CorrelateByCode';
   /** True when this row's configuration has no exact backend equivalent and was approximated. */
   approximated: boolean;
+  /** Set for the csv-aggregate and Nth-instance cases below — the MappingFieldDto.Format marker
+   *  JsonMappingEngine's HasCsvAggregate/ParseInstanceIndex read ("aggregate=csv" / "index=N", each a
+   *  plain substring/key=value check, so the "directField" mode-marker prefix isn't load-bearing for
+   *  either, but is included anyway to match MappingImportService.BuildJsonPathAndFormat's own convention
+   *  exactly, in case another Format-keyed code path is added later). Every other case leaves this
+   *  undefined — resolveArrayPolicy's caller only ever sends a Format at all when this is present (see
+   *  serializeRowsFlat). */
+  format?: string;
+  /** Set only for the 'criteria'/CorrelateByCode case below. correlationSiblingField is the criteria's bare
+   *  field name ("use"), NOT YET an absolute JsonPath — this layer's own MappingSourceRef.jsonPath is
+   *  frequently unavailable (only ever populated "when present", per its own doc comment), so
+   *  workflow-build-assembler-v2.service.ts derives the real MappingFieldDto.CorrelationCodeJsonPath itself,
+   *  off this row's own ALWAYS-resolved final jsonPath (falls back to a naive conversion when the catalog
+   *  didn't supply one) — see its buildMappingForResource/siblingCorrelationJsonPath. CorrelationCodeValue
+   *  is the value that sibling is compared against, correlationOperator ("Equals" | "Contains" | "NotEquals")
+   *  is how — JsonMappingEngine.ResolveCorrelatedValue/MatchesCorrelationOperator reads all three to pick
+   *  the array item by the sibling's value instead of by position — the same mechanism a blood-pressure
+   *  Observation's systolic/diastolic component[] already uses (see its own doc comment), just driven by
+   *  this row's own criteria instead of a fixed LOINC code. */
+  correlationSiblingField?: string;
+  correlationCodeValue?: string;
+  correlationOperator?: 'Equals' | 'Contains' | 'NotEquals';
 }
 
 /**
@@ -481,25 +516,6 @@ export function wholeNodeJsonPath(row: MappingRow): string | undefined {
   return bare && bare !== row.resource ? `$.${bare}[${selector}]` : undefined;
 }
 
-/**
- * A scalar field's own JsonPath with the criteria filter substituted for its nearest array ancestor's "[*]",
- * e.g. "$.name[*].text" + (use = usual) becomes "$.name[?use=usual].text". Undefined when there is nothing to
- * rewrite — no criteria, no filter to build from it, or a path that never wildcards that ancestor.
- *
- * Only the LAST "[*]" is rewritten: the instance picker asks about the nearest enclosing repeat
- * (arrayAncestorLabel), which is the innermost one the path crosses, and an outer repeat keeps addressing all
- * of its items exactly as before.
- */
-export function criteriaJsonPath(row: MappingRow): string | undefined {
-  if (row.mode !== 'value') return undefined;
-  const predicate = instanceCriteriaPredicate(row.instance);
-  const jsonPath = row.sources[0]?.jsonPath;
-  if (!predicate || !jsonPath) return undefined;
-  const lastWildcard = jsonPath.lastIndexOf('[*]');
-  return lastWildcard === -1
-    ? undefined
-    : `${jsonPath.slice(0, lastWildcard)}[${predicate}]${jsonPath.slice(lastWildcard + 3)}`;
-}
 
 /**
  * Single source of truth for translating a MappingRow's join/instance-selection UI state into the
@@ -542,19 +558,53 @@ function applyInstance(
     case 'all':
       if (!hasArrayAncestors) return { arrayPolicy: 'Scalar', approximated: false };
       if (instance.aggregate === 'csv') {
-        // No backend concept of "join array items with a delimiter into one column".
-        return { arrayPolicy: 'FirstItem', approximated: true };
+        // JsonMappingEngine.HasCsvAggregate reads this marker and joins every resolved occurrence into
+        // one delimited string on the parent row BEFORE the ArrayPolicy switch even runs (see its own
+        // doc comment) — so the stored ArrayPolicy value here is never actually reached at execution
+        // time; FirstItem is just the placeholder NetArchTest/DTO validation expects to see stored
+        // alongside a Format that carries this marker (mirrors MappingImportService
+        // .BuildJsonPathAndFormat's identical "directField;aggregate=csv" convention for the V1 profile
+        // path). No longer an approximation now that the marker actually reaches the engine.
+        return { arrayPolicy: 'FirstItem', approximated: false, format: 'directField;aggregate=csv' };
       }
       return { arrayPolicy: 'RepeatParent', approximated: false };
-    case 'criteria':
-      // The criteria itself now travels in the JsonPath (see criteriaJsonPath), so what reaches this field is
-      // already only the matching repeats — taking the first of those is exact, not an approximation.
-      return { arrayPolicy: 'FirstItem', approximated: false };
-    case 'nth':
-      // Closest existing enum value; still wrong whenever n > 0. Unlike a whole-node row, a scalar field's
-      // path has no index form to carry the position through (its own wildcard addresses every repeat), so
-      // this one stays an approximation.
-      return { arrayPolicy: 'FirstItem', approximated: true };
+    case 'nth': {
+      // instance.n is the user-facing, 1-based "Instance #" (1 = first, 2 = second, ...) — JsonMappingEngine
+      // .ParseInstanceIndex's own "index=N" marker is 0-based (a natural array index), so it's converted
+      // here, at the one place a MappingRow's UI state becomes the wire Format, rather than either the UI
+      // or the engine having to know about the other's counting convention. Reads this marker and narrows
+      // to the N-th DISTINCT instance of the repeating parent BEFORE the ArrayPolicy switch runs — same
+      // "Format marker wins regardless of the stored ArrayPolicy" precedent as aggregate=csv above. Never
+      // an approximation, at any n (clamped to 0 for a non-positive/missing n, same as "1st" itself).
+      const n = Math.max(0, (instance.n ?? 1) - 1);
+      return { arrayPolicy: 'FirstItem', approximated: false, format: `directField;index=${n}` };
+    }
+    case 'criteria': {
+      // instance.op defaults to '=' the same way the popover/list-row <select> itself displays it
+      // (`d.instance?.op ?? '='`) — onInstanceTypeChange only ever sets `{ type }` when switching to
+      // 'criteria', never seeding `op`, so a user who never touches the dropdown (already showing its own
+      // default "equals") leaves the real stored value undefined. Treating undefined as "not equals" here
+      // silently fell back to the approximation for the single most common case: picking "Match criteria"
+      // and typing straight into field/value without ever re-selecting "equals".
+      const op = instance.op ?? '=';
+      // An incomplete criteria (no field/value typed yet) can't correlate against anything, and a field
+      // with no repeating ancestor at all has nothing to correlate WITHIN — both fall back to the closest
+      // existing policy, same as before.
+      if (!instance.field?.trim() || !instance.value || !hasArrayAncestors) {
+        return { arrayPolicy: 'FirstItem', approximated: true };
+      }
+
+      // The real absolute CorrelationCodeJsonPath is derived downstream, in
+      // workflow-build-assembler-v2.service.ts's buildMappingForResource — see correlationSiblingField's own
+      // doc comment on ArrayPolicyResolution for why this layer only ever hands over the bare field name.
+      return {
+        arrayPolicy: 'CorrelateByCode',
+        approximated: false,
+        correlationSiblingField: instance.field.trim(),
+        correlationCodeValue: instance.value,
+        correlationOperator: op === 'contains' ? 'Contains' : op === '!=' ? 'NotEquals' : 'Equals',
+      };
+    }
   }
 }
 

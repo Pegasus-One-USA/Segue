@@ -3,7 +3,7 @@ import {
   MappingRow, LegacyMappingRow,
   qualifyTableName, defaultSchemaFor, splitTableName, reconcileTargetsForDestTypeSwitch,
   effectiveMappingValueType, checkColumnTypeCompatibility,
-  defaultInstanceType, wholeNodeInstanceIndex, wholeNodeJsonPath, criteriaJsonPath,
+  defaultInstanceType, wholeNodeInstanceIndex, wholeNodeJsonPath,
 } from './field-mapping-model';
 import { DestinationTable } from '../../../../services/destination-schema.service';
 
@@ -392,6 +392,70 @@ describe('serializeRowsFlat', () => {
       );
       expect(flat[0].arrayPolicy).toBe('RepeatParent');
     });
+
+    it('a root-table csv-aggregate field carries the aggregate=csv Format marker JsonMappingEngine reads', () => {
+      const flat = serializeRowsFlat(
+        [{ resource: 'Patient', sources: [{ fhirPath: 'Patient.telecom.use', label: 'Use', arrays: ['telecom'] }], mode: 'value', instance: { type: 'all', aggregate: 'csv' }, targetName: 'telecom', tableName: 'dbo.Patient' }],
+        targetByResource, [], childRelations,
+      );
+      expect(flat[0].arrayPolicy).toBe('FirstItem');
+      expect(flat[0].format).toBe('directField;aggregate=csv');
+    });
+
+    it('a root-table Nth-instance field converts its 1-based instance.n to the 0-based index=N Format marker JsonMappingEngine reads', () => {
+      const flat = serializeRowsFlat(
+        // n=2 is the user-facing "2nd instance" — the wire Format marker is the 0-based array index (1).
+        [{ resource: 'Patient', sources: [{ fhirPath: 'Patient.telecom.use', label: 'Use', arrays: ['telecom'] }], mode: 'value', instance: { type: 'nth', n: 2 }, targetName: 'telecom', tableName: 'dbo.Patient' }],
+        targetByResource, [], childRelations,
+      );
+      expect(flat[0].arrayPolicy).toBe('FirstItem');
+      expect(flat[0].format).toBe('directField;index=1');
+    });
+
+    it('suppresses the csv-aggregate Format marker once the field is fanned out to its own child-table row per item', () => {
+      // Collapsing every occurrence into one delimited string only makes sense on the parent row; once
+      // isChildTable overrides the policy to SeparateDestination, each occurrence already becomes its own
+      // child-table row, so the marker must not survive onto it (see serializeRowsFlat's own `format` calc).
+      const flat = serializeRowsFlat(
+        [childRow({ sources: [{ fhirPath: 'Patient.name.given', label: 'Given', arrays: ['name'] }], instance: { type: 'all', aggregate: 'csv' } })],
+        targetByResource, [], childRelations,
+      );
+      expect(flat[0].arrayPolicy).toBe('SeparateDestination');
+      expect(flat[0].format).toBeUndefined();
+    });
+
+    it('a root-table criteria field emits CorrelateByCode plus the bare sibling field name — the absolute CorrelationCodeJsonPath is derived downstream, in workflow-build-assembler-v2.service.ts, off this row\'s own resolved jsonPath (frequently unavailable at this layer; see MappingSourceRef.jsonPath)', () => {
+      const flat = serializeRowsFlat(
+        [{
+          resource: 'Patient',
+          // Deliberately NO catalog jsonPath on the source — this is the common case in the live app
+          // (MappingSourceRef.jsonPath is only "when present"), and correlationSiblingField must still be
+          // emitted; only the FINAL absolute path build depends on a jsonPath, and that now happens later.
+          sources: [{ fhirPath: 'Patient.telecom.value', label: 'Value', arrays: ['telecom'] }],
+          mode: 'value', instance: { type: 'criteria', field: 'use', op: '=', value: 'mobile' },
+          targetName: 'telecom', tableName: 'dbo.Patient',
+        }],
+        targetByResource, [], childRelations,
+      );
+      expect(flat[0].arrayPolicy).toBe('CorrelateByCode');
+      expect(flat[0].correlationSiblingField).toBe('use');
+      expect(flat[0].correlationCodeValue).toBe('mobile');
+      expect(flat[0].correlationOperator).toBe('Equals');
+    });
+
+    it('suppresses the correlation fields once a criteria field is fanned out to its own child-table row per item', () => {
+      const flat = serializeRowsFlat(
+        [childRow({
+          sources: [{ fhirPath: 'Patient.name.given', label: 'Given', arrays: ['name'] }],
+          instance: { type: 'criteria', field: 'use', op: '=', value: 'official' },
+        })],
+        targetByResource, [], childRelations,
+      );
+      expect(flat[0].arrayPolicy).toBe('SeparateDestination');
+      expect(flat[0].correlationSiblingField).toBeUndefined();
+      expect(flat[0].correlationCodeValue).toBeUndefined();
+      expect(flat[0].correlationOperator).toBeUndefined();
+    });
   });
 
   describe('mode: default', () => {
@@ -481,19 +545,79 @@ describe('resolveArrayPolicy', () => {
       .toEqual({ arrayPolicy: 'Scalar', approximated: false });
   });
 
-  it('single source, instance "all"/aggregate csv -> FirstItem, approximated', () => {
+  it('single source, instance "all"/aggregate csv -> FirstItem, NOT approximated, carries the aggregate=csv Format marker', () => {
     expect(resolveArrayPolicy(row({ instance: { type: 'all', aggregate: 'csv' } })))
-      .toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'directField;aggregate=csv' });
   });
 
-  it('single source, instance "nth" -> FirstItem, approximated', () => {
+  it('single source, instance "nth", 1-based n=2 (the second instance) -> FirstItem, NOT approximated, carries the 0-based index=1 Format marker', () => {
     expect(resolveArrayPolicy(row({ instance: { type: 'nth', n: 2 } })))
-      .toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'directField;index=1' });
   });
 
-  it('single source, instance "criteria" -> FirstItem, exact (the filter rides in the JsonPath)', () => {
-    expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', op: '=', value: 'official' } })))
-      .toEqual({ arrayPolicy: 'FirstItem', approximated: false });
+  it('instance "nth" with no explicit n defaults to n=1 (the first instance, index=0)', () => {
+    expect(resolveArrayPolicy(row({ instance: { type: 'nth' } })))
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'directField;index=0' });
+  });
+
+  it('instance "nth", n=1 (the first instance) -> index=0, identical to plain "First"', () => {
+    expect(resolveArrayPolicy(row({ instance: { type: 'nth', n: 1 } })))
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'directField;index=0' });
+  });
+
+  describe('instance "criteria"', () => {
+    it('op "=" -> CorrelateByCode, NOT approximated, hands over the bare sibling field name (no catalog jsonPath needed at this layer — see correlationSiblingField\'s own doc comment) and correlationOperator "Equals"', () => {
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', op: '=', value: 'mobile' } })))
+        .toEqual({
+          arrayPolicy: 'CorrelateByCode', approximated: false,
+          correlationSiblingField: 'use', correlationCodeValue: 'mobile', correlationOperator: 'Equals',
+        });
+    });
+
+    it('op omitted entirely (onInstanceTypeChange never seeds one; the "equals" shown is only the <select>\'s own display default) -> still resolves as "Equals", NOT approximated', () => {
+      // Regression guard for the exact bug reported live: switching "Which instance?" to "Match criteria"
+      // and typing straight into field/value, without ever re-selecting "equals" in the op dropdown (already
+      // showing it), left the real instance.op undefined — silently falling back to the approximation for
+      // what looked, on screen, like a fully configured "equals" criteria.
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', value: 'mobile' } })))
+        .toEqual({
+          arrayPolicy: 'CorrelateByCode', approximated: false,
+          correlationSiblingField: 'use', correlationCodeValue: 'mobile', correlationOperator: 'Equals',
+        });
+    });
+
+    it('op "contains" -> CorrelateByCode, NOT approximated, correlationOperator "Contains"', () => {
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', op: 'contains', value: 'mob' } })))
+        .toEqual({
+          arrayPolicy: 'CorrelateByCode', approximated: false,
+          correlationSiblingField: 'use', correlationCodeValue: 'mob', correlationOperator: 'Contains',
+        });
+    });
+
+    it('op "!=" -> CorrelateByCode, NOT approximated, correlationOperator "NotEquals"', () => {
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', op: '!=', value: 'home' } })))
+        .toEqual({
+          arrayPolicy: 'CorrelateByCode', approximated: false,
+          correlationSiblingField: 'use', correlationCodeValue: 'home', correlationOperator: 'NotEquals',
+        });
+    });
+
+    it('a criteria still being typed (no field yet) -> FirstItem, approximated', () => {
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: '', op: '=', value: 'mobile' } })))
+        .toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+    });
+
+    it('a criteria still being typed (no value yet) -> FirstItem, approximated', () => {
+      expect(resolveArrayPolicy(row({ instance: { type: 'criteria', field: 'use', op: '=', value: '' } })))
+        .toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+    });
+
+    it('a source with no repeating ancestor at all -> FirstItem, approximated (no array to correlate within)', () => {
+      expect(resolveArrayPolicy(row({
+        sources: [scalarSource],
+        instance: { type: 'criteria', field: 'use', op: '=', value: 'mobile' },
+      }))).toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+    });
   });
 
   it('joined sources (>1) -> rules applied to sources[0], always approximated', () => {
@@ -521,7 +645,11 @@ describe('isApproximated', () => {
       resource: 'Patient', sources: [{ fhirPath: 'Patient.id', label: 'Patient ID' }],
       mode: 'value', instance: { type: 'first' }, targetName: 'SourcePatientId', tableName: 'dbo.Patient',
     };
-    const approx: MappingRow = { ...exact, instance: { type: 'nth', n: 1 } };
+    // 'nth' and a fully-configured 'criteria' (any op) are no longer approximations of their OWN accord
+    // (see the resolveArrayPolicy suite) — but `exact`'s own source has no array ancestors at all
+    // (Patient.id is scalar), so 'criteria' here still falls back: nothing to correlate against regardless
+    // of how complete the criteria itself is.
+    const approx: MappingRow = { ...exact, instance: { type: 'criteria', field: 'use', op: '=', value: 'official' } };
     expect(isApproximated(exact)).toBeFalse();
     expect(isApproximated(approx)).toBeTrue();
   });
@@ -704,38 +832,6 @@ describe('checkColumnTypeCompatibility', () => {
     };
     const column = { dataType: 'character varying', mappingValueType: 'STRING' };
     expect(checkColumnTypeCompatibility(row, column)).toBeNull();
-  });
-});
-
-describe('criteriaJsonPath — a scalar field inside a filtered repeat', () => {
-  function valueRow(instance?: MappingRow['instance'], jsonPath = '$.name[*].text'): MappingRow {
-    return {
-      resource: 'Patient',
-      sources: [{ fhirPath: 'Patient.name.text', label: 'Text', jsonPath, arrays: ['name'] }],
-      mode: 'value', instance, targetName: 'NameText', tableName: 'dbo.Patient',
-    };
-  }
-
-  it('substitutes the filter for the repeat it applies to', () => {
-    expect(criteriaJsonPath(valueRow({ type: 'criteria', field: 'use', op: '=', value: 'usual' })))
-      .toBe('$.name[?use=usual].text');
-  });
-
-  it('rewrites only the NEAREST repeat, leaving an outer one addressing every item', () => {
-    const nested = valueRow({ type: 'criteria', field: 'use', op: '=', value: 'home' }, '$.contact[*].address[*].city');
-    expect(criteriaJsonPath(nested)).toBe('$.contact[*].address[?use=home].city');
-  });
-
-  it('is undefined for every non-criteria selection, leaving the catalog path untouched', () => {
-    expect(criteriaJsonPath(valueRow(undefined))).toBeUndefined();
-    expect(criteriaJsonPath(valueRow({ type: 'first' }))).toBeUndefined();
-    expect(criteriaJsonPath(valueRow({ type: 'all' }))).toBeUndefined();
-  });
-
-  it('serializeRowsFlat sends the filtered path in place of the wildcard one', () => {
-    const flat = serializeRowsFlat([valueRow({ type: 'criteria', field: 'use', op: '=', value: 'usual' })], {});
-    expect(flat[0].jsonPath).toBe('$.name[?use=usual].text');
-    expect(flat[0].approximated).toBeFalse();
   });
 });
 

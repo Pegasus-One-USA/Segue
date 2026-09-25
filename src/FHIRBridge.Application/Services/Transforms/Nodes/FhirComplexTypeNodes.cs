@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.Globalization;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using FHIRBridge.Domain.Enums;
 using PhoneNumbers;
@@ -622,6 +623,17 @@ public sealed class TelecomNormalizationNode : ITransformNode
     private static readonly Regex EmailPattern = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled);
     private static readonly PhoneNumberUtil PhoneUtil = PhoneNumberUtil.GetInstance();
 
+    /// <summary>Bound on a single user-supplied regex evaluation, so a pathological pattern fails one value
+    /// loudly instead of hanging the pipeline thread that is processing the batch.</summary>
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// ContactPoint.system codes that bypass phone parsing: their values have no canonical format this node
+    /// could normalize to, so the raw value is carried through. Mirrors the FHIR ContactPointSystem value set
+    /// minus "phone" (parsed) and "email" (auto-detected above).
+    /// </summary>
+    private static readonly string[] NonPhoneSystems = ["fax", "url", "sms", "pager", "other"];
+
     public TransformNodeType NodeType => TransformNodeType.TelecomNormalization;
 
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
@@ -632,56 +644,166 @@ public sealed class TelecomNormalizationNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
-        var rank = config.GetOrNull("rank");
-
-        if (EmailPattern.IsMatch(raw))
+        // A rank that cannot become a positiveInt is a configuration error, not a per-value one: it would be
+        // wrong identically on every element the rule touches. Reported once, up front, rather than silently
+        // writing `"rank": null` into the ContactPoint (which is what a failed parse used to emit).
+        if (!TryReadRank(config, out var rank, out var rankError))
         {
-            var email = new JsonObject { ["system"] = "email", ["value"] = raw, ["use"] = config.Get("use", "home") };
-            if (rank is not null)
-            {
-                email["rank"] = int.TryParse(rank, out var emailRank) ? emailRank : null;
-            }
-
-            return TransformResult.Ok(email);
+            return TransformResult.Fail(rankError!);
         }
 
-        // "system" config can explicitly force fax/url instead of the phone-vs-email auto-detection above —
-        // there's no reliable free-text signal to detect fax/url from the raw value itself.
-        var explicitSystem = config.GetOrNull("system");
-        if (explicitSystem is "fax" or "url")
+        // Regex replace runs on the raw incoming contact value, BEFORE email detection and phone parsing —
+        // it is a cleanup pass for source data libphonenumber cannot make sense of on its own (an "x203"
+        // extension suffix, a "Tel: " label, a "/" separating two numbers in one field). Running it after
+        // E.164 formatting instead would only corrupt the very normalization this node exists to produce.
+        // Whatever the pattern leaves behind is what gets detected, parsed and validated.
+        if (!TryApplyRegex(raw, config, out var cleaned, out var regexError))
         {
-            var result = new JsonObject { ["system"] = explicitSystem, ["value"] = raw, ["use"] = config.Get("use", "work") };
-            if (rank is not null)
+            return TransformResult.Fail(regexError!);
+        }
+
+        // The pattern is free to erase the value entirely (e.g. stripping a placeholder like "N/A"), which is
+        // treated exactly like a blank input rather than handed to the parser as an empty string.
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            return TransformResult.Ok(null);
+        }
+
+        if (EmailPattern.IsMatch(cleaned))
+        {
+            return TransformResult.Ok(BuildContactPoint("email", cleaned, config.Get("use", "home"), rank));
+        }
+
+        // "system" config can explicitly force a non-phone system instead of the phone-vs-email auto-detection
+        // above — there's no reliable free-text signal to detect fax/url/sms/pager from the raw value itself.
+        // Compared case-insensitively and trimmed: the dropdown only ever emits lowercase, but an imported
+        // mapping profile or an API-set config can carry "FAX" or " fax ", and those used to miss this branch
+        // silently and fall through to phone parsing — producing either a mislabelled phone ContactPoint or a
+        // baffling "not a valid phone number" failure for a value that was never meant to be parsed as one.
+        var explicitSystem = config.GetOrNull("system")?.Trim();
+        if (explicitSystem is not null)
+        {
+            var match = NonPhoneSystems.FirstOrDefault(s => string.Equals(s, explicitSystem, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
             {
-                result["rank"] = int.TryParse(rank, out var explicitRank) ? explicitRank : null;
+                return TransformResult.Ok(BuildContactPoint(match, cleaned, config.Get("use", "work"), rank));
             }
 
-            return TransformResult.Ok(result);
+            // "phone" is a legitimate, meaningful setting — it pins the phone branch for a value that would
+            // otherwise be ambiguous — so it is accepted rather than rejected, and simply falls through below.
+            if (!string.Equals(explicitSystem, "phone", StringComparison.OrdinalIgnoreCase))
+            {
+                return TransformResult.Fail(
+                    $"'{explicitSystem}' is not a recognized ContactPoint system. Expected one of: phone, {string.Join(", ", NonPhoneSystems)}.");
+            }
         }
 
         var region = config.Get("region", "US");
         string normalized;
         try
         {
-            var parsedNumber = PhoneUtil.Parse(raw, region);
+            var parsedNumber = PhoneUtil.Parse(cleaned, region);
             if (!PhoneUtil.IsValidNumber(parsedNumber))
             {
-                return TransformResult.Fail($"'{raw}' is not a valid phone number for region '{region}'.");
+                return InvalidNumber($"'{cleaned}' is not a valid phone number for region '{region}'.", config);
             }
 
             normalized = PhoneUtil.Format(parsedNumber, PhoneNumberFormat.E164);
         }
         catch (NumberParseException ex)
         {
-            return TransformResult.Fail($"Unable to parse '{raw}' as a phone number: {ex.Message}");
+            return InvalidNumber($"Unable to parse '{cleaned}' as a phone number: {ex.Message}", config);
         }
 
-        var phone = new JsonObject { ["system"] = "phone", ["value"] = normalized, ["use"] = config.Get("use", "mobile") };
+        return TransformResult.Ok(BuildContactPoint("phone", normalized, config.Get("use", "mobile"), rank));
+    }
+
+    /// <summary>
+    /// How an unparseable/invalid number is reported. "reject" (the default) fails the field, which is the
+    /// safe choice for a scalar binding. "skip" drops just this element — necessary when the rule is bound
+    /// across a repeating array, where one malformed entry would otherwise take the whole field down with it
+    /// (matching how a blank input is already treated above).
+    /// </summary>
+    private static TransformResult InvalidNumber(string message, IReadOnlyDictionary<string, string> config) =>
+        string.Equals(config.Get("onInvalid", "reject"), "skip", StringComparison.OrdinalIgnoreCase)
+            ? TransformResult.Ok(null)
+            : TransformResult.Fail(message);
+
+    private static JsonObject BuildContactPoint(string system, string value, string use, int? rank)
+    {
+        var contactPoint = new JsonObject { ["system"] = system, ["value"] = value, ["use"] = use };
         if (rank is not null)
         {
-            phone["rank"] = int.TryParse(rank, out var phoneRank) ? phoneRank : null;
+            contactPoint["rank"] = rank.Value;
         }
 
-        return TransformResult.Ok(phone);
+        return contactPoint;
+    }
+
+    /// <summary>
+    /// Applies the optional <c>regexPattern</c>/<c>regexReplacement</c> pair to the raw contact value. Mirrors
+    /// <c>StringNormalizationNode</c>'s regex step, including treating an unparseable pattern as a
+    /// configuration mistake that fails the node explicitly (routed through the rule's own ErrorPolicy)
+    /// rather than letting the exception escape and take down the rest of the batch. A blank pattern skips
+    /// the step, and a blank replacement deletes the matched text — which is the common case here, since most
+    /// telecom cleanups are about removing junk (labels, extensions, separators) rather than rewriting it.
+    /// </summary>
+    private static bool TryApplyRegex(string raw, IReadOnlyDictionary<string, string> config, out string result, out string? error)
+    {
+        result = raw;
+        error = null;
+
+        var pattern = config.GetOrNull("regexPattern");
+        if (pattern is null)
+        {
+            return true;
+        }
+
+        try
+        {
+            result = Regex.Replace(raw, pattern, config.Get("regexReplacement"), RegexOptions.None, RegexTimeout).Trim();
+            return true;
+        }
+        catch (RegexParseException ex)
+        {
+            error = $"Invalid regex pattern '{pattern}': {ex.Message}";
+            return false;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // A catastrophically-backtracking pattern is still a configuration mistake, but one that only
+            // shows up against certain values — bounded here so a single bad row cannot stall the pipeline.
+            error = $"Regex pattern '{pattern}' timed out while matching this value.";
+            return false;
+        }
+    }
+
+    private static bool TryReadRank(IReadOnlyDictionary<string, string> config, out int? rank, out string? error)
+    {
+        rank = null;
+        error = null;
+
+        var configured = config.GetOrNull("rank");
+        if (configured is null)
+        {
+            return true;
+        }
+
+        if (!int.TryParse(configured, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            error = $"Rank '{configured}' is not a whole number.";
+            return false;
+        }
+
+        // FHIR types ContactPoint.rank as positiveInt — 1 and up. 0 and negatives used to pass straight
+        // through into the destination.
+        if (parsed < 1)
+        {
+            error = $"Rank '{configured}' must be 1 or greater (FHIR ContactPoint.rank is a positiveInt).";
+            return false;
+        }
+
+        rank = parsed;
+        return true;
     }
 }

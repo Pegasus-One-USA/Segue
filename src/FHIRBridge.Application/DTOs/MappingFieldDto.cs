@@ -24,6 +24,11 @@ public sealed record MappingFieldDto(
     // take (e.g. "8480-6" for BP systolic). Ignored for every other ArrayPolicy.
     string? CorrelationCodeJsonPath = null,
     string? CorrelationCodeValue = null,
+    // How CorrelationCodeValue is compared against each array item's sibling code element — "Equals" (the
+    // default, including null: every CorrelateByCode field saved before this existed relied on exact match),
+    // "Contains" (case-insensitive substring), or "NotEquals". Ignored for every other ArrayPolicy, same as
+    // the two members above.
+    string? CorrelationCodeOperator = null,
     // Destination column constraints — never persisted on the mapping profile itself, only filled in at pipeline
     // run time (see ConfiguredPipelineService.MapResourcesAsync) from the destination's live schema, so
     // JsonMappingEngine can reject a value that would overflow the column before it's ever sent to the database.

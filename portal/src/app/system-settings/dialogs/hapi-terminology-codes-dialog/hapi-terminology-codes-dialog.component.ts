@@ -53,7 +53,9 @@ export class HapiTerminologyCodesDialogComponent implements OnInit {
   readonly searching   = signal(false);
   readonly concepts    = signal<TerminologyConcept[]>([]);
 
-  readonly displayedCols = ['index', 'code', 'display', 'actions'];
+  readonly displayedCols = [
+    'index', 'code', 'display', 'shortDescription', 'longDescription', 'longCommonName', 'isActive', 'actions',
+  ];
 
   private readonly searchChanged = new Subject<string>();
 

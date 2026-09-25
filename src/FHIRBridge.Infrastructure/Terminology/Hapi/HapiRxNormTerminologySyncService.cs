@@ -60,7 +60,15 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
         var concepts = ParseRxnConso(zipPath);
         _logger.LogInformation("Parsed {Total} RxNorm concepts from release {Version}.", concepts.Count, release.ReleaseName);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "RxNorm", release.ReleaseName, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "RxNorm",
+            release.ReleaseName,
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                LongCommonName: c.LongCommonName,
+                IsActive: c.IsActive)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -84,6 +92,9 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
             ?? throw new InvalidDataException("No RXNCONSO.RRF file was found in the release archive.");
 
         var candidates = new Dictionary<string, Candidate>(400_000, StringComparer.Ordinal);
+        // Collected in the same single pass as the display candidates, since RXNCONSO is ~132MB and a
+        // second read would double the parse cost for one extra column.
+        var prescribableNames = new Dictionary<string, string>(40_000, StringComparer.Ordinal);
         using var stream = entry.Open();
         using var reader = new StreamReader(stream);
         string? line;
@@ -109,7 +120,19 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
             var candidate = new Candidate(
                 Name: row[14],
                 IsRxNormSource: row[11].Equals("RXNORM", StringComparison.OrdinalIgnoreCase),
-                IsPreferred: row[6].Equals("Y", StringComparison.OrdinalIgnoreCase));
+                IsPreferred: row[6].Equals("Y", StringComparison.OrdinalIgnoreCase),
+                // SUPPRESS (col 16) is three-valued in the real release: N (812,754 rows), O (390,482,
+                // obsolete) and E (7,222, non-human//editor-suppressed). Only N counts as in force.
+                IsSuppressed: !row[16].Equals("N", StringComparison.OrdinalIgnoreCase),
+                // TTY (col 12) = PSN is RxNorm's "prescribable name", a genuinely different string from
+                // the SCD/IN/BN name on 30,434 RXCUIs (e.g. "Levo-T 112 MCG Oral Tablet" vs
+                // "levothyroxine sodium 0.112 MG Oral Tablet [Levo-T]").
+                TermType: row[12]);
+
+            if (candidate.TermType.Equals("PSN", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(candidate.Name))
+            {
+                prescribableNames.TryAdd(rxcui, candidate.Name);
+            }
 
             if (!candidates.TryGetValue(rxcui, out var existing) || IsBetterCandidate(candidate, existing))
             {
@@ -119,7 +142,11 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
 
         return candidates
             .Where(kv => !string.IsNullOrEmpty(kv.Value.Name))
-            .Select(kv => new Concept(kv.Key, kv.Value.Name))
+            .Select(kv => new Concept(
+                kv.Key,
+                kv.Value.Name,
+                prescribableNames.GetValueOrDefault(kv.Key),
+                !kv.Value.IsSuppressed))
             .ToList();
     }
 
@@ -133,7 +160,7 @@ public sealed class HapiRxNormTerminologySyncService : IHapiRxNormTerminologySyn
         return candidate.IsPreferred && !existing.IsPreferred;
     }
 
-    private sealed record Candidate(string Name, bool IsRxNormSource, bool IsPreferred);
+    private sealed record Candidate(string Name, bool IsRxNormSource, bool IsPreferred, bool IsSuppressed, string TermType);
 
-    private sealed record Concept(string Code, string Display);
+    private sealed record Concept(string Code, string Display, string? LongCommonName, bool IsActive);
 }

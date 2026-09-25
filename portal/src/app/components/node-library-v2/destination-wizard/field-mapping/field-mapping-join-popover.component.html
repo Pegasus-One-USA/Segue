@@ -102,9 +102,9 @@
           </select>
 
           @if (instanceType() === 'nth') {
-            <label class="fm-popover-inline-label">
+            <label class="fm-popover-inline-label" title="1-based: 1 is the first occurrence, 2 the second, and so on.">
               Instance #
-              <input type="number" min="1" class="fm-popover-input fm-popover-input--sm" [value]="d.instance?.n ?? 1" (input)="onInstanceField({ n: +$any($event.target).value || 1 })" />
+              <input type="number" min="1" class="fm-popover-input fm-popover-input--sm" [value]="d.instance?.n ?? 1" (input)="onInstanceField({ n: parseInstanceNumber($any($event.target).value) })" />
             </label>
           }
           @if (instanceType() === 'criteria') {

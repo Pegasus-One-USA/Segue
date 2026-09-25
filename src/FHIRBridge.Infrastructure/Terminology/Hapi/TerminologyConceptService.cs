@@ -46,7 +46,10 @@ public sealed class TerminologyConceptService : ITerminologyConceptService
             var upperTerm = term.ToUpperInvariant();
             query = query.Where(c =>
                 c.CodeVal.ToUpper().Contains(upperTerm) ||
-                (c.Display != null && c.Display.ToUpper().Contains(upperTerm)));
+                (c.Display != null && c.Display.ToUpper().Contains(upperTerm)) ||
+                (c.ShortDescription != null && c.ShortDescription.ToUpper().Contains(upperTerm)) ||
+                (c.LongDescription != null && c.LongDescription.ToUpper().Contains(upperTerm)) ||
+                (c.LongCommonName != null && c.LongCommonName.ToUpper().Contains(upperTerm)));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -54,7 +57,8 @@ public sealed class TerminologyConceptService : ITerminologyConceptService
             .OrderBy(c => c.CodeVal)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(c => new TerminologyConceptDto(c.Pid, c.CodeVal, c.Display))
+            .Select(c => new TerminologyConceptDto(
+                c.Pid, c.CodeVal, c.Display, c.ShortDescription, c.LongDescription, c.LongCommonName, c.IsActive))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<TerminologyConceptDto>(items, totalCount, page, pageSize);
@@ -74,11 +78,20 @@ public sealed class TerminologyConceptService : ITerminologyConceptService
             throw new InvalidOperationException($"Code '{code}' already exists in {descriptor.DisplayName}.");
         }
 
-        var concept = new TrmConcept(versionPid, code, request.Display?.Trim());
+        var concept = new TrmConcept(
+            versionPid,
+            code,
+            request.Display?.Trim(),
+            request.ShortDescription,
+            request.LongDescription,
+            request.LongCommonName,
+            request.IsActive);
         _dbContext.TrmConcepts.Add(concept);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return new TerminologyConceptDto(concept.Pid, concept.CodeVal, concept.Display);
+        return new TerminologyConceptDto(
+            concept.Pid, concept.CodeVal, concept.Display,
+            concept.ShortDescription, concept.LongDescription, concept.LongCommonName, concept.IsActive);
     }
 
     public async Task<TerminologyConceptDto> UpdateAsync(
@@ -105,9 +118,13 @@ public sealed class TerminologyConceptService : ITerminologyConceptService
         }
 
         concept.Update(code, request.Display);
+        concept.UpdateDescriptions(
+            request.ShortDescription, request.LongDescription, request.LongCommonName, request.IsActive);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return new TerminologyConceptDto(concept.Pid, concept.CodeVal, concept.Display);
+        return new TerminologyConceptDto(
+            concept.Pid, concept.CodeVal, concept.Display,
+            concept.ShortDescription, concept.LongDescription, concept.LongCommonName, concept.IsActive);
     }
 
     public async Task DeleteAsync(string systemCode, long pid, CancellationToken cancellationToken)

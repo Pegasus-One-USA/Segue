@@ -1,4 +1,4 @@
-﻿using FHIRBridge.Application.DTOs.Transforms;
+using FHIRBridge.Application.DTOs.Transforms;
 using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services.Transforms;
@@ -62,8 +62,10 @@ public static class TransformNodeConfigSchemas
     private static TransformConfigFieldSchema Combo(string key, string label, string[] options, string? defaultValue = null, string? placeholder = null, bool advanced = false) =>
         new(key, label, "combo", options, defaultValue, placeholder, advanced);
 
-    private static TransformConfigFieldSchema Checkbox(string key, string label, bool defaultValue, bool advanced = false) =>
-        new(key, label, "checkbox", null, defaultValue.ToString(), IsAdvanced: advanced);
+    private static TransformConfigFieldSchema Checkbox(
+        string key, string label, bool defaultValue, bool advanced = false,
+        TransformConfigFieldVisibility? visibleWhen = null) =>
+        new(key, label, "checkbox", null, defaultValue.ToString(), IsAdvanced: advanced, VisibleWhen: visibleWhen);
 
     // Same canonical URIs as CodeableConceptBuilderNode.SystemUris (kept in sync by hand — these live in
     // different layers, one a friendly-name lookup table, one a raw dropdown of presets), offered here as
@@ -75,6 +77,10 @@ public static class TransformNodeConfigSchemas
         "http://www.cms.gov/Medicare/Coding/HCPCSReleaseCodeSets", "http://www.cms.gov/Medicare/Coding/ICD10",
         "http://hl7.org/fhir/sid/ndc", "http://hl7.org/fhir/sid/cvx",
         "http://unitsofmeasure.org", "http://www.ama-assn.org/go/cpt",
+        // The four remaining locally-synced systems, previously absent from both this preset list and the
+        // CodeableConceptBuilder dropdown despite having concepts loaded.
+        "http://id.who.int/icd/release/11/mms", "http://terminology.hl7.org/CodeSystem/ICPC-3",
+        "http://dicom.nema.org/resources/ontology/DCM", "https://www.nlm.nih.gov/mesh",
     ];
 
     // Same UCUM codes as UnitConversionNode.UcumUnitMap (kept in sync by hand, same reasoning as
@@ -154,7 +160,11 @@ public static class TransformNodeConfigSchemas
             [TransformNodeType.NumberCast] = new(TransformNodeType.NumberCast, "Number Cast",
             [
                 Select("targetType", "Target type", ["integer", "decimal"], "decimal"),
-                Select("decimalSeparator", "Decimal separator in the source value", ["dot", "comma"], "dot", advanced: true),
+                // Not advanced (the form would otherwise collapse a two-field schema behind a toggle) and
+                // scoped to a decimal target: an integer conversion has no fractional part, so asking which
+                // separator the source uses is meaningless there.
+                Select("decimalSeparator", "Decimal separator in the source value", ["dot", "comma"], "dot",
+                    visibleWhen: OnlyWhen("targetType", "decimal")),
             ]),
             [TransformNodeType.BooleanConversion] = new(TransformNodeType.BooleanConversion, "Boolean Conversion",
             [
@@ -165,10 +175,12 @@ public static class TransformNodeConfigSchemas
             [
                 Combo("sourceUnit", "Source unit", KnownUcumUnits, defaultValue: "lb_av"),
                 Combo("targetUnit", "Target unit", KnownUcumUnits, defaultValue: "kg"),
-                Text("targetCode", "Target UCUM code (optional — defaults to target unit)", placeholder: "e.g. kg", advanced: true),
-                Number("factor", "Conversion factor (optional override)", placeholder: "e.g. 18.0182 for mg/dL↔mmol/L glucose", advanced: true),
-                Select("direction", "Factor direction", ["multiply", "divide"], "multiply", advanced: true),
-                Number("precision", "Decimal places", "1", advanced: true),
+                // "Target UCUM code" and "Conversion factor" are deliberately NOT offered here: the code
+                // defaults to the target unit, and the factor is derived from the source/target pair by
+                // UnitConversionNode's own UCUM table. Both remain readable from a stored config if one was
+                // set previously — this removes them from the FORM, not from the node's behaviour.
+                Select("direction", "Factor direction", ["multiply", "divide"], "multiply"),
+                Number("precision", "Decimal places", "1"),
             ]),
             [TransformNodeType.QuantityRangeAssembly] = new(TransformNodeType.QuantityRangeAssembly, "Quantity/Range Assembly",
             [
@@ -197,11 +209,25 @@ public static class TransformNodeConfigSchemas
                 // whatever was typed AS the literal system URI when it isn't a recognized key. A typo (or a
                 // correctly-spelled name this dictionary hasn't been taught yet) used to produce a garbage
                 // non-URI system value with no error — a closed list makes that specific failure impossible.
-                Select("system", "Code system", ["LOINC", "SNOMED", "ICD10", "RXNORM", "NPI", "HCPCS", "ICD10PCS", "NDC", "CVX", "UCUM", "CPT"], "LOINC"),
+                // All 13 systems the terminology server actually syncs (Settings → System Settings →
+                // Terminology Server), so an author can build a concept against any of them — DCM, ICD11MMS,
+                // ICPC3 and MeSH used to be missing here despite being fully synced and locally resolvable.
+                // NPI and CPT are kept on the end although they are NOT synced locally: existing saved rules
+                // reference them, and they still emit a correct system URI — only the display lookup no-ops.
+                Select("system", "Code system",
+                    ["LOINC", "SNOMED", "ICD10", "ICD10PCS", "ICD11MMS", "ICPC3", "RXNORM", "NDC", "CVX",
+                     "HCPCS", "UCUM", "DCM", "MESH", "NPI", "CPT"],
+                    "LOINC"),
                 Text("display", "Display text (optional — leave blank to resolve from the local terminology DB)", placeholder: "e.g. Glucose", advanced: true),
                 Checkbox("resolveDisplayFromTerminology", "Look up real display text from the local terminology DB when Display is blank", true, advanced: true),
                 Checkbox("autoDetectSystemOnLocalMiss", "If the code isn't found under Code system above, check other locally-synced systems before giving up (e.g. a wildcard source field mixing SNOMED and ICD-10 codings) — corrects the system to match whichever one actually has the code", false, advanced: true),
-                Select("outputShape", "Output shape", ["object", "displayTextOnly"], "object"),
+                // The three description shapes emit a single plain string, like displayTextOnly, but pick a
+                // specific field from the local terminology store instead of the resolved display. When the
+                // requested field is null for a code, the node falls back across the other two before the
+                // display and finally the code itself, so a flat column is never silently blank.
+                Select("outputShape", "Output shape",
+                    ["object", "displayTextOnly", "shortDescription", "longDescription", "longCommonName"],
+                    "object"),
                 Checkbox("includeText", "Include CodeableConcept.text (only when Output shape is \"object\")", true, advanced: true),
                 Text("additionalCodings", "Additional codings (JSON array of {system,code,display}, optional — only when Output shape is \"object\")", placeholder: "e.g. [{\"system\":\"SNOMED\",\"code\":\"...\"}]", advanced: true),
             ]),
@@ -247,8 +273,13 @@ public static class TransformNodeConfigSchemas
             [TransformNodeType.TelecomNormalization] = new(TransformNodeType.TelecomNormalization, "Telecom Normalization",
             [
                 Select("use", "Use", ["home", "work", "mobile", "temp", "old"], "mobile"),
-                Select("system", "Force system (optional — overrides phone/email auto-detect)", ["", "fax", "url"], "", advanced: true),
+                Select("system", "Force system (optional — overrides phone/email auto-detect)", ["", "phone", "fax", "url", "sms", "pager", "other"], "", advanced: true),
                 Select("region", "Region for parsing phone numbers (ISO-3166 alpha-2)", Iso3166Alpha2Countries, "US"),
+                Text("regexPattern", "Regex clean-up of the contact value — pattern (optional, applied before parsing)",
+                    placeholder: @"e.g. \s*(ext|x)\.?\s*\d+$ — leave blank to skip", advanced: true),
+                Text("regexReplacement", "Regex clean-up — replacement (blank deletes the match)",
+                    placeholder: "e.g. leave blank to strip the match", advanced: true),
+                Select("onInvalid", "When the number is invalid", ["reject", "skip"], "reject", advanced: true),
                 Number("rank", "Rank (optional — order when this is one of several)", placeholder: "e.g. 1", advanced: true),
             ]),
             [TransformNodeType.StringNormalization] = new(TransformNodeType.StringNormalization, "String Normalization",
@@ -285,14 +316,23 @@ public static class TransformNodeConfigSchemas
             [TransformNodeType.DateMathAge] = new(TransformNodeType.DateMathAge, "Date Math/Age",
             [
                 Select("operation", "Operation", ["age", "add", "shift"], "age"),
-                Text("referenceDate", "Reference date (age operation, optional — defaults to today)", placeholder: "e.g. 2026-01-01", advanced: true),
+                // Each of the four below applies to exactly one operation, so they are scoped rather than
+                // merely marked advanced — a rule configured for "age" now stores (and shows) only the age
+                // fields, instead of carrying an unused duration and shift magnitude. Same treatment as
+                // Hashing/Masking's mode-scoped fields.
+                Text("referenceDate", "Reference date (optional — defaults to today)", placeholder: "e.g. 2026-01-01",
+                    visibleWhen: OnlyWhen("operation", "age")),
                 // Kept out of Advanced Options despite having a default — this is a HIPAA Safe Harbor
                 // compliance control, not a fine-tuning knob; burying it would make it too easy to miss that
                 // it's on (or to leave it off) when configuring a de-identification rule.
-                Checkbox("redactOver89", "Redact ages over 89 (Safe Harbor)", true),
-                Text("duration", "ISO-8601 duration, e.g. P1Y6M or P30D (add operation)", "P0D", advanced: true),
-                Number("days", "Fixed day offset — used when no vault secret/patient id is available (shift operation)", "0", advanced: true),
-                Number("maxShiftDays", "Max seeded shift magnitude in days (shift operation)", "60", advanced: true),
+                Checkbox("redactOver89", "Redact ages over 89 (Safe Harbor)", true,
+                    visibleWhen: OnlyWhen("operation", "age")),
+                Text("duration", "ISO-8601 duration, e.g. P1Y6M or P30D", "P0D",
+                    visibleWhen: OnlyWhen("operation", "add")),
+                Number("days", "Fixed day offset — used when no vault secret/patient id is available", "0",
+                    visibleWhen: OnlyWhen("operation", "shift")),
+                Number("maxShiftDays", "Max seeded shift magnitude in days", "60",
+                    visibleWhen: OnlyWhen("operation", "shift")),
             ]),
             [TransformNodeType.HashingMasking] = new(TransformNodeType.HashingMasking, "Hashing/Masking",
             [

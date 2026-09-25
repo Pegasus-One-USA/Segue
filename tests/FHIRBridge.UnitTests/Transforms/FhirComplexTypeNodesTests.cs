@@ -436,4 +436,161 @@ public sealed class FhirComplexTypeNodesTests
         contact["system"]!.GetValue<string>().Should().Be("fax");
         contact["rank"]!.GetValue<int>().Should().Be(1);
     }
+
+    // The dropdown only ever emits lowercase, but an imported mapping profile or an API-set config can carry
+    // "FAX" or " fax ". Those used to miss the override branch silently and fall through to phone parsing.
+    [Theory]
+    [InlineData("FAX")]
+    [InlineData("Fax")]
+    [InlineData(" fax ")]
+    public void TelecomNormalizationNode_matches_the_system_override_regardless_of_case_or_padding(string configured)
+    {
+        var config = new Dictionary<string, string> { ["system"] = configured };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["system"]!.GetValue<string>().Should().Be("fax");
+        contact["value"]!.GetValue<string>().Should().Be("(313) 555-0142");
+    }
+
+    [Theory]
+    [InlineData("sms")]
+    [InlineData("pager")]
+    [InlineData("other")]
+    public void TelecomNormalizationNode_supports_the_remaining_contact_point_systems(string configured)
+    {
+        var config = new Dictionary<string, string> { ["system"] = configured };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        ((System.Text.Json.Nodes.JsonObject)result.Value!)["system"]!.GetValue<string>().Should().Be(configured);
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_pins_the_phone_branch_when_system_is_phone()
+    {
+        var config = new Dictionary<string, string> { ["system"] = "phone" };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        ((System.Text.Json.Nodes.JsonObject)result.Value!)["value"]!.GetValue<string>().Should().Be("+13135550142");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_rejects_an_unrecognized_system()
+    {
+        var config = new Dictionary<string, string> { ["system"] = "bogus" };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("not a recognized ContactPoint system");
+    }
+
+    // An email value short-circuits before the override is consulted, so a forced fax/url cannot relabel it.
+    [Fact]
+    public void TelecomNormalizationNode_detects_email_even_when_a_system_override_is_set()
+    {
+        var config = new Dictionary<string, string> { ["system"] = "fax" };
+        var result = new TelecomNormalizationNode().Execute("jane@example.com", config, null);
+        ((System.Text.Json.Nodes.JsonObject)result.Value!)["system"]!.GetValue<string>().Should().Be("email");
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("1.5")]
+    [InlineData("abc")]
+    [InlineData("99999999999999999999")]
+    public void TelecomNormalizationNode_fails_for_a_rank_that_is_not_a_positive_int(string rank)
+    {
+        var config = new Dictionary<string, string> { ["rank"] = rank };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        result.Success.Should().BeFalse();
+    }
+
+    // A blank rank means "not configured" — the key must be absent, not written as null.
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TelecomNormalizationNode_omits_rank_when_it_is_blank(string rank)
+    {
+        var config = new Dictionary<string, string> { ["rank"] = rank };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        ((System.Text.Json.Nodes.JsonObject)result.Value!).ContainsKey("rank").Should().BeFalse();
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_skips_an_invalid_number_when_configured_to_skip()
+    {
+        var config = new Dictionary<string, string> { ["onInvalid"] = "skip" };
+        var result = new TelecomNormalizationNode().Execute("123", config, null);
+        result.Success.Should().BeTrue();
+        result.Value.Should().BeNull();
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_rejects_an_invalid_number_by_default()
+    {
+        var result = new TelecomNormalizationNode().Execute("123", new Dictionary<string, string>(), null);
+        result.Success.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_applies_the_regex_to_the_contact_value_before_parsing()
+    {
+        // The extension suffix is what makes this unparseable as-is; stripping it is the whole point of the option.
+        var config = new Dictionary<string, string> { ["regexPattern"] = @"\s*(?:ext|x)\.?\s*\d+$" };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142 ext. 203", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["value"]!.GetValue<string>().Should().Be("+13135550142");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_uses_the_regex_replacement_when_one_is_configured()
+    {
+        var config = new Dictionary<string, string> { ["regexPattern"] = "^Tel: ", ["regexReplacement"] = "+1 " };
+        var result = new TelecomNormalizationNode().Execute("Tel: 3135550142", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["value"]!.GetValue<string>().Should().Be("+13135550142");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_runs_the_regex_before_email_detection()
+    {
+        var config = new Dictionary<string, string> { ["regexPattern"] = @"^mailto:" };
+        var result = new TelecomNormalizationNode().Execute("mailto:jane@example.com", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["system"]!.GetValue<string>().Should().Be("email");
+        contact["value"]!.GetValue<string>().Should().Be("jane@example.com");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_applies_the_regex_to_a_non_phone_system_value()
+    {
+        var config = new Dictionary<string, string> { ["system"] = "url", ["regexPattern"] = @"\s+", ["regexReplacement"] = "" };
+        var result = new TelecomNormalizationNode().Execute("https://example.com/ contact", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["value"]!.GetValue<string>().Should().Be("https://example.com/contact");
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_treats_a_value_fully_erased_by_the_regex_as_blank()
+    {
+        var config = new Dictionary<string, string> { ["regexPattern"] = "^N/A$" };
+        var result = new TelecomNormalizationNode().Execute("N/A", config, null);
+        result.Success.Should().BeTrue();
+        result.Value.Should().BeNull();
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_fails_cleanly_on_an_invalid_regex_instead_of_throwing()
+    {
+        var config = new Dictionary<string, string> { ["regexPattern"] = "(unclosed" };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        result.Success.Should().BeFalse();
+        result.Error.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void TelecomNormalizationNode_leaves_the_value_untouched_when_no_regex_is_configured()
+    {
+        var config = new Dictionary<string, string> { ["regexReplacement"] = "ignored-without-a-pattern" };
+        var result = new TelecomNormalizationNode().Execute("(313) 555-0142", config, null);
+        var contact = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        contact["value"]!.GetValue<string>().Should().Be("+13135550142");
+    }
 }

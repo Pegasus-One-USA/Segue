@@ -6,7 +6,7 @@ using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services;
 
-public sealed class JsonMappingEngine : IJsonMappingEngine
+public sealed partial class JsonMappingEngine : IJsonMappingEngine
 {
     public MappingTestResultDto Map(
         string sourceJson,
@@ -91,6 +91,17 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
                             field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform),
                         m.Indices))
                     .ToList();
+
+            // "index=N" is the payload's own signal for "Nth instance" (see field-mapping-model.ts) — narrows
+            // down to just the N-th distinct occurrence of the repeating parent BEFORE the resolved.Count == 0
+            // check below, so an out-of-range N (e.g. Instance #5 picked but only 3 telecom entries exist)
+            // falls through to the exact same DefaultValue/IsRequired/null handling a genuinely absent optional
+            // sub-field already gets, rather than needing its own duplicate branch.
+            var instanceIndex = ParseInstanceIndex(field.Format);
+            if (instanceIndex is int selectedInstance)
+            {
+                resolved = SelectInstance(resolved, selectedInstance);
+            }
 
             if (resolved.Count == 0)
             {
@@ -305,9 +316,14 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
     /// <summary>
     /// Selects the value among <paramref name="indices"/>/<paramref name="values"/> (same order, one per array item)
     /// whose sibling code element — resolved via <see cref="MappingFieldDto.CorrelationCodeJsonPath"/>, sharing the
-    /// same outermost array index as <paramref name="indices"/> — equals <see cref="MappingFieldDto.CorrelationCodeValue"/>.
-    /// This is how e.g. a blood-pressure Observation's systolic/diastolic <c>component[]</c> entries are told apart:
-    /// position alone isn't reliable, but each component carries a LOINC code identifying which reading it is.
+    /// same array index CHAIN (every level, not merely the outermost — see <see cref="IsIndexChainMatch"/>) as
+    /// <paramref name="indices"/> — satisfies <see cref="MappingFieldDto.CorrelationCodeOperator"/> (default/null:
+    /// exact match) against <see cref="MappingFieldDto.CorrelationCodeValue"/>. This is how e.g. a blood-pressure
+    /// Observation's systolic/diastolic <c>component[]</c> entries are told apart (one repeating level: position
+    /// alone isn't reliable, but each component carries a LOINC code identifying which reading it is), and equally
+    /// how a specific <c>Patient.contact[].telecom[].value</c> is picked by that SAME telecom item's own
+    /// <c>system</c>/<c>use</c> (two repeating levels: matching on the outer "which contact" index alone would
+    /// return that contact's FIRST telecom value, not necessarily the one whose own sibling actually matched).
     /// </summary>
     private static object? ResolveCorrelatedValue(
         JsonElement root,
@@ -323,27 +339,69 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         }
 
         var codeMatches = ResolveAll(root, field.CorrelationCodeJsonPath);
-        var matchingOuterIndices = codeMatches
+        var matchingIndexChains = codeMatches
             .Where(m => m.Element.ValueKind == JsonValueKind.String &&
-                        string.Equals(m.Element.GetString(), field.CorrelationCodeValue, StringComparison.OrdinalIgnoreCase))
-            .Where(m => m.Indices.Count > 0)
-            .Select(m => m.Indices[0])
-            .ToHashSet();
+                        MatchesCorrelationOperator(field.CorrelationCodeOperator, m.Element.GetString()!, field.CorrelationCodeValue))
+            .Select(m => m.Indices)
+            .Where(ix => ix.Count > 0)
+            .ToList();
 
-        if (matchingOuterIndices.Count == 0)
+        if (matchingIndexChains.Count == 0)
         {
             return null;
         }
 
         for (var i = 0; i < indices.Count; i++)
         {
-            if (indices[i].Count > 0 && matchingOuterIndices.Contains(indices[i][0]))
+            if (matchingIndexChains.Any(chain => IsIndexChainMatch(chain, indices[i])))
             {
                 return values[i];
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The comparison a "Match criteria" row's op selects — null/"Equals" (every CorrelateByCode field saved
+    /// before this operator existed relied on exact match, so that must stay the default), "Contains" (case-
+    /// insensitive substring) or "NotEquals". Unrecognized operator text falls back to "Equals" the same way
+    /// a null one does, rather than silently matching nothing.
+    /// </summary>
+    private static bool MatchesCorrelationOperator(string? operatorName, string siblingValue, string targetValue) =>
+        operatorName switch
+        {
+            "Contains" => siblingValue.Contains(targetValue, StringComparison.OrdinalIgnoreCase),
+            "NotEquals" => !string.Equals(siblingValue, targetValue, StringComparison.OrdinalIgnoreCase),
+            _ => string.Equals(siblingValue, targetValue, StringComparison.OrdinalIgnoreCase),
+        };
+
+    /// <summary>
+    /// Whether a correlation match's index chain and a resolved value's own index chain agree on every level
+    /// they both have — a single-repeating-level correlation (e.g. Observation.component's LOINC code, chain
+    /// length 1) only ever needs to agree on that one outer index, exactly as before this compared full
+    /// chains; a two-level correlation (e.g. Patient.contact[].telecom[]'s own sibling, chain length 2) must
+    /// agree on BOTH the contact index AND the telecom index — agreeing on the outer index alone would
+    /// return the right CONTACT's FIRST telecom value rather than the specific telecom item whose own
+    /// sibling actually satisfied the criteria.
+    /// </summary>
+    private static bool IsIndexChainMatch(IReadOnlyList<int> matchIndices, IReadOnlyList<int> valueIndices)
+    {
+        var depth = Math.Min(matchIndices.Count, valueIndices.Count);
+        if (depth == 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < depth; i++)
+        {
+            if (matchIndices[i] != valueIndices[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static List<IReadOnlyDictionary<string, object?>> BuildParentRows(
@@ -425,6 +483,79 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
         }
 
         return kept.Count > 0 ? kept : values;
+    }
+
+    /// <summary>True when the field's Format carries the "index=N" marker the "Nth instance" instance
+    /// selection stamps (see field-mapping-model.ts) — the counterpart to <see cref="HasCsvAggregate"/>,
+    /// mutually exclusive with it (the UI's instance-selection control offers First/All/Nth/Criteria as one
+    /// choice, never two at once). 0-based: 0 means the first occurrence — the same occurrence "First"
+    /// (no marker at all) already picks — so a row switched from "First" to "Nth instance" at N=0 behaves
+    /// identically.</summary>
+    private static int? ParseInstanceIndex(string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+        {
+            return null;
+        }
+
+        foreach (var part in format.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var equalsIndex = part.IndexOf('=', StringComparison.Ordinal);
+            if (equalsIndex > 0
+                && part[..equalsIndex].Equals("index", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(part[(equalsIndex + 1)..], out var n))
+            {
+                return n;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Narrows `resolved` down to just the values belonging to the (0-based) <paramref name="n"/>-th DISTINCT
+    /// instance of the outermost repeating parent — i.e. the n-th entry of the ordered set of
+    /// resolved[i].Indices[0] values, NOT literally resolved[n] (a field nested under a second array, e.g.
+    /// "name.given" over two names, resolves multiple "given" values per name; "instance 1" must mean
+    /// name[1]'s own given list, not the second given value overall — generalizes
+    /// <see cref="TakeFirstInstance"/>'s identical framing to any n, not just the first).
+    ///
+    /// A non-repeating field (resolved[0].Indices is empty — there is only ever one instance) returns
+    /// `resolved` unchanged for n == 0 and empty for n &gt; 0: there is no second instance to pick. Empty is
+    /// also returned when n has no matching instance at all (out of range) — the caller's existing
+    /// "resolved.Count == 0" branch (DefaultValue / IsRequired / null) then applies exactly as it does for a
+    /// genuinely absent optional sub-field, rather than this needing its own duplicate fallback.
+    /// </summary>
+    private static List<(object? Value, IReadOnlyList<int> Indices)> SelectInstance(
+        List<(object? Value, IReadOnlyList<int> Indices)> resolved, int n)
+    {
+        if (resolved.Count == 0)
+        {
+            return resolved;
+        }
+
+        if (resolved[0].Indices.Count == 0)
+        {
+            return n == 0 ? resolved : [];
+        }
+
+        var distinctInstances = new List<int>();
+        foreach (var (_, indices) in resolved)
+        {
+            var outer = indices[0];
+            if (!distinctInstances.Contains(outer))
+            {
+                distinctInstances.Add(outer);
+            }
+        }
+
+        if (n < 0 || n >= distinctInstances.Count)
+        {
+            return [];
+        }
+
+        var target = distinctInstances[n];
+        return resolved.Where(r => r.Indices.Count > 0 && r.Indices[0] == target).ToList();
     }
 
     /// <summary>
@@ -784,7 +915,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             MappingValueType.Integer => ConvertInteger(element.ToString(), targetField, errors),
             MappingValueType.Decimal => ConvertDecimal(element.ToString(), targetField, errors, precision, scale),
             MappingValueType.Boolean => ConvertBoolean(element.ToString(), targetField, errors),
-            MappingValueType.Date => ConvertDate(element.ToString(), format, targetField, errors)?.Date,
+            MappingValueType.Date => ConvertDateOnly(element.ToString(), format, targetField, errors),
             MappingValueType.DateTime => ConvertDate(element.ToString(), format, targetField, errors),
             MappingValueType.Json => element.GetRawText(),
             _ => element.ToString()
@@ -837,7 +968,7 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             MappingValueType.Integer => ConvertInteger(value, targetField, errors),
             MappingValueType.Decimal => ConvertDecimal(value, targetField, errors, precision, scale),
             MappingValueType.Boolean => ConvertBoolean(value, targetField, errors),
-            MappingValueType.Date => ConvertDate(value, format, targetField, errors)?.Date,
+            MappingValueType.Date => ConvertDateOnly(value, format, targetField, errors),
             MappingValueType.DateTime => ConvertDate(value, format, targetField, errors),
             MappingValueType.Json => value,
             _ => value
@@ -942,16 +1073,87 @@ public sealed class JsonMappingEngine : IJsonMappingEngine
             format.StartsWith("joinedFields", StringComparison.OrdinalIgnoreCase) ||
             format.StartsWith("wholeNodeAsJson", StringComparison.OrdinalIgnoreCase));
 
+        // Only ever called for a DateTime/instant-typed field now (a Date-typed one uses ConvertDateOnly
+        // below instead — a plain calendar date has no time zone to normalize through UTC at all).
+        // AdjustToUniversal|AssumeUniversal (not AssumeUniversal alone) resolves the true UTC instant an
+        // offset-bearing source value (e.g. a FHIR instant/dateTime) actually represents — AssumeUniversal
+        // alone instead converts it to THIS PROCESS's own local system time zone, so the exact same input
+        // parses to a different value depending on which machine happens to run it (verified empirically:
+        // "2026-03-14T22:00:00Z" -> 2026-03-15T03:30 local on a UTC+05:30 host). Kind is then reset to
+        // Unspecified so this native pass-through DateTime binds identically regardless of destination —
+        // Npgsql only treats a bare Kind=Utc DateTime as "timestamptz" (see
+        // MappingNodeExecutor.CoerceToExpectedValueType's identical fix, which this mirrors).
         var isParsed = string.IsNullOrWhiteSpace(format) || isModeMarker
-            ? DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedDate)
-            : DateTime.TryParseExact(value, format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsedDate);
+            ? DateTime.TryParse(
+                value, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsedDate)
+            : DateTime.TryParseExact(
+                value, format, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out parsedDate);
 
         if (isParsed)
         {
-            return parsedDate;
+            return DateTime.SpecifyKind(parsedDate, DateTimeKind.Unspecified);
         }
 
         errors.Add($"Field '{targetField}' could not be converted to a date/time.");
         return null;
     }
+
+    /// <summary>
+    /// A FHIR `date` has no time zone at all — unlike `dateTime`/`instant`, there is no "true UTC instant" to
+    /// normalize through, and DateTimeFormatNode's own "date" output (a DateTimeOffset formatted straight to
+    /// "yyyy-MM-dd", never adjusted to UTC — see its own TryParse/Execute) already reflects that.
+    /// DateTimeOffset.TryParse (unlike DateTime.TryParse, which ConvertDate above uses) never converts to
+    /// this process's own system time zone even without AdjustToUniversal, so taking its own .Date is
+    /// host-independent without doing any UTC conversion at all — unlike ConvertDate's old shared behavior,
+    /// which (before this method existed) normalized through UTC first and so changed the CALENDAR DAY itself
+    /// for an offset-bearing input (e.g. "2026-03-14T20:00:00-05:00" became 2026-03-15).
+    ///
+    /// A bare year ("2020") or year-month ("2020-05") is valid FHIR date precision on its own —
+    /// DateTimeFormatNode deliberately emits it unchanged rather than fabricate a day (see its own identical
+    /// regex guard). Coercing it into a full date here would silently invent a day for real patient data, so
+    /// this records why and returns null instead — the caller's existing "don't let a type mismatch silently
+    /// become null" fallback (see ConvertElement/ConvertValue) then passes the raw partial-precision string
+    /// through unconverted, same as it already does for any other unparseable Date input, rather than writing
+    /// a fabricated day that reads as if it were real.
+    /// </summary>
+    private static DateTime? ConvertDateOnly(
+        string? value,
+        string? format,
+        string targetField,
+        List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (PartialDatePattern().IsMatch(value))
+        {
+            errors.Add($"Field '{targetField}' has only year/year-month precision.");
+            return null;
+        }
+
+        var isModeMarker = format is not null && (
+            format.StartsWith("directField", StringComparison.OrdinalIgnoreCase) ||
+            format.StartsWith("joinedFields", StringComparison.OrdinalIgnoreCase) ||
+            format.StartsWith("wholeNodeAsJson", StringComparison.OrdinalIgnoreCase));
+
+        var isParsed = string.IsNullOrWhiteSpace(format) || isModeMarker
+            ? DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedDate)
+            : DateTimeOffset.TryParseExact(value, format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsedDate);
+
+        if (isParsed)
+        {
+            return DateTime.SpecifyKind(parsedDate.Date, DateTimeKind.Unspecified);
+        }
+
+        errors.Add($"Field '{targetField}' could not be converted to a date.");
+        return null;
+    }
+
+    // Mirrors MappingNodeExecutor.CoerceDate's (and DateTimeFormatNode's) identical partial-FHIR-date guard.
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\d{4}(-\d{2})?$")]
+    private static partial System.Text.RegularExpressions.Regex PartialDatePattern();
 }

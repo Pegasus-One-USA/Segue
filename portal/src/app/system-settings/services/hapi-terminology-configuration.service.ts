@@ -18,11 +18,26 @@ export interface TerminologyConcept {
   pid: number;
   code: string;
   display: string | null;
+  /** The source's own abbreviated description, where it publishes one distinct from the long form
+   *  (ICD-10-CM order-file positions 17-76, HCPCS field 8, LOINC SHORTNAME). Null where the source
+   *  publishes only a single description string. */
+  shortDescription: string | null;
+  /** The source's own full-length description (HCPCS field 7, DCM skos:definition, MeSH ScopeNote). */
+  longDescription: string | null;
+  /** LOINC's LONG_COMMON_NAME and its per-source equivalents (SNOMED FSN, RxNorm prescribable name). */
+  longCommonName: string | null;
+  /** Computed at import from whatever status or expiry signal the source publishes; true for the
+   *  sources that publish none. */
+  isActive: boolean;
 }
 
 export interface UpsertTerminologyConcept {
   code: string;
   display: string | null;
+  shortDescription: string | null;
+  longDescription: string | null;
+  longCommonName: string | null;
+  isActive: boolean;
 }
 
 export interface HapiCredentialField {
@@ -59,8 +74,14 @@ export interface HapiTerminologyRunStartedResponse {
 
 /** Result of checking one system's official source for a newer version than what's stored locally,
  * without downloading/importing anything. `supported` is false for systems whose source has no
- * discoverable "latest version" pointer — in that case `latestAvailableVersion` is always null and
- * `updateAvailable` is always false, but `storedVersion` is still populated. */
+ * discoverable "latest version" pointer — in that case `latestAvailableVersion` is always null, but
+ * `storedVersion` is still populated.
+ *
+ * `updateAvailable` is true whenever a sync is needed, which covers two distinct cases: a newer release
+ * exists upstream, OR nothing has ever been downloaded for this system. It is therefore true even when
+ * `supported` is false or the check itself errored, because "we could not check" and "we already hold
+ * the current release" are different claims — conflating them made the portal report every system as up
+ * to date while most had never been downloaded at all. Use `storedVersion` to tell the two apart. */
 export interface HapiTerminologyVersionCheckResult {
   code: string;
   supported: boolean;

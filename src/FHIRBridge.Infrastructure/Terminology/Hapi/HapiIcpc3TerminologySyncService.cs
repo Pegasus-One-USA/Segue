@@ -12,8 +12,10 @@ namespace FHIRBridge.Infrastructure.Terminology.Hapi;
 /// Source: https://ct.icpc-3.info/download.php?language=english — the same public JSON endpoint
 /// the official "ICPC-3 Coding Tool" web app (ct.icpc-3.info) itself calls to populate its search
 /// index; no authentication, confirmed reachable and returning real data. Each ICPC-3 code appears
-/// as multiple rows (one per "rkind": preferred/description/inclusion/exclusion/snomed-CT/etc.) —
-/// only the "preferred" row (the term's canonical display text) is used here, one per code, 1:1.
+/// as multiple rows (one per "rkind": preferred/description/inclusion/exclusion/snomed-CT/etc.). The
+/// "preferred" row supplies the display, one per code, 1:1; the "description" row — present for 961 of
+/// the 1,623 codes — is kept as the long description instead of being discarded. ICPC-3 publishes no
+/// status or expiry signal of any kind, so every code is stored active.
 /// </summary>
 public sealed class HapiIcpc3TerminologySyncService : IHapiIcpc3TerminologySyncService
 {
@@ -52,7 +54,15 @@ public sealed class HapiIcpc3TerminologySyncService : IHapiIcpc3TerminologySyncS
         var concepts = await DownloadAndParseAsync(downloadClient, cancellationToken);
         _logger.LogInformation("Parsed {Total} ICPC-3 concepts from the official dataset.", concepts.Count);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "ICPC3", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "ICPC3",
+            version: null,
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                LongDescription: c.LongDescription,
+                IsActive: true)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -67,25 +77,50 @@ public sealed class HapiIcpc3TerminologySyncService : IHapiIcpc3TerminologySyncS
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
 
         var results = new List<Concept>(2_000);
+        // The "description" rows are a separate rkind from "preferred" and arrive interleaved with them,
+        // so both are collected in one pass and joined by code afterwards.
+        var descriptions = new Dictionary<string, string>(1_000, StringComparer.Ordinal);
+
         foreach (var row in document.RootElement.EnumerateArray())
         {
-            if (!row.TryGetProperty("rkind", out var rkind) || rkind.GetString() != "preferred")
+            if (!row.TryGetProperty("rkind", out var rkind))
+            {
+                continue;
+            }
+
+            var kind = rkind.GetString();
+            if (kind != "preferred" && kind != "description")
             {
                 continue;
             }
 
             var code = row.TryGetProperty("code", out var codeProp) ? codeProp.GetString() : null;
-            var display = row.TryGetProperty("rubric", out var rubricProp) ? rubricProp.GetString() : null;
-            if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(display))
+            var rubric = row.TryGetProperty("rubric", out var rubricProp) ? rubricProp.GetString() : null;
+            if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(rubric))
             {
                 continue;
             }
 
-            results.Add(new Concept(code, display));
+            if (kind == "description")
+            {
+                descriptions.TryAdd(code, rubric);
+                continue;
+            }
+
+            results.Add(new Concept(code, rubric));
+        }
+
+        foreach (var concept in results)
+        {
+            concept.LongDescription = descriptions.GetValueOrDefault(concept.Code);
         }
 
         return results;
     }
 
-    private sealed record Concept(string Code, string Display);
+    private sealed record Concept(string Code, string Display)
+    {
+        /// <summary>Filled in after parsing, once the separate "description" rows have all been seen.</summary>
+        public string? LongDescription { get; set; }
+    }
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using FHIRBridge.Application.Abstractions.Caching;
 using Microsoft.Extensions.Configuration;
@@ -54,7 +55,15 @@ public sealed class HapiNdcTerminologySyncService : IHapiNdcTerminologySyncServi
         var concepts = await DownloadAndParseAsync(downloadClient, cancellationToken);
         _logger.LogInformation("Parsed {Total} NDC product codes from the official directory.", concepts.Count);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "NDC", version: null, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "NDC",
+            version: null,
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                LongCommonName: c.LongCommonName,
+                IsActive: c.IsActive)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -78,7 +87,7 @@ public sealed class HapiNdcTerminologySyncService : IHapiNdcTerminologySyncServi
         // Keyed by code to dedupe: the real FDA file has ~900 PRODUCTNDC values repeated across
         // multiple product records (package-size variants, repackagers, etc.) — a CodeSystem can't
         // contain duplicate concept codes, so first-seen wins.
-        var byCode = new Dictionary<string, string>(120_000, StringComparer.Ordinal);
+        var byCode = new Dictionary<string, Concept>(120_000, StringComparer.Ordinal);
         using var reader = new StreamReader(entry.Open());
 
         var header = await reader.ReadLineAsync(ct); // skip header row
@@ -106,11 +115,26 @@ public sealed class HapiNdcTerminologySyncService : IHapiNdcTerminologySyncServi
                 continue;
             }
 
-            byCode.TryAdd(code, display);
+            // NDC_EXCLUDE_FLAG (col 19, 0-indexed 18) marks a product FDA has removed from the active
+            // directory; ENDMARKETINGDATE (col 10, 0-indexed 9) in the past means marketing has ceased.
+            // Either one retires the code. Both columns exist in the real 20-column product.txt.
+            var excluded = fields.Length > 18
+                && fields[18].Trim().Equals("Y", StringComparison.OrdinalIgnoreCase);
+            var marketingEnded = fields.Length > 9
+                && DateTime.TryParseExact(
+                    fields[9].Trim(), "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var endsOn)
+                && endsOn.Date <= DateTime.UtcNow.Date;
+
+            byCode.TryAdd(code, new Concept(
+                code,
+                display,
+                // The generic name is a genuinely different string from the brand name used as display.
+                string.IsNullOrEmpty(genericName) ? null : genericName,
+                !(excluded || marketingEnded)));
         }
 
-        return byCode.Select(kv => new Concept(kv.Key, kv.Value)).ToList();
+        return byCode.Values.ToList();
     }
 
-    private sealed record Concept(string Code, string Display);
+    private sealed record Concept(string Code, string Display, string? LongCommonName, bool IsActive);
 }
