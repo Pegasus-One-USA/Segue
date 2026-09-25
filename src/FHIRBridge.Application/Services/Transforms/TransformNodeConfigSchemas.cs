@@ -184,7 +184,7 @@ public static class TransformNodeConfigSchemas
             ]),
             [TransformNodeType.QuantityRangeAssembly] = new(TransformNodeType.QuantityRangeAssembly, "Quantity/Range Assembly",
             [
-                Text("unit", "Unit", placeholder: "e.g. mg/L"),
+                Text("unit", "Unit (blank keeps the source's own unit)", placeholder: "e.g. mg/L"),
             ]),
             [TransformNodeType.RoundingScaling] = new(TransformNodeType.RoundingScaling, "Rounding/Scaling",
             [

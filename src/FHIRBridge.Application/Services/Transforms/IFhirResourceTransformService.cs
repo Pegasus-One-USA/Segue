@@ -230,10 +230,19 @@ public sealed class FhirResourceTransformService : IFhirResourceTransformService
             : sourceField;
     }
 
+    /// <summary>Serializes a hop's before/after value for display. Uses the relaxed encoder so a value
+    /// containing &lt;, &gt; or &amp; — a reference range like "&lt;=200", say — reads as itself in the
+    /// preview rather than as an escaped <=200; the default HTML-escaping encoder exists to protect JSON
+    /// embedded in a page, which this never is.</summary>
     private static string? Serialize(object? value) => value switch
     {
         null => null,
         string s => s,
-        _ => JsonSerializer.Serialize(value),
+        _ => JsonSerializer.Serialize(value, RelaxedJsonOptions),
+    };
+
+    private static readonly JsonSerializerOptions RelaxedJsonOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 }

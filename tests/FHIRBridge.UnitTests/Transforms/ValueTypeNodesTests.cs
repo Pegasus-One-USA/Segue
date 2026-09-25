@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Application.Services.Transforms.Nodes;
 using FluentAssertions;
 
@@ -143,6 +144,73 @@ public sealed class ValueTypeNodesTests
         var range = (System.Text.Json.Nodes.JsonObject)result.Value!;
         range["low"]!["value"]!.GetValue<decimal>().Should().Be(10m);
         range["high"]!["value"]!.GetValue<decimal>().Should().Be(20m);
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_falls_back_to_the_sources_own_unit_when_the_rule_configures_none()
+    {
+        var config = new Dictionary<string, string> { [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL" };
+        var result = new QuantityRangeAssemblyNode().Execute("187", config, null);
+        var quantity = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        quantity["value"]!.GetValue<decimal>().Should().Be(187m);
+        quantity["unit"]!.GetValue<string>().Should().Be("mg/dL", "a blank rule unit must not erase the unit the source resource already carried");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_prefers_the_rules_configured_unit_over_the_source_hint()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["unit"] = "mmol/L",
+            [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL"
+        };
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode().Execute("187", config, null).Value!;
+        quantity["unit"]!.GetValue<string>().Should().Be("mmol/L");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_carries_the_source_unit_into_both_ends_of_a_range()
+    {
+        var config = new Dictionary<string, string> { [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL" };
+        var range = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode().Execute("10-20", config, null).Value!;
+        range["low"]!["unit"]!.GetValue<string>().Should().Be("mg/dL");
+        range["high"]!["unit"]!.GetValue<string>().Should().Be("mg/dL");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_reads_a_whole_Quantity_element_instead_of_stringifying_it()
+    {
+        var source = System.Text.Json.Nodes.JsonNode.Parse(
+            """{"value":187,"unit":"mg/dL","system":"http://unitsofmeasure.org","code":"mg/dL"}""");
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(source, new Dictionary<string, string>(), null).Value!;
+
+        quantity["value"]!.GetValue<decimal>().Should().Be(187m);
+        quantity["unit"]!.GetValue<string>().Should().Be("mg/dL");
+        quantity.ContainsKey("text").Should().BeFalse("a Quantity element must not fall through to the non-numeric text branch");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_falls_back_to_the_UCUM_code_when_a_Quantity_element_carries_no_unit()
+    {
+        var source = System.Text.Json.Nodes.JsonNode.Parse("""{"value":187,"code":"mg/dL"}""");
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(source, new Dictionary<string, string>(), null).Value!;
+        quantity["unit"]!.GetValue<string>().Should().Be("mg/dL");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_emits_an_unescaped_comparator()
+    {
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute("<=200", new Dictionary<string, string>(), null).Value!;
+
+        quantity["comparator"]!.GetValue<string>().Should().Be("<=");
+        quantity.ToJsonString(new System.Text.Json.JsonSerializerOptions
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        }).Should().Contain("\"comparator\":\"<=\"").And.NotContain("u003C");
     }
 
     [Fact]

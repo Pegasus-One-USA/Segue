@@ -51,8 +51,16 @@ public static class FhirSourceJsonPatcher
             SetAtPath(rootObject, path, value);
         }
 
-        return rootObject.ToJsonString();
+        // Relaxed encoder: the default escapes < > & into \uXXXX form, which would rewrite a patched-in value
+        // like "<=200" into "<=200" in the resource a FHIR-native destination receives. Legal JSON either
+        // way, but only one of them survives a human reading the record.
+        return rootObject.ToJsonString(RelaxedJsonOptions);
     }
+
+    private static readonly JsonSerializerOptions RelaxedJsonOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     /// <summary>Reads the sibling "display" value next to a "...code" leaf in the source resource's own JSON —
     /// e.g. given source field path "code.coding.code", reads "code.coding.display" (taking the first element
@@ -63,18 +71,64 @@ public static class FhirSourceJsonPatcher
     /// has nothing to offer, not an error.</summary>
     public static string? TryReadSiblingDisplay(string? sourceJson, string? sourceFieldPath)
     {
-        if (string.IsNullOrWhiteSpace(sourceJson) || string.IsNullOrWhiteSpace(sourceFieldPath))
+        var segments = SplitLeafPath(sourceFieldPath, "code");
+        return segments is null ? null : ReadSiblingString(sourceJson, segments, "display");
+    }
+
+    /// <summary>Reads the unit the source resource already carried next to a Quantity's own "...value" leaf —
+    /// e.g. given source field path "$.valueQuantity.value", reads "valueQuantity.unit", falling back to the
+    /// UCUM "valueQuantity.code" when the element carries only the coded form. Feeds
+    /// <see cref="ReservedTransformConfigKeys.SourceUnitHint"/>, which
+    /// <see cref="Nodes.QuantityRangeAssemblyNode"/> uses when the rule itself configures no unit — without it
+    /// an assembled Quantity emits <c>"unit": ""</c> even though the source said "mg/dL".
+    /// Returns null when the path doesn't end in a "value" segment, the JSON isn't parseable, or neither
+    /// sibling holds a string — all of which just mean there's nothing to carry over, not an error.</summary>
+    public static string? TryReadSiblingQuantityUnit(string? sourceJson, string? sourceFieldPath)
+    {
+        var segments = SplitLeafPath(sourceFieldPath, "value");
+        if (segments is null)
         {
             return null;
         }
 
-        var segments = sourceFieldPath.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (segments.Length == 0 || !string.Equals(segments[^1], "code", StringComparison.OrdinalIgnoreCase))
+        return ReadSiblingString(sourceJson, segments, "unit") ?? ReadSiblingString(sourceJson, segments, "code");
+    }
+
+    /// <summary>Splits a rule's source field path into segments, but only when its leaf segment is
+    /// <paramref name="expectedLeaf"/> — the guard that keeps a sibling hint from being read off an unrelated
+    /// path. Strips the JsonPath "$." prefix the mapping profile stores (source fields arrive as "$.a.b", not
+    /// "a.b"), so the traversal below starts at a real property name rather than at "$".</summary>
+    private static string[]? SplitLeafPath(string? sourceFieldPath, string expectedLeaf)
+    {
+        if (string.IsNullOrWhiteSpace(sourceFieldPath))
         {
             return null;
         }
 
-        segments[^1] = "display";
+        var bare = sourceFieldPath.StartsWith("$.", StringComparison.Ordinal)
+            ? sourceFieldPath[2..]
+            : sourceFieldPath.TrimStart('$', '.');
+
+        var segments = bare.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Length == 0)
+        {
+            return null;
+        }
+
+        var (leafName, _) = ParseSegment(segments[^1]);
+        return string.Equals(leafName, expectedLeaf, StringComparison.OrdinalIgnoreCase) ? segments : null;
+    }
+
+    /// <summary>Walks <paramref name="segments"/> through the source JSON with the leaf replaced by
+    /// <paramref name="siblingName"/>, honoring "[n]"/"[]"/"[*]" indices via <see cref="ParseSegment"/> and
+    /// otherwise taking the first element of any array encountered (the mapping engine's own "First"
+    /// instance-selection convention).</summary>
+    private static string? ReadSiblingString(string? sourceJson, string[] segments, string siblingName)
+    {
+        if (string.IsNullOrWhiteSpace(sourceJson))
+        {
+            return null;
+        }
 
         JsonNode? current;
         try
@@ -86,16 +140,27 @@ public static class FhirSourceJsonPatcher
             return null;
         }
 
-        foreach (var segment in segments)
+        for (var i = 0; i < segments.Length; i++)
         {
-            if (current is JsonArray array)
+            var (propertyName, arrayIndex) = ParseSegment(segments[i]);
+            if (i == segments.Length - 1)
             {
-                current = array.Count > 0 ? array[0] : null;
+                propertyName = siblingName;
             }
 
-            if (current is not JsonObject obj || !obj.TryGetPropertyValue(segment, out current))
+            if (current is JsonArray outerArray)
+            {
+                current = outerArray.Count > 0 ? outerArray[0] : null;
+            }
+
+            if (current is not JsonObject obj || !obj.TryGetPropertyValue(propertyName, out current))
             {
                 return null;
+            }
+
+            if (arrayIndex is not null && current is JsonArray indexed)
+            {
+                current = indexed.Count > arrayIndex.Value ? indexed[arrayIndex.Value] : null;
             }
         }
 
@@ -104,7 +169,7 @@ public static class FhirSourceJsonPatcher
             current = finalArray.Count > 0 ? finalArray[0] : null;
         }
 
-        return current is JsonValue value && value.TryGetValue<string>(out var display) ? display : null;
+        return current is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
     }
 
     private static void SetAtPath(JsonObject root, string path, object? value)

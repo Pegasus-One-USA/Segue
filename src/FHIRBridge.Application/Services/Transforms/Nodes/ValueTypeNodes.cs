@@ -266,13 +266,31 @@ public sealed class QuantityRangeAssemblyNode : ITransformNode
 
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
     {
+        // The unit is whatever the RULE configures, and only when it configures nothing does the source's own
+        // unit stand in (see ReservedTransformConfigKeys.SourceUnitHint). Without that fallback a rule left on
+        // its default settings emits "unit": "" for an Observation.valueQuantity whose source JSON plainly
+        // carried "mg/dL" — the value survives the hop and its unit silently does not, which for a lab result
+        // is the difference between a number and a measurement.
+        var unit = config.Get("unit");
+        if (string.IsNullOrWhiteSpace(unit))
+        {
+            unit = config.Get(ReservedTransformConfigKeys.SourceUnitHint);
+        }
+
+        // A source field pointed at the whole Quantity element (".valueQuantity" rather than
+        // ".valueQuantity.value") arrives as an object, not a scalar — read its parts directly instead of
+        // ToString()-ing it into JSON text that neither regex below can match, which would otherwise fall all
+        // the way through to the non-numeric "text" branch and stash the raw JSON in it.
+        if (TryReadQuantityObject(value) is { } quantityObject)
+        {
+            return TransformResult.Ok(BuildQuantity(quantityObject, unit));
+        }
+
         var raw = value?.ToString()?.Trim();
         if (string.IsNullOrWhiteSpace(raw))
         {
             return TransformResult.Ok(null);
         }
-
-        var unit = config.Get("unit");
 
         var rangeMatch = RangePattern.Match(raw);
         if (rangeMatch.Success)
@@ -303,6 +321,57 @@ public sealed class QuantityRangeAssemblyNode : ITransformNode
         // Non-numeric ("positive", "trace") routes to a plain text CodeableConcept-shaped value instead of a Quantity.
         return TransformResult.Ok(new JsonObject { ["text"] = raw });
     }
+
+    /// <summary>Recognizes an input that is already a FHIR Quantity element — a JsonObject straight from the
+    /// reader, or JSON text carrying one — and returns it. Anything without a "value" property is not a
+    /// Quantity and falls through to the scalar parsing above.</summary>
+    private static JsonObject? TryReadQuantityObject(object? value)
+    {
+        var node = value as JsonNode;
+        if (node is null && value is string text
+            && text.AsSpan().TrimStart() is { Length: > 0 } trimmed && trimmed[0] == '{')
+        {
+            try
+            {
+                node = JsonNode.Parse(text);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return null;
+            }
+        }
+
+        return node is JsonObject obj && obj.ContainsKey("value") ? obj : null;
+    }
+
+    /// <summary>Rebuilds a Quantity from a source element, keeping the rule's configured unit when it has one
+    /// and otherwise the element's own "unit" (then its UCUM "code"), plus any comparator it already carried.</summary>
+    private static JsonObject BuildQuantity(JsonObject source, string unit)
+    {
+        if (string.IsNullOrWhiteSpace(unit))
+        {
+            unit = ReadString(source, "unit") ?? ReadString(source, "code") ?? string.Empty;
+        }
+
+        var quantity = new JsonObject
+        {
+            ["value"] = source["value"]?.DeepClone(),
+            ["unit"] = unit
+        };
+
+        if (ReadString(source, "comparator") is { Length: > 0 } comparator)
+        {
+            quantity["comparator"] = comparator;
+        }
+
+        return quantity;
+    }
+
+    private static string? ReadString(JsonObject source, string propertyName) =>
+        source.TryGetPropertyValue(propertyName, out var node) && node is JsonValue value
+        && value.TryGetValue<string>(out var text) && !string.IsNullOrWhiteSpace(text)
+            ? text
+            : null;
 }
 
 /// <summary>6. Rounding / Scaling / Precision.</summary>

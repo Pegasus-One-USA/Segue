@@ -26,4 +26,12 @@ public static class ReservedTransformConfigKeys
     /// source field ending in "code". <see cref="Nodes.CodeableConceptBuilderNode"/> uses it as the fallback
     /// tier between "resolved from the local terminology DB" and "the bare code itself."</summary>
     public const string SourceDisplayHint = "_sourceDisplayHint";
+
+    /// <summary>The unit the SOURCE resource already carried alongside the numeric value a rule's source field
+    /// points at (e.g. Epic's own <c>Observation.valueQuantity.unit</c>, sibling to the
+    /// <c>valueQuantity.value</c> the rule reads) — only populated by the Runtime pipeline, which is the only
+    /// caller holding the whole resource JSON, and only for a source field whose leaf segment is "value".
+    /// <see cref="Nodes.QuantityRangeAssemblyNode"/> uses it whenever the rule's own "unit" setting is blank,
+    /// so an assembled Quantity keeps the source's real unit instead of emitting an empty one.</summary>
+    public const string SourceUnitHint = "_sourceUnitHint";
 }

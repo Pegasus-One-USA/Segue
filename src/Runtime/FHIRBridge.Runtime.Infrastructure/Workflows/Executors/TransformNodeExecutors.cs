@@ -1305,6 +1305,15 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     }
                 }
 
+                if (rule.NodeType == TransformNodeType.QuantityRangeAssembly)
+                {
+                    var siblingUnit = FhirSourceJsonPatcher.TryReadSiblingQuantityUnit(sourceJson, sourceField);
+                    if (siblingUnit is not null)
+                    {
+                        config[ReservedTransformConfigKeys.SourceUnitHint] = siblingUnit;
+                    }
+                }
+
                 var hopInput = currentValue;
                 var hopExecutedAtUtc = DateTimeOffset.UtcNow;
                 var hopStopwatch = lineageEntries is null ? null : Stopwatch.StartNew();
@@ -1361,7 +1370,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             // exists from object type ... JsonObject"), so it must be serialized to its JSON text here, the same
             // way JsonMappingEngine's own MappingValueType.Json case stores a JSON column as a string.
             transformed[destinationField] = currentValue is System.Text.Json.Nodes.JsonNode jsonNode
-                ? jsonNode.ToJsonString()
+                ? jsonNode.ToJsonString(RelaxedJsonOptions)
                 : CoerceToExpectedValueType(
                     currentValue,
                     lastReachedTypedRule?.ExpectedValueType,
@@ -1577,6 +1586,17 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     private const string DefaultTrueValuesConfig = "y,yes,1,t,true,+";
     private const string DefaultFalseValuesConfig = "n,no,0,f,false,-";
 
+    /// <summary>System.Text.Json escapes <c>&lt;</c>, <c>&gt;</c> and <c>&amp;</c> by default, as an
+    /// HTML-injection guard for JSON that gets embedded in a page. Nothing here is embedded in a page — this
+    /// JSON goes straight into a destination column — and that default turns a perfectly ordinary clinical
+    /// value into an unreadable one: a reference range assembled from "&lt;=200" lands in Postgres as
+    /// <c>{"comparator":"<="}</c> instead of <c>{"comparator":"&lt;="}</c>. Both encodings parse back to
+    /// the same string, but only one is legible to whoever queries the table.</summary>
+    private static readonly System.Text.Json.JsonSerializerOptions RelaxedJsonOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     /// <summary>The relational engines RelationalDestinationWriterBase/MappedSqlServerDestinationWriter actually
     /// write to — mirrors SqlDestinationSchemaService.IsRelational (that class lives in the non-Runtime
     /// Infrastructure project, which this one doesn't reference).</summary>
@@ -1596,12 +1616,12 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
 
         if (value is System.Text.Json.Nodes.JsonNode jsonNode)
         {
-            return jsonNode.ToJsonString();
+            return jsonNode.ToJsonString(RelaxedJsonOptions);
         }
 
         try
         {
-            return System.Text.Json.JsonSerializer.Serialize(value);
+            return System.Text.Json.JsonSerializer.Serialize(value, RelaxedJsonOptions);
         }
         catch (NotSupportedException)
         {
