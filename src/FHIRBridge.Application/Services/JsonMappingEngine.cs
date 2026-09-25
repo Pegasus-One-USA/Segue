@@ -88,7 +88,7 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             var joinedRows = isJoinedFields ? ResolveJoinedFieldRows(root, field) : null;
 
             var resolved = joinedRows is not null
-                ? JoinRows(joinedRows, ParseDelimiter(field.Format))
+                ? JoinRows(joinedRows, ParseDelimiter(field.Format), field, errors)
                 : ResolveAll(root, field.JsonPath)
                     .Select(m => (
                         Value: ConvertElement(
@@ -590,15 +590,17 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         var subPaths = field.JsonPath.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var resolvedSubPaths = subPaths.Select(subPath => ResolveAll(root, subPath)).ToList();
 
-        // The instance keys to emit a row for, in first-seen order: every distinct outermost index any sub-path
-        // matched. Taken across ALL sub-paths rather than from whichever matched most, so a sub-path present on
-        // an instance the others skipped still gets a row of its own.
-        var instanceKeys = new List<int>();
+        // The instance keys to emit a row for: every distinct outermost index any sub-path matched. Taken
+        // across ALL sub-paths rather than from whichever matched most, so a sub-path present on an instance
+        // the others skipped still gets a row of its own. Sorted below into array order — NOT the order they
+        // happened to be discovered in, which depends on which sub-path the user listed first and would make
+        // "family|given" emit its rows in a different order than "given|family" for the same document.
+        var instanceKeys = new HashSet<int>();
         foreach (var matches in resolvedSubPaths)
         {
             foreach (var match in matches)
             {
-                if (match.Indices.Count > 0 && !instanceKeys.Contains(match.Indices[0]))
+                if (match.Indices.Count > 0)
                 {
                     instanceKeys.Add(match.Indices[0]);
                 }
@@ -620,10 +622,10 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             return [(scalarPieces, Array.Empty<int>())];
         }
 
-        instanceKeys.Sort();
+        var orderedKeys = instanceKeys.Order().ToList();
 
-        var rows = new List<(string[] Pieces, IReadOnlyList<int> Indices)>(instanceKeys.Count);
-        foreach (var instanceKey in instanceKeys)
+        var rows = new List<(string[] Pieces, IReadOnlyList<int> Indices)>(orderedKeys.Count);
+        foreach (var instanceKey in orderedKeys)
         {
             var pieces = resolvedSubPaths
                 .Select(matches => JoinInstancePieces(matches
@@ -641,9 +643,26 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     }
 
     /// <summary>Collapses each joined row's pieces into the single delimited value the column stores.</summary>
+    /// <remarks>
+    /// Routed through <see cref="ConvertValue"/> for the same reason every other resolved value is: the
+    /// declared ValueType/MaxLength/Precision/Scale describe the DESTINATION COLUMN, and a joined value has
+    /// to satisfy them exactly like a single-source one. Returning the raw string here instead meant none of
+    /// them ever applied to a multi-source column — a join into a typed date/integer column handed Postgres a
+    /// delimited string (42804 at write time rather than a mapping error naming the field), and a join
+    /// overflowing a varchar(n) failed the whole write where the same value from ONE source would have been
+    /// rejected up front by ValidateLength. ConvertValue's own mismatch fallback still hands the untouched
+    /// string onward, so a field whose real type comes from a downstream transform is unaffected.
+    /// </remarks>
     private static List<(object? Value, IReadOnlyList<int> Indices)> JoinRows(
-        List<(string[] Pieces, IReadOnlyList<int> Indices)> rows, string delimiter) =>
-        rows.Select(row => ((object?)string.Join(delimiter, row.Pieces), row.Indices)).ToList();
+        List<(string[] Pieces, IReadOnlyList<int> Indices)> rows,
+        string delimiter,
+        MappingFieldDto field,
+        List<string> errors) =>
+        rows.Select(row => (
+            ConvertValue(
+                string.Join(delimiter, row.Pieces), field.ValueType, field.Format, field.TargetField, errors,
+                field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform),
+            row.Indices)).ToList();
 
     /// <summary>Joins the values one sub-path contributed for a single array instance. Space-separated: these
     /// are repeats of ONE field (the two given names of one person), not the distinct fields the configured

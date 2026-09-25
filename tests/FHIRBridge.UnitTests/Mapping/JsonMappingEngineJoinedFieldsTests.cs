@@ -193,4 +193,182 @@ public sealed class JsonMappingEngineJoinedFieldsTests
 
         result.Rows![0]["Given"].Should().Be("Warren, James, Warren, James, Warren");
     }
+
+    [Fact]
+    public void Match_criteria_picks_the_name_entry_whose_sibling_satisfies_the_criteria()
+    {
+        // "Match criteria" on a JOINED column: the criteria is evaluated against name[].use and the value
+        // taken is the join of THAT instance. Correlation matches on the outermost index, which is exactly
+        // what a joined row carries, so the nickname entry — the one with a single given name — comes back.
+        var field = new MappingFieldDto(
+            TargetField: "FullName",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter= ",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.name[*].use",
+            CorrelationCodeValue: "nickname");
+
+        var result = _engine.Map(EpicPatientJson, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Rows![0]["FullName"].Should().Be("Warren McGinnis");
+    }
+
+    [Theory]
+    // Contains matches "nickname" on a substring; NotEquals takes the first entry that is NOT official.
+    [InlineData("Contains", "nick", "Warren McGinnis")]
+    [InlineData("NotEquals", "official", "Warren James McGinnis")]
+    public void Match_criteria_operators_apply_to_a_joined_column_too(
+        string op, string criteriaValue, string expected)
+    {
+        var field = new MappingFieldDto(
+            TargetField: "FullName",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter= ",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.name[*].use",
+            CorrelationCodeValue: criteriaValue,
+            CorrelationCodeOperator: op);
+
+        _engine.Map(EpicPatientJson, [field]).Rows![0]["FullName"].Should().Be(expected);
+    }
+
+    [Fact]
+    public void A_joined_value_that_overflows_the_destination_column_is_rejected_not_written()
+    {
+        // A joined column satisfies the destination's constraints exactly like a single-source one. The join
+        // used to skip ConvertValue entirely, so MaxLength never applied and the oversized string reached the
+        // database to fail there instead of being reported as a mapping error naming the field.
+        var field = new MappingFieldDto(
+            TargetField: "FullName",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter= ",
+            ArrayPolicy: ArrayPolicy.FirstItem,
+            MaxLength: 5);
+
+        var result = _engine.Map(EpicPatientJson, [field]);
+
+        // One error per name[] instance, not one for the column: every instance is length-checked as it is
+        // built, exactly as the non-joined path checks every match. FirstItem then writes only the first —
+        // which is null, because an over-length value is a deliberate rejection rather than a truncation.
+        result.Errors.Should().HaveCount(3)
+            .And.AllSatisfy(error => error.Should().Contain("FullName").And.Contain("at most 5"));
+        result.Rows![0]["FullName"].Should().BeNull();
+    }
+
+    [Fact]
+    public void A_joined_value_within_the_column_limit_is_written_unchanged()
+    {
+        var field = new MappingFieldDto(
+            TargetField: "FullName",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter= ",
+            ArrayPolicy: ArrayPolicy.FirstItem,
+            MaxLength: 200);
+
+        var result = _engine.Map(EpicPatientJson, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Rows![0]["FullName"].Should().Be("Warren James McGinnis");
+    }
+
+    [Fact]
+    public void A_joined_value_declared_as_a_non_string_type_reports_the_mismatch_and_keeps_the_text()
+    {
+        // Declaring a join as Integer is a configuration mistake — two text fields concatenated can never be
+        // one. It has to SAY so rather than hand Postgres a string for an integer column, which fails at
+        // write time naming neither the field nor the mapping. ConvertValue's own mismatch fallback still
+        // passes the raw text on, so a rule chain downstream is unaffected.
+        var field = new MappingFieldDto(
+            TargetField: "FullName",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.Integer,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter= ",
+            ArrayPolicy: ArrayPolicy.FirstItem);
+
+        var result = _engine.Map(EpicPatientJson, [field]);
+
+        result.Errors.Should().NotBeEmpty();
+        result.Rows![0]["FullName"].Should().Be("Warren James McGinnis");
+    }
+
+    [Fact]
+    public void A_transform_owned_type_is_still_handed_the_untouched_joined_text()
+    {
+        // DeferTypeToTransform means the RULE produces the column's real type — coercing here would only log
+        // a bogus error, exactly as it would for a single-source field.
+        var field = new MappingFieldDto(
+            TargetField: "FullName",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.Integer,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter= ",
+            ArrayPolicy: ArrayPolicy.FirstItem,
+            DeferTypeToTransform: true);
+
+        var result = _engine.Map(EpicPatientJson, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Rows![0]["FullName"].Should().Be("Warren James McGinnis");
+    }
+
+    [Fact]
+    public void A_joined_child_table_column_shares_its_row_with_a_sibling_at_the_same_depth()
+    {
+        // A joined row carries only its OUTERMOST index, so a joined column fanned out to a child table keys
+        // its RowIndex by the name[] instance — the same key "$.name[*].use" produces. That is what keeps
+        // both columns on ONE child row per name entry instead of splitting them across half-populated rows,
+        // and it is the combination the child-table override in serializeRowsFlat deliberately allows.
+        var joined = new MappingFieldDto(
+            TargetField: "FullName",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter= ",
+            ResourceType: "Patient",
+            DestinationObject: "dbo.PatientName",
+            ArrayPolicy: ArrayPolicy.SeparateDestination,
+            ArrayAncestors: ["name"]);
+        var use = new MappingFieldDto(
+            TargetField: "Use",
+            JsonPath: "$.name[*].use",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "directField",
+            ResourceType: "Patient",
+            DestinationObject: "dbo.PatientName",
+            ArrayPolicy: ArrayPolicy.SeparateDestination,
+            ArrayAncestors: ["name"]);
+
+        var result = _engine.Map(EpicPatientJson, [joined, use]);
+
+        result.Errors.Should().BeEmpty();
+        var rows = result.ChildTables!.Single(t => t.Name == "dbo.PatientName").Rows;
+
+        rows.Should().HaveCount(3, "one child row per name[] entry, not one per column shape");
+        rows.Should().AllSatisfy(row => row.Should().ContainKeys("FullName", "Use"));
+        rows.Should().ContainSingle(r =>
+            (string?)r.GetValueOrDefault("Use") == "nickname" &&
+            (string?)r.GetValueOrDefault("FullName") == "Warren McGinnis");
+        rows.Should().ContainSingle(r =>
+            (string?)r.GetValueOrDefault("Use") == "official" &&
+            (string?)r.GetValueOrDefault("FullName") == "Warren James McGinnis");
+    }
 }

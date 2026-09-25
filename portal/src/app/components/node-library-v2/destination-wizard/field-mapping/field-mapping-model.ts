@@ -328,6 +328,9 @@ export function serializeRowsFlat(
   const resourcesWithExplicitKey = new Set(rows.filter(r => r.isUpsertKey === true).map(r => r.resource));
   return rows.map(row => {
     const primary = row.sources[0];
+    // Declared up here rather than beside its first use below, because the joinedFields Format guard needs
+    // it too and a `const` read before its declaration is a TDZ ReferenceError, not a falsy value.
+    const isDefault = row.mode === 'default';
     // A row's OWN table is always the real destination for its column — critically, this must NOT fall
     // back to the resource's primary table when they differ (see rootTable below), or a field mapped onto
     // a genuine child/extra table (e.g. "Use" on dbo.PatientName) gets silently validated/written against
@@ -362,9 +365,14 @@ export function serializeRowsFlat(
     // beside it do not: the jsonPath emitted below is "|"-delimited for a multi-source row, and without the
     // prefix telling JsonMappingEngine to split it, that whole string is resolved as one literal path and
     // matches nothing — the column would go silently NULL. Only the aggregate/index markers are dropped.
+    // `!isDefault` matches the joinSources guard below and resolveArrayPolicy's own early return for a
+    // default-mode row: a "@default" column has no source paths to join, so stamping the joinedFields prefix
+    // on one would describe a join that cannot exist. Harmless in the engine today (it resolves "@default"
+    // and returns before the joinedFields branch) but the Format string still reaches ConvertValue, and the
+    // two guards must agree or the prefix outlives the joinSources that give it meaning.
     const format = survivesChildTableOverride
       ? resolvedPolicy.format
-      : (row.sources.length > 1 ? joinedFieldsFormat(row, undefined) : undefined);
+      : (row.sources.length > 1 && !isDefault ? joinedFieldsFormat(row, undefined) : undefined);
     const correlationSiblingField = survivesChildTableOverride ? resolvedPolicy.correlationSiblingField : undefined;
     const correlationCodeValue = survivesChildTableOverride ? resolvedPolicy.correlationCodeValue : undefined;
     const correlationOperator = survivesChildTableOverride ? resolvedPolicy.correlationOperator : undefined;
@@ -391,7 +399,6 @@ export function serializeRowsFlat(
     // (JsonMappingEngine) — it never changes what gets written.
     const targetColumn = targetTable?.columns.find(c => c.name === row.targetName);
     const isRequired = row.isRequired ?? (targetColumn?.isNullable === false ? true : undefined);
-    const isDefault = row.mode === 'default';
     return {
       resource: row.resource,
       // A default column has no real source field — the token itself (e.g. "@now") stands in as both the
@@ -501,8 +508,13 @@ export function resolveArrayPolicy(row: MappingRow): ArrayPolicyResolution {
     // FIRST source: mapping name.given + name.family onto one column silently wrote the given names and
     // dropped the family entirely, with nothing but a "Preview only" banner to say so. serializeRowsFlat
     // builds the matching "|"-joined jsonPath — the two must stay in step.
+    // `approximated` carries whatever applyInstance decided — it is NOT unconditionally false. The join
+    // itself is exact now, but the INSTANCE SELECTION layered on top can still be an approximation: a
+    // "Match criteria" with no field/value typed yet falls back to FirstItem and flags itself, and hard-
+    // coding false here swallowed that flag, so a half-configured criteria on a joined column silently lost
+    // the "Preview only" banner that is the only thing telling the user their criteria isn't running.
     const joined = applyInstance(instance, hasArrayAncestors);
-    return { ...joined, approximated: false, format: joinedFieldsFormat(row, joined.format) };
+    return { ...joined, format: joinedFieldsFormat(row, joined.format) };
   }
 
   return applyInstance(instance, hasArrayAncestors);

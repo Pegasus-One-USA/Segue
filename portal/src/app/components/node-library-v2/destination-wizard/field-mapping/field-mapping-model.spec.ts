@@ -594,6 +594,35 @@ describe('resolveArrayPolicy', () => {
       .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'joinedFields;delimiter=, ' });
   });
 
+  it('a joined row with an INCOMPLETE criteria still reports itself as approximated', () => {
+    // The join is exact, but the instance selection layered on it is not — hard-coding approximated:false
+    // for every joined row swallowed that, hiding the "Preview only" banner which is the only signal that
+    // the criteria the user half-typed is not actually running.
+    const joined = row({
+      sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
+      instance: { type: 'criteria', field: 'use', op: '=', value: '' },
+      delimiter: ', ',
+    });
+    expect(resolveArrayPolicy(joined))
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: true, format: 'joinedFields;delimiter=, ' });
+  });
+
+  it('a joined row with a COMPLETE criteria keeps CorrelateByCode and is exact', () => {
+    const joined = row({
+      sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
+      instance: { type: 'criteria', field: 'use', op: '=', value: 'official' },
+      delimiter: ', ',
+    });
+    expect(resolveArrayPolicy(joined)).toEqual({
+      arrayPolicy: 'CorrelateByCode',
+      approximated: false,
+      correlationSiblingField: 'use',
+      correlationCodeValue: 'official',
+      correlationOperator: 'Equals',
+      format: 'joinedFields;delimiter=, ',
+    });
+  });
+
   it('joined sources keep the instance marker alongside the joinedFields prefix', () => {
     const joined = row({
       sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
