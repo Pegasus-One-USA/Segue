@@ -85,16 +85,17 @@ public sealed class HumanNameArrayModeSpecTests
         Run(withPrefix, "RoundTrip", TransformArrayMode.Whole).Should().Be("Dr Jane Roe");
     }
 
-    /// <summary>No transformation at all is not this node's path — the mapping writes the node's JSON itself
-    /// (ArrayPolicy.StoreJson). Asserted here only to state the boundary: everything above needs a rule.</summary>
+    /// <summary>A rule saved as Whole before the popover chose the mode per row still runs per element over the
+    /// array — it neither fails (NULLing the column under NullOut) nor parses the array's JSON text as a name.
+    /// With no pattern it composes the historical default order, middle name and suffix included.</summary>
     [Fact]
-    public void Without_a_rule_nothing_here_runs()
+    public void A_legacy_Whole_rule_with_default_config_runs_per_element()
     {
-        // The array reaches no node, so its JSON is what the column receives. Guard against a future change
-        // that quietly makes the applier act on a value no rule asked it to touch.
-        TransformNodeApplier.ExecuteWithArrayMode(
-                new HumanNameParsingNode(), NameArray, new Dictionary<string, string>(), null,
-                TransformArrayMode.Whole)
-            .Success.Should().BeFalse("an array handed to a scalar node without per-item mode is a mismatch");
+        var result = TransformNodeApplier.ExecuteWithArrayMode(
+            new HumanNameParsingNode(), NameArray, new Dictionary<string, string>(), null, TransformArrayMode.Whole);
+
+        result.Success.Should().BeTrue();
+        ((object?[])result.Value!).Should().Equal(
+            "Warren James McGinnis III", "Warren James McGinnis III", "Warren McGinnis");
     }
 }

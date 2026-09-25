@@ -684,7 +684,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 childTables = await ApplyTransformRulesToChildTablesAsync(
                     childTables, fields, resource.ResourceType, destinationType, sourceSystem,
                     resourcePipelineRouteId, ruleCache, resource.ResourceId, sourceJson, preMappingHops,
-                    mapped.RawArrayValues, context.WorkflowRunId, node.Id, sourceConnectionName,
+                    context.WorkflowRunId, node.Id, sourceConnectionName,
                     destinationName, cancellationToken);
                 var referenceLookups = mapped.ReferenceLookups is { Count: > 0 }
                     ? mapped.ReferenceLookups
@@ -1352,6 +1352,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             // then narrows a plain string to the native CLR TYPE a relational column needs. Only a value the
             // first left untouched reaches the second: what it rewrote is already-final JSON text, and re-typing
             // that against the chain's ExpectedValueType would parse the serialized JSON as a date/number.
+            //
+            // A PerItem run over a one-element array is unwrapped to that element first: it is a single value,
+            // and joining it into a string would skip the coercion a date/int column needs (SQL Server converts
+            // implicitly; PostgreSQL/MySQL parameter binding does not).
+            currentValue = UnwrapSingleItem(currentValue);
             var destinationValue = ToDestinationValue(currentValue);
             transformed[destinationField] = ReferenceEquals(destinationValue, currentValue)
                 ? CoerceToExpectedValueType(
@@ -1577,6 +1582,14 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         DestinationType.SqlServer or DestinationType.AzureSql or DestinationType.PostgreSql
         or DestinationType.MySql or DestinationType.DataFabricWarehouse;
 
+    /// <summary>The sole element of a PerItem result (the CLR <c>object?[]</c> TransformNodeApplier reassembles)
+    /// when it has exactly one scalar; anything else — a structured element, which keeps its JSON-array shape,
+    /// or a JsonArray a node returned itself — as-is.</summary>
+    private static object? UnwrapSingleItem(object? value) =>
+        value is object?[] { Length: 1 } single && single[0] is not System.Text.Json.Nodes.JsonNode
+            ? single[0]
+            : value;
+
     /// <summary>
     /// Converts a rule chain's final value into something a destination writer's ADO.NET parameter binding can
     /// actually take. A FHIR complex-type builder node (HumanNameParsing, AddressParsing, TelecomNormalization,
@@ -1679,13 +1692,6 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         => new MappedRecordBatch(inputs.Select(input => input.Payload!).Where(payload => payload is not null).ToArray());
 
     /// <summary>
-    /// Resolves each child table's FK/parent-key column names from the (import-populated)
-    /// <see cref="MappingFieldDto.ForeignKeyColumn"/>/<see cref="MappingFieldDto.ParentKeyColumn"/> metadata on
-    /// one of its own fields. A child table with no field carrying that metadata can't be linked back to a
-    /// parent row — skipped rather than written with a missing/garbage FK value (mirrors
-    /// ConfiguredPipelineService's identical guard for the Configured Pipeline execution path).
-    /// </summary>
-    /// <summary>
     /// Hands one resource's lineage hops to the dispatcher. Fire-and-continue: EnqueueAsync only ever writes
     /// to a channel/publishes to a broker — it never waits on the actual FieldLineageEntries insert, which
     /// happens out-of-band in the Worker (see LineageCaptureProcessor). A publish failure here must never fail
@@ -1751,7 +1757,6 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         string resourceId,
         string? sourceJson,
         IReadOnlyList<DeIdentificationFieldHop> preMappingHops,
-        IReadOnlyDictionary<string, IReadOnlyList<object?>>? rawArrayValues,
         Guid workflowRunId,
         Guid nodeId,
         string? sourceConnectionName,
@@ -1777,10 +1782,14 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             var rows = new List<IReadOnlyDictionary<string, object?>>(childTable.Rows.Count);
             foreach (var row in childTable.Rows)
             {
+                // No rawArrayValues: that map is keyed by TargetField and spans EVERY instance of the repeating
+                // element (it was built for the parent row), so handing it to a child row would make a chain
+                // led by ConcatenationTemplating/ArrayListOperations substitute the same cross-instance list
+                // into every row. A child row already IS one instance — its own value is the right input.
                 var (transformedRow, _, rowLineage) = await ApplyTransformRulesAsync(
                     row, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
                     resourcePipelineRouteId, ruleCache, resourceId, sourceJson, preMappingHops,
-                    rawArrayValues, cancellationToken);
+                    rawArrayValues: null, cancellationToken);
                 // FhirWriteBackJsonPath patches are discarded on purpose: a child table only exists for a
                 // relational destination (BuildChildTableRecords requires a ForeignKeyColumn), and write-back
                 // targets a FHIR-native destination that stores the resource itself and so has no child tables.
@@ -1804,6 +1813,13 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         return transformedTables;
     }
 
+    /// <summary>
+    /// Resolves each child table's FK/parent-key column names from the (import-populated)
+    /// <see cref="MappingFieldDto.ForeignKeyColumn"/>/<see cref="MappingFieldDto.ParentKeyColumn"/> metadata on
+    /// one of its own fields. A child table with no field carrying that metadata can't be linked back to a
+    /// parent row — skipped rather than written with a missing/garbage FK value (mirrors
+    /// ConfiguredPipelineService's identical guard for the Configured Pipeline execution path).
+    /// </summary>
     private static IReadOnlyList<MappedChildTableRecord>? BuildChildTableRecords(
         IReadOnlyList<MappingChildTableDto>? childTables, IReadOnlyCollection<MappingFieldDto> fields, string resourceType)
     {

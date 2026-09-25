@@ -9,7 +9,7 @@ import { MappingValueType } from '../../../../mapping-profiles/models/mapping-pr
 import { DestinationTypeV2 as DestinationType } from '../../../../models/destination-configuration-v2.model';
 import { ToastService } from '../../../../services/toast.service';
 import {
-  TransformationRulesService, TransformationRule, TransformNodeType, TransformNodeSchema,
+  TransformationRulesService, TransformationRule, TransformNodeType, TransformNodeSchema, TransformArrayMode,
   TRANSFORM_NODE_DEFAULT_VALUE_TYPES,
 } from './transformation-rules.service';
 import { RuleConfigFormComponent, applyNodeDefaults } from './rule-config-form/rule-config-form.component';
@@ -177,13 +177,8 @@ export class FieldMappingJoinPopoverComponent {
         onNull: 'Skip',
         errorPolicy: 'NullOut',
         isEnabled: true,
-        // 'PerItem' exactly when the value IS an array — a whole-node row still reading every repeat. The
-        // node then runs once per element and the results are reassembled into one JSON array for the column,
-        // instead of the whole array being handed to a scalar node as one opaque string (which parsed the JSON
-        // source text itself as a value: a family name of '[{'use':'official''). TransformNodeApplier
-        // unwraps the JSON-array string this arrives as; it used to fan out only over a real IEnumerable, which
-        // a StoreJson value never is.
-        arrayMode: this.isChildJson() && this.readsWholeNode() ? 'PerItem' : 'Whole',
+        // See resolveArrayMode.
+        arrayMode: this.resolveArrayMode(),
         executionPhase: 'PostMapping',
         // A rule that reshapes the value (e.g. DateMathAge turning a Date into an Integer) must declare
         // that output type, or CreateMappingProfileRequestValidator falls back to comparing the RAW
@@ -211,6 +206,27 @@ export class FieldMappingJoinPopoverComponent {
           this.toast.error('Could not save the transformation rule', err?.error?.detail ?? err?.message ?? '');
         },
       });
+  }
+
+  /** Node types that operate ON a collection (first/last/count/join/…) and so must see the whole array — the
+   *  client-side mirror of ITransformNode.AcceptsCollections. Running one per element would count 1 per name. */
+  private static readonly COLLECTION_NODE_TYPES: ReadonlySet<TransformNodeType> = new Set<TransformNodeType>(['ArrayListOperations']);
+
+  /** 'PerItem' exactly when the value can be an array — a whole-node row not pinned to one index — AND the node
+   *  converts a single value. The node then runs once per element and the results are reassembled for the
+   *  column, instead of the whole array being handed to a scalar node as one opaque string (which parsed the
+   *  JSON source text itself as a value). A collection node keeps 'Whole': fanning it out would apply every
+   *  aggregate to a single element.
+   *
+   *  An existing rule keeps the mode it was saved with while its node type is unchanged, so editing an
+   *  unrelated setting never silently changes what the column receives — there is no control for this mode. */
+  private resolveArrayMode(): TransformArrayMode {
+    const existing = this.existingRule();
+    if (existing?.arrayMode && existing.nodeType === this.ruleNodeType()) return existing.arrayMode;
+    return this.isChildJson() && this.valueCanBeArray()
+      && !FieldMappingJoinPopoverComponent.COLLECTION_NODE_TYPES.has(this.ruleNodeType())
+      ? 'PerItem'
+      : 'Whole';
   }
 
   // Both NumberCast and DateTimeFormat have a "targetType" config field (see TransformNodeConfigSchemas.cs)
@@ -340,6 +356,10 @@ export class FieldMappingJoinPopoverComponent {
     // A criteria selection narrows the node too, even though it resolves to a filter rather than an index.
     return wholeNodeInstanceIndex(instance) === null && instanceCriteriaPredicate(instance) === null;
   });
+  /** Whether the whole-node value can arrive as a JSON array — unlike readsWholeNode (which drives the hints),
+   *  a criteria selection counts: its "[?field=value]" filter selects EVERY matching element, so two phone
+   *  numbers still arrive as an array. Only a first/nth selection pins the value to one element. */
+  valueCanBeArray = computed(() => wholeNodeInstanceIndex(this.draft()?.instance) === null);
   /** Names the single instance a whole-node row reads, for the hints — only ever read while readsWholeNode()
    *  is false, so the "every instance" case has no phrasing here. */
   instanceSummary = computed(() => {

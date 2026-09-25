@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { FieldMappingJoinPopoverComponent } from './field-mapping-join-popover.component';
 import { MappingRow } from './field-mapping-model';
-import { TransformationRulesService, TransformNodeSchema } from './transformation-rules.service';
+import { TransformationRule, TransformationRulesService, TransformNodeSchema } from './transformation-rules.service';
 import { ToastService } from '../../../../services/toast.service';
 
 /**
@@ -21,7 +21,9 @@ describe('FieldMappingJoinPopoverComponent — transformations on a whole-node (
   let effectiveRuleFilters: Record<string, unknown>[];
   let savedRequests: Record<string, unknown>[];
 
-  function createFixture(row: MappingRow, childArrayLabel: string | null = null) {
+  function createFixture(
+    row: MappingRow, childArrayLabel: string | null = null, existingRules: Partial<TransformationRule>[] = [],
+  ) {
     effectiveRuleFilters = [];
     savedRequests = [];
 
@@ -29,7 +31,7 @@ describe('FieldMappingJoinPopoverComponent — transformations on a whole-node (
       getNodeSchemas: () => of(SCHEMAS),
       getEffectiveRules: (filter: Record<string, unknown>) => {
         effectiveRuleFilters.push(filter);
-        return of([]);
+        return of(existingRules);
       },
       save: (request: Record<string, unknown>) => {
         savedRequests.push(request);
@@ -103,9 +105,40 @@ describe('FieldMappingJoinPopoverComponent — transformations on a whole-node (
   // text itself as a value.
   it('runs the rule per item while the row reads the whole array', () => {
     const fixture = createFixture(childJsonRow);
+    fixture.componentInstance.onRuleNodeTypeChange('StringNormalization');
     fixture.componentInstance.saveRule();
 
     expect(savedRequests[0]['arrayMode']).toBe('PerItem');
+  });
+
+  // An aggregate (count/first/join/…) must see the whole array — per item, "count" gives 1 per element.
+  it('keeps a collection node on the whole array', () => {
+    const fixture = createFixture(childJsonRow);
+    expect(fixture.componentInstance.ruleNodeType()).toBe('ArrayListOperations');
+    fixture.componentInstance.saveRule();
+
+    expect(savedRequests[0]['arrayMode']).toBe('Whole');
+  });
+
+  // "[?system=phone]" selects every matching element, so the value can still be an array.
+  it('runs the rule per item for a match-criteria selection', () => {
+    const fixture = createFixture({
+      ...childJsonRow, instance: { type: 'criteria', field: 'system', op: '=', value: 'phone' },
+    });
+    fixture.componentInstance.onRuleNodeTypeChange('StringNormalization');
+    fixture.componentInstance.saveRule();
+
+    expect(savedRequests[0]['arrayMode']).toBe('PerItem');
+  });
+
+  it('keeps an existing rule\'s saved array mode when it is re-saved', () => {
+    const fixture = createFixture(childJsonRow, null, [{
+      id: 'rule-0', nodeType: 'StringNormalization', config: {}, arrayMode: 'Whole',
+    }]);
+    fixture.componentInstance.saveRule();
+
+    expect(savedRequests[0]['id']).toBe('rule-0');
+    expect(savedRequests[0]['arrayMode']).toBe('Whole');
   });
 
   it('runs the rule once when the row has been narrowed to a single instance', () => {

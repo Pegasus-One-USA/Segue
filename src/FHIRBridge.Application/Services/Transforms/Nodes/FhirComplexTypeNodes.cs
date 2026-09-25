@@ -144,13 +144,17 @@ public sealed class HumanNameParsingNode : ITransformNode
     /// "Middle" maps to the given names after the first, which is where a parsed middle name lands.</summary>
     private static readonly string[] FormatTokens = ["prefix", "first", "middle", "given", "last", "family", "suffix"];
 
+    /// <summary>The token order a structured name composes in when neither <c>format</c> nor <c>pattern</c>
+    /// names one.</summary>
+    private const string DefaultFormat = "First Middle Last Suffix";
+
     /// <summary>The <c>pattern</c> value selecting the one-rule parse-then-format mode.</summary>
     private const string RoundTripPattern = "RoundTrip";
 
     public TransformNodeType NodeType => TransformNodeType.HumanNameParsing;
 
-    /// <summary>Reads the element rather than only its display string: <c>use</c> says which of a patient's
-    /// names this is, and no rendering of the name carries it. An element with no <c>text</c> is also the one
+    /// <summary>Reads the element rather than only its display string: an element states its own family/given
+    /// parts, which the display string can only approximate, and an element with no <c>text</c> is the one
     /// shape this node composes FROM, rather than parses.</summary>
     public bool AcceptsStructuredValue => true;
 
@@ -178,7 +182,7 @@ public sealed class HumanNameParsingNode : ITransformNode
         // it still composes even when no format is named — with the shape it has always defaulted to.
         if (string.IsNullOrWhiteSpace(format) && config.Get("pattern", "FirstLast") == RoundTripPattern)
         {
-            format = "First Middle Last Suffix";
+            format = DefaultFormat;
         }
 
         return string.IsNullOrWhiteSpace(format)
@@ -202,15 +206,21 @@ public sealed class HumanNameParsingNode : ITransformNode
         {
             // An element already states its own parts, so nothing is parsed out of the display string — the
             // element IS the parse. `pattern` therefore selects the order those parts are composed in, and the
-            // result is a display string. See PatternFormats for the five orders.
+            // result is a display string. See PatternFormats for the five orders. The element's `use`, `period`
+            // and `text` are not carried: the output is a display string, which has nowhere to put them.
             //
             // The display string is still read for the affixes, which FHIR routinely leaves only in `text`:
             // "Warren James McGinnis III" carries a suffix the element itself never states, and RoundTrip is
             // defined to include it.
+            //
+            // No `pattern` at all keeps the order a structured name has always composed in (Format's own
+            // default), so an existing `{}` rule still writes the middle name and suffix.
             var name = EnrichAffixesFromText(structured!, ReadString(structured["text"]), config);
             var format = config.GetOrNull("format") is { Length: > 0 } explicitFormat
                 ? explicitFormat
-                : PatternFormats.GetValueOrDefault(config.Get("pattern", "FirstLast"), "First Last");
+                : config.GetOrNull("pattern") is { Length: > 0 } pattern
+                    ? PatternFormats.GetValueOrDefault(pattern, DefaultFormat)
+                    : DefaultFormat;
 
             return Format(name, new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase)
             {
@@ -256,7 +266,10 @@ public sealed class HumanNameParsingNode : ITransformNode
 
     /// <summary>
     /// The element's own parts, plus only the affixes it is missing, read out of its display string. Never
-    /// overwrites a prefix/suffix the element already states.
+    /// overwrites a prefix/suffix the element already states. The affixes are read from the string's first and
+    /// last tokens whatever order the rest of it is in — the name parts come from the element, so `pattern`
+    /// has nothing to say here, and "McGinnis, Warren III" carries its suffix as plainly as
+    /// "Warren McGinnis III" does.
     /// </summary>
     private static JsonObject EnrichAffixesFromText(
         JsonObject name, string? text, IReadOnlyDictionary<string, string> config)
@@ -267,13 +280,18 @@ public sealed class HumanNameParsingNode : ITransformNode
             ["given"] = new JsonArray(ReadStrings(name["given"]).Select(g => (JsonNode)g).ToArray()),
         };
 
-        var parsed = string.IsNullOrWhiteSpace(text) ? null : Parse(text, config).Value as JsonObject;
+        string? prefixFromText = null;
+        string? suffixFromText = null;
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            var tokens = text.Split([' ', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+            (prefixFromText, suffixFromText) = StripAffixes(tokens, config);
+        }
 
-        foreach (var affix in new[] { "prefix", "suffix" })
+        foreach (var (affix, fromText) in new[] { ("prefix", prefixFromText), ("suffix", suffixFromText) })
         {
             var own = ReadStrings(name[affix]);
-            var fromText = parsed is null ? [] : ReadStrings(parsed[affix]);
-            var values = own.Count > 0 ? own : fromText;
+            var values = own.Count > 0 ? own : fromText is null ? [] : [fromText];
             if (values.Count > 0)
             {
                 enriched[affix] = new JsonArray(values.Select(v => (JsonNode)v).ToArray());
@@ -283,29 +301,36 @@ public sealed class HumanNameParsingNode : ITransformNode
         return enriched;
     }
 
-    /// <summary>Parses an element's display string, keeping the element's own <c>use</c> — nothing else can
-    /// supply it, and without it a per-item run over Patient.name loses which name was the official one. An
-    /// explicit config <c>use</c> still wins.</summary>
-    private static TransformResult ParseCarryingElementUse(
-        string text, JsonObject element, IReadOnlyDictionary<string, string> config)
-    {
-        var parsed = Parse(text, config);
-        if (parsed.Success && parsed.Value is JsonObject parsedName
-            && config.GetOrNull("use") is null && ReadString(element["use"]) is { Length: > 0 } elementUse)
-        {
-            parsedName["use"] = elementUse;
-        }
-
-        return parsed;
-    }
-
-    private static TransformResult Parse(string raw, IReadOnlyDictionary<string, string> config)
+    /// <summary>Removes a recognized prefix token from the front of <paramref name="parts"/> and a recognized
+    /// suffix token from its end, returning what was removed. <paramref name="stripPrefix"/> is false for a
+    /// family part, whose leading token is the surname itself and never a title.</summary>
+    private static (string? Prefix, string? Suffix) StripAffixes(
+        List<string> parts, IReadOnlyDictionary<string, string> config, bool stripPrefix = true)
     {
         var prefixTokens = config.Get("prefixTokens", "Dr,Mr,Mrs,Ms,Miss")
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var suffixTokens = config.Get("suffixTokens", "Jr,Sr,II,III,IV,MD,PhD")
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
+        string? prefix = null;
+        string? suffix = null;
+        if (stripPrefix && parts.Count > 0 && prefixTokens.Contains(parts[0].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
+        {
+            prefix = parts[0];
+            parts.RemoveAt(0);
+        }
+
+        if (parts.Count > 0 && suffixTokens.Contains(parts[^1].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
+        {
+            suffix = parts[^1];
+            parts.RemoveAt(parts.Count - 1);
+        }
+
+        return (prefix, suffix);
+    }
+
+    private static TransformResult Parse(string raw, IReadOnlyDictionary<string, string> config)
+    {
         var pattern = config.Get("pattern", "FirstLast");
 
         string family;
@@ -318,8 +343,17 @@ public sealed class HumanNameParsingNode : ITransformNode
         if (pattern == "LastFirstMiddle" || raw.Contains(','))
         {
             var parts = raw.Split(',', 2, StringSplitOptions.TrimEntries);
-            family = parts[0];
+            // Affixes come off here too: "McGinnis, Dr Warren III" puts the prefix at the head of the given
+            // part and the suffix at its tail, and "McGinnis III, Warren" puts the suffix on the family part.
             given = parts.Length > 1 ? [.. parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries)] : [];
+            (prefix, suffix) = StripAffixes(given, config);
+            var familyParts = parts[0].Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (suffix is null && familyParts.Count > 1)
+            {
+                (_, suffix) = StripAffixes(familyParts, config, stripPrefix: false);
+            }
+
+            family = string.Join(' ', familyParts);
         }
         else
         {
@@ -327,17 +361,7 @@ public sealed class HumanNameParsingNode : ITransformNode
 
             // Affixes come off before any positional assignment, and in every pattern — otherwise a trailing
             // "III" occupies a name position and shifts every remaining token by one.
-            if (parts.Count > 0 && prefixTokens.Contains(parts[0].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
-            {
-                prefix = parts[0];
-                parts.RemoveAt(0);
-            }
-
-            if (parts.Count > 0 && suffixTokens.Contains(parts[^1].TrimEnd('.'), StringComparer.OrdinalIgnoreCase))
-            {
-                suffix = parts[^1];
-                parts.RemoveAt(parts.Count - 1);
-            }
+            (prefix, suffix) = StripAffixes(parts, config);
 
             if (pattern == "FirstMiddleLast" && parts.Count > 1)
             {
@@ -400,7 +424,7 @@ public sealed class HumanNameParsingNode : ITransformNode
     /// double space behind, so a name with no middle name or suffix still formats cleanly.</summary>
     private static TransformResult Format(JsonObject name, IReadOnlyDictionary<string, string> config)
     {
-        var format = config.Get("format", "First Middle Last Suffix");
+        var format = config.Get("format", DefaultFormat);
         var tokens = format.Split([' ', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (tokens.Length == 0)
         {

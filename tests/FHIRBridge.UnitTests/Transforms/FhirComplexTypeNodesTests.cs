@@ -158,11 +158,10 @@ public sealed class FhirComplexTypeNodesTests
 
     /// <summary>
     /// LastFirstMiddle is comma-driven: it splits on "," and assigns everything before it to family. Given a
-    /// string with NO comma that is the whole string, and the prefix/suffix stripping in the positional branch
-    /// never runs either — so a First-Middle-Last source parsed under this pattern yields one giant family name
-    /// and no given names. Pinned because it is what a whole-node rule left on the default-looking
-    /// LastFirstMiddle actually produces, and it reads as "the transform is broken" rather than "the pattern
-    /// does not match this data".
+    /// string with NO comma that is the whole string — so a First-Middle-Last source parsed under this pattern
+    /// yields one giant family name and no given names. Pinned because it is what a whole-node rule left on the
+    /// default-looking LastFirstMiddle actually produces, and it reads as "the transform is broken" rather than
+    /// "the pattern does not match this data". A trailing suffix still comes off, as in every other branch.
     /// </summary>
     [Fact]
     public void HumanNameParsingNode_LastFirstMiddle_without_a_comma_puts_the_whole_string_in_family()
@@ -172,9 +171,46 @@ public sealed class FhirComplexTypeNodesTests
         var result = new HumanNameParsingNode().Execute("Warren James McGinnis III", config, null);
 
         var name = (System.Text.Json.Nodes.JsonObject)result.Value!;
-        name["family"]!.GetValue<string>().Should().Be("Warren James McGinnis III");
+        name["family"]!.GetValue<string>().Should().Be("Warren James McGinnis");
         name["given"]!.AsArray().Should().BeEmpty();
-        name.ContainsKey("suffix").Should().BeFalse("the comma branch never reaches the affix stripping");
+        name["suffix"]!.AsArray().Select(x => x!.GetValue<string>()).Should().Equal("III");
+    }
+
+    [Fact]
+    public void HumanNameParsingNode_comma_form_strips_prefix_and_suffix()
+    {
+        var result = new HumanNameParsingNode().Execute(
+            "McGinnis, Dr Warren James III", new Dictionary<string, string> { ["pattern"] = "LastFirstMiddle" }, null);
+
+        var name = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        name["family"]!.GetValue<string>().Should().Be("McGinnis");
+        name["given"]!.AsArray().Select(g => g!.GetValue<string>()).Should().Equal("Warren", "James");
+        name["prefix"]!.AsArray().Select(x => x!.GetValue<string>()).Should().Equal("Dr");
+        name["suffix"]!.AsArray().Select(x => x!.GetValue<string>()).Should().Equal("III");
+    }
+
+    /// <summary>A structured name with default config keeps composing First Middle Last Suffix.</summary>
+    [Fact]
+    public void HumanNameParsingNode_structured_name_with_default_config_keeps_middle_and_suffix()
+    {
+        var result = new HumanNameParsingNode().Execute(
+            """{"family":"McGinnis","given":["Warren","James"],"suffix":["III"]}""",
+            new Dictionary<string, string>(), null);
+
+        result.Value.Should().Be("Warren James McGinnis III");
+    }
+
+    /// <summary>The suffix is recovered from a comma-form display string too, whatever the pattern.</summary>
+    [Theory]
+    [InlineData("LastFirstMiddle")]
+    [InlineData("RoundTrip")]
+    public void HumanNameParsingNode_structured_name_recovers_suffix_from_comma_form_text(string pattern)
+    {
+        var result = new HumanNameParsingNode().Execute(
+            """{"family":"McGinnis","given":["Warren"],"text":"McGinnis, Warren III"}""",
+            new Dictionary<string, string> { ["pattern"] = pattern, ["format"] = "First Last Suffix" }, null);
+
+        result.Value.Should().Be("Warren McGinnis III");
     }
 
     /// <summary>A lone token is a surname under FirstMiddleLast too, the same fallback every other positional

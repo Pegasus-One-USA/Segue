@@ -62,23 +62,44 @@ public sealed class TransformNodeApplierTests
     }
 
     /// <summary>
-    /// The guard is the shared layer's, not any one node's: every node that converts a single scalar is
-    /// refused a collection, and the one node built to read collections is not.
+    /// The guard is the shared layer's, not any one node's: every node that converts a single scalar runs per
+    /// element over a JSON array even under Whole — a rule saved as Whole before the mode was chosen per row
+    /// must not start failing (and NULLing its column under NullOut) — and never parses the array's JSON text.
     /// </summary>
     [Fact]
-    public void Whole_refuses_an_array_for_any_node_that_converts_a_single_value()
+    public void Whole_fans_out_an_array_for_any_node_that_converts_a_single_value()
     {
         ITransformNode[] scalarNodes =
             [new HumanNameParsingNode(), new AddressParsingNode(), new StringNormalizationNode(), new DateTimeFormatNode()];
 
         foreach (var node in scalarNodes)
         {
-            var result = TransformNodeApplier.ExecuteWithArrayMode(
+            var whole = TransformNodeApplier.ExecuteWithArrayMode(
                 node, NameArrayJson, new Dictionary<string, string>(), null, TransformArrayMode.Whole);
+            var perItem = TransformNodeApplier.ExecuteWithArrayMode(
+                node, NameArrayJson, new Dictionary<string, string>(), null, TransformArrayMode.PerItem);
 
-            result.Success.Should().BeFalse($"{node.NodeType} converts one value, so an array is a mismatch");
-            result.Error.Should().Contain("per item");
+            whole.Success.Should().Be(perItem.Success, $"{node.NodeType} converts one value, so it runs per element");
+            if (whole.Success)
+            {
+                ((object?[])whole.Value!).Should().HaveCount(2);
+                ((object?[])whole.Value!).Select(v => v?.ToString()).Should().Equal(
+                    ((object?[])perItem.Value!).Select(v => v?.ToString()));
+            }
         }
+    }
+
+    /// <summary>A structured element is one value, not a collection of its key/value pairs.</summary>
+    [Fact]
+    public void PerItem_does_not_fan_out_over_a_single_element()
+    {
+        var element = JsonNode.Parse("""{"family":"Roe","given":["Jane"]}""")!;
+
+        var result = TransformNodeApplier.ExecuteWithArrayMode(
+            new HumanNameParsingNode(), element,
+            new Dictionary<string, string> { ["format"] = "First Last" }, null, TransformArrayMode.PerItem);
+
+        result.Value.Should().Be("Jane Roe");
     }
 
     [Fact]
