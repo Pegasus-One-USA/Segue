@@ -266,4 +266,41 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
 
     expect(called).toBeFalse();
   });
+
+  // A REPLACE drops the previous row just as surely as a delete does. Whether that strands the rule depends
+  // entirely on whether the replacement still carries the source field the rule is keyed on, so both
+  // directions need pinning: remapping the column away from the field must clean up, joining a second source
+  // onto the same field must NOT.
+  it('deletes the rule when a column is re-pointed at a literal default, discarding its source', async () => {
+    const deleted: string[] = [];
+    const fixture = await createComponent({
+      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1' }] as never),
+      delete: (id: string) => { deleted.push(id); return of(void 0); },
+    });
+
+    fixture.componentInstance.openDefaultValueModal('Observation', 'public.Observation', 'TransformationQuantityRange');
+    fixture.componentInstance.submitDefaultValue({ token: '@default', literalValue: 'n/a', valueType: 'String' });
+
+    expect(deleted).toEqual(['rule-1']);
+  });
+
+  it('keeps the rule when a second source is JOINED onto the column, which leaves sources[0] intact', async () => {
+    let called = false;
+    const fixture = await createComponent({
+      getEffectiveRules: () => { called = true; return of([] as never); },
+      delete: () => of(void 0),
+    });
+    const component = fixture.componentInstance as unknown as {
+      replaceRow(resource: string, tableName: string, column: string, row: unknown): void;
+    };
+
+    // What completeMapping's join branch builds: the ORIGINAL primary source, plus a new one appended.
+    component.replaceRow('Observation', 'public.Observation', 'TransformationQuantityRange', {
+      ...ROW,
+      sources: [ROW.sources[0], { fhirPath: 'Observation.valueQuantity.unit', label: 'unit' }],
+      delimiter: ', ',
+    });
+
+    expect(called).toBeFalse();
+  });
 });

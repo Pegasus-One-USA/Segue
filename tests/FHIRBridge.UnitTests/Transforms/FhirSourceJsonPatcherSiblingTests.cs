@@ -51,6 +51,29 @@ public sealed class FhirSourceJsonPatcherSiblingTests
         FhirSourceJsonPatcher.TryReadSiblingQuantityUnit("{not json", "$.valueQuantity.value").Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TryReadSiblingQuantityUnit_returns_null_rather_than_throwing_on_an_absent_document(string? sourceJson)
+    {
+        // The parameter is string? and the contract is "null when there's nothing to offer" — a missing
+        // document is the emptiest such case. It needs its own assertion because an absent document does NOT
+        // fail the same way unparseable text does: JsonNode.Parse(null) throws ArgumentNullException, which a
+        // catch (JsonException) never sees, so the exception escapes and fails the whole transform for the
+        // resource instead of skipping one optional hint.
+        FhirSourceJsonPatcher.TryReadSiblingQuantityUnit(sourceJson, "$.valueQuantity.value").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TryReadSiblingDisplay_returns_null_rather_than_throwing_on_an_absent_document(string? sourceJson)
+    {
+        FhirSourceJsonPatcher.TryReadSiblingDisplay(sourceJson, "$.code.coding.code").Should().BeNull();
+    }
+
     [Fact]
     public void TryReadSiblingDisplay_handles_the_JsonPath_prefix_the_mapping_profile_actually_stores()
     {

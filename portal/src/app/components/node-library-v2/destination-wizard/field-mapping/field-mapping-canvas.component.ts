@@ -1843,9 +1843,22 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   }
 
   private replaceRow(resource: string, tableName: string, column: string, row: MappingRow): void {
+    const previous = this.mappingRows().find(
+      r => r.resource === resource && r.tableName === tableName && r.targetName === column);
     const rows = this.mappingRows().filter(r => !(r.resource === resource && r.tableName === tableName && r.targetName === column));
     rows.push(row);
     this.mappingRowsChange.emit(rows);
+
+    // A replace DROPS the previous row, so it owes the same rule cleanup removeRow does — but only when the
+    // replacement no longer carries the source field the rule is keyed on. That distinction is the whole
+    // point: joining a second source appends to `sources` and leaves sources[0] alone, so the rule still
+    // matches its mapping and must survive; switching the column to a different field, to whole-node JSON
+    // (sources: []), or to a literal default discards the key entirely and strands the rule, which then
+    // silently re-attaches if that same field is ever mapped back onto this column.
+    const previousSource = previous?.sources[0]?.fhirPath;
+    if (previous && previousSource !== row.sources[0]?.fhirPath) {
+      this.deleteRuleForRemovedRow(previous);
+    }
   }
 
   removeRow(resource: string, tableName: string, column: string): void {
@@ -1865,9 +1878,13 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  same column later and that orphan silently re-attaches, transforming a field nobody asked it to.
    *
    *  Called from removeRow (the popover's "Delete mapping", the mapping list's own remove, and the two
-   *  column-drop flows all funnel through it) and from clearMappingsForResource, which wipes every row for a
-   *  resource without going through removeRow at all — "Load JSON Payload" and "Reset to Original". Any new
-   *  path that drops a mapping row has to call this too; the row filter alone is not the whole deletion.
+   *  column-drop flows all funnel through it); from clearMappingsForResource, which wipes every row for a
+   *  resource without going through removeRow at all — "Load JSON Payload" and "Reset to Original"; and from
+   *  replaceRow, which drops the previous row just as surely, whenever the replacement no longer carries the
+   *  source field the rule was keyed on (remapping the column to a different field, to whole-node JSON, or
+   *  to a literal default — but NOT joining a second source, which leaves sources[0] and so the key intact).
+   *  Any new path that drops a mapping row has to call this too; the row filter alone is not the whole
+   *  deletion.
    *
    *  workflowScopedOnly is what makes this safe to do automatically: it restricts the lookup to a rule
    *  authored against THIS workflow, so a Global/ResourceType-scope rule shared with other pipelines is

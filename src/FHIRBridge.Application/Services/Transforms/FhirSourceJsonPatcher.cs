@@ -94,15 +94,7 @@ public static class FhirSourceJsonPatcher
         // Parsed ONCE and reused for both sibling names. This runs per field, per rule, per resource in the
         // Runtime pipeline's mapping loop, so parsing the whole resource twice per call turned a batch of a
         // few thousand Observations into twice that many full-document parses for no benefit.
-        JsonNode? root;
-        try
-        {
-            root = JsonNode.Parse(sourceJson!);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        var root = TryParseSource(sourceJson);
 
         return ReadSiblingFrom(root, segments, "unit") ?? ReadSiblingFrom(root, segments, "code");
     }
@@ -136,7 +128,21 @@ public static class FhirSourceJsonPatcher
     /// <paramref name="siblingName"/>, honoring "[n]"/"[]"/"[*]" indices via <see cref="ParseSegment"/> and
     /// otherwise taking the first element of any array encountered (the mapping engine's own "First"
     /// instance-selection convention).</summary>
-    private static string? ReadSiblingString(string? sourceJson, string[] segments, string siblingName)
+    private static string? ReadSiblingString(string? sourceJson, string[] segments, string siblingName) =>
+        ReadSiblingFrom(TryParseSource(sourceJson), segments, siblingName);
+
+    /// <summary>Parses the source document for a sibling lookup, yielding null for the two cases every
+    /// TryReadSibling* method treats identically: there is nothing to parse, or it isn't valid JSON.</summary>
+    /// <remarks>
+    /// Shared rather than inlined per caller because the null guard and the JsonException catch are NOT
+    /// interchangeable and an inlined copy once kept only the second. <c>JsonNode.Parse(null)</c> throws
+    /// <see cref="ArgumentNullException"/>, which <c>catch (JsonException)</c> does not cover — so a null
+    /// document escaped as an unhandled exception and took down the whole transform for that resource,
+    /// instead of the documented "nothing to offer, not an error" of a missing hint. Every one of these
+    /// methods takes a <c>string?</c> and promises null on unparseable input, so the guard belongs in the
+    /// one place they all go through.
+    /// </remarks>
+    private static JsonNode? TryParseSource(string? sourceJson)
     {
         if (string.IsNullOrWhiteSpace(sourceJson))
         {
@@ -145,7 +151,7 @@ public static class FhirSourceJsonPatcher
 
         try
         {
-            return ReadSiblingFrom(JsonNode.Parse(sourceJson), segments, siblingName);
+            return JsonNode.Parse(sourceJson);
         }
         catch (JsonException)
         {

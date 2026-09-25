@@ -169,6 +169,21 @@ public sealed class FhirResourceTransformService : IFhirResourceTransformService
                     }
                 }
 
+                // The unit hint has to be fed on THIS path too, not only the Runtime pipeline's mapped-column
+                // loop. A rule reads "$.valueQuantity.value", so the node receives the scalar 187 and its
+                // whole-Quantity branch never fires — leaving the rule's own (blank) unit as the only source
+                // of one, which is exactly the "unit": "" this branch set out to fix. It matters more here
+                // than on the mapped-column path: FhirWriteBackJsonPath replaces the whole element, so a
+                // FHIR-native destination does not merely miss the unit, it has the source's own unit erased.
+                if (rule.NodeType == TransformNodeType.QuantityRangeAssembly)
+                {
+                    var siblingUnit = FhirSourceJsonPatcher.TryReadSiblingQuantityUnit(resourceJson, readPath);
+                    if (siblingUnit is not null)
+                    {
+                        config[ReservedTransformConfigKeys.SourceUnitHint] = siblingUnit;
+                    }
+                }
+
                 var secret = rule.NodeType is TransformNodeType.HashingMasking or TransformNodeType.DateMathAge
                     ? _secretAccessor?.TransformHashingKey
                     : null;
