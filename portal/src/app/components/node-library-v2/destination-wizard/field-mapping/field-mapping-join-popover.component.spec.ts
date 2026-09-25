@@ -41,7 +41,10 @@ describe('FieldMappingJoinPopoverComponent — transformations on a whole-node (
       imports: [FieldMappingJoinPopoverComponent],
       providers: [
         { provide: TransformationRulesService, useValue: rulesService },
-        { provide: ToastService, useValue: { success: () => {}, error: () => {}, warning: () => {} } },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning']),
+        },
       ],
     });
 
@@ -52,10 +55,6 @@ describe('FieldMappingJoinPopoverComponent — transformations on a whole-node (
     fixture.componentRef.setInput('childArrayLabel', childArrayLabel);
     fixture.detectChanges();
     return fixture;
-  }
-
-  function instancePicker(fixture: { nativeElement: HTMLElement }): HTMLSelectElement | null {
-    return fixture.nativeElement.querySelector('#fm-inst-type');
   }
 
   const childJsonRow: MappingRow = {
@@ -151,7 +150,10 @@ describe('FieldMappingJoinPopoverComponent - instance selection on a whole-node 
           provide: TransformationRulesService,
           useValue: { getNodeSchemas: () => of([]), getEffectiveRules: () => of([]), save: () => of({}) },
         },
-        { provide: ToastService, useValue: { success: () => {}, error: () => {}, warning: () => {} } },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning']),
+        },
       ],
     });
 
@@ -245,7 +247,10 @@ describe('FieldMappingJoinPopoverComponent - whole-node hints follow the instanc
           provide: TransformationRulesService,
           useValue: { getNodeSchemas: () => of([]), getEffectiveRules: () => of([]), save: () => of({}) },
         },
-        { provide: ToastService, useValue: { success: () => {}, error: () => {}, warning: () => {} } },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning']),
+        },
       ],
     });
 
