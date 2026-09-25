@@ -166,10 +166,26 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             // address[0].line[*] — every value under one instance — stays whole and still joins as before.
             // "All records" (RepeatParent, or FirstItem plus the csv aggregate above) remains the way to span
             // every instance, so nothing loses the ability to do so.
-            rawArrayValues[field.TargetField] =
-                policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+            // A JOINED column hands its transform chain the individual source-field values, not the single
+            // string they were joined into. ConcatenationTemplating binds "{0} {1}" positionally to the items
+            // it receives (see AsItems: a string is ONE item), so against the joined string "{0}" swallowed
+            // the whole thing and "{1}" matched nothing and survived as literal text in the column —
+            // "Mr Warren James, McGinnis {1} Sir". With the parts, {0} is the given name and {1} the family,
+            // which is the only reading under which a template on a joined column means anything.
+            //
+            // Only when the column holds ONE instance's join (First / Nth / a non-repeating field). Under
+            // "All records" the column is deliberately a list spanning every instance, so there is no single
+            // pair of fields for the placeholders to bind to, and the collapsed value stays the input.
+            var joinedParts = joinedRows is not null
+                && !HasCsvAggregate(field.Format)
+                && policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+                ? FirstRowPieces(joinedRows, resolved)
+                : null;
+
+            rawArrayValues[field.TargetField] = joinedParts
+                ?? (policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
                     ? TakeFirstInstance(resolved, values)
-                    : values;
+                    : values);
 
             // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
             // delimited string on the parent row" — no ArrayPolicy value represents that (see
@@ -644,6 +660,34 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     private static List<(object? Value, IReadOnlyList<int> Indices)> JoinRows(
         List<(string[] Pieces, IReadOnlyList<int> Indices)> rows, string delimiter) =>
         rows.Select(row => ((object?)string.Join(delimiter, row.Pieces), row.Indices)).ToList();
+
+    /// <summary>The individual source-field values behind the ONE joined value this column will store — the
+    /// pieces of whichever row <paramref name="resolved"/> starts with, which is the row every single-value
+    /// ArrayPolicy ends up writing (and, after an "index=N" selection, the Nth instance rather than the
+    /// first). Null when there is nothing to hand over, so the caller keeps its existing input.</summary>
+    private static IReadOnlyList<object?>? FirstRowPieces(
+        List<(string[] Pieces, IReadOnlyList<int> Indices)> joinedRows,
+        List<(object? Value, IReadOnlyList<int> Indices)> resolved)
+    {
+        if (resolved.Count == 0 || joinedRows.Count == 0)
+        {
+            return null;
+        }
+
+        var target = resolved[0].Indices;
+        foreach (var row in joinedRows)
+        {
+            var sameInstance = target.Count == 0
+                ? row.Indices.Count == 0
+                : row.Indices.Count > 0 && row.Indices[0] == target[0];
+            if (sameInstance)
+            {
+                return row.Pieces;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>Joins the values one sub-path contributed for a single array instance. Space-separated: these
     /// are repeats of ONE field (the two given names of one person), not the distinct fields the configured

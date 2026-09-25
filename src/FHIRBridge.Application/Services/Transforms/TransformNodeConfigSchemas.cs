@@ -289,10 +289,20 @@ public static class TransformNodeConfigSchemas
             [TransformNodeType.ConcatenationTemplating] = new(TransformNodeType.ConcatenationTemplating, "Concatenation/Templating",
             [
                 Select("mode", "Mode", ["concat", "split"], "concat"),
-                Text("separator", "Join separator (concat mode, ignored when a template is set)", " "),
-                Text("template", "Template with {0} {1}... placeholders (concat mode, optional)", placeholder: "e.g. {0} {1}, MD", advanced: true),
-                Text("splitDelimiter", "Split delimiter or regex (split mode)", ","),
-                Checkbox("splitIsRegex", "Treat split delimiter as a regex", false, advanced: true),
+                // Each mode shows only the fields it actually uses. Rendering both a join separator and a
+                // split delimiter side by side invited exactly the misreading it looks like: a split rule
+                // configured with a join separator, or a concat rule with a split delimiter, where the unused
+                // one is silently ignored and nothing says so. The mode qualifiers are dropped from the labels
+                // too — a field that only appears in one mode does not need to name it.
+                Text("separator", "Join separator (ignored when a template is set)", " ",
+                    visibleWhen: OnlyWhen("mode", "concat")),
+                Text("splitDelimiter", "Split delimiter or regex", ",",
+                    visibleWhen: OnlyWhen("mode", "split")),
+                Checkbox("splitIsRegex", "Treat split delimiter as a regex", false, advanced: true,
+                    visibleWhen: OnlyWhen("mode", "split")),
+                // Deliberately NOT mode-scoped: a template renders the column's source fields in concat mode
+                // and the split's own pieces in split mode, so it is meaningful in both.
+                Text("template", "Template with {0} {1}... placeholders (optional)", placeholder: "e.g. {0} {1}, MD", advanced: true),
             ]),
             [TransformNodeType.ArrayListOperations] = new(TransformNodeType.ArrayListOperations, "Array/List Operations",
             [

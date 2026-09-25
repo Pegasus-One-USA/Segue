@@ -83,6 +83,8 @@ public sealed class StringNormalizationNode : ITransformNode
 /// <see cref="IEnumerable{T}"/> of values to join (concat mode) or a single string (split mode).</summary>
 public sealed class ConcatenationTemplatingNode : ITransformNode
 {
+    private static readonly Regex UnboundPlaceholder = new(@"\{\d+\}", RegexOptions.Compiled);
+
     public TransformNodeType NodeType => TransformNodeType.ConcatenationTemplating;
 
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
@@ -99,7 +101,14 @@ public sealed class ConcatenationTemplatingNode : ITransformNode
             var split = config.GetBool("splitIsRegex", false)
                 ? Regex.Split(raw, delimiter).Select(s => s.Trim())
                 : raw.Split(delimiter, StringSplitOptions.TrimEntries);
-            return TransformResult.Ok(split.Where(s => s.Length > 0).ToArray());
+            var splitParts = split.Where(s => s.Length > 0).ToArray();
+
+            // A template in SPLIT mode renders the parts the split just produced: "Hi {0}" against
+            // "Physician Family Medicine, MD" gives "Hi Physician Family Medicine". Without one the parts are
+            // handed on as an array, for a downstream node (ArrayListOperations, or a second pass in concat
+            // mode) to consume — which is what split exists for.
+            var splitTemplate = config.GetOrNull("template");
+            return TransformResult.Ok(splitTemplate is null ? splitParts : FillTemplate(splitTemplate, splitParts));
         }
 
         var parts = value.AsItems().Select(v => v?.ToString()).ToArray();
@@ -110,19 +119,34 @@ public sealed class ConcatenationTemplatingNode : ITransformNode
         var template = config.GetOrNull("template");
         if (template is not null)
         {
-            var filled = template;
-            for (var i = 0; i < parts.Length; i++)
-            {
-                filled = filled.Replace($"{{{i}}}", parts[i] ?? string.Empty);
-            }
-
-            return TransformResult.Ok(string.IsNullOrWhiteSpace(filled) ? null : filled);
+            return TransformResult.Ok(FillTemplate(template, parts));
         }
 
         var nonNullParts = parts.Where(p => !string.IsNullOrEmpty(p)).ToArray();
         var separator = config.Get("separator", " ");
 
         return TransformResult.Ok(nonNullParts.Length == 0 ? null : string.Join(separator, nonNullParts));
+    }
+
+    /// <summary>Binds "{0}", "{1}", ... positionally to <paramref name="parts"/>. Shared by both modes: concat
+    /// binds the column's source fields, split binds the pieces the split produced.</summary>
+    /// <remarks>
+    /// A placeholder with no value behind it renders as nothing, rather than surviving as the literal text
+    /// "{1}" in the destination column. A template outliving its inputs is a configuration mistake — "Mr {0}
+    /// {1} Sir" left on a column that later dropped to a single source, say — and writing template syntax into
+    /// what is usually a patient-facing field is the worst of the available outcomes: it looks like data, so
+    /// nothing downstream flags it.
+    /// </remarks>
+    private static string? FillTemplate(string template, IReadOnlyList<string?> parts)
+    {
+        var filled = template;
+        for (var i = 0; i < parts.Count; i++)
+        {
+            filled = filled.Replace($"{{{i}}}", parts[i] ?? string.Empty);
+        }
+
+        filled = UnboundPlaceholder.Replace(filled, string.Empty);
+        return string.IsNullOrWhiteSpace(filled) ? null : filled;
     }
 }
 
