@@ -1,0 +1,26 @@
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_6fe240044cc58e::t_79d277f4811826 3269,3438,3467,3473-3478,3487
+  s_6fe240044cc58e::t_35616555a3f5e2 511-520
+  s_6fe240044cc58e::t_7a5ea5307f5591 3393,3395,3397-3398
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_6fe240044cc58e::t_623ee0bc5d9de3 707-714,716-737
+  s_6fe240044cc58e::t_ec251436de6b52 715
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_6fe240044cc58e::t_6fe97c27ea7e2b 633-638,643,655-668,670
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a56d3ab25caa36a734b8bf68ad1b29ae286c954b",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,110 @@
+src/FHIRBridge.Application/Services/Transforms/TransformNodeApplier.cs
+  s_7f4f158af8615d::t_c2d4abe73fac36 30,36-37,63-65,71-72,141-169,172-214
+  s_7f4f158af8615d::t_2c96473f583fff 170-171
+  s_7f4f158af8615d::t_531d8e2d58f70a 1-3,11-21,28,61,84-140
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_7f4f158af8615d::t_c1112d24dd675e 1550-1553
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_7f4f158af8615d::t_82268ac4b691a3 358-362
+src/FHIRBridge.Application/Services/Transforms/Nodes/FhirComplexTypeNodes.cs
+  s_7f4f158af8615d::t_906fd6bea543fb 163-196,226-228,231-234,283,285-295,298
+  s_7f4f158af8615d::t_e5e39722b42f1e 341-350
+  s_7f4f158af8615d::t_2c96473f583fff 151-155
+  s_7f4f158af8615d::t_e47c12f6addfcb 202-217,235-282
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_7f4f158af8615d::t_369ef1878e3b4d 136,151-152,161-162
+  s_7f4f158af8615d::t_7bd3de80066583 98
+  s_7f4f158af8615d::t_64795e10da8960 158-159
+  s_7f4f158af8615d::t_ad0d076967f4e3 28-33,153-157,160
+  s_7f4f158af8615d::t_60ab14531605a4 92,94-97,99-102,104-129
+tests/FHIRBridge.UnitTests/Infrastructure/HapiLocalTerminologyTests.cs
+  s_7f4f158af8615d::t_f72fe76f9c789b 1,10,31-37
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_7f4f158af8615d::t_ecfe56ad037d79 1,598-620,641-705
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineMatchCriteriaTests.cs
+  s_7f4f158af8615d::t_f8b3291bfd3f38 64-65
+  s_7f4f158af8615d::t_2c0b5d0d3f9ef3 1-63,66-115
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_7f4f158af8615d::t_aebaf96091a946 109,132-137,175,294-305
+  s_7f4f158af8615d::t_0806673502cd87 306-310
+  s_7f4f158af8615d::t_ad0d076967f4e3 4-5,7,315-317,323-327,331-332
+  s_7f4f158af8615d::t_98c5bde899e9a7 180-186
+  s_7f4f158af8615d::t_89a51c013df2a2 56-62,256-259,311-314,333-338,348
+  s_7f4f158af8615d::t_64795e10da8960 6,318-322,328-330
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.spec.ts
+  s_7f4f158af8615d::t_e5cbd62d0746f8 100-122
+  s_7f4f158af8615d::t_f7c8a17f170674 282,284-287
+  s_7f4f158af8615d::t_127b8f74951371 24,52,57-60,136-227
+  s_7f4f158af8615d::t_53a53f55867b58 238-240
+  s_7f4f158af8615d::t_92f70760219c04 1-23,25-51,53-56,61-99,123-135,228-229
+  s_7f4f158af8615d::t_acd7c9df43f2fc 230-237,241-281,283,288-289
+tests/FHIRBridge.UnitTests/Transforms/RuleSourceFieldFormatTests.cs
+  s_7f4f158af8615d::t_1bfee15e763a02 1-53
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_7f4f158af8615d::t_b64b1daa2d287e 571-614,621-722,784-785
+  s_7f4f158af8615d::t_27315ea5fe8f1c 1,723-783
+  s_7f4f158af8615d::t_ac51fee2be2df9 615-620
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_7f4f158af8615d::t_a990a354d5eb70 24,1892-1906
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_7f4f158af8615d::t_7cf3c2d1d8ae15 389,422-449,467-474,478-480,502-503,512
+  s_7f4f158af8615d::t_c1112d24dd675e 386-388,450-466,475-477,481-501,513-515,550-556
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_7f4f158af8615d::t_a990a354d5eb70 90
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_7f4f158af8615d::t_64795e10da8960 225,227-228,231-243,464,466,760,765-766
+  s_7f4f158af8615d::t_723a8efd0b1db3 6,494,496,709-738
+  s_7f4f158af8615d::t_0380a66b5a6e6b 191-224,226,229-230,244-252,456-463,465,467-468,739-759,761-764,767-787
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-summary.model.spec.ts
+  s_7f4f158af8615d::t_11c077d92bee3b 104-137,637-678
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_7f4f158af8615d::t_e5e39722b42f1e 230-231,233
+tests/FHIRBridge.UnitTests/Transforms/TransformNodeApplierTests.cs
+  s_7f4f158af8615d::t_d00671afb897f9 30-32,36-38,41,50,53,61
+  s_7f4f158af8615d::t_913b678ecd8f3c 51-52,54-60
+  s_7f4f158af8615d::t_76f08ec153fa59 64-67,69,71-123,164-168,170-173
+  s_7f4f158af8615d::t_a25b40fe76f14a 1-29,33-34,68,70,169,174-218
+  s_7f4f158af8615d::t_ac08fc3611a0cd 35,39-40,42-49,62-63
+  s_7f4f158af8615d::t_bfbf6ad58b8796 124-163
+src/FHIRBridge.Application/Services/Transforms/ITransformNode.cs
+  s_7f4f158af8615d::t_2c96473f583fff 39-46
+  s_7f4f158af8615d::t_c2d4abe73fac36 1,30-38
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_7f4f158af8615d::t_409727adac816c 677-682,684-687,723,725-728,1420-1421,1479-1597
+  s_7f4f158af8615d::t_e47c12f6addfcb 1396-1407,1409
+  s_7f4f158af8615d::t_791c8fd8309f7a 1335,1371-1395,1408,1410-1419
+  s_7f4f158af8615d::t_7a2693cac3847e 683
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_7f4f158af8615d::t_1b42f99c809f5b 14,96-102,198,242-245,667-671
+tests/FHIRBridge.UnitTests/Transforms/FhirComplexTypeNodesTests.cs
+  s_7f4f158af8615d::t_d00671afb897f9 48-49,52,58,61-62,70,73-74,76,80-81
+  s_7f4f158af8615d::t_913b678ecd8f3c 82-95,99-120,134-135,138-139
+  s_7f4f158af8615d::t_65c7f1b2f6ca07 128,159-179
+  s_7f4f158af8615d::t_155d929e8fb554 47,50-51,53-54,59-60,63,65-66,68-69,141,192-193
+  s_7f4f158af8615d::t_065b1f795a5363 55-57,64,67,71-72,75,77-79,121-122,129,131,143-158,180-191
+  s_7f4f158af8615d::t_4cf26f5afb2acc 96-98
+  s_7f4f158af8615d::t_5caa02b12e6ebe 123-127,130,132-133,136-137,140,142
+src/FHIRBridge.Application/Services/Transforms/Nodes/StringStructureNodes.cs
+  s_7f4f158af8615d::t_c2d4abe73fac36 1,135-138
+tests/FHIRBridge.UnitTests/Transforms/HumanNameArrayModeSpecTests.cs
+  s_7f4f158af8615d::t_21935a88ff4c56 1-42,48,53,55-100
+  s_7f4f158af8615d::t_27315ea5fe8f1c 43-47,49-52,54
+src/FHIRBridge.Application/Services/Transforms/RuleSourceFieldFormat.cs
+  s_7f4f158af8615d::t_41c2ab2f9dbfad 43-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a2c1ce218561aefd6679981fdefb1db47551c206",
+  "prompts": {},
+  "sessions": {
+    "s_7f4f158af8615d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2fa22186-758b-45a6-bf17-f82593fb1fb7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}

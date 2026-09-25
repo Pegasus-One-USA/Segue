@@ -1,0 +1,19 @@
+portal/package-lock.json
+  s_6fe240044cc58e::t_24c57ce33eaf28 9474,9485,15095
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1a85bb1be0182dd6097086a3f9577a5ed85792fb",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "unknown"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
