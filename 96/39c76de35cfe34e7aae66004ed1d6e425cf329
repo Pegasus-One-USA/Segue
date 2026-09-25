@@ -1,0 +1,33 @@
+src/FHIRBridge.Application/Services/Transforms/Nodes/ValueTypeNodes.cs
+  s_6fe240044cc58e::t_56160f12aaccf8 362-376
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_6fe240044cc58e::t_78168028e9f88f 732-733,736-745
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_6fe240044cc58e::t_4ab4df531b9afa 1576,1578-1581,1867-1870
+  s_6fe240044cc58e::t_d81e86d88dd18a 1879-1881,1889,1891-1897,1900-1904
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.spec.ts
+  s_6fe240044cc58e::t_4baeb5705372f3 177,198-204,206-232
+  s_6fe240044cc58e::t_29939c3e90ee84 205
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_6fe240044cc58e::t_56160f12aaccf8 633-639
+tests/FHIRBridge.UnitTests/Transforms/ValueTypeNodesTests.cs
+  s_6fe240044cc58e::t_d7cb4a9c20d7d0 194-221
+src/FHIRBridge.Application/Services/Transforms/FhirSourceJsonPatcher.cs
+  s_6fe240044cc58e::t_7f78b22fbc9f6d 94-107,148,154-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9639c76de35cfe34e7aae66004ed1d6e425cf329",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
