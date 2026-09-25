@@ -67,6 +67,9 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-fabric',
     'dest-fabric-lakehouse-table',
     'dest-fabric-warehouse',
+    // Cosmos DB in Fabric — writer, node executor, validator, Step 1 form and wizard family are all in place
+    // (see MappedCosmosDbFabricDestinationWriter). Not yet confirmed against a live tenant.
+    'dest-fabric-cosmos',
     // General-purpose, fully configurable outbound REST API — writer, sender, validator, Step 1 form and
     // wizard family are all in place (see MappedApiEndpointDestinationWriter).
     'dest-apiendpoint',

@@ -27,6 +27,7 @@ import { DatabricksDestinationFormComponent } from './databricks-destination-for
 import { DataLakeWebhookDestinationFormComponent } from './data-lake-webhook-destination-form.component';
 import { DataFabricDestinationFormComponent } from './data-fabric-destination-form.component';
 import { ApiEndpointDestinationFormComponent } from './api-endpoint-destination-form.component';
+import { CosmosDbFabricDestinationFormComponent } from './cosmos-db-fabric-destination-form.component';
 
 /**
  * Single source of truth mapping every DestinationType to the standalone component that configures it —
@@ -66,4 +67,7 @@ export const DESTINATION_FORM_REGISTRY: DestinationFormRegistry<DestinationType>
   // Warehouse-only fields it already carries. The landing mode is implied by the destination type.
   DataFabricWarehouse: DataFabricDestinationFormComponent,
   ApiEndpoint: ApiEndpointDestinationFormComponent,
+  // NOT the Fabric form: this shares the vendor and the Entra auth shape, but nothing else — it addresses a
+  // Cosmos endpoint and database rather than a workspace and item, so it has its own form.
+  CosmosDbFabric: CosmosDbFabricDestinationFormComponent,
 };

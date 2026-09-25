@@ -31,6 +31,10 @@ export type DestinationType =
   /** Microsoft Fabric Warehouse — see DestinationTypeV2's own note; kept in step with that union and with the
    *  backend DestinationType enum, which all three must agree on. */
   | 'DataFabricWarehouse'
+  /** Cosmos DB in Microsoft Fabric — documents into a container over the Cosmos NoSQL data plane. Grouped with
+   *  the other Fabric destinations in the picker, but sharing nothing technical with them, and deliberately NOT
+   *  reachable through 'Mongo': Fabric's Cosmos DB is the NoSQL API and speaks no MongoDB wire protocol. */
+  | 'CosmosDbFabric'
   | 'ApiEndpoint';
 
 /** Must match the backend's ArtifactDeliveryMode enum member names. Stored as `dest_deliveryMode` in

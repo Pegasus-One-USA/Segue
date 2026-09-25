@@ -79,5 +79,22 @@ public enum DestinationType
     /// data-lake ingestion front doors (Fabric/Databricks/HEC) and always PHI-carrying/https-only; this type is
     /// the general destination for an arbitrary customer- or partner-owned HTTP API. See <c>ApiEndpointSettings</c>.
     /// </summary>
-    ApiEndpoint = 27
+    ApiEndpoint = 27,
+
+    /// <summary>
+    /// Cosmos DB in Microsoft Fabric — documents into a container over the Cosmos NoSQL data plane.
+    ///
+    /// <para><b>Why this is not served by <see cref="Mongo"/>.</b> Cosmos DB in Fabric is the NoSQL API:
+    /// Microsoft's own wording is that it "uses the same engine, same infrastructure as Azure Cosmos DB for
+    /// NoSQL". It does not speak the MongoDB wire protocol, so <c>MongoDB.Driver</c> cannot connect to it at
+    /// all. (Azure Cosmos DB <i>for MongoDB</i> is a different product; Fabric's Data Factory connector for it
+    /// addresses external accounts, not this Fabric-native item.) Assuming the Mongo writer covered this was
+    /// the original survey's mistake, and it is recorded here so the next reader does not repeat it.</para>
+    ///
+    /// <para><b>Why it is not a mode of <see cref="DataFabricAzure"/>.</b> That type's surfaces are all OneLake
+    /// over the blob endpoint. This speaks an entirely different data plane with its own SDK, so it shares no
+    /// client, no addressing and no auth audience with them — it is grouped with them in the picker as one
+    /// vendor, but it is its own destination. See <c>CosmosDbFabricDestinationSettings</c>.</para>
+    /// </summary>
+    CosmosDbFabric = 28
 }

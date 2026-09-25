@@ -254,6 +254,24 @@ public sealed class DataFabricWarehouseDestinationNodeExecutor : DestinationNode
     }
 }
 
+/// <summary>
+/// Cosmos DB in Microsoft Fabric — documents into a container. Listed in MultiTableRelationalDestinationTypes
+/// alongside the other per-object destinations: the container a record lands in is resolved from the PROFILE's
+/// destination object, so a mixed batch has to be split per resource type by the base executor first, or every
+/// record would land in whichever single container the profile happened to name.
+/// </summary>
+public sealed class CosmosDbFabricDestinationNodeExecutor : DestinationNodeExecutor
+{
+    public CosmosDbFabricDestinationNodeExecutor(
+        IConfiguredDestinationWriterFactory? writerFactory = null,
+        IWorkflowDefinitionStore? workflowDefinitionStore = null,
+        IGovernanceLogger? governanceLogger = null,
+        IConfigurationRepository? configurationRepository = null)
+        : base(WorkflowNodeTypes.CosmosDbFabricDestination, DestinationType.CosmosDbFabric, writerFactory, workflowDefinitionStore, governanceLogger, configurationRepository)
+    {
+    }
+}
+
 public sealed class CsvDestinationNodeExecutor : DestinationNodeExecutor
 {
     public CsvDestinationNodeExecutor(IConfiguredDestinationWriterFactory? writerFactory = null,
@@ -668,6 +686,11 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         DestinationType.DataFabricWarehouse,
         DestinationType.DataLakeWebhook,
         DestinationType.ApiEndpoint,
+        // Cosmos resolves its CONTAINER from the profile's destination object (see
+        // CosmosDbFabricDestinationSettings.ResolveContainer), so a mixed batch arriving in one call would put
+        // every resource type into whichever container that one profile named — the same failure Mongo is
+        // listed here to avoid.
+        DestinationType.CosmosDbFabric,
     ];
 
     // NodeType -> RuntimeSourceType for every source node executor's own hardcoded mapping (see SourceNodeExecutors.cs

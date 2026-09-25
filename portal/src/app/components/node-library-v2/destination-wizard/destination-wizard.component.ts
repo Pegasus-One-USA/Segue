@@ -804,6 +804,8 @@ export class DestinationWizardComponent implements OnInit {
         return 'DataFabricAzure';
       case 'fabricwarehouse':
         return 'DataFabricWarehouse';
+      case 'cosmosfabric':
+        return 'CosmosDbFabric';
       case 'apiendpoint':
         return 'ApiEndpoint';
       case 'medplum':

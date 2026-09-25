@@ -36,6 +36,10 @@ export type MappingDestType =
   // SQL_FAMILY_TYPES below and gets the live table picker and schema authoring the SQL engines get.
   // 'fabric' above remains the FILE surface (OneLake Files) and stays out, exactly as before.
   | 'fabricwarehouse'
+  // Cosmos DB in Fabric — document-shaped like 'mongo', so it also stays OUT of SQL_FAMILY_TYPES: a
+  // container has no columns to probe and no schema to qualify a name against. Sharing a vendor with
+  // 'fabricwarehouse' says nothing about its mapping shape.
+  | 'cosmosfabric'
   // Same "no live schema, no table qualification" category as datalake/fabric above.
   | 'apiendpoint';
 

@@ -518,6 +518,11 @@ public static class DependencyInjection
         services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.LakehouseTableLandingStrategy>();
         services.AddScoped<Destinations.Fabric.IFabricLandingStrategyRegistry, Destinations.Fabric.FabricLandingStrategyRegistry>();
         services.AddScoped<MappedDataFabricDestinationWriter>();
+        // Cosmos DB in Fabric is grouped with the other Fabric surfaces in the picker, but shares no client,
+        // addressing or auth audience with them — it speaks the Cosmos NoSQL data plane, so it is its own
+        // writer rather than another landing strategy.
+        services.AddScoped<Destinations.Fabric.ICosmosDbFabricClientFactory, Destinations.Fabric.CosmosDbFabricClientFactory>();
+        services.AddScoped<MappedCosmosDbFabricDestinationWriter>();
         services.AddScoped<MappedMongoDestinationWriter>();
         services.AddHttpClient(nameof(MedplumTokenProvider));
         services.AddHttpClient(nameof(MappedMedplumDestinationWriter));

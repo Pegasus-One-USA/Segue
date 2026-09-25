@@ -1040,7 +1040,7 @@ export class WorkflowBuildAssemblerServiceV2 {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'apiendpoint',
+    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'cosmosFabric' | 'apiendpoint',
   ): string {
     const keys =
       kind === 'apiendpoint'
@@ -1124,6 +1124,22 @@ export class WorkflowBuildAssemblerServiceV2 {
             'dest_fabricWarehouseStagingPath',
             'dest_fabricWarehouseUseWorkspaceIdentity',
             'dest_fabricLakehouseSchema',
+          ]
+        // Cosmos DB in Fabric: same vendor, none of the same keys — an endpoint and database rather than a
+        // workspace and item. Missing a key here drops it silently before the save, which is what made the
+        // Warehouse fields above fail validation for fields the form had just posted.
+        : kind === 'cosmosFabric'
+        ? [
+            'dest_name',
+            'dest_cosmosFabricEndpoint',
+            'dest_cosmosFabricDatabase',
+            'dest_cosmosFabricContainer',
+            'dest_cosmosFabricAuthMode',
+            'dest_cosmosFabricTenantId',
+            'dest_cosmosFabricClientId',
+            'dest_cosmosFabricManagedIdentityClientId',
+            'dest_cosmosFabricAuthorityHost',
+            'dest_cosmosFabricPartitionKeyPath',
           ]
         : kind === 'sql'
         ? [

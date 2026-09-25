@@ -93,7 +93,7 @@ export function buildFhirSecretBlob(f: Record<string, string>): string {
  */
 export function buildConnectionMetadata(
   f: Record<string, string>,
-  kind: 'sql' | 'csv' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'apiendpoint',
+  kind: 'sql' | 'csv' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'cosmosFabric' | 'apiendpoint',
 ): string {
   const keys =
     // API Endpoint — the general-purpose REST destination. Every field here is non-secret transport/framing
@@ -139,6 +139,14 @@ export function buildConnectionMetadata(
          'dest_fabricWarehouseTable', 'dest_fabricWarehouseSchema',
          'dest_fabricWarehouseWriteMode', 'dest_fabricWarehouseStagingPath',
          'dest_fabricWarehouseUseWorkspaceIdentity', 'dest_fabricLakehouseSchema']
+    // Cosmos DB in Fabric shares the vendor and the Entra auth shape with 'fabric' above, but not one key:
+    // it addresses an endpoint and database, not a workspace and item, so it needs its own entry rather than
+    // additions to that one. Same allowlist rule applies — a key missing here is dropped before the save.
+    : kind === 'cosmosFabric'
+      ? ['dest_name', 'dest_cosmosFabricEndpoint', 'dest_cosmosFabricDatabase', 'dest_cosmosFabricContainer',
+         'dest_cosmosFabricAuthMode', 'dest_cosmosFabricTenantId', 'dest_cosmosFabricClientId',
+         'dest_cosmosFabricManagedIdentityClientId', 'dest_cosmosFabricAuthorityHost',
+         'dest_cosmosFabricPartitionKeyPath']
     : kind === 'sql'
       ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
       : kind === 'fhir'

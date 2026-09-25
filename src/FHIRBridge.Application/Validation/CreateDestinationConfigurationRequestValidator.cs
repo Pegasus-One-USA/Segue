@@ -88,6 +88,47 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         {
             ValidateApiEndpointMetadata(request, context, metadata);
         }
+        else if (request.DestinationType == DestinationType.CosmosDbFabric)
+        {
+            // Grouped with the other Fabric destinations in the picker, but NOT sharing their metadata shape:
+            // it addresses a Cosmos endpoint and database rather than a workspace and item, so it needs its own
+            // validation rather than reusing ValidateDataFabricMetadata.
+            ValidateCosmosDbFabricMetadata(context, metadata);
+        }
+    }
+
+    /// <summary>
+    /// Cosmos DB in Fabric: endpoint and database are required and cannot be defaulted, and a service principal
+    /// needs its tenant and client ids. Mirrors <c>CosmosDbFabricDestinationSettings.Parse</c>, so a
+    /// configuration that saves is one the writer can also parse.
+    /// </summary>
+    private static void ValidateCosmosDbFabricMetadata(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        var endpoint = metadata.GetValueOrDefault("dest_cosmosFabricEndpoint");
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            context.AddFailure("dest_cosmosFabricEndpoint", "Cosmos DB endpoint is required.");
+        }
+        else if (!Uri.TryCreate(endpoint.Trim(), UriKind.Absolute, out var endpointUri)
+            || (endpointUri.Scheme != Uri.UriSchemeHttps && endpointUri.Scheme != Uri.UriSchemeHttp))
+        {
+            context.AddFailure(
+                "dest_cosmosFabricEndpoint",
+                "Cosmos DB endpoint must be an absolute URL, as shown in the database's Settings > Connection "
+                    + "section in Fabric.");
+        }
+
+        RequireField(context, metadata, "dest_cosmosFabricDatabase", "Database name is required.");
+
+        // Entra only — Cosmos DB in Fabric has no account keys, so there is no third mode to accept here.
+        var authMode = metadata.GetValueOrDefault("dest_cosmosFabricAuthMode", "managedIdentity");
+        if (string.Equals(authMode, "servicePrincipal", StringComparison.OrdinalIgnoreCase))
+        {
+            RequireField(context, metadata, "dest_cosmosFabricTenantId", "Tenant ID is required.");
+            RequireField(context, metadata, "dest_cosmosFabricClientId", "Client ID is required.");
+        }
     }
 
     private static readonly string[] SupportedApiEndpointAuthModes =
