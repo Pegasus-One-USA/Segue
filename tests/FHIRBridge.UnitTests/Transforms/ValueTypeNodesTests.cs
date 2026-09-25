@@ -192,6 +192,34 @@ public sealed class ValueTypeNodesTests
     }
 
     [Fact]
+    public void QuantityRangeAssemblyNode_keeps_the_sources_own_system_and_code()
+    {
+        // Rebuilding a Quantity from value+unit alone strips its machine-readable half. With a write-back path
+        // pointed at the element, the patcher replaces it wholesale — so a FHIR-native destination would get a
+        // measurement that can only be read, never unit-converted or compared.
+        var source = System.Text.Json.Nodes.JsonNode.Parse(
+            """{"value":187,"unit":"mg/dL","system":"http://unitsofmeasure.org","code":"mg/dL","comparator":"<"}""");
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(source, new Dictionary<string, string>(), null).Value!;
+
+        quantity["system"]!.GetValue<string>().Should().Be("http://unitsofmeasure.org");
+        quantity["code"]!.GetValue<string>().Should().Be("mg/dL");
+        quantity["comparator"]!.GetValue<string>().Should().Be("<");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_omits_system_and_code_the_source_never_had()
+    {
+        var source = System.Text.Json.Nodes.JsonNode.Parse("""{"value":187,"unit":"mg/dL"}""");
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(source, new Dictionary<string, string>(), null).Value!;
+
+        quantity.ContainsKey("system").Should().BeFalse();
+        quantity.ContainsKey("code").Should().BeFalse();
+    }
+
+    [Fact]
     public void QuantityRangeAssemblyNode_falls_back_to_the_UCUM_code_when_a_Quantity_element_carries_no_unit()
     {
         var source = System.Text.Json.Nodes.JsonNode.Parse("""{"value":187,"code":"mg/dL"}""");

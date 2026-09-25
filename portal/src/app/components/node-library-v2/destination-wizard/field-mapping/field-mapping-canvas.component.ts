@@ -1573,7 +1573,12 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  own "Reset to Original", which clears the same way even though nothing was actually re-parsed here).
    *  Every OTHER resource's rows are left completely untouched, same as removeRow's own identity filter. */
   private clearMappingsForResource(resource: string): void {
+    const cleared = this.mappingRows().filter(r => r.resource === resource);
     this.mappingRowsChange.emit(this.mappingRows().filter(r => r.resource !== resource));
+    // Clearing a resource's mappings is a deletion like any other, and the rules have to go with them —
+    // "Load JSON Payload" and "Reset to Original" both wipe every row for the resource, and without this they
+    // leave the whole set of rules behind for the next mapping onto those same columns to silently pick up.
+    cleared.forEach(row => this.deleteRuleForRemovedRow(row));
   }
 
   submitLoadPayload(raw: string): void {
@@ -1859,9 +1864,10 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  the rule behind, still resolvable. The consequence is worse than clutter: recreate a mapping onto the
    *  same column later and that orphan silently re-attaches, transforming a field nobody asked it to.
    *
-   *  Called from removeRow, the single choke point every deletion path funnels through (the popover's
-   *  "Delete mapping", the mapping list's own remove, and the column-drop flows), so none of them can
-   *  drift out of sync.
+   *  Called from removeRow (the popover's "Delete mapping", the mapping list's own remove, and the two
+   *  column-drop flows all funnel through it) and from clearMappingsForResource, which wipes every row for a
+   *  resource without going through removeRow at all — "Load JSON Payload" and "Reset to Original". Any new
+   *  path that drops a mapping row has to call this too; the row filter alone is not the whole deletion.
    *
    *  workflowScopedOnly is what makes this safe to do automatically: it restricts the lookup to a rule
    *  authored against THIS workflow, so a Global/ResourceType-scope rule shared with other pipelines is
@@ -1870,7 +1876,9 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  a rule the author never saw would be noise. */
   private deleteRuleForRemovedRow(row: MappingRow): void {
     const destinationType = this.rulesDestinationType();
-    if (!destinationType) return;
+    const workflowId = this.workflowId();
+    // With no workflow id there is no way to prove any rule belongs to THIS pipeline, so nothing is deleted.
+    if (!destinationType || !workflowId) return;
 
     this.rulesService
       .getEffectiveRules({
@@ -1878,14 +1886,22 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
         resourceType: row.resource,
         destinationField: row.targetName,
         sourceField: row.sources[0]?.fhirPath ?? null,
-        resourcePipelineRouteId: this.workflowId() ?? undefined,
+        resourcePipelineRouteId: workflowId,
         workflowScopedOnly: true,
-        // A rule authored before the workflow's first save is stored unattached; without this, deleting a
-        // mapping on a never-yet-saved pipeline would leave behind the very rule just authored on it.
-        includePending: true,
+        // NOT includePending. workflowScopedOnly does NOT scope the pending tier: a rule authored before its
+        // workflow's first save has ResourcePipelineRouteId == null, and GetPendingWorkflowScopedAsync matches
+        // on (destination type, resource, field, source field) with no workflow id in the predicate at all —
+        // by construction, since there is no route to key on yet. Asking for pending rows here would let
+        // deleting a mapping in one pipeline hard-delete an unsaved draft rule belonging to a different one.
+        // The cost is that a rule authored on a never-yet-saved workflow outlives its mapping; that is a far
+        // better failure than destroying someone else's work, and re-saving the mapping re-attaches it.
       })
       .subscribe({
-        next: rules => rules.forEach(rule => this.rulesService.delete(rule.id).subscribe({ error: () => {} })),
+        // Belt and braces over the server-side scoping: only delete a rule this workflow demonstrably OWNS.
+        // A Global/ResourceType-scope rule, or one attached to another route, is never a candidate.
+        next: rules => rules
+          .filter(rule => rule.resourcePipelineRouteId === workflowId)
+          .forEach(rule => this.rulesService.delete(rule.id).subscribe({ error: () => {} })),
         error: () => {},
       });
   }

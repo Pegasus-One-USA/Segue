@@ -359,6 +359,21 @@ public sealed class QuantityRangeAssemblyNode : ITransformNode
             ["unit"] = unit
         };
 
+        // Carry the source's own UCUM coding through. Rebuilding a Quantity from value+unit alone strips the
+        // machine-readable half of it, and with a FhirWriteBackJsonPath pointed at the element the patcher
+        // replaces it wholesale — so a FHIR-native destination would receive a measurement that can no longer
+        // be unit-converted or compared programmatically, only read. UnitConversionNode emits both for the
+        // same reason.
+        if (ReadString(source, "system") is { Length: > 0 } system)
+        {
+            quantity["system"] = system;
+        }
+
+        if (ReadString(source, "code") is { Length: > 0 } code)
+        {
+            quantity["code"] = code;
+        }
+
         if (ReadString(source, "comparator") is { Length: > 0 } comparator)
         {
             quantity["comparator"] = comparator;

@@ -630,11 +630,13 @@ export function isJsonSafeForColumn(
  *   Integer for an age calculation, String -> Json for a parsed name, etc.) always failed this check,
  *   even though the transform makes the raw-type mismatch irrelevant.
  */
-/** Node types whose output type the author actually chooses, via a "targetType" config field the rule
- *  popover renders (see FieldMappingJoinPopoverComponent.resolveExpectedValueType). Every other node type's
- *  output is fixed by the node itself (TransformNodeTypeDefaults), so telling its author to "fix the rule's
- *  Expected output type" sends them looking for a control that does not exist on that rule. */
-const OUTPUT_TYPE_OVERRIDABLE_NODE_TYPES = new Set(['NumberCast', 'DateTimeFormat']);
+/** Node types whose output type the author actually controls through a config field the rule popover
+ *  renders, so "fix the rule's Expected output type" names something they can reach: NumberCast and
+ *  DateTimeFormat via "targetType", and DateMathAge via "operation" ("add"/"shift" declare Date, "age"
+ *  declares Integer — see FieldMappingJoinPopoverComponent.resolveExpectedValueType, which is the authority
+ *  on this list). Every other node type's output is fixed by the node itself (TransformNodeTypeDefaults), so
+ *  the same advice would send its author looking for a control that does not exist on that rule. */
+const OUTPUT_TYPE_OVERRIDABLE_NODE_TYPES = new Set(['NumberCast', 'DateTimeFormat', 'DateMathAge']);
 
 export function checkColumnTypeCompatibility(
   row: MappingRow,

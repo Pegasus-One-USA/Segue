@@ -91,7 +91,20 @@ public static class FhirSourceJsonPatcher
             return null;
         }
 
-        return ReadSiblingString(sourceJson, segments, "unit") ?? ReadSiblingString(sourceJson, segments, "code");
+        // Parsed ONCE and reused for both sibling names. This runs per field, per rule, per resource in the
+        // Runtime pipeline's mapping loop, so parsing the whole resource twice per call turned a batch of a
+        // few thousand Observations into twice that many full-document parses for no benefit.
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(sourceJson!);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return ReadSiblingFrom(root, segments, "unit") ?? ReadSiblingFrom(root, segments, "code");
     }
 
     /// <summary>Splits a rule's source field path into segments, but only when its leaf segment is
@@ -130,15 +143,21 @@ public static class FhirSourceJsonPatcher
             return null;
         }
 
-        JsonNode? current;
         try
         {
-            current = JsonNode.Parse(sourceJson);
+            return ReadSiblingFrom(JsonNode.Parse(sourceJson), segments, siblingName);
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    /// <summary>The traversal half of <see cref="ReadSiblingString"/>, over an ALREADY-parsed document — so a
+    /// caller reading two sibling names off the same resource pays one parse, not two.</summary>
+    private static string? ReadSiblingFrom(JsonNode? root, string[] segments, string siblingName)
+    {
+        var current = root;
 
         for (var i = 0; i < segments.Length; i++)
         {

@@ -174,7 +174,7 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
   it('deletes the rule the removed row owned', async () => {
     const deleted: string[] = [];
     const fixture = await createComponent({
-      getEffectiveRules: () => of([{ id: 'rule-1' }] as never),
+      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1' }] as never),
       delete: (id: string) => { deleted.push(id); return of(void 0); },
     });
 
@@ -195,9 +195,41 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
     expect(query?.['workflowScopedOnly']).toBeTrue();
     expect(query?.['destinationField']).toBe('TransformationQuantityRange');
     expect(query?.['sourceField']).toBe('Observation.valueQuantity.value');
-    // A rule authored before the workflow's first save is stored unattached — without this the rule just
-    // created on a never-yet-saved pipeline would survive its own mapping being deleted.
-    expect(query?.['includePending']).toBeTrue();
+    expect(query?.['resourcePipelineRouteId']).toBe('wf-1');
+    // NOT pending. workflowScopedOnly does not scope the pending tier — GetPendingWorkflowScopedAsync has no
+    // workflow id in its predicate at all — so asking for pending rows here would let deleting a mapping in
+    // one pipeline hard-delete an unsaved draft rule belonging to a different one.
+    expect(query?.['includePending']).toBeFalsy();
+  });
+
+  it('never deletes a rule attached to a different workflow, even if the server returns one', async () => {
+    const deleted: string[] = [];
+    const fixture = await createComponent({
+      getEffectiveRules: () => of([
+        { id: 'mine', resourcePipelineRouteId: 'wf-1' },
+        { id: 'other-workflow', resourcePipelineRouteId: 'wf-2' },
+        { id: 'unattached-draft', resourcePipelineRouteId: null },
+        { id: 'tenant-wide' },
+      ] as never),
+      delete: (id: string) => { deleted.push(id); return of(void 0); },
+    });
+
+    fixture.componentInstance.removeRow('Observation', 'public.Observation', 'TransformationQuantityRange');
+
+    expect(deleted).toEqual(['mine']);
+  });
+
+  it('deletes nothing when there is no workflow id to prove ownership with', async () => {
+    let called = false;
+    const fixture = await createComponent({
+      getEffectiveRules: () => { called = true; return of([] as never); },
+      delete: () => of(void 0),
+    });
+    fixture.componentRef.setInput('workflowId', null);
+
+    fixture.componentInstance.removeRow('Observation', 'public.Observation', 'TransformationQuantityRange');
+
+    expect(called).toBeFalse();
   });
 
   it('still removes the row when the rule lookup fails', async () => {

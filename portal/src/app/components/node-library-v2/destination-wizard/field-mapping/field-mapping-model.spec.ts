@@ -729,9 +729,19 @@ describe('checkColumnTypeCompatibility', () => {
 
       it('only mentions text columns for a Json mismatch', () => {
         const intColumn = { dataType: 'integer', mappingValueType: 'Integer', maxLength: null };
-        const error = checkColumnTypeCompatibility(childJsonRow, intColumn, 'Date', 'DateMathAge');
-        expect(error).toContain('DateMathAge always does');
+        const error = checkColumnTypeCompatibility(childJsonRow, intColumn, 'Date', 'CodeableConceptBuilder');
+        expect(error).toContain('CodeableConceptBuilder always does');
         expect(error).not.toContain('text column');
+      });
+
+      it('treats DateMathAge as overridable — its operation select decides Date vs Integer', () => {
+        // resolveExpectedValueType derives DateMathAge's output from `operation` ("add"/"shift" -> Date,
+        // "age" -> Integer), so "it always outputs Date" is false and sends the author to ALTER TABLE when
+        // a dropdown on the rule already open is the real fix.
+        const intColumn = { dataType: 'integer', mappingValueType: 'Integer', maxLength: null };
+        const error = checkColumnTypeCompatibility(childJsonRow, intColumn, 'Date', 'DateMathAge');
+        expect(error).toContain("fix the rule's Expected output type");
+        expect(error).not.toContain('always does');
       });
     });
 
