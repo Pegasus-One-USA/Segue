@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -131,6 +131,10 @@ public sealed class ConcatenationTemplatingNode : ITransformNode
 public sealed class ArrayListOperationsNode : ITransformNode
 {
     public TransformNodeType NodeType => TransformNodeType.ArrayListOperations;
+
+    /// <summary>The whole point of this node — first/last/nth/count/join/dedupe/filter are operations ON a
+    /// collection, so it unwraps a JSON-array-shaped value itself (see TryUnwrapJsonArrayString).</summary>
+    public bool AcceptsCollections => true;
 
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
     {
