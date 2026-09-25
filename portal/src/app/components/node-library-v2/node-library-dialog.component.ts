@@ -74,6 +74,9 @@ interface LibraryItem {
   /** True for a vendor heading that has children. A parent is not selectable: clicking it expands or
    *  collapses its surfaces, and only a child opens a wizard. */
   isParent?: boolean;
+  /** Fabric landing mode this row stands for, when the row is a surface of a shared destination type rather
+   *  than a type of its own (see Transform.fabricMode). */
+  fabricMode?: string | null;
 }
 
 interface LibraryCategory {
@@ -279,6 +282,12 @@ export class NodeLibraryDialogComponent {
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
   readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint' | null>(null);
+
+  /** Landing mode to pin when the picked row is a Fabric SURFACE rather than its own destination type — today
+   *  only Lakehouse Delta (see Transform.fabricMode for why it is a mode and Warehouse is a type). Null for
+   *  every other row, including OneLake Files, which is the Fabric form's own default. Read straight from the
+   *  catalog entry so the picker row and the form cannot disagree about which surface was chosen. */
+  readonly destWizardFabricMode = signal<string | null>(null);
   readonly destWizardAttach = signal<CanvasNode | null>(null);
   readonly destEditNode     = signal<CanvasNode | null>(null);
   // Queried directly (rather than threading another output through) so both onDestWizardCancelled() and
@@ -411,6 +420,11 @@ export class NodeLibraryDialogComponent {
   readonly destMappingCount = signal(0);
 
   readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint' | null>(null);
+
+  /** The Fabric landing mode awaiting the same confirmation as pendingDestSwitch. Held separately because a
+   *  switch between two rows of one type (OneLake Files → Lakehouse Delta) differs only by mode, so the type
+   *  alone does not describe what the user picked. */
+  readonly pendingDestSwitchFabricMode = signal<string | null>(null);
 
   // Guards the dest wizard's own "← Back to library" button — same "don't silently discard progress"
   // intent as pendingDestSwitch above, just for backing out to the library instead of switching type.
@@ -580,6 +594,7 @@ export class NodeLibraryDialogComponent {
         isSource: false, status, reason,
         group: t.group ?? null,
         parentId: t.parentId ?? null,
+        fabricMode: t.fabricMode ?? null,
         // A vendor heading is whatever at least one other entry points at. Derived rather than flagged so
         // adding a surface is a one-line catalog change and nothing here needs updating.
         isParent: TRANSFORMS.some(other => other.parentId === t.id),
@@ -723,22 +738,30 @@ export class NodeLibraryDialogComponent {
       return;
     }
 
-    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-fhir' || item.id === 'dest-blob' || item.id === 'dest-medplum' || item.id === 'dest-azurefhir' || item.id === 'dest-datalake-webhook' || item.id === 'dest-fabric' || item.id === 'dest-fabric-warehouse' || item.id === 'dest-apiendpoint') {
+    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-fhir' || item.id === 'dest-blob' || item.id === 'dest-medplum' || item.id === 'dest-azurefhir' || item.id === 'dest-datalake-webhook' || item.id === 'dest-fabric' || item.id === 'dest-fabric-lakehouse-table' || item.id === 'dest-fabric-warehouse' || item.id === 'dest-apiendpoint') {
       const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint' =
-        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-medplum' ? 'medplum' : item.id === 'dest-fhir' ? 'fhir' : item.id === 'dest-blob' ? 'blob' : item.id === 'dest-azurefhir' ? 'azurefhir' : item.id === 'dest-datalake-webhook' ? 'datalake' : item.id === 'dest-fabric-warehouse' ? 'fabricwarehouse' : item.id === 'dest-fabric' ? 'fabric' : item.id === 'dest-apiendpoint' ? 'apiendpoint' : 'csv';
+        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-medplum' ? 'medplum' : item.id === 'dest-fhir' ? 'fhir' : item.id === 'dest-blob' ? 'blob' : item.id === 'dest-azurefhir' ? 'azurefhir' : item.id === 'dest-datalake-webhook' ? 'datalake' : item.id === 'dest-fabric-warehouse' ? 'fabricwarehouse' : (item.id === 'dest-fabric' || item.id === 'dest-fabric-lakehouse-table') ? 'fabric' : item.id === 'dest-apiendpoint' ? 'apiendpoint' : 'csv';
+      // Both Fabric FILE-surface rows (OneLake Files and Lakehouse Delta) open the same wizard TYPE, so the
+      // landing mode is what distinguishes them and has to travel alongside the type everywhere below —
+      // including through the switch-confirm detour, which resumes with whatever was pending.
+      const fabricMode = item.fabricMode ?? null;
+
       if (this.showDestWizard()) {
-        // Already showing this exact destination type — _openDestWizard() unconditionally resets step,
-        // attach node and mapping state, which would wipe the form for no reason. No-op instead.
-        if (this.destWizardType() === type) return;
-        // Switching to a *different* type after the user has already filled in later steps — or just typed
+        // Already showing this exact surface — _openDestWizard() unconditionally resets step, attach node and
+        // mapping state, which would wipe the form for no reason. No-op instead. The mode is part of "exact"
+        // here: OneLake Files and Lakehouse Delta share a type, so comparing type alone would treat a switch
+        // between those two rows as a no-op and silently leave the wrong surface selected.
+        if (this.destWizardType() === type && this.destWizardFabricMode() === fabricMode) return;
+        // Switching to a *different* surface after the user has already filled in later steps — or just typed
         // into Step 1 without ever clicking Next/Save (destWizardHasProgressed alone misses that; see
         // DestinationWizardComponent.isStep1Dirty()) — would silently discard that progress. Confirm first.
         if (this.destWizardHasProgressed() || this.destWizardRef()?.isStep1Dirty()) {
           this.pendingDestSwitch.set(type);
+          this.pendingDestSwitchFabricMode.set(fabricMode);
           return;
         }
       }
-      this._openDestWizard(type);
+      this._openDestWizard(type, fabricMode);
       return;
     }
 
@@ -753,8 +776,9 @@ export class NodeLibraryDialogComponent {
 
   confirmDestSwitch(): void {
     const type = this.pendingDestSwitch();
-    if (type) this._openDestWizard(type);
+    if (type) this._openDestWizard(type, this.pendingDestSwitchFabricMode());
     this.pendingDestSwitch.set(null);
+    this.pendingDestSwitchFabricMode.set(null);
   }
 
   cancelDestSwitch(): void {
@@ -898,8 +922,12 @@ export class NodeLibraryDialogComponent {
     return false;
   }
 
-  private _openDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint'): void {
+  private _openDestWizard(
+    type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint',
+    fabricMode: string | null = null,
+  ): void {
     if (!this.canOpenDestWizard(type, 'create')) return;
+    this.destWizardFabricMode.set(fabricMode);
     const pm = this.pickerModel();
     if (!pm) return;
     // An ordinary destination add starts at Step 1 on the Mapping tab — only a chain node opens
@@ -926,8 +954,14 @@ export class NodeLibraryDialogComponent {
   private _openDestWizardEdit(node: CanvasNode): void {
     const tId = (node as TransformNode).transformId;
     const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'apiendpoint' =
-      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : tId === 'dest-fhir' ? 'fhir' : tId === 'dest-blob' ? 'blob' : tId === 'dest-azurefhir' ? 'azurefhir' : tId === 'dest-datalake-webhook' ? 'datalake' : tId === 'dest-fabric-warehouse' ? 'fabricwarehouse' : tId === 'dest-fabric' ? 'fabric' : tId === 'dest-apiendpoint' ? 'apiendpoint' : 'csv';
+      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : tId === 'dest-fhir' ? 'fhir' : tId === 'dest-blob' ? 'blob' : tId === 'dest-azurefhir' ? 'azurefhir' : tId === 'dest-datalake-webhook' ? 'datalake' : tId === 'dest-fabric-warehouse' ? 'fabricwarehouse' : (tId === 'dest-fabric' || tId === 'dest-fabric-lakehouse-table') ? 'fabric' : tId === 'dest-apiendpoint' ? 'apiendpoint' : 'csv';
     if (!this.canOpenDestWizard(type, 'edit')) return;
+    // Re-opening a saved node: the mode comes from the catalog row the node was created from, so a Delta
+    // destination re-opens on Delta rather than falling back to the form's OneLake Files default. The form
+    // also patches its own mode from saved metadata, so this only has to be right for a node whose metadata
+    // has not loaded yet.
+    this.destWizardFabricMode.set(
+      TRANSFORMS.find(transform => transform.id === tId)?.fabricMode ?? null);
     const inbound = this.store.inboundEdges(node.id);
     const parentId = inbound[0]?.from ?? '';
     const parentNode = parentId ? this.store.byId(parentId) : null;

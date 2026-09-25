@@ -65,6 +65,7 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // allowlist, and a filtered-out heading takes its children with it (see filteredCategories).
     'dest-fabric-group',
     'dest-fabric',
+    'dest-fabric-lakehouse-table',
     'dest-fabric-warehouse',
     // General-purpose, fully configurable outbound REST API — writer, sender, validator, Step 1 form and
     // wizard family are all in place (see MappedApiEndpointDestinationWriter).
@@ -82,12 +83,12 @@ const PHASE_1_CONFIG: PhaseConfig = {
   // OneLake Files and Warehouse are both verified end to end against a live Fabric tenant. Warehouse requires a
   // pre-created target table: FHIRBridge never creates or alters destination schema.
   //
-  // 'lakehouseTable' (Delta) is deliberately NOT listed yet. It is implemented — it writes the _delta_log that
-  // registers a Tables/ folder as a real table — but no table written by it has been opened in Fabric, and a
-  // Delta log that a reader rejects fails in a particularly unhelpful way: the write reports success and the
-  // table simply never appears. Add it here once a live write has been confirmed, the same way Warehouse was
-  // held back until it had been.
-  enabledFabricModes: ['oneLakeFiles', 'warehouseTable'],
+  // 'lakehouseTable' (Delta) is listed so its picker row can open — it has its own entry under the Microsoft
+  // Fabric group. It has NOT yet been confirmed against a live tenant, and it fails in a particularly
+  // unhelpful way when the log is wrong: the write reports success and the table simply never appears. Treat
+  // it as unproven until a real table has been opened in Fabric (see
+  // docs/backend/19-microsoft-fabric-surfaces.md for the test procedure and what to check first).
+  enabledFabricModes: ['oneLakeFiles', 'lakehouseTable', 'warehouseTable'],
 
   hiddenRanks: [
     2,   // Validation

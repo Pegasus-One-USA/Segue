@@ -154,6 +154,11 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
    *  repopulated when patching from an existing connection, so requiring it would block reuse. */
   readonly reusingExisting = input<boolean>(false);
 
+  /** Landing surface the picker row stood for, when that row is a MODE of this destination type rather than a
+   *  type of its own — today only Lakehouse Delta. Null means "no opinion", which is every other entry point:
+   *  the form then keeps whatever the user chooses, defaulting to OneLake Files. */
+  readonly fabricLandingMode = input<string | null>(null);
+
   constructor() {
     effect(() => {
       const authMode = this.fabricForm.controls.authMode.value;
@@ -178,6 +183,22 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       untracked(() => {
         if (this.fabricForm.controls.mode.value === 'warehouseTable') return;
         this.fabricForm.controls.mode.setValue('warehouseTable');
+      });
+    });
+
+    // Same correction one level down, for the surfaces that SHARE a destination type: DataFabricAzure serves
+    // both OneLake Files and Lakehouse Delta, so the type cannot say which row was clicked and the picker
+    // passes the mode instead. Without this, choosing "Lakehouse Tables (Delta)" would open a form defaulted
+    // to OneLake Files and quietly save a file destination — the same class of mismatch the Warehouse effect
+    // above exists to prevent. Deliberately does not fight the user afterwards: it only corrects a mode that
+    // still holds the form's own default, so switching surfaces inside the form keeps working.
+    effect(() => {
+      const pinned = this.fabricLandingMode();
+      if (!pinned || this.isWarehouseType()) return;
+      untracked(() => {
+        const current = this.fabricForm.controls.mode.value;
+        if (current === pinned || current !== 'oneLakeFiles') return;
+        this.fabricForm.controls.mode.setValue(pinned);
       });
     });
   }

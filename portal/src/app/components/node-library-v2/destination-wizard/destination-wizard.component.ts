@@ -576,6 +576,13 @@ export class DestinationWizardComponent implements OnInit {
   readonly pendingFreeColumnsByCard = signal<Record<string, string[]>>({});
 
   readonly destType = input.required<WizardDestType>();
+
+  /** Which Fabric landing surface the picker row stood for, when the row is a MODE rather than its own
+   *  destination type — today only Lakehouse Delta. Null for every other destination, including OneLake Files,
+   *  which is the Fabric form's own default. Passed straight through to the Fabric form, which pins it exactly
+   *  as it pins Warehouse from the destination type, so the row the user clicked and the surface the form
+   *  configures cannot disagree. */
+  readonly fabricLandingMode = input<string | null>(null);
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
@@ -842,6 +849,9 @@ export class DestinationWizardComponent implements OnInit {
       // it — the Fabric form uses it to pin its landing mode, since DataFabricWarehouse IS the Warehouse
       // surface and must not present a mode choice that could contradict the type.
       destinationType: this.resolveDestinationTypeForRules(),
+      // And which surface WITHIN that type, for the one type serving more than one: DataFabricAzure covers
+      // both OneLake Files and Lakehouse Delta, so the type alone cannot say which row was picked.
+      fabricLandingMode: this.fabricLandingMode(),
     };
   }
 
