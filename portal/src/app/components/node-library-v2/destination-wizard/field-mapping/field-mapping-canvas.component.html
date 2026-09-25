@@ -87,6 +87,7 @@
         [workflowId]="workflowId()"
         [dataTypeForTable]="dataTypeForTable()"
         [totalSourceCount]="(popoverRow()?.sources ?? []).length"
+        [childArrayLabel]="popoverChildArrayLabel()"
         (save)="onPopoverSave($event)"
         (remove)="onPopoverRemove()"
         (closed)="closePopover()"
