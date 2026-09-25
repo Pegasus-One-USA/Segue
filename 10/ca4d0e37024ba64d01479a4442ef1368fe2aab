@@ -1,0 +1,36 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.spec.ts
+  s_6fe240044cc58e::t_a89e46eca8ddfb 388-422
+  s_6fe240044cc58e::t_49e7b186eda933 311-369,378-380,383,386-387
+  s_6fe240044cc58e::t_fb4cfdf219a3b5 370-374
+  s_6fe240044cc58e::t_462f6c36023b0c 376
+  s_6fe240044cc58e::t_f4ee8163443890 160-162,168-169
+  s_6fe240044cc58e::t_7986adc29e0a18 375,377,381-382,384-385
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_6fe240044cc58e::t_161cecd724908a 434,453,820,1227,1258,1685,2336
+  s_6fe240044cc58e::t_d95c1c46232d6c 1869,1873,1876,1878-1928,1934-1935
+  s_6fe240044cc58e::t_08e1b17e90809d 1612-1614,1618-1619
+  s_6fe240044cc58e::t_81af78faa0baa2 2014
+  s_6fe240044cc58e::t_788ad75e88a611 2032
+  s_6fe240044cc58e::t_ce23384aeb51a9 2007-2011
+  s_6fe240044cc58e::t_b719241f626b4d 1943-1948
+  s_6fe240044cc58e::t_eaa94d8c7ff03a 1929-1933
+  s_6fe240044cc58e::t_b285addef2b6c8 1608,1636
+  s_6fe240044cc58e::t_69b227634b0ac9 1633-1635,1639-1641
+  s_6fe240044cc58e::t_eea563da557d7e 1570-1594
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "10ca4d0e37024ba64d01479a4442ef1368fe2aab",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
