@@ -123,6 +123,8 @@ import {
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants-v2.data';
 import { PipelineStoreV2 } from '../../../services/pipeline-v2.store';
+import { WorkflowApiService, ResourceTypeCriteriaDto } from '../../../services/workflow-api.service';
+import { WorkflowGraphMapperServiceV2 } from '../../../services/workflow-graph-mapper-v2.service';
 import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 
@@ -537,6 +539,8 @@ export class DestinationWizardComponent implements OnInit {
   );
   private readonly mappingProfileSvc = inject(MappingProfileService);
   private readonly pipelineStore = inject(PipelineStoreV2);
+  private readonly workflowApi = inject(WorkflowApiService);
+  private readonly graphMapper = inject(WorkflowGraphMapperServiceV2);
   private readonly injector = inject(Injector);
   private readonly dialogService = inject(DialogService);
   private readonly transformationRulesSvc = inject(TransformationRulesService);
@@ -2069,6 +2073,20 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   constructor() {
+    // Criteria authored before the workflow existed are buffered locally (they key on a real workflow id),
+    // so send them as soon as a save supplies one. Also clears the load guard on a workflow switch, so
+    // reopening the editor against a different workflow refetches instead of showing the previous one's rows.
+    effect(() => {
+      const workflowId = this.currentWorkflowId();
+      untracked(() => {
+        if (!workflowId) return;
+        if (this.criteriaLoadedForWorkflowId !== workflowId) {
+          this.criteriaLoadedForWorkflowId = null;
+        }
+        this.flushCriteriaBuffer(workflowId);
+      });
+    });
+
     // Step 3's active tab follows whichever canvas node opened this wizard (Mapping / Transformation /
     // De-identification). Applied as the tab's starting value only — the user can still switch tabs
     // freely once the screen is open, so this never fights a manual selection.
@@ -2719,6 +2737,22 @@ export class DestinationWizardComponent implements OnInit {
   private mappingRowsSnapshot: MappingRow[] | null = null;
   private targetByResourceSnapshot: Record<string, string> | null = null;
   readonly pendingExitConfirm = signal(false);
+
+  // ── Per-resource-type FHIR search criteria ─────────────────────────────────────────────────────────
+  // Keyed by resource type, holding the criteria currently stored for the launch source node. Buffered
+  // locally while the workflow has no id yet (a brand-new canvas): the rows key on a real workflow id, so
+  // they cannot be persisted until the workflow is saved — flushCriteriaBuffer() sends them once it is,
+  // rather than blocking the button behind a "save the workflow first" wall.
+  private readonly criteriaByResourceType = signal<Record<string, string>>({});
+  private criteriaBuffer: Record<string, string> = {};
+  private criteriaLoadedForWorkflowId: string | null = null;
+
+  /** Resource type whose criteria editor is open, or null. */
+  readonly criteriaEditorResource = signal<string | null>(null);
+  readonly criteriaDraft = signal('');
+  readonly criteriaReplace = signal(false);
+  readonly criteriaSaving = signal(false);
+  readonly criteriaError = signal<string | null>(null);
   /** Non-null while the "save anyway?" confirm dialog is up — see saveGroupMapping/buildParentReferenceWarnings. */
   readonly pendingSaveWarnings = signal<PendingParentReferenceWarning[] | null>(null);
   /** Non-null while the transform-rule-conflict dialog is up — see saveGroupMapping/validateRuleConflictsForSave.
@@ -3757,6 +3791,185 @@ export class DestinationWizardComponent implements OnInit {
 
   onExitConfirmBackdropClick(e: MouseEvent): void {
     if (e.target === e.currentTarget) this.cancelExitMapping();
+  }
+
+  // -- Per-resource-type FHIR search criteria ---------------------------------------------------------
+
+  /** The criteria currently stored for a resource type, or empty when it has none. */
+  criteriaFor(resourceType: string): string {
+    return this.criteriaByResourceType()[resourceType] ?? '';
+  }
+
+  openResourceCriteria(resourceType: string): void {
+    this.criteriaError.set(null);
+    this.criteriaReplace.set(false);
+    // Starts empty even when criteria exist: the default action is ADDING to them, and the current value is
+    // shown above the box instead. Prefilling would make "Add" re-send what is already stored.
+    this.criteriaDraft.set('');
+    this.criteriaEditorResource.set(resourceType);
+    this.loadResourceTypeCriteria();
+  }
+
+  closeResourceCriteria(): void {
+    this.criteriaEditorResource.set(null);
+    this.criteriaDraft.set('');
+    this.criteriaError.set(null);
+    this.criteriaReplace.set(false);
+  }
+
+  onCriteriaBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.closeResourceCriteria();
+  }
+
+  submitResourceCriteria(): void {
+    const resourceType = this.criteriaEditorResource();
+    if (!resourceType || this.criteriaSaving()) return;
+
+    const criteria = this.criteriaDraft().trim();
+    const replace = this.criteriaReplace();
+
+    // An append of nothing is a no-op; a replace with nothing is how the box clears criteria, so only the
+    // append path rejects an empty value (matching ResourceTypeCriteriaService's own validation).
+    if (!criteria && !replace) {
+      this.criteriaError.set('Enter at least one FHIR search parameter, e.g. gender=female.');
+      return;
+    }
+
+    const sourceNodeId = this.graphMapper.findLaunchSourceNodeId();
+    if (!sourceNodeId) {
+      this.criteriaError.set('No source node is wired up yet - add a source before setting criteria.');
+      return;
+    }
+
+    const merged = replace ? criteria : this.mergeCriteria(this.criteriaFor(resourceType), criteria);
+    const workflowId = this.currentWorkflowId();
+
+    // No workflow id yet (a canvas that has never been saved): keep it locally and let the first save flush
+    // it, so criteria can be authored in the same pass as everything else on a brand-new workflow.
+    if (!workflowId) {
+      this.criteriaBuffer = { ...this.criteriaBuffer, [resourceType]: merged };
+      this.criteriaByResourceType.update(current => ({ ...current, [resourceType]: merged }));
+      this.toast.info(`Criteria for ${resourceType} will be saved with the workflow.`);
+      this.closeResourceCriteria();
+      return;
+    }
+
+    this.criteriaSaving.set(true);
+    this.workflowApi
+      .saveResourceTypeCriteria(workflowId, { sourceNodeId, resourceType, criteria, replace })
+      .subscribe({
+        next: saved => {
+          this.criteriaByResourceType.update(current => ({ ...current, [resourceType]: saved.criteria }));
+          this.criteriaSaving.set(false);
+          this.toast.success(`Criteria saved for ${resourceType}.`);
+          this.closeResourceCriteria();
+        },
+        error: () => {
+          this.criteriaSaving.set(false);
+          this.criteriaError.set(`Could not save criteria for ${resourceType}. Please try again.`);
+        },
+      });
+  }
+
+  clearResourceCriteria(): void {
+    const resourceType = this.criteriaEditorResource();
+    if (!resourceType || this.criteriaSaving()) return;
+
+    const sourceNodeId = this.graphMapper.findLaunchSourceNodeId();
+    const workflowId = this.currentWorkflowId();
+
+    const dropLocally = () => {
+      const { [resourceType]: _removed, ...rest } = this.criteriaByResourceType();
+      this.criteriaByResourceType.set(rest);
+      const { [resourceType]: _buffered, ...restBuffer } = this.criteriaBuffer;
+      this.criteriaBuffer = restBuffer;
+    };
+
+    if (!workflowId || !sourceNodeId) {
+      dropLocally();
+      this.closeResourceCriteria();
+      return;
+    }
+
+    this.criteriaSaving.set(true);
+    this.workflowApi.deleteResourceTypeCriteria(workflowId, sourceNodeId, resourceType).subscribe({
+      next: () => {
+        dropLocally();
+        this.criteriaSaving.set(false);
+        this.toast.success(`Criteria cleared for ${resourceType}.`);
+        this.closeResourceCriteria();
+      },
+      error: () => {
+        this.criteriaSaving.set(false);
+        this.criteriaError.set(`Could not clear criteria for ${resourceType}. Please try again.`);
+      },
+    });
+  }
+
+  /** Loads this workflow's stored criteria once per workflow id, so reopening the editor is not a refetch. */
+  private loadResourceTypeCriteria(): void {
+    const workflowId = this.currentWorkflowId();
+    const sourceNodeId = this.graphMapper.findLaunchSourceNodeId();
+    if (!workflowId || !sourceNodeId || this.criteriaLoadedForWorkflowId === workflowId) return;
+
+    this.criteriaLoadedForWorkflowId = workflowId;
+    this.workflowApi.listResourceTypeCriteria(workflowId).subscribe({
+      next: rows => {
+        const byResourceType: Record<string, string> = {};
+        for (const row of rows.filter((r: ResourceTypeCriteriaDto) => r.sourceNodeId === sourceNodeId)) {
+          byResourceType[row.resourceType] = row.criteria;
+        }
+        // Anything buffered before the workflow had an id wins - it is newer than what the server holds.
+        this.criteriaByResourceType.set({ ...byResourceType, ...this.criteriaBuffer });
+      },
+      // A failed load leaves the editor usable (it just shows no current value) rather than blocking it.
+      error: () => { this.criteriaLoadedForWorkflowId = null; },
+    });
+  }
+
+  /**
+   * Persists criteria authored before the workflow had an id. Called after a save supplies one; each entry
+   * goes up as a replace, since the buffered value is already the fully merged result.
+   */
+  private flushCriteriaBuffer(workflowId: string): void {
+    const buffered = Object.entries(this.criteriaBuffer);
+    if (buffered.length === 0) return;
+
+    const sourceNodeId = this.graphMapper.findLaunchSourceNodeId();
+    if (!sourceNodeId) return;
+
+    this.criteriaBuffer = {};
+    for (const [resourceType, criteria] of buffered) {
+      this.workflowApi
+        .saveResourceTypeCriteria(workflowId, { sourceNodeId, resourceType, criteria, replace: true })
+        .subscribe({
+          error: () => this.toast.error(`Could not save criteria for ${resourceType}.`),
+        });
+    }
+  }
+
+  /**
+   * Appends additional parameters to existing ones, dropping any whose key is already present. Mirrors the
+   * server-side merge (ResourceTypeCriteria.MergeCriteria) so the dialog previews exactly what will be stored:
+   * a repeated key is not additive filtering, and Epic rejects a duplicated identifier outright.
+   */
+  private mergeCriteria(existing: string, additional: string): string {
+    const merged: string[] = [];
+    const seenKeys = new Set<string>();
+
+    for (const source of [existing, additional]) {
+      for (const segment of source.trim().split('&')) {
+        const parameter = segment.trim().replace(/^[?&]+/, '');
+        if (!parameter) continue;
+        const equals = parameter.indexOf('=');
+        const key = (equals < 0 ? parameter : parameter.slice(0, equals)).toLowerCase();
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        merged.push(parameter);
+      }
+    }
+
+    return merged.join('&');
   }
 
   confirmExitMapping(): void {

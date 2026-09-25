@@ -796,6 +796,12 @@
                   <button type="button" class="btn btn-sm btn-primary" (click)="openGroupMapping(r)">
                     {{ configTab() === 'transformation' ? 'Transformation' : configTab() === 'deidentification' ? 'De-identification' : 'Map' }}
                   </button>
+                  <!-- Per-resource-type FHIR search criteria — appends to whatever this resource type already
+                       has (see openResourceCriteria/submitResourceCriteria). Scoped to the launch source node,
+                       so it filters what the extraction fetches for THIS type only. -->
+                  <button type="button" class="btn btn-sm btn-secondary" (click)="openResourceCriteria(r)">
+                    Criteria@if (criteriaFor(r)) {<span class="dw-criteria-dot" aria-hidden="true">•</span>}
+                  </button>
                   <!-- The per-resource "Rules" button used to live here. Transformation rules are now
                        reached from the canvas's own Transformation node — which lands on the matching tab
                        of the mapping list for a SQL destination, and opens the payload-tree rules panel
@@ -1171,6 +1177,72 @@
           @else { Next }
         </button>
         }
+      </div>
+    </div>
+  }
+
+  <!-- ── Per-resource-type FHIR search criteria ──────────────────────────────
+       One input box per resource type, raw FHIR search parameters. Saving APPENDS to whatever is already
+       stored (parameters whose key is already present are dropped, since a repeated key is not additive
+       filtering — Epic rejects a repeated identifier outright), so the box starts empty with the current
+       value shown above it. "Replace" is the escape hatch for removing/rewriting an existing parameter. ── -->
+  @if (criteriaEditorResource(); as criteriaResource) {
+    <div class="dw-confirm-backdrop" tabindex="0"
+         (click)="onCriteriaBackdropClick($event)"
+         (keydown.escape)="closeResourceCriteria()">
+      <div class="dw-confirm-dialog dw-confirm-dialog--wide">
+        <h3 class="dw-confirm-title">Search criteria for {{ criteriaResource }}</h3>
+        <div class="dw-confirm-body">
+          @if (criteriaFor(criteriaResource); as current) {
+            <p class="dw-criteria-current-label">Currently applied</p>
+            <code class="dw-criteria-current">{{ current }}</code>
+          } @else {
+            <p class="dw-criteria-empty">
+              No criteria yet — {{ criteriaResource }} is fetched unfiltered, apart from any
+              connection-level search criteria and patient scoping the run already applies.
+            </p>
+          }
+
+          <label class="dw-criteria-label" for="dw-criteria-input">
+            {{ criteriaReplace() ? 'Replace with' : 'Add criteria' }}
+          </label>
+          <input
+            id="dw-criteria-input"
+            class="dw-criteria-input"
+            type="text"
+            autocomplete="off"
+            placeholder="e.g. birthdate=gt2000-01-01&amp;gender=female"
+            [value]="criteriaDraft()"
+            (input)="criteriaDraft.set($any($event.target).value)"
+            (keydown.enter)="submitResourceCriteria()"
+          />
+          <p class="dw-criteria-hint">
+            Raw FHIR search parameters, joined with <code>&amp;</code>. Any parameter the source server accepts
+            is valid; nothing is validated here.
+          </p>
+
+          <label class="dw-criteria-replace">
+            <input type="checkbox" [checked]="criteriaReplace()"
+                   (change)="criteriaReplace.set($any($event.target).checked)" />
+            Replace existing criteria instead of adding to it
+          </label>
+
+          @if (criteriaError(); as error) {
+            <p class="dw-criteria-error">{{ error }}</p>
+          }
+        </div>
+        <div class="dw-confirm-actions">
+          @if (criteriaFor(criteriaResource)) {
+            <button type="button" class="btn btn-danger" [disabled]="criteriaSaving()"
+                    (click)="clearResourceCriteria()">Clear all</button>
+          }
+          <button type="button" class="btn btn-secondary" [disabled]="criteriaSaving()"
+                  (click)="closeResourceCriteria()">Cancel</button>
+          <button type="button" class="btn btn-primary" [disabled]="criteriaSaving()"
+                  (click)="submitResourceCriteria()">
+            {{ criteriaSaving() ? 'Saving…' : criteriaReplace() ? 'Replace' : 'Add' }}
+          </button>
+        </div>
       </div>
     </div>
   }

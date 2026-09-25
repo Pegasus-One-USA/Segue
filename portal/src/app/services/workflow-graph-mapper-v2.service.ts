@@ -258,6 +258,13 @@ export class WorkflowGraphMapperServiceV2 {
       ?? null;
   }
 
+  /** The launch source node's CANVAS id — what a per-resource-type criteria row is keyed by (the backend
+   *  stamps this same value onto the node's configuration as `canvasNodeId`; see nodeToRequest, which sends
+   *  node.id as the request id). Distinct from findLaunchSourceId above, which returns its saved CONNECTION id. */
+  findLaunchSourceNodeId(): string | null {
+    return this.store.nodes().find(node => !node.kind)?.id ?? null;
+  }
+
   private nodeToRequest(node: CanvasNode, catalog: WorkflowCatalogItem[]): WorkflowNodeRequest {
     const transformId = this.catalogSupportedTransformId(this.transformIdForNode(node), node, catalog);
     const item = this.catalogForTransform(transformId, catalog);
