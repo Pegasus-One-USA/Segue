@@ -1,0 +1,110 @@
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.scss
+  s_28625b94800ea7::t_78139d46855884 705-794
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260924124621_AddResourceTypeCriteria.Designer.cs
+  s_28625b94800ea7::t_922f458872801b 1-6241
+src/FHIRBridge.Infrastructure/Persistence/Configurations/ResourceTypeCriteriaConfiguration.cs
+  s_28625b94800ea7::t_15f910e3582a19 1-32
+  s_28625b94800ea7::t_8773840703ade1 33
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_28625b94800ea7::t_85e0ef91caaf93 261-267
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_28625b94800ea7::t_7158253d7b3a4a 3863-3879,3881-3884,3893,3895-3896,3898,3900-3901,3903-3904,3919-3922
+  s_28625b94800ea7::t_9bdef4879b68fa 3880,3885-3892,3894,3897,3899,3902
+  s_28625b94800ea7::t_f8d839a473d34c 2717-2751,2755,2765-2770
+src/FHIRBridge.Application/Abstractions/Persistence/IResourceTypeCriteriaRepository.cs
+  s_28625b94800ea7::t_c4e968b6f7b8bb 20-21
+  s_28625b94800ea7::t_f1e5abe0a50d14 1-18,22
+  s_28625b94800ea7::t_59acdd2a3ab591 19
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_28625b94800ea7::t_7f64bc2445d58d 1231-1241,1243-1245,1248-1249,1252-1254
+  s_28625b94800ea7::t_f7bc1e8eaff11e 226,242-243,262
+  s_28625b94800ea7::t_814b936e5d2129 32-34,52-54,72-74,92-94,112-114,132-134,152-154,172-174
+  s_28625b94800ea7::t_a1d467781e66e9 309-315,985,1010-1044
+  s_28625b94800ea7::t_d11ca86b279a75 986-1009,1045-1052,1242,1246-1247
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_28625b94800ea7::t_b95818bf21c405 799-804,1184-1245
+  s_28625b94800ea7::t_aaf177d7fda388 1246-1249
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260924124621_AddResourceTypeCriteria.cs
+  s_28625b94800ea7::t_922f458872801b 1-57
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_28625b94800ea7::t_8420bdc2305bb7 1,74-82
+src/FHIRBridge.Application/DTOs/ResourceTypeCriteriaDtos.cs
+  s_28625b94800ea7::t_f1e5abe0a50d14 1-25
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260924124735_AddResourceTypeCriteria.Designer.cs
+  s_28625b94800ea7::t_f3656cabe8e029 1-6278
+src/FHIRBridge.Application/Services/ResourceTypeCriteriaService.cs
+  s_28625b94800ea7::t_67cba1b67baed7 1-89
+  s_28625b94800ea7::t_11872611d67763 90
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260924124735_AddResourceTypeCriteria.cs
+  s_28625b94800ea7::t_f3656cabe8e029 1-57
+src/FHIRBridge.Application/Services/IResourceTypeCriteriaService.cs
+  s_28625b94800ea7::t_67cba1b67baed7 1-5,8-21,25
+  s_28625b94800ea7::t_c4e968b6f7b8bb 23-24
+  s_28625b94800ea7::t_e012a597dc9c74 6-7
+  s_28625b94800ea7::t_22d023ced4be1e 22
+src/FHIRBridge.Domain/Entities/ResourceTypeCriteria.cs
+  s_28625b94800ea7::t_7876160d9a885f 1-6,24-48,55-77,79,81-123
+  s_28625b94800ea7::t_8ba655a91df733 7-9,21-23
+  s_28625b94800ea7::t_df13d7643d5c74 49-54
+  s_28625b94800ea7::t_6dbb285e8b477a 78
+  s_28625b94800ea7::t_e0a6f6eb3cd135 80
+  s_28625b94800ea7::t_2d401d49905173 124
+  s_102cddd76c43e9::t_37bcc3582b129f 10-20
+src/FHIRBridge.Infrastructure/Persistence/EfResourceTypeCriteriaRepository.cs
+  s_28625b94800ea7::t_c4e968b6f7b8bb 50-65
+  s_28625b94800ea7::t_3366c835eb8578 1-48,66
+  s_28625b94800ea7::t_102ea9a397f6bf 49
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_28625b94800ea7::t_a610b41b6a70f3 2740-2755
+  s_28625b94800ea7::t_365019fd0a1d0b 127,543
+  s_28625b94800ea7::t_71343de8223925 2076-2089
+  s_28625b94800ea7::t_d712caf11e0383 3796-3974
+  s_28625b94800ea7::t_807993b3893729 126,542
+tests/FHIRBridge.UnitTests/Workflows/ResourceTypeCriteriaTests.cs
+  s_28625b94800ea7::t_b548541e706789 1-7,21-23,26,28-31,33,35-37,43,45-48,50,52-54,61,63-65,71,73-75,77,79-81,88,90-92,98,100-105
+  s_28625b94800ea7::t_139510689ea96e 8-10,18-20
+  s_28625b94800ea7::t_48633b596bcbf1 24-25
+  s_28625b94800ea7::t_dc87a3ead460b0 27
+  s_28625b94800ea7::t_9d1a35dd4f0f0c 32
+  s_28625b94800ea7::t_10d4b432810328 34
+  s_28625b94800ea7::t_3fc0bcf373f9e9 38-42
+  s_28625b94800ea7::t_7a3c006665431f 44
+  s_28625b94800ea7::t_cee6281b9c2bf0 49
+  s_28625b94800ea7::t_7c4fac4c8f04a0 51
+  s_28625b94800ea7::t_6d8de5aac501c1 55-60
+  s_28625b94800ea7::t_bebbfc7d4de47f 62
+  s_28625b94800ea7::t_ea600d067edbd0 66-70
+  s_28625b94800ea7::t_b04d9b72e91c92 72
+  s_28625b94800ea7::t_f9cc60c6eddd39 76
+  s_28625b94800ea7::t_cd33ca562f23c4 78
+  s_28625b94800ea7::t_2e5e35c5b0c06f 82-87
+  s_28625b94800ea7::t_729f017c13196b 89
+  s_28625b94800ea7::t_07f7885258dccb 93-97
+  s_28625b94800ea7::t_4ce567a23db86f 99
+  s_28625b94800ea7::t_18d4fb7b96817f 106
+  s_102cddd76c43e9::t_b3ed6a3c2872ae 11-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d4dcfb9026c1c33ca4aacc23abfcec55f8445b52",
+  "prompts": {},
+  "sessions": {
+    "s_102cddd76c43e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "267708a9-2483-411a-abaf-536b681fbfb5",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_28625b94800ea7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70fecf5b-137d-4150-9025-a4ef50f4bcff",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
