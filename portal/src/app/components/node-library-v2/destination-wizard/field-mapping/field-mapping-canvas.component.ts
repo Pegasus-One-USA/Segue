@@ -1901,8 +1901,15 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
         // A Global/ResourceType-scope rule, or one attached to another route, is never a candidate.
         next: rules => rules
           .filter(rule => rule.resourcePipelineRouteId === workflowId)
-          .forEach(rule => this.rulesService.delete(rule.id).subscribe({ error: () => {} })),
-        error: () => {},
+          .forEach(rule => this.rulesService.delete(rule.id).subscribe({
+            // Deliberately silent: the row is already gone from the canvas, so a toast about a rule the
+            // author never saw is noise. A failed delete leaves an orphan, which re-saving the mapping
+            // re-attaches — the same end state as before this cleanup existed.
+            error: () => { /* swallowed by design — see above */ },
+          })),
+        // Same reasoning for the lookup itself: if we cannot enumerate the rules, there is nothing
+        // actionable to tell the author about a mapping they have already removed.
+        error: () => { /* swallowed by design — see above */ },
       });
   }
 

@@ -155,7 +155,16 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: ToastService, useValue: { show: () => {}, success: () => {}, error: () => {} } },
+        // Toasts are irrelevant to what these cases assert — stubbed to no-ops so a component that raises
+        // one does not need a real ToastService (and so an unexpected toast never fails an unrelated case).
+        {
+          provide: ToastService,
+          useValue: {
+            show: () => { /* no-op stub */ },
+            success: () => { /* no-op stub */ },
+            error: () => { /* no-op stub */ },
+          },
+        },
         { provide: DestinationSchemaService, useValue: {} },
         { provide: TransformationRulesService, useValue: { getNodeSchemas: () => of([]), ...(rulesService as object) } },
       ],
