@@ -166,6 +166,16 @@ A `dest_*` key absent from **both** of these is silently dropped before save:
 
 This has caused two separate bugs. Any new Fabric field must be added to both.
 
+### Empty string vs null
+
+`MappedDestinationSerialization.GetCell` returns `string.Empty` for a value the mapping did not produce, never
+null. Every column is declared nullable in the Delta schema (and written as nullable Parquet), but in practice a
+missing value arrives as an empty string, so the two are not distinguishable downstream.
+
+This is pre-existing behaviour shared with the Warehouse and Parquet file surfaces, not something Delta
+introduced. Worth knowing if a consumer needs to tell "not mapped" from "mapped to blank"; changing it would alter
+what already-shipping surfaces write, so it is recorded rather than fixed here.
+
 ### Schema ownership
 
 FHIRBridge never issues DDL against a customer's destination schema. The Warehouse strategy verifies the target
