@@ -127,6 +127,12 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
     warehouseTable: ['', []],
     warehouseSchema: ['dbo', []],
     warehouseWriteMode: ['append', []],
+    /** OFF by default, which is what the COPY INTO docs specify for a OneLake source: with no CREDENTIAL
+     *  clause the statement runs as the executing user's Entra identity — the service principal that opened
+     *  this connection. That identity already needs Contributor on both workspaces. Turning this ON asks
+     *  Fabric to impersonate the WORKSPACE identity instead, which is a separate provisioned principal and
+     *  fails if it does not exist. Defaulting it on made every load fail on tenants without one. */
+    warehouseUseWorkspaceIdentity: [false, []],
     warehouseStagingPath: ['_staging', []],
   });
 
@@ -248,6 +254,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       dest_fabricWarehouseTable: v.warehouseTable ?? '',
       dest_fabricWarehouseSchema: v.warehouseSchema ?? 'dbo',
       dest_fabricWarehouseWriteMode: v.warehouseWriteMode ?? 'append',
+      dest_fabricWarehouseUseWorkspaceIdentity: v.warehouseUseWorkspaceIdentity ? 'true' : 'false',
       dest_fabricWarehouseStagingPath: v.warehouseStagingPath ?? '_staging',
     };
   }
@@ -285,6 +292,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       warehouseTable: fields['dest_fabricWarehouseTable'] || '',
       warehouseSchema: fields['dest_fabricWarehouseSchema'] || 'dbo',
       warehouseWriteMode: fields['dest_fabricWarehouseWriteMode'] || 'append',
+      warehouseUseWorkspaceIdentity: fields['dest_fabricWarehouseUseWorkspaceIdentity'] === 'true',
       warehouseStagingPath: fields['dest_fabricWarehouseStagingPath'] || '_staging',
     });
     this._syncAuthModeValidators(this.fabricForm.value.authMode ?? null, this.reusingExisting());
@@ -416,7 +424,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       managedIdentityClientId: '', endpointSuffix: 'fabric.microsoft.com', authorityHost: '',
       accountUrl: '', mode: 'oneLakeFiles', warehouseSqlEndpoint: '',
       warehouseStagingLakehouse: '', warehouseTable: '', warehouseSchema: 'dbo',
-      warehouseWriteMode: 'append', warehouseStagingPath: '_staging',
+      warehouseWriteMode: 'append', warehouseUseWorkspaceIdentity: false, warehouseStagingPath: '_staging',
     });
     this._syncAuthModeValidators(this.fabricForm.value.authMode ?? null, this.reusingExisting());
     this.modeValue.set('oneLakeFiles');

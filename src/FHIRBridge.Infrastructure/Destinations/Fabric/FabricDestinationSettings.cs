@@ -84,8 +84,28 @@ public sealed record FabricDestinationSettings(
     /// OneLake path prefix of the staging Lakehouse's Files area, e.g. <c>Stage.Lakehouse/Files/_staging</c>.
     /// Warehouse mode only.
     /// </summary>
+    /// <remarks>
+    /// A GUID is emitted bare, without the <c>.Lakehouse</c> suffix, because OneLake addresses an item either by
+    /// friendly name (<c>Stage.Lakehouse</c>) or by item id — never by id with a type suffix. This matters on a
+    /// tenant with friendly-name support disabled, where the DFS endpoint rejects names outright with
+    /// <c>FriendlyNameSupportDisabled</c>; see <see cref="IsItemId"/>.
+    /// </remarks>
     public string WarehouseStagingRootPath =>
-        $"{WarehouseStagingLakehouse}.Lakehouse/Files/{WarehouseStagingPath}".TrimEnd('/');
+        $"{FormatItemSegment(WarehouseStagingLakehouse, "Lakehouse")}/Files/{WarehouseStagingPath}".TrimEnd('/');
+
+    /// <summary>
+    /// True when the configured name is actually a GUID. Some tenants disable OneLake's friendly-name support, so
+    /// a workspace or item must be addressed by id; the blob endpoint is more forgiving than the DFS one, which is
+    /// why a file drop can succeed by name while a Warehouse COPY INTO reading the same path fails.
+    /// </summary>
+    internal static bool IsItemId(string? value) => Guid.TryParse(value?.Trim(), out _);
+
+    /// <summary>A GUID addresses the item directly; a friendly name needs its <c>.{ItemType}</c> suffix.</summary>
+    internal static string FormatItemSegment(string? nameOrId, string itemType)
+    {
+        var value = (nameOrId ?? string.Empty).Trim();
+        return IsItemId(value) ? value : $"{value}.{itemType}";
+    }
 
     /// <summary>
     /// The fully-qualified target table for a Warehouse load.
@@ -160,7 +180,11 @@ public sealed record FabricDestinationSettings(
         : AccountUrlOverride;
 
     /// <summary>The item's own path prefix inside the workspace container, e.g. <c>Sales.Lakehouse</c>.</summary>
-    public string ItemPathSegment => $"{ItemName}.{ItemType}";
+    /// <remarks>
+    /// A GUID item name is emitted bare — see <see cref="FormatItemSegment"/> for why a tenant with OneLake
+    /// friendly names disabled needs that.
+    /// </remarks>
+    public string ItemPathSegment => FormatItemSegment(ItemName, ItemType);
 
     /// <summary>Full prefix every written file sits under, e.g. <c>Sales.Lakehouse/Files/fhirbridge</c>.</summary>
     public string RootPath => string.IsNullOrWhiteSpace(BasePath)

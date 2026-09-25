@@ -1,6 +1,8 @@
+using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
+using FHIRBridge.Infrastructure.Destinations;
 using FHIRBridge.Infrastructure.Destinations.Fabric;
 using FluentAssertions;
 
@@ -131,6 +133,74 @@ public sealed class WarehouseTableLandingStrategyTests
         var settings = FabricDestinationSettings.Parse(Destination(metadata.ToJsonString()));
 
         settings.WarehouseConnectionString.Should().EndWith(";Database=ClinicalWh");
+    }
+
+    /// <summary>
+    /// Some tenants disable OneLake friendly names, so workspaces and items must be addressed by GUID. An item
+    /// GUID takes NO ".Lakehouse" suffix — OneLake addresses an item either by name-plus-type or by id, never by
+    /// id with a type appended. Getting this wrong is invisible until COPY INTO runs: the blob endpoint accepts a
+    /// friendly name so the staging upload succeeds, while the DFS endpoint COPY INTO reads through rejects it as
+    /// an "unsupported URL" (FriendlyNameSupportDisabled on a direct call).
+    /// </summary>
+    [Fact]
+    public void A_staging_lakehouse_given_as_a_guid_is_addressed_without_the_item_type_suffix()
+    {
+        var metadata = System.Text.Json.Nodes.JsonNode.Parse(WarehouseMetadata)!.AsObject();
+        metadata["dest_fabricWarehouseStagingLakehouse"] = "8f14e45f-ceea-467a-9f3a-3d3d3d3d3d3d";
+
+        var settings = FabricDestinationSettings.Parse(Destination(metadata.ToJsonString()));
+
+        settings.WarehouseStagingRootPath.Should()
+            .Be("8f14e45f-ceea-467a-9f3a-3d3d3d3d3d3d/Files/_staging")
+            .And.NotContain(".Lakehouse", "an item id is not suffixed with its type");
+    }
+
+    [Fact]
+    public void A_staging_lakehouse_given_as_a_name_keeps_its_item_type_suffix()
+    {
+        var settings = FabricDestinationSettings.Parse(Destination(WarehouseMetadata));
+
+        settings.WarehouseStagingRootPath.Should().Be("Stage.Lakehouse/Files/_staging");
+    }
+
+    /// <summary>The workspace half of the same URL — it is passed through verbatim, name or GUID.</summary>
+    [Fact]
+    public void A_workspace_guid_flows_into_the_staging_url_unchanged()
+    {
+        var metadata = System.Text.Json.Nodes.JsonNode.Parse(WarehouseMetadata)!.AsObject();
+        metadata["dest_fabricWorkspace"] = "21fe9b8f-2349-4667-8608-3547317ea11f";
+        metadata["dest_fabricWarehouseStagingLakehouse"] = "8f14e45f-ceea-467a-9f3a-3d3d3d3d3d3d";
+
+        var settings = FabricDestinationSettings.Parse(Destination(metadata.ToJsonString()));
+        var path = WarehouseTableLandingStrategy.BuildStagingBlobPath(settings, Mapping(), DateTime.UtcNow);
+
+        WarehouseTableLandingStrategy.BuildStagingUrl(settings, path).Should().StartWith(
+            "https://onelake.dfs.fabric.microsoft.com/21fe9b8f-2349-4667-8608-3547317ea11f/"
+                + "8f14e45f-ceea-467a-9f3a-3d3d3d3d3d3d/Files/_staging/");
+    }
+
+    /// <summary>
+    /// Regression: COPY INTO named PipelineRunId/ResourceType/DestinationObject/SourceResourceId/WrittenOnUtc
+    /// alongside the mapped fields, because the shared GetColumns helper prepends those lineage columns. A
+    /// customer-owned table has none of them — the relational writers stopped injecting system columns per
+    /// docs/backend/11-destination-schema-ownership-plan.md — so Fabric rejected the load with "invalid metadata
+    /// for column 'PipelineRunId'". The Warehouse load must use the mapped columns only.
+    /// </summary>
+    [Fact]
+    public void Only_mapped_columns_are_loaded_never_the_lineage_columns()
+    {
+        var record = new MappedDestinationRecord(
+            Guid.NewGuid(), "Patient", "Patients", "p1",
+            new Dictionary<string, object?> { ["Id"] = "1", ["Family"] = "Smith" });
+
+        var mapped = MappedDestinationSerialization.GetMappedColumns([record]);
+
+        mapped.Should().BeEquivalentTo(["Family", "Id"]);
+        mapped.Should().NotContain("PipelineRunId", "a customer-owned table has no lineage columns");
+        mapped.Should().NotContain("ResourceType").And.NotContain("WrittenOnUtc");
+
+        // The unfiltered helper still carries them, for the writers that legitimately want an audit trail.
+        MappedDestinationSerialization.GetColumns([record]).Should().Contain("PipelineRunId");
     }
 
     [Fact]

@@ -64,7 +64,12 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
         PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
-        var columns = MappedDestinationSerialization.GetColumns(records);
+        // Mapped columns only. GetColumns prepends PipelineRunId/ResourceType/DestinationObject/
+        // SourceResourceId/WrittenOnUtc, which a customer-owned table does not have — the relational writers
+        // stopped injecting those per docs/backend/11-destination-schema-ownership-plan.md, so a table built from
+        // a mapping holds exactly the mapped fields. Naming them in COPY INTO fails on the column that does not
+        // exist ("invalid metadata for column 'PipelineRunId'").
+        var columns = MappedDestinationSerialization.GetMappedColumns(records);
         if (columns.Count == 0)
         {
             // No mapped columns means nothing to COPY INTO; creating an empty table would be worse than saying so.
@@ -80,7 +85,8 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
         var workspace = await _clientFactory.GetWorkspaceAsync(destination, settings, cancellationToken);
         var stagingBlob = workspace.Container.GetBlobClient(stagingBlobPath);
 
-        var payload = await MappedDestinationParquetSerializer.SerializeAsync(records, cancellationToken);
+        // Staged file carries exactly the columns COPY INTO will name, in the same order.
+        var payload = await MappedDestinationParquetSerializer.SerializeAsync(records, columns, cancellationToken);
         using (var stream = new MemoryStream(payload))
         {
             await stagingBlob.UploadAsync(stream, overwrite: true, cancellationToken);
@@ -108,6 +114,51 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
                 destination.Id);
 
             return new DestinationWriteResult(loaded);
+        }
+        catch (SqlException exception) when (
+            exception.Message.Contains("Access token couldn't be fetched", StringComparison.OrdinalIgnoreCase))
+        {
+            // The Warehouse engine reads the staging file ITSELF — it does not inherit this connection's token.
+            // Without a CREDENTIAL clause it has no identity for OneLake, and Fabric reports that as "unsupported
+            // URL or ... transient error", which points at the URL and sends people to re-check a path that is
+            // fine. Restate it as the credential problem it is, and name the setting that fixes it.
+            // Friendly names first, because this is the cause that looks least like itself: OneLake's DFS endpoint
+            // rejects display names on a tenant with friendly-name support disabled, and reports it as an
+            // "unsupported URL", which reads like a malformed path rather than a naming-mode problem. The blob
+            // endpoint is more forgiving, so the staging upload succeeds by name moments earlier and makes the
+            // path look proven. Only mention identity once the addressing is already by id.
+            var namedByFriendlyName =
+                !FabricDestinationSettings.IsItemId(settings.Workspace)
+                || !FabricDestinationSettings.IsItemId(settings.WarehouseStagingLakehouse);
+
+            if (namedByFriendlyName)
+            {
+                throw new InvalidOperationException(
+                    $"Destination '{destination.Name}': the Warehouse could not read the staging file at "
+                        + $"{stagingBlobPath}. The workspace and staging lakehouse are addressed by name, and some "
+                        + "tenants disable OneLake friendly names — the file drop succeeds by name while COPY INTO, "
+                        + "which reads through the DFS endpoint, does not (it reports this as 'unsupported URL', and "
+                        + "a direct call returns FriendlyNameSupportDisabled). Put the workspace GUID and the "
+                        + "staging lakehouse's item GUID in this destination instead of their names. Both are in "
+                        + "the Fabric URL when the item is open.",
+                    exception);
+            }
+
+            throw new InvalidOperationException(
+                $"Destination '{destination.Name}': the Warehouse could not read the staging file at {stagingBlobPath}. "
+                    + (settings.WarehouseUseWorkspaceIdentity
+                        ? "COPY INTO asked Fabric to impersonate the WORKSPACE identity, which is a separate "
+                            + "provisioned principal from the one this connection authenticated with. Fabric could "
+                            + "not get a token for it. Either provision it (Fabric > Workspace settings > Workspace "
+                            + "identity) and give it Contributor on the workspace holding the staging lakehouse, or "
+                            + "turn off 'Load staged files as the workspace identity' so the read runs as the "
+                            + "configured identity instead — that is the documented default for a OneLake source."
+                        : "COPY INTO read as the identity configured on this destination, which is the documented "
+                            + "default for a OneLake source. That identity needs the Contributor role on BOTH "
+                            + "workspaces: the one holding the staging lakehouse and the one holding the Warehouse. "
+                            + "Workspace membership is what grants this — an Azure RBAC role on storage does not.")
+                    + " The staging file itself uploaded successfully, so OneLake access from FHIRBridge is fine.",
+                exception);
         }
         finally
         {
