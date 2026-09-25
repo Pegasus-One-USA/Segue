@@ -7,6 +7,7 @@ import { canQueueAddColumn, describeCreateTableConflict, describeLiveCreateTable
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { MappingSuggestion, suggestMappings } from './field-mapping-automap.util';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
+import { TransformationRulesService } from './transformation-rules.service';
 import { FieldMappingSourceTreeComponent } from './field-mapping-source-tree.component';
 import { FieldMappingTargetCardComponent } from './field-mapping-target-card.component';
 import { FieldMappingWiresComponent, FmTempWire } from './field-mapping-wires.component';
@@ -95,6 +96,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   // the exact same singleton service (providedIn: 'root') and the exact same schema-preview endpoint the
   // Step 1 connection-test flow already calls — not a new/duplicate table-existence API.
   private readonly schemaSvc = inject(DestinationSchemaService);
+  private readonly rulesService = inject(TransformationRulesService);
   private readonly canvasInner = viewChild.required<ElementRef<HTMLElement>>('canvasInner');
   private readonly viewport = viewChild.required<ElementRef<HTMLElement>>('viewport');
   // Not .required — only rendered while addTableMenuOpen() is true (see toggleAddTableMenu, which
@@ -1842,9 +1844,50 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   }
 
   removeRow(resource: string, tableName: string, column: string): void {
+    const removed = this.mappingRows().find(
+      r => r.resource === resource && r.tableName === tableName && r.targetName === column);
+
     this.mappingRowsChange.emit(
       this.mappingRows().filter(r => !(r.resource === resource && r.tableName === tableName && r.targetName === column)),
     );
+
+    if (removed) this.deleteRuleForRemovedRow(removed);
+  }
+
+  /** Deletes the transformation rule a removed mapping owned. Rules live server-side and are keyed by
+   *  (resource, destination field, source field) — NOT by the mapping row — so dropping the row alone left
+   *  the rule behind, still resolvable. The consequence is worse than clutter: recreate a mapping onto the
+   *  same column later and that orphan silently re-attaches, transforming a field nobody asked it to.
+   *
+   *  Called from removeRow, the single choke point every deletion path funnels through (the popover's
+   *  "Delete mapping", the mapping list's own remove, and the column-drop flows), so none of them can
+   *  drift out of sync.
+   *
+   *  workflowScopedOnly is what makes this safe to do automatically: it restricts the lookup to a rule
+   *  authored against THIS workflow, so a Global/ResourceType-scope rule shared with other pipelines is
+   *  never touched — exactly the scoping the popover uses to decide what "Remove transformation" may
+   *  delete. Failures are deliberately silent: the row is already gone from the canvas, and a toast about
+   *  a rule the author never saw would be noise. */
+  private deleteRuleForRemovedRow(row: MappingRow): void {
+    const destinationType = this.rulesDestinationType();
+    if (!destinationType) return;
+
+    this.rulesService
+      .getEffectiveRules({
+        destinationType,
+        resourceType: row.resource,
+        destinationField: row.targetName,
+        sourceField: row.sources[0]?.fhirPath ?? null,
+        resourcePipelineRouteId: this.workflowId() ?? undefined,
+        workflowScopedOnly: true,
+        // A rule authored before the workflow's first save is stored unattached; without this, deleting a
+        // mapping on a never-yet-saved pipeline would leave behind the very rule just authored on it.
+        includePending: true,
+      })
+      .subscribe({
+        next: rules => rules.forEach(rule => this.rulesService.delete(rule.id).subscribe({ error: () => {} })),
+        error: () => {},
+      });
   }
 
   /** "All records" without combining (RepeatParent) duplicates the entire destination row once per array

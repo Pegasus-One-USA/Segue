@@ -1,7 +1,11 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { FieldMappingCanvasComponent } from './field-mapping-canvas.component';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationSchemaService } from '../../../../services/destination-schema.service';
+import { TransformationRulesService } from './transformation-rules.service';
+import { of, throwError } from 'rxjs';
 
 /**
  * Regression coverage for the "Map Fields table card disappears after Save -> leave -> reopen" bug
@@ -17,8 +21,17 @@ describe('FieldMappingCanvasComponent — MySQL bare-name reopen fix', () => {
     await TestBed.configureTestingModule({
       imports: [FieldMappingCanvasComponent],
       providers: [
+        // The canvas renders field-mapping-list, which injects DeIdentificationProfileService -> HttpClient.
+        // Without these the whole suite failed to construct the component at all (10/10 NullInjectorError).
+        provideHttpClient(),
+        provideHttpClientTesting(),
         { provide: ToastService, useValue: { show: () => {} } },
         { provide: DestinationSchemaService, useValue: {} },
+        { provide: TransformationRulesService, useValue: {
+            // The join popover calls getNodeSchemas() on construction; the rest is what removeRow's own
+            // rule cleanup needs.
+            getNodeSchemas: () => of([]), getEffectiveRules: () => of([]), delete: () => of(void 0),
+          } },
       ],
     }).compileComponents();
 
@@ -118,5 +131,98 @@ describe('FieldMappingCanvasComponent — MySQL bare-name reopen fix', () => {
       { resource: 'FamilyMemberHistory', tableName: 'FamilyMemberHistory', isExtra: false },
       { resource: 'FamilyMemberHistory', tableName: 'FamilyMemberHistory_Contact', isExtra: true },
     ]);
+  });
+});
+
+
+/**
+ * Removing a mapping must take its transformation rule with it. Rules are keyed server-side by
+ * (resource, destination field, source field) rather than by the mapping row, so a row deleted on its own
+ * left the rule resolvable — and a mapping later recreated onto the same column silently picked it back up.
+ */
+describe('FieldMappingCanvasComponent — removing a mapping deletes its transformation rule', () => {
+  const ROW = {
+    resource: 'Observation',
+    sources: [{ fhirPath: 'Observation.valueQuantity.value', label: 'value' }],
+    mode: 'value' as const,
+    targetName: 'TransformationQuantityRange',
+    tableName: 'public.Observation',
+  };
+
+  async function createComponent(rulesService: unknown) {
+    await TestBed.configureTestingModule({
+      imports: [FieldMappingCanvasComponent],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ToastService, useValue: { show: () => {}, success: () => {}, error: () => {} } },
+        { provide: DestinationSchemaService, useValue: {} },
+        { provide: TransformationRulesService, useValue: { getNodeSchemas: () => of([]), ...(rulesService as object) } },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(FieldMappingCanvasComponent);
+    fixture.componentRef.setInput('resources', ['Observation']);
+    fixture.componentRef.setInput('mappingRows', [ROW]);
+    fixture.componentRef.setInput('rulesDestinationType', 'PostgreSql');
+    fixture.componentRef.setInput('workflowId', 'wf-1');
+    fixture.componentRef.setInput('availableFields', () => []);
+    fixture.componentRef.setInput('columnsForResourceTarget', () => []);
+    return fixture;
+  }
+
+  it('deletes the rule the removed row owned', async () => {
+    const deleted: string[] = [];
+    const fixture = await createComponent({
+      getEffectiveRules: () => of([{ id: 'rule-1' }] as never),
+      delete: (id: string) => { deleted.push(id); return of(void 0); },
+    });
+
+    fixture.componentInstance.removeRow('Observation', 'public.Observation', 'TransformationQuantityRange');
+
+    expect(deleted).toEqual(['rule-1']);
+  });
+
+  it('looks the rule up scoped to this workflow only, so a shared tenant-wide rule is never deleted', async () => {
+    let query: Record<string, unknown> | undefined;
+    const fixture = await createComponent({
+      getEffectiveRules: (q: Record<string, unknown>) => { query = q; return of([] as never); },
+      delete: () => of(void 0),
+    });
+
+    fixture.componentInstance.removeRow('Observation', 'public.Observation', 'TransformationQuantityRange');
+
+    expect(query?.['workflowScopedOnly']).toBeTrue();
+    expect(query?.['destinationField']).toBe('TransformationQuantityRange');
+    expect(query?.['sourceField']).toBe('Observation.valueQuantity.value');
+    // A rule authored before the workflow's first save is stored unattached — without this the rule just
+    // created on a never-yet-saved pipeline would survive its own mapping being deleted.
+    expect(query?.['includePending']).toBeTrue();
+  });
+
+  it('still removes the row when the rule lookup fails', async () => {
+    const emitted: unknown[] = [];
+    const fixture = await createComponent({
+      getEffectiveRules: () => throwError(() => new Error('offline')),
+      delete: () => of(void 0),
+    });
+    fixture.componentInstance.mappingRowsChange.subscribe((rows: unknown) => emitted.push(rows));
+
+    expect(() =>
+      fixture.componentInstance.removeRow('Observation', 'public.Observation', 'TransformationQuantityRange'),
+    ).not.toThrow();
+    expect(emitted).toEqual([[]]);
+  });
+
+  it('does nothing rule-side when the row was not there to begin with', async () => {
+    let called = false;
+    const fixture = await createComponent({
+      getEffectiveRules: () => { called = true; return of([] as never); },
+      delete: () => of(void 0),
+    });
+
+    fixture.componentInstance.removeRow('Observation', 'public.Observation', 'NoSuchColumn');
+
+    expect(called).toBeFalse();
   });
 });
