@@ -1,0 +1,35 @@
+src/FHIRBridge.Application/Services/Transforms/IFhirResourceTransformService.cs
+  s_6fe240044cc58e::t_99db50dddb755d 172-177,186
+  s_6fe240044cc58e::t_d5b6808e9be940 178-185
+tests/FHIRBridge.UnitTests/Transforms/FhirResourceTransformServiceTests.cs
+  s_6fe240044cc58e::t_801a2c2cfca91d 79,106
+  s_6fe240044cc58e::t_07f2928769ab00 107-118,120-136,138-144
+  s_6fe240044cc58e::t_c4b12b24cede55 119,137
+src/FHIRBridge.Application/Services/Transforms/FhirSourceJsonPatcher.cs
+  s_6fe240044cc58e::t_990b341fb51e60 97
+  s_6fe240044cc58e::t_2dc5aa6e86f28f 131-145,154
+tests/FHIRBridge.UnitTests/Transforms/FhirSourceJsonPatcherSiblingTests.cs
+  s_6fe240044cc58e::t_2dc5aa6e86f28f 54-76
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_6fe240044cc58e::t_b4e01f65f07b7f 1881-1887
+  s_6fe240044cc58e::t_27d0ba01b9d61c 1846-1847,1851-1858,1860-1861
+  s_6fe240044cc58e::t_da018b29ab12bc 1859
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.spec.ts
+  s_6fe240044cc58e::t_029de62e83b1b0 269-305
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "32f7c23037f3636c7784c9a60c6d52b64d8c8bfb",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

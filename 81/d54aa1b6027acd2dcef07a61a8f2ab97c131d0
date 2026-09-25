@@ -1,0 +1,35 @@
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_cbdb4fc323eae1 48,85-92,139-143,199,202-207,280,319
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_d8c85374db9f6f::t_54322a4ff6c348 1126
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_d8c85374db9f6f::t_0dd6b7c09b46ca 188,233-238
+  s_d8c85374db9f6f::t_c6c8e2ebfe4c49 239-240
+portal/src/app/services/phase-config-v2.service.ts
+  s_d8c85374db9f6f::t_c2c8f14be6faa2 88-95
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_d8c85374db9f6f::t_0dd6b7c09b46ca 188,233-238
+  s_d8c85374db9f6f::t_ebb1dc4b166d8e 239-240
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_cbdb4fc323eae1 48,85-92,139-143,199,202-207,280,319
+portal/src/app/services/phase-config.service.ts
+  s_d8c85374db9f6f::t_c2c8f14be6faa2 82-89
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_d8c85374db9f6f::t_54322a4ff6c348 141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "81d54aa1b6027acd2dcef07a61a8f2ab97c131d0",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
