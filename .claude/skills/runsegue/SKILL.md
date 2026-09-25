@@ -33,7 +33,7 @@ file is edited**.
 
 | Piece | Value |
 |---|---|
-| App database (default) | container `fhirbridge-controlplane-pg` → `localhost:5434`, db `FHIRBridge_v2`, user `postgres` |
+| App database (default) | container `fhirbridge-controlplane-postgres` → `localhost:5434`, db `FHIRBridge_v2`, user `postgres` (the script tries `fhirbridge-controlplane-pg` first and falls back to this) |
 | Connection string | `Host=localhost;Port=5434;Database=<name>;Username=postgres;` |
 | SQL Server alternative | container `fhirbridge-controlplane-sql` → `localhost:1433`, user `sa` |
 | Provider switch | `Database:Provider` = `PostgreSql` or `SqlServer` |
@@ -108,11 +108,22 @@ Report back to the user:
   launches hosts via `dotnet <dll>` when no `.exe` is present (`Get-BuiltAssembly`'s extension fallback), so
   this changes nothing about how the hosts start. If you ever see that MSB3021 again from a hand-rolled build
   outside this script, add the same flag rather than trying to grant the process write access.
-- **Two Postgres containers look alike.** `fhirbridge-controlplane-pg` is the one actually published on
-  host port **5434** and holding the dev data (`FHIRBridge`, `FHIRBridge_v2`, `ErrorLogger`). The
-  compose-defined `fhirbridge-controlplane-postgres` also runs but does **not** publish 5434. The script
-  targets `-pg` and falls back to the compose container only if `-pg` is absent. Running `docker exec`
-  against the wrong one makes a database that exists look missing.
+- **`fhirbridge-controlplane-postgres` is the app database container.** It publishes host port **5434** and
+  holds the dev data (`FHIRBridge`, `FHIRBridge_v2`, `ErrorLogger`). The script still *prefers* a container
+  named `fhirbridge-controlplane-pg` and falls back to this one — but as of 2026-09-24 `-pg` no longer exists
+  on this machine, so the fallback is the normal path and the "[warn] container not running" line is expected,
+  not a problem.
+- **Two databases differ only in case.** Both `FHIRBridge_v2` and `fhirbridge_v2` exist; the latter is stale,
+  left by an old unquoted `CREATE DATABASE`. The connection string's `Database=FHIRBridge_v2` is interpreted
+  literally by libpq, so the app uses the MIXED-CASE one — that is where the migrations are. Querying the
+  lowercase one and finding no data is not a bug.
+- **Never probe for a database with `ILIKE`.** `_` is a LIKE wildcard, and with both spellings present an
+  `ILIKE '<name>'` probe matches two rows; `-join ''`-ing them yields `"11"`, which compares unequal to `"1"`
+  and reports an existing database as missing. Match with `datname = '<name>'` instead.
+- **Never pipe a native command's stderr with `2>&1` in this script.** Under `$ErrorActionPreference = 'Stop'`,
+  Windows PowerShell wraps native stderr in a `NativeCommandError` and TERMINATES the script — which happened
+  here after the stop phase had already killed the API, Worker and portal, leaving the whole stack down with
+  nothing rebuilt. Use `*> $null` and judge the outcome by re-querying instead.
 - **Port 5434, not 5432.** `5432` is the HAPI FHIR source Postgres; `5433` is the *output* destination
   Postgres. The app database is `5434`. Pointing the app at the wrong one produces confusing
   "relation does not exist" errors.

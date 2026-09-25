@@ -239,15 +239,26 @@ Write-Ok "$Provider ready on localhost:$DbPort"
 
 # The API's startup migration creates the schema, not the database itself.
 if ($Provider -eq 'PostgreSql') {
-    # Match case-insensitively: an unquoted CREATE DATABASE folds the name to lower case,
-    # so an exact datname= comparison can miss a database that really does exist.
-    $exists = ((& docker exec $DbContainer psql -U $DbUser -tAc "SELECT 1 FROM pg_database WHERE datname ILIKE '$DatabaseName'" 2>$null) -join '').Trim()
-    if ($exists -ne '1') {
+    # EXACT, case-sensitive match on the name as written — that is precisely how libpq will interpret the
+    # Database= in the connection string, so it is the only spelling that matters. The previous ILIKE probe
+    # was wrong twice over: "_" is a LIKE WILDCARD, and this box really does have both "fhirbridge_v2" (from
+    # an old unquoted CREATE) and "FHIRBridge_v2", so it matched two rows, -join'd them into "11", compared
+    # that against "1", concluded the database was missing, and ran a CREATE that then failed with
+    # "already exists" — aborting the whole run AFTER the stop phase had killed the API, Worker and portal.
+    $existsRows = @(& docker exec $DbContainer psql -U $DbUser -tAc "SELECT 1 FROM pg_database WHERE datname = '$DatabaseName'" 2>$null)
+    $exists = $existsRows | Where-Object { $_.Trim() -eq '1' } | Select-Object -First 1
+    if (-not $exists) {
         Write-Info "database '$DatabaseName' does not exist - creating it"
         # Double-quote the identifier so mixed-case names are preserved verbatim.
         $createSql = 'CREATE DATABASE "' + $DatabaseName + '"'
-        $createOut = & docker exec $DbContainer psql -U $DbUser -c $createSql 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "Failed to create database '$DatabaseName': $createOut" }
+        # NOT 2>&1: under $ErrorActionPreference='Stop', Windows PowerShell wraps a native command's stderr
+        # in a NativeCommandError and terminates the script, so even a fully handled "already exists" killed
+        # the run before it built anything. Stderr is discarded and the outcome judged by re-probing instead.
+        & docker exec $DbContainer psql -U $DbUser -c $createSql *> $null
+        $recheck = @(& docker exec $DbContainer psql -U $DbUser -tAc "SELECT 1 FROM pg_database WHERE datname = '$DatabaseName'" 2>$null)
+        if (-not ($recheck | Where-Object { $_.Trim() -eq '1' })) {
+            throw "Failed to create database '$DatabaseName' in container '$DbContainer'."
+        }
     }
 } else {
     & docker exec $DbContainer /opt/mssql-tools18/bin/sqlcmd -S localhost -U $DbUser -P $DbPassword -C `

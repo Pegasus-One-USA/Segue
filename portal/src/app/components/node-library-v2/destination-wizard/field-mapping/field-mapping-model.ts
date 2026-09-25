@@ -320,6 +320,7 @@ export function serializeRowsFlat(
   correlationSiblingField?: string; correlationCodeValue?: string; correlationOperator?: string;
   parentTable?: string; parentKeyColumn?: string; foreignKeyColumn?: string;
   referencesResource?: string;
+  joinSources?: { path: string; jsonPath?: string; arrays?: string[] }[];
 })[] {
   // Once the user has explicitly marked ANY row for a resource as the upsert key (via the target card's
   // key toggle), that choice is authoritative for the whole resource — the real PK column is no longer
@@ -357,7 +358,13 @@ export function serializeRowsFlat(
     // its own child-table row per item (the isChildTable override above), so neither must survive that
     // override.
     const survivesChildTableOverride = arrayPolicy === resolvedPolicy.arrayPolicy;
-    const format = survivesChildTableOverride ? resolvedPolicy.format : undefined;
+    // The "joinedFields" MODE prefix must survive the child-table override even though the instance markers
+    // beside it do not: the jsonPath emitted below is "|"-delimited for a multi-source row, and without the
+    // prefix telling JsonMappingEngine to split it, that whole string is resolved as one literal path and
+    // matches nothing — the column would go silently NULL. Only the aggregate/index markers are dropped.
+    const format = survivesChildTableOverride
+      ? resolvedPolicy.format
+      : (row.sources.length > 1 ? joinedFieldsFormat(row, undefined) : undefined);
     const correlationSiblingField = survivesChildTableOverride ? resolvedPolicy.correlationSiblingField : undefined;
     const correlationCodeValue = survivesChildTableOverride ? resolvedPolicy.correlationCodeValue : undefined;
     const correlationOperator = survivesChildTableOverride ? resolvedPolicy.correlationOperator : undefined;
@@ -420,6 +427,21 @@ export function serializeRowsFlat(
       // all on what actually gets saved, and a FHIR reference column keeps writing raw "Patient/xyz" strings
       // (or, worse, NULL into a NOT NULL FK column) forever, no matter what the user picked in that dropdown.
       ...(row.referencesResource ? { referencesResource: row.referencesResource } : {}),
+      // EVERY source of a joined row, in user order. The assembler turns these into the "|"-delimited
+      // JsonPath ResolveJoinedFields splits apart, deriving an absolute path for any source the catalog
+      // never gave a `jsonPath` (it is populated only "when present"). Emitting a pre-joined path HERE
+      // instead meant a row whose sources all lacked one silently degraded to the primary source alone
+      // while still carrying the joinedFields Format — so the engine joined a single sub-path and the
+      // column got just the first field (observed: a family+given join writing only "McGinnis").
+      ...(row.sources.length > 1 && !isDefault
+        ? {
+            joinSources: row.sources.map(source => ({
+              path: source.fhirPath,
+              ...(source.jsonPath ? { jsonPath: source.jsonPath } : {}),
+              ...(source.arrays?.length ? { arrays: source.arrays } : {}),
+            })),
+          }
+        : {}),
     };
   });
 }
@@ -472,11 +494,37 @@ export function resolveArrayPolicy(row: MappingRow): ArrayPolicyResolution {
   const instance = row.instance ?? { type: 'first' };
 
   if (isJoin) {
-    // No backend representation for joining multiple distinct fields — best-effort primary source.
-    return { ...applyInstance(instance, hasArrayAncestors), approximated: true };
+    // The backend DOES represent this: JsonMappingEngine.ResolveJoinedFields resolves a "|"-delimited
+    // JsonPath and joins the pieces with the delimiter stamped onto Format, exactly as
+    // MappingImportService.BuildJsonPathAndFormat emits it for the V1 "Save mapping" path. This used to
+    // return the primary source alone and flag `approximated`, which is why a two-field join saved only its
+    // FIRST source: mapping name.given + name.family onto one column silently wrote the given names and
+    // dropped the family entirely, with nothing but a "Preview only" banner to say so. serializeRowsFlat
+    // builds the matching "|"-joined jsonPath — the two must stay in step.
+    const joined = applyInstance(instance, hasArrayAncestors);
+    return { ...joined, approximated: false, format: joinedFieldsFormat(row, joined.format) };
   }
 
   return applyInstance(instance, hasArrayAncestors);
+}
+
+/**
+ * Builds the Format marker for a multi-source (joined) row: the "joinedFields" mode prefix plus the row's own
+ * delimiter, carrying over whichever instance-selection marker applyInstance already produced
+ * ("aggregate=csv" / "index=N"). Mirrors MappingImportService.BuildJsonPathAndFormat's
+ * `joinedFields;delimiter={d}{aggregateSuffix}` byte for byte, since JsonMappingEngine.ParseDelimiter /
+ * HasCsvAggregate / ParseInstanceIndex all read this one string.
+ *
+ * The delimiter is written verbatim, spaces included — ", " is the common choice and the engine no longer
+ * trims it away. A delimiter containing ";" or "=" would collide with the marker's own syntax, so those are
+ * stripped rather than silently corrupting the rest of the Format.
+ */
+function joinedFieldsFormat(row: MappingRow, instanceFormat: string | undefined): string {
+  const delimiter = (row.delimiter ?? ', ').replace(/[;=]/g, '');
+  // applyInstance emits "directField;aggregate=csv" / "directField;index=N" — keep only the marker itself,
+  // since the mode prefix here is joinedFields, not directField.
+  const instanceMarker = instanceFormat?.split(';').slice(1).join(';');
+  return `joinedFields;delimiter=${delimiter}${instanceMarker ? `;${instanceMarker}` : ''}`;
 }
 
 function applyInstance(

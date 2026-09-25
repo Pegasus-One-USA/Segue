@@ -38,7 +38,20 @@ public static class RuleSourceFieldFormat
             return null;
         }
 
-        var bare = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath.TrimStart('$', '.');
+        // A MULTI-SOURCE (joined) column's JsonPath is every source's path joined with "|" (see
+        // JsonMappingEngine.ResolveJoinedFieldRows). The rule-authoring UI has no such concept: it saves
+        // SourceField as sources[0].fhirPath alone (field-mapping-join-popover's saveRule/loadRuleFor), so the
+        // first sub-path is the one both sides agree on. Normalizing the whole joined string instead produced
+        // the malformed key "Patient.name.given|$.name.family" — matching no rule at all, which the repository
+        // expresses as "SourceField == null || SourceField == key" and therefore filters the rule out
+        // entirely. The symptom is silent: the column writes its untransformed value and nothing reports why.
+        var single = jsonPath.Split('|', 2, StringSplitOptions.TrimEntries)[0];
+        if (string.IsNullOrEmpty(single))
+        {
+            return null;
+        }
+
+        var bare = single.StartsWith("$.", StringComparison.Ordinal) ? single[2..] : single.TrimStart('$', '.');
         bare = ArrayIndexAnnotation.Replace(bare, string.Empty);
         return $"{resourceType}.{bare}";
     }
