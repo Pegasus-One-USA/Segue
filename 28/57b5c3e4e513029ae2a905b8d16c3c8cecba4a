@@ -1,0 +1,49 @@
+portal/src/app/services/workflow-api.service.ts
+  s_174e16661bf66d::t_26a02003d3d266 224-227
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_174e16661bf66d::t_26a02003d3d266 99,101
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_174e16661bf66d::t_26a02003d3d266 47-51,53-57,1410-1426,1465,1468,1470,1548-1567
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_174e16661bf66d::t_6d4024a5dd4965 520
+  s_174e16661bf66d::t_73d18da27be823 490
+  s_174e16661bf66d::t_26a02003d3d266 332-395,472,474,477,479,482-489,491-519,521-544,572-576
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_174e16661bf66d::t_26a02003d3d266 319-320,355-363,410-411,428,431-452,492-499,502-538
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_174e16661bf66d::t_3e578bfc5c0180 405-406
+  s_174e16661bf66d::t_26a02003d3d266 95-105,319-326,342,344-347,349,356,365-404,488-558
+  s_174e16661bf66d::t_7f6457a6c9621a 559-560
+src/FHIRBridge.Application/DTOs/MappingFieldDto.cs
+  s_174e16661bf66d::t_26a02003d3d266 27-31
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_174e16661bf66d::t_26a02003d3d266 289,291
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_174e16661bf66d::t_b7355435c83308 673-674
+  s_174e16661bf66d::t_26a02003d3d266 661,664,668-672
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineArrayPolicyTests.cs
+  s_174e16661bf66d::t_26a02003d3d266 140-403
+portal/src/app/services/workflow-build-assembler-v2.correlate-by-code.spec.ts
+  s_174e16661bf66d::t_4f6e6c3257d6c4 40,44-46,48-55
+  s_174e16661bf66d::t_4c4283b6199621 1-39,41-43,47,56-72
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineNthInstanceTests.cs
+  s_174e16661bf66d::t_ad24f06e56f0ed 1-116
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_174e16661bf66d::t_26a02003d3d266 363-371
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2857b5c3e4e513029ae2a905b8d16c3c8cecba4a",
+  "prompts": {},
+  "sessions": {
+    "s_174e16661bf66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a051edf-3c44-4555-8dea-ae48ca7f4ff9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

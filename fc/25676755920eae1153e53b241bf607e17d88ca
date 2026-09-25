@@ -1,0 +1,25 @@
+tests/FHIRBridge.UnitTests/Transforms/FhirComplexTypeNodesTests.cs
+  s_d54e1af1190aed::t_0f45c28575d325 292-383
+src/FHIRBridge.Application/Services/Transforms/Nodes/FhirComplexTypeNodes.cs
+  s_d54e1af1190aed::t_cfa3c1d1da049e 1-2
+  s_d54e1af1190aed::t_1e328f1539d04e 527-533,537,540-547,549-550,552,555-561,571,578,581-597,600-628,631-632
+  s_d54e1af1190aed::t_d7ad712220205b 510-516
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_d54e1af1190aed::t_dd1df5709461c0 276,278
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fc25676755920eae1153e53b241bf607e17d88ca",
+  "prompts": {},
+  "sessions": {
+    "s_d54e1af1190aed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "17a5cd7e-1679-48e0-9f85-97597fc9f841",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}

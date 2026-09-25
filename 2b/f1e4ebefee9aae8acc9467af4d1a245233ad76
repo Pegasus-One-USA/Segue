@@ -1,0 +1,44 @@
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260923175415_AddMappingFieldCorrelationOperator.cs
+  s_174e16661bf66d::t_637f77eb8ce515 1-29
+src/FHIRBridge.Infrastructure/Persistence/Configurations/MappingProfileConfiguration.cs
+  s_174e16661bf66d::t_f8a9e8ad2c1250 61
+src/FHIRBridge.Domain/ValueObjects/MappingField.cs
+  s_174e16661bf66d::t_04b770a9c72980 28-33
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_174e16661bf66d::t_b97ce2479a4876 254
+  s_174e16661bf66d::t_31aa2736234fec 192
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_174e16661bf66d::t_637f77eb8ce515 5431-5434
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_174e16661bf66d::t_a7648bd592e25c 5467-5470
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260923175329_AddMappingFieldCorrelationOperator.Designer.cs
+  s_174e16661bf66d::t_a7648bd592e25c 1-6213
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260923175415_AddMappingFieldCorrelationOperator.Designer.cs
+  s_174e16661bf66d::t_637f77eb8ce515 1-6177
+tests/FHIRBridge.UnitTests/Configuration/MappingFieldCorrelationCodeOperatorMappingTests.cs
+  s_174e16661bf66d::t_c0a01275bc7511 2-62
+  s_174e16661bf66d::t_47a0264ad6b2e5 1
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260923175329_AddMappingFieldCorrelationOperator.cs
+  s_174e16661bf66d::t_a7648bd592e25c 1-29
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_174e16661bf66d::t_a46e88132a654f 1417
+  s_174e16661bf66d::t_e43bbd7fe9ad27 1561-1578
+portal/src/app/services/workflow-build-assembler-v2.correlate-by-code.spec.ts
+  s_174e16661bf66d::t_fd57dd5c7dcbfb 7-20,27-29,32,34,47-48,52-56,60-68,71-85,87-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2bf1e4ebefee9aae8acc9467af4d1a245233ad76",
+  "prompts": {},
+  "sessions": {
+    "s_174e16661bf66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a051edf-3c44-4555-8dea-ae48ca7f4ff9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

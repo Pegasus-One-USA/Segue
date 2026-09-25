@@ -1,0 +1,33 @@
+src/FHIRBridge.Application/Services/Transforms/Nodes/ValueTypeNodes.cs
+  s_6fe240044cc58e::t_d59d2af6a2194a 269-288,324-374
+src/FHIRBridge.Application/Services/Transforms/ReservedTransformConfigKeys.cs
+  s_6fe240044cc58e::t_d59d2af6a2194a 29-36
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_6fe240044cc58e::t_d59d2af6a2194a 1308-1316,1373,1589-1599,1619,1624
+tests/FHIRBridge.UnitTests/Transforms/FhirSourceJsonPatcherSiblingTests.cs
+  s_6fe240044cc58e::t_d59d2af6a2194a 1-69
+tests/FHIRBridge.UnitTests/Transforms/ValueTypeNodesTests.cs
+  s_6fe240044cc58e::t_d59d2af6a2194a 1,149-215
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_6fe240044cc58e::t_8c43791769a615 187
+src/FHIRBridge.Application/Services/Transforms/IFhirResourceTransformService.cs
+  s_6fe240044cc58e::t_d59d2af6a2194a 233-236,241-246
+src/FHIRBridge.Application/Services/Transforms/FhirSourceJsonPatcher.cs
+  s_6fe240044cc58e::t_d59d2af6a2194a 54-57,60-64,74-103,108-113,118-131,143,145-151,153,156,160-164,172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0b280858be1be628877e92c7a949051279d268a4",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
