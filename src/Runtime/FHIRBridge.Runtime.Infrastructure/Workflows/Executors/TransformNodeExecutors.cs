@@ -674,6 +674,17 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 // resolves a single target table per write call, so a flat child record would otherwise get
                 // written straight into the PARENT's table ("Invalid column name" for every child-only column).
                 var childTables = BuildChildTableRecords(mapped.ChildTables, fields, resourceType);
+                // A field that fans out into the array's OWN table (ArrayPolicy.SeparateDestination) writes its
+                // values here rather than onto the parent row, and only the parent row went through the rule
+                // chain below — so a rule authored on a repeating element's field (e.g. Patient.name.text) ran
+                // for whichever single instance landed on the parent table and never for any of the rows in
+                // dbo.PatientName. Same rule, same field, silently applied or not depending on which table the
+                // mapping happened to target. Every item's field goes through the identical chain now.
+                childTables = await ApplyTransformRulesToChildTablesAsync(
+                    childTables, fields, resource.ResourceType, destinationType, sourceSystem,
+                    resourcePipelineRouteId, ruleCache, resource.ResourceId, sourceJson, preMappingHops,
+                    mapped.RawArrayValues, context.WorkflowRunId, node.Id, sourceConnectionName,
+                    destinationName, cancellationToken);
                 var referenceLookups = mapped.ReferenceLookups is { Count: > 0 }
                     ? mapped.ReferenceLookups
                         .Select(l => new MappedReferenceLookup(l.TargetField, l.LookupTable, l.LookupKeyColumn, l.ReferenceId))
@@ -709,36 +720,12 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                             ? FhirSourceJsonPatcher.ApplyPatches(sourceJson, fhirWriteBackPatches)
                             : sourceJson;
 
-                        if (_lineageCaptureDispatcher is not null && lineageEntries is { Count: > 0 })
+                        if (lineageEntries is { Count: > 0 })
                         {
-                            // Fire-and-continue: EnqueueAsync only ever writes to a channel/publishes to a
-                            // broker — it never waits on the actual FieldLineageEntries insert, which happens
-                            // out-of-band in the Worker (see LineageCaptureProcessor). A publish failure here
-                            // must never fail the resource's own transform/write, so it's swallowed, not awaited
-                            // into the caller's exception path.
-                            try
-                            {
-                                await _lineageCaptureDispatcher.EnqueueAsync(
-                                    new LineageCaptureCommand(
-                                        context.WorkflowRunId,
-                                        node.Id,
-                                        resource.ResourceType,
-                                        resource.ResourceId,
-                                        lineageEntries,
-                                        Guid.NewGuid().ToString("N"))
-                                    {
-                                        SourceSystemType = sourceSystem,
-                                        SourceConnectionName = sourceConnectionName,
-                                        DestinationTypeName = destinationType?.ToString(),
-                                        DestinationName = destinationName,
-                                    },
-                                    cancellationToken);
-                            }
-                            catch (Exception) when (!cancellationToken.IsCancellationRequested)
-                            {
-                                // Lineage is diagnostic/audit data, not correctness-critical — losing a batch of
-                                // it must never take down the pipeline run that produced it.
-                            }
+                            await DispatchLineageAsync(
+                                context.WorkflowRunId, node.Id, resource.ResourceType, resource.ResourceId,
+                                lineageEntries, sourceSystem, sourceConnectionName, destinationType,
+                                destinationName, cancellationToken);
                         }
 
                         records.Add(new MappedDestinationRecord(
@@ -1345,9 +1332,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             // binding has no mapping for that CLR type (MappedSqlServerDestinationWriter throws "No mapping
             // exists from object type ... JsonObject"), so it must be serialized to its JSON text here, the same
             // way JsonMappingEngine's own MappingValueType.Json case stores a JSON column as a string.
-            transformed[destinationField] = currentValue is System.Text.Json.Nodes.JsonNode jsonNode
-                ? jsonNode.ToJsonString()
-                : currentValue;
+            transformed[destinationField] = ToDestinationValue(currentValue);
         }
 
         // A configured field whose source path matched nothing in this resource never reaches `row` at all, so
@@ -1381,6 +1366,57 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         }
 
         return (transformed ?? row, fhirWriteBackPatches, lineageEntries);
+    }
+
+    /// <summary>
+    /// Converts a rule chain's final value into something a destination writer's ADO.NET parameter binding can
+    /// actually take. A FHIR complex-type builder node (HumanNameParsing, AddressParsing, TelecomNormalization,
+    /// IdentifierFormatting, ReferenceConstruction) yields a <see cref="System.Text.Json.Nodes.JsonNode"/>, and
+    /// MappedSqlServerDestinationWriter throws "No mapping exists from object type … JsonObject" for it — so it
+    /// is serialized to its JSON text here, the same way JsonMappingEngine's own MappingValueType.Json case
+    /// stores a JSON column as a string.
+    ///
+    /// A PerItem run returns an ARRAY of those results (TransformNodeApplier reassembles one per element), which
+    /// has the same problem one level up and is written as a JSON array rather than left as a CLR object[].
+    /// Built as a real JsonArray rather than serialized straight, so a JsonNode element is embedded as JSON
+    /// instead of being re-encoded as a string of JSON.
+    /// </summary>
+    private static object? ToDestinationValue(object? value)
+    {
+        if (value is System.Text.Json.Nodes.JsonNode jsonNode)
+        {
+            return jsonNode.ToJsonString();
+        }
+
+        if (value is string || value is not System.Collections.IEnumerable items)
+        {
+            return value;
+        }
+
+        var materialized = items.Cast<object?>().ToList();
+
+        // A per-item run that produced plain values joins them into one delimited string rather than a JSON
+        // array: "All records" with a transformation is asking for every repeat rendered, and a column holding
+        // `["Warren McGinnis","Warren McGinnis"]` reads as an encoding artefact where
+        // `Warren McGinnis, Warren McGinnis` reads as the list it is. Structured results keep the JSON array —
+        // flattening an object to its ToString() would lose it.
+        if (materialized.All(item => item is null or string || item is not System.Text.Json.Nodes.JsonNode))
+        {
+            return string.Join(", ", materialized.Where(item => item is not null).Select(item => item!.ToString()));
+        }
+
+        var array = new System.Text.Json.Nodes.JsonArray();
+        foreach (var item in materialized)
+        {
+            array.Add(item switch
+            {
+                null => null,
+                System.Text.Json.Nodes.JsonNode node => node.DeepClone(),
+                _ => System.Text.Json.Nodes.JsonValue.Create(item.ToString()),
+            });
+        }
+
+        return array.ToJsonString();
     }
 
     /// <summary>Best-effort JSON serialization of a hop's before/after value for lineage storage — a lineage
@@ -1440,6 +1476,125 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     /// parent row — skipped rather than written with a missing/garbage FK value (mirrors
     /// ConfiguredPipelineService's identical guard for the Configured Pipeline execution path).
     /// </summary>
+    /// <summary>
+    /// Hands one resource's lineage hops to the dispatcher. Fire-and-continue: EnqueueAsync only ever writes
+    /// to a channel/publishes to a broker — it never waits on the actual FieldLineageEntries insert, which
+    /// happens out-of-band in the Worker (see LineageCaptureProcessor). A publish failure here must never fail
+    /// the resource's own transform/write, so it is swallowed rather than awaited into the caller's exception
+    /// path: lineage is diagnostic/audit data, not correctness-critical, and losing a batch of it must not take
+    /// down the pipeline run that produced it.
+    /// </summary>
+    private async Task DispatchLineageAsync(
+        Guid workflowRunId,
+        Guid nodeId,
+        string resourceType,
+        string resourceId,
+        IReadOnlyList<LineageHopEntryDto> entries,
+        string? sourceSystem,
+        string? sourceConnectionName,
+        DestinationType? destinationType,
+        string? destinationName,
+        CancellationToken cancellationToken)
+    {
+        if (_lineageCaptureDispatcher is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _lineageCaptureDispatcher.EnqueueAsync(
+                new LineageCaptureCommand(
+                    workflowRunId, nodeId, resourceType, resourceId, entries, Guid.NewGuid().ToString("N"))
+                {
+                    SourceSystemType = sourceSystem,
+                    SourceConnectionName = sourceConnectionName,
+                    DestinationTypeName = destinationType?.ToString(),
+                    DestinationName = destinationName,
+                },
+                cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Runs the same PostMapping rule chain over every child-table row that <see
+    /// cref="ApplyTransformRulesAsync"/> runs over a parent row, so a transformation rule attached to a field
+    /// inside a repeating element applies to EVERY instance of it — not only to whichever one the parent row
+    /// happened to carry. Returns <paramref name="childTables"/> unchanged when there is nothing to do.
+    ///
+    /// The source-field map is rebuilt per child table rather than reusing the caller's, which is keyed by
+    /// TargetField across every field of the resource: a child column and a parent column that share a name
+    /// (dbo.Patient.Text and dbo.PatientName.Text both being "Text") collide there, and the child rows would
+    /// resolve their rules against the parent field's source path. Scoping to the fields that actually write
+    /// to this table removes the ambiguity entirely.
+    /// </summary>
+    private async Task<IReadOnlyList<MappedChildTableRecord>?> ApplyTransformRulesToChildTablesAsync(
+        IReadOnlyList<MappedChildTableRecord>? childTables,
+        IReadOnlyCollection<MappingFieldDto> fields,
+        string resourceType,
+        DestinationType? destinationType,
+        string? sourceSystem,
+        Guid? resourcePipelineRouteId,
+        Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
+        string resourceId,
+        string? sourceJson,
+        IReadOnlyList<DeIdentificationFieldHop> preMappingHops,
+        IReadOnlyDictionary<string, IReadOnlyList<object?>>? rawArrayValues,
+        Guid workflowRunId,
+        Guid nodeId,
+        string? sourceConnectionName,
+        string? destinationName,
+        CancellationToken cancellationToken)
+    {
+        if (childTables is not { Count: > 0 } || _ruleResolver is null || _transformNodeRegistry is null
+            || destinationType is null)
+        {
+            return childTables;
+        }
+
+        var transformedTables = new List<MappedChildTableRecord>(childTables.Count);
+        List<LineageHopEntryDto>? lineageEntries = _lineageCaptureDispatcher is null ? null : [];
+
+        foreach (var childTable in childTables)
+        {
+            var sourceFieldByTarget = fields
+                .Where(f => string.Equals(f.DestinationObject, childTable.TableName, StringComparison.OrdinalIgnoreCase))
+                .GroupBy(f => f.TargetField, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().JsonPath, StringComparer.OrdinalIgnoreCase);
+
+            var rows = new List<IReadOnlyDictionary<string, object?>>(childTable.Rows.Count);
+            foreach (var row in childTable.Rows)
+            {
+                var (transformedRow, _, rowLineage) = await ApplyTransformRulesAsync(
+                    row, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
+                    resourcePipelineRouteId, ruleCache, resourceId, sourceJson, preMappingHops,
+                    rawArrayValues, cancellationToken);
+                // FhirWriteBackJsonPath patches are discarded on purpose: a child table only exists for a
+                // relational destination (BuildChildTableRecords requires a ForeignKeyColumn), and write-back
+                // targets a FHIR-native destination that stores the resource itself and so has no child tables.
+                rows.Add(transformedRow);
+                if (lineageEntries is not null && rowLineage is { Count: > 0 })
+                {
+                    lineageEntries.AddRange(rowLineage);
+                }
+            }
+
+            transformedTables.Add(childTable with { Rows = rows });
+        }
+
+        if (lineageEntries is { Count: > 0 })
+        {
+            await DispatchLineageAsync(
+                workflowRunId, nodeId, resourceType, resourceId, lineageEntries,
+                sourceSystem, sourceConnectionName, destinationType, destinationName, cancellationToken);
+        }
+
+        return transformedTables;
+    }
+
     private static IReadOnlyList<MappedChildTableRecord>? BuildChildTableRecords(
         IReadOnlyList<MappingChildTableDto>? childTables, IReadOnlyCollection<MappingFieldDto> fields, string resourceType)
     {

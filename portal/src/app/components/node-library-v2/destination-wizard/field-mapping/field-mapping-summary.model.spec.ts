@@ -101,6 +101,40 @@ describe('buildMappingSummaryDocument', () => {
     expect(col.sources).toBeUndefined();
   });
 
+  // An unset instance means "every repeat" for a whole-node mapping and "the first one" for a field
+  // mapping, so the default stamped here cannot be the same for both -- see defaultInstanceType.
+  it('stamps an unset whole-node instance as "all", not "first"', () => {
+    const rows: MappingRow[] = [{
+      resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient.name',
+      targetName: 'NameJson', tableName: 'dbo.Patient',
+    }];
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType: 'sql', destLabel: 'SQL Server',
+      mappingRows: rows, sqlTables: [], childTableRelationsByTable: {}, availableFields, sourceConnectionId: null, destinationId: null,
+    });
+    const col = doc.mappings[0].tables[0].columns[0];
+    expect(col.instance).toEqual({ arrayContext: 'Patient.name', type: 'all' });
+    expect(col.instanceIsExplicit).toBeTrue();
+  });
+
+  it('round-trips a deliberate whole-node instance choice', () => {
+    const rows: MappingRow[] = [{
+      resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient.name',
+      instance: { type: 'nth', n: 2 }, targetName: 'NameJson', tableName: 'dbo.Patient',
+    }];
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType: 'sql', destLabel: 'SQL Server',
+      mappingRows: rows, sqlTables: [], childTableRelationsByTable: {}, availableFields, sourceConnectionId: null, destinationId: null,
+    });
+    expect(doc.mappings[0].tables[0].columns[0].instance)
+      .toEqual({ arrayContext: 'Patient.name', type: 'nth', n: 2 });
+
+    const restored = applyMappingSummaryDocument(doc, 'sql');
+    expect(restored.mappingRows[0].instance).toEqual({
+      type: 'nth', n: 2, field: undefined, op: undefined, value: undefined, aggregate: undefined,
+    });
+  });
+
   it('emits mode "default" with defaultToken/defaultValue/defaultValueType, never sources', () => {
     const rows: MappingRow[] = [{
       resource: 'Patient', sources: [], mode: 'default',
@@ -598,5 +632,47 @@ describe('pruneOrphanedMappingRows', () => {
 
     expect(pruned).toHaveSize(1);
     expect(pruned[0].resource).toBe('Patient');
+  });
+});
+
+/**
+ * Before the whole-node instance picker existed, toSummaryInstance stamped {type:'first'} onto EVERY
+ * whole-node column by default. That was inert then -- nothing read it for this mode -- but it is
+ * indistinguishable from a deliberate "first instance" now that the selection is honoured, and honouring
+ * it would turn every already-saved whole-node mapping into a first-instance-only one on reopen. The
+ * instanceIsExplicit marker is what separates the two.
+ */
+describe('applyMappingSummaryDocument - legacy whole-node instance stamp', () => {
+  function docWithWholeNodeColumn(
+    instance: Record<string, unknown> | null, extra: Record<string, unknown> = {},
+  ): MappingSummaryDocument {
+    return {
+      source: 'EPIC', destination: 'SQL', sourceConnectionId: null, destinationId: null,
+      mappings: [{
+        resourceType: 'Patient', rank: 0, generatedAt: '2026-01-01T00:00:00.000Z',
+        schemaChanges: { tablesToCreate: [], columnsToAdd: [], summary: '' },
+        processingOrder: [], destination: { type: 'sql', label: 'SQL Server' },
+        tables: [{
+          name: 'Patient', isNew: false, isPrimary: true, relation: null,
+          columns: [{
+            column: 'NameJson', mode: 'wholeNodeAsJson', sourceNode: 'Patient.name',
+            instance, ...extra,
+          }],
+        }],
+      }],
+    } as unknown as MappingSummaryDocument;
+  }
+
+  it('drops the inert stamp from an older document, so the column keeps storing the whole node', () => {
+    const doc = docWithWholeNodeColumn({ arrayContext: 'Patient.name', type: 'first' });
+    const restored = applyMappingSummaryDocument(doc, 'sql');
+    expect(restored.mappingRows[0].mode).toBe('childJson');
+    expect(restored.mappingRows[0].instance).toBeUndefined();
+  });
+
+  it('keeps the same selection when the document marks it as explicit', () => {
+    const doc = docWithWholeNodeColumn({ arrayContext: 'Patient.name', type: 'first' }, { instanceIsExplicit: true });
+    const restored = applyMappingSummaryDocument(doc, 'sql');
+    expect(restored.mappingRows[0].instance?.type).toBe('first');
   });
 });

@@ -227,9 +227,10 @@ public static class TransformNodeConfigSchemas
             ]),
             [TransformNodeType.HumanNameParsing] = new(TransformNodeType.HumanNameParsing, "HumanName Parsing & Formatting",
             [
-                Select("pattern", "Mode / input pattern", ["FirstLast", "FirstLastMiddle", "LastFirstMiddle", "RoundTrip"], "FirstLast"),
+                Select("pattern", "Mode / input pattern",
+                    ["FirstLast", "FirstMiddleLast", "FirstLastMiddle", "LastFirstMiddle", "RoundTrip"], "FirstLast"),
                 Select("roundTripPattern", "Round trip — pattern to parse the incoming string with",
-                    ["FirstLast", "FirstLastMiddle", "LastFirstMiddle"], "FirstLast",
+                    ["FirstLast", "FirstMiddleLast", "FirstLastMiddle", "LastFirstMiddle"], "FirstLast",
                     visibleWhen: OnlyWhen("pattern", "RoundTrip")),
                 Text("format", "Output format (HumanName → string)", "First Middle Last Suffix",
                     visibleWhen: OnlyWhen("pattern", "RoundTrip")),

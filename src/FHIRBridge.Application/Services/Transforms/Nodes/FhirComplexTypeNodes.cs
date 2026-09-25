@@ -148,6 +148,11 @@ public sealed class HumanNameParsingNode : ITransformNode
 
     public TransformNodeType NodeType => TransformNodeType.HumanNameParsing;
 
+    /// <summary>Reads the element rather than only its display string: <c>use</c> says which of a patient's
+    /// names this is, and no rendering of the name carries it. An element with no <c>text</c> is also the one
+    /// shape this node composes FROM, rather than parses.</summary>
+    public bool AcceptsStructuredValue => true;
+
     public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret)
     {
         if (value is null)
@@ -155,13 +160,61 @@ public sealed class HumanNameParsingNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
-        // Direction follows the shape of the input: an already-structured name formats, a plain string parses.
+        // Two independent halves, because they answer different questions and a single "pattern" could only
+        // ever answer one of them: FIRST resolve the name's parts (from an already-structured element, or by
+        // parsing a display string with `pattern`), THEN emit either those parts or a display string composed
+        // in the token order `format` names. Blank `format` means "emit the parts", which is why it is the
+        // default — a rule that names no output shape should not silently flatten a name into a string.
+        var resolved = ResolveName(value, config);
+        if (!resolved.Success || resolved.Value is not JsonObject name)
+        {
+            return resolved;
+        }
+
+        var format = config.GetOrNull("format");
+
+        // RoundTrip predates `format` being reachable on its own and has always meant parse-then-compose, so
+        // it still composes even when no format is named — with the shape it has always defaulted to.
+        if (string.IsNullOrWhiteSpace(format) && config.Get("pattern", "FirstLast") == RoundTripPattern)
+        {
+            format = "First Middle Last Suffix";
+        }
+
+        return string.IsNullOrWhiteSpace(format)
+            ? TransformResult.Ok(name)
+            : Format(name, new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase) { ["format"] = format });
+    }
+
+    /// <summary>
+    /// The name's parts, however they have to be arrived at. An already-structured element is authoritative
+    /// for the parts it states — the source system parsed its own data, and re-deriving family/given from the
+    /// display string instead discards that and makes the result depend on the author picking a `pattern` that
+    /// happens to match this record's name order. Its display string is still read for the affixes, which FHIR
+    /// routinely leaves only in `text`: a "III" or a "Dr" that the element itself never states.
+    /// </summary>
+    private static TransformResult ResolveName(object value, IReadOnlyDictionary<string, string> config)
+    {
         // TryReadStructuredName also accepts JSON object *text*, because an upstream node's JsonObject is
         // serialized to its JSON string on the way to a destination field (see TransformNodeExecutors), so a
         // re-read structured name arrives here as text rather than as a live node.
         if (TryReadStructuredName(value, out var structured))
         {
-            return Format(structured!, config);
+            // An element already states its own parts, so nothing is parsed out of the display string — the
+            // element IS the parse. `pattern` therefore selects the order those parts are composed in, and the
+            // result is a display string. See PatternFormats for the five orders.
+            //
+            // The display string is still read for the affixes, which FHIR routinely leaves only in `text`:
+            // "Warren James McGinnis III" carries a suffix the element itself never states, and RoundTrip is
+            // defined to include it.
+            var name = EnrichAffixesFromText(structured!, ReadString(structured["text"]), config);
+            var format = config.GetOrNull("format") is { Length: > 0 } explicitFormat
+                ? explicitFormat
+                : PatternFormats.GetValueOrDefault(config.Get("pattern", "FirstLast"), "First Last");
+
+            return Format(name, new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase)
+            {
+                ["format"] = format,
+            });
         }
 
         var raw = value.ToString()?.Trim();
@@ -170,25 +223,79 @@ public sealed class HumanNameParsingNode : ITransformNode
             return TransformResult.Ok(null);
         }
 
-        // The RoundTrip pattern does both halves in ONE rule: parse the display string into a HumanName, then
-        // immediately compose it back out via `format`. It exists because a destination column carries a single
-        // rule fed by a single (string) source path, so the format direction is otherwise unreachable from the
-        // product — chaining a second rule to do it is not something an end user can express in the mapping UI.
-        // `roundTripPattern` names the parse order to use, keeping `pattern` free to select RoundTrip itself.
-        if (config.Get("pattern", "FirstLast") == RoundTripPattern)
-        {
-            var parseConfig = new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase)
+        // `roundTripPattern` names the order to read the string in when `pattern` is spent selecting RoundTrip.
+        var parseConfig = config.Get("pattern", "FirstLast") == RoundTripPattern
+            ? new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase)
             {
                 ["pattern"] = config.Get("roundTripPattern", "FirstLast"),
-            };
+            }
+            : config;
 
-            var parsed = Parse(raw, parseConfig);
-            return parsed.Success && parsed.Value is JsonObject parsedName
-                ? Format(parsedName, config)
-                : parsed;
+        return Parse(raw, parseConfig);
+    }
+
+    /// <summary>
+    /// What each mode composes from an element's own parts. "First" is the first given name, "Middle" the
+    /// given names after it, "Given" all of them, "Last"/"Family" the family name.
+    ///   FirstLast        -> Warren McGinnis
+    ///   FirstMiddleLast  -> Warren James McGinnis
+    ///   FirstLastMiddle  -> Warren McGinnis James
+    ///   LastFirstMiddle  -> McGinnis Warren James
+    ///   RoundTrip        -> Warren James McGinnis III   (prefix, given, family, suffix)
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> PatternFormats =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["FirstLast"] = "First Last",
+            ["FirstMiddleLast"] = "First Middle Last",
+            ["FirstLastMiddle"] = "First Last Middle",
+            ["LastFirstMiddle"] = "Last First Middle",
+            [RoundTripPattern] = "Prefix Given Family Suffix",
+        };
+
+    /// <summary>
+    /// The element's own parts, plus only the affixes it is missing, read out of its display string. Never
+    /// overwrites a prefix/suffix the element already states.
+    /// </summary>
+    private static JsonObject EnrichAffixesFromText(
+        JsonObject name, string? text, IReadOnlyDictionary<string, string> config)
+    {
+        var enriched = new JsonObject
+        {
+            ["family"] = ReadString(name["family"]),
+            ["given"] = new JsonArray(ReadStrings(name["given"]).Select(g => (JsonNode)g).ToArray()),
+        };
+
+        var parsed = string.IsNullOrWhiteSpace(text) ? null : Parse(text, config).Value as JsonObject;
+
+        foreach (var affix in new[] { "prefix", "suffix" })
+        {
+            var own = ReadStrings(name[affix]);
+            var fromText = parsed is null ? [] : ReadStrings(parsed[affix]);
+            var values = own.Count > 0 ? own : fromText;
+            if (values.Count > 0)
+            {
+                enriched[affix] = new JsonArray(values.Select(v => (JsonNode)v).ToArray());
+            }
         }
 
-        return Parse(raw, config);
+        return enriched;
+    }
+
+    /// <summary>Parses an element's display string, keeping the element's own <c>use</c> — nothing else can
+    /// supply it, and without it a per-item run over Patient.name loses which name was the official one. An
+    /// explicit config <c>use</c> still wins.</summary>
+    private static TransformResult ParseCarryingElementUse(
+        string text, JsonObject element, IReadOnlyDictionary<string, string> config)
+    {
+        var parsed = Parse(text, config);
+        if (parsed.Success && parsed.Value is JsonObject parsedName
+            && config.GetOrNull("use") is null && ReadString(element["use"]) is { Length: > 0 } elementUse)
+        {
+            parsedName["use"] = elementUse;
+        }
+
+        return parsed;
     }
 
     private static TransformResult Parse(string raw, IReadOnlyDictionary<string, string> config)
@@ -231,7 +338,16 @@ public sealed class HumanNameParsingNode : ITransformNode
                 parts.RemoveAt(parts.Count - 1);
             }
 
-            if (pattern == "FirstLastMiddle" && parts.Count > 1)
+            if (pattern == "FirstMiddleLast" && parts.Count > 1)
+            {
+                // Positional: the LAST token is the surname and everything before it is a given name — the
+                // ordinary Western reading of "Warren James McGinnis". Distinct from FirstLast, which treats
+                // everything after the first token as one multi-word surname ("James McGinnis") and so cannot
+                // express a middle name at all.
+                family = parts[^1];
+                given = [.. parts[..^1]];
+            }
+            else if (pattern == "FirstLastMiddle" && parts.Count > 1)
             {
                 // Positional: token 1 = first (given), token 2 = last (family), tokens 3+ = middle (given).
                 // A source that emits this order puts the surname in the *second* position, so the trailing

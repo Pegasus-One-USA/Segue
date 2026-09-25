@@ -1,7 +1,10 @@
 import { Component, HostBinding, computed, inject, input, output, signal, effect } from '@angular/core';
 import { A11yModule } from '@angular/cdk/a11y';
 import { FormsModule } from '@angular/forms';
-import { MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCandidate } from './field-mapping-model';
+import {
+  MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCandidate, defaultInstanceType,
+  wholeNodeInstanceIndex, instanceCriteriaPredicate,
+} from './field-mapping-model';
 import { MappingValueType } from '../../../../mapping-profiles/models/mapping-profile.model';
 import { DestinationTypeV2 as DestinationType } from '../../../../models/destination-configuration-v2.model';
 import { ToastService } from '../../../../services/toast.service';
@@ -50,6 +53,13 @@ export class FieldMappingJoinPopoverComponent {
    *  0 so a host that never passes it (there are none today) just never shows "Show all sources" rather
    *  than throwing on a missing required input. */
   readonly totalSourceCount = input<number>(0);
+  /** For a whole-node ('childJson') row only: the display label of the repeating node it reads — its own,
+   *  when that node is the array (Patient.name), or the nearest enclosing one when it is not
+   *  (Patient.contact.name repeats through "Contact"). Null means the node does not repeat at all, which
+   *  hides the instance picker. Resolved by the host, which is the only side holding the source tree
+   *  (FieldMappingCanvasComponent.childArrayLabelFor) — a childJson row carries no `sources`, so unlike an
+   *  ordinary field mapping there is no per-source `arrays` metadata on the row itself to read it from. */
+  readonly childArrayLabel = input<string | null>(null);
 
   readonly save = output<MappingRow>();
   readonly remove = output<void>();
@@ -96,7 +106,7 @@ export class FieldMappingJoinPopoverComponent {
         destinationType,
         resourceType: row.resource,
         destinationField: row.targetName,
-        sourceField: row.sources[0]?.fhirPath ?? null,
+        sourceField: this.ruleSourceField(row),
         resourcePipelineRouteId: this.workflowId() ?? undefined,
         // Only THIS workflow's rule may show here. Without this the popover opened in "update" mode over a
         // rule some other pipeline had authored against the same column.
@@ -119,6 +129,12 @@ export class FieldMappingJoinPopoverComponent {
             this.ruleNodeType.set(rule.nodeType);
             this.ruleConfig.set({ ...rule.config });
             this.ruleSectionOpen.set(true);
+          } else {
+            // Nothing authored yet — start on whichever node type actually fits this row's value shape.
+            // A childJson row's value is a whole JSON array (ArrayPolicy.StoreJson), which is what
+            // ArrayListOperationsNode alone knows how to unwrap into real items; every other node would see
+            // one opaque blob. Still only a starting point — the Type dropdown offers all of them.
+            this.ruleNodeType.set(row.mode === 'childJson' ? 'ArrayListOperations' : 'StringNormalization');
           }
         },
         error: () => this.existingRule.set(null),
@@ -156,12 +172,18 @@ export class FieldMappingJoinPopoverComponent {
         destinationType,
         resourceType: row.resource,
         destinationField: row.targetName,
-        sourceField: row.sources[0]?.fhirPath ?? null,
+        sourceField: this.ruleSourceField(row),
         order: 0,
         onNull: 'Skip',
         errorPolicy: 'NullOut',
         isEnabled: true,
-        arrayMode: 'Whole',
+        // 'PerItem' exactly when the value IS an array — a whole-node row still reading every repeat. The
+        // node then runs once per element and the results are reassembled into one JSON array for the column,
+        // instead of the whole array being handed to a scalar node as one opaque string (which parsed the JSON
+        // source text itself as a value: a family name of '[{'use':'official''). TransformNodeApplier
+        // unwraps the JSON-array string this arrives as; it used to fan out only over a real IEnumerable, which
+        // a StoreJson value never is.
+        arrayMode: this.isChildJson() && this.readsWholeNode() ? 'PerItem' : 'Whole',
         executionPhase: 'PostMapping',
         // A rule that reshapes the value (e.g. DateMathAge turning a Date into an Integer) must declare
         // that output type, or CreateMappingProfileRequestValidator falls back to comparing the RAW
@@ -231,6 +253,10 @@ export class FieldMappingJoinPopoverComponent {
    *  combination is reopened (constructor effect above), so the checkbox — always disabled while type is
    *  'all' — never shows unchecked-but-locked. */
   private withForcedAggregate(row: MappingRow): MappingRow {
+    // Never on a whole-node row: its "All records" already writes the entire node as one JSON array on one
+    // row (ArrayPolicy.StoreJson), so there is no row duplication to prevent and no delimited string to
+    // aggregate into — stamping 'csv' there would only persist a setting nothing reads.
+    if (row.mode === 'childJson') return row;
     if (row.instance?.type !== 'all' || row.instance.aggregate === 'csv') return row;
     return { ...row, instance: { ...row.instance, aggregate: 'csv' } };
   }
@@ -265,7 +291,51 @@ export class FieldMappingJoinPopoverComponent {
     this.dragOffset = null;
   }
 
-  hasArrayAncestors = computed(() => (this.draft()?.sources[0]?.arrays?.length ?? 0) > 0);
+  /** What a transformation rule is keyed by on the source side, for BOTH row shapes. An ordinary 'value'
+   *  row has a real source field; a 'childJson' row has `sources: []` (see MappingRow.sources) and carries its
+   *  path as childNodeId instead — passing null for it there would have keyed the rule to "any source field"
+   *  on that column, so a rule authored on one array node would have been picked up by any other mapping onto
+   *  the same column. Both shapes already agree on the format the backend re-derives at run time
+   *  (RuleSourceFieldFormat.FromJsonPath): serializeRowsFlat sends the childJson row's path as childNodeId,
+   *  which workflow-build-assembler-v2 turns into the same "$.name" JsonPath that normalizes back to
+   *  "Patient.name" — exactly what is persisted here. */
+  private ruleSourceField(row: MappingRow): string | null {
+    return row.sources[0]?.fhirPath ?? row.childNodeId ?? null;
+  }
+
+  /** The whole-node-as-JSON row shape (ArrayPolicy.StoreJson) — no source chips, and a value that reaches
+   *  a transformation rule as one JSON string rather than a scalar. */
+  isChildJson = computed(() => this.draft()?.mode === 'childJson');
+  /** A whole-node row has no per-source `arrays` metadata to read (its `sources` is empty by construction),
+   *  so whether it repeats is the host's answer — see childArrayLabel. */
+  hasArrayAncestors = computed(() =>
+    this.isChildJson()
+      ? this.childArrayLabel() !== null
+      : (this.draft()?.sources[0]?.arrays?.length ?? 0) > 0);
+  /** True while a whole-node row still reads every repeat — what it has always done, and what both of its
+   *  hints describe. False once one instance is singled out, since the value is then a single JSON object
+   *  rather than a JSON array. */
+  readsWholeNode = computed(() => {
+    const instance = this.draft()?.instance;
+    // A criteria selection narrows the node too, even though it resolves to a filter rather than an index.
+    return wholeNodeInstanceIndex(instance) === null && instanceCriteriaPredicate(instance) === null;
+  });
+  /** Names the single instance a whole-node row reads, for the hints — only ever read while readsWholeNode()
+   *  is false, so the "every instance" case has no phrasing here. */
+  instanceSummary = computed(() => {
+    const d = this.draft();
+    if (d?.instance?.type === 'nth') return `instance #${Math.max(1, Math.floor(d.instance.n ?? 1))}`;
+    // Deliberately not restating the criteria itself — its three inputs sit directly above this line, and
+    // repeating them back reads as noise rather than as confirmation.
+    if (d?.instance?.type === 'criteria') return 'the matching instances';
+    return 'the first instance';
+  });
+  /** The effective instance selection shown in the picker — an unset one means different things per row
+   *  shape (see defaultInstanceType), so the fallback can't be a literal 'first' in the template. */
+  instanceType = computed<MappingInstanceSelection['type']>(() => {
+    const d = this.draft();
+    return d ? (d.instance?.type ?? defaultInstanceType(d)) : 'first';
+  });
   isJoin = computed(() => (this.draft()?.sources.length ?? 0) > 1);
   /** True while `row` is a deliberately narrowed single-source VIEW of a real join with more sources than
    *  are actually shown here (see FieldMappingCanvasComponent.popoverDisplayRow) — gates the "Show all N
@@ -275,6 +345,7 @@ export class FieldMappingJoinPopoverComponent {
 
   onShowAllSources(): void { this.showAllSources.emit(); }
   arrayAncestorLabel = computed(() => {
+    if (this.isChildJson()) return this.childArrayLabel() ?? '';
     const arrays = this.draft()?.sources[0]?.arrays;
     return arrays?.length ? arrays[arrays.length - 1] : '';
   });

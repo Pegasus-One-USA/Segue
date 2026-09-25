@@ -383,8 +383,10 @@ export function serializeRowsFlat(
       path: isDefault ? (row.defaultToken ?? '@default') : (primary?.fhirPath ?? row.childNodeId ?? ''),
       target: targetTableName,
       column: row.targetName,
-      jsonPath: isDefault ? (row.defaultToken ?? '@default') : primary?.jsonPath,
-      valueType: isDefault ? row.defaultValueType : (arrayPolicy === 'StoreJson' ? 'Json' : primary?.valueType),
+      jsonPath: isDefault
+        ? (row.defaultToken ?? '@default')
+        : (criteriaJsonPath(row) ?? primary?.jsonPath ?? wholeNodeJsonPath(row)),
+      valueType: isDefault ? row.defaultValueType : effectiveMappingValueType(row),
       arrays: primary?.arrays,
       arrayPolicy,
       approximated,
@@ -418,6 +420,88 @@ export interface ArrayPolicyResolution {
 }
 
 /**
+ * What an absent `instance` means, which differs by row shape. A 'value' row defaults to the first item
+ * (see migrateLegacyRow's own comment — anything else would silently re-point already-provisioned
+ * pipelines), but a 'childJson' row has always stored the node in FULL, so its unset default is 'all'.
+ * Getting that backwards would turn every existing whole-node mapping into a first-item-only one.
+ */
+export function defaultInstanceType(row: MappingRow): MappingInstanceSelection['type'] {
+  return row.mode === 'childJson' ? 'all' : 'first';
+}
+
+/**
+ * The array index a whole-node (childJson) row's instance selection resolves to, or null for "the whole
+ * node, every instance" — which is what 'all' and an unset selection both mean here. Unlike a scalar row,
+ * where the instance is expressed through ArrayPolicy, this becomes a literal index in the JsonPath
+ * (JsonMappingEngine.ParseSegment accepts one), so 'nth' is exact rather than approximated. 'criteria' has
+ * no engine-side predicate support and falls back to the first instance — resolveArrayPolicy flags that as
+ * approximated so the popover's ⚠ caveat explains it.
+ */
+export function wholeNodeInstanceIndex(instance: MappingInstanceSelection | undefined): number | null {
+  switch (instance?.type) {
+    case 'first': return 0;
+    // `n` is 1-based in the UI ("Instance #1" is the first), 0-based in the path.
+    case 'nth': return Math.max(1, Math.floor(instance.n ?? 1)) - 1;
+    default: return null;
+  }
+}
+
+/**
+ * The "[?field op value]" filter for a "Match criteria" selection — the wire form JsonMappingEngine's
+ * ResolveAll matches array elements with. Null for every other selection, and for a criteria selection that
+ * names no field yet (a half-filled form selects nothing rather than silently selecting everything).
+ *
+ * The value is NOT quoted or escaped: the engine splits this token on the first operator and takes the rest
+ * verbatim, so a value containing "]" would truncate the path. Nothing in the UI restricts that today — worth
+ * knowing, though a FHIR code/system/use is the realistic input here.
+ */
+export function instanceCriteriaPredicate(instance: MappingInstanceSelection | undefined): string | null {
+  if (instance?.type !== 'criteria') return null;
+  const field = instance.field?.trim();
+  if (!field) return null;
+  const op = instance.op === '!=' ? '!=' : instance.op === 'contains' ? '~' : '=';
+  return `?${field}${op}${instance.value?.trim() ?? ''}`;
+}
+
+/**
+ * The explicit JsonPath a whole-node row needs when it must read ONE instance rather than the whole node,
+ * or undefined to let workflow-build-assembler-v2's toJsonPath derive the plain node path as before.
+ * Undefined for the resource's own root node too: the root of a FHIR resource is an object, never a
+ * repeating element, so there is no instance of it to index.
+ */
+export function wholeNodeJsonPath(row: MappingRow): string | undefined {
+  if (row.mode !== 'childJson' || !row.childNodeId) return undefined;
+  const index = wholeNodeInstanceIndex(row.instance);
+  const predicate = instanceCriteriaPredicate(row.instance);
+  const selector = predicate ?? (index === null ? null : `${index}`);
+  if (selector === null) return undefined;
+  const bare = row.childNodeId.startsWith(`${row.resource}.`)
+    ? row.childNodeId.slice(row.resource.length + 1)
+    : row.childNodeId;
+  return bare && bare !== row.resource ? `$.${bare}[${selector}]` : undefined;
+}
+
+/**
+ * A scalar field's own JsonPath with the criteria filter substituted for its nearest array ancestor's "[*]",
+ * e.g. "$.name[*].text" + (use = usual) becomes "$.name[?use=usual].text". Undefined when there is nothing to
+ * rewrite — no criteria, no filter to build from it, or a path that never wildcards that ancestor.
+ *
+ * Only the LAST "[*]" is rewritten: the instance picker asks about the nearest enclosing repeat
+ * (arrayAncestorLabel), which is the innermost one the path crosses, and an outer repeat keeps addressing all
+ * of its items exactly as before.
+ */
+export function criteriaJsonPath(row: MappingRow): string | undefined {
+  if (row.mode !== 'value') return undefined;
+  const predicate = instanceCriteriaPredicate(row.instance);
+  const jsonPath = row.sources[0]?.jsonPath;
+  if (!predicate || !jsonPath) return undefined;
+  const lastWildcard = jsonPath.lastIndexOf('[*]');
+  return lastWildcard === -1
+    ? undefined
+    : `${jsonPath.slice(0, lastWildcard)}[${predicate}]${jsonPath.slice(lastWildcard + 3)}`;
+}
+
+/**
  * Single source of truth for translating a MappingRow's join/instance-selection UI state into the
  * backend's ArrayPolicy enum (Scalar | FirstItem | RepeatParent | SeparateDestination | StoreJson |
  * RejectIfMultiple — only the first four have a UI entry point in this feature; the remaining two are
@@ -425,6 +509,10 @@ export interface ArrayPolicyResolution {
  */
 export function resolveArrayPolicy(row: MappingRow): ArrayPolicyResolution {
   if (row.mode === 'childJson') {
+    // Always StoreJson: the value is written as JSON text whichever instance it came from. WHICH instance
+    // is carried by the JsonPath instead (see wholeNodeJsonPath) — an index, or a "[?field=value]" filter,
+    // both of which the engine's own ResolveAll understands — rather than by the policy enum, which has no
+    // "the nth one, as JSON" member.
     return { arrayPolicy: 'StoreJson', approximated: false };
   }
   if (row.mode === 'default') {
@@ -458,9 +546,14 @@ function applyInstance(
         return { arrayPolicy: 'FirstItem', approximated: true };
       }
       return { arrayPolicy: 'RepeatParent', approximated: false };
-    case 'nth':
     case 'criteria':
-      // Closest existing enum value; wrong whenever n > 0 or the criteria wouldn't pick the first item.
+      // The criteria itself now travels in the JsonPath (see criteriaJsonPath), so what reaches this field is
+      // already only the matching repeats — taking the first of those is exact, not an approximation.
+      return { arrayPolicy: 'FirstItem', approximated: false };
+    case 'nth':
+      // Closest existing enum value; still wrong whenever n > 0. Unlike a whole-node row, a scalar field's
+      // path has no index form to carry the position through (its own wildcard addresses every repeat), so
+      // this one stays an approximation.
       return { arrayPolicy: 'FirstItem', approximated: true };
   }
 }

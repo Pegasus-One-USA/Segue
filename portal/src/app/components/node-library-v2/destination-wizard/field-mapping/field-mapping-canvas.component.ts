@@ -21,7 +21,7 @@ import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payl
 import { FieldMappingDefaultValueModalComponent, FmDefaultValueSubmit } from './field-mapping-default-value-modal.component';
 import { FieldMappingLoadDestinationPayloadModalComponent } from './field-mapping-load-destination-payload-modal.component';
 import { parseSourcePayloadJson, reconstructPayloadJsonFor, parseDestinationPayloadJson } from './field-mapping-payload.util';
-import { ChildTableRelation } from './field-mapping-summary.model';
+import { ChildTableRelation, nearestArrayGroupId } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest, DestinationSchemaService } from '../../../../services/destination-schema.service';
 import { DestinationTypeV2 as DestinationType, DeIdentificationProfileDto } from '../../../../models/destination-configuration-v2.model';
@@ -1887,6 +1887,21 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     if (!row || !focus || row.mode !== 'value' || row.sources.length <= 1) return row;
     const source = row.sources.find(s => s.fhirPath === focus);
     return source ? { ...row, sources: [source] } : row;
+  });
+
+  /**
+   * The repeating node a whole-node ('childJson') mapping actually reads, as a display label — the node
+   * itself when it is the array ("Name" for Patient.name), the nearest enclosing one when it is not
+   * ("Contact" for Patient.contact.name), and null when nothing on that path repeats, which is what hides
+   * the popover's instance picker. Resolved here because the source tree lives on this side and a
+   * childJson row carries no `sources` to read `arrays` metadata from; an ordinary field mapping needs no
+   * equivalent, since each of its sources carries its own array ancestry.
+   */
+  readonly popoverChildArrayLabel = computed<string | null>(() => {
+    const row = this.popoverDisplayRow();
+    if (!row || row.mode !== 'childJson' || !row.childNodeId) return null;
+    const arrayGroupId = nearestArrayGroupId(this.forest(), row.childNodeId);
+    return arrayGroupId ? (findNode(this.forest(), arrayGroupId)?.label ?? null) : null;
   });
 
   /** `e.sourceFhirPath` is the ACTUAL source the clicked wire was drawn for (FmWirePath.sourceFhirPath,

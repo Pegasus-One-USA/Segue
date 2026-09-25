@@ -1547,7 +1547,10 @@ export class WorkflowBuildAssemblerServiceV2 {
     const missing = arrays
       .map(a => (a.startsWith(`${resource}.`) ? a.slice(resource.length + 1) : a))
       .map(a => a.replace(/\[\*\]/g, '').trim())
-      .filter(a => a.length > 0 && !jsonPath.includes(`${a}[*]`));
+      // "[?field=value]" addresses that ancestor just as deliberately as "[*]" does — it selects the repeats
+      // matching the mapping's own criteria rather than all of them — so a filtered ancestor is intact, not
+      // missing. Without this every "Match criteria" mapping warns that it resolves to nothing.
+      .filter(a => a.length > 0 && !jsonPath.includes(`${a}[*]`) && !jsonPath.includes(`${a}[?`));
     if (missing.length > 0) {
       console.warn(
         `[mapping] ${resource}.${column}: jsonPath "${jsonPath}" does not wildcard its array ancestor(s) ` +
