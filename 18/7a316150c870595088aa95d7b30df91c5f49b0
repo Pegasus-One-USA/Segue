@@ -1,0 +1,162 @@
+src/BuildingBlocks/FHIRBridge.Governance/IGovernanceLogger.cs
+  s_102cddd76c43e9::t_8bc7aa79230206 30-31
+src/FHIRBridge.Application/DTOs/GovernanceDtos.cs
+  s_102cddd76c43e9::t_fcc54eefab6da2 143-163
+  s_102cddd76c43e9::t_037691004df965 302-303,309
+portal/src/app/services/workflow-api.service.ts
+  s_28625b94800ea7::t_670138573ebcd5 31-47,497-521
+  s_28625b94800ea7::t_bf7af4c004c247 522
+portal/src/app/governance/models/correlation-search.model.ts
+  s_102cddd76c43e9::t_a07d68955d5d3d 84
+  s_102cddd76c43e9::t_d0cfb901004341 37-65
+src/FHIRBridge.Infrastructure/Destinations/LoggingConfiguredDestinationWriter.cs
+  s_102cddd76c43e9::t_e6275f26466a6d 151-157,162-210
+  s_102cddd76c43e9::t_a0b5a7cb32e7b3 112-117
+  s_102cddd76c43e9::t_b55fef6ba94353 4,20-27,33,35-38,42
+  s_102cddd76c43e9::t_2d643782512310 127-136
+  s_102cddd76c43e9::t_b938f27bd7c836 74-96,99
+  s_102cddd76c43e9::t_f733786a676bb4 211-212
+tests/FHIRBridge.UnitTests/Governance/DestinationStepDescriberTests.cs
+  s_102cddd76c43e9::t_dcc24c4dd80484 1-69
+  s_102cddd76c43e9::t_7e7cbdd6044b4f 70-71
+portal/src/app/governance/pages/correlation-search/correlation-search.component.ts
+  s_102cddd76c43e9::t_16b251c98ad091 46-47
+  s_102cddd76c43e9::t_9c700d9dc7b515 109-111
+  s_102cddd76c43e9::t_e5f63989419d58 112
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceLogger.cs
+  s_102cddd76c43e9::t_c67fa7c7dc8ac8 233-257
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_102cddd76c43e9::t_e28418a6675dd4 490-512,517
+portal/src/app/governance/pages/correlation-search/correlation-search.component.html
+  s_102cddd76c43e9::t_24d8620b71db66 314-344
+src/BuildingBlocks/FHIRBridge.Governance/GovernanceEntries.cs
+  s_102cddd76c43e9::t_0e9dd0fb9577ea 113-136
+src/FHIRBridge.Infrastructure/Governance/NullGovernanceLogger.cs
+  s_102cddd76c43e9::t_5bc9bbd2a25edc 28-29
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_28625b94800ea7::t_922f458872801b 1045-1048,1051-1052,1055,1058-1060,1063,1079,1082,1087-1089,1092,1097,1104,2527-2591
+  s_012a949fbb852d::t_f88643c8512bdf 1044,1049-1050,1053-1054,1056-1057,1061-1062,1064-1078,1080-1081,1083-1086,1090-1091,1093-1096,1098-1103,1105-1114,2592-2593
+portal/src/app/core/api-endpoints.ts
+  s_28625b94800ea7::t_c79ada3b761c95 505
+src/FHIRBridge.Infrastructure/Destinations/RelationalDestinationWriterBase.cs
+  s_102cddd76c43e9::t_bd4ff088547c73 75-77
+src/FHIRBridge.Infrastructure/Destinations/Fabric/WarehouseTableLandingStrategy.cs
+  s_102cddd76c43e9::t_ac67a53cf766ee 104-107
+  s_102cddd76c43e9::t_a502d37f0df242 85-92
+portal/src/app/governance/pages/correlation-search/correlation-search.component.scss
+  s_102cddd76c43e9::t_b2735a52561f66 273-305
+src/FHIRBridge.Infrastructure/Destinations/Fabric/OneLakeFilesLandingStrategy.cs
+  s_102cddd76c43e9::t_4865438b8da0b6 61-66
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_28625b94800ea7::t_e04d0dbf1fe0a4 1,331,700
+src/FHIRBridge.Infrastructure/Destinations/MappedBlobStorageDestinationWriter.cs
+  s_102cddd76c43e9::t_0494ff5118d20d 53-61
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_28625b94800ea7::t_f3656cabe8e029 1054-1057,1060-1061,1064,1067-1069,1072,1088,1091,1096-1098,1101,1106,1113,2547-2612
+  s_28625b94800ea7::t_e50f2722db9946 1053
+  s_28625b94800ea7::t_30185eac362fe1 1058-1059
+  s_28625b94800ea7::t_35298802696255 1062-1063
+  s_28625b94800ea7::t_bfddd1fc3473a2 1065-1066
+  s_28625b94800ea7::t_d287e1647aedc0 1070-1071
+  s_28625b94800ea7::t_682f374c8b0f8d 1073-1075,1085-1087
+  s_28625b94800ea7::t_b43de41844a01a 1089-1090
+  s_28625b94800ea7::t_a9d0c7cd1c23fb 1092-1095
+  s_28625b94800ea7::t_6a357a5027e4c6 1099-1100
+  s_28625b94800ea7::t_cb1dcc8f37ba82 1102-1105
+  s_28625b94800ea7::t_163404aaa13f9d 1107-1112
+  s_28625b94800ea7::t_b20b1d1dbc5adc 1114-1116
+  s_28625b94800ea7::t_0b8b0083482674 2613-2614
+  s_102cddd76c43e9::t_c13828dc79fe63 1076-1084,1117-1123
+src/FHIRBridge.Infrastructure/Destinations/SftpUploader.cs
+  s_102cddd76c43e9::t_0dcee233bd122e 45,47-50,52,58-65
+  s_102cddd76c43e9::t_b644715eeb4d3b 39-44,51
+  s_102cddd76c43e9::t_3346143c360f12 13-18,23-24
+tests/FHIRBridge.UnitTests/Destinations/LoggingConfiguredDestinationWriterTests.cs
+  s_102cddd76c43e9::t_a5b1361b30ad92 1-255
+src/FHIRBridge.Infrastructure/Destinations/MappedSftpDestinationWriter.cs
+  s_102cddd76c43e9::t_0983ca7640261c 40-46
+  s_102cddd76c43e9::t_bec860092cf20d 47
+  s_102cddd76c43e9::t_fb848b9b6312f4 1
+src/FHIRBridge.Application/Abstractions/Destinations/PipelineWriteContext.cs
+  s_102cddd76c43e9::t_3322eb3c051ee1 38-49,57-72
+src/FHIRBridge.Application/Governance/DestinationStepDescriber.cs
+  s_102cddd76c43e9::t_5ed2a26f62d6bc 1-52
+  s_102cddd76c43e9::t_4c19f2e243d963 53
+tests/FHIRBridge.UnitTests/Destinations/DestinationStageReportingTests.cs
+  s_102cddd76c43e9::t_3d0c5107a34668 1-131
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_102cddd76c43e9::t_c2c23df01ac1a1 139
+  s_28625b94800ea7::t_63f31a73006fef 1,67-69,265-267
+src/FHIRBridge.Domain/Entities/Governance/DestinationActivityLog.cs
+  s_102cddd76c43e9::t_692a7382b624ca 1-105
+src/FHIRBridge.Infrastructure/Governance/EmptyGovernanceQueryService.cs
+  s_102cddd76c43e9::t_60fcc16cb07224 59
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Governance/DestinationActivityLogConfiguration.cs
+  s_102cddd76c43e9::t_eb75884d2dc69e 1-26
+  s_102cddd76c43e9::t_c8935b0e46793c 27-28
+src/FHIRBridge.Infrastructure/Destinations/MappedS3DestinationWriter.cs
+  s_102cddd76c43e9::t_065b75d9b77e55 43-46
+src/FHIRBridge.Infrastructure/Destinations/MappedSqlServerDestinationWriter.cs
+  s_102cddd76c43e9::t_7ce356784ee91d 71-73
+src/FHIRBridge.Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs
+  s_102cddd76c43e9::t_d4da182626c46f 3
+  s_102cddd76c43e9::t_7619dd0ee8668a 44-51
+src/FHIRBridge.Infrastructure/Destinations/MappedMongoDestinationWriter.cs
+  s_102cddd76c43e9::t_54e0a6354d91b8 57-63
+src/FHIRBridge.Application/Abstractions/Destinations/DestinationStageReporting.cs
+  s_102cddd76c43e9::t_693deca8c6f1f5 95-96,102,106,109-111,113-116,120
+  s_102cddd76c43e9::t_f8f7f68a105eb4 1-36,39-42,45-47,51-55,57-77,107-108,112,117-119,121-150
+  s_102cddd76c43e9::t_7bfeabb13427e8 78-93,97-101,103-105
+  s_102cddd76c43e9::t_a8a73724e0dfbd 37-38,43-44,48-50,56
+  s_102cddd76c43e9::t_3dba64149a6a95 94
+portal/package-lock.json
+  s_4f5d1619e405a5::t_9db07debbd4a29 9474,9485,15095
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260925070215_AddDestinationActivityLogs.Designer.cs
+  s_102cddd76c43e9::t_2b8a927313d641 1-6312
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260925070215_AddDestinationActivityLogs.cs
+  s_102cddd76c43e9::t_9aa8f5d72a3ee2 1-62
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260925070104_AddDestinationActivityLogs.Designer.cs
+  s_102cddd76c43e9::t_94703821b5f6f7 1-6349
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260925070104_AddDestinationActivityLogs.cs
+  s_102cddd76c43e9::t_ab1a37289410f2 1-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "187a316150c870595088aa95d7b30df91c5f49b0",
+  "prompts": {},
+  "sessions": {
+    "s_012a949fbb852d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1899cc87-d26f-4d5f-84d4-4774d4e1a2cb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_102cddd76c43e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "267708a9-2483-411a-abaf-536b681fbfb5",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    },
+    "s_28625b94800ea7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70fecf5b-137d-4150-9025-a4ef50f4bcff",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_4f5d1619e405a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d72fff9d-b9df-409d-a882-e47a118b52ea",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
