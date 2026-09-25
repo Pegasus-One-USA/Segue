@@ -1,0 +1,33 @@
+src/FHIRBridge.Infrastructure/Destinations/Fabric/WarehouseTableLandingStrategy.cs
+  s_d8c85374db9f6f::t_f3b568c260b14c 112-131
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_579af2aa2f3deb 130-132,254,292,424
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_d8c85374db9f6f::t_d8f7be056695b8 142,145-153
+  s_d8c85374db9f6f::t_2e7905b47ff4da 143-144
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_d8c85374db9f6f::t_49984e75c6f8b1 1125
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.html
+  s_d8c85374db9f6f::t_d8f7be056695b8 142,145-153
+  s_d8c85374db9f6f::t_2e7905b47ff4da 143-144
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_d8c85374db9f6f::t_a02cd8aa6fd960 140-141
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_579af2aa2f3deb 130-132,254,292,424
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2ff5ae13fc7135d112a368f68fd2afe194bee3d0",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
