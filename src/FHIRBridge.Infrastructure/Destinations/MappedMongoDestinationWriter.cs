@@ -54,7 +54,13 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
         var createIfNotExists = ConnectionMetadataReader.GetBool(
             destination.ConnectionMetadataJson, "dest_createCollectionIfNotExists", fallback: false);
 
-        await EnsureCollectionExistsAsync(database, collectionName, createIfNotExists, cancellationToken);
+        // Reported around the first real round trip, not around the MongoClient constructor above: the driver
+        // connects lazily, so constructing a client against unreachable hosts or wrong credentials succeeds
+        // silently. Reporting "Connected" there would claim a connection that has not happened yet — and would
+        // still claim it for credentials that are about to be rejected here.
+        await context.ReportConnectAsync(
+            () => EnsureCollectionExistsAsync(database, collectionName, createIfNotExists, cancellationToken),
+            cancellationToken);
 
         var collection = database.GetCollection<BsonDocument>(collectionName);
         var keyField = ResolveUpsertKeyField(mappingProfile, mappingProfile.DestinationObject);

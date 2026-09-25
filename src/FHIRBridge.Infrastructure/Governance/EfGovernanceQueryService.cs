@@ -487,11 +487,34 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
                 x.GrantedScope, x.PatientContextGranted, x.TokenCacheKeyHash, x.CorrelationId))
             .ToListAsync(cancellationToken);
 
+        // Ascending by time, unlike the descending log listings above: this section is read as a narrative of one
+        // destination write (connect, then complete), so the stages have to appear in the order they happened.
+        var destinationActivity = await _dbContext.DestinationActivityLogs
+            .AsNoTracking()
+            .Where(x => x.CorrelationId == correlationId)
+            .OrderBy(x => x.OccurredOnUtc)
+            .Take(take)
+            .Select(x => new DestinationActivityLogDto(
+                x.Id, x.OccurredOnUtc, x.DestinationId, x.DestinationName, x.DestinationType, x.Stage, x.Status,
+                x.ResourceType, x.RecordCount, x.WrittenCount, x.DurationMs, x.Detail, x.Error, x.CorrelationId,
+                x.PipelineRunId, string.Empty))
+            .ToListAsync(cancellationToken);
+
+        // Step text is derived here rather than in the projection above: it is a read-time concern (see
+        // DestinationStepDescriber) and EF cannot translate it into SQL.
+        var describedDestinationActivity = destinationActivity
+            .Select(x => x with
+            {
+                Step = DestinationStepDescriber.Describe(
+                    x.Stage, x.Status, x.RecordCount, x.WrittenCount, x.Detail),
+            })
+            .ToList();
+
         return new CorrelationSearchResultDto(
             correlationId, pipelineRun, auditLogs.Items, dataAccessLogs.Items, authenticationLogs.Items,
             securityEvents.Items, authorizationLogs.Items, schedulerHistory.Items, retryHistory.Items,
             errors.Items, apiRequests.Items, exports.Items, notifications.Items, validationFailures.Items,
-            workflowRuns, smartLaunchLogs);
+            workflowRuns, smartLaunchLogs, describedDestinationActivity);
     }
 
     public Task<IReadOnlyList<RetentionPolicyDto>> GetRetentionPoliciesAsync(CancellationToken cancellationToken)

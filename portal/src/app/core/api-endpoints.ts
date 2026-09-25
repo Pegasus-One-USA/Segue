@@ -502,6 +502,7 @@ export const WORKFLOW_ENDPOINTS = {
   configurationExport: (id: string) => `${API_V1_BASE}/workflows/${id}/configuration-export`,
   checkpointUrl:    (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}/checkpoint-url`,
   checkpointResult: (workflowRunId: string) => `${API_V1_BASE}/workflows/runs/${workflowRunId}/checkpoint-result`,
+  resourceTypeCriteria: (id: string) => `${API_V1_BASE}/workflows/${id}/resource-type-criteria`,
   runStatus:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/status`,
   cancelRun:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/cancel`,
 };

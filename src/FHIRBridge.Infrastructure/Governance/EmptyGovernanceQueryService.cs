@@ -56,7 +56,7 @@ public sealed class EmptyGovernanceQueryService : IGovernanceQueryService
         => Task.FromResult<IReadOnlyList<SmartLaunchLogDto>>([]);
 
     public Task<CorrelationSearchResultDto> GetCorrelationSearchResultAsync(string correlationId, CancellationToken cancellationToken)
-        => Task.FromResult(new CorrelationSearchResultDto(correlationId, null, [], [], [], [], [], [], [], [], [], [], [], [], [], []));
+        => Task.FromResult(new CorrelationSearchResultDto(correlationId, null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], []));
 
     public Task<IReadOnlyList<RetentionPolicyDto>> GetRetentionPoliciesAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<RetentionPolicyDto>>([]);

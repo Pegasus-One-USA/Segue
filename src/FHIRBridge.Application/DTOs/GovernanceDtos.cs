@@ -140,6 +140,27 @@ public sealed record ExportHistoryDto(
     string Status,
     string? CorrelationId);
 
+/// <summary>One stage of one destination write, as surfaced by Correlation Search's Destination Activity section.</summary>
+public sealed record DestinationActivityLogDto(
+    Guid Id,
+    DateTime OccurredOnUtc,
+    Guid DestinationId,
+    string DestinationName,
+    string DestinationType,
+    string Stage,
+    string Status,
+    string? ResourceType,
+    int? RecordCount,
+    int? WrittenCount,
+    long DurationMs,
+    string? Detail,
+    string? Error,
+    string? CorrelationId,
+    Guid? PipelineRunId,
+    /// <summary>Plain-language description of this stage — see <c>DestinationStepDescriber</c>. Derived at read
+    /// time from the fields above, never stored.</summary>
+    string Step = "");
+
 public sealed record NotificationHistoryDto(
     Guid Id,
     DateTime OccurredOnUtc,
@@ -278,13 +299,14 @@ public sealed record CorrelationSearchResultDto(
     IReadOnlyList<NotificationHistoryDto> Notifications,
     IReadOnlyList<ValidationFailureDto> ValidationFailures,
     IReadOnlyList<WorkflowRunSummaryDto> WorkflowRuns,
-    IReadOnlyList<SmartLaunchLogDto> SmartLaunchLogs)
+    IReadOnlyList<SmartLaunchLogDto> SmartLaunchLogs,
+    IReadOnlyList<DestinationActivityLogDto> DestinationActivity)
 {
     public int TotalCount =>
         (PipelineRun is null ? 0 : 1) + AuditLogs.Count + DataAccessLogs.Count + AuthenticationLogs.Count +
         SecurityEvents.Count + AuthorizationLogs.Count + SchedulerHistory.Count + RetryHistory.Count + Errors.Count +
         ApiRequests.Count + Exports.Count + Notifications.Count + ValidationFailures.Count + WorkflowRuns.Count +
-        SmartLaunchLogs.Count;
+        SmartLaunchLogs.Count + DestinationActivity.Count;
 }
 
 /// <summary>Runtime-plane (DAG) workflow run header, as surfaced by Correlation Search — a lighter shape than

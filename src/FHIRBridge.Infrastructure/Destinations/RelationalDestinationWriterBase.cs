@@ -72,7 +72,9 @@ public abstract partial class RelationalDestinationWriterBase : IConfiguredDesti
         var target = ParseTarget(destination.Target ?? mappingProfile.DestinationObject, mappingProfile);
 
         await using var connection = CreateConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
+        await context.ReportConnectAsync(
+            () => connection.OpenAsync(cancellationToken),
+            cancellationToken);
 
         await EnsureTableAsync(connection, target, mappingProfile, cancellationToken);
 

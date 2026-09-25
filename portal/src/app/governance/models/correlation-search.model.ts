@@ -34,6 +34,35 @@ export interface WorkflowRunSummary {
   errorMessage: string | null;
 }
 
+/**
+ * Matches the backend's DestinationActivityLogDto — one stage of one destination write.
+ *
+ * Complements `apiRequests`, which can only ever show destinations that speak HTTP (the backend produces it from
+ * an HttpClient handler); most destinations use ADO.NET or a vendor SDK, so this is the only place they appear.
+ */
+export interface DestinationActivityEntry {
+  id: string;
+  occurredOnUtc: string;
+  destinationId: string;
+  destinationName: string;
+  destinationType: string;
+  /** "Connect" or "Complete". */
+  stage: string;
+  /** "Succeeded" | "Failed" | "PartialSuccess" | "NoData". */
+  status: string;
+  resourceType: string | null;
+  recordCount: number | null;
+  writtenCount: number | null;
+  durationMs: number;
+  /** Short technical context, e.g. which half of a two-part Fabric connect. Never record data. */
+  detail: string | null;
+  error: string | null;
+  correlationId: string | null;
+  pipelineRunId: string | null;
+  /** Plain-language description derived server-side at read time. */
+  step: string;
+}
+
 /** Matches the backend's CorrelationSearchResultDto (api/v1/governance/correlation-search). */
 export interface CorrelationSearchResult {
   correlationId: string;
@@ -52,5 +81,6 @@ export interface CorrelationSearchResult {
   validationFailures: ValidationFailureEntry[];
   workflowRuns: WorkflowRunSummary[];
   smartLaunchLogs: SmartLaunchLogEntry[];
+  destinationActivity: DestinationActivityEntry[];
   totalCount: number;
 }

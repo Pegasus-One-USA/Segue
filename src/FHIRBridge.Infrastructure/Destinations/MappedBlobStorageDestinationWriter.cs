@@ -50,7 +50,15 @@ public sealed class MappedBlobStorageDestinationWriter : IConfiguredDestinationW
         }
 
         var settings = BlobDestinationSettings.Parse(destination);
-        var target = await _clientFactory.GetTargetAsync(destination, settings, cancellationToken);
+
+        // The factory is where the destination's auth mode is resolved and its credential built, so a malformed
+        // connection string, an unusable SAS or an unresolvable account URL fails here — which makes this the
+        // connect worth reporting. The Azure SDK authenticates lazily on first request, so a Connect line here
+        // means "credentials resolved", and a credential the service later rejects surfaces on the Complete line.
+        var target = await context.ReportConnectAsync(
+            () => _clientFactory.GetTargetAsync(destination, settings, cancellationToken),
+            cancellationToken,
+            detail: settings.ContainerName);
 
         if (settings.CreateContainerIfNotExists && target.SupportsContainerCreate)
         {

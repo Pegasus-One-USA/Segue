@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Governance;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -40,7 +41,14 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
         // Wrapping here rather than in each writer is what makes write telemetry uniform across every destination
         // type, and automatic for any destination registered later. The logger is named for the concrete writer, so
         // SourceContext in Seq still identifies which implementation ran (several types share one writer).
-        return new LoggingConfiguredDestinationWriter(writer, _loggerFactory.CreateLogger(implementationType));
+        //
+        // GetService, not GetRequiredService: the Worker's in-memory (no-database) configuration registers no
+        // governance logger at all, and a destination write must still run there — the decorator simply skips the
+        // governance rows when it has none, exactly as ApiRequestLoggingHandler treats ICurrentUserService.
+        return new LoggingConfiguredDestinationWriter(
+            writer,
+            _loggerFactory.CreateLogger(implementationType),
+            _serviceProvider.GetService<IGovernanceLogger>());
     }
 
     /// <summary>

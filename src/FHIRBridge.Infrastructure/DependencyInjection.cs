@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Aggregation;
+﻿using FHIRBridge.Application.Abstractions.Aggregation;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
@@ -328,6 +328,7 @@ public static class DependencyInjection
             services.AddScoped<ISchemaMappingRepository, EfSchemaMappingRepository>();
             services.AddScoped<ITransformationRuleRepository, EfTransformationRuleRepository>();
             services.AddScoped<IDeIdentificationProfileRepository, EfDeIdentificationProfileRepository>();
+            services.AddScoped<IResourceTypeCriteriaRepository, EfResourceTypeCriteriaRepository>();
             services.AddScoped<IDeIdentificationProfileSeeder, DeIdentificationProfileSeeder>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
@@ -696,6 +697,7 @@ public static class DependencyInjection
         // rows (overrides the Application pass-through stub).
         services.AddScoped<IDeIdentificationService, SafeHarborDeIdentificationService>();
         services.AddScoped<IDeIdentificationProfileService, DeIdentificationProfileService>();
+        services.AddScoped<IResourceTypeCriteriaService, ResourceTypeCriteriaService>();
 
         // G4: configurable retention + a purge service over purgeable stores (immutable audit is never purged).
         // The lineage store (in-memory or EF-backed) is registered as IPurgeableStore in the DB-mode branch above.

@@ -28,6 +28,23 @@ export interface WorkflowCatalogItem {
   description?: string;
 }
 
+/** One resource type's stored FHIR search criteria for a workflow's source node. */
+export interface ResourceTypeCriteriaDto {
+  id: string;
+  workflowId: string;
+  sourceNodeId: string;
+  resourceType: string;
+  criteria: string;
+}
+
+export interface SaveResourceTypeCriteriaRequest {
+  sourceNodeId: string;
+  resourceType: string;
+  criteria: string;
+  /** Omitted/false appends to whatever is stored; true overwrites (the only way to remove a parameter). */
+  replace?: boolean;
+}
+
 export interface WorkflowNodeRequest {
   id: string;
   nodeType: string;
@@ -475,6 +492,32 @@ export class WorkflowApiService {
   /** Interactive (EHR launch / standalone / patient) workflows: the opaque launch URL to register with the EHR. */
   launchUrl(workflowId: string): Observable<WorkflowLaunchUrl> {
     return this.http.get<WorkflowLaunchUrl>(WORKFLOW_ENDPOINTS.launchUrl(workflowId));
+  }
+
+  /** Every per-resource-type criteria row saved for a workflow. */
+  listResourceTypeCriteria(workflowId: string): Observable<ResourceTypeCriteriaDto[]> {
+    return this.http.get<ResourceTypeCriteriaDto[]>(WORKFLOW_ENDPOINTS.resourceTypeCriteria(workflowId));
+  }
+
+  /** Appends to the resource type's stored criteria (or overwrites it, with `replace`). */
+  saveResourceTypeCriteria(
+    workflowId: string,
+    request: SaveResourceTypeCriteriaRequest,
+  ): Observable<ResourceTypeCriteriaDto> {
+    return this.http.post<ResourceTypeCriteriaDto>(
+      WORKFLOW_ENDPOINTS.resourceTypeCriteria(workflowId),
+      request,
+    );
+  }
+
+  deleteResourceTypeCriteria(
+    workflowId: string,
+    sourceNodeId: string,
+    resourceType: string,
+  ): Observable<void> {
+    return this.http.delete<void>(WORKFLOW_ENDPOINTS.resourceTypeCriteria(workflowId), {
+      params: new HttpParams().set('sourceNodeId', sourceNodeId).set('resourceType', resourceType),
+    });
   }
 
   /** Per-node checkpoint (Phase 1): the node must already have checkpointUrlEnabled saved server-side. */

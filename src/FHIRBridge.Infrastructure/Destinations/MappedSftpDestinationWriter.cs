@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
@@ -36,7 +37,14 @@ public sealed class MappedSftpDestinationWriter : IConfiguredDestinationWriter
         var fileName = MappedDestinationSerialization.BuildFileName(destination, mappingProfile, "ndjson");
         var content = Encoding.UTF8.GetBytes(MappedDestinationSerialization.ToNdjson(records));
 
-        await SftpUploader.UploadAsync(secret, fileName, content, cancellationToken);
+        // Reported from the uploader's own connect hook rather than around this whole call, so the Connect stage
+        // reflects the SSH connection alone — not the directory creation and file transfer that follow it.
+        // A connect that fails throws out of UploadAsync before the hook runs, so the Failed line comes from the
+        // decorator's Complete stage carrying the SSH error; that is the single failure row the design calls for.
+        var connectStartedAt = Stopwatch.GetTimestamp();
+        await SftpUploader.UploadAsync(
+            secret, fileName, content, cancellationToken,
+            onConnectedAsync: () => context.ReportConnectedAsync(connectStartedAt, cancellationToken));
 
         return new DestinationWriteResult(records.Count);
     }

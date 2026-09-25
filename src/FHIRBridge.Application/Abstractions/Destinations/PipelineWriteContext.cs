@@ -35,6 +35,18 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// <see cref="Guid.Empty"/> for every caller that hasn't been updated to pass the real one; only
 /// <c>ConfiguredPipelineService</c> and the Runtime plane's destination executors currently do.
 /// </param>
+/// <param name="ReportStageAsync">
+/// Optional hook a writer calls to report a stage of its own write — currently only opening/authenticating the
+/// connection, which the caller cannot observe because <see cref="IConfiguredDestinationWriter.WriteAsync"/> is a
+/// single opaque call. The completion/failure of the write as a whole is reported by the caller
+/// (<c>LoggingConfiguredDestinationWriter</c>), so a writer never reports that itself.
+/// <para>A callback rather than a constructor dependency on purpose: writers are resolved from dependency
+/// injection in several places (the writer factory, health-check providers, tests), so widening ~21 constructors
+/// to thread a logger through would ripple far past the writers that actually have a connection to report.</para>
+/// <para>Null by default, exactly like <paramref name="FetchMissingReferenceAsync"/> — every caller that doesn't
+/// supply it and every writer that ignores it behaves exactly as before. A writer must never let a failure from
+/// this hook change its own outcome; see <c>DestinationStageReporting.ReportAsync</c>, which swallows for it.</para>
+/// </param>
 public sealed record PipelineWriteContext(
     bool AllowInlineDelivery,
     string RouteName,
@@ -42,4 +54,19 @@ public sealed record PipelineWriteContext(
     string? CorrelationId = null,
     Func<string, string, CancellationToken, Task<string?>>? FetchMissingReferenceAsync = null,
     string? SourceBaseUrl = null,
-    Guid PipelineRunId = default);
+    Guid PipelineRunId = default,
+    Func<DestinationStageReport, CancellationToken, Task>? ReportStageAsync = null);
+
+/// <summary>
+/// One stage a writer reports through <see cref="PipelineWriteContext.ReportStageAsync"/>. Carries only what the
+/// writer itself knows — the caller stamps destination identity, resource type and correlation id on top, so a
+/// writer never has to restate them.
+/// <para><b>PHI-free:</b> <paramref name="Detail"/> is for short technical context (which half of a two-part
+/// connect, a qualified table name), never record data.</para>
+/// </summary>
+public sealed record DestinationStageReport(
+    string Stage,
+    string Status,
+    long DurationMs = 0,
+    string? Detail = null,
+    string? Error = null);
