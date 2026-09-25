@@ -229,11 +229,10 @@ public static class TransformNodeConfigSchemas
             [
                 Select("pattern", "Mode / input pattern",
                     ["FirstLast", "FirstMiddleLast", "FirstLastMiddle", "LastFirstMiddle", "RoundTrip"], "FirstLast"),
-                Select("roundTripPattern", "Round trip — pattern to parse the incoming string with",
-                    ["FirstLast", "FirstMiddleLast", "FirstLastMiddle", "LastFirstMiddle"], "FirstLast",
-                    visibleWhen: OnlyWhen("pattern", "RoundTrip")),
-                Text("format", "Output format (HumanName → string)", "First Middle Last Suffix",
-                    visibleWhen: OnlyWhen("pattern", "RoundTrip")),
+                // No roundTripPattern / format field: every mode above now names its own output order over
+                // the element's parts (see HumanNameParsingNode.PatternFormats), RoundTrip included, so there
+                // is nothing left for either to decide. Both keys are still honoured by the node if a saved
+                // rule carries one, so an older rule keeps behaving as authored.
                 Checkbox("setText", "Set HumanName.text", true, advanced: true),
                 Select("use", "Use (optional)", ["", "official", "usual", "nickname", "maiden"], "", advanced: true),
                 Text("prefixTokens", "Recognized prefixes (comma-separated)", "Dr,Mr,Mrs,Ms,Miss", advanced: true),
