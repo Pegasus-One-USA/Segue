@@ -157,11 +157,16 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
         provideHttpClientTesting(),
         // Toasts are irrelevant to what these cases assert — stubbed to no-ops so a component that raises
         // one does not need a real ToastService (and so an unexpected toast never fails an unrelated case).
+        // Every level the component can raise, not just the three it happened to use when this was written —
+        // a missing one fails as "this.toast.X is not a function" from whatever code path reaches it, which
+        // reads like a bug in the code under test rather than a gap in the harness.
         {
           provide: ToastService,
           useValue: {
             show: () => { /* no-op stub */ },
             success: () => { /* no-op stub */ },
+            info: () => { /* no-op stub */ },
+            warning: () => { /* no-op stub */ },
             error: () => { /* no-op stub */ },
           },
         },
@@ -302,5 +307,117 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
     });
 
     expect(called).toBeFalse();
+  });
+
+  // updateRow edits a row IN PLACE, so it never changes the row count — which is why its cleanup was missing
+  // while three separate doc comments claimed the caller list was complete. The join popover rekeys a mapping
+  // through it without removing anything.
+  it('deletes the rule when the FIRST chip of a join is removed, promoting sources[1] to the key', async () => {
+    const deleted: string[] = [];
+    const fixture = await createComponent({
+      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1' }] as never),
+      delete: (id: string) => { deleted.push(id); return of(void 0); },
+    });
+    const joined = {
+      ...ROW,
+      sources: [ROW.sources[0], { fhirPath: 'Observation.valueString', label: 'valueString' }],
+    };
+    fixture.componentRef.setInput('mappingRows', [joined]);
+
+    // What removeSource(0) leaves behind: valueString is now sources[0], so the rule keyed on
+    // valueQuantity.value no longer has a mapping.
+    fixture.componentInstance.updateRow({ ...joined, sources: [joined.sources[1]] });
+
+    expect(deleted).toEqual(['rule-1']);
+  });
+
+  it('deletes the rule when the chips are REORDERED so a different source leads', async () => {
+    const deleted: string[] = [];
+    const fixture = await createComponent({
+      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1' }] as never),
+      delete: (id: string) => { deleted.push(id); return of(void 0); },
+    });
+    const second = { fhirPath: 'Observation.valueString', label: 'valueString' };
+    const joined = { ...ROW, sources: [ROW.sources[0], second] };
+    fixture.componentRef.setInput('mappingRows', [joined]);
+
+    fixture.componentInstance.updateRow({ ...joined, sources: [second, ROW.sources[0]] });
+
+    expect(deleted).toEqual(['rule-1']);
+  });
+
+  it('keeps the rule when updateRow changes something other than the key', async () => {
+    let called = false;
+    const fixture = await createComponent({
+      getEffectiveRules: () => { called = true; return of([] as never); },
+      delete: () => of(void 0),
+    });
+
+    // Editing the instance selection leaves resource/targetName/sources[0] alone — the rule still has its
+    // mapping and must not be touched.
+    fixture.componentInstance.updateRow({ ...ROW, instance: { type: 'nth', index: 2 } } as never);
+
+    expect(called).toBeFalse();
+  });
+
+  it('does NOT delete the rule when a destination column is renamed', async () => {
+    let called = false;
+    const fixture = await createComponent({
+      getEffectiveRules: () => { called = true; return of([] as never); },
+      delete: () => of(void 0),
+    });
+
+    // onRenameFreeColumn consults the live column list, which needs these two inputs. false = no probed
+    // schema, so it falls back to the mapped + pending free-text names — the free-column rename path.
+    fixture.componentRef.setInput('hasSqlTables', false);
+    fixture.componentRef.setInput('destType', 'postgres');
+
+    const emitted: { targetName: string }[][] = [];
+    fixture.componentInstance.mappingRowsChange.subscribe(rows => { emitted.push(rows); });
+
+    // A rename changes targetName, which is half the rule's key — so the diff WOULD see the old key vanish.
+    // Deleting there would destroy a rule the author still wants for renaming a column, which is strictly
+    // worse than the orphan it avoids, so the rename path deliberately bypasses reconciliation.
+    fixture.componentInstance.onRenameFreeColumn(
+      'Observation', 'public.Observation', 'TransformationQuantityRange', 'renamed_col');
+
+    // Asserted so the case cannot pass merely because the rename bailed out before doing anything.
+    expect(emitted.at(-1)?.[0].targetName).toBe('renamed_col');
+    expect(called).toBeFalse();
+  });
+
+  // "Reset to Original" is an UNDO. Everything else it does is local and reversible — the rows are in memory
+  // until Save — so it must not issue an irreversible server-side DELETE. An author who resets an experiment
+  // and then abandons the wizard would otherwise keep their (never-saved) mappings and silently lose every
+  // rule for the resource, with no undo and no message saying so.
+  it('does NOT delete rules when "Reset to Original" clears the mappings', async () => {
+    let called = false;
+    const fixture = await createComponent({
+      getEffectiveRules: () => { called = true; return of([] as never); },
+      delete: () => of(void 0),
+    });
+    const emitted: unknown[][] = [];
+    fixture.componentInstance.mappingRowsChange.subscribe(rows => { emitted.push(rows); });
+
+    fixture.componentInstance.onResetToOriginalPayload();
+
+    // The rows really were cleared — so this cannot pass by the reset having done nothing at all.
+    expect(emitted.at(-1)).toEqual([]);
+    expect(called).toBeFalse();
+  });
+
+  // The other caller of the same clearing helper. A pasted payload genuinely replaces this resource's fields,
+  // so the old fhirPaths are gone and rules keyed on them are dead by construction — that one still cleans up.
+  it('DOES delete rules when a new payload replaces the resource fields', async () => {
+    const deleted: string[] = [];
+    const fixture = await createComponent({
+      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1' }] as never),
+      delete: (id: string) => { deleted.push(id); return of(void 0); },
+    });
+
+    fixture.componentInstance.submitLoadPayload(
+      JSON.stringify({ resourceType: 'Observation', id: 'obs-1', status: 'final' }));
+
+    expect(deleted).toEqual(['rule-1']);
   });
 });
