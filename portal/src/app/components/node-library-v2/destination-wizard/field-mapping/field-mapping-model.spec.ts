@@ -780,6 +780,47 @@ describe('checkColumnTypeCompatibility', () => {
       expect(checkColumnTypeCompatibility(childJsonRow, column, 'Json')).toBeNull();
     });
 
+    describe('the remedy it names', () => {
+      // Quantity/Range Assembly's output type is fixed by the node (TransformNodeTypeDefaults) — the rule
+      // popover renders no control for it, so telling its author to "fix the rule's Expected output type"
+      // sends them hunting for something that isn't there. Only NumberCast/DateTimeFormat have that control.
+      const bounded = { dataType: 'character varying', mappingValueType: 'String', maxLength: 255 };
+
+      it('points a fixed-output node at the column, not at a control it does not have', () => {
+        const error = checkColumnTypeCompatibility(childJsonRow, bounded, 'Json', 'QuantityRangeAssembly');
+        expect(error).toContain('QuantityRangeAssembly always does');
+        expect(error).toContain('text column');
+        expect(error).not.toContain("fix the rule's Expected output type");
+      });
+
+      it('still offers the output-type fix for a node that really exposes one', () => {
+        const error = checkColumnTypeCompatibility(childJsonRow, bounded, 'Json', 'NumberCast');
+        expect(error).toContain("fix the rule's Expected output type");
+      });
+
+      it('keeps the generic wording when the node type is unknown', () => {
+        const error = checkColumnTypeCompatibility(childJsonRow, bounded, 'Json');
+        expect(error).toContain("fix the rule's Expected output type");
+      });
+
+      it('only mentions text columns for a Json mismatch', () => {
+        const intColumn = { dataType: 'integer', mappingValueType: 'Integer', maxLength: null };
+        const error = checkColumnTypeCompatibility(childJsonRow, intColumn, 'Date', 'CodeableConceptBuilder');
+        expect(error).toContain('CodeableConceptBuilder always does');
+        expect(error).not.toContain('text column');
+      });
+
+      it('treats DateMathAge as overridable — its operation select decides Date vs Integer', () => {
+        // resolveExpectedValueType derives DateMathAge's output from `operation` ("add"/"shift" -> Date,
+        // "age" -> Integer), so "it always outputs Date" is false and sends the author to ALTER TABLE when
+        // a dropdown on the rule already open is the real fix.
+        const intColumn = { dataType: 'integer', mappingValueType: 'Integer', maxLength: null };
+        const error = checkColumnTypeCompatibility(childJsonRow, intColumn, 'Date', 'DateMathAge');
+        expect(error).toContain("fix the rule's Expected output type");
+        expect(error).not.toContain('always does');
+      });
+    });
+
     // MySQL's information_schema NEVER reports a null character_maximum_length for TEXT/MEDIUMTEXT/
     // LONGTEXT — always a real (if huge) number, since capacity is fixed by the type keyword itself, not
     // an independently configurable length the way varchar(n) is. maxLength === null alone would miss

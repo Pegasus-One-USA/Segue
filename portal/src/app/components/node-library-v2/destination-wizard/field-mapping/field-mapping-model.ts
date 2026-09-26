@@ -699,10 +699,19 @@ export function isJsonSafeForColumn(
  *   Integer for an age calculation, String -> Json for a parsed name, etc.) always failed this check,
  *   even though the transform makes the raw-type mismatch irrelevant.
  */
+/** Node types whose output type the author actually controls through a config field the rule popover
+ *  renders, so "fix the rule's Expected output type" names something they can reach: NumberCast and
+ *  DateTimeFormat via "targetType", and DateMathAge via "operation" ("add"/"shift" declare Date, "age"
+ *  declares Integer — see FieldMappingJoinPopoverComponent.resolveExpectedValueType, which is the authority
+ *  on this list). Every other node type's output is fixed by the node itself (TransformNodeTypeDefaults), so
+ *  the same advice would send its author looking for a control that does not exist on that rule. */
+const OUTPUT_TYPE_OVERRIDABLE_NODE_TYPES = new Set(['NumberCast', 'DateTimeFormat', 'DateMathAge']);
+
 export function checkColumnTypeCompatibility(
   row: MappingRow,
   column: { dataType: string; mappingValueType?: string; maxLength?: number | null } | undefined,
   ruleExpectedType?: string | null,
+  ruleNodeType?: string | null,
 ): string | null {
   if (!column?.mappingValueType) return null;
 
@@ -714,10 +723,22 @@ export function checkColumnTypeCompatibility(
     ) {
       return null;
     }
+    const lead =
+      `"${row.targetName}" on ${row.tableName} is a ${column.dataType} column ` +
+      `(expects ${column.mappingValueType}), but its transformation rule outputs ${ruleExpectedType}`;
+
+    // Only offer "change the rule's output type" when the rule actually has that control. For a fixed-output
+    // node (Quantity/Range Assembly, CodeableConcept Builder, ...) the only real remedy is the column, and
+    // naming a column type that works beats naming a category the author has to decode.
+    if (ruleNodeType && !OUTPUT_TYPE_OVERRIDABLE_NODE_TYPES.has(ruleNodeType)) {
+      return (
+        `${lead}, which ${ruleNodeType} always does — retarget it to a column that accepts ` +
+        `${ruleExpectedType}${ruleExpectedType.toLowerCase() === 'json' ? ' (a text column, or a character varying with no length limit)' : ''}.`
+      );
+    }
+
     return (
-      `"${row.targetName}" on ${row.tableName} is a ${column.dataType} column (expects ${column.mappingValueType}), ` +
-      `but its transformation rule declares an output type of ${ruleExpectedType} — fix the rule's Expected ` +
-      `output type, or retarget to a ${ruleExpectedType}-compatible column.`
+      `${lead} — fix the rule's Expected output type, or retarget to a ${ruleExpectedType}-compatible column.`
     );
   }
 
