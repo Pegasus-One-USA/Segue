@@ -1,0 +1,60 @@
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_6fe240044cc58e::t_210a4ed1308f8b 397-399,401-410,422,429-433,438,442
+  s_6fe240044cc58e::t_3cd1cd9d06e840 746-748,751-752,759
+  s_6fe240044cc58e::t_195f9a0c096c38 280-283
+  s_6fe240044cc58e::t_1ea1d81353db96 373-376
+  s_6fe240044cc58e::t_af389975ade34c 196-202
+  s_6fe240044cc58e::t_93a2c5a3be8273 377,379,381-396
+  s_6fe240044cc58e::t_2ae7b162d6a30a 363
+  s_6fe240044cc58e::t_44af096d486093 204-211
+  s_6fe240044cc58e::t_32e51dfdeaaeca 179-185,188-193
+  s_6fe240044cc58e::t_6b11b0cfd838b2 378
+  s_6fe240044cc58e::t_a3461a1eb48d52 380
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineJoinedFieldsTests.cs
+  s_6fe240044cc58e::t_2bb5edfa17378f 607-631
+  s_6fe240044cc58e::t_e2a5177a2d2ca3 254-302
+  s_6fe240044cc58e::t_3bd73b3f056e07 499-523,579-606
+  s_6fe240044cc58e::t_e61342f1b82c60 345-346,348
+  s_6fe240044cc58e::t_c7048f02e23cd2 524-578
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_6fe240044cc58e::t_fbc40ca11c9846 458
+  s_6fe240044cc58e::t_b990950379d540 470-478
+  s_6fe240044cc58e::t_f9ae56b691ced5 446-457,459-464,466,479-490
+tests/FHIRBridge.UnitTests/Transforms/TransformNodeConfigSchemaTests.cs
+  s_6fe240044cc58e::t_b0eeef6b65e23a 39-58
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_6fe240044cc58e::t_c5d65de905b86d 151-155
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_6fe240044cc58e::t_d7d8c4b2b072e4 98,101,103-105,177
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.spec.ts
+  s_6fe240044cc58e::t_9e357d7e3bff8e 328-428
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineArrayPolicyTests.cs
+  s_6fe240044cc58e::t_376b95b4be6ddd 310-314,317
+  s_6fe240044cc58e::t_54972934d9c6e7 355-356
+  s_6fe240044cc58e::t_9f2ffef645e76f 225,227-229,233
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_6fe240044cc58e::t_dc6658d0ac167b 308-313
+  s_6fe240044cc58e::t_1b50c6b17e1b12 31-32
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_6fe240044cc58e::t_235f593bd7b088 183-187
+  s_6fe240044cc58e::t_ccaa0e64b545b2 265-272
+  s_6fe240044cc58e::t_f9a5556adabb2e 1,273-274
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_6fe240044cc58e::t_ec68f5f2ffcc77 106-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "cba691c1a27df47e4cc8bc94ba4963893597ebc4",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
