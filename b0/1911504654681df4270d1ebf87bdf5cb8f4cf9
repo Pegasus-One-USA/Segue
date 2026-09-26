@@ -1,0 +1,75 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_6fe240044cc58e::t_7421057ad96496 90
+src/FHIRBridge.Application/Services/Transforms/RuleSourceFieldFormat.cs
+  s_6fe240044cc58e::t_7421057ad96496 43-49
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_6fe240044cc58e::t_7421057ad96496 25,2069-2083
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_6fe240044cc58e::t_7421057ad96496 28-33,92,94-102,104-129,136,151-162
+src/FHIRBridge.Application/Services/Transforms/TransformNodeApplier.cs
+  s_6fe240044cc58e::t_7421057ad96496 1-3,11-26,33,35,41,65,67,73,85-219
+src/FHIRBridge.Application/Services/Transforms/Nodes/StringStructureNodes.cs
+  s_6fe240044cc58e::t_7421057ad96496 1,135-138
+src/FHIRBridge.Application/Services/Transforms/Nodes/FhirComplexTypeNodes.cs
+  s_6fe240044cc58e::t_7421057ad96496 147-150,156-160,168-201,207-228,237-239,242-281,283-288,291-301,304-308,315-333,346-347,349-356,364,366,368-373,375,427
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_6fe240044cc58e::t_7421057ad96496 1611-1614
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_6fe240044cc58e::t_41c6a7a2f14c71 1628-1632,1635
+  s_6fe240044cc58e::t_310cb6f757a893 1666
+  s_6fe240044cc58e::t_7421057ad96496 678-688,724,726-729,1359-1372,1377-1378,1605-1627,1633-1634,1636-1665,1667-1668,1719-1840
+tests/FHIRBridge.UnitTests/Transforms/FhirComplexTypeNodesTests.cs
+  s_6fe240044cc58e::t_7421057ad96496 47-229
+tests/FHIRBridge.UnitTests/Transforms/HumanNameArrayModeSpecTests.cs
+  s_6fe240044cc58e::t_7421057ad96496 1-101
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_6fe240044cc58e::t_7421057ad96496 14,96-102,198,242-245,667-671
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_6fe240044cc58e::t_7421057ad96496 256-261
+tests/FHIRBridge.UnitTests/Transforms/TransformNodeApplierTests.cs
+  s_6fe240044cc58e::t_7421057ad96496 1-239
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.spec.ts
+  s_6fe240044cc58e::t_7421057ad96496 1-327
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_6fe240044cc58e::t_7421057ad96496 1,729-751,772-836
+tests/FHIRBridge.UnitTests/Infrastructure/HapiLocalTerminologyTests.cs
+  s_6fe240044cc58e::t_7421057ad96496 1,10,31-37
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_6fe240044cc58e::t_7421057ad96496 6,191-252,520-532,878-924
+src/FHIRBridge.Application/Services/Transforms/ITransformNode.cs
+  s_6fe240044cc58e::t_7421057ad96496 1,30-46
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_6fe240044cc58e::t_7421057ad96496 4-7,12,56-62,109,132-137,175,180-181,211-231,292-295,330-378,388
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_6fe240044cc58e::t_7421057ad96496 1,572-576,579,587-592,595-605,610,612-613,615,618-623,625,627,645-906,1340-1405
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-summary.model.spec.ts
+  s_6fe240044cc58e::t_7421057ad96496 104-137,637-678
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_6fe240044cc58e::t_7421057ad96496 397-400,457-519,528-531
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineMatchCriteriaTests.cs
+  s_6fe240044cc58e::t_7421057ad96496 1-115
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_6fe240044cc58e::t_7421057ad96496 358-362
+tests/FHIRBridge.UnitTests/Transforms/RuleSourceFieldFormatTests.cs
+  s_6fe240044cc58e::t_7421057ad96496 1-53
+package-lock.json
+  s_6fe240044cc58e::t_34b7d9ed46659f 1-6
+portal/package-lock.json
+  s_6fe240044cc58e::t_efdead51989695 9474,9485,15095
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b01911504654681df4270d1ebf87bdf5cb8f4cf9",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
