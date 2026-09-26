@@ -82,8 +82,13 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             var isJoinedFields = field.Format?.StartsWith("joinedFields", StringComparison.OrdinalIgnoreCase) == true;
             var policy = field.ArrayPolicy;
 
-            var resolved = isJoinedFields
-                ? ResolveJoinedFields(root, field)
+            // Kept alongside the joined strings below so a transform chain can be handed the field's PARTS
+            // rather than the one string they were joined into — see the rawArrayValues assignment further
+            // down for why a template's {0}/{1} are meaningless without them.
+            var joinedRows = isJoinedFields ? ResolveJoinedFieldRows(root, field) : null;
+
+            var resolved = joinedRows is not null
+                ? JoinRows(joinedRows, ParseDelimiter(field.Format), field, errors)
                 : ResolveAll(root, field.JsonPath)
                     .Select(m => (
                         Value: ConvertElement(
@@ -562,31 +567,108 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// Resolves a "joinedFields" field: <see cref="MappingFieldDto.JsonPath"/> is a <c>|</c>-delimited list of
     /// sub-paths (see <c>MappingImportService.BuildJsonPathAndFormat</c>), each resolved independently and then
     /// joined per row with the delimiter encoded in <see cref="MappingFieldDto.Format"/> (<c>;delimiter=X</c>).
-    /// Rows are aligned by position across sub-paths — they're expected to share the same array context, so the
-    /// first sub-path that yields any matches determines the row indices; a sub-path with fewer/no matches at a
-    /// given position contributes an empty string for that row rather than dropping the row.
     /// </summary>
-    private static List<(object? Value, IReadOnlyList<int> Indices)> ResolveJoinedFields(JsonElement root, MappingFieldDto field)
+    /// <remarks>
+    /// Rows are aligned by the OUTERMOST array instance each match came from, not by flat position. Sub-paths
+    /// under the same repeating parent fan out at different rates — Patient.name[*].given[*] yields one match
+    /// per given name (five, for an Epic payload carrying three name entries) while name[*].family yields one
+    /// per name entry (three). Pairing those by index paired "James" with the second name's family and left the
+    /// last two rows with no family at all; grouping by name[] instance instead keeps every value with the name
+    /// it actually belongs to.
+    ///
+    /// Within one instance a sub-path can still hold several values (given = ["Warren", "James"]) — those join
+    /// with a SPACE, because they are parts of one field, while the configured delimiter separates the distinct
+    /// fields being joined. One delimiter box cannot express both levels, and a space is the only sensible
+    /// reading of "the given names of this person" (see field-mapping-join-popover).
+    ///
+    /// A sub-path with no repeating ancestor at all (e.g. Patient.id joined onto a name) contributes its single
+    /// value to every row rather than only the first. A sub-path that resolves to nothing for a given instance
+    /// contributes no piece at all, so the result is "Warren James" rather than a dangling "Warren James, ".
+    /// </remarks>
+    private static List<(string[] Pieces, IReadOnlyList<int> Indices)> ResolveJoinedFieldRows(JsonElement root, MappingFieldDto field)
     {
-        var delimiter = ParseDelimiter(field.Format);
         var subPaths = field.JsonPath.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var resolvedSubPaths = subPaths.Select(subPath => ResolveAll(root, subPath)).ToList();
 
-        var shape = resolvedSubPaths.OrderByDescending(r => r.Count).FirstOrDefault() ?? [];
-        if (shape.Count == 0)
+        // The instance keys to emit a row for: every distinct outermost index any sub-path matched. Taken
+        // across ALL sub-paths rather than from whichever matched most, so a sub-path present on an instance
+        // the others skipped still gets a row of its own. Sorted below into array order — NOT the order they
+        // happened to be discovered in, which depends on which sub-path the user listed first and would make
+        // "family|given" emit its rows in a different order than "given|family" for the same document.
+        var instanceKeys = new HashSet<int>();
+        foreach (var matches in resolvedSubPaths)
         {
-            return [];
+            foreach (var match in matches)
+            {
+                if (match.Indices.Count > 0)
+                {
+                    instanceKeys.Add(match.Indices[0]);
+                }
+            }
         }
 
-        var rows = new List<(object? Value, IReadOnlyList<int> Indices)>(shape.Count);
-        for (var i = 0; i < shape.Count; i++)
+        // Nothing repeating anywhere — every sub-path is a plain scalar, so there is exactly one row.
+        if (instanceKeys.Count == 0)
         {
-            var pieces = resolvedSubPaths.Select(matches => i < matches.Count ? ElementToJoinString(matches[i].Element) : string.Empty);
-            rows.Add((string.Join(delimiter, pieces), shape[i].Indices));
+            if (resolvedSubPaths.All(matches => matches.Count == 0))
+            {
+                return [];
+            }
+
+            var scalarPieces = resolvedSubPaths
+                .Select(matches => JoinInstancePieces(matches.Select(m => m.Element)))
+                .Where(piece => piece.Length > 0)
+                .ToArray();
+            return [(scalarPieces, Array.Empty<int>())];
+        }
+
+        var orderedKeys = instanceKeys.Order().ToList();
+
+        var rows = new List<(string[] Pieces, IReadOnlyList<int> Indices)>(orderedKeys.Count);
+        foreach (var instanceKey in orderedKeys)
+        {
+            var pieces = resolvedSubPaths
+                .Select(matches => JoinInstancePieces(matches
+                    // A sub-path with no repeating ancestor carries no indices at all — it belongs to every
+                    // instance equally, so it is never filtered out by the instance key.
+                    .Where(m => m.Indices.Count == 0 || m.Indices[0] == instanceKey)
+                    .Select(m => m.Element)))
+                .Where(piece => piece.Length > 0)
+                .ToArray();
+
+            rows.Add((pieces, new[] { instanceKey }));
         }
 
         return rows;
     }
+
+    /// <summary>Collapses each joined row's pieces into the single delimited value the column stores.</summary>
+    /// <remarks>
+    /// Routed through <see cref="ConvertValue"/> for the same reason every other resolved value is: the
+    /// declared ValueType/MaxLength/Precision/Scale describe the DESTINATION COLUMN, and a joined value has
+    /// to satisfy them exactly like a single-source one. Returning the raw string here instead meant none of
+    /// them ever applied to a multi-source column — a join into a typed date/integer column handed Postgres a
+    /// delimited string (42804 at write time rather than a mapping error naming the field), and a join
+    /// overflowing a varchar(n) failed the whole write where the same value from ONE source would have been
+    /// rejected up front by ValidateLength. ConvertValue's own mismatch fallback still hands the untouched
+    /// string onward, so a field whose real type comes from a downstream transform is unaffected.
+    /// </remarks>
+    private static List<(object? Value, IReadOnlyList<int> Indices)> JoinRows(
+        List<(string[] Pieces, IReadOnlyList<int> Indices)> rows,
+        string delimiter,
+        MappingFieldDto field,
+        List<string> errors) =>
+        rows.Select(row => (
+            ConvertValue(
+                string.Join(delimiter, row.Pieces), field.ValueType, field.Format, field.TargetField, errors,
+                field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform),
+            row.Indices)).ToList();
+
+    /// <summary>Joins the values one sub-path contributed for a single array instance. Space-separated: these
+    /// are repeats of ONE field (the two given names of one person), not the distinct fields the configured
+    /// delimiter separates. Empty/absent values are dropped rather than padding the string with separators.</summary>
+    private static string JoinInstancePieces(IEnumerable<JsonElement> elements) =>
+        string.Join(' ', elements.Select(ElementToJoinString).Where(text => !string.IsNullOrEmpty(text)));
 
     private static string ParseDelimiter(string? format)
     {
@@ -595,10 +677,13 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             return ",";
         }
 
-        foreach (var part in format.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        // NOT TrimEntries: ", " is the single most common delimiter a user types, and trimming the part would
+        // silently hand back "," instead — the space is part of the value, not formatting around it. Only the
+        // KEY is trimmed, so "delimiter=, " still matches while keeping its space.
+        foreach (var part in format.Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             var equalsIndex = part.IndexOf('=', StringComparison.Ordinal);
-            if (equalsIndex > 0 && part[..equalsIndex].Equals("delimiter", StringComparison.OrdinalIgnoreCase))
+            if (equalsIndex > 0 && part[..equalsIndex].Trim().Equals("delimiter", StringComparison.OrdinalIgnoreCase))
             {
                 return part[(equalsIndex + 1)..];
             }
@@ -607,12 +692,28 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         return ",";
     }
 
+    /// <summary>Renders one resolved element as text for a join.</summary>
+    /// <remarks>
+    /// An ARRAY of scalars collapses to its space-joined items rather than its raw JSON text. Whether a
+    /// source path carries the inner wildcard is not something the user controls or even sees: the field
+    /// catalog supplies "$.name[*].given[*]" for a source it knows about, while a source it has no entry for
+    /// is derived as "$.name[*].given" — the first fans out into two matches, the second resolves to the
+    /// whole ["Warren","James"] array. Without this, the same join would write "Warren James" or the literal
+    /// text [&quot;Warren&quot;,&quot;James&quot;] depending on which of the two it happened to get.
+    /// Non-scalar items (objects, nested arrays) have no sensible flat form and are skipped, matching
+    /// JoinArrayOfStrings.
+    /// </remarks>
     private static string ElementToJoinString(JsonElement element)
     {
         return element.ValueKind switch
         {
             JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
             JsonValueKind.String => element.GetString() ?? string.Empty,
+            JsonValueKind.Array => string.Join(' ', element.EnumerateArray()
+                .Where(item => item.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array
+                    or JsonValueKind.Null or JsonValueKind.Undefined))
+                .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() ?? string.Empty : item.ToString())
+                .Where(text => text.Length > 0)),
             _ => element.ToString()
         };
     }
@@ -626,6 +727,18 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// <summary>Joins already-converted field values (one per resolved occurrence) into one delimited
     /// string — the parent-row counterpart to JoinArrayOfStrings, operating on .NET values already produced
     /// by ConvertElement rather than raw JsonElements.</summary>
+    /// <remarks>
+    /// Deliberately ", " and NOT the field's own configured delimiter. A joined field has TWO levels of
+    /// separation and the delimiter box only configures the inner one:
+    ///
+    ///   "Warren James McGinnis, Warren James McGinnis, Warren McGinnis"
+    ///    ^^^^^^^^^^^^^^^^^^^^^ one name[] instance, its given+family joined by the configured delimiter
+    ///                         ^^ instances joined by THIS, always ", "
+    ///
+    /// Using the configured delimiter here too collapses the two levels together, so a "full name" column set
+    /// to a space delimiter runs every name entry into one unreadable line. See ResolveJoinedFields, which
+    /// owns the inner join.
+    /// </remarks>
     private static string JoinValues(IEnumerable<object?> values) =>
         string.Join(", ", values.Select(v => v?.ToString() ?? string.Empty));
 
