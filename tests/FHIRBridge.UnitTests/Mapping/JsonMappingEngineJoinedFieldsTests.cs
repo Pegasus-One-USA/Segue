@@ -252,6 +252,55 @@ public sealed class JsonMappingEngineJoinedFieldsTests
     }
 
     [Fact]
+    public void Concat_mode_joins_a_joined_columns_parts_with_the_configured_separator()
+    {
+        // Without a template the "Join separator" is what decides how the parts are put together, and it must
+        // override the delimiter the COLUMN itself was joined with. The column stores "Warren James, McGinnis"
+        // (its own ", " delimiter); a concat rule configured with "|" re-joins the same parts as
+        // "Warren James|McGinnis". This only works because the chain receives the PARTS — handed the already
+        // joined string it would see a single item and the separator would have nothing to act on.
+        var field = new MappingFieldDto(
+            TargetField: "FULLNAME",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter=, ",
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.FirstItem);
+
+        var mapped = _engine.Map(EpicPatientJson, [field]);
+        var transformInput = mapped.RawArrayValues!["FULLNAME"];
+
+        var ruleConfig = new Dictionary<string, string>
+        {
+            ["mode"] = "concat",
+            ["separator"] = "|",
+        };
+
+        new ConcatenationTemplatingNode().Execute(transformInput, ruleConfig, null)
+            .Value.Should().Be("Warren James|McGinnis");
+    }
+
+    [Fact]
+    public void Concat_mode_separator_is_deliberately_ignored_once_a_template_is_set()
+    {
+        // The two are alternative ways to say the same thing, and the template is the more specific one — it
+        // positions the parts itself, so a separator has nothing left to separate. The config label says so
+        // ("Join separator (ignored when a template is set)"); this pins that it really is the behaviour.
+        var parts = new object?[] { "Warren James", "McGinnis" };
+        var ruleConfig = new Dictionary<string, string>
+        {
+            ["mode"] = "concat",
+            ["separator"] = "|",
+            ["template"] = "{0} {1}",
+        };
+
+        new ConcatenationTemplatingNode().Execute(parts, ruleConfig, null)
+            .Value.Should().Be("Warren James McGinnis");
+    }
+
+    [Fact]
     public void A_directField_aggregate_keeps_its_historical_comma_space_default()
     {
         // No delimiter marker at all (every directField) must keep writing exactly as it always has.
@@ -293,9 +342,10 @@ public sealed class JsonMappingEngineJoinedFieldsTests
     }
 
     [Theory]
-    // Contains matches "nickname" on a substring; NotEquals takes the first entry that is NOT official.
+    // Contains matches "nickname" on a substring — one entry, so one name comes back. NotEquals matches BOTH
+    // the usual and nickname entries, and a criteria yields every instance it selects, not the first.
     [InlineData("Contains", "nick", "Warren McGinnis")]
-    [InlineData("NotEquals", "official", "Warren James McGinnis")]
+    [InlineData("NotEquals", "official", "Warren James McGinnis, Warren McGinnis")]
     public void Match_criteria_operators_apply_to_a_joined_column_too(
         string op, string criteriaValue, string expected)
     {
@@ -445,5 +495,138 @@ public sealed class JsonMappingEngineJoinedFieldsTests
         rows.Should().ContainSingle(r =>
             (string?)r.GetValueOrDefault("Use") == "official" &&
             (string?)r.GetValueOrDefault("FullName") == "Warren James McGinnis");
+    }
+
+    /// <summary>A Patient with two generalPractitioner references — the reported shape, where the display
+    /// text itself contains ", " and so cannot be told apart from the separator joining the records.</summary>
+    private const string TwoPractitionersJson = """
+    {
+      "resourceType": "Patient",
+      "generalPractitioner": [
+        { "reference": "Practitioner/eM5CWtq15N0WJeuCet5bJlQ3", "type": "Practitioner", "display": "Physician Family Medicine, MD" },
+        { "reference": "Practitioner/ef9TegF2nfECi-0Skirbvpg3", "type": "Practitioner", "display": "Physician One Cardiology, MD" }
+      ]
+    }
+    """;
+
+    private static MappingFieldDto AllRecordsPractitionerDisplay() => new(
+        TargetField: "Practitioners",
+        JsonPath: "$.generalPractitioner[*].display",
+        ValueType: MappingValueType.String,
+        IsRequired: false,
+        DefaultValue: null,
+        // What "All records" saves: the csv-aggregate marker, with FirstItem stored alongside it.
+        Format: "directField;aggregate=csv",
+        ResourceType: "Patient",
+        ArrayPolicy: ArrayPolicy.FirstItem);
+
+    [Fact]
+    public void Match_criteria_hands_a_transform_chain_only_the_instance_it_selected()
+    {
+        // The reported failure: "use equals official" with a concat rule joining on "|" produced ALL THREE
+        // names — "Warren James, McGinnis | Warren James, McGinnis | Warren, McGinnis". The criteria chose
+        // one instance for the COLUMN, but the chain was handed every instance, so the separator ended up
+        // separating names rather than the given/family within the chosen one. Both halves of that were the
+        // same bug: the selection was computed for the column and not reused for the chain.
+        var field = new MappingFieldDto(
+            TargetField: "FullName",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter=, ",
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.name[*].use",
+            CorrelationCodeValue: "official");
+
+        var mapped = _engine.Map(EpicPatientJson, [field]);
+
+        // One instance's pieces, not three instances' joined strings.
+        mapped.RawArrayValues!["FullName"].Should().Equal(["Warren James", "McGinnis"]);
+
+        var ruleConfig = new Dictionary<string, string> { ["mode"] = "concat", ["separator"] = "|" };
+        new ConcatenationTemplatingNode()
+            .Execute(mapped.RawArrayValues!["FullName"], ruleConfig, null)
+            .Value.Should().Be("Warren James|McGinnis");
+    }
+
+    [Fact]
+    public void Match_criteria_selecting_several_instances_hands_the_chain_all_of_them()
+    {
+        // The other half: a criteria that genuinely matches more than one instance narrows to those, not to
+        // one and not to everything. "use not-equals official" leaves the usual and nickname entries.
+        var field = new MappingFieldDto(
+            TargetField: "FullName",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter=, ",
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.name[*].use",
+            CorrelationCodeValue: "official",
+            CorrelationCodeOperator: "NotEquals");
+
+        var mapped = _engine.Map(EpicPatientJson, [field]);
+
+        mapped.RawArrayValues!["FullName"].Should().Equal(
+            ["Warren James, McGinnis", "Warren, McGinnis"]);
+    }
+
+    [Fact]
+    public void All_records_hands_a_transform_chain_every_instance_not_just_the_first()
+    {
+        // The regression behind "I set the join separator to | and the records are still comma-separated".
+        // "All records" stores ArrayPolicy.FirstItem beside the aggregate marker, and TakeFirstInstance used
+        // to narrow the raw values to instance 0 — leaving ONE item, which fails the executor's "more than
+        // one" check, so the node was handed the already-joined column string instead of the list.
+        var mapped = _engine.Map(TwoPractitionersJson, [AllRecordsPractitionerDisplay()]);
+
+        mapped.RawArrayValues!["Practitioners"].Should().Equal(
+            ["Physician Family Medicine, MD", "Physician One Cardiology, MD"]);
+    }
+
+    [Fact]
+    public void All_records_with_a_concat_rule_joins_the_records_with_the_configured_separator()
+    {
+        // End to end: the column itself still stores the ", "-joined text, and the concat rule re-joins the
+        // same records with "|". Note the displays CONTAIN ", " — so the only way to see the separator took
+        // effect is that the "|" appears between the records and the inner commas survive untouched.
+        var mapped = _engine.Map(TwoPractitionersJson, [AllRecordsPractitionerDisplay()]);
+        mapped.Rows![0]["Practitioners"].Should()
+            .Be("Physician Family Medicine, MD, Physician One Cardiology, MD");
+
+        var ruleConfig = new Dictionary<string, string> { ["mode"] = "concat", ["separator"] = "|" };
+
+        new ConcatenationTemplatingNode()
+            .Execute(mapped.RawArrayValues!["Practitioners"], ruleConfig, null)
+            .Value.Should().Be("Physician Family Medicine, MD|Physician One Cardiology, MD");
+    }
+
+    [Fact]
+    public void A_misconfigured_match_criteria_reports_its_error_once_not_per_evaluation()
+    {
+        // The criteria's selection feeds TWO consumers — the column value and the transform chain's input —
+        // and computing it separately for each re-walked the document for the same answer and recorded this
+        // configuration error twice for one field. It is computed once and shared.
+        var field = new MappingFieldDto(
+            TargetField: "Doc",
+            JsonPath: "$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "directField",
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: null,
+            CorrelationCodeValue: null);
+
+        var result = _engine.Map(EpicPatientJson, [field]);
+
+        result.Errors.Should().ContainSingle()
+            .Which.Should().Contain("Doc").And.Contain("CorrelationCodeJsonPath");
+        result.Rows![0]["Doc"].Should().BeNull();
     }
 }

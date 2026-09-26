@@ -176,16 +176,39 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             // Only when the column holds ONE instance's join (First / Nth / a non-repeating field). Under
             // "All records" the column is deliberately a list spanning every instance, so there is no single
             // pair of fields for the placeholders to bind to, and the collapsed value stays the input.
-            var joinedParts = joinedRows is not null
-                && !HasCsvAggregate(field.Format)
-                && policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
-                ? FirstRowPieces(joinedRows, resolved)
+            // The criteria's selection, computed ONCE and used for both the column value and the transform
+            // chain's input. Anything else lets the two disagree, which is exactly what made "use equals
+            // official" behave as though no criteria had been set once a concat rule was attached.
+            var correlatedPositions = policy == ArrayPolicy.CorrelateByCode
+                ? SelectCorrelatedPositions(root, field, resolved.Select(r => r.Indices).ToList(), errors)
                 : null;
 
+            var joinedParts = joinedRows is not null
+                && !HasCsvAggregate(field.Format)
+                && (policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+                    // A criteria that lands on exactly one instance holds ONE join, same as First/Nth — so
+                    // the chain gets that instance's given/family rather than the string they were joined
+                    // into, and a "|" separator separates the FIELDS as configured instead of the instances.
+                    || correlatedPositions is { Count: 1 })
+                ? FirstRowPieces(joinedRows, resolved, correlatedPositions is { Count: 1 } one ? resolved[one[0]].Indices : null)
+                : null;
+
+            // The HasCsvAggregate guard matters as much here as it does for the column value below, and for
+            // the same reason: "All records" stores ArrayPolicy.FirstItem alongside the aggregate marker, and
+            // that stored policy must not run in the marker's place. Letting TakeFirstInstance narrow to one
+            // instance left a chain LED by ConcatenationTemplating with a single item, so the executor's
+            // "more than one" check failed, the node was handed the ALREADY ", "-joined column value instead
+            // of the list, and joining one item with the configured separator returned it untouched — a "|"
+            // join separator silently did nothing and the records stayed comma-separated.
             rawArrayValues[field.TargetField] = joinedParts
-                ?? (policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
-                    ? TakeFirstInstance(resolved, values)
-                    : values);
+                // A Match criteria narrows to what it selected, for the same reason First/Nth narrow below:
+                // the chain must see what the instance selection chose, not every instance in the resource.
+                ?? (correlatedPositions is not null
+                    ? correlatedPositions.Select(i => values[i]).ToList()
+                    : !HasCsvAggregate(field.Format)
+                      && policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+                        ? TakeFirstInstance(resolved, values)
+                        : values);
 
             // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
             // delimited string on the parent row" — no ArrayPolicy value represents that (see
@@ -254,8 +277,10 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
                     break;
 
                 case ArrayPolicy.CorrelateByCode:
-                    parent[field.TargetField] = ResolveCorrelatedValue(
-                        root, field, resolved.Select(r => r.Indices).ToList(), values, errors);
+                    // correlatedPositions, not a second selection pass: resolving the criteria twice per
+                    // field re-walked the whole document for the same answer, and recorded the "missing
+                    // CorrelationCodeJsonPath/Value" configuration error twice for one misconfigured field.
+                    parent[field.TargetField] = CollapseCorrelatedValues(correlatedPositions, values);
                     break;
 
                 case ArrayPolicy.Scalar:
@@ -335,7 +360,7 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         => jsonPath is not null && jsonPath.TrimEnd().EndsWith(".reference", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Selects the value among <paramref name="indices"/>/<paramref name="values"/> (same order, one per array item)
+    /// Selects EVERY value among <paramref name="indices"/>/<paramref name="values"/> (same order, one per array item)
     /// whose sibling code element — resolved via <see cref="MappingFieldDto.CorrelationCodeJsonPath"/>, sharing the
     /// same array index CHAIN (every level, not merely the outermost — see <see cref="IsIndexChainMatch"/>) as
     /// <paramref name="indices"/> — satisfies <see cref="MappingFieldDto.CorrelationCodeOperator"/> (default/null:
@@ -345,12 +370,47 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// how a specific <c>Patient.contact[].telecom[].value</c> is picked by that SAME telecom item's own
     /// <c>system</c>/<c>use</c> (two repeating levels: matching on the outer "which contact" index alone would
     /// return that contact's FIRST telecom value, not necessarily the one whose own sibling actually matched).
+    ///
+    /// A criteria narrow enough to identify one item — the usual case, and the one those examples describe —
+    /// yields that item's value unchanged. A criteria that matches several yields all of them, joined; see the
+    /// switch at the end for why the single-match case must not take the joining path.
     /// </summary>
-    private static object? ResolveCorrelatedValue(
+    private static object? CollapseCorrelatedValues(List<int>? positions, List<object?> values)
+    {
+        var selected = positions is null ? [] : positions.Select(i => values[i]).ToList();
+
+        return selected.Count switch
+        {
+            0 => null,
+            // A single match returns the value ITSELF, not a one-element string. This is what keeps the
+            // ordinary case — a criteria written to identify exactly one item, e.g. the telecom whose
+            // system is "phone" — byte-identical to before, types included: collapsing it to text here
+            // would hand a Date or Integer column a string and break the write.
+            1 => selected[0],
+            // Several matches share one destination column, so they join the way every other "more than one
+            // value in one column" path does (JoinValues, the same ", " the csv aggregate uses).
+            _ => JoinValues(selected)
+        };
+    }
+
+    /// <summary>
+    /// The POSITIONS into <paramref name="indices"/> (and therefore into the parallel values list) that the
+    /// field's Match criteria selects. Null when the criteria cannot run at all — a missing path or value,
+    /// which is a configuration error and recorded as one; an empty list when it ran and matched nothing.
+    /// </summary>
+    /// <remarks>
+    /// Separated from <see cref="ResolveCorrelatedValue"/> because the selection has TWO consumers that must
+    /// not disagree: the value written to the column, and the value list handed to a transform chain. They
+    /// did disagree — the chain was given every instance regardless of the criteria, so "use equals official"
+    /// on a joined name column, with a concat rule, produced all three names joined by the rule's separator
+    /// ("Warren James, McGinnis | Warren James, McGinnis | Warren, McGinnis") instead of the one the criteria
+    /// picked. The criteria appeared to be ignored, and the separator appeared to be separating the wrong
+    /// thing; both were the same bug.
+    /// </remarks>
+    private static List<int>? SelectCorrelatedPositions(
         JsonElement root,
         MappingFieldDto field,
         List<IReadOnlyList<int>> indices,
-        List<object?> values,
         List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(field.CorrelationCodeJsonPath) || string.IsNullOrWhiteSpace(field.CorrelationCodeValue))
@@ -359,28 +419,27 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             return null;
         }
 
-        var codeMatches = ResolveAll(root, field.CorrelationCodeJsonPath);
-        var matchingIndexChains = codeMatches
+        var matchingIndexChains = ResolveAll(root, field.CorrelationCodeJsonPath)
             .Where(m => m.Element.ValueKind == JsonValueKind.String &&
                         MatchesCorrelationOperator(field.CorrelationCodeOperator, m.Element.GetString()!, field.CorrelationCodeValue))
             .Select(m => m.Indices)
             .Where(ix => ix.Count > 0)
             .ToList();
 
-        if (matchingIndexChains.Count == 0)
-        {
-            return null;
-        }
-
+        // EVERY item the criteria selects, not merely the first. "type equals Practitioner" against a
+        // generalPractitioner[] holding two Practitioner references is a criteria that matches both, and
+        // returning one of them silently discarded the other — the same answer "First instance" would have
+        // given, so the criteria appeared to do nothing.
+        var positions = new List<int>();
         for (var i = 0; i < indices.Count; i++)
         {
             if (matchingIndexChains.Any(chain => IsIndexChainMatch(chain, indices[i])))
             {
-                return values[i];
+                positions.Add(i);
             }
         }
 
-        return null;
+        return positions;
     }
 
     /// <summary>
@@ -684,16 +743,20 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// pieces of whichever row <paramref name="resolved"/> starts with, which is the row every single-value
     /// ArrayPolicy ends up writing (and, after an "index=N" selection, the Nth instance rather than the
     /// first). Null when there is nothing to hand over, so the caller keeps its existing input.</summary>
+    /// <param name="targetIndices">Overrides which instance to take the pieces from. A Match criteria picks
+    /// its instance by a sibling's value rather than by position, so it is not necessarily resolved[0] — and
+    /// handing back the first row's pieces there would give a concat rule the wrong name entirely.</param>
     private static IReadOnlyList<object?>? FirstRowPieces(
         List<(string[] Pieces, IReadOnlyList<int> Indices)> joinedRows,
-        List<(object? Value, IReadOnlyList<int> Indices)> resolved)
+        List<(object? Value, IReadOnlyList<int> Indices)> resolved,
+        IReadOnlyList<int>? targetIndices = null)
     {
         if (resolved.Count == 0 || joinedRows.Count == 0)
         {
             return null;
         }
 
-        var target = resolved[0].Indices;
+        var target = targetIndices ?? resolved[0].Indices;
         foreach (var row in joinedRows)
         {
             var sameInstance = target.Count == 0

@@ -222,13 +222,15 @@ public sealed class JsonMappingEngineArrayPolicyTests
     }
 
     [Fact]
-    public void CorrelationCodeOperator_NotEquals_matches_the_first_sibling_that_differs()
+    public void CorrelationCodeOperator_NotEquals_returns_every_sibling_that_differs()
     {
-        // "home" (the first telecom entry) is excluded; "mobile" (the second) is the first that qualifies.
+        // "home" (the first telecom entry) is excluded; "mobile" and "work" both qualify, and a criteria
+        // yields everything it selects. NotEquals is where that matters most — "not X" matches nearly
+        // everything, so a multi-match is its normal outcome rather than an edge case.
         var result = Sut.Map(TelecomJson, [TelecomField(correlationCodeOperator: "NotEquals", correlationCodeValue: "home")]);
 
         result.Errors.Should().BeEmpty();
-        result.Values.GetValueOrDefault("Telecom").Should().Be("+1(585)-998-7425");
+        result.Values.GetValueOrDefault("Telecom").Should().Be("+1(585)-998-7425, 987-452-2522");
     }
 
     [Fact]
@@ -305,11 +307,14 @@ public sealed class JsonMappingEngineArrayPolicyTests
 
     /// <summary>
     /// The exact reported live scenario: correlating on "system" NotEquals "mail" — since no telecom entry's
-    /// system is literally "mail" (they're "phone"/"phone"/"email"/"phone"), every one of them qualifies, and
-    /// the engine must return the FIRST field-order match (contact[0].telecom[0]), not null.
+    /// system is literally "mail" (they're "phone"/"phone"/"email"/"phone"), every one of them qualifies.
+    /// The original bug was that this wrote NULL; it must not. It now writes all four, because a criteria
+    /// yields every instance it selects — worth seeing plainly here, since the value that lands in a column
+    /// named for a phone number includes an email address. That is the criteria being too broad, which is
+    /// the author's to narrow, not something the engine should paper over by silently keeping one.
     /// </summary>
     [Fact]
-    public void CorrelateByCode_NotEquals_matching_every_sibling_returns_the_first_one_not_null()
+    public void CorrelateByCode_NotEquals_matching_every_sibling_returns_all_of_them_not_null()
     {
         const string patientJson = """
             {
@@ -347,7 +352,8 @@ public sealed class JsonMappingEngineArrayPolicyTests
         var result = Sut.Map(patientJson, [field]);
 
         result.Errors.Should().BeEmpty();
-        result.Values.GetValueOrDefault("Telecom").Should().Be("125-875-4714");
+        result.Values.GetValueOrDefault("Telecom")
+            .Should().Be("125-875-4714, Postcare123@gmail.com, 897-532-5871, 897-532-5871-mobile");
     }
 
     /// <summary>

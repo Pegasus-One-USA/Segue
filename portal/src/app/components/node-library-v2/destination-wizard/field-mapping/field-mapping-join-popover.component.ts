@@ -443,8 +443,49 @@ export class FieldMappingJoinPopoverComponent {
     this.draft.update(d => (d ? { ...d, delimiter: value } : d));
   }
 
+  /**
+   * True while the attached rule is a Concatenation/Templating in SPLIT mode, which is the one configuration
+   * that cannot cope with more than one instance.
+   *
+   * Split takes a single string apart. Under "All records" the chain is handed every instance instead, and
+   * the split branch stringifies that list rather than its items — writing the literal type name into the
+   * column. "Match criteria" is only a problem when the criteria matches several instances, but it is
+   * blocked alongside it so the rule is one a person can hold: split reads one value.
+   *
+   * Concat is unaffected and keeps every option — joining across instances is exactly what it is for.
+   */
+  readonly splitModeRestrictsInstances = computed(() =>
+    this.ruleNodeType() === 'ConcatenationTemplating' && this.ruleConfig()['mode'] === 'split');
+
+  /** Whether one instance-picker option can be chosen right now — see splitModeRestrictsInstances. */
+  isInstanceTypeDisabled(type: MappingInstanceSelection['type']): boolean {
+    return this.splitModeRestrictsInstances() && (type === 'all' || type === 'criteria');
+  }
+
   onInstanceTypeChange(type: MappingInstanceSelection['type']): void {
+    if (this.isInstanceTypeDisabled(type)) return;
     this.draft.update(d => (d ? this.withForcedAggregate({ ...d, instance: { ...(d.instance ?? { type: 'first' }), type } }) : d));
+  }
+
+  /** The config form mutates its @Input object in place, so neither the signal nor change detection sees an
+   *  edit on its own. Re-setting the signal with a copy is what makes splitModeRestrictsInstances recompute
+   *  when the mode changes — without it the picker would keep whatever enabled/disabled state it had when
+   *  the popover opened. */
+  onRuleConfigChanged(config: Record<string, string>): void {
+    this.ruleConfig.set({ ...config });
+    this.reconcileInstanceWithRuleMode();
+  }
+
+  /**
+   * Switching the rule INTO split mode while a now-blocked instance type is selected falls back to "First
+   * instance" rather than leaving the picker showing a disabled option as the current value. Disabling an
+   * option the row is already on would otherwise save the exact combination the disabling exists to prevent.
+   */
+  private reconcileInstanceWithRuleMode(): void {
+    if (!this.splitModeRestrictsInstances()) return;
+    const current = this.instanceType();
+    if (current !== 'all' && current !== 'criteria') return;
+    this.draft.update(d => (d ? { ...d, instance: { type: 'first' } } : d));
   }
 
   onInstanceField(patch: Partial<MappingInstanceSelection>): void {

@@ -37,6 +37,26 @@ public sealed class TransformNodeConfigSchemaTests
     }
 
     [Fact]
+    public void ConcatenationTemplating_resets_the_template_when_the_mode_changes()
+    {
+        // The template survives the switch (it applies in both modes) but its CONTENT does not: "{0} {1}"
+        // written against a joined column's two source fields describes nothing in particular once the same
+        // rule is splitting a string into however many pieces. Visibility cannot express "still applies, no
+        // longer valid", so the field declares the key whose change invalidates it.
+        Field(TransformNodeType.ConcatenationTemplating, "template").ResetOn.Should().Equal(["mode"]);
+    }
+
+    [Theory]
+    [InlineData("separator")]
+    [InlineData("splitDelimiter")]
+    public void ConcatenationTemplating_mode_scoped_fields_need_no_reset_rule(string key)
+    {
+        // A field scoped to one mode is already dropped by VisibleWhen when the mode changes — declaring a
+        // reset as well would be belt-and-braces that hides which mechanism is doing the work.
+        Field(TransformNodeType.ConcatenationTemplating, key).ResetOn.Should().BeNull();
+    }
+
+    [Fact]
     public void ConcatenationTemplating_labels_drop_the_mode_qualifier_now_that_the_field_is_mode_scoped()
     {
         Field(TransformNodeType.ConcatenationTemplating, "splitDelimiter").Label

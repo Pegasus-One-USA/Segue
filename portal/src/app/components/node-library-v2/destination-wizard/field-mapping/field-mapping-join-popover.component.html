@@ -95,11 +95,14 @@
         <div class="fm-popover-section">
           <label class="fm-popover-section-title" for="fm-inst-type">{{ arrayAncestorLabel() }} repeats — which instance?</label>
           <select id="fm-inst-type" class="fm-popover-select" [value]="instanceType()" (change)="onInstanceTypeChange($any($event.target).value)">
-            <option value="all">All records</option>
+            <option value="all" [disabled]="isInstanceTypeDisabled('all')">All records</option>
             <option value="first">First instance</option>
             <option value="nth">Nth instance</option>
-            <option value="criteria">Match criteria</option>
+            <option value="criteria" [disabled]="isInstanceTypeDisabled('criteria')">Match criteria</option>
           </select>
+          @if (splitModeRestrictsInstances()) {
+            <p class="fm-popover-hint">Split reads a single value, so "All records" and "Match criteria" are unavailable while this rule is in split mode. Switch the rule to concat to use them.</p>
+          }
 
           @if (instanceType() === 'nth') {
             <label class="fm-popover-inline-label" title="1-based: 1 is the first occurrence, 2 the second, and so on.">
@@ -171,7 +174,7 @@
                 }
               </select>
 
-              <app-rule-config-form [schema]="ruleSchema()" [config]="ruleConfig()" />
+              <app-rule-config-form [schema]="ruleSchema()" [config]="ruleConfig()" (configChange)="onRuleConfigChanged($event)" />
 
               <div class="fm-popover-rule-actions">
                 @if (existingRule()) {
