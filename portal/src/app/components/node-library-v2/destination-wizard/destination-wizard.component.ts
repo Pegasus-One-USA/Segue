@@ -509,6 +509,16 @@ function genericResourceDef(r: string): ResourceDef {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
+/** What resolveRuleExpectedTypesForSave found for one mapped field: the output type the field's LAST
+ *  type-declaring transformation rule produces, plus which node type declared it — the latter decides
+ *  whether checkColumnTypeCompatibility may suggest changing that output type at all (only NumberCast and
+ *  DateTimeFormat expose a control for it). A null expectedValueType means "a rule exists but declares no
+ *  output type", which is distinct from the key being absent ("no rule at all"). */
+interface ResolvedRuleOutputType {
+  expectedValueType: string | null;
+  nodeType: string | null;
+}
+
 @Component({
   selector: 'app-destination-wizard',
   standalone: true,
@@ -3272,7 +3282,7 @@ export class DestinationWizardComponent implements OnInit {
    *  unnoticed — checked right before "Save" is allowed to actually persist anything (see
    *  saveGroupMapping). Table/column-existence checks are skipped entirely when there's no live SQL
    *  schema to check against (CSV, or SQL not yet connected) — a free-text column is always valid there. */
-  private validateMappingForSave(resource: string, ruleExpectedTypeByField: Map<string, string | null>): string[] {
+  private validateMappingForSave(resource: string, ruleExpectedTypeByField: Map<string, ResolvedRuleOutputType>): string[] {
     const errors: string[] = [];
 
     // A still-queued "add column" whose name collides with a column the live probe already found on
@@ -3396,10 +3406,12 @@ export class DestinationWizardComponent implements OnInit {
         // resolveRuleExpectedTypesForSave) overrides the raw source-type comparison — its declared output
         // type is what actually reaches the column at runtime, not birthDate's own Date type, e.g.
         const ruleKey = `${row.tableName}::${row.targetName}`;
+        const resolvedRule = ruleExpectedTypeByField.get(ruleKey);
         const ruleExpectedType = ruleExpectedTypeByField.has(ruleKey)
-          ? ruleExpectedTypeByField.get(ruleKey)!
+          ? resolvedRule!.expectedValueType
           : undefined;
-        const typeError = checkColumnTypeCompatibility(row, column, ruleExpectedType);
+        const typeError = checkColumnTypeCompatibility(
+          row, column, ruleExpectedType, resolvedRule?.nodeType);
         if (typeError) {
           errors.push(typeError);
           continue;
@@ -3439,7 +3451,7 @@ export class DestinationWizardComponent implements OnInit {
    *  a missing key, which means "no rule at all" (fall back to comparing the raw source type). Same
    *  hasSqlTables()/destinationType short-circuit as validateRuleConflictsForSave below, which this always
    *  runs directly ahead of. */
-  private resolveRuleExpectedTypesForSave(resource: string): Observable<Map<string, string | null>> {
+  private resolveRuleExpectedTypesForSave(resource: string): Observable<Map<string, ResolvedRuleOutputType>> {
     if (!this.hasSqlTables()) return of(new Map());
 
     const destinationType = this.resolveDestinationTypeForRules();
@@ -3468,13 +3480,18 @@ export class DestinationWizardComponent implements OnInit {
           includePending: true,
         })
         .pipe(
-          map((rules): [string, string | null] | null => {
+          map((rules): [string, ResolvedRuleOutputType] | null => {
             if (rules.length === 0) return null;
             // The LAST rule that declares an output type is what actually reaches the column — the chain
             // runs in order, each step feeding the next, so an earlier step's type describes an
             // intermediate value the column never sees.
             const declared = [...rules].reverse().find((rule) => rule.expectedValueType != null);
-            return [`${row.tableName}::${row.targetName}`, declared?.expectedValueType ?? null];
+            // Its node type rides along so the error can tell an author whose rule has no output-type
+            // control (every node except NumberCast/DateTimeFormat) to fix the column instead.
+            return [
+              `${row.tableName}::${row.targetName}`,
+              { expectedValueType: declared?.expectedValueType ?? null, nodeType: declared?.nodeType ?? null },
+            ];
           }),
           // A transient rule-lookup failure shouldn't block Save on its own here either — same tolerance
           // validateRuleConflictsForSave already uses; the server-side check is still the backstop.
@@ -3483,7 +3500,7 @@ export class DestinationWizardComponent implements OnInit {
     });
 
     return forkJoin(checks).pipe(
-      map((entries) => new Map(entries.filter((e): e is [string, string | null] => e !== null))),
+      map((entries) => new Map(entries.filter((e): e is [string, ResolvedRuleOutputType] => e !== null))),
     );
   }
 
