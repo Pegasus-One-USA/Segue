@@ -156,7 +156,7 @@ describe('migrateLegacyRow', () => {
 });
 
 describe('serializeRowsFlat', () => {
-  it('emits one legacy-shaped entry per row using the primary (first) source', () => {
+  it('emits a joinedFields entry carrying EVERY source for a multi-source row', () => {
     const rows: MappingRow[] = [{
       resource: 'Patient',
       sources: [
@@ -175,7 +175,47 @@ describe('serializeRowsFlat', () => {
     expect(flat[0].path).toBe('Patient.name.given');
     expect(flat[0].column).toBe('FullName');
     expect(flat[0].target).toBe('dbo.Patient');
-    expect(flat[0].approximated).toBeTrue(); // join has no backend representation
+    // EVERY source is carried, with the mode+delimiter marker JsonMappingEngine.ResolveJoinedFields reads.
+    // Sending only sources[0] is what silently dropped the family name. The "|"-joined JsonPath itself is
+    // assembled downstream (workflow-build-assembler-v2), which can derive a path for a source the catalog
+    // never gave a jsonPath — so the join survives a source that has only a fhirPath.
+    expect(flat[0].joinSources).toEqual([
+      { path: 'Patient.name.given', jsonPath: '$.name[*].given[*]', arrays: ['name'] },
+      { path: 'Patient.name.family', jsonPath: '$.name[*].family', arrays: ['name'] },
+    ]);
+    expect(flat[0].format).toBe('joinedFields;delimiter= ');
+    expect(flat[0].approximated).toBeFalse();
+  });
+
+  it('carries a joined source that has no catalog jsonPath, rather than degrading to the primary', () => {
+    // The real shape of a canvas-dragged row: fhirPath + label + arrays, no jsonPath. Requiring one on every
+    // source made this row fall back to sources[0] alone while still stamping joinedFields, so the engine
+    // joined a single sub-path and the column got just the first field.
+    const rows: MappingRow[] = [{
+      resource: 'Patient',
+      sources: [
+        { fhirPath: 'Patient.name.family', label: 'family', arrays: ['name'] },
+        { fhirPath: 'Patient.name.given', label: 'given', arrays: ['name'] },
+      ],
+      mode: 'value', delimiter: ', ', instance: { type: 'first' },
+      targetName: 'FULLNAME', tableName: 'dbo.Patient',
+    }];
+    const flat = serializeRowsFlat(rows, { Patient: 'dbo.Patient' });
+    expect(flat[0].joinSources).toEqual([
+      { path: 'Patient.name.family', arrays: ['name'] },
+      { path: 'Patient.name.given', arrays: ['name'] },
+    ]);
+    expect(flat[0].format).toBe('joinedFields;delimiter=, ');
+  });
+
+  it('emits no joinSources for a single-source row', () => {
+    const rows: MappingRow[] = [{
+      resource: 'Patient',
+      sources: [{ fhirPath: 'Patient.gender', label: 'Gender', jsonPath: '$.gender' }],
+      mode: 'value', instance: { type: 'first' },
+      targetName: 'Gender', tableName: 'dbo.Patient',
+    }];
+    expect(serializeRowsFlat(rows, { Patient: 'dbo.Patient' })[0].joinSources).toBeUndefined();
   });
 
   it('sets valueType to Json and arrayPolicy to StoreJson for childJson rows', () => {
@@ -343,7 +383,12 @@ describe('serializeRowsFlat', () => {
         targetName: 'Name', tableName: 'patients_local', jsonWriteMode: 'document',
       };
       expect(supportsJsonWriteMode(join)).toBeFalse();
-      expect(serializeRowsFlat([join], {})[0].format).toBeUndefined();
+      // A join DOES emit a format — the "joinedFields" mode prefix, without which JsonMappingEngine resolves
+      // the "|"-delimited jsonPath as one literal path and the column goes silently NULL. So the assertion
+      // is that no json= marker rides along with it, not that there is no format at all; "format is
+      // undefined" was only ever a proxy for that, accurate while a join emitted none.
+      expect(serializeRowsFlat([join], {})[0].format).toBe('joinedFields;delimiter=, ');
+      expect(serializeRowsFlat([join], {})[0].format).not.toContain('json=');
     });
 
     // The marker and the declared ValueType have to agree: the backend honours the marker only on a
@@ -814,12 +859,64 @@ describe('resolveArrayPolicy', () => {
     });
   });
 
-  it('joined sources (>1) -> rules applied to sources[0], always approximated', () => {
+  it('joined sources (>1) -> joinedFields format, not approximated', () => {
     const joined = row({
       sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
       instance: { type: 'first' },
+      delimiter: ', ',
     });
-    expect(resolveArrayPolicy(joined)).toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+    expect(resolveArrayPolicy(joined))
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'joinedFields;delimiter=, ' });
+  });
+
+  it('a joined row with an INCOMPLETE criteria still reports itself as approximated', () => {
+    // The join is exact, but the instance selection layered on it is not — hard-coding approximated:false
+    // for every joined row swallowed that, hiding the "Preview only" banner which is the only signal that
+    // the criteria the user half-typed is not actually running.
+    const joined = row({
+      sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
+      instance: { type: 'criteria', field: 'use', op: '=', value: '' },
+      delimiter: ', ',
+    });
+    expect(resolveArrayPolicy(joined))
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: true, format: 'joinedFields;delimiter=, ' });
+  });
+
+  it('a joined row with a COMPLETE criteria keeps CorrelateByCode and is exact', () => {
+    const joined = row({
+      sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
+      instance: { type: 'criteria', field: 'use', op: '=', value: 'official' },
+      delimiter: ', ',
+    });
+    expect(resolveArrayPolicy(joined)).toEqual({
+      arrayPolicy: 'CorrelateByCode',
+      approximated: false,
+      correlationSiblingField: 'use',
+      correlationCodeValue: 'official',
+      correlationOperator: 'Equals',
+      format: 'joinedFields;delimiter=, ',
+    });
+  });
+
+  it('joined sources keep the instance marker alongside the joinedFields prefix', () => {
+    const joined = row({
+      sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
+      instance: { type: 'all', aggregate: 'csv' },
+      delimiter: ', ',
+    });
+    expect(resolveArrayPolicy(joined)).toEqual({
+      arrayPolicy: 'FirstItem', approximated: false,
+      format: 'joinedFields;delimiter=, ;aggregate=csv',
+    });
+  });
+
+  it('strips delimiter characters that would collide with the Format marker syntax', () => {
+    const joined = row({
+      sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
+      instance: { type: 'first' },
+      delimiter: '; =',
+    });
+    expect(resolveArrayPolicy(joined).format).toBe('joinedFields;delimiter= ');
   });
 
   it('absent instance defaults to "first" semantics', () => {

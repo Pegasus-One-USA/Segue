@@ -116,4 +116,97 @@ public sealed class StringStructureNodesTests
         var result = new ArrayListOperationsNode().Execute(new object?[] { new object?[] { "a", "b" }, "c" }, config, null);
         result.Value.Should().BeEquivalentTo(new[] { "a", "b", "c" });
     }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_binds_placeholders_to_each_source_value()
+    {
+        var config = new Dictionary<string, string> { ["template"] = "Mr {0} {1} Sir" };
+        var result = new ConcatenationTemplatingNode()
+            .Execute(new object?[] { "Warren James", "McGinnis" }, config, null);
+
+        result.Value.Should().Be("Mr Warren James McGinnis Sir");
+    }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_drops_a_placeholder_with_no_value_behind_it()
+    {
+        // Never leave "{1}" sitting in a destination column: it looks like data, so nothing downstream
+        // flags it as a misconfiguration.
+        var config = new Dictionary<string, string> { ["template"] = "Mr {0} {1} Sir" };
+        var result = new ConcatenationTemplatingNode().Execute(new object?[] { "Warren" }, config, null);
+
+        result.Value.Should().Be("Mr Warren  Sir").And.NotBe("Mr Warren {1} Sir");
+    }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_returns_null_when_a_template_binds_nothing_at_all()
+    {
+        var config = new Dictionary<string, string> { ["template"] = "{0}{1}" };
+        new ConcatenationTemplatingNode().Execute(null, config, null).Value.Should().BeNull();
+    }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_split_mode_renders_the_parts_through_a_template()
+    {
+        // Epic sends generalPractitioner.display as "Physician Family Medicine, MD". Split on "," to get the
+        // name away from the credential, then template the piece that matters.
+        var config = new Dictionary<string, string>
+        {
+            ["mode"] = "split",
+            ["splitDelimiter"] = ",",
+            ["template"] = "Hi {0}",
+        };
+        var result = new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null);
+
+        result.Value.Should().Be("Hi Physician Family Medicine");
+    }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_split_mode_can_reach_a_later_part()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["mode"] = "split",
+            ["splitDelimiter"] = ",",
+            ["template"] = "{1} - {0}",
+        };
+        new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null)
+            .Value.Should().Be("MD - Physician Family Medicine");
+    }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_split_mode_without_a_template_still_yields_the_parts()
+    {
+        // Split exists to feed a downstream node; that path must keep handing on the array.
+        var config = new Dictionary<string, string> { ["mode"] = "split", ["splitDelimiter"] = "," };
+        new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null)
+            .Value.Should().BeEquivalentTo(new[] { "Physician Family Medicine", "MD" });
+    }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_split_mode_drops_a_placeholder_past_the_last_part()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["mode"] = "split",
+            ["splitDelimiter"] = ",",
+            ["template"] = "Hi {0} {5}",
+        };
+        // The placeholder goes; the literal text around it (here the separating space) is the author's and stays.
+        new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null)
+            .Value.Should().Be("Hi Physician Family Medicine ").And.NotBe("Hi Physician Family Medicine {5}");
+    }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_split_mode_on_a_value_without_the_delimiter_binds_the_whole_value()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["mode"] = "split",
+            ["splitDelimiter"] = ",",
+            ["template"] = "Hi {0}",
+        };
+        new ConcatenationTemplatingNode().Execute("Physician One Cardiology", config, null)
+            .Value.Should().Be("Hi Physician One Cardiology");
+    }
 }

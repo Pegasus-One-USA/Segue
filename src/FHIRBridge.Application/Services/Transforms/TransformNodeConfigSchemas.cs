@@ -28,8 +28,8 @@ public static class TransformNodeConfigSchemas
 {
     private static TransformConfigFieldSchema Text(
         string key, string label, string? defaultValue = null, string? placeholder = null, bool advanced = false,
-        TransformConfigFieldVisibility? visibleWhen = null) =>
-        new(key, label, "text", null, defaultValue, placeholder, advanced, visibleWhen);
+        TransformConfigFieldVisibility? visibleWhen = null, IReadOnlyList<string>? resetOn = null) =>
+        new(key, label, "text", null, defaultValue, placeholder, advanced, visibleWhen, resetOn);
 
     // A number input (rejects non-numeric keystrokes at the UI layer) for the many config keys that are
     // parsed as int/decimal by the node itself (config.GetInt / decimal.TryParse) but used to be a plain
@@ -293,10 +293,24 @@ public static class TransformNodeConfigSchemas
             [TransformNodeType.ConcatenationTemplating] = new(TransformNodeType.ConcatenationTemplating, "Concatenation/Templating",
             [
                 Select("mode", "Mode", ["concat", "split"], "concat"),
-                Text("separator", "Join separator (concat mode, ignored when a template is set)", " "),
-                Text("template", "Template with {0} {1}... placeholders (concat mode, optional)", placeholder: "e.g. {0} {1}, MD", advanced: true),
-                Text("splitDelimiter", "Split delimiter or regex (split mode)", ","),
-                Checkbox("splitIsRegex", "Treat split delimiter as a regex", false, advanced: true),
+                // Each mode shows only the fields it actually uses. Rendering both a join separator and a
+                // split delimiter side by side invited exactly the misreading it looks like: a split rule
+                // configured with a join separator, or a concat rule with a split delimiter, where the unused
+                // one is silently ignored and nothing says so. The mode qualifiers are dropped from the labels
+                // too — a field that only appears in one mode does not need to name it.
+                Text("separator", "Join separator (ignored when a template is set)", " ",
+                    visibleWhen: OnlyWhen("mode", "concat")),
+                Text("splitDelimiter", "Split delimiter or regex", ",",
+                    visibleWhen: OnlyWhen("mode", "split")),
+                Checkbox("splitIsRegex", "Treat split delimiter as a regex", false, advanced: true,
+                    visibleWhen: OnlyWhen("mode", "split")),
+                // Deliberately NOT mode-scoped: a template renders the column's source fields in concat mode
+                // and the split's own pieces in split mode, so it is meaningful in both — but it means
+                // something DIFFERENT in each, which is why it resets on the switch rather than carrying a
+                // "{0} {1}" written for two joined source fields over onto whatever a split happened to
+                // produce. Visibility cannot express that: the field still applies, its content does not.
+                Text("template", "Template with {0} {1}... placeholders (optional)", placeholder: "e.g. {0} {1}, MD", advanced: true,
+                    resetOn: ["mode"]),
             ]),
             [TransformNodeType.ArrayListOperations] = new(TransformNodeType.ArrayListOperations, "Array/List Operations",
             [

@@ -82,8 +82,13 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             var isJoinedFields = field.Format?.StartsWith("joinedFields", StringComparison.OrdinalIgnoreCase) == true;
             var policy = field.ArrayPolicy;
 
-            var resolved = isJoinedFields
-                ? ResolveJoinedFields(root, field)
+            // Kept alongside the joined strings below so a transform chain can be handed the field's PARTS
+            // rather than the one string they were joined into — see the rawArrayValues assignment further
+            // down for why a template's {0}/{1} are meaningless without them.
+            var joinedRows = isJoinedFields ? ResolveJoinedFieldRows(root, field) : null;
+
+            var resolved = joinedRows is not null
+                ? JoinRows(joinedRows, ParseDelimiter(field.Format), field, errors)
                 : ResolveAll(root, field.JsonPath)
                     .Select(m => (
                         Value: ConvertElement(
@@ -161,10 +166,49 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             // address[0].line[*] — every value under one instance — stays whole and still joins as before.
             // "All records" (RepeatParent, or FirstItem plus the csv aggregate above) remains the way to span
             // every instance, so nothing loses the ability to do so.
-            rawArrayValues[field.TargetField] =
-                policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
-                    ? TakeFirstInstance(resolved, values)
-                    : values;
+            // A JOINED column hands its transform chain the individual source-field values, not the single
+            // string they were joined into. ConcatenationTemplating binds "{0} {1}" positionally to the items
+            // it receives (see AsItems: a string is ONE item), so against the joined string "{0}" swallowed
+            // the whole thing and "{1}" matched nothing and survived as literal text in the column —
+            // "Mr Warren James, McGinnis {1} Sir". With the parts, {0} is the given name and {1} the family,
+            // which is the only reading under which a template on a joined column means anything.
+            //
+            // Only when the column holds ONE instance's join (First / Nth / a non-repeating field). Under
+            // "All records" the column is deliberately a list spanning every instance, so there is no single
+            // pair of fields for the placeholders to bind to, and the collapsed value stays the input.
+            // The criteria's selection, computed ONCE and used for both the column value and the transform
+            // chain's input. Anything else lets the two disagree, which is exactly what made "use equals
+            // official" behave as though no criteria had been set once a concat rule was attached.
+            var correlatedPositions = policy == ArrayPolicy.CorrelateByCode
+                ? SelectCorrelatedPositions(root, field, resolved.Select(r => r.Indices).ToList(), errors)
+                : null;
+
+            var joinedParts = joinedRows is not null
+                && !HasCsvAggregate(field.Format)
+                && (policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+                    // A criteria that lands on exactly one instance holds ONE join, same as First/Nth — so
+                    // the chain gets that instance's given/family rather than the string they were joined
+                    // into, and a "|" separator separates the FIELDS as configured instead of the instances.
+                    || correlatedPositions is { Count: 1 })
+                ? FirstRowPieces(joinedRows, resolved, correlatedPositions is { Count: 1 } one ? resolved[one[0]].Indices : null)
+                : null;
+
+            // The HasCsvAggregate guard matters as much here as it does for the column value below, and for
+            // the same reason: "All records" stores ArrayPolicy.FirstItem alongside the aggregate marker, and
+            // that stored policy must not run in the marker's place. Letting TakeFirstInstance narrow to one
+            // instance left a chain LED by ConcatenationTemplating with a single item, so the executor's
+            // "more than one" check failed, the node was handed the ALREADY ", "-joined column value instead
+            // of the list, and joining one item with the configured separator returned it untouched — a "|"
+            // join separator silently did nothing and the records stayed comma-separated.
+            rawArrayValues[field.TargetField] = joinedParts
+                // A Match criteria narrows to what it selected, for the same reason First/Nth narrow below:
+                // the chain must see what the instance selection chose, not every instance in the resource.
+                ?? (correlatedPositions is not null
+                    ? correlatedPositions.Select(i => values[i]).ToList()
+                    : !HasCsvAggregate(field.Format)
+                      && policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+                        ? TakeFirstInstance(resolved, values)
+                        : values);
 
             // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
             // delimited string on the parent row" — no ArrayPolicy value represents that (see
@@ -233,8 +277,10 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
                     break;
 
                 case ArrayPolicy.CorrelateByCode:
-                    parent[field.TargetField] = ResolveCorrelatedValue(
-                        root, field, resolved.Select(r => r.Indices).ToList(), values, errors);
+                    // correlatedPositions, not a second selection pass: resolving the criteria twice per
+                    // field re-walked the whole document for the same answer, and recorded the "missing
+                    // CorrelationCodeJsonPath/Value" configuration error twice for one misconfigured field.
+                    parent[field.TargetField] = CollapseCorrelatedValues(correlatedPositions, values);
                     break;
 
                 case ArrayPolicy.Scalar:
@@ -314,7 +360,7 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         => jsonPath is not null && jsonPath.TrimEnd().EndsWith(".reference", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Selects the value among <paramref name="indices"/>/<paramref name="values"/> (same order, one per array item)
+    /// Selects EVERY value among <paramref name="indices"/>/<paramref name="values"/> (same order, one per array item)
     /// whose sibling code element — resolved via <see cref="MappingFieldDto.CorrelationCodeJsonPath"/>, sharing the
     /// same array index CHAIN (every level, not merely the outermost — see <see cref="IsIndexChainMatch"/>) as
     /// <paramref name="indices"/> — satisfies <see cref="MappingFieldDto.CorrelationCodeOperator"/> (default/null:
@@ -324,12 +370,47 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// how a specific <c>Patient.contact[].telecom[].value</c> is picked by that SAME telecom item's own
     /// <c>system</c>/<c>use</c> (two repeating levels: matching on the outer "which contact" index alone would
     /// return that contact's FIRST telecom value, not necessarily the one whose own sibling actually matched).
+    ///
+    /// A criteria narrow enough to identify one item — the usual case, and the one those examples describe —
+    /// yields that item's value unchanged. A criteria that matches several yields all of them, joined; see the
+    /// switch at the end for why the single-match case must not take the joining path.
     /// </summary>
-    private static object? ResolveCorrelatedValue(
+    private static object? CollapseCorrelatedValues(List<int>? positions, List<object?> values)
+    {
+        var selected = positions is null ? [] : positions.Select(i => values[i]).ToList();
+
+        return selected.Count switch
+        {
+            0 => null,
+            // A single match returns the value ITSELF, not a one-element string. This is what keeps the
+            // ordinary case — a criteria written to identify exactly one item, e.g. the telecom whose
+            // system is "phone" — byte-identical to before, types included: collapsing it to text here
+            // would hand a Date or Integer column a string and break the write.
+            1 => selected[0],
+            // Several matches share one destination column, so they join the way every other "more than one
+            // value in one column" path does (JoinValues, the same ", " the csv aggregate uses).
+            _ => JoinValues(selected)
+        };
+    }
+
+    /// <summary>
+    /// The POSITIONS into <paramref name="indices"/> (and therefore into the parallel values list) that the
+    /// field's Match criteria selects. Null when the criteria cannot run at all — a missing path or value,
+    /// which is a configuration error and recorded as one; an empty list when it ran and matched nothing.
+    /// </summary>
+    /// <remarks>
+    /// Separated from <see cref="ResolveCorrelatedValue"/> because the selection has TWO consumers that must
+    /// not disagree: the value written to the column, and the value list handed to a transform chain. They
+    /// did disagree — the chain was given every instance regardless of the criteria, so "use equals official"
+    /// on a joined name column, with a concat rule, produced all three names joined by the rule's separator
+    /// ("Warren James, McGinnis | Warren James, McGinnis | Warren, McGinnis") instead of the one the criteria
+    /// picked. The criteria appeared to be ignored, and the separator appeared to be separating the wrong
+    /// thing; both were the same bug.
+    /// </remarks>
+    private static List<int>? SelectCorrelatedPositions(
         JsonElement root,
         MappingFieldDto field,
         List<IReadOnlyList<int>> indices,
-        List<object?> values,
         List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(field.CorrelationCodeJsonPath) || string.IsNullOrWhiteSpace(field.CorrelationCodeValue))
@@ -338,28 +419,27 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             return null;
         }
 
-        var codeMatches = ResolveAll(root, field.CorrelationCodeJsonPath);
-        var matchingIndexChains = codeMatches
+        var matchingIndexChains = ResolveAll(root, field.CorrelationCodeJsonPath)
             .Where(m => m.Element.ValueKind == JsonValueKind.String &&
                         MatchesCorrelationOperator(field.CorrelationCodeOperator, m.Element.GetString()!, field.CorrelationCodeValue))
             .Select(m => m.Indices)
             .Where(ix => ix.Count > 0)
             .ToList();
 
-        if (matchingIndexChains.Count == 0)
-        {
-            return null;
-        }
-
+        // EVERY item the criteria selects, not merely the first. "type equals Practitioner" against a
+        // generalPractitioner[] holding two Practitioner references is a criteria that matches both, and
+        // returning one of them silently discarded the other — the same answer "First instance" would have
+        // given, so the criteria appeared to do nothing.
+        var positions = new List<int>();
         for (var i = 0; i < indices.Count; i++)
         {
             if (matchingIndexChains.Any(chain => IsIndexChainMatch(chain, indices[i])))
             {
-                return values[i];
+                positions.Add(i);
             }
         }
 
-        return null;
+        return positions;
     }
 
     /// <summary>
@@ -562,31 +642,140 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// Resolves a "joinedFields" field: <see cref="MappingFieldDto.JsonPath"/> is a <c>|</c>-delimited list of
     /// sub-paths (see <c>MappingImportService.BuildJsonPathAndFormat</c>), each resolved independently and then
     /// joined per row with the delimiter encoded in <see cref="MappingFieldDto.Format"/> (<c>;delimiter=X</c>).
-    /// Rows are aligned by position across sub-paths — they're expected to share the same array context, so the
-    /// first sub-path that yields any matches determines the row indices; a sub-path with fewer/no matches at a
-    /// given position contributes an empty string for that row rather than dropping the row.
     /// </summary>
-    private static List<(object? Value, IReadOnlyList<int> Indices)> ResolveJoinedFields(JsonElement root, MappingFieldDto field)
+    /// <remarks>
+    /// Rows are aligned by the OUTERMOST array instance each match came from, not by flat position. Sub-paths
+    /// under the same repeating parent fan out at different rates — Patient.name[*].given[*] yields one match
+    /// per given name (five, for an Epic payload carrying three name entries) while name[*].family yields one
+    /// per name entry (three). Pairing those by index paired "James" with the second name's family and left the
+    /// last two rows with no family at all; grouping by name[] instance instead keeps every value with the name
+    /// it actually belongs to.
+    ///
+    /// Within one instance a sub-path can still hold several values (given = ["Warren", "James"]) — those join
+    /// with a SPACE, because they are parts of one field, while the configured delimiter separates the distinct
+    /// fields being joined. One delimiter box cannot express both levels, and a space is the only sensible
+    /// reading of "the given names of this person" (see field-mapping-join-popover).
+    ///
+    /// A sub-path with no repeating ancestor at all (e.g. Patient.id joined onto a name) contributes its single
+    /// value to every row rather than only the first. A sub-path that resolves to nothing for a given instance
+    /// contributes no piece at all, so the result is "Warren James" rather than a dangling "Warren James, ".
+    /// </remarks>
+    private static List<(string[] Pieces, IReadOnlyList<int> Indices)> ResolveJoinedFieldRows(JsonElement root, MappingFieldDto field)
     {
-        var delimiter = ParseDelimiter(field.Format);
         var subPaths = field.JsonPath.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var resolvedSubPaths = subPaths.Select(subPath => ResolveAll(root, subPath)).ToList();
 
-        var shape = resolvedSubPaths.OrderByDescending(r => r.Count).FirstOrDefault() ?? [];
-        if (shape.Count == 0)
+        // The instance keys to emit a row for: every distinct outermost index any sub-path matched. Taken
+        // across ALL sub-paths rather than from whichever matched most, so a sub-path present on an instance
+        // the others skipped still gets a row of its own. Sorted below into array order — NOT the order they
+        // happened to be discovered in, which depends on which sub-path the user listed first and would make
+        // "family|given" emit its rows in a different order than "given|family" for the same document.
+        var instanceKeys = new HashSet<int>();
+        foreach (var matches in resolvedSubPaths)
         {
-            return [];
+            foreach (var match in matches)
+            {
+                if (match.Indices.Count > 0)
+                {
+                    instanceKeys.Add(match.Indices[0]);
+                }
+            }
         }
 
-        var rows = new List<(object? Value, IReadOnlyList<int> Indices)>(shape.Count);
-        for (var i = 0; i < shape.Count; i++)
+        // Nothing repeating anywhere — every sub-path is a plain scalar, so there is exactly one row.
+        if (instanceKeys.Count == 0)
         {
-            var pieces = resolvedSubPaths.Select(matches => i < matches.Count ? ElementToJoinString(matches[i].Element) : string.Empty);
-            rows.Add((string.Join(delimiter, pieces), shape[i].Indices));
+            if (resolvedSubPaths.All(matches => matches.Count == 0))
+            {
+                return [];
+            }
+
+            var scalarPieces = resolvedSubPaths
+                .Select(matches => JoinInstancePieces(matches.Select(m => m.Element)))
+                .Where(piece => piece.Length > 0)
+                .ToArray();
+            return [(scalarPieces, Array.Empty<int>())];
+        }
+
+        var orderedKeys = instanceKeys.Order().ToList();
+
+        var rows = new List<(string[] Pieces, IReadOnlyList<int> Indices)>(orderedKeys.Count);
+        foreach (var instanceKey in orderedKeys)
+        {
+            var pieces = resolvedSubPaths
+                .Select(matches => JoinInstancePieces(matches
+                    // A sub-path with no repeating ancestor carries no indices at all — it belongs to every
+                    // instance equally, so it is never filtered out by the instance key.
+                    .Where(m => m.Indices.Count == 0 || m.Indices[0] == instanceKey)
+                    .Select(m => m.Element)))
+                .Where(piece => piece.Length > 0)
+                .ToArray();
+
+            rows.Add((pieces, new[] { instanceKey }));
         }
 
         return rows;
     }
+
+    /// <summary>Collapses each joined row's pieces into the single delimited value the column stores.</summary>
+    /// <remarks>
+    /// Routed through <see cref="ConvertValue"/> for the same reason every other resolved value is: the
+    /// declared ValueType/MaxLength/Precision/Scale describe the DESTINATION COLUMN, and a joined value has
+    /// to satisfy them exactly like a single-source one. Returning the raw string here instead meant none of
+    /// them ever applied to a multi-source column — a join into a typed date/integer column handed Postgres a
+    /// delimited string (42804 at write time rather than a mapping error naming the field), and a join
+    /// overflowing a varchar(n) failed the whole write where the same value from ONE source would have been
+    /// rejected up front by ValidateLength. ConvertValue's own mismatch fallback still hands the untouched
+    /// string onward, so a field whose real type comes from a downstream transform is unaffected.
+    /// </remarks>
+    private static List<(object? Value, IReadOnlyList<int> Indices)> JoinRows(
+        List<(string[] Pieces, IReadOnlyList<int> Indices)> rows,
+        string delimiter,
+        MappingFieldDto field,
+        List<string> errors) =>
+        rows.Select(row => (
+            ConvertValue(
+                string.Join(delimiter, row.Pieces), field.ValueType, field.Format, field.TargetField, errors,
+                field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform),
+            row.Indices)).ToList();
+
+    /// <summary>The individual source-field values behind the ONE joined value this column will store — the
+    /// pieces of whichever row <paramref name="resolved"/> starts with, which is the row every single-value
+    /// ArrayPolicy ends up writing (and, after an "index=N" selection, the Nth instance rather than the
+    /// first). Null when there is nothing to hand over, so the caller keeps its existing input.</summary>
+    /// <param name="targetIndices">Overrides which instance to take the pieces from. A Match criteria picks
+    /// its instance by a sibling's value rather than by position, so it is not necessarily resolved[0] — and
+    /// handing back the first row's pieces there would give a concat rule the wrong name entirely.</param>
+    private static IReadOnlyList<object?>? FirstRowPieces(
+        List<(string[] Pieces, IReadOnlyList<int> Indices)> joinedRows,
+        List<(object? Value, IReadOnlyList<int> Indices)> resolved,
+        IReadOnlyList<int>? targetIndices = null)
+    {
+        if (resolved.Count == 0 || joinedRows.Count == 0)
+        {
+            return null;
+        }
+
+        var target = targetIndices ?? resolved[0].Indices;
+        foreach (var row in joinedRows)
+        {
+            var sameInstance = target.Count == 0
+                ? row.Indices.Count == 0
+                : row.Indices.Count > 0 && row.Indices[0] == target[0];
+            if (sameInstance)
+            {
+                return row.Pieces;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Joins the values one sub-path contributed for a single array instance. Space-separated: these
+    /// are repeats of ONE field (the two given names of one person), not the distinct fields the configured
+    /// delimiter separates. Empty/absent values are dropped rather than padding the string with separators.</summary>
+    private static string JoinInstancePieces(IEnumerable<JsonElement> elements) =>
+        string.Join(' ', elements.Select(ElementToJoinString).Where(text => !string.IsNullOrEmpty(text)));
 
     private static string ParseDelimiter(string? format)
     {
@@ -595,10 +784,13 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             return ",";
         }
 
-        foreach (var part in format.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        // NOT TrimEntries: ", " is the single most common delimiter a user types, and trimming the part would
+        // silently hand back "," instead — the space is part of the value, not formatting around it. Only the
+        // KEY is trimmed, so "delimiter=, " still matches while keeping its space.
+        foreach (var part in format.Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             var equalsIndex = part.IndexOf('=', StringComparison.Ordinal);
-            if (equalsIndex > 0 && part[..equalsIndex].Equals("delimiter", StringComparison.OrdinalIgnoreCase))
+            if (equalsIndex > 0 && part[..equalsIndex].Trim().Equals("delimiter", StringComparison.OrdinalIgnoreCase))
             {
                 return part[(equalsIndex + 1)..];
             }
@@ -607,12 +799,28 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         return ",";
     }
 
+    /// <summary>Renders one resolved element as text for a join.</summary>
+    /// <remarks>
+    /// An ARRAY of scalars collapses to its space-joined items rather than its raw JSON text. Whether a
+    /// source path carries the inner wildcard is not something the user controls or even sees: the field
+    /// catalog supplies "$.name[*].given[*]" for a source it knows about, while a source it has no entry for
+    /// is derived as "$.name[*].given" — the first fans out into two matches, the second resolves to the
+    /// whole ["Warren","James"] array. Without this, the same join would write "Warren James" or the literal
+    /// text [&quot;Warren&quot;,&quot;James&quot;] depending on which of the two it happened to get.
+    /// Non-scalar items (objects, nested arrays) have no sensible flat form and are skipped, matching
+    /// JoinArrayOfStrings.
+    /// </remarks>
     private static string ElementToJoinString(JsonElement element)
     {
         return element.ValueKind switch
         {
             JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
             JsonValueKind.String => element.GetString() ?? string.Empty,
+            JsonValueKind.Array => string.Join(' ', element.EnumerateArray()
+                .Where(item => item.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array
+                    or JsonValueKind.Null or JsonValueKind.Undefined))
+                .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() ?? string.Empty : item.ToString())
+                .Where(text => text.Length > 0)),
             _ => element.ToString()
         };
     }
@@ -626,6 +834,18 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// <summary>Joins already-converted field values (one per resolved occurrence) into one delimited
     /// string — the parent-row counterpart to JoinArrayOfStrings, operating on .NET values already produced
     /// by ConvertElement rather than raw JsonElements.</summary>
+    /// <remarks>
+    /// Deliberately ", " and NOT the field's own configured delimiter. A joined field has TWO levels of
+    /// separation and the delimiter box only configures the inner one:
+    ///
+    ///   "Warren James McGinnis, Warren James McGinnis, Warren McGinnis"
+    ///    ^^^^^^^^^^^^^^^^^^^^^ one name[] instance, its given+family joined by the configured delimiter
+    ///                         ^^ instances joined by THIS, always ", "
+    ///
+    /// Using the configured delimiter here too collapses the two levels together, so a "full name" column set
+    /// to a space delimiter runs every name entry into one unreadable line. See ResolveJoinedFields, which
+    /// owns the inner join.
+    /// </remarks>
     private static string JoinValues(IEnumerable<object?> values) =>
         string.Join(", ", values.Select(v => v?.ToString() ?? string.Empty));
 

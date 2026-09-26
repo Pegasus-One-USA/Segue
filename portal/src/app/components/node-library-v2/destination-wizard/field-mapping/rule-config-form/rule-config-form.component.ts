@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -180,6 +180,11 @@ interface KeyValueRow {
 export class RuleConfigFormComponent {
   @Input() schema: TransformNodeSchema | undefined;
   @Input() config: Record<string, string> = {};
+  /** Fires after every edit, carrying the same object `config` points at. The host already holds that
+   *  reference and saves from it, so this is not how the value reaches the save — it exists so a host that
+   *  DERIVES something from the config (the join popover gates its instance picker on mode === "split") is
+   *  told when to re-derive. Mutating in place is invisible to a signal or an OnPush parent otherwise. */
+  @Output() readonly configChange = new EventEmitter<Record<string, string>>();
   /** Renders every applicable field as one wrapping row with no "Advanced Options" collapse, for a host
    *  form that wants its controls on a single line. Only sensible for a short schema — the de-identification
    *  rule's mode plus whichever single field that mode uses. Left false everywhere else, where the default
@@ -257,6 +262,16 @@ export class RuleConfigFormComponent {
     for (const field of this.schema?.fields ?? []) {
       if (!isConfigFieldVisible(field, this.config)) delete this.config[field.key];
     }
+
+    // And a field that survives the switch but no longer means what it did must be cleared too. Visibility
+    // cannot express that case: ConcatenationTemplating's template applies in both modes, binding "{0} {1}"
+    // to a joined column's source fields under concat and to a split's own pieces under split — so carrying
+    // one across looked like the setting had been kept when it had really been re-pointed at other inputs.
+    for (const field of this.schema?.fields ?? []) {
+      if (field.resetOn?.includes(key)) delete this.config[field.key];
+    }
+
+    this.configChange.emit(this.config);
   }
 
   /** A combo field is in "custom" mode (dropdown shows "Custom…", text box visible) whenever its current

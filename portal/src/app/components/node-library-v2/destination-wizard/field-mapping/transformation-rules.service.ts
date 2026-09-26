@@ -148,6 +148,11 @@ export interface TransformConfigFieldSchema {
    *  when mode is "mask"). Unlike isAdvanced, which merely buries the field, this excludes it: it is neither
    *  rendered nor stored in a mode it has no effect on. See isConfigFieldVisible(). */
   visibleWhen?: TransformConfigFieldVisibility | null;
+  /** Keys whose change clears this field's current value. For a field scoped to one mode, visibleWhen
+   *  already handles it — the field stops existing. This is for one that applies across modes while meaning
+   *  something different in each (ConcatenationTemplating's template), where the field stays but its
+   *  content no longer describes the right inputs. See setValue() in RuleConfigFormComponent. */
+  resetOn?: string[] | null;
 }
 
 export interface TransformConfigFieldVisibility {

@@ -48,6 +48,14 @@ interface DestMappingRow {
   // (e.g. "use"), not yet an absolute JsonPath: that layer frequently has no catalog jsonPath to build one
   // from (see MappingSourceRef.jsonPath), so buildMappingForResource derives the real
   // MappingFieldRequest.correlationCodeJsonPath itself, off this row's OWN already-resolved `jsonPath`.
+  // Every source of a MULTI-SOURCE (joined) row, in the order the user arranged them — the join
+  // JsonMappingEngine.ResolveJoinedFields executes from a "|"-delimited JsonPath. Carried as individual
+  // paths rather than a pre-joined string because a source's catalog `jsonPath` is only populated "when
+  // present" (see MappingSourceRef.jsonPath): field-mapping-model.ts cannot build the absolute path for a
+  // source that lacks one, and silently falling back to the primary source alone is exactly what made a
+  // two-field join write only its first field. This layer HAS toJsonPath, so it derives the missing ones —
+  // the same division of labour correlationSiblingField above already uses.
+  joinSources?: { path: string; jsonPath?: string; arrays?: string[] }[];
   correlationSiblingField?: string;
   correlationCodeValue?: string;
   // "Equals" | "Contains" | "NotEquals" — how correlationCodeValue is compared against the sibling field's
@@ -1408,7 +1416,11 @@ export class WorkflowBuildAssemblerServiceV2 {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the
       // naive conversion only when the catalog was unavailable.
       const arrays = row.arrays ?? [];
-      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource, arrays);
+      const jsonPath = row.joinSources?.length
+        ? row.joinSources
+            .map(source => source.jsonPath ?? this.toJsonPath(source.path, resource, source.arrays ?? arrays))
+            .join('|')
+        : (row.jsonPath ?? this.toJsonPath(row.path, resource, arrays));
       this.assertArrayWildcardsIntact(resource, row.column, jsonPath, arrays);
       const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
       // field-mapping-model.ts only ever hands this row a bare sibling field NAME ("use"), not an absolute
