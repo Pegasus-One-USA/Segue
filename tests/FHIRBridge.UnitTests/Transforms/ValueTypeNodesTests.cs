@@ -253,6 +253,83 @@ public sealed class ValueTypeNodesTests
         quantity["code"]!.GetValue<string>().Should().Be("1");
     }
 
+    /// <summary>What UnitConversionNode hands the next node in a chain: a complete Quantity carrying the
+    /// unit the value now has, not the one it started with.</summary>
+    private const string ConvertedQuantityJson =
+        """{"value":4.85,"unit":"mmol/L","system":"http://unitsofmeasure.org","code":"mmol/L"}""";
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_prefers_an_incoming_elements_own_unit_over_a_stale_hint()
+    {
+        // The chain UnitConversion(mg/dL -> mmol/L) then QuantityRangeAssembly-on-defaults. The hint is read
+        // once from the RAW source and handed to this rule wherever it sits, so it still says "mg/dL" — the
+        // unit the value was converted AWAY from. Trusting it stamped the converted 4.85 with "mg/dL": a
+        // number off by ~38x wearing a label that makes it look right, which is worse than the "unit": ""
+        // the same chain produced before the hint existed.
+        var config = new Dictionary<string, string>
+        {
+            [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL"
+        };
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(ConvertedQuantityJson, config, null).Value!;
+
+        quantity["unit"]!.GetValue<string>().Should().Be("mmol/L");
+        quantity["value"]!.GetValue<double>().Should().Be(4.85);
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_keeps_the_coding_of_a_converted_element_rather_than_stripping_it()
+    {
+        // Follows from the above: fed a stale hint, emitsTheSourcesOwnUnit compared "mg/dL" against the
+        // element's real "mmol/L", saw a mismatch, and stripped a system/code that were entirely correct —
+        // producing exactly the non-computable Quantity that check exists to prevent.
+        var config = new Dictionary<string, string>
+        {
+            [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL"
+        };
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(ConvertedQuantityJson, config, null).Value!;
+
+        quantity["system"]!.GetValue<string>().Should().Be("http://unitsofmeasure.org");
+        quantity["code"]!.GetValue<string>().Should().Be("mmol/L");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_still_lets_the_rules_own_unit_beat_an_incoming_element()
+    {
+        // Precedence is configured unit > element's own > hint. A rule that names a unit is still making a
+        // deliberate choice and must outrank both.
+        var config = new Dictionary<string, string>
+        {
+            ["unit"] = "g/L",
+            [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL"
+        };
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(ConvertedQuantityJson, config, null).Value!;
+
+        quantity["unit"]!.GetValue<string>().Should().Be("g/L");
+        quantity.ContainsKey("code").Should().BeFalse("an overridden unit still drops a coding it contradicts");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_falls_back_to_the_hint_for_an_element_carrying_no_unit_at_all()
+    {
+        // The hint's remaining job on this path: an element with a value but no unit or code of its own has
+        // nothing better to offer, so the source's unit is still the best available answer.
+        var config = new Dictionary<string, string>
+        {
+            [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL"
+        };
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute("""{"value":187}""", config, null).Value!;
+
+        quantity["unit"]!.GetValue<string>().Should().Be("mg/dL");
+    }
+
     [Fact]
     public void QuantityRangeAssemblyNode_drops_the_coding_when_the_rule_overrides_the_unit()
     {

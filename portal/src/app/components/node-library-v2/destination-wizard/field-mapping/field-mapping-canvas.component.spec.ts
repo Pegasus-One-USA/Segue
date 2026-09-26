@@ -188,7 +188,7 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
   it('deletes the rule the removed row owned', async () => {
     const deleted: string[] = [];
     const fixture = await createComponent({
-      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1' }] as never),
+      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1', sourceField: 'Observation.valueQuantity.value' }] as never),
       delete: (id: string) => { deleted.push(id); return of(void 0); },
     });
 
@@ -279,7 +279,7 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
   it('deletes the rule when a column is re-pointed at a literal default, discarding its source', async () => {
     const deleted: string[] = [];
     const fixture = await createComponent({
-      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1' }] as never),
+      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1', sourceField: 'Observation.valueQuantity.value' }] as never),
       delete: (id: string) => { deleted.push(id); return of(void 0); },
     });
 
@@ -315,7 +315,7 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
   it('deletes the rule when the FIRST chip of a join is removed, promoting sources[1] to the key', async () => {
     const deleted: string[] = [];
     const fixture = await createComponent({
-      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1' }] as never),
+      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1', sourceField: 'Observation.valueQuantity.value' }] as never),
       delete: (id: string) => { deleted.push(id); return of(void 0); },
     });
     const joined = {
@@ -334,7 +334,7 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
   it('deletes the rule when the chips are REORDERED so a different source leads', async () => {
     const deleted: string[] = [];
     const fixture = await createComponent({
-      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1' }] as never),
+      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1', sourceField: 'Observation.valueQuantity.value' }] as never),
       delete: (id: string) => { deleted.push(id); return of(void 0); },
     });
     const second = { fhirPath: 'Observation.valueString', label: 'valueString' };
@@ -406,12 +406,67 @@ describe('FieldMappingCanvasComponent — removing a mapping deletes its transfo
     expect(called).toBeFalse();
   });
 
+  // A Workflow rule stored WITHOUT a source field is bound to the column, not to a source — and
+  // GetWorkflowScopedAsync returns it for every source-field query, because a null SourceField matches
+  // anything. So it must survive any edit that leaves the column mapped.
+  it('keeps a source-agnostic rule when the column is merely re-pointed at another source', async () => {
+    const deleted: string[] = [];
+    const fixture = await createComponent({
+      getEffectiveRules: () => of([
+        { id: 'rule-col', resourcePipelineRouteId: 'wf-1', sourceField: null },
+      ] as never),
+      delete: (id: string) => { deleted.push(id); return of(void 0); },
+    });
+    const second = { fhirPath: 'Observation.valueString', label: 'valueString' };
+    const joined = { ...ROW, sources: [ROW.sources[0], second] };
+    fixture.componentRef.setInput('mappingRows', [joined]);
+
+    // Reordering the chips rekeys the mapping but leaves the column mapped.
+    fixture.componentInstance.updateRow({ ...joined, sources: [second, ROW.sources[0]] });
+
+    expect(deleted).toEqual([]);
+  });
+
+  it('deletes a source-agnostic rule once the column has no mapping at all', async () => {
+    const deleted: string[] = [];
+    const fixture = await createComponent({
+      getEffectiveRules: () => of([
+        { id: 'rule-col', resourcePipelineRouteId: 'wf-1', sourceField: null },
+      ] as never),
+      delete: (id: string) => { deleted.push(id); return of(void 0); },
+    });
+
+    fixture.componentInstance.removeRow('Observation', 'public.Observation', 'TransformationQuantityRange');
+
+    expect(deleted).toEqual(['rule-col']);
+  });
+
+  // Removing a table is local and undoable — the rows go from an in-memory list and the queued schema op is
+  // cancelled, all discarded if the wizard closes unsaved. It must not bulk-delete every rule for the table.
+  it('does NOT delete rules when a destination table is removed', async () => {
+    let called = false;
+    const fixture = await createComponent({
+      getEffectiveRules: () => { called = true; return of([] as never); },
+      delete: () => of(void 0),
+    });
+    fixture.componentRef.setInput('targetByResource', { Observation: 'public.Observation' });
+    const emitted: unknown[][] = [];
+    fixture.componentInstance.mappingRowsChange.subscribe(rows => { emitted.push(rows); });
+
+    fixture.componentInstance.onRemoveTable('Observation', 'public.Observation', false);
+    fixture.componentInstance.confirmRemoveTable();
+
+    // The rows really were dropped, so this cannot pass by the removal having bailed out.
+    expect(emitted.at(-1)).toEqual([]);
+    expect(called).toBeFalse();
+  });
+
   // The other caller of the same clearing helper. A pasted payload genuinely replaces this resource's fields,
   // so the old fhirPaths are gone and rules keyed on them are dead by construction — that one still cleans up.
   it('DOES delete rules when a new payload replaces the resource fields', async () => {
     const deleted: string[] = [];
     const fixture = await createComponent({
-      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1' }] as never),
+      getEffectiveRules: () => of([{ id: 'rule-1', resourcePipelineRouteId: 'wf-1', sourceField: 'Observation.valueQuantity.value' }] as never),
       delete: (id: string) => { deleted.push(id); return of(void 0); },
     });
 

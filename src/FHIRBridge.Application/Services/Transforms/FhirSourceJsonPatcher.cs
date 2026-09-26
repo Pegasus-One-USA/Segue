@@ -170,7 +170,13 @@ public static class FhirSourceJsonPatcher
             var (propertyName, arrayIndex) = ParseSegment(segments[i]);
             if (i == segments.Length - 1)
             {
+                // The leaf's own "[n]" goes with the leaf, not with the sibling replacing it. A rule on
+                // "...valueQuantity.value[0]" says WHICH value it means; the sibling "unit" is a different
+                // property that has its own shape, and indexing into it because the leaf was indexed reads a
+                // subscript the path never asked for — returning null, or worse the wrong element, for a
+                // sibling that is itself an array.
                 propertyName = siblingName;
+                arrayIndex = null;
             }
 
             if (current is JsonArray outerArray)

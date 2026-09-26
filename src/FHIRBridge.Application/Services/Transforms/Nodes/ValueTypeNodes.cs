@@ -271,11 +271,11 @@ public sealed class QuantityRangeAssemblyNode : ITransformNode
         // its default settings emits "unit": "" for an Observation.valueQuantity whose source JSON plainly
         // carried "mg/dL" — the value survives the hop and its unit silently does not, which for a lab result
         // is the difference between a number and a measurement.
-        var unit = config.Get("unit");
-        if (string.IsNullOrWhiteSpace(unit))
-        {
-            unit = config.Get(ReservedTransformConfigKeys.SourceUnitHint);
-        }
+        //
+        // Kept SEPARATE from the hint rather than collapsed into one value, because the two rank differently
+        // against an incoming Quantity element — see BuildQuantity.
+        var configuredUnit = config.Get("unit");
+        var sourceUnitHint = config.Get(ReservedTransformConfigKeys.SourceUnitHint);
 
         // A source field pointed at the whole Quantity element (".valueQuantity" rather than
         // ".valueQuantity.value") arrives as an object, not a scalar — read its parts directly instead of
@@ -283,8 +283,12 @@ public sealed class QuantityRangeAssemblyNode : ITransformNode
         // the way through to the non-numeric "text" branch and stash the raw JSON in it.
         if (TryReadQuantityObject(value) is { } quantityObject)
         {
-            return TransformResult.Ok(BuildQuantity(quantityObject, unit));
+            return TransformResult.Ok(BuildQuantity(quantityObject, configuredUnit, sourceUnitHint));
         }
+
+        // Scalar input carries no unit of its own, so the hint is the only thing standing between it and
+        // "unit": "" — unchanged from before.
+        var unit = string.IsNullOrWhiteSpace(configuredUnit) ? sourceUnitHint : configuredUnit;
 
         var raw = value?.ToString()?.Trim();
         if (string.IsNullOrWhiteSpace(raw))
@@ -346,11 +350,33 @@ public sealed class QuantityRangeAssemblyNode : ITransformNode
 
     /// <summary>Rebuilds a Quantity from a source element, keeping the rule's configured unit when it has one
     /// and otherwise the element's own "unit" (then its UCUM "code"), plus any comparator it already carried.</summary>
-    private static JsonObject BuildQuantity(JsonObject source, string unit)
+    /// <summary>
+    /// Rebuilds a Quantity from an element that already IS one, choosing its unit by three-way precedence:
+    /// the rule's own configured unit, then the ELEMENT's own unit/code, then the source-unit hint.
+    /// </summary>
+    /// <remarks>
+    /// The element outranking the hint is the whole point of the ordering. The hint is read once, from the raw
+    /// source resource, and handed to this rule wherever it sits in the chain — so by the time a node upstream
+    /// has rewritten the value, the hint describes a measurement that no longer exists. A chain of
+    /// UnitConversion(mg/dL → mmol/L) followed by this node stamped the converted 4.85 with the hint's
+    /// "mg/dL": a number off by a factor of ~38, wearing a label that makes it look right. Before the hint
+    /// existed the same chain emitted "unit": "" — visibly missing rather than quietly wrong, which for a lab
+    /// result is the better failure.
+    ///
+    /// An incoming element carries the unit of the value as it stands NOW, which is exactly what the hint
+    /// cannot know, so it is the better authority whenever both are present. Nothing is lost when this node
+    /// runs first: the element and the hint are then read from the same source element and agree. The hint
+    /// still matters for the scalar case (a rule on ".valueQuantity.value" receives a bare number that carries
+    /// no unit at all), which is what it was added for. This also keeps emitsTheSourcesOwnUnit below honest —
+    /// fed a stale hint it saw a mismatch against the element's real unit and stripped a perfectly correct
+    /// system/code, the precise non-computable Quantity it exists to prevent.
+    /// </remarks>
+    private static JsonObject BuildQuantity(JsonObject source, string configuredUnit, string sourceUnitHint)
     {
+        var unit = configuredUnit;
         if (string.IsNullOrWhiteSpace(unit))
         {
-            unit = ReadString(source, "unit") ?? ReadString(source, "code") ?? string.Empty;
+            unit = ReadString(source, "unit") ?? ReadString(source, "code") ?? sourceUnitHint ?? string.Empty;
         }
 
         var quantity = new JsonObject

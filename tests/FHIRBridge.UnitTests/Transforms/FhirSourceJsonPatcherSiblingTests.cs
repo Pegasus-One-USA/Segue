@@ -35,6 +35,33 @@ public sealed class FhirSourceJsonPatcherSiblingTests
             .Should().Be("mg/dL");
     }
 
+    [Fact]
+    public void TryReadSiblingQuantityUnit_does_not_carry_the_leafs_index_onto_the_sibling()
+    {
+        // The "[1]" belongs to the LEAF the rule named, not to the sibling standing in for it. Carrying it
+        // over evaluated unit[1] and returned "SECOND" — a subscript the path never asked of `unit`, chosen
+        // by a number that describes a different property's cardinality.
+        //
+        // Deliberately an index of 1 against an ARRAY-valued sibling, because neither alone can fail: a
+        // string sibling ignores the index (`current is JsonArray` is false), and index 0 lands on the same
+        // element the trailing first-of-array fallback would have picked anyway. An earlier version of this
+        // test used "$.valueQuantity.value[0]" and passed just as happily with the bug in place.
+        const string arraySiblingJson = """
+        { "valueQuantity": { "value": [1, 2], "unit": ["FIRST", "SECOND"] } }
+        """;
+
+        FhirSourceJsonPatcher.TryReadSiblingQuantityUnit(arraySiblingJson, "$.valueQuantity.value[1]")
+            .Should().Be("FIRST");
+    }
+
+    [Fact]
+    public void TryReadSiblingQuantityUnit_still_reads_a_scalar_sibling_when_the_leaf_is_indexed()
+    {
+        // The ordinary shape: an indexed leaf beside a plain string sibling, which must keep working.
+        FhirSourceJsonPatcher.TryReadSiblingQuantityUnit(ObservationJson, "$.valueQuantity.value[0]")
+            .Should().Be("mg/dL");
+    }
+
     [Theory]
     [InlineData("$.referenceRange[0].text")]
     [InlineData("$.code.coding.code")]

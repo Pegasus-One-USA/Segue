@@ -1255,7 +1255,14 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       // Unlike extraTablesChange, the parent's targetByResourceChange handler is a bare signal.set() with
       // no cleanup of its own, so this table's mappings are discarded here before clearing the target —
       // otherwise they'd silently survive, orphaned against a target the resource no longer points at.
-      this.commitRows(
+      //
+      // Rules are NOT reconciled here, for the same reason "Reset to Original" does not: removing a table is
+      // local and undoable — the rows go from an in-memory list and the queued schema op is cancelled, all of
+      // it discarded if the wizard is closed without saving. Routing this through the reconciling path turned
+      // it into an immediate, irreversible bulk DELETE of every rule for the table, which is the largest
+      // blast radius on this screen and the least expected: nothing about "remove this table" says the
+      // author's transformation rules should stop existing before they have saved anything.
+      this.commitRowsPreservingRules(
         this.mappingRows().filter(r => !(r.resource === resource && r.tableName === tableName)),
       );
       this.targetByResourceChange.emit({ ...this.targetByResource(), [resource]: '' });
@@ -1893,18 +1900,29 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    * later cannot forget: if a key present before is absent after, its rule goes, and no caller had to know.
    * It also subsumes replaceRow's old hand-written condition for free — joining a second source leaves
    * sources[0] intact, so the key survives the diff and the rule is never a candidate.
+   *
+   * A vanished key is NOT on its own enough to condemn every rule the lookup returns, which is why the
+   * column is checked separately below. GetWorkflowScopedAsync matches `x.SourceField == null` against any
+   * source field asked for, so a Workflow rule authored without one — routine, since the rule popover only
+   * stores a source field when the author narrows to a specific one — comes back for every query. Such a
+   * rule is bound to the COLUMN, not to a source, so re-pointing or reordering the sources under it leaves
+   * it perfectly applicable, and deleting it there destroys a rule that still has a mapping.
    */
   private commitRows(next: MappingRow[]): void {
     const previous = this.mappingRows();
     this.mappingRowsChange.emit(next);
 
     const liveKeys = new Set(next.map(row => FieldMappingCanvasComponent.ruleKeyOf(row)));
+    // Columns still mapped by SOMETHING after this edit, regardless of which source now feeds them.
+    const liveColumns = new Set(next.map(row => FieldMappingCanvasComponent.columnKeyOf(row)));
     const alreadyHandled = new Set<string>();
     for (const row of previous) {
       const key = FieldMappingCanvasComponent.ruleKeyOf(row);
       if (liveKeys.has(key) || alreadyHandled.has(key)) continue;
       alreadyHandled.add(key);
-      this.deleteRuleForRemovedRow(row);
+      // Only once the column itself is unmapped is a source-agnostic rule genuinely stranded.
+      const columnUnmapped = !liveColumns.has(FieldMappingCanvasComponent.columnKeyOf(row));
+      this.deleteRuleForRemovedRow(row, columnUnmapped);
     }
   }
 
@@ -1921,6 +1939,13 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    */
   private commitRowsPreservingRules(next: MappingRow[]): void {
     this.mappingRowsChange.emit(next);
+  }
+
+  /** The column a rule is bound to when it names no source field of its own — (resource, destination field).
+   *  Whether this survives an edit is what separates "this rule lost its mapping" from "this rule's mapping
+   *  changed which source feeds it", which the rule key alone cannot tell apart. */
+  private static columnKeyOf(row: MappingRow): string {
+    return JSON.stringify([row.resource, row.targetName]);
   }
 
   /** A rule is resolved by (resource, destination field, source field) — NOT by the mapping row — so this is
@@ -1951,8 +1976,16 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  authored against THIS workflow, so a Global/ResourceType-scope rule shared with other pipelines is
    *  never touched — exactly the scoping the popover uses to decide what "Remove transformation" may
    *  delete. Failures are deliberately silent: the row is already gone from the canvas, and a toast about
-   *  a rule the author never saw would be noise. */
-  private deleteRuleForRemovedRow(row: MappingRow): void {
+   *  a rule the author never saw would be noise.
+   *
+   *  `columnUnmapped` says whether the destination column still has ANY mapping after the edit, and it is
+   *  what keeps a source-agnostic rule alive. The lookup cannot make that distinction on its own:
+   *  GetWorkflowScopedAsync treats a stored `SourceField == null` as matching whatever source field was
+   *  asked for, so a rule authored without one — the common case, since the popover only records a source
+   *  field when the author narrows to one — is returned by every query. That rule belongs to the COLUMN,
+   *  so re-pointing the column at a different field, or reordering the sources of a join, leaves it exactly
+   *  as applicable as before; only the column losing its mapping altogether strands it. */
+  private deleteRuleForRemovedRow(row: MappingRow, columnUnmapped: boolean): void {
     const destinationType = this.rulesDestinationType();
     const workflowId = this.workflowId();
     // With no workflow id there is no way to prove any rule belongs to THIS pipeline, so nothing is deleted.
@@ -1979,6 +2012,10 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
         // A Global/ResourceType-scope rule, or one attached to another route, is never a candidate.
         next: rules => rules
           .filter(rule => rule.resourcePipelineRouteId === workflowId)
+          // A rule that names no source field is bound to the column, and the server returned it only
+          // because a null SourceField matches anything. It survives unless the column itself is now
+          // unmapped — otherwise reordering a join's chips would destroy a rule that still applies.
+          .filter(rule => rule.sourceField ? true : columnUnmapped)
           .forEach(rule => this.rulesService.delete(rule.id).subscribe({
             // Deliberately silent: the row is already gone from the canvas, so a toast about a rule the
             // author never saw is noise. A failed delete leaves an orphan, which re-saving the mapping
