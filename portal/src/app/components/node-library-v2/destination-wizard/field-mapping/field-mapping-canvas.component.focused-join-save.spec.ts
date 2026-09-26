@@ -37,7 +37,10 @@ describe('FieldMappingCanvasComponent — saving a join focused on one source', 
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: ToastService, useValue: { show: () => {}, success: () => {}, warning: () => {}, error: () => {} } },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['show', 'success', 'warning', 'error']),
+        },
         { provide: DestinationSchemaService, useValue: {} },
         {
           provide: TransformationRulesService,
