@@ -10,8 +10,11 @@ namespace FHIRBridge.Application.DTOs;
 /// <param name="Collection">Optional — when supplied, the test also checks whether this collection exists (same
 /// name-normalization <see cref="Domain.Entities.DestinationConfiguration.Target"/> gets at write time), so a
 /// missing collection surfaces here instead of only at pipeline-run time.</param>
-/// <param name="CreateIfNotExists">Mirrors the form's "Create collection if not exists" checkbox — when true, a
-/// missing <paramref name="Collection"/> doesn't fail the test (the write path will create it).</param>
+/// <param name="CreateIfNotExists">When true, a missing <paramref name="Collection"/> doesn't fail the test.
+/// The destination form no longer sends either this or <paramref name="Collection"/> — the write path now
+/// always creates a missing collection (see MappedMongoDestinationWriter.EnsureCollectionExistsAsync), so
+/// there is nothing left for it to warn about — but both are kept for any caller that still wants the
+/// existence check.</param>
 public sealed record MongoConnectionTestRequest(
     string ConnectionString,
     string? Collection = null,

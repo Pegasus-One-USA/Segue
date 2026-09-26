@@ -3,6 +3,7 @@ import {
   MappingRow, LegacyMappingRow,
   qualifyTableName, defaultSchemaFor, splitTableName, reconcileTargetsForDestTypeSwitch,
   effectiveMappingValueType, checkColumnTypeCompatibility,
+  supportsJsonWriteMode, resolveJsonWriteMode, formatWithJsonWriteMode, jsonWriteModeFromFormat,
   defaultInstanceType, wholeNodeInstanceIndex, wholeNodeJsonPath,
 } from './field-mapping-model';
 import { DestinationTable } from '../../../../services/destination-schema.service';
@@ -226,6 +227,204 @@ describe('serializeRowsFlat', () => {
     expect(flat[0].arrayPolicy).toBe('StoreJson');
     expect(flat[0].valueType).toBe('Json');
     expect(flat[0].approximated).toBeFalse();
+  });
+
+  // MongoDB "store this JSON as a real sub-document" — carried to the backend on `format` (read there by
+  // MappingFieldFormat.ReadJsonWriteMode), which serializeRowsFlat emits ONLY for this, so every other row
+  // keeps producing exactly the payload it always has.
+  describe('jsonWriteMode', () => {
+    function jsonRow(overrides: Partial<MappingRow> = {}): MappingRow {
+      return {
+        resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient',
+        targetName: 'Patient', tableName: 'patients_local',
+        ...overrides,
+      };
+    }
+
+    it('omits format entirely when the row never made the choice (every pre-existing mapping)', () => {
+      expect(serializeRowsFlat([jsonRow()], {})[0].format).toBeUndefined();
+    });
+
+    it("omits format for an explicit 'string' choice too — that IS the default behaviour", () => {
+      expect(serializeRowsFlat([jsonRow({ jsonWriteMode: 'string' })], {})[0].format).toBeUndefined();
+    });
+
+    it("emits the json=document marker for a 'document' choice", () => {
+      expect(serializeRowsFlat([jsonRow({ jsonWriteMode: 'document' })], {})[0].format)
+        .toBe('json=document');
+    });
+
+    it('preserves any other markers already on the row format', () => {
+      const flat = serializeRowsFlat(
+        [jsonRow({ jsonWriteMode: 'document', format: 'wholeNodeAsJson' })], {});
+      expect(flat[0].format).toBe('wholeNodeAsJson;json=document');
+    });
+
+    it('never emits the marker for an ordinary non-Json row', () => {
+      const valueRow: MappingRow = {
+        resource: 'Patient',
+        sources: [{ fhirPath: 'Patient.gender', label: 'Gender', valueType: 'String' }],
+        mode: 'value', instance: { type: 'first' },
+        targetName: 'Gender', tableName: 'patients_local',
+      };
+      expect(serializeRowsFlat([valueRow], {})[0].format).toBeUndefined();
+    });
+
+    it('supportsJsonWriteMode follows the row\'s effective ValueType', () => {
+      expect(supportsJsonWriteMode(jsonRow())).toBeTrue();
+      expect(supportsJsonWriteMode({
+        resource: 'Patient', sources: [{ fhirPath: 'Patient.gender', label: 'Gender', valueType: 'String' }],
+        mode: 'value', targetName: 'Gender', tableName: 'patients_local',
+      })).toBeFalse();
+    });
+
+    // A row rebuilt from the Mapping JSON summary comes back with no source valueType (sourceRefFromPath
+    // doesn't round-trip it), so the choice it explicitly carries has to be enough on its own — otherwise
+    // reopening and re-saving silently drops it.
+    it('honours an explicitly-carried mode even when the source type is unknown', () => {
+      const restored: MappingRow = {
+        resource: 'Patient',
+        sources: [{ fhirPath: 'Patient.extension', label: 'extension' }],
+        mode: 'value', instance: { type: 'first' },
+        targetName: 'Extension', tableName: 'patients_local',
+        jsonWriteMode: 'document',
+      };
+      expect(supportsJsonWriteMode(restored)).toBeTrue();
+      expect(serializeRowsFlat([restored], {})[0].format).toBe('json=document');
+    });
+
+    it('resolveJsonWriteMode defaults to "string"', () => {
+      expect(resolveJsonWriteMode(jsonRow())).toBe('string');
+      expect(resolveJsonWriteMode(jsonRow({ jsonWriteMode: 'document' }))).toBe('document');
+    });
+
+    // Read back out of a saved MappingField's `format` by the "Select Existing Profile" load path
+    // (destination-wizard.component.ts's _applyExistingProfile) — the third route into MappingRow[], after
+    // dest_mappings_v2 and the Mapping JSON summary. `format` is a ';'-separated marker BAG, so this is a
+    // substring test, matching the backend's MappingFieldFormat.ReadJsonWriteMode: an equality check against
+    // 'json=document' would miss every compound value, which is the shape formatWithJsonWriteMode actually
+    // produces whenever the field already carried a column-mode marker.
+    describe('jsonWriteModeFromFormat', () => {
+      it('reads the marker on its own and inside a marker bag, case-insensitively', () => {
+        expect(jsonWriteModeFromFormat('json=document')).toBe('document');
+        expect(jsonWriteModeFromFormat('wholeNodeAsJson;json=document')).toBe('document');
+        expect(jsonWriteModeFromFormat('WholeNodeAsJson;JSON=DOCUMENT')).toBe('document');
+      });
+
+      it("is 'string' for every format that doesn't carry it", () => {
+        expect(jsonWriteModeFromFormat(null)).toBe('string');
+        expect(jsonWriteModeFromFormat(undefined)).toBe('string');
+        expect(jsonWriteModeFromFormat('')).toBe('string');
+        expect(jsonWriteModeFromFormat('wholeNodeAsJson')).toBe('string');
+        expect(jsonWriteModeFromFormat('wholeNodeAsJson;json=string')).toBe('string');
+        expect(jsonWriteModeFromFormat('directField;aggregate=csv')).toBe('string');
+      });
+
+      // The regression: reapplying a saved profile used to copy `format` but not derive jsonWriteMode, so a
+      // field saved as a document came back 'string' — the popover showed "JSON string" and the next save
+      // dropped the marker outright. Rebuilding the row the way _applyExistingProfile does must survive it.
+      it('lets a reapplied profile row keep writing a document on the next save', () => {
+        const fromProfile = (format: string | null): MappingRow => {
+          const jsonWriteMode = jsonWriteModeFromFormat(format);
+          return {
+            resource: 'Patient',
+            sources: [{ fhirPath: 'Patient', label: 'Patient', jsonPath: '$', valueType: 'Json' }],
+            mode: 'value', instance: { type: 'first' },
+            targetName: 'Patient', tableName: 'patients_local',
+            format,
+            ...(jsonWriteMode === 'document' ? { jsonWriteMode } : {}),
+          };
+        };
+
+        const row = fromProfile('json=document');
+        expect(resolveJsonWriteMode(row)).toBe('document');
+        expect(serializeRowsFlat([row], { Patient: 'patients_local' })[0].format).toBe('json=document');
+      });
+
+      // Why 'document' is spread in rather than the mode always being assigned: supportsJsonWriteMode() is
+      // true for any row carrying an explicit mode, so stamping 'string' on every reapplied field would
+      // surface the Mongo-only dropdown on plain String columns that have no such choice to make.
+      it('leaves a non-Json column with no mode at all, keeping the option hidden for it', () => {
+        expect(jsonWriteModeFromFormat(null)).toBe('string');
+        const plain: MappingRow = {
+          resource: 'Patient',
+          sources: [{ fhirPath: 'Patient.gender', label: 'Gender', valueType: 'String' }],
+          mode: 'value', instance: { type: 'first' },
+          targetName: 'Gender', tableName: 'patients_local', format: null,
+        };
+        expect(plain.jsonWriteMode).toBeUndefined();
+        expect(supportsJsonWriteMode(plain)).toBeFalse();
+      });
+    });
+
+    // `format` segments carry arbitrary text — JsonMappingEngine.ParseDelimiter takes everything after the
+    // first '=' as a joined field's delimiter — so the marker is matched as a whole ';'-separated segment,
+    // never as a substring of the joined value (mirrors the backend's MappingFieldFormat.ReadJsonWriteMode).
+    it('does not mistake the marker embedded in another segment for the real thing', () => {
+      expect(jsonWriteModeFromFormat('joinedFields;delimiter=json=document')).toBe('string');
+      expect(jsonWriteModeFromFormat('json=documentary')).toBe('string');
+      expect(jsonWriteModeFromFormat('notjson=document')).toBe('string');
+      // ...while a real segment still reads, whitespace and casing included.
+      expect(jsonWriteModeFromFormat('directField; json=document ')).toBe('document');
+    });
+
+    // A join's value is string.Join(delimiter, pieces) on the backend (JsonMappingEngine.ResolveJoinedFields):
+    // a delimited string by construction, never a JSON document, whatever its first source's type claims. So
+    // the choice is never offered for one — which is also why toSummaryColumn's joinedFields branch has no
+    // jsonWriteMode to persist.
+    it('offers nothing for a join, even one whose primary source is Json-typed', () => {
+      const join: MappingRow = {
+        resource: 'Patient',
+        sources: [
+          { fhirPath: 'Patient.name.given', label: 'Given', valueType: 'Json' },
+          { fhirPath: 'Patient.name.family', label: 'Family', valueType: 'String' },
+        ],
+        mode: 'value', instance: { type: 'first' }, delimiter: ', ',
+        targetName: 'Name', tableName: 'patients_local', jsonWriteMode: 'document',
+      };
+      expect(supportsJsonWriteMode(join)).toBeFalse();
+      // A join DOES emit a format — the "joinedFields" mode prefix, without which JsonMappingEngine resolves
+      // the "|"-delimited jsonPath as one literal path and the column goes silently NULL. So the assertion
+      // is that no json= marker rides along with it, not that there is no format at all; "format is
+      // undefined" was only ever a proxy for that, accurate while a join emitted none.
+      expect(serializeRowsFlat([join], {})[0].format).toBe('joinedFields;delimiter=, ');
+      expect(serializeRowsFlat([join], {})[0].format).not.toContain('json=');
+    });
+
+    // The marker and the declared ValueType have to agree: the backend honours the marker only on a
+    // ValueType=Json field (MappedMongoDestinationWriter.ResolveDocumentJsonColumns), and JsonMappingEngine
+    // only hands the value through as raw JSON text for that type. A row rebuilt from the Mapping JSON
+    // summary has lost its source valueType, so without this the assembler's path-guessed 'String' would win
+    // and the write would silently downgrade to escaped text while the UI still showed "JSON document".
+    it('declares Json whenever it emits the marker, even with no source valueType', () => {
+      const lostType: MappingRow = {
+        resource: 'Patient',
+        sources: [{ fhirPath: 'Patient.extension', label: 'extension' }],
+        mode: 'value', instance: { type: 'first' },
+        targetName: 'Extension', tableName: 'patients_local', jsonWriteMode: 'document',
+      };
+      const flat = serializeRowsFlat([lostType], {})[0];
+      expect(flat.format).toBe('json=document');
+      expect(flat.valueType).toBe('Json');
+    });
+
+    it("leaves an unmarked row's own valueType alone", () => {
+      const plain: MappingRow = {
+        resource: 'Patient',
+        sources: [{ fhirPath: 'Patient.gender', label: 'Gender', valueType: 'String' }],
+        mode: 'value', instance: { type: 'first' },
+        targetName: 'Gender', tableName: 'patients_local',
+      };
+      const flat = serializeRowsFlat([plain], {})[0];
+      expect(flat.valueType).toBe('String');
+      expect(flat.format).toBeUndefined();
+    });
+
+    it('formatWithJsonWriteMode replaces a previously-stored json= marker rather than stacking one', () => {
+      expect(formatWithJsonWriteMode('wholeNodeAsJson;json=document', 'string')).toBe('wholeNodeAsJson');
+      expect(formatWithJsonWriteMode('json=document', 'string')).toBeUndefined();
+      expect(formatWithJsonWriteMode('json=document', 'document')).toBe('json=document');
+    });
   });
 
   // Which instance a whole-node mapping reads travels as an index in the JsonPath, not in the ArrayPolicy

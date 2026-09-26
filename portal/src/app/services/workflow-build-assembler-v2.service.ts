@@ -1144,7 +1144,10 @@ export class WorkflowBuildAssemblerServiceV2 {
             'dest_requireSsl',
           ]
         : kind === 'mongo'
-          ? ['dest_name', 'dest_collection', 'dest_writeMode', 'dest_createCollectionIfNotExists']
+          // No dest_collection / dest_createCollectionIfNotExists: the Mongo form no longer offers either.
+          // Which collection a resource writes to is a per-resource mapping-canvas choice (this branch
+          // already sends target: null so those win), and a missing collection is always created.
+          ? ['dest_name', 'dest_writeMode']
           : kind === 'medplum'
             ? [
                 'dest_name',

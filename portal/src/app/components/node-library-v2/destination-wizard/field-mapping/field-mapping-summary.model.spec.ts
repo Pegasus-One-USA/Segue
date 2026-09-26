@@ -14,6 +14,80 @@ const PATIENT_FIELDS: ResourceFieldDef[] = [
 
 function availableFields(r: string): ResourceFieldDef[] { return r === 'Patient' ? PATIENT_FIELDS : []; }
 
+// Regression: the Mapping JSON summary — not dest_mappings_v2 — is what a reopened destination node is
+// rebuilt from (destination-wizard.component.ts returns early on that branch), so anything this document
+// drops is a setting the user silently loses on edit. That is exactly what happened to the MongoDB
+// "store as JSON string / as a JSON document" choice: the dropdown reverted to "JSON string" on reopen.
+describe('jsonWriteMode round-trip', () => {
+  function mongoDoc(rows: MappingRow[]): MappingSummaryDocument {
+    return buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType: 'mongo', destLabel: 'MongoDB',
+      mappingRows: rows, sqlTables: [], childTableRelationsByTable: {}, availableFields,
+      sourceConnectionId: null, destinationId: null,
+      targetByResource: { Patient: 'patients_local' },
+    });
+  }
+
+  function wholeNodeRow(jsonWriteMode?: 'string' | 'document'): MappingRow {
+    return {
+      resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient',
+      targetName: 'Patient', tableName: 'patients_local',
+      ...(jsonWriteMode ? { jsonWriteMode } : {}),
+    };
+  }
+
+  it("records a 'document' choice on the column", () => {
+    const doc = mongoDoc([wholeNodeRow('document')]);
+    expect(doc.mappings[0].tables[0].columns[0].jsonWriteMode).toBe('document');
+  });
+
+  it("restores it, so reopening the node shows the choice the user made", () => {
+    const doc = mongoDoc([wholeNodeRow('document')]);
+    const restored = applyMappingSummaryDocument(doc, 'mongo').mappingRows;
+    expect(restored[0].jsonWriteMode).toBe('document');
+  });
+
+  // A DEFAULT column can be Json-valued too (defaultValueType), and serializeRowsFlat sends that as its
+  // ValueType — so its 'document' choice is as real as a mapped column's and has to round-trip identically.
+  // Both halves matter: toSummaryColumn writing the key, and applyMappingSummaryDocument reading it back.
+  it('round-trips the choice on a Json-valued default column', () => {
+    const dflt: MappingRow = {
+      resource: 'Patient', sources: [], mode: 'default', defaultToken: '@default',
+      defaultValue: '{"a":1}', defaultValueType: 'Json',
+      targetName: 'Meta', tableName: 'patients_local', jsonWriteMode: 'document',
+    };
+    const doc = mongoDoc([dflt]);
+    expect(doc.mappings[0].tables[0].columns[0].jsonWriteMode).toBe('document');
+    expect(applyMappingSummaryDocument(doc, 'mongo').mappingRows[0].jsonWriteMode).toBe('document');
+  });
+
+  // A join has no such choice to make (see field-mapping-model.spec.ts), so its column carries no key —
+  // this pins that the omission is deliberate rather than the same drop-on-reopen bug in another branch.
+  it('writes no key for a join, whose value is a delimited string by construction', () => {
+    const join: MappingRow = {
+      resource: 'Patient',
+      sources: [
+        { fhirPath: 'Patient.name.given', label: 'Given', valueType: 'Json' },
+        { fhirPath: 'Patient.name.family', label: 'Family', valueType: 'String' },
+      ],
+      mode: 'value', instance: { type: 'first' }, delimiter: ', ',
+      targetName: 'Name', tableName: 'patients_local', jsonWriteMode: 'document',
+    };
+    const doc = mongoDoc([join]);
+    expect(doc.mappings[0].tables[0].columns[0].mode).toBe('joinedFields');
+    expect(doc.mappings[0].tables[0].columns[0].jsonWriteMode).toBeUndefined();
+  });
+
+  it("adds no key at all for the default 'string' choice — the document stays what it was", () => {
+    for (const row of [wholeNodeRow(), wholeNodeRow('string')]) {
+      const doc = mongoDoc([row]);
+      expect(doc.mappings[0].tables[0].columns[0].jsonWriteMode).toBeUndefined();
+      expect(JSON.stringify(doc)).not.toContain('jsonWriteMode');
+      expect(applyMappingSummaryDocument(doc, 'mongo').mappingRows[0].jsonWriteMode).toBeUndefined();
+    }
+  });
+});
+
 describe('buildMappingSummaryDocument', () => {
   it('wraps every mapped resource under {source, destination, mappings[]}', () => {
     const rows: MappingRow[] = [{

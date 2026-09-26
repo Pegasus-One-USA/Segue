@@ -11,7 +11,10 @@
 
 import { DestinationTable, DestinationColumn } from '../../../../services/destination-schema.service';
 import type { ResourceFieldDef } from '../destination-wizard.component';
-import { MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType, DefaultValueToken, qualifyTableName, defaultInstanceType } from './field-mapping-model';
+import {
+  MappingRow, MappingInstanceSelection, MappingSourceRef, MappingDestType, DefaultValueToken,
+  JsonColumnWriteMode, qualifyTableName, resolveJsonWriteMode, supportsJsonWriteMode, defaultInstanceType,
+} from './field-mapping-model';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { dependencyRankFor } from '../resource-dependency.config';
 
@@ -107,6 +110,13 @@ export interface MappingSummaryColumn {
    *  designated as the resource's upsert key via the target card's toggle. Omitted (not false) on every
    *  other column, matching referenceLookup's spread convention above. */
   isUpsertKey?: boolean;
+  /** Mirrors MappingRow.jsonWriteMode — present ('document') only on a Json-valued column the user
+   *  explicitly switched to MongoDB's native document storage. Omitted (never 'string') everywhere else,
+   *  same spread convention as isUpsertKey above, so the document stays byte-for-byte what it was for
+   *  every mapping that hasn't made the choice. THIS document, not dest_mappings_v2, is what a reopened
+   *  node is rebuilt from (see destination-wizard.component.ts — the summary branch returns early), so a
+   *  MappingRow field missing here is a field the user's choice silently loses on reopen. */
+  jsonWriteMode?: JsonColumnWriteMode;
 }
 
 export interface MappingSummaryTable {
@@ -237,25 +247,38 @@ function toSummaryColumn(
   // mapping, and sidesteps any ambiguity in how a test's equality check treats an undefined-valued key.
   const referenceLookup = keyInfo ? { referenceLookup: { table: keyInfo.table, keyColumn: keyInfo.keyColumn } } : {};
   const upsertKey = row.isUpsertKey === true ? { isUpsertKey: true } : {};
+  // Same spread convention as upsertKey: only a deliberate 'document' choice on a Json-valued column is
+  // recorded, so nothing changes in the document for any mapping that hasn't made the choice. Without
+  // this, reopening the node rebuilds every row from here with the choice gone (applyMappingSummaryDocument
+  // below), which is exactly the "dropdown reverts to JSON string on edit" bug.
+  const jsonWriteMode = supportsJsonWriteMode(row) && resolveJsonWriteMode(row) === 'document'
+    ? { jsonWriteMode: 'document' as const }
+    : {};
 
   if (row.mode === 'childJson') {
     return {
       column: row.targetName, mode: 'wholeNodeAsJson', sourceNode: row.childNodeId ?? '',
-      instance, ...(instance ? { instanceIsExplicit: true as const } : {}), ...referenceLookup, ...upsertKey,
+      instance, ...(instance ? { instanceIsExplicit: true as const } : {}),
+      ...referenceLookup, ...upsertKey, ...jsonWriteMode,
     };
   }
   if (row.mode === 'default') {
+    // A default column CAN be Json-valued (defaultValueType), and serializeRowsFlat sends that as its
+    // ValueType, so a 'document' choice is as real here as on a mapped column and has to round-trip too.
     return {
       column: row.targetName, mode: 'default',
       defaultToken: row.defaultToken ?? '@default', defaultValue: row.defaultValue ?? null, defaultValueType: row.defaultValueType,
-      instance, ...referenceLookup, ...upsertKey,
+      instance, ...referenceLookup, ...upsertKey, ...jsonWriteMode,
     };
   }
   const sources = row.sources.map(s => s.fhirPath);
   if (sources.length > 1) {
+    // No jsonWriteMode: a join's value is a delimited string by construction (JsonMappingEngine.
+    // ResolveJoinedFields), so there is no such choice to make for one — supportsJsonWriteMode() returns
+    // false for a multi-source row, which is what keeps `jsonWriteMode` above empty here in the first place.
     return { column: row.targetName, mode: 'joinedFields', sources, delimiter: row.delimiter ?? ', ', instance, ...referenceLookup, ...upsertKey };
   }
-  return { column: row.targetName, mode: 'directField', sources, instance, ...referenceLookup, ...upsertKey };
+  return { column: row.targetName, mode: 'directField', sources, instance, ...referenceLookup, ...upsertKey, ...jsonWriteMode };
 }
 
 // ── per-resource table set + schema-change/processing-order derivation ──────────────────────────────
@@ -670,6 +693,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
             instance: col.instanceIsExplicit ? instance : undefined,
             targetName: col.column, tableName: fullName,
             ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
+            ...(col.jsonWriteMode ? { jsonWriteMode: col.jsonWriteMode } : {}),
           });
           continue;
         }
@@ -679,6 +703,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
             defaultToken: col.defaultToken ?? '@default', defaultValue: col.defaultValue ?? null, defaultValueType: col.defaultValueType,
             instance, targetName: col.column, tableName: fullName,
             ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
+            ...(col.jsonWriteMode ? { jsonWriteMode: col.jsonWriteMode } : {}),
           });
           continue;
         }
@@ -693,6 +718,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
           targetName: col.column, tableName: fullName,
           ...(referencesResource ? { referencesResource } : {}),
           ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
+          ...(col.jsonWriteMode ? { jsonWriteMode: col.jsonWriteMode } : {}),
         });
       }
     });

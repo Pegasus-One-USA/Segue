@@ -87,6 +87,7 @@
         [workflowId]="workflowId()"
         [dataTypeForTable]="dataTypeForTable()"
         [totalSourceCount]="(popoverRow()?.sources ?? []).length"
+        [isDocumentDestination]="destType() === 'mongo'"
         [childArrayLabel]="popoverChildArrayLabel()"
         (save)="onPopoverSave($event)"
         (remove)="onPopoverRemove()"
@@ -186,9 +187,9 @@
                   </button>
                 }
                 <!-- Mongo has no schema to author (no columns to define), so a typed name that isn't an
-                     already-listed collection is offered straight from the search box — no modal needed,
-                     matching MappedMongoDestinationWriter's own "customer owns the destination" contract
-                     (existing unless "Create collection if not exists" is checked on the destination). -->
+                     already-listed collection is offered straight from the search box — no modal needed.
+                     A name typed here need not exist yet: MappedMongoDestinationWriter creates a missing
+                     collection on its first write. -->
                 @if (destType() === 'mongo' && addTableSearchQuery().trim() && !filteredTablesToAdd(primaryResource).includes(addTableSearchQuery().trim())) {
                   <button type="button" class="fm-add-table-option" (click)="onAddTableSelectChange(primaryResource, addTableSearchQuery().trim())">
                     ＋ Use "{{ addTableSearchQuery().trim() }}" as a new collection
