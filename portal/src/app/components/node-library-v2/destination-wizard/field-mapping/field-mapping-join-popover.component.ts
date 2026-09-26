@@ -134,6 +134,14 @@ export class FieldMappingJoinPopoverComponent {
           if (rule) {
             this.ruleNodeType.set(rule.nodeType);
             this.ruleConfig.set({ ...rule.config });
+            // A rule LOADED in split mode restricts the instance picker exactly as one switched into it
+            // does, so the same reconciliation has to run here. Without it a row whose saved selection is
+            // "All records" and whose saved rule is already split — written by the API, duplicated from
+            // another row, or authored before this restriction existed — opened showing a DISABLED option
+            // as its current value. The author could not re-select it to clear it, and saving without
+            // touching the picker wrote the invalid pair straight back, silently keeping the very
+            // combination the restriction exists to prevent.
+            this.reconcileInstanceWithRuleMode();
             this.ruleSectionOpen.set(true);
           } else {
             // Nothing authored yet — start on whichever node type actually fits this row's value shape.

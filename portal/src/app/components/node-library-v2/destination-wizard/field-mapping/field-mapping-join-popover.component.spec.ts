@@ -340,13 +340,17 @@ describe('FieldMappingJoinPopoverComponent - split mode restricts the instance p
     },
   ];
 
-  function createFixture(row: MappingRow) {
+  function createFixture(row: MappingRow, existingRules: Partial<TransformationRule>[] = []) {
     TestBed.configureTestingModule({
       imports: [FieldMappingJoinPopoverComponent],
       providers: [
         {
           provide: TransformationRulesService,
-          useValue: { getNodeSchemas: () => of(SCHEMAS), getEffectiveRules: () => of([]), save: () => of({}) },
+          useValue: {
+            getNodeSchemas: () => of(SCHEMAS),
+            getEffectiveRules: () => of(existingRules),
+            save: () => of({}),
+          },
         },
         {
           provide: ToastService,
@@ -424,5 +428,19 @@ describe('FieldMappingJoinPopoverComponent - split mode restricts the instance p
     fixture.componentInstance.onRuleConfigChanged({ mode: 'split' });
 
     expect(fixture.componentInstance.splitModeRestrictsInstances()).toBeFalse();
+  });
+
+  it('corrects a row LOADED with "all records" and a saved split rule, not only newly-edited ones', () => {
+    // The combination can already exist: written by the API, duplicated from another row, or authored
+    // before this restriction did. Loading a rule set ruleConfig directly, bypassing the reconciliation, so
+    // the picker showed a DISABLED option as the current value — unfixable by re-selecting it, and saved
+    // straight back if the author never touched the instance selector.
+    const fixture = createFixture(
+      { ...arrayRow, instance: { type: 'all', aggregate: 'csv' } },
+      [{ id: 'rule-1', nodeType: 'ConcatenationTemplating', config: { mode: 'split' } } as Partial<TransformationRule>],
+    );
+
+    expect(fixture.componentInstance.splitModeRestrictsInstances()).toBeTrue();
+    expect(fixture.componentInstance.instanceType()).toBe('first');
   });
 });
