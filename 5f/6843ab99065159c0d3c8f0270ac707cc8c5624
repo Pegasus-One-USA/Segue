@@ -1,0 +1,73 @@
+tests/FHIRBridge.UnitTests/Validation/CreateDestinationConfigurationRequestValidatorTests.cs
+  s_6fe240044cc58e::t_d3844f2cc00784 76-79,81,83
+tests/FHIRBridge.UnitTests/Sources/EpicSourceConnectionScopeSyncServiceTests.cs
+  s_6fe240044cc58e::t_d3844f2cc00784 45-65,203-267
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 42-45,91-93,95
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 72,1562-1563,1919-1921,1923,3060-3072,3091,3117,4004-4005,4576-4580,4582,4586-4591,4662-4665,4874-4917,4922
+tests/FHIRBridge.UnitTests/Destinations/MongoJsonWriteModeTests.cs
+  s_6fe240044cc58e::t_d3844f2cc00784 1-104
+src/FHIRBridge.Infrastructure/Destinations/MongoDestinationConnectionTestService.cs
+  s_6fe240044cc58e::t_d3844f2cc00784 92
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 7,57-61,420-438
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.focused-join-save.spec.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 1-122
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_6fe240044cc58e::t_d3844f2cc00784 90,190-192
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/mongo-destination-form.component.html
+  s_6fe240044cc58e::t_d3844f2cc00784 50
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 255-330,476-490,503-514,519
+  s_6fe240044cc58e::t_004695c794425f 446-447
+portal/src/app/services/destination-schema.service.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 192-193
+src/FHIRBridge.Domain/Enums/JsonColumnWriteMode.cs
+  s_6fe240044cc58e::t_d3844f2cc00784 1-23
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 2-4,627-631
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 937-938,2455-2465
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-summary.model.spec.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 17-90
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 14-17,113-119,250-256,261-262,266-267,271,276-278,281,696,706,721
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_6fe240044cc58e::t_d3844f2cc00784 9,77,173,190,220,227-242
+src/FHIRBridge.Application/DTOs/MongoConnectionTestRequest.cs
+  s_6fe240044cc58e::t_d3844f2cc00784 13-17
+src/FHIRBridge.Domain/ValueObjects/MappingFieldFormat.cs
+  s_6fe240044cc58e::t_d3844f2cc00784 1-55
+src/FHIRBridge.Infrastructure/Destinations/MappedMongoDestinationWriter.cs
+  s_6fe240044cc58e::t_d3844f2cc00784 5,24-30,60,64,69-70,75,92,118-119,140,142-145,150-151,186-198,200,226-229,231-232,237,254-257,262,273,279-298,344-375
+src/FHIRBridge.Infrastructure/Destinations/MongoJsonValueConverter.cs
+  s_6fe240044cc58e::t_d3844f2cc00784 1-65
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 25-28,43-49,75-77,82-88,140-143
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 1147-1150
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_6fe240044cc58e::t_69defaefd863bb 386-391
+  s_6fe240044cc58e::t_d3844f2cc00784 6,232-385,392-429
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_6fe240044cc58e::t_d3844f2cc00784 10,58,715,793-831
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_6fe240044cc58e::t_d3844f2cc00784 29,31-36,139-166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5f6843ab99065159c0d3c8f0270ac707cc8c5624",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
