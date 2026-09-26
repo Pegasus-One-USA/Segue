@@ -73,12 +73,14 @@ public sealed class CreateDestinationConfigurationRequestValidatorTests
         _sut.Validate(Request(DestinationType.SqlServer, metadata)).IsValid.Should().BeTrue();
     }
 
+    // Mongo has no required connection metadata of its own. The connection string is the whole credential and
+    // lives in the encrypted secret, not here; the collection is chosen per resource on the mapping canvas
+    // (the build sends target: null for Mongo so those per-resource choices win), and a collection that
+    // doesn't exist yet is created on the first write — so there is nothing here left to require.
     [Fact]
-    public void Mongo_metadata_missing_collection_fails()
+    public void Mongo_metadata_needs_no_collection()
     {
-        var result = _sut.Validate(Request(DestinationType.Mongo, new { dest_name = "Mongo" }));
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "dest_collection");
+        _sut.Validate(Request(DestinationType.Mongo, new { dest_name = "Mongo" })).IsValid.Should().BeTrue();
     }
 
     [Fact]

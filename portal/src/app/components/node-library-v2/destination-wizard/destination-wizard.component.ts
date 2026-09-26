@@ -69,6 +69,7 @@ import {
   reconcileTargetsForDestTypeSwitch,
   checkColumnTypeCompatibility,
   DefaultValueToken,
+  jsonWriteModeFromFormat,
 } from './field-mapping/field-mapping-model';
 import { computePendingTableNames, runQueuedOpsSequentially } from './field-mapping/field-mapping-schema-ops.util';
 import { MappingSnapshotService } from './field-mapping/mapping-snapshot.service';
@@ -1558,8 +1559,8 @@ export class DestinationWizardComponent implements OnInit {
    *  "+ Add a table"/"+ Add a collection". Sourced from sqlTables() for SQL, mongoCollections() for Mongo —
    *  deliberately NOT gated through hasSqlTables()/sqlTableOptions() (the canvas's own hasSqlTables input,
    *  which also drives isPrimaryTargetValid's "must be a known table" check): a not-yet-created Mongo
-   *  collection is a valid primary target (paired with "Create collection if not exists"), so Mongo must
-   *  never flip that check on. */
+   *  collection is a valid primary target — the pipeline always creates a missing one on its first write —
+   *  so Mongo must never flip that check on. */
   readonly availableTablesToAddFn = (group: string): string[] => {
     const used = new Set([
       this.targetFor(group),
@@ -1915,8 +1916,11 @@ export class DestinationWizardComponent implements OnInit {
         // policy is renamed or a workflow is cloned, creating a second empty policy and silently redacting
         // nothing. This covers just the case where no id was stamped: a node saved before that key existed.
         // Only ever ADOPTS: creating a policy is FieldMappingListComponent's job, and only when a rule is added.
+        // The NAME is the link between a workflow and its policy — a DeIdentificationProfile row carries no
+        // workflow reference of its own — so a policy named with this workflow's id is authoritative, not a
+        // last resort. Previously this only filled a gap, which let an id adopted from elsewhere win.
         const workflowId = this.currentWorkflowId();
-        if (workflowId && !this.selectedDeIdentificationProfileId()) {
+        if (workflowId) {
           const owned = profiles.find(p => p.name === workflowId);
           if (owned) this.selectedDeIdentificationProfileId.set(owned.id);
         }
@@ -3053,6 +3057,19 @@ export class DestinationWizardComponent implements OnInit {
     }
 
     const newRows: MappingRow[] = profile.fields.map((f) => {
+      // The MongoDB "store this JSON as a real sub-document" choice lives on the saved field's `format`
+      // marker bag (see field-mapping-model.ts's jsonWriteModeFromFormat / the backend's MappingFieldFormat),
+      // so it has to be read back out of it here. This is the third load path into MappingRow[], alongside
+      // dest_mappings_v2 (carries the full row verbatim) and the canonical Mapping JSON summary
+      // (applyMappingSummaryDocument, which round-trips its own jsonWriteMode key) — copying `format` alone,
+      // as this used to, left the row defaulting to 'string': the popover showed "JSON string" for a field
+      // saved as a document, and the very next serializeRowsFlat dropped the json=document marker outright.
+      // Spread rather than always assigned, matching the summary path's own convention: only a real
+      // 'document' choice is stamped, because an explicit 'string' would make supportsJsonWriteMode() true
+      // for EVERY field and surface the Mongo-only dropdown on plain String columns that have no such choice.
+      const jsonWriteMode = jsonWriteModeFromFormat(f.format);
+      const jsonWriteModeEntry = jsonWriteMode === 'document' ? { jsonWriteMode } : {};
+
       // A "@token" JsonPath (JsonMappingEngine.IsSystemToken) has no real source at all — reconstructing
       // it as an ordinary mode: 'value' row (as every field below unconditionally used to) produced a
       // broken row with a fabricated fhirPath and, worse, silently lost defaultValue/defaultValueType on
@@ -3071,6 +3088,7 @@ export class DestinationWizardComponent implements OnInit {
           isRequired: f.isRequired,
           format: f.format ?? null,
           isUpsertKey: f.isUpsertKey ?? false,
+          ...jsonWriteModeEntry,
         };
       }
       const resolved = this._resolveFhirPath(resource, f);
@@ -3096,6 +3114,7 @@ export class DestinationWizardComponent implements OnInit {
         defaultValue: f.defaultValue ?? null,
         format: f.format ?? null,
         isUpsertKey: f.isUpsertKey ?? false,
+        ...jsonWriteModeEntry,
       };
     });
 
@@ -3982,6 +4001,8 @@ export class DestinationWizardComponent implements OnInit {
     // _pendingFormPatch for why the form itself might not). Self-guards on isSql()/destination type, so
     // this is a no-op for every non-SQL destination.
     this._refreshSqlTablesFromLiveSchema();
+    // Mongo's equivalent — same reason, same self-guard (see its own doc comment).
+    this._refreshMongoCollectionsFromLiveConnection();
 
     // The de-identification policy is NOT read off the destination any more: it belongs to the workflow, not
     // to the connection, and a reused connection may already carry another workflow's policy in that column.
@@ -4552,39 +4573,22 @@ export class DestinationWizardComponent implements OnInit {
     // The de-identification policy, restored from the id STAMPED ON THIS NODE — the authoritative record of
     // which policy this workflow owns.
     //
-    // The DestinationConfiguration row is consulted ONLY as the migration fallback below — the policy belongs
-    // to the workflow, not to the connection, and a reused connection may carry another workflow's policy.
+    // The id this node was saved with. It is a starting point only: loadDeIdentificationProfiles() resolves
+    // the policy NAMED with this workflow's id and overwrites this, because the name is the sole link between
+    // a workflow and its policy — a DeIdentificationProfile row carries no workflow reference. Reading the
+    // stamped id first still matters for the window before that list arrives, and for a policy list that
+    // fails to load.
     //
-    // Not resolved by NAME here either, even though the policy is named with the workflow id. Matching on a
-    // display-name field makes it do foreign-key duty: rename the policy, or clone the workflow, and the
-    // lookup misses, a second empty policy is created, and that workflow silently redacts nothing. The stamped
-    // id survives both. loadDeIdentificationProfiles()'s name lookup remains only as a fallback for a node
-    // saved before this key was written.
+    // The DestinationConfiguration row is NOT consulted at all any more; see below.
     if (f['deIdentificationProfileId']) {
       this.selectedDeIdentificationProfileId.set(f['deIdentificationProfileId']);
-    } else if (f['destinationId']) {
-      // MIGRATION for a workflow configured before the policy became per-workflow. Its node carries no stamped
-      // id — the policy lived on the DestinationConfiguration row — so without this the wizard opens showing no
-      // policy, the de-identification chain node is dropped on the next save, and a workflow that was redacting
-      // silently stops. Adopt the destination's policy once; _save() then stamps it onto the node, and every
-      // later open takes the branch above. Nothing is written back to the destination column, so a connection
-      // shared with another workflow is not disturbed.
-      //
-      // Known imprecision: a BRAND-NEW workflow reusing a connection that already carries a policy will adopt
-      // it too — the node fields cannot distinguish "legacy workflow" from "new workflow on an old connection".
-      // That is the pre-existing behaviour rather than a new one, and it errs toward redacting under an
-      // inherited policy instead of silently redacting nothing, which is the right direction to fail for PHI.
-      this.destinationConfigSvc.getById(f['destinationId']).subscribe({
-        next: dto => {
-          if (dto?.deIdentificationProfileId && !this.selectedDeIdentificationProfileId()) {
-            this.selectedDeIdentificationProfileId.set(dto.deIdentificationProfileId);
-          }
-        },
-        // Leave the selection alone on a failed read: resetting it here would make a transient failure look
-        // like "no policy assigned", which is the migration hazard this branch exists to prevent.
-        error: () => { /* keep whatever is already selected */ },
-      });
     }
+
+    // Deliberately no fallback to the destination connection's own DeIdentificationProfileId. A connection is
+    // shared by every workflow that writes to it, so adopting its policy handed a brand-new workflow someone
+    // else's redaction — the "known imprecision" the removed branch documented, and why a De-identification
+    // step appeared on pipelines that had never configured one. A workflow's policy is the one NAMED with its
+    // id (see loadDeIdentificationProfiles); if no such policy exists, this workflow redacts nothing.
     if (this.isFhir()) {
       this.fhirForm.patchValue({
         name: f['dest_name'] || 'Aidbox Production',
@@ -4655,6 +4659,10 @@ export class DestinationWizardComponent implements OnInit {
     // nothing on reopen (everything it knew about was already used). Re-probe the live database now that
     // the connection form above is populated — must run before any of the early returns below, not after.
     this._refreshSqlTablesFromLiveSchema();
+    // Mongo's equivalent. Matters most here: this is the path a Mapping/Transformation/De-identification
+    // node takes, opening straight on Step 3, where Step 1's form (the only thing that ever filled
+    // mongoCollections() before) is never mounted at all.
+    this._refreshMongoCollectionsFromLiveConnection();
     if (f['dest_resources']) {
       this.selectedResources.set(
         f['dest_resources'].split(',').filter(Boolean),
@@ -4863,10 +4871,55 @@ export class DestinationWizardComponent implements OnInit {
     });
   }
 
+  /**
+   * Mongo's counterpart to _refreshSqlTablesFromLiveSchema — loads the database's real collection names for
+   * the mapping canvas's "+ Add a collection…" picker (availableTablesToAddFn reads mongoCollections() for
+   * Mongo the way it reads sqlTables() for SQL).
+   *
+   * Needed because mongoCollections() was previously only ever filled by next()'s Step 1 Mongo branch, from
+   * the connection form's own Test Connection result. A chain node — Mapping / Transformation /
+   * De-identification — opens straight on Step 3 against an already-configured destination (see the
+   * initialStep effect), so Step 1 and its form are never visited and next() never runs: the picker opened
+   * with an empty list. Going in via the destination node instead happens to work only because that route
+   * does pass through Step 1.
+   *
+   * Uses the saved destination's own id rather than a connection string: reopening a persisted node never has
+   * the plaintext connection string (workflow-graph-mapper.service.ts's SECRET_FIELD_KEYS strips it before
+   * persisting), and MongoDestinationConnectionTestService already resolves the stored secret from the vault
+   * when ConnectionString is blank and DestinationId is set — the same id-based path the Mongo form's own
+   * "Test connection" uses when re-testing a saved destination. Collection/createIfNotExists are deliberately
+   * omitted: this only wants the collection list, not the form's "does my target collection exist?" check,
+   * which would report a failure for a collection the pipeline is set to auto-create.
+   */
+  private _refreshMongoCollectionsFromLiveConnection(): void {
+    if (!this.isMongo()) return;
+
+    // Same two independent records of "which saved destination is this?" _refreshSqlTablesFromLiveSchema
+    // reconciles — selectedExistingId() from the "Existing connection" picker, resolvedDestinationId() from
+    // editing a saved node or one provisioned earlier this session.
+    const destinationId = this.selectedExistingId() ?? this.resolvedDestinationId();
+    if (!destinationId) return;
+
+    this.schemaSvc.testMongo({ connectionString: '', destinationId }).subscribe({
+      // Never clobber a list already loaded from the form with an empty one — a failed/unreachable connection
+      // leaves the picker exactly as it was rather than emptying it.
+      next: (res) => {
+        if (res.connected && res.collections?.length) {
+          this.mongoCollections.set(res.collections);
+        }
+      },
+      error: () => {
+        /* Non-blocking, same contract as the SQL reload above: the canvas stays usable, and a collection
+           name can still be typed by hand (Mongo's picker always allows a new name). */
+      },
+    });
+  }
+
   /** Re-attempts the live schema read behind the mapping canvas's "Retry" — the same call ngOnInit makes,
    *  so a transient failure no longer needs a full close/reopen of the wizard to clear. */
   retrySchemaLoad(): void {
     this._refreshSqlTablesFromLiveSchema();
+    this._refreshMongoCollectionsFromLiveConnection();
   }
 
   // FHIR is hand-rolled, not registry-routed (see isFhir()'s doc comment), so it needs its own getFullConfig()/
