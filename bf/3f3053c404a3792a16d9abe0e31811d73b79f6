@@ -1,0 +1,29 @@
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_6fe240044cc58e::t_d449f83ef6acc0 296-309
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_6fe240044cc58e::t_d449f83ef6acc0 169-186,188,683-710
+src/FHIRBridge.Application/Services/Transforms/Nodes/StringStructureNodes.cs
+  s_6fe240044cc58e::t_d449f83ef6acc0 86-87,104-111,122,130-150
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineJoinedFieldsTests.cs
+  s_6fe240044cc58e::t_d449f83ef6acc0 3-4,181-253
+tests/FHIRBridge.UnitTests/Transforms/StringStructureNodesTests.cs
+  s_6fe240044cc58e::t_d449f83ef6acc0 119-211
+tests/FHIRBridge.UnitTests/Transforms/TransformNodeConfigSchemaTests.cs
+  s_6fe240044cc58e::t_d449f83ef6acc0 1-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bf3f3053c404a3792a16d9abe0e31811d73b79f6",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
