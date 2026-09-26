@@ -2452,11 +2452,15 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       const sources = edited
         ? original.sources.map(s => (s.fhirPath === focus ? edited : s))
         : original.sources.filter(s => s.fhirPath !== focus);
+      // Deliberately NOT jsonWriteMode. supportsJsonWriteMode() is false for a join — the backend joins the
+      // pieces into a delimited string, never a JSON document — but the narrowed draft has exactly ONE source,
+      // so the check passes there and the popover offers the choice. Carrying it back would write a setting
+      // onto the real join that serializeRowsFlat then ignores, leaving the UI implying an effect it never
+      // had and a stray value that reappears every time that one connector line is reopened.
       this.updateRow({
         ...original,
         instance: row.instance,
         referencesResource: row.referencesResource,
-        jsonWriteMode: row.jsonWriteMode,
         sources,
       });
       this.closePopover();

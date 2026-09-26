@@ -1916,8 +1916,11 @@ export class DestinationWizardComponent implements OnInit {
         // policy is renamed or a workflow is cloned, creating a second empty policy and silently redacting
         // nothing. This covers just the case where no id was stamped: a node saved before that key existed.
         // Only ever ADOPTS: creating a policy is FieldMappingListComponent's job, and only when a rule is added.
+        // The NAME is the link between a workflow and its policy — a DeIdentificationProfile row carries no
+        // workflow reference of its own — so a policy named with this workflow's id is authoritative, not a
+        // last resort. Previously this only filled a gap, which let an id adopted from elsewhere win.
         const workflowId = this.currentWorkflowId();
-        if (workflowId && !this.selectedDeIdentificationProfileId()) {
+        if (workflowId) {
           const owned = profiles.find(p => p.name === workflowId);
           if (owned) this.selectedDeIdentificationProfileId.set(owned.id);
         }
@@ -4570,39 +4573,22 @@ export class DestinationWizardComponent implements OnInit {
     // The de-identification policy, restored from the id STAMPED ON THIS NODE — the authoritative record of
     // which policy this workflow owns.
     //
-    // The DestinationConfiguration row is consulted ONLY as the migration fallback below — the policy belongs
-    // to the workflow, not to the connection, and a reused connection may carry another workflow's policy.
+    // The id this node was saved with. It is a starting point only: loadDeIdentificationProfiles() resolves
+    // the policy NAMED with this workflow's id and overwrites this, because the name is the sole link between
+    // a workflow and its policy — a DeIdentificationProfile row carries no workflow reference. Reading the
+    // stamped id first still matters for the window before that list arrives, and for a policy list that
+    // fails to load.
     //
-    // Not resolved by NAME here either, even though the policy is named with the workflow id. Matching on a
-    // display-name field makes it do foreign-key duty: rename the policy, or clone the workflow, and the
-    // lookup misses, a second empty policy is created, and that workflow silently redacts nothing. The stamped
-    // id survives both. loadDeIdentificationProfiles()'s name lookup remains only as a fallback for a node
-    // saved before this key was written.
+    // The DestinationConfiguration row is NOT consulted at all any more; see below.
     if (f['deIdentificationProfileId']) {
       this.selectedDeIdentificationProfileId.set(f['deIdentificationProfileId']);
-    } else if (f['destinationId']) {
-      // MIGRATION for a workflow configured before the policy became per-workflow. Its node carries no stamped
-      // id — the policy lived on the DestinationConfiguration row — so without this the wizard opens showing no
-      // policy, the de-identification chain node is dropped on the next save, and a workflow that was redacting
-      // silently stops. Adopt the destination's policy once; _save() then stamps it onto the node, and every
-      // later open takes the branch above. Nothing is written back to the destination column, so a connection
-      // shared with another workflow is not disturbed.
-      //
-      // Known imprecision: a BRAND-NEW workflow reusing a connection that already carries a policy will adopt
-      // it too — the node fields cannot distinguish "legacy workflow" from "new workflow on an old connection".
-      // That is the pre-existing behaviour rather than a new one, and it errs toward redacting under an
-      // inherited policy instead of silently redacting nothing, which is the right direction to fail for PHI.
-      this.destinationConfigSvc.getById(f['destinationId']).subscribe({
-        next: dto => {
-          if (dto?.deIdentificationProfileId && !this.selectedDeIdentificationProfileId()) {
-            this.selectedDeIdentificationProfileId.set(dto.deIdentificationProfileId);
-          }
-        },
-        // Leave the selection alone on a failed read: resetting it here would make a transient failure look
-        // like "no policy assigned", which is the migration hazard this branch exists to prevent.
-        error: () => { /* keep whatever is already selected */ },
-      });
     }
+
+    // Deliberately no fallback to the destination connection's own DeIdentificationProfileId. A connection is
+    // shared by every workflow that writes to it, so adopting its policy handed a brand-new workflow someone
+    // else's redaction — the "known imprecision" the removed branch documented, and why a De-identification
+    // step appeared on pipelines that had never configured one. A workflow's policy is the one NAMED with its
+    // id (see loadDeIdentificationProfiles); if no such policy exists, this workflow redacts nothing.
     if (this.isFhir()) {
       this.fhirForm.patchValue({
         name: f['dest_name'] || 'Aidbox Production',

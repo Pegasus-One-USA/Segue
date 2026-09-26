@@ -7,6 +7,7 @@ import { UnsavedChangesRegistryService } from '../../core/services/unsaved-chang
 import { BlockingConfirmService } from '../../core/services/blocking-confirm.service';
 import { PipelineStoreV2 } from '../../services/pipeline-v2.store';
 import { TransformationRulesService } from '../../components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
+import { DeIdentificationProfileService } from '../../destination-connections/services/deidentification-profile.service';
 import type { LegacyMappingRow } from '../../components/node-library-v2/destination-wizard/field-mapping/field-mapping-model';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityServiceV2 } from '../../services/applicability-v2.service';
@@ -54,6 +55,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   private readonly toast  = inject(ToastService);
   private readonly appSvc = inject(ApplicabilityServiceV2);
   private readonly transformationRules = inject(TransformationRulesService);
+  private readonly deIdentificationProfiles = inject(DeIdentificationProfileService);
   private readonly workflowApi = inject(WorkflowApiService);
   private readonly graphMapper = inject(WorkflowGraphMapperServiceV2);
   private readonly buildAssembler = inject(WorkflowBuildAssemblerServiceV2);
@@ -709,10 +711,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       && !!destinationType
       && SQL_FAMILY_DESTINATION_TYPES.has(destinationType);
 
-    const hasDeIdentification = !!fields['deIdentificationProfileId'];
-
     if (mappingApplies) this.ensureChainNode(destination, 'field-mapping');
-    if (hasDeIdentification) this.ensureChainNode(destination, 'deidentification');
+    this.syncDeIdentificationNode(destination);
 
     // Transformation rules are the only step that lives server-side, so this is the one signal that has to be
     // asked for rather than read off the node. What it asks for is the part that matters: rules belonging to
@@ -790,6 +790,45 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   }
 
   /** Adds `transformId` to `destination`'s chain if it isn't already there (see insertChainStep). */
+  /**
+   * A De-identification node belongs on the canvas only when THIS workflow actually redacts something.
+   *
+   * The policy a workflow owns is the one NAMED with its id — that is the only link between the two, since a
+   * DeIdentificationProfile row carries no workflow reference of its own. So the question is asked in two
+   * parts: does a policy named with this workflow's id exist, and does it have any enabled rule?
+   *
+   * The gate used to be `!!fields['deIdentificationProfileId']` — a policy id being STAMPED on the
+   * destination node, whether or not it belonged to this workflow and whether or not it had a single rule.
+   * An id reaches that field without anyone authoring a rule (a new workflow reusing a connection that
+   * already carried a policy adopted it), so the node appeared on workflows that redact nothing. Same shape
+   * as the Transformation gate right below: ask for what actually belongs to this pipeline, and add nothing
+   * on a guess.
+   */
+  private syncDeIdentificationNode(destination: CanvasNode): void {
+    const workflowId = this.currentWorkflowId();
+    if (!workflowId) return;
+
+    this.deIdentificationProfiles.list().subscribe({
+      next: profiles => {
+        const owned = profiles.find(profile => profile.name === workflowId);
+        if (!owned) return;
+
+        // Filtered client-side: the rules endpoint has no deIdentificationProfileId parameter (it was built
+        // to filter by resource/destination/field), and this is the same one-off check the destination
+        // wizard's own Review card makes.
+        this.transformationRules.list({}).subscribe({
+          next: rules => {
+            if (rules.some(rule => rule.deIdentificationProfileId === owned.id && rule.isEnabled)) {
+              this.ensureChainNode(destination, 'deidentification');
+            }
+          },
+          error: () => { /* a rules lookup failure must not add a node on a guess */ },
+        });
+      },
+      error: () => { /* nor a profile lookup failure */ },
+    });
+  }
+
   private ensureChainNode(destination: CanvasNode, transformId: string): void {
     if (this.chainStepsBefore(destination).some(n => (n as TransformNode).transformId === transformId)) return;
     this.insertChainStep(destination, transformId);
