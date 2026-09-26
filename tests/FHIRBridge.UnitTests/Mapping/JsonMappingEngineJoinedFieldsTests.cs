@@ -1,5 +1,7 @@
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Transforms;
+using FHIRBridge.Application.Services.Transforms.Nodes;
 using FHIRBridge.Domain.Enums;
 using FluentAssertions;
 
@@ -174,6 +176,79 @@ public sealed class JsonMappingEngineJoinedFieldsTests
             Format: "joinedFields;delimiter=, ", ArrayPolicy: ArrayPolicy.FirstItem);
 
         _engine.Map(EpicPatientJson, [field]).Rows![0]["FullName"].Should().Be("McGinnis, Warren James");
+    }
+
+    [Fact]
+    public void A_joined_column_hands_its_transform_chain_the_individual_source_values()
+    {
+        // ConcatenationTemplating binds {0}/{1} positionally to the items it receives, and AsItems treats a
+        // string as ONE item — so against the joined string "{1}" matched nothing and survived as literal
+        // text in the column ("Mr Warren James, McGinnis {1} Sir"). The parts make the template work.
+        var result = _engine.Map(EpicPatientJson, [JoinedNameField("joinedFields;delimiter=, ", ArrayPolicy.FirstItem)]);
+
+        result.RawArrayValues.Should().ContainKey("FullName");
+        result.RawArrayValues!["FullName"].Should().Equal(["Warren James", "McGinnis"]);
+    }
+
+    [Fact]
+    public void Nth_instance_hands_over_that_instances_parts_not_the_firsts()
+    {
+        var result = _engine.Map(
+            EpicPatientJson,
+            [JoinedNameField("joinedFields;delimiter=, ;index=2", ArrayPolicy.FirstItem)]);
+
+        result.RawArrayValues!["FullName"].Should().Equal(["Warren", "McGinnis"]);
+    }
+
+    [Fact]
+    public void All_records_keeps_the_collapsed_value_as_the_transform_input()
+    {
+        // The column deliberately spans every instance there, so there is no single pair of fields for a
+        // template's placeholders to bind to.
+        var result = _engine.Map(
+            EpicPatientJson,
+            [JoinedNameField("joinedFields;delimiter= ;aggregate=csv", ArrayPolicy.FirstItem)]);
+
+        result.RawArrayValues!["FullName"].Should().NotEqual(["Warren James", "McGinnis"]);
+    }
+
+    [Fact]
+    public void End_to_end_a_joined_column_with_a_saved_template_rule_renders_both_fields()
+    {
+        // Field config and rule config below are the EXACT rows read back out of a real workflow's database,
+        // not an idealized version of them: jsonPath carries the derived "$.name[*].given" (no inner wildcard,
+        // because the catalog had no entry for that source), and the rule is the portal's own saved ConfigJson.
+        var field = new MappingFieldDto(
+            TargetField: "FULLNAME",
+            JsonPath: "$.name[*].given|$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false, DefaultValue: null,
+            Format: "joinedFields;delimiter=, ", ArrayPolicy: ArrayPolicy.FirstItem);
+
+        var mapped = _engine.Map(EpicPatientJson, [field]);
+
+        // Untransformed, the column holds the joined string.
+        mapped.Rows![0]["FULLNAME"].Should().Be("Warren James, McGinnis");
+
+        // The rule resolves only because the joined path keys off its FIRST sub-path — normalizing the whole
+        // "|"-joined string produced "Patient.name.given|$.name.family", which matched no rule and silently
+        // left the column untransformed.
+        RuleSourceFieldFormat.FromJsonPath("Patient", field.JsonPath).Should().Be("Patient.name.given");
+
+        // And the chain is handed the field's PARTS, so both placeholders bind.
+        var ruleConfig = new Dictionary<string, string>
+        {
+            ["mode"] = "concat",
+            ["separator"] = " ",
+            ["splitDelimiter"] = ",",
+            ["splitIsRegex"] = "False",
+            ["template"] = "Mr {0} {1} Sir",
+        };
+        var transformInput = mapped.RawArrayValues!["FULLNAME"];
+        transformInput.Should().Equal(["Warren James", "McGinnis"]);
+
+        new ConcatenationTemplatingNode().Execute(transformInput, ruleConfig, null)
+            .Value.Should().Be("Mr Warren James McGinnis Sir");
     }
 
     [Fact]
