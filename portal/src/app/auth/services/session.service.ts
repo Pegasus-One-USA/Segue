@@ -134,7 +134,11 @@ export class SessionService {
       catchError(() => EMPTY),
       finalize(() => {
         this.end();
-        this.store.setError('Your session has expired due to inactivity. Please sign in again.');
+        // Deliberately NOT store.setError() here: that signal drives the login page's own inline
+        // error banner (see LoginComponent), which would then render the exact same "session expired"
+        // text a second time, underneath/after the SweetAlert prompt below — the prompt is already the
+        // single source of truth for this message (see SessionExpiredDialogService's doc comment).
+        //
         // Unlike the interceptor's 401 path (user is actively at the keyboard, so the prompt can sit
         // over whatever they were looking at), idle timeout exists specifically FOR the unattended
         // workstation — showing the prompt without navigating first would leave PHI (execution history

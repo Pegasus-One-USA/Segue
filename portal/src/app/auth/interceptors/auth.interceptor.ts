@@ -46,15 +46,22 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     console.warn(`Refusing to send credentials to non-HTTPS request: ${req.url}`);
   }
 
-  const headers: Record<string, string> = {};
-  if (withCreds && STATE_CHANGING_METHODS.has(req.method.toUpperCase())) {
-    const csrfToken = tokens.getCsrfToken();
-    if (csrfToken) {
-      headers['X-CSRF-Token'] = csrfToken;
+  // Reads the CSRF cookie fresh each call rather than once up front — a silent token refresh (below)
+  // can rotate that cookie, and retrying a state-changing request with the header it captured BEFORE
+  // the refresh would fail CSRF validation on a perfectly healthy, just-refreshed session, which this
+  // interceptor can't distinguish from a real expired one and would force-logout an active user over.
+  const buildRequest = (): HttpRequest<unknown> => {
+    const headers: Record<string, string> = {};
+    if (withCreds && STATE_CHANGING_METHODS.has(req.method.toUpperCase())) {
+      const csrfToken = tokens.getCsrfToken();
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
     }
-  }
+    return req.clone({ withCredentials: withCreds, setHeaders: headers });
+  };
 
-  const cloned = req.clone({ withCredentials: withCreds, setHeaders: headers });
+  const cloned = buildRequest();
 
   const forceLogout = (err: HttpErrorResponse): Observable<never> => {
     tokens.clearTokens();
@@ -80,8 +87,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         () => authService.refreshToken(),
         () => authService.syncCurrentUser(),
       ).pipe(
-        switchMap(() => next(cloned)),
+        // catchError before switchMap: only a FAILED refresh should force a logout. Ordering it
+        // after switchMap (as before) also caught errors from the retried request itself — a
+        // refresh that succeeds followed by e.g. a 400 validation error or 409 concurrency conflict
+        // on the retry would still show "Session expired" and log an active user out, swallowing
+        // the real error in the process.
         catchError(() => forceLogout(err)),
+        switchMap(() => next(buildRequest())),
       );
     })
   );
