@@ -189,7 +189,8 @@ export interface MongoConnectionTestRequest {
   connectionString: string;
   /** When supplied, the test also checks whether this collection exists (not just connectivity). */
   collection?: string;
-  /** Mirrors the form's "Create collection if not exists" checkbox — skips the missing-collection failure. */
+  /** Skips the missing-collection failure. Unused by the destination form, which sends no `collection` at all
+   *  now that the pipeline always creates one that's missing; kept for any caller that wants the check. */
   createIfNotExists?: boolean;
   /** When re-testing an already-saved destination without retyping its connection string, carries the
    *  destination's id so the backend can resolve the stored one instead. */

@@ -252,6 +252,82 @@ export interface MappingRow {
    * being forced onto whichever column the schema happens to flag as the physical primary key.
    */
   isUpsertKey?: boolean;
+  /**
+   * How this row's JSON value is materialized in the destination column — only meaningful when the row's
+   * effective ValueType is 'Json' (see effectiveMappingValueType) AND the destination stores structure
+   * natively, which today means MongoDB only. Undefined everywhere else, and undefined means 'string':
+   * every mapping authored before this option existed keeps the single, escaped-text behaviour it had.
+   * Round-trips through dest_mappings_v2 (the full MappingRow) and reaches the backend as the
+   * "json=document" marker serializeRowsFlat appends to `format` (see MappingFieldFormat on the backend).
+   */
+  jsonWriteMode?: JsonColumnWriteMode;
+}
+
+/** See MappingRow.jsonWriteMode — mirrors the backend's JsonColumnWriteMode enum. */
+export type JsonColumnWriteMode = 'string' | 'document';
+
+/** The marker serializeRowsFlat appends to a field's `format` to select 'document' — read back by the
+ *  backend's MappingFieldFormat.ReadJsonWriteMode, which treats its absence as 'string'. */
+export const JSON_WRITE_MODE_DOCUMENT_MARKER = 'json=document';
+
+/** True when `row` is one the MongoDB "store as JSON string / as a JSON document" choice applies to: its
+ *  value reaches the destination as JSON text (a whole-node mapping, or any Json-typed source field), so
+ *  there is something to either keep as text or expand into a real sub-document.
+ *
+ *  A row already carrying an explicit jsonWriteMode counts too, whatever its sources currently declare:
+ *  only a Json-valued row can ever have been given one, and a row rebuilt from the Mapping JSON summary
+ *  comes back with no source valueType at all (sourceRefFromPath doesn't round-trip it), so without this
+ *  a restored 'value' row would drop the user's choice the next time it was saved. */
+export function supportsJsonWriteMode(row: MappingRow): boolean {
+  // A join's value is `string.Join(delimiter, pieces)` on the backend (JsonMappingEngine.ResolveJoinedFields)
+  // — a delimited string by construction, never a JSON document, whatever its first source's own type says.
+  // Checked before everything else so a single-source Json row that later gains a second source stops
+  // offering (and stops sending) a choice that could no longer mean anything.
+  if (row.sources.length > 1) return false;
+  return effectiveMappingValueType(row) === 'Json' || row.jsonWriteMode !== undefined;
+}
+
+/** The JSON write mode a backend field's `format` marker bag selects — the client-side mirror of the
+ *  backend's MappingFieldFormat.ReadJsonWriteMode, and deliberately the same substring test rather than an
+ *  equality check: `format` carries a ';'-separated BAG of markers, so the real stored values include
+ *  "json=document" alone AND compound forms like "wholeNodeAsJson;json=document" (see
+ *  formatWithJsonWriteMode, which preserves whatever markers were already there, and
+ *  MappingImportService.BuildJsonPathAndFormat, which stamps the column-mode marker). Anything without the
+ *  marker — a null/blank format included — is 'string'.
+ *
+ *  Matches whole ';'-separated SEGMENTS, not a raw substring of the joined value, mirroring the backend's
+ *  ReadJsonWriteMode and JsonMappingEngine.ParseDelimiter. A segment can carry arbitrary user text — a
+ *  "joinedFields;delimiter=X" field takes everything after the first '=' as its delimiter — so a substring
+ *  test would let a delimiter of "json=document" flip an unrelated column into document storage. */
+export function jsonWriteModeFromFormat(format: string | null | undefined): JsonColumnWriteMode {
+  return (format ?? '')
+    .split(';')
+    .some(segment => segment.trim().toLowerCase() === JSON_WRITE_MODE_DOCUMENT_MARKER)
+    ? 'document'
+    : 'string';
+}
+
+/** `row`'s effective JSON write mode, defaulting to today's behaviour ('string') for every row that has
+ *  never made the choice. */
+export function resolveJsonWriteMode(row: MappingRow): JsonColumnWriteMode {
+  return row.jsonWriteMode === 'document' ? 'document' : 'string';
+}
+
+/** The `format` value carrying `mode`, preserving whatever other markers `format` already held (e.g. the
+ *  "wholeNodeAsJson"/"aggregate=csv" column-mode markers the mapping-profiles import path stamps).
+ *  Returns undefined when there is nothing to record — a 'string' row with no pre-existing format keeps
+ *  sending no `format` at all, exactly as before this option existed. */
+export function formatWithJsonWriteMode(
+  format: string | null | undefined,
+  mode: JsonColumnWriteMode,
+): string | undefined {
+  const base = (format ?? '')
+    .split(';')
+    .map(part => part.trim())
+    .filter(part => part.length > 0 && !/^json=/i.test(part));
+
+  if (mode === 'document') base.push(JSON_WRITE_MODE_DOCUMENT_MARKER);
+  return base.length > 0 ? base.join(';') : undefined;
 }
 
 /** The legacy flat shape already round-tripped through node.fields['dest_mappings']. */
@@ -357,7 +433,9 @@ export function serializeRowsFlat(
     // its own child-table row per item (the isChildTable override above), so neither must survive that
     // override.
     const survivesChildTableOverride = arrayPolicy === resolvedPolicy.arrayPolicy;
-    const format = survivesChildTableOverride ? resolvedPolicy.format : undefined;
+    // The array-instance marker (aggregate=csv / index=N), dropped when the field is instead fanned out
+    // into its own child-table row per item — see survivesChildTableOverride above.
+    const instanceFormat = survivesChildTableOverride ? resolvedPolicy.format : undefined;
     const correlationSiblingField = survivesChildTableOverride ? resolvedPolicy.correlationSiblingField : undefined;
     const correlationCodeValue = survivesChildTableOverride ? resolvedPolicy.correlationCodeValue : undefined;
     const correlationOperator = survivesChildTableOverride ? resolvedPolicy.correlationOperator : undefined;
@@ -385,6 +463,21 @@ export function serializeRowsFlat(
     const targetColumn = targetTable?.columns.find(c => c.name === row.targetName);
     const isRequired = row.isRequired ?? (targetColumn?.isNullable === false ? true : undefined);
     const isDefault = row.mode === 'default';
+    // The MongoDB "store this JSON as a real sub-document, not as escaped text" choice rides the same
+    // `format` marker channel the mapping-profiles import path already uses for column-mode markers, so it
+    // needs no new field anywhere on the wire (see formatWithJsonWriteMode / the backend's
+    // MappingFieldFormat). A row that never made the choice — i.e. every row saved before this existed, and
+    // every row on a non-Mongo destination — produces undefined here and so sends no `format` at all,
+    // leaving the request byte-for-byte what it was. Strictly additive for that reason: this is the only
+    // condition under which serializeRowsFlat has ever emitted `format`.
+    const isDocumentJson = supportsJsonWriteMode(row) && resolveJsonWriteMode(row) === 'document';
+    // Both markers ride the SAME ';'-separated bag, so the document choice is APPENDED to whatever the
+    // instance selection already put there (formatWithJsonWriteMode preserves existing markers — see its
+    // own doc comment) rather than replacing it. Falls back to the row's stored format when the instance
+    // selection derived none, which is what this branch did before the marker channel gained a second user.
+    const format = isDocumentJson
+      ? formatWithJsonWriteMode(instanceFormat ?? row.format, 'document')
+      : instanceFormat;
     return {
       resource: row.resource,
       // A default column has no real source field — the token itself (e.g. "@now") stands in as both the
@@ -394,12 +487,26 @@ export function serializeRowsFlat(
       path: isDefault ? (row.defaultToken ?? '@default') : (primary?.fhirPath ?? row.childNodeId ?? ''),
       target: targetTableName,
       column: row.targetName,
-      jsonPath: isDefault ? (row.defaultToken ?? '@default') : primary?.jsonPath,
-      valueType: isDefault ? row.defaultValueType : (arrayPolicy === 'StoreJson' ? 'Json' : primary?.valueType),
+      jsonPath: isDefault
+        ? (row.defaultToken ?? '@default')
+        : (primary?.jsonPath ?? wholeNodeJsonPath(row)),
+      // `isDocumentJson` rather than `format`: emitting the document marker and declaring anything but
+      // Json would be self-contradictory, and the backend reads BOTH —
+      // MappedMongoDestinationWriter.ResolveDocumentJsonColumns only honours the marker on a ValueType=Json
+      // field, and JsonMappingEngine.ConvertElement only hands the value through as raw JSON text for that
+      // same type. This matters for a row rebuilt from the Mapping JSON summary, which doesn't round-trip a
+      // source's valueType (sourceRefFromPath): such a row still carries the user's 'document' choice but
+      // would otherwise fall back to the assembler's path-guessed 'String', silently downgrading to escaped
+      // text while the UI kept showing "JSON document". Deliberately NOT keyed off `format` being set at all,
+      // which would now also catch an instance marker (aggregate=csv / index=N) on a plain String column.
+      valueType: isDefault
+        ? row.defaultValueType
+        : (isDocumentJson ? 'Json' : effectiveMappingValueType(row)),
       arrays: primary?.arrays,
       arrayPolicy,
       approximated,
       isUpsertKey,
+      ...(format ? { format } : {}),
       ...(isRequired ? { isRequired: true } : {}),
       // Previously dropped here even though MappingRow already carried it (see its own doc comment) — every
       // caller downstream (workflow-build-assembler.service.ts's MappingFieldRequest.defaultValue,
@@ -453,6 +560,69 @@ export interface ArrayPolicyResolution {
 }
 
 /**
+ * What an absent `instance` means, which differs by row shape. A 'value' row defaults to the first item
+ * (see migrateLegacyRow's own comment — anything else would silently re-point already-provisioned
+ * pipelines), but a 'childJson' row has always stored the node in FULL, so its unset default is 'all'.
+ * Getting that backwards would turn every existing whole-node mapping into a first-item-only one.
+ */
+export function defaultInstanceType(row: MappingRow): MappingInstanceSelection['type'] {
+  return row.mode === 'childJson' ? 'all' : 'first';
+}
+
+/**
+ * The array index a whole-node (childJson) row's instance selection resolves to, or null for "the whole
+ * node, every instance" — which is what 'all' and an unset selection both mean here. Unlike a scalar row,
+ * where the instance is expressed through ArrayPolicy, this becomes a literal index in the JsonPath
+ * (JsonMappingEngine.ParseSegment accepts one), so 'nth' is exact rather than approximated. 'criteria' has
+ * no engine-side predicate support and falls back to the first instance — resolveArrayPolicy flags that as
+ * approximated so the popover's ⚠ caveat explains it.
+ */
+export function wholeNodeInstanceIndex(instance: MappingInstanceSelection | undefined): number | null {
+  switch (instance?.type) {
+    case 'first': return 0;
+    // `n` is 1-based in the UI ("Instance #1" is the first), 0-based in the path.
+    case 'nth': return Math.max(1, Math.floor(instance.n ?? 1)) - 1;
+    default: return null;
+  }
+}
+
+/**
+ * The "[?field op value]" filter for a "Match criteria" selection — the wire form JsonMappingEngine's
+ * ResolveAll matches array elements with. Null for every other selection, and for a criteria selection that
+ * names no field yet (a half-filled form selects nothing rather than silently selecting everything).
+ *
+ * The value is NOT quoted or escaped: the engine splits this token on the first operator and takes the rest
+ * verbatim, so a value containing "]" would truncate the path. Nothing in the UI restricts that today — worth
+ * knowing, though a FHIR code/system/use is the realistic input here.
+ */
+export function instanceCriteriaPredicate(instance: MappingInstanceSelection | undefined): string | null {
+  if (instance?.type !== 'criteria') return null;
+  const field = instance.field?.trim();
+  if (!field) return null;
+  const op = instance.op === '!=' ? '!=' : instance.op === 'contains' ? '~' : '=';
+  return `?${field}${op}${instance.value?.trim() ?? ''}`;
+}
+
+/**
+ * The explicit JsonPath a whole-node row needs when it must read ONE instance rather than the whole node,
+ * or undefined to let workflow-build-assembler-v2's toJsonPath derive the plain node path as before.
+ * Undefined for the resource's own root node too: the root of a FHIR resource is an object, never a
+ * repeating element, so there is no instance of it to index.
+ */
+export function wholeNodeJsonPath(row: MappingRow): string | undefined {
+  if (row.mode !== 'childJson' || !row.childNodeId) return undefined;
+  const index = wholeNodeInstanceIndex(row.instance);
+  const predicate = instanceCriteriaPredicate(row.instance);
+  const selector = predicate ?? (index === null ? null : `${index}`);
+  if (selector === null) return undefined;
+  const bare = row.childNodeId.startsWith(`${row.resource}.`)
+    ? row.childNodeId.slice(row.resource.length + 1)
+    : row.childNodeId;
+  return bare && bare !== row.resource ? `$.${bare}[${selector}]` : undefined;
+}
+
+
+/**
  * Single source of truth for translating a MappingRow's join/instance-selection UI state into the
  * backend's ArrayPolicy enum (Scalar | FirstItem | RepeatParent | SeparateDestination | StoreJson |
  * RejectIfMultiple — only the first four have a UI entry point in this feature; the remaining two are
@@ -460,6 +630,10 @@ export interface ArrayPolicyResolution {
  */
 export function resolveArrayPolicy(row: MappingRow): ArrayPolicyResolution {
   if (row.mode === 'childJson') {
+    // Always StoreJson: the value is written as JSON text whichever instance it came from. WHICH instance
+    // is carried by the JsonPath instead (see wholeNodeJsonPath) — an index, or a "[?field=value]" filter,
+    // both of which the engine's own ResolveAll understands — rather than by the policy enum, which has no
+    // "the nth one, as JSON" member.
     return { arrayPolicy: 'StoreJson', approximated: false };
   }
   if (row.mode === 'default') {
@@ -630,10 +804,19 @@ export function isJsonSafeForColumn(
  *   Integer for an age calculation, String -> Json for a parsed name, etc.) always failed this check,
  *   even though the transform makes the raw-type mismatch irrelevant.
  */
+/** Node types whose output type the author actually controls through a config field the rule popover
+ *  renders, so "fix the rule's Expected output type" names something they can reach: NumberCast and
+ *  DateTimeFormat via "targetType", and DateMathAge via "operation" ("add"/"shift" declare Date, "age"
+ *  declares Integer — see FieldMappingJoinPopoverComponent.resolveExpectedValueType, which is the authority
+ *  on this list). Every other node type's output is fixed by the node itself (TransformNodeTypeDefaults), so
+ *  the same advice would send its author looking for a control that does not exist on that rule. */
+const OUTPUT_TYPE_OVERRIDABLE_NODE_TYPES = new Set(['NumberCast', 'DateTimeFormat', 'DateMathAge']);
+
 export function checkColumnTypeCompatibility(
   row: MappingRow,
   column: { dataType: string; mappingValueType?: string; maxLength?: number | null } | undefined,
   ruleExpectedType?: string | null,
+  ruleNodeType?: string | null,
 ): string | null {
   if (!column?.mappingValueType) return null;
 
@@ -645,10 +828,22 @@ export function checkColumnTypeCompatibility(
     ) {
       return null;
     }
+    const lead =
+      `"${row.targetName}" on ${row.tableName} is a ${column.dataType} column ` +
+      `(expects ${column.mappingValueType}), but its transformation rule outputs ${ruleExpectedType}`;
+
+    // Only offer "change the rule's output type" when the rule actually has that control. For a fixed-output
+    // node (Quantity/Range Assembly, CodeableConcept Builder, ...) the only real remedy is the column, and
+    // naming a column type that works beats naming a category the author has to decode.
+    if (ruleNodeType && !OUTPUT_TYPE_OVERRIDABLE_NODE_TYPES.has(ruleNodeType)) {
+      return (
+        `${lead}, which ${ruleNodeType} always does — retarget it to a column that accepts ` +
+        `${ruleExpectedType}${ruleExpectedType.toLowerCase() === 'json' ? ' (a text column, or a character varying with no length limit)' : ''}.`
+      );
+    }
+
     return (
-      `"${row.targetName}" on ${row.tableName} is a ${column.dataType} column (expects ${column.mappingValueType}), ` +
-      `but its transformation rule declares an output type of ${ruleExpectedType} — fix the rule's Expected ` +
-      `output type, or retarget to a ${ruleExpectedType}-compatible column.`
+      `${lead} — fix the rule's Expected output type, or retarget to a ${ruleExpectedType}-compatible column.`
     );
   }
 

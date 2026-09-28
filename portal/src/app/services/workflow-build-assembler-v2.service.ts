@@ -1136,7 +1136,10 @@ export class WorkflowBuildAssemblerServiceV2 {
             'dest_requireSsl',
           ]
         : kind === 'mongo'
-          ? ['dest_name', 'dest_collection', 'dest_writeMode', 'dest_createCollectionIfNotExists']
+          // No dest_collection / dest_createCollectionIfNotExists: the Mongo form no longer offers either.
+          // Which collection a resource writes to is a per-resource mapping-canvas choice (this branch
+          // already sends target: null so those win), and a missing collection is always created.
+          ? ['dest_name', 'dest_writeMode']
           : kind === 'medplum'
             ? [
                 'dest_name',
@@ -1608,7 +1611,10 @@ export class WorkflowBuildAssemblerServiceV2 {
     const missing = arrays
       .map(a => (a.startsWith(`${resource}.`) ? a.slice(resource.length + 1) : a))
       .map(a => a.replace(/\[\*\]/g, '').trim())
-      .filter(a => a.length > 0 && !jsonPath.includes(`${a}[*]`));
+      // "[?field=value]" addresses that ancestor just as deliberately as "[*]" does — it selects the repeats
+      // matching the mapping's own criteria rather than all of them — so a filtered ancestor is intact, not
+      // missing. Without this every "Match criteria" mapping warns that it resolves to nothing.
+      .filter(a => a.length > 0 && !jsonPath.includes(`${a}[*]`) && !jsonPath.includes(`${a}[?`));
     if (missing.length > 0) {
       console.warn(
         `[mapping] ${resource}.${column}: jsonPath "${jsonPath}" does not wildcard its array ancestor(s) ` +

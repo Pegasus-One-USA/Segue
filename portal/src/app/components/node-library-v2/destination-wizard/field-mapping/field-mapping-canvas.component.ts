@@ -7,6 +7,7 @@ import { canQueueAddColumn, describeCreateTableConflict, describeLiveCreateTable
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
 import { MappingSuggestion, suggestMappings } from './field-mapping-automap.util';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
+import { TransformationRulesService } from './transformation-rules.service';
 import { FieldMappingSourceTreeComponent } from './field-mapping-source-tree.component';
 import { FieldMappingTargetCardComponent } from './field-mapping-target-card.component';
 import { FieldMappingWiresComponent, FmTempWire } from './field-mapping-wires.component';
@@ -21,7 +22,7 @@ import { FieldMappingLoadPayloadModalComponent } from './field-mapping-load-payl
 import { FieldMappingDefaultValueModalComponent, FmDefaultValueSubmit } from './field-mapping-default-value-modal.component';
 import { FieldMappingLoadDestinationPayloadModalComponent } from './field-mapping-load-destination-payload-modal.component';
 import { parseSourcePayloadJson, reconstructPayloadJsonFor, parseDestinationPayloadJson } from './field-mapping-payload.util';
-import { ChildTableRelation } from './field-mapping-summary.model';
+import { ChildTableRelation, nearestArrayGroupId } from './field-mapping-summary.model';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationColumn, DestinationTable, DestinationProbeRequest, DestinationSchemaService } from '../../../../services/destination-schema.service';
 import { DestinationTypeV2 as DestinationType, DeIdentificationProfileDto } from '../../../../models/destination-configuration-v2.model';
@@ -95,6 +96,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   // the exact same singleton service (providedIn: 'root') and the exact same schema-preview endpoint the
   // Step 1 connection-test flow already calls — not a new/duplicate table-existence API.
   private readonly schemaSvc = inject(DestinationSchemaService);
+  private readonly rulesService = inject(TransformationRulesService);
   private readonly canvasInner = viewChild.required<ElementRef<HTMLElement>>('canvasInner');
   private readonly viewport = viewChild.required<ElementRef<HTMLElement>>('viewport');
   // Not .required — only rendered while addTableMenuOpen() is true (see toggleAddTableMenu, which
@@ -429,7 +431,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     const result = suggestMappings(this.forest(), this.mappingRows(), this.targetByResource(), columnsForResource);
 
     if (result.autoMapped.length) {
-      this.mappingRowsChange.emit([...this.mappingRows(), ...result.autoMapped]);
+      this.commitRows([...this.mappingRows(), ...result.autoMapped]);
     }
     this.rawSuggestions.set(result.suggestions);
 
@@ -448,7 +450,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       s => s.row.resource === e.resource && s.row.tableName === e.tableName && s.row.targetName === e.targetName,
     );
     if (!match) return;
-    this.mappingRowsChange.emit([...this.mappingRows(), match.row]);
+    this.commitRows([...this.mappingRows(), match.row]);
     this.rawSuggestions.update(list => list.filter(s => s !== match));
     this.toast.success('Suggestion accepted', `${match.row.sources[0]?.label ?? ''} → ${e.targetName}`);
   }
@@ -815,7 +817,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       ...m,
       [key]: (m[key] ?? []).map(c => (c === oldName ? trimmed : c)),
     }));
-    this.mappingRowsChange.emit(this.mappingRows().map(r =>
+    this.commitRowsPreservingRules(this.mappingRows().map(r =>
       r.resource === resource && r.tableName === tableName && r.targetName === oldName
         ? { ...r, targetName: trimmed }
         : r
@@ -932,8 +934,8 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   /** Whether the "+ Add a table" slot should render the searchable-list UI (vs. SQL's plain "+ Create a
    *  new table…" @else branch, or nothing at all). Deliberately separate from the hasSqlTables INPUT —
    *  that one also drives isPrimaryTargetValid's "primary target must be a known table" gate below, which
-   *  must stay false for Mongo (a not-yet-created collection is a valid primary target, paired with
-   *  "Create collection if not exists" on the destination). Mongo always gets the searchable UI regardless
+   *  must stay false for Mongo (a not-yet-created collection is a valid primary target — the writer creates
+   *  a missing one on its first write). Mongo always gets the searchable UI regardless
    *  of hasSqlTables()/whether any collections were loaded yet, since its own "type a new collection name"
    *  option (see the template) needs the search box open even against a brand-new, empty database. */
   showAddTablePicker(): boolean {
@@ -1222,7 +1224,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       this.targetByResourceChange.emit({ ...this.targetByResource(), [resource]: trimmed });
     }
 
-    this.mappingRowsChange.emit(
+    this.commitRows(
       this.mappingRows().map(r =>
         r.resource === resource && r.tableName === oldName ? { ...r, tableName: trimmed } : r,
       ),
@@ -1253,7 +1255,14 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       // Unlike extraTablesChange, the parent's targetByResourceChange handler is a bare signal.set() with
       // no cleanup of its own, so this table's mappings are discarded here before clearing the target —
       // otherwise they'd silently survive, orphaned against a target the resource no longer points at.
-      this.mappingRowsChange.emit(
+      //
+      // Rules are NOT reconciled here, for the same reason "Reset to Original" does not: removing a table is
+      // local and undoable — the rows go from an in-memory list and the queued schema op is cancelled, all of
+      // it discarded if the wizard is closed without saving. Routing this through the reconciling path turned
+      // it into an immediate, irreversible bulk DELETE of every rule for the table, which is the largest
+      // blast radius on this screen and the least expected: nothing about "remove this table" says the
+      // author's transformation rules should stop existing before they have saved anything.
+      this.commitRowsPreservingRules(
         this.mappingRows().filter(r => !(r.resource === resource && r.tableName === tableName)),
       );
       this.targetByResourceChange.emit({ ...this.targetByResource(), [resource]: '' });
@@ -1565,13 +1574,31 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     return reconstructPayloadJsonFor(resource, this.defaultAvailableFields()(resource));
   }
 
-  /** Drops every existing mapping for `resource` — used by both submitLoadPayload (a genuinely new
-   *  payload shape just replaced this resource's fields; any row still pointing at the old shape's
-   *  fhirPaths would be silently dangling) and onResetToOriginalPayload (the Load JSON Payload modal's
-   *  own "Reset to Original", which clears the same way even though nothing was actually re-parsed here).
-   *  Every OTHER resource's rows are left completely untouched, same as removeRow's own identity filter. */
-  private clearMappingsForResource(resource: string): void {
-    this.mappingRowsChange.emit(this.mappingRows().filter(r => r.resource !== resource));
+  /**
+   * Drops every existing mapping for `resource`. Every OTHER resource's rows are left completely untouched,
+   * same as removeRow's own identity filter.
+   *
+   * `deleteOrphanedRules` is the difference between the two callers, and it is not a detail. Clearing rows is
+   * local and reversible — they live in memory until Save — but deleting a rule is an immediate server-side
+   * DELETE with no undo, so the two must not be assumed to travel together:
+   *
+   *  - submitLoadPayload (true): a genuinely new payload shape just replaced this resource's fields, so the
+   *    old fhirPaths are gone and rules keyed on them are dead by construction.
+   *  - onResetToOriginalPayload (false): an UNDO button. Destroying server-side rules is the opposite of what
+   *    "reset my local changes" means, and an author who resets an experiment then abandons the wizard would
+   *    keep their (never-saved) mappings and silently lose every rule for the resource. The cost is that
+   *    saving after a reset leaves those rules orphaned — recoverable, and strictly better than destroying
+   *    work that cannot be recovered. Deferring ALL rule deletion to Save is the real fix and is tracked
+   *    separately; this is the narrow version of it that matters most.
+   */
+  private clearMappingsForResource(resource: string, deleteOrphanedRules: boolean): void {
+    const remaining = this.mappingRows().filter(r => r.resource !== resource);
+    if (deleteOrphanedRules) {
+      this.commitRows(remaining);
+      return;
+    }
+
+    this.commitRowsPreservingRules(remaining);
   }
 
   submitLoadPayload(raw: string): void {
@@ -1585,15 +1612,18 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     }
 
     this.sourcePayloadLoaded.emit({ resource, fields: result.fields });
-    this.clearMappingsForResource(resource);
+    this.clearMappingsForResource(resource, true);
     this.loadPayloadOpen.set(false);
     this.loadPayloadError.set(null);
     const count = `${result.fields.length} field${result.fields.length === 1 ? '' : 's'}`;
+    // Says "and their transformation rules" because that is what actually happened, server-side and without
+    // an undo. A message naming only the mappings understated it: those are still in memory until Save, the
+    // rules are already gone.
     this.toast.success(
       'Payload loaded',
       result.declaredResourceType
-        ? `${count} found (pasted JSON declares resourceType "${result.declaredResourceType}") — previous mappings for ${resource} were cleared.`
-        : `${count} found in the pasted ${resource} JSON — previous mappings for ${resource} were cleared.`,
+        ? `${count} found (pasted JSON declares resourceType "${result.declaredResourceType}") — previous mappings for ${resource} and their transformation rules were cleared.`
+        : `${count} found in the pasted ${resource} JSON — previous mappings for ${resource} and their transformation rules were cleared.`,
     );
   }
 
@@ -1607,10 +1637,15 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   onResetToOriginalPayload(): void {
     const resource = this.resources()[0];
     if (!resource) return;
-    this.clearMappingsForResource(resource);
+    // false: everything this button does is local and undoable — the rows are in memory until Save and the
+    // source tree just reverts. Deleting server-side rules here would make an UNDO the single most
+    // destructive action on the screen.
+    this.clearMappingsForResource(resource, false);
     this.sourcePayloadReset.emit(resource);
     this.loadPayloadError.set(null);
-    this.toast.info('Reset to original', `Mappings for ${resource} were cleared.`);
+    this.toast.info(
+      'Reset to original',
+      `Mappings for ${resource} were cleared. Transformation rules are untouched — save to apply, or close without saving to keep everything as it was.`);
   }
 
   // ── load destination payload (paste the target system's own JSON body, rebuild this card's column
@@ -1654,7 +1689,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     const rowsBefore = this.mappingRows();
     const droppedCount = rowsBefore.filter(
       r => r.resource === resource && r.tableName === tableName && !newColumnSet.has(r.targetName)).length;
-    this.mappingRowsChange.emit(
+    this.commitRows(
       rowsBefore.filter(r => !(r.resource === resource && r.tableName === tableName) || newColumnSet.has(r.targetName)));
     this.destinationTemplateGenerated.emit({ resource, templateJson: result.templateJson });
 
@@ -1838,13 +1873,159 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   private replaceRow(resource: string, tableName: string, column: string, row: MappingRow): void {
     const rows = this.mappingRows().filter(r => !(r.resource === resource && r.tableName === tableName && r.targetName === column));
     rows.push(row);
-    this.mappingRowsChange.emit(rows);
+    this.commitRows(rows);
   }
 
   removeRow(resource: string, tableName: string, column: string): void {
-    this.mappingRowsChange.emit(
+    this.commitRows(
       this.mappingRows().filter(r => !(r.resource === resource && r.tableName === tableName && r.targetName === column)),
     );
+  }
+
+  /**
+   * The ONE way this component publishes a new set of mapping rows. Everything that adds, removes, replaces
+   * or edits a row goes through here, and rule cleanup is derived from the before/after diff rather than
+   * asked of each caller.
+   *
+   * That inversion is the point. Cleanup used to be the caller's job, and the list of callers that remembered
+   * was documented as complete three separate times while it was not: removeRow, then clearMappingsForResource,
+   * then replaceRow — and updateRow, the target-clear at onRemoveTable, and the column-pruning in
+   * loadDestinationPayload all still dropped a rule's key with no cleanup at all. The invariant was also
+   * written down wrongly, as "any path that DROPS a row", when what actually strands a rule is any path that
+   * drops its KEY — and updateRow never drops a row, it edits one in place. Removing the first chip of a
+   * two-source join, or reordering the chips, promotes sources[1] into sources[0] and rekeys the mapping
+   * without touching the row count at all.
+   *
+   * Diffing keys instead of enumerating callers makes every one of those correct at once, and a path added
+   * later cannot forget: if a key present before is absent after, its rule goes, and no caller had to know.
+   * It also subsumes replaceRow's old hand-written condition for free — joining a second source leaves
+   * sources[0] intact, so the key survives the diff and the rule is never a candidate.
+   *
+   * A vanished key is NOT on its own enough to condemn every rule the lookup returns, which is why the
+   * column is checked separately below. GetWorkflowScopedAsync matches `x.SourceField == null` against any
+   * source field asked for, so a Workflow rule authored without one — routine, since the rule popover only
+   * stores a source field when the author narrows to a specific one — comes back for every query. Such a
+   * rule is bound to the COLUMN, not to a source, so re-pointing or reordering the sources under it leaves
+   * it perfectly applicable, and deleting it there destroys a rule that still has a mapping.
+   */
+  private commitRows(next: MappingRow[]): void {
+    const previous = this.mappingRows();
+    this.mappingRowsChange.emit(next);
+
+    const liveKeys = new Set(next.map(row => FieldMappingCanvasComponent.ruleKeyOf(row)));
+    // Columns still mapped by SOMETHING after this edit, regardless of which source now feeds them.
+    const liveColumns = new Set(next.map(row => FieldMappingCanvasComponent.columnKeyOf(row)));
+    const alreadyHandled = new Set<string>();
+    for (const row of previous) {
+      const key = FieldMappingCanvasComponent.ruleKeyOf(row);
+      if (liveKeys.has(key) || alreadyHandled.has(key)) continue;
+      alreadyHandled.add(key);
+      // Only once the column itself is unmapped is a source-agnostic rule genuinely stranded.
+      const columnUnmapped = !liveColumns.has(FieldMappingCanvasComponent.columnKeyOf(row));
+      this.deleteRuleForRemovedRow(row, columnUnmapped);
+    }
+  }
+
+  /**
+   * Publishes rows WITHOUT the rule cleanup above — for the one edit where a vanished key does not mean a
+   * stranded rule: renaming a destination column.
+   *
+   * A rename changes targetName, which is half the rule's key, so the diff would see the old key vanish and
+   * delete a rule the author still wants — destroying their work for renaming a column, which is strictly
+   * worse than the orphan it would be avoiding. The rule should MOVE instead (the rules service's save()
+   * takes an optional id, so re-saving with the new destinationField would do it); that is deliberately not
+   * attempted here, so a rename leaves the rule under the old column name exactly as it did before this
+   * component cleaned up anything. Called from one place, and new callers should be treated with suspicion.
+   */
+  private commitRowsPreservingRules(next: MappingRow[]): void {
+    this.mappingRowsChange.emit(next);
+  }
+
+  /** The column a rule is bound to when it names no source field of its own — (resource, destination field).
+   *  Whether this survives an edit is what separates "this rule lost its mapping" from "this rule's mapping
+   *  changed which source feeds it", which the rule key alone cannot tell apart. */
+  private static columnKeyOf(row: MappingRow): string {
+    return JSON.stringify([row.resource, row.targetName]);
+  }
+
+  /** A rule is resolved by (resource, destination field, source field) — NOT by the mapping row — so this is
+   *  the identity that decides whether a rule still has a mapping. Note tableName is deliberately absent: it
+   *  is not part of what the server matches on, so two rows differing only by table share one key and one
+   *  rule. Mirrors the filter deleteRuleForRemovedRow sends.
+   *
+   *  JSON rather than a delimiter-joined string so no value can forge a key boundary — a column or FHIR path
+   *  containing the delimiter would otherwise collide two distinct mappings onto one key and delete the wrong
+   *  rule. */
+  private static ruleKeyOf(row: MappingRow): string {
+    return JSON.stringify([row.resource, row.targetName, row.sources[0]?.fhirPath ?? null]);
+  }
+
+  /** Deletes the transformation rule a removed mapping owned. Rules live server-side and are keyed by
+   *  (resource, destination field, source field) — NOT by the mapping row — so dropping the row alone left
+   *  the rule behind, still resolvable. The consequence is worse than clutter: recreate a mapping onto the
+   *  same column later and that orphan silently re-attaches, transforming a field nobody asked it to.
+   *
+   *  Called from ONE place: commitRows, when a rule key present before an edit is absent after it. Earlier
+   *  versions of this comment listed the callers that were expected to invoke it by hand, and were wrong
+   *  every time — not because callers were careless, but because the invariant was written down as "any path
+   *  that drops a row" when what strands a rule is any path that drops its KEY. Editing a row in place can do
+   *  that without changing the row count at all. Do not call this directly; publish rows through commitRows
+   *  and the diff decides.
+   *
+   *  workflowScopedOnly is what makes this safe to do automatically: it restricts the lookup to a rule
+   *  authored against THIS workflow, so a Global/ResourceType-scope rule shared with other pipelines is
+   *  never touched — exactly the scoping the popover uses to decide what "Remove transformation" may
+   *  delete. Failures are deliberately silent: the row is already gone from the canvas, and a toast about
+   *  a rule the author never saw would be noise.
+   *
+   *  `columnUnmapped` says whether the destination column still has ANY mapping after the edit, and it is
+   *  what keeps a source-agnostic rule alive. The lookup cannot make that distinction on its own:
+   *  GetWorkflowScopedAsync treats a stored `SourceField == null` as matching whatever source field was
+   *  asked for, so a rule authored without one — the common case, since the popover only records a source
+   *  field when the author narrows to one — is returned by every query. That rule belongs to the COLUMN,
+   *  so re-pointing the column at a different field, or reordering the sources of a join, leaves it exactly
+   *  as applicable as before; only the column losing its mapping altogether strands it. */
+  private deleteRuleForRemovedRow(row: MappingRow, columnUnmapped: boolean): void {
+    const destinationType = this.rulesDestinationType();
+    const workflowId = this.workflowId();
+    // With no workflow id there is no way to prove any rule belongs to THIS pipeline, so nothing is deleted.
+    if (!destinationType || !workflowId) return;
+
+    this.rulesService
+      .getEffectiveRules({
+        destinationType,
+        resourceType: row.resource,
+        destinationField: row.targetName,
+        sourceField: row.sources[0]?.fhirPath ?? null,
+        resourcePipelineRouteId: workflowId,
+        workflowScopedOnly: true,
+        // NOT includePending. workflowScopedOnly does NOT scope the pending tier: a rule authored before its
+        // workflow's first save has ResourcePipelineRouteId == null, and GetPendingWorkflowScopedAsync matches
+        // on (destination type, resource, field, source field) with no workflow id in the predicate at all —
+        // by construction, since there is no route to key on yet. Asking for pending rows here would let
+        // deleting a mapping in one pipeline hard-delete an unsaved draft rule belonging to a different one.
+        // The cost is that a rule authored on a never-yet-saved workflow outlives its mapping; that is a far
+        // better failure than destroying someone else's work, and re-saving the mapping re-attaches it.
+      })
+      .subscribe({
+        // Belt and braces over the server-side scoping: only delete a rule this workflow demonstrably OWNS.
+        // A Global/ResourceType-scope rule, or one attached to another route, is never a candidate.
+        next: rules => rules
+          .filter(rule => rule.resourcePipelineRouteId === workflowId)
+          // A rule that names no source field is bound to the column, and the server returned it only
+          // because a null SourceField matches anything. It survives unless the column itself is now
+          // unmapped — otherwise reordering a join's chips would destroy a rule that still applies.
+          .filter(rule => rule.sourceField ? true : columnUnmapped)
+          .forEach(rule => this.rulesService.delete(rule.id).subscribe({
+            // Deliberately silent: the row is already gone from the canvas, so a toast about a rule the
+            // author never saw is noise. A failed delete leaves an orphan, which re-saving the mapping
+            // re-attaches — the same end state as before this cleanup existed.
+            error: () => { /* swallowed by design — see above */ },
+          })),
+        // Same reasoning for the lookup itself: if we cannot enumerate the rules, there is nothing
+        // actionable to tell the author about a mapping they have already removed.
+        error: () => { /* swallowed by design — see above */ },
+      });
   }
 
   /** "All records" without combining (RepeatParent) duplicates the entire destination row once per array
@@ -1860,9 +2041,14 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     return { ...row, instance: { ...row.instance, aggregate: 'csv' } };
   }
 
+  /** Edits a row in place. It never changes the row COUNT, which is exactly why its rule cleanup went missing
+   *  for so long — but the join popover can rekey a mapping through here without removing anything: deleting
+   *  the first chip of a two-source join, or reordering the chips, promotes sources[1] into sources[0], and
+   *  onPopoverSave's focused branch drops the focused source the same way. commitRows compares keys rather
+   *  than row counts, so all three are handled without this method knowing anything about rules. */
   updateRow(updated: MappingRow): void {
     const normalized = this.withForcedAggregate(updated);
-    this.mappingRowsChange.emit(
+    this.commitRows(
       this.mappingRows().map(r =>
         (r.resource === normalized.resource && r.tableName === normalized.tableName && r.targetName === normalized.targetName) ? normalized : r,
       ),
@@ -1880,7 +2066,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     const target = this.rowForColumnFn(resource, tableName, column);
     if (!target) return;
     const turningOn = !target.isUpsertKey;
-    this.mappingRowsChange.emit(
+    this.commitRows(
       this.mappingRows().map(r => {
         if (r.resource !== resource || r.tableName !== tableName) return r;
         if (r === target) return { ...r, isUpsertKey: turningOn };
@@ -1915,6 +2101,21 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     if (!row || !focus || row.mode !== 'value' || row.sources.length <= 1) return row;
     const source = row.sources.find(s => s.fhirPath === focus);
     return source ? { ...row, sources: [source] } : row;
+  });
+
+  /**
+   * The repeating node a whole-node ('childJson') mapping actually reads, as a display label — the node
+   * itself when it is the array ("Name" for Patient.name), the nearest enclosing one when it is not
+   * ("Contact" for Patient.contact.name), and null when nothing on that path repeats, which is what hides
+   * the popover's instance picker. Resolved here because the source tree lives on this side and a
+   * childJson row carries no `sources` to read `arrays` metadata from; an ordinary field mapping needs no
+   * equivalent, since each of its sources carries its own array ancestry.
+   */
+  readonly popoverChildArrayLabel = computed<string | null>(() => {
+    const row = this.popoverDisplayRow();
+    if (!row || row.mode !== 'childJson' || !row.childNodeId) return null;
+    const arrayGroupId = nearestArrayGroupId(this.forest(), row.childNodeId);
+    return arrayGroupId ? (findNode(this.forest(), arrayGroupId)?.label ?? null) : null;
   });
 
   /** `e.sourceFhirPath` is the ACTUAL source the clicked wire was drawn for (FmWirePath.sourceFhirPath,
@@ -2184,7 +2385,7 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   }
 
   onListAddRow(row: MappingRow): void {
-    this.mappingRowsChange.emit([...this.mappingRows(), row]);
+    this.commitRows([...this.mappingRows(), row]);
   }
 
   onListRemoveRow(e: { resource: string; tableName: string; targetName: string }): void {
@@ -2251,7 +2452,17 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
       const sources = edited
         ? original.sources.map(s => (s.fhirPath === focus ? edited : s))
         : original.sources.filter(s => s.fhirPath !== focus);
-      this.updateRow({ ...original, instance: row.instance, referencesResource: row.referencesResource, sources });
+      // Deliberately NOT jsonWriteMode. supportsJsonWriteMode() is false for a join — the backend joins the
+      // pieces into a delimited string, never a JSON document — but the narrowed draft has exactly ONE source,
+      // so the check passes there and the popover offers the choice. Carrying it back would write a setting
+      // onto the real join that serializeRowsFlat then ignores, leaving the UI implying an effect it never
+      // had and a stray value that reappears every time that one connector line is reopened.
+      this.updateRow({
+        ...original,
+        instance: row.instance,
+        referencesResource: row.referencesResource,
+        sources,
+      });
       this.closePopover();
       return;
     }

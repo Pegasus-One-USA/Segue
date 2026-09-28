@@ -42,6 +42,27 @@ public sealed class EpicSourceConnectionScopeSyncServiceTests
         applicationType: ApplicationType.Backend,
         interactive: null);
 
+    private static SourceConnection MakeAthenaPatientSource(string[] scopes) => new(
+        "Athena Patient",
+        SourceSystemType.Athenahealth,
+        "https://api.preview.platform.athenahealth.com/fhir/r4",
+        new SourceAuthenticationConfiguration(AuthenticationType.None, "client-3", null, scopes, null, null, null),
+        applicationType: ApplicationType.Patient,
+        interactive: new SourceInteractiveConfiguration(["http://localhost:5000/api/v1/oauth/callback"], null, []));
+
+    private static WorkflowDefinition WorkflowWithAutoFetchDestination(
+        Guid sourceConnectionId, string destResources)
+    {
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "wf", 1);
+        workflow.AddNode(
+            "AthenahealthSourceNode", WorkflowNodeCategory.Source, rank: 0,
+            configurationJson: $$"""{"sourceConnectionId":"{{sourceConnectionId}}"}""");
+        workflow.AddNode(
+            "FhirRepositoryDestinationNode", WorkflowNodeCategory.Destination, rank: 30,
+            configurationJson: $$"""{"dest_resources":"{{destResources}}","dest_autoFetchMissingReferences":"true"}""");
+        return workflow;
+    }
+
     private static WorkflowDefinition WorkflowWithEpicSourceAndDestination(
         Guid sourceConnectionId, string destResources)
     {
@@ -178,5 +199,70 @@ public sealed class EpicSourceConnectionScopeSyncServiceTests
         changed.Should().ContainSingle().Which.Should().Be(driftedSource.Id);
         _configurationRepository.Verify(
             x => x.GetSourceConnectionAsync(backendSource.Id, It.IsAny<CancellationToken>()), Times.Never);
+    }
+    [Fact]
+    public async Task Patient_application_type_never_widens_to_reference_targets_even_with_auto_fetch_on()
+    {
+        // Regression: auto-fetch widening turned a Patient-only selection into
+        // patient/Organization.read + patient/Practitioner.read + patient/RelatedPerson.read
+        // (FhirReferenceTargets["Patient"]), which athenahealth rejects outright — access_denied
+        // "Policy evaluation failed" — because its policy evaluation is all-or-nothing per request.
+        var source = MakeAthenaPatientSource(["openid", "fhirUser", "offline_access", "launch/patient", "patient/Patient.read"]);
+
+        _configurationRepository.Setup(x => x.GetSourceConnectionAsync(source.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(source);
+        _configurationRepository
+            .Setup(x => x.UpdateSourceConnectionAsync(It.IsAny<SourceConnection>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _workflowStore.Setup(x => x.ListAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([WorkflowWithAutoFetchDestination(source.Id, "Patient")]);
+
+        var result = await Service().SyncAsync(source.Id, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result!.Should().BeEquivalentTo(["openid", "fhirUser", "offline_access", "launch/patient", "patient/Patient.read"]);
+        result.Should().NotContain(["patient/Organization.read", "patient/Practitioner.read", "patient/RelatedPerson.read"]);
+    }
+
+    [Fact]
+    public async Task Non_patient_application_types_still_widen_to_reference_targets_when_auto_fetch_is_on()
+    {
+        // The guard above is scoped to ApplicationType.Patient only — Provider Standalone keeps the widening it
+        // was built for, so auto-fetch can pull a referenced Organization/Practitioner without a 403.
+        var source = MakeSource(["openid", "fhirUser", "offline_access", "user/Patient.rs"]);
+
+        _configurationRepository.Setup(x => x.GetSourceConnectionAsync(source.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(source);
+        _configurationRepository
+            .Setup(x => x.UpdateSourceConnectionAsync(It.IsAny<SourceConnection>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _workflowStore.Setup(x => x.ListAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([WorkflowWithAutoFetchDestination(source.Id, "Patient")]);
+
+        var result = await Service().SyncAsync(source.Id, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result!.Should().Contain(["user/Patient.rs", "user/Organization.rs", "user/Practitioner.rs", "user/RelatedPerson.rs"]);
+    }
+
+    [Fact]
+    public async Task Patient_application_type_keeps_every_resource_type_the_workflow_actually_selected()
+    {
+        // The guard drops only the speculative widening, never the operator's own selection.
+        var source = MakeAthenaPatientSource(["openid", "fhirUser", "offline_access", "launch/patient", "patient/Patient.read"]);
+
+        _configurationRepository.Setup(x => x.GetSourceConnectionAsync(source.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(source);
+        _configurationRepository
+            .Setup(x => x.UpdateSourceConnectionAsync(It.IsAny<SourceConnection>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _workflowStore.Setup(x => x.ListAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([WorkflowWithAutoFetchDestination(source.Id, "Patient,Observation")]);
+
+        var result = await Service().SyncAsync(source.Id, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result!.Should().Contain(["patient/Patient.read", "patient/Observation.read"]);
+        result.Should().NotContain("patient/Organization.read");
     }
 }
