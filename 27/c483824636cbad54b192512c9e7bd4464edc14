@@ -1,0 +1,45 @@
+tests/FHIRBridge.UnitTests/Transforms/FhirComplexTypeNodesTests.cs
+  s_e3bca1a37fed94::t_1d92cd42315ed7 161-164,174,176-213
+tests/FHIRBridge.UnitTests/Transforms/HumanNameArrayModeSpecTests.cs
+  s_e3bca1a37fed94::t_0fbccbd64d22cb 88-90,92,94-99
+tests/FHIRBridge.UnitTests/Transforms/TransformNodeApplierTests.cs
+  s_e3bca1a37fed94::t_a737b4754cffd1 65-67,70,77,79-80,82-88,92-104
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_e3bca1a37fed94::t_0e5f59a1f929ed 359-362
+  s_e3bca1a37fed94::t_0698b749e86732 12
+  s_e3bca1a37fed94::t_c7e8921a7a113e 211-231
+  s_e3bca1a37fed94::t_b11bc842753933 180-181
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.spec.ts
+  s_e3bca1a37fed94::t_695162013ddfca 108,114-141
+  s_e3bca1a37fed94::t_4761357fdeb8cf 24-26,34,142-143
+  s_e3bca1a37fed94::t_5bd0b82f7b6a85 5
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_e3bca1a37fed94::t_69e5ae5427db84 786-908
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_e3bca1a37fed94::t_f50bf1a0903375 687
+  s_e3bca1a37fed94::t_1e8a2810e2b5eb 1585,1588,1592
+  s_e3bca1a37fed94::t_63b175b76557f7 1586-1587,1589-1591
+  s_e3bca1a37fed94::t_cec4c88dc758d9 1785-1788,1792
+  s_e3bca1a37fed94::t_edbabee4d67c67 1816-1822
+  s_e3bca1a37fed94::t_8d925308d69172 1355-1359
+src/FHIRBridge.Application/Services/Transforms/Nodes/FhirComplexTypeNodes.cs
+  s_e3bca1a37fed94::t_09d3917fe57a0e 147-150,156-157,185,209-210,215-217,221-223,269-272,283-289,291,294,304-308,310-323,325-326,329,346-347,349-356,364,427
+src/FHIRBridge.Application/Services/Transforms/TransformNodeApplier.cs
+  s_e3bca1a37fed94::t_eaa3b643c2fd52 22-26,33,35,41,65,67,73,87,92-95,97-98,101-107,112-130,137,139-140,142-144,149,152-156,170-171,173,175,177,180-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "27c483824636cbad54b192512c9e7bd4464edc14",
+  "prompts": {},
+  "sessions": {
+    "s_e3bca1a37fed94": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "81daa9ff-f912-4703-be62-36c0568a3dc9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}

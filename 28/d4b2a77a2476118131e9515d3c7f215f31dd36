@@ -1,0 +1,30 @@
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineJoinedFieldsTests.cs
+  s_6fe240044cc58e::t_ed5593209a58ab 413,415-420,432
+  s_6fe240044cc58e::t_5328c623c2ae9b 634-720
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_6fe240044cc58e::t_9c813d9dc8ab95 288
+  s_6fe240044cc58e::t_d804eba5cd2670 149-154
+  s_6fe240044cc58e::t_243a22364bd7b5 383-384,388,394-408
+  s_6fe240044cc58e::t_03035b6ff85cfd 753-763
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_6fe240044cc58e::t_46ab28781f37ba 50,257,271
+  s_6fe240044cc58e::t_674f3eda156797 10-12,15-21
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_6fe240044cc58e::t_46ab28781f37ba 285
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "28d4b2a77a2476118131e9515d3c7f215f31dd36",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
