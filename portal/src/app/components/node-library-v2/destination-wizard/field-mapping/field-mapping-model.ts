@@ -396,6 +396,7 @@ export function serializeRowsFlat(
   correlationSiblingField?: string; correlationCodeValue?: string; correlationOperator?: string;
   parentTable?: string; parentKeyColumn?: string; foreignKeyColumn?: string;
   referencesResource?: string;
+  joinSources?: { path: string; jsonPath?: string; arrays?: string[] }[];
 })[] {
   // Once the user has explicitly marked ANY row for a resource as the upsert key (via the target card's
   // key toggle), that choice is authoritative for the whole resource — the real PK column is no longer
@@ -403,6 +404,9 @@ export function serializeRowsFlat(
   const resourcesWithExplicitKey = new Set(rows.filter(r => r.isUpsertKey === true).map(r => r.resource));
   return rows.map(row => {
     const primary = row.sources[0];
+    // Declared up here rather than beside its first use below, because the joinedFields Format guard needs
+    // it too and a `const` read before its declaration is a TDZ ReferenceError, not a falsy value.
+    const isDefault = row.mode === 'default';
     // A row's OWN table is always the real destination for its column — critically, this must NOT fall
     // back to the resource's primary table when they differ (see rootTable below), or a field mapped onto
     // a genuine child/extra table (e.g. "Use" on dbo.PatientName) gets silently validated/written against
@@ -433,9 +437,16 @@ export function serializeRowsFlat(
     // its own child-table row per item (the isChildTable override above), so neither must survive that
     // override.
     const survivesChildTableOverride = arrayPolicy === resolvedPolicy.arrayPolicy;
-    // The array-instance marker (aggregate=csv / index=N), dropped when the field is instead fanned out
-    // into its own child-table row per item — see survivesChildTableOverride above.
-    const instanceFormat = survivesChildTableOverride ? resolvedPolicy.format : undefined;
+    // The "joinedFields" MODE prefix must survive the child-table override even though the instance markers
+    // beside it do not: the jsonPath emitted below is "|"-delimited for a multi-source row, and without the
+    // prefix telling JsonMappingEngine to split it, that whole string is resolved as one literal path and
+    // matches nothing — the column would go silently NULL. Only the aggregate/index markers are dropped.
+    // `!isDefault` matches the joinSources guard below and resolveArrayPolicy's own early return for a
+    // default-mode row: a "@default" column has no source paths to join, so stamping the joinedFields prefix
+    // on one would describe a join that cannot exist.
+    const instanceFormat = survivesChildTableOverride
+      ? resolvedPolicy.format
+      : (row.sources.length > 1 && !isDefault ? joinedFieldsFormat(row, undefined) : undefined);
     const correlationSiblingField = survivesChildTableOverride ? resolvedPolicy.correlationSiblingField : undefined;
     const correlationCodeValue = survivesChildTableOverride ? resolvedPolicy.correlationCodeValue : undefined;
     const correlationOperator = survivesChildTableOverride ? resolvedPolicy.correlationOperator : undefined;
@@ -462,7 +473,6 @@ export function serializeRowsFlat(
     // (JsonMappingEngine) — it never changes what gets written.
     const targetColumn = targetTable?.columns.find(c => c.name === row.targetName);
     const isRequired = row.isRequired ?? (targetColumn?.isNullable === false ? true : undefined);
-    const isDefault = row.mode === 'default';
     // The MongoDB "store this JSON as a real sub-document, not as escaped text" choice rides the same
     // `format` marker channel the mapping-profiles import path already uses for column-mode markers, so it
     // needs no new field anywhere on the wire (see formatWithJsonWriteMode / the backend's
@@ -527,6 +537,21 @@ export function serializeRowsFlat(
       // all on what actually gets saved, and a FHIR reference column keeps writing raw "Patient/xyz" strings
       // (or, worse, NULL into a NOT NULL FK column) forever, no matter what the user picked in that dropdown.
       ...(row.referencesResource ? { referencesResource: row.referencesResource } : {}),
+      // EVERY source of a joined row, in user order. The assembler turns these into the "|"-delimited
+      // JsonPath ResolveJoinedFields splits apart, deriving an absolute path for any source the catalog
+      // never gave a `jsonPath` (it is populated only "when present"). Emitting a pre-joined path HERE
+      // instead meant a row whose sources all lacked one silently degraded to the primary source alone
+      // while still carrying the joinedFields Format — so the engine joined a single sub-path and the
+      // column got just the first field (observed: a family+given join writing only "McGinnis").
+      ...(row.sources.length > 1 && !isDefault
+        ? {
+            joinSources: row.sources.map(source => ({
+              path: source.fhirPath,
+              ...(source.jsonPath ? { jsonPath: source.jsonPath } : {}),
+              ...(source.arrays?.length ? { arrays: source.arrays } : {}),
+            })),
+          }
+        : {}),
     };
   });
 }
@@ -646,11 +671,42 @@ export function resolveArrayPolicy(row: MappingRow): ArrayPolicyResolution {
   const instance = row.instance ?? { type: 'first' };
 
   if (isJoin) {
-    // No backend representation for joining multiple distinct fields — best-effort primary source.
-    return { ...applyInstance(instance, hasArrayAncestors), approximated: true };
+    // The backend DOES represent this: JsonMappingEngine.ResolveJoinedFields resolves a "|"-delimited
+    // JsonPath and joins the pieces with the delimiter stamped onto Format, exactly as
+    // MappingImportService.BuildJsonPathAndFormat emits it for the V1 "Save mapping" path. This used to
+    // return the primary source alone and flag `approximated`, which is why a two-field join saved only its
+    // FIRST source: mapping name.given + name.family onto one column silently wrote the given names and
+    // dropped the family entirely, with nothing but a "Preview only" banner to say so. serializeRowsFlat
+    // builds the matching "|"-joined jsonPath — the two must stay in step.
+    // `approximated` carries whatever applyInstance decided — it is NOT unconditionally false. The join
+    // itself is exact now, but the INSTANCE SELECTION layered on top can still be an approximation: a
+    // "Match criteria" with no field/value typed yet falls back to FirstItem and flags itself, and hard-
+    // coding false here swallowed that flag, so a half-configured criteria on a joined column silently lost
+    // the "Preview only" banner that is the only thing telling the user their criteria isn't running.
+    const joined = applyInstance(instance, hasArrayAncestors);
+    return { ...joined, format: joinedFieldsFormat(row, joined.format) };
   }
 
   return applyInstance(instance, hasArrayAncestors);
+}
+
+/**
+ * Builds the Format marker for a multi-source (joined) row: the "joinedFields" mode prefix plus the row's own
+ * delimiter, carrying over whichever instance-selection marker applyInstance already produced
+ * ("aggregate=csv" / "index=N"). Mirrors MappingImportService.BuildJsonPathAndFormat's
+ * `joinedFields;delimiter={d}{aggregateSuffix}` byte for byte, since JsonMappingEngine.ParseDelimiter /
+ * HasCsvAggregate / ParseInstanceIndex all read this one string.
+ *
+ * The delimiter is written verbatim, spaces included — ", " is the common choice and the engine no longer
+ * trims it away. A delimiter containing ";" or "=" would collide with the marker's own syntax, so those are
+ * stripped rather than silently corrupting the rest of the Format.
+ */
+function joinedFieldsFormat(row: MappingRow, instanceFormat: string | undefined): string {
+  const delimiter = (row.delimiter ?? ', ').replace(/[;=]/g, '');
+  // applyInstance emits "directField;aggregate=csv" / "directField;index=N" — keep only the marker itself,
+  // since the mode prefix here is joinedFields, not directField.
+  const instanceMarker = instanceFormat?.split(';').slice(1).join(';');
+  return `joinedFields;delimiter=${delimiter}${instanceMarker ? `;${instanceMarker}` : ''}`;
 }
 
 function applyInstance(

@@ -103,7 +103,15 @@ public sealed record TransformConfigFieldSchema(
     // neither renders nor stores it in a mode it does not affect. Before this, every field's default was
     // written regardless of mode, producing configs like "mode = hash, keepLength = 4" that read as though
     // keepLength did something.
-    TransformConfigFieldVisibility? VisibleWhen = null);
+    TransformConfigFieldVisibility? VisibleWhen = null,
+    // Keys whose change invalidates whatever this field currently holds, so the UI clears it. For a field
+    // that applies in only ONE mode, VisibleWhen already does this — it stops being rendered or stored. This
+    // is for a field that applies in SEVERAL modes while MEANING something different in each, which no
+    // visibility rule can express: ConcatenationTemplating's template binds "{0} {1}" to the joined column's
+    // source fields under concat and to the pieces a split produced under split, so a template written for
+    // one is silently wrong for the other. Carrying it across the switch looked like the setting had simply
+    // been kept, rather than re-pointed at different inputs.
+    IReadOnlyList<string>? ResetOn = null);
 
 /// <summary>"Only while <see cref="Key"/> holds one of <see cref="Values"/>" — see
 /// <see cref="TransformConfigFieldSchema.VisibleWhen"/>.</summary>

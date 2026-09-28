@@ -325,3 +325,122 @@ describe('FieldMappingJoinPopoverComponent - whole-node hints follow the instanc
     expect(fixture.nativeElement.querySelector('.fm-popover-caveat')).toBeNull();
   });
 });
+
+/**
+ * Split mode reads a SINGLE value. Handed every instance it stringifies the list rather than its items, so
+ * the column receives a type name — which is why the instance picker refuses the two selections that can
+ * produce more than one value while a split rule is attached.
+ */
+describe('FieldMappingJoinPopoverComponent - split mode restricts the instance picker', () => {
+  const SCHEMAS: TransformNodeSchema[] = [
+    {
+      nodeType: 'ConcatenationTemplating',
+      label: 'Concatenation/Templating',
+      fields: [{ key: 'mode', label: 'Mode', inputKind: 'select', options: ['concat', 'split'], defaultValue: 'concat' }],
+    },
+  ];
+
+  function createFixture(row: MappingRow, existingRules: Partial<TransformationRule>[] = []) {
+    TestBed.configureTestingModule({
+      imports: [FieldMappingJoinPopoverComponent],
+      providers: [
+        {
+          provide: TransformationRulesService,
+          useValue: {
+            getNodeSchemas: () => of(SCHEMAS),
+            getEffectiveRules: () => of(existingRules),
+            save: () => of({}),
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning']),
+        },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(FieldMappingJoinPopoverComponent);
+    fixture.componentRef.setInput('row', row);
+    fixture.componentRef.setInput('rulesDestinationType', 'sqlserver');
+    fixture.componentRef.setInput('workflowId', 'wf-1');
+    fixture.componentRef.setInput('childArrayLabel', null);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  const arrayRow: MappingRow = {
+    resource: 'Patient',
+    sources: [{ fhirPath: 'Patient.generalPractitioner.display', label: 'Display', arrays: ['generalPractitioner'] }],
+    mode: 'value',
+    targetName: 'FullName',
+    tableName: 'dbo.Patient',
+  };
+
+  function selectSplit(fixture: ReturnType<typeof createFixture>): void {
+    const c = fixture.componentInstance;
+    c.onRuleNodeTypeChange('ConcatenationTemplating');
+    c.onRuleConfigChanged({ mode: 'split' });
+    fixture.detectChanges();
+  }
+
+  it('leaves every instance option available while the rule is in concat mode', () => {
+    const fixture = createFixture(arrayRow);
+    fixture.componentInstance.onRuleNodeTypeChange('ConcatenationTemplating');
+    fixture.componentInstance.onRuleConfigChanged({ mode: 'concat' });
+
+    expect(fixture.componentInstance.splitModeRestrictsInstances()).toBeFalse();
+    expect(fixture.componentInstance.isInstanceTypeDisabled('all')).toBeFalse();
+    expect(fixture.componentInstance.isInstanceTypeDisabled('criteria')).toBeFalse();
+  });
+
+  it('disables "All records" and "Match criteria" once the rule is in split mode', () => {
+    const fixture = createFixture(arrayRow);
+    selectSplit(fixture);
+
+    expect(fixture.componentInstance.isInstanceTypeDisabled('all')).toBeTrue();
+    expect(fixture.componentInstance.isInstanceTypeDisabled('criteria')).toBeTrue();
+    // The two that always yield one value stay selectable.
+    expect(fixture.componentInstance.isInstanceTypeDisabled('first')).toBeFalse();
+    expect(fixture.componentInstance.isInstanceTypeDisabled('nth')).toBeFalse();
+  });
+
+  it('refuses to switch the row onto a disabled option', () => {
+    const fixture = createFixture(arrayRow);
+    selectSplit(fixture);
+
+    fixture.componentInstance.onInstanceTypeChange('all');
+
+    expect(fixture.componentInstance.instanceType()).not.toBe('all');
+  });
+
+  it('falls back to "first" when split is chosen while "all records" is already selected', () => {
+    // Disabling an option the row is already ON would otherwise save the very combination this prevents.
+    const fixture = createFixture({ ...arrayRow, instance: { type: 'all', aggregate: 'csv' } });
+    expect(fixture.componentInstance.instanceType()).toBe('all');
+
+    selectSplit(fixture);
+
+    expect(fixture.componentInstance.instanceType()).toBe('first');
+  });
+
+  it('does not restrict anything for a different node type', () => {
+    const fixture = createFixture(arrayRow);
+    fixture.componentInstance.onRuleConfigChanged({ mode: 'split' });
+
+    expect(fixture.componentInstance.splitModeRestrictsInstances()).toBeFalse();
+  });
+
+  it('corrects a row LOADED with "all records" and a saved split rule, not only newly-edited ones', () => {
+    // The combination can already exist: written by the API, duplicated from another row, or authored
+    // before this restriction did. Loading a rule set ruleConfig directly, bypassing the reconciliation, so
+    // the picker showed a DISABLED option as the current value — unfixable by re-selecting it, and saved
+    // straight back if the author never touched the instance selector.
+    const fixture = createFixture(
+      { ...arrayRow, instance: { type: 'all', aggregate: 'csv' } },
+      [{ id: 'rule-1', nodeType: 'ConcatenationTemplating', config: { mode: 'split' } } as Partial<TransformationRule>],
+    );
+
+    expect(fixture.componentInstance.splitModeRestrictsInstances()).toBeTrue();
+    expect(fixture.componentInstance.instanceType()).toBe('first');
+  });
+});
