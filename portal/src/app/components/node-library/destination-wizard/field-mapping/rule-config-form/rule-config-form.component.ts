@@ -7,10 +7,20 @@ import { TransformConfigFieldSchema, TransformNodeSchema } from '../transformati
 /** Whether a schema field applies given the config's current values — false for a field scoped to another
  *  field's value (see TransformConfigFieldSchema.visibleWhen) when that value isn't currently selected, e.g.
  *  keepLength while mode is "hash". A field with no visibleWhen always applies. */
-export function isConfigFieldVisible(field: TransformConfigFieldSchema, config: Record<string, string>): boolean {
+export function isConfigFieldVisible(
+  field: TransformConfigFieldSchema, config: Record<string, string>,
+  schema?: TransformNodeSchema): boolean {
   const rule = field.visibleWhen;
   if (!rule) return true;
-  return rule.values.includes(config[rule.key]);
+  // An ABSENT controlling key falls back to that field's schema default, because that is what the node
+  // itself does: ConcatenationTemplatingNode reads config.Get("mode", "concat"), so a rule saved before
+  // `mode` was ever written still RUNS as concat. Comparing against undefined instead hid its "Join
+  // separator", and pruneInapplicableConfig then deleted the separator on the next save — silently
+  // reverting a rule's configured separator to the default space, with nothing on screen to show it.
+  // Kept in step with the node-library-v2 copy: this one still backs the global Transformation Rules
+  // page and the older mapping-profile dialog, so fixing only the newer form left those screens broken.
+  const current = config[rule.key] ?? schema?.fields.find(f => f.key === rule.key)?.defaultValue ?? undefined;
+  return current !== undefined && rule.values.includes(current);
 }
 
 /** Merges a node type's schema defaults into an existing config object — any key the config doesn't
@@ -39,7 +49,7 @@ export function pruneInapplicableConfig(
   if (!schema) return config;
   const pruned = { ...config };
   for (const field of schema.fields) {
-    if (!isConfigFieldVisible(field, pruned)) delete pruned[field.key];
+    if (!isConfigFieldVisible(field, pruned, schema)) delete pruned[field.key];
   }
   return pruned;
 }
@@ -241,7 +251,7 @@ export class RuleConfigFormComponent {
   /** The schema's fields minus those scoped to a mode that isn't selected — e.g. keepLength disappears the
    *  moment mode switches off "mask", rather than sitting there implying it still does something. */
   private applicableFields(): TransformConfigFieldSchema[] {
-    return (this.schema?.fields ?? []).filter(f => isConfigFieldVisible(f, this.config));
+    return (this.schema?.fields ?? []).filter(f => isConfigFieldVisible(f, this.config, this.schema));
   }
 
   setValue(key: string, value: string | number | null): void {
@@ -255,7 +265,7 @@ export class RuleConfigFormComponent {
     // typed under "redact" would still be sitting in the config after switching to "hash". Mutated in
     // place because `config` is an @Input object the parent holds a reference to and saves from.
     for (const field of this.schema?.fields ?? []) {
-      if (!isConfigFieldVisible(field, this.config)) delete this.config[field.key];
+      if (!isConfigFieldVisible(field, this.config, this.schema)) delete this.config[field.key];
     }
   }
 

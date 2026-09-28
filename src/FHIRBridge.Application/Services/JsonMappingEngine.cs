@@ -394,15 +394,28 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             return selected.Count == 0 ? null : selected[0];
         }
 
+        // An UPSERT KEY cannot be a list, whatever its type. The type check below catches a numeric or date
+        // key, but a text key takes "123, 456" without complaint — and an upsert key that is a
+        // concatenation matches no existing row, so every run INSERTS instead of updating and the
+        // destination fills with duplicates that look like real records. Nothing downstream can detect
+        // that, because each write succeeds. Refusing it here costs one record and reports why; allowing
+        // it corrupts the table quietly on every run from then on.
+        if (field.IsUpsertKey)
+        {
+            errors.Add(
+                $"Field '{field.TargetField}' is the upsert key but its Match criteria selected {selected.Count} " +
+                "values. A key must identify one row — narrow the criteria so it matches a single item.");
+            return null;
+        }
+
         // Several matches share one destination column, so they join the way every other "more than one
         // value in one column" path does (JoinValues, the same ", " the csv aggregate uses).
         //
         // That join is TEXT, whatever the column was declared as, so it has to be checked rather than
         // written blind: a criteria matching several rows on a Decimal or Date column silently handed it
-        // "12, 34", and on an upsert-key column an MRN became "123, 456" — a key that matches no existing
-        // row, so every run inserts a duplicate instead of updating. Routed through ConvertValue with the
-        // column's real ValueType so a type that cannot hold a list says so as a mapping error, and
-        // MaxLength is applied to the joined result rather than only to each item.
+        // "12, 34". Routed through ConvertValue with the column's real ValueType so a type that cannot hold
+        // a list says so as a mapping error, and MaxLength is applied to the joined result rather than only
+        // to each item.
         return ConvertValue(
             JoinValues(selected), field.ValueType, field.Format, field.TargetField, errors,
             field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform);

@@ -718,4 +718,67 @@ public sealed class JsonMappingEngineJoinedFieldsTests
         // Says so, rather than silently handing a numeric column a delimited string.
         result.Errors.Should().NotBeEmpty();
     }
+
+    private const string TwoMrnsJson = """
+    {
+      "resourceType": "Patient",
+      "identifier": [
+        { "system": "mrn", "value": "123" },
+        { "system": "mrn", "value": "456" }
+      ]
+    }
+    """;
+
+    private static MappingFieldDto MrnCriteriaField(MappingValueType valueType, bool isUpsertKey) => new(
+        TargetField: "Mrn",
+        JsonPath: "$.identifier[*].value",
+        ValueType: valueType,
+        IsRequired: false,
+        DefaultValue: null,
+        Format: "directField",
+        ResourceType: "Patient",
+        ArrayPolicy: ArrayPolicy.CorrelateByCode,
+        IsUpsertKey: isUpsertKey,
+        CorrelationCodeJsonPath: "$.identifier[*].system",
+        CorrelationCodeValue: "mrn");
+
+    [Fact]
+    public void A_criteria_matching_several_values_is_refused_on_an_upsert_key_even_a_text_one()
+    {
+        // The type check alone does not cover this: a TEXT key accepts "123, 456" without complaint. But an
+        // upsert key that is a concatenation matches no existing row, so every run INSERTS instead of
+        // updating and the table fills with duplicates that each look like a real record — and nothing
+        // downstream can notice, because every write succeeds.
+        var result = _engine.Map(TwoMrnsJson, [MrnCriteriaField(MappingValueType.String, isUpsertKey: true)]);
+
+        result.Errors.Should().ContainSingle()
+            .Which.Should().Contain("Mrn").And.Contain("upsert key").And.Contain("2 values");
+        result.Rows![0]["Mrn"].Should().BeNull();
+    }
+
+    [Fact]
+    public void A_criteria_matching_one_value_is_fine_on_an_upsert_key()
+    {
+        // The refusal is about multiplicity, not about criteria on a key — narrowing it is the fix, and a
+        // criteria that identifies one identifier is exactly how a key SHOULD be selected.
+        const string oneMrn = """
+        { "resourceType": "Patient", "identifier": [ { "system": "mrn", "value": "123" } ] }
+        """;
+
+        var result = _engine.Map(oneMrn, [MrnCriteriaField(MappingValueType.String, isUpsertKey: true)]);
+
+        result.Errors.Should().BeEmpty();
+        result.Rows![0]["Mrn"].Should().Be("123");
+    }
+
+    [Fact]
+    public void A_criteria_matching_several_values_still_joins_on_an_ordinary_text_column()
+    {
+        // Only the KEY is refused. An ordinary column is free to hold the joined list — that is the whole
+        // point of a criteria selecting every match.
+        var result = _engine.Map(TwoMrnsJson, [MrnCriteriaField(MappingValueType.String, isUpsertKey: false)]);
+
+        result.Errors.Should().BeEmpty();
+        result.Rows![0]["Mrn"].Should().Be("123, 456");
+    }
 }

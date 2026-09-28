@@ -252,7 +252,7 @@ export class FieldMappingListComponent {
     const entries = Object.entries(rule.config)
       .filter(([key]) => {
         const field = schema?.fields.find(f => f.key === key);
-        return !field || isConfigFieldVisible(field, rule.config);
+        return !field || isConfigFieldVisible(field, rule.config, schema);
       });
     return entries.length ? entries.map(([k, v]) => `${k} = ${v}`).join(', ') : '—';
   }
