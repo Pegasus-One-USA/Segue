@@ -87,8 +87,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         () => authService.refreshToken(),
         () => authService.syncCurrentUser(),
       ).pipe(
-        switchMap(() => next(buildRequest())),
+        // catchError before switchMap: only a FAILED refresh should force a logout. Ordering it
+        // after switchMap (as before) also caught errors from the retried request itself — a
+        // refresh that succeeds followed by e.g. a 400 validation error or 409 concurrency conflict
+        // on the retry would still show "Session expired" and log an active user out, swallowing
+        // the real error in the process.
         catchError(() => forceLogout(err)),
+        switchMap(() => next(buildRequest())),
       );
     })
   );

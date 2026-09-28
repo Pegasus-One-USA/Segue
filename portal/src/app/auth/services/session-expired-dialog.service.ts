@@ -34,8 +34,8 @@ export class SessionExpiredDialogService {
   private isOpen = false;
 
   constructor() {
-    // Covers the case where something else (a route guard, another tab's redirect landing here via
-    // a shared-state race) lands the app on the login page WHILE this prompt is still up — e.g. it
+    // Covers the case where something else (a route guard, or CrossTabAuthSyncService reacting to
+    // another tab's logout) lands the app on the login page WHILE this prompt is still up — e.g. it
     // was opened by the interceptor's 401 path over a protected page, and before the user clicks
     // "Log In" the app is already routed to /auth/login by a different path. Once we're actually on
     // the login page there is nothing left to confirm, so the modal shouldn't keep sitting over the
@@ -46,7 +46,12 @@ export class SessionExpiredDialogService {
     ).subscribe((e) => {
       if (!this.isOpen) return;
       if (e.urlAfterRedirects.split(/[?#]/)[0] !== '/auth/login') return;
-      void Swal.close();
+      // Swal.close() closes whichever popup is currently showing, not specifically this one — guard
+      // against ever closing some unrelated Swal that happens to be open at the same time (isOpen
+      // only tracks whether *this* dialog thinks it's showing).
+      if (Swal.getPopup()?.classList.contains('se-swal-popup')) {
+        void Swal.close();
+      }
     });
   }
 
