@@ -322,10 +322,18 @@ public static class TransformNodeConfigSchemas
             [TransformNodeType.ArrayListOperations] = new(TransformNodeType.ArrayListOperations, "Array/List Operations",
             [
                 Select("operation", "Operation", ["first", "last", "nth", "dedupe", "join", "count", "filter", "flatten"], "first"),
-                Number("index", "Index (nth operation)", "0"),
-                Text("separator", "Join separator (join operation)", ","),
-                Text("predicateField", "Predicate field (filter operation, optional — omit to compare items directly)", placeholder: "e.g. system", advanced: true),
-                Text("predicateValue", "Predicate value to match (filter operation)", placeholder: "e.g. http://hl7.org/fhir/sid/us-npi", advanced: true),
+                // Each operation shows only the fields it uses, the same way the two Concatenation/Templating
+                // modes do. Eight operations sharing one flat form meant "nth" sat under an Advanced Options
+                // panel offering a predicate it will never read, and an index box stayed on screen for
+                // "count" — a field that is visibly there and silently ignored reads as broken behaviour
+                // rather than as an inapplicable setting. The operation qualifiers come off the labels too: a
+                // field that only appears for one operation does not need to name it.
+                Number("index", "Index (0-based)", "0", visibleWhen: OnlyWhen("operation", "nth")),
+                Text("separator", "Join separator", ",", visibleWhen: OnlyWhen("operation", "join", "filter")),
+                Text("predicateField", "Predicate field (optional — omit to compare items directly)", placeholder: "e.g. system", advanced: true,
+                    visibleWhen: OnlyWhen("operation", "filter")),
+                Text("predicateValue", "Predicate value to match", placeholder: "e.g. http://hl7.org/fhir/sid/us-npi", advanced: true,
+                    visibleWhen: OnlyWhen("operation", "filter")),
             ]),
             [TransformNodeType.DefaultNullHandling] = new(TransformNodeType.DefaultNullHandling, "Default/Null Handling",
             [

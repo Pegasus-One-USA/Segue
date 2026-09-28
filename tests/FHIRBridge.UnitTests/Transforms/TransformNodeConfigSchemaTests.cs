@@ -15,6 +15,33 @@ public sealed class TransformNodeConfigSchemaTests
         TransformNodeConfigSchemas.Get(nodeType)!.Fields.Single(f => f.Key == key);
 
     [Theory]
+    [InlineData("index", new[] { "nth" })]
+    [InlineData("separator", new[] { "join", "filter" })]
+    [InlineData("predicateField", new[] { "filter" })]
+    [InlineData("predicateValue", new[] { "filter" })]
+    public void ArrayListOperations_scopes_each_field_to_the_operations_that_use_it(string key, string[] operations)
+    {
+        // Eight operations sharing one flat form put an index box on screen for "count" and an Advanced
+        // Options panel on "nth" offering a predicate it will never read.
+        var visibility = Field(TransformNodeType.ArrayListOperations, key).VisibleWhen;
+
+        visibility.Should().NotBeNull();
+        visibility!.Key.Should().Be("operation");
+        visibility.Values.Should().Equal(operations);
+    }
+
+    [Fact]
+    public void ArrayListOperations_leaves_no_advanced_fields_visible_outside_filter()
+    {
+        // The portal's "Advanced Options (n)" toggle counts the fields left after visibleWhen, so scoping the
+        // two predicate fields to "filter" is what makes the whole panel disappear for every other operation
+        // rather than sitting there empty-but-present.
+        TransformNodeConfigSchemas.Get(TransformNodeType.ArrayListOperations)!.Fields
+            .Where(f => f.IsAdvanced)
+            .Should().OnlyContain(f => f.VisibleWhen != null && f.VisibleWhen.Values.Contains("filter"));
+    }
+
+    [Theory]
     [InlineData("separator", "concat")]
     [InlineData("splitDelimiter", "split")]
     [InlineData("splitIsRegex", "split")]
