@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
@@ -170,6 +170,60 @@ public sealed class MappedDataLakeWebhookDestinationWriterTests
         root.GetProperty("meta").GetProperty("routeName").GetString().Should().Be("Lake Export Workflow");
         root.GetProperty("meta").GetProperty("correlationId").GetString().Should().Be("corr-1");
         root.GetProperty("records").GetArrayLength().Should().Be(1);
+    }
+
+    // ChartChat-style push consumer: the envelope has to say WHOSE data this is in the consumer's own terms.
+    // Without this the push carries only the EHR's patient id and the consumer must keep its own mapping table.
+    [Fact]
+    public async Task Envelope_meta_carries_the_launch_user_identity_when_the_run_had_a_signed_in_user()
+    {
+        SetupSender();
+
+        await CreateWriter().WriteAsync(
+            Destination("""{"dest_dlwPayloadShape":"envelope"}"""),
+            Mapping(),
+            [Record("p1")],
+            Context() with { UserIdentity = "internal-patient-42" },
+            CancellationToken.None);
+
+        var root = JsonDocument.Parse(_sent[0].Body).RootElement;
+        root.GetProperty("meta").GetProperty("userIdentity").GetString().Should().Be("internal-patient-42");
+    }
+
+    // Omitted entirely, not emitted as null: a scheduled/webhook run genuinely has no signed-in user, and a
+    // present-but-null field would read to a consumer as "one was expected and lost".
+    [Fact]
+    public async Task Envelope_meta_omits_the_user_identity_entirely_for_a_run_with_no_signed_in_user()
+    {
+        SetupSender();
+
+        await CreateWriter().WriteAsync(
+            Destination("""{"dest_dlwPayloadShape":"envelope"}"""),
+            Mapping(),
+            [Record("p1")],
+            Context(),
+            CancellationToken.None);
+
+        var meta = JsonDocument.Parse(_sent[0].Body).RootElement.GetProperty("meta");
+        meta.TryGetProperty("userIdentity", out _).Should().BeFalse();
+    }
+
+    // The per-record shape is a published contract shared with the REST API destination's consumers — the identity
+    // belongs in the envelope (it is constant across the batch), and adding it per record would change that shape.
+    [Fact]
+    public async Task Record_payload_shape_is_unchanged_by_the_user_identity()
+    {
+        SetupSender();
+
+        await CreateWriter().WriteAsync(
+            Destination("""{"dest_dlwPayloadShape":"envelope"}"""),
+            Mapping(),
+            [Record("p1")],
+            Context() with { UserIdentity = "internal-patient-42" },
+            CancellationToken.None);
+
+        var record = JsonDocument.Parse(_sent[0].Body).RootElement.GetProperty("records")[0];
+        record.TryGetProperty("userIdentity", out _).Should().BeFalse();
     }
 
     [Fact]

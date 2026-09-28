@@ -1,4 +1,4 @@
-namespace FHIRBridge.Runtime.Application.Workflows;
+﻿namespace FHIRBridge.Runtime.Application.Workflows;
 
 public sealed class WorkflowExecutionContext
 {
@@ -10,7 +10,8 @@ public sealed class WorkflowExecutionContext
         string? triggerType = null,
         string? targetPatientId = null,
         string? patientSearchCriteria = null,
-        string? callerId = null)
+        string? callerId = null,
+        string? userIdentity = null)
     {
         WorkflowRunId = workflowRunId == Guid.Empty ? Guid.NewGuid() : workflowRunId;
         CorrelationId = string.IsNullOrWhiteSpace(correlationId) ? WorkflowRunId.ToString("N") : correlationId;
@@ -20,6 +21,7 @@ public sealed class WorkflowExecutionContext
         TargetPatientId = targetPatientId;
         PatientSearchCriteria = patientSearchCriteria;
         CallerId = callerId;
+        UserIdentity = userIdentity;
     }
 
     public Guid WorkflowRunId { get; }
@@ -58,4 +60,19 @@ public sealed class WorkflowExecutionContext
     /// preserves the pre-existing per-SourceConnection keying.
     /// </summary>
     public string? CallerId { get; }
+
+    /// <summary>
+    /// The stable identifier of the end user whose sign-in authorized this run — the calling third-party app's own
+    /// account id for the person (e.g. ChartChat's internalPatientId), supplied as <c>userIdentity</c> when the
+    /// launch URL was minted and permanently bound to one FHIR patient in <c>UserFhirContextBindings</c>.
+    /// <para>
+    /// Deliberately NOT the same thing as <see cref="CallerId"/> above, despite both identifying "who is driving
+    /// this run": CallerId is an opaque per-browser session key used to look up the interactive token cache, so the
+    /// same real person signing in from a second browser gets a different value. This one identifies the person
+    /// across every launch, which is what makes it safe for a consumer to key its own records on. Anything that
+    /// needs a durable identity must read this, not CallerId.
+    /// </para>
+    /// Null (the default for every existing trigger path) preserves prior behavior.
+    /// </summary>
+    public string? UserIdentity { get; }
 }

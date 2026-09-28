@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
@@ -166,6 +166,94 @@ public sealed class LakeDestinationNodeExecutorTests
             WorkflowNodeCategory.Destination,
             90,
             configurationJson: JsonSerializer.Serialize(config, JsonOptions));
+    }
+
+    // The launch identity must survive the hop from the run context into the write context, or a push destination
+    // has nothing to put in its envelope. Asserted on the context the writer actually receives rather than on the
+    // envelope, so this fails at the plumbing hop itself if the executor ever stops forwarding it.
+    [Fact]
+    public async Task The_launch_user_identity_reaches_the_writers_write_context()
+    {
+        var (executor, capturedContexts) = CreateContextCapturingExecutor();
+
+        await executor.ExecuteAsync(
+            new WorkflowExecutionContext(
+                Guid.NewGuid(), "test-correlation", callerId: "browser-session-abc", userIdentity: "internal-patient-42"),
+            CreateNode(DestinationType.DataLakeWebhook, writeMode: null),
+            [MixedUpstreamBatch()],
+            CancellationToken.None);
+
+        capturedContexts.Should().NotBeEmpty();
+        capturedContexts.Should().OnlyContain(context => context.UserIdentity == "internal-patient-42");
+    }
+
+    // CallerId (an opaque per-browser session key, used for token-cache lookup) and UserIdentity (the stable
+    // cross-session account id) are easy to mistake for one another and were nearly collapsed into one field.
+    // Collapsing them would silently break a returning patient on a second browser, whose CallerId differs.
+    [Fact]
+    public async Task The_browser_session_key_is_not_mistaken_for_the_durable_user_identity()
+    {
+        var (executor, capturedContexts) = CreateContextCapturingExecutor();
+
+        await executor.ExecuteAsync(
+            new WorkflowExecutionContext(
+                Guid.NewGuid(), "test-correlation", callerId: "browser-session-abc", userIdentity: "internal-patient-42"),
+            CreateNode(DestinationType.DataLakeWebhook, writeMode: null),
+            [MixedUpstreamBatch()],
+            CancellationToken.None);
+
+        capturedContexts.Should().OnlyContain(context => context.UserIdentity != "browser-session-abc");
+    }
+
+    // A scheduled or webhook run has no signed-in user at all; the write context must carry null rather than
+    // inventing a stand-in, so the envelope omits the field entirely.
+    [Fact]
+    public async Task A_run_with_no_signed_in_user_carries_no_user_identity()
+    {
+        var (executor, capturedContexts) = CreateContextCapturingExecutor();
+
+        await executor.ExecuteAsync(
+            CreateContext(),
+            CreateNode(DestinationType.DataLakeWebhook, writeMode: null),
+            [MixedUpstreamBatch()],
+            CancellationToken.None);
+
+        capturedContexts.Should().NotBeEmpty();
+        capturedContexts.Should().OnlyContain(context => context.UserIdentity == null);
+    }
+
+    /// <summary>Mirrors <see cref="CreateExecutor"/> but keeps the write context instead of the profile/records.</summary>
+    private static (DestinationNodeExecutor Executor, List<PipelineWriteContext> Contexts) CreateContextCapturingExecutor()
+    {
+        var destinationId = DestinationIdFor(DestinationType.DataLakeWebhook);
+        var repository = new Mock<IConfigurationRepository>();
+        repository.Setup(r => r.GetMappingProfilesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                Profile("Patient", destinationId),
+                Profile("Observation", destinationId),
+            ]);
+
+        var capturedContexts = new List<PipelineWriteContext>();
+        var writer = new Mock<IConfiguredDestinationWriter>();
+        writer
+            .Setup(w => w.WriteAsync(
+                It.IsAny<DestinationConfiguration>(),
+                It.IsAny<MappingProfile>(),
+                It.IsAny<IReadOnlyCollection<MappedDestinationRecord>>(),
+                It.IsAny<PipelineWriteContext>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<DestinationConfiguration, MappingProfile, IReadOnlyCollection<MappedDestinationRecord>, PipelineWriteContext, CancellationToken>(
+                (_, _, _, writeContext, _) => capturedContexts.Add(writeContext))
+            .ReturnsAsync((DestinationConfiguration _, MappingProfile _, IReadOnlyCollection<MappedDestinationRecord> records, PipelineWriteContext _, CancellationToken _)
+                => new FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult(records.Count));
+
+        var writerFactory = new Mock<IConfiguredDestinationWriterFactory>();
+        writerFactory.Setup(f => f.Create(DestinationType.DataLakeWebhook)).Returns(writer.Object);
+
+        return (
+            new DataLakeWebhookDestinationNodeExecutor(writerFactory.Object, configurationRepository: repository.Object),
+            capturedContexts);
     }
 
     private static WorkflowExecutionContext CreateContext() => new(Guid.NewGuid(), "test-correlation");

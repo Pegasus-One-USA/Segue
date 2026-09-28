@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Router } from '@angular/router';
-import { catchError, finalize, timeout, EMPTY } from 'rxjs';
+import { NavigationEnd, Router } from '@angular/router';
+import { catchError, filter, finalize, timeout, EMPTY } from 'rxjs';
 import Swal from 'sweetalert2';
 import { ToastService } from '../../services/toast.service';
 import { IAuthService } from './i-auth.service';
@@ -32,6 +32,28 @@ export class SessionExpiredDialogService {
   private readonly tokens  = inject(TokenService);
   private readonly store   = inject(AuthStore);
   private isOpen = false;
+
+  constructor() {
+    // Covers the case where something else (a route guard, or CrossTabAuthSyncService reacting to
+    // another tab's logout) lands the app on the login page WHILE this prompt is still up — e.g. it
+    // was opened by the interceptor's 401 path over a protected page, and before the user clicks
+    // "Log In" the app is already routed to /auth/login by a different path. Once we're actually on
+    // the login page there is nothing left to confirm, so the modal shouldn't keep sitting over the
+    // login form waiting for a click. Swal.close() resolves the .then() in show() exactly as a real
+    // button click would, running the same logOutAndRedirect() cleanup.
+    this.router.events.pipe(
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+    ).subscribe((e) => {
+      if (!this.isOpen) return;
+      if (e.urlAfterRedirects.split(/[?#]/)[0] !== '/auth/login') return;
+      // Swal.close() closes whichever popup is currently showing, not specifically this one — guard
+      // against ever closing some unrelated Swal that happens to be open at the same time (isOpen
+      // only tracks whether *this* dialog thinks it's showing).
+      if (Swal.getPopup()?.classList.contains('se-swal-popup')) {
+        void Swal.close();
+      }
+    });
+  }
 
   /**
    * @param alreadyOnLoginPage Set by SessionService.onIdle(), which navigates to /auth/login itself
