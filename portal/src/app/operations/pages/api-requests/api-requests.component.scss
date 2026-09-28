@@ -114,8 +114,32 @@
   background: var(--color-border);
   border-radius: 6px;
   font-size: 12px;
-  max-width: 420px;
+  max-width: 640px;
   white-space: pre-wrap;
+}
+
+// Temporary troubleshooting capture only — see ApiRequestLogEntry's own doc comment; these sections only ever
+// render when a row carries the API Endpoint destination's captured request/response detail.
+.detail-section {
+  margin-top: 8px;
+
+  &:first-child {
+    margin-top: 0;
+  }
+}
+
+.detail-pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: var(--color-surface-subtle, #f8fafc);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 .empty-state {

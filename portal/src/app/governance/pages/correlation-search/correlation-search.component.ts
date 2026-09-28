@@ -4,7 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { CorrelationSearchResult } from '../../models/correlation-search.model';
-import { ErrorLogEntry } from '../../../operations/models/operations.model';
+import { ApiRequestLogEntry, ErrorLogEntry } from '../../../operations/models/operations.model';
 
 /** Hides per-record failure rows (Severity "Error") whenever a "PartialSuccess" Informational summary is also
  *  present in this same correlationId-scoped result — that summary already describes the batch failure, so the
@@ -137,6 +137,9 @@ export class CorrelationSearchComponent implements OnInit {
   readonly viewMode = signal<'sections' | 'timeline'>('sections');
   readonly expandedIndex = signal<number | null>(null);
   readonly collapsedSections = signal<Set<string>>(new Set());
+  /** Which API Requests row (by id) has its full call detail expanded — temporary troubleshooting capture
+   *  only, see ApiRequestLogEntry's own doc comment; most rows have nothing to expand into. */
+  readonly expandedApiRequestId = signal<string | null>(null);
 
   readonly timeline = computed<TimelineEntry[]>(() => {
     const r = this.result();
@@ -196,6 +199,17 @@ export class CorrelationSearchComponent implements OnInit {
 
   toggleRaw(index: number): void {
     this.expandedIndex.set(this.expandedIndex() === index ? null : index);
+  }
+
+  toggleApiRequestDetail(id: string): void {
+    this.expandedApiRequestId.set(this.expandedApiRequestId() === id ? null : id);
+  }
+
+  /** Whether this row has anything to expand into — either a real error message, or the temporary API
+   *  Endpoint destination capture (request/response headers/body). A non-2xx status with no thrown exception
+   *  (e.g. a destination server returning HTTP 500) leaves `error` null, so this can't just check `x.error`. */
+  hasApiRequestDetail(x: ApiRequestLogEntry): boolean {
+    return !!(x.error || x.requestBody || x.responseBody || x.requestHeaders || x.responseHeaders);
   }
 
   rawJson(entry: TimelineEntry): string {

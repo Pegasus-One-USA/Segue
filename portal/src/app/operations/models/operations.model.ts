@@ -98,6 +98,13 @@ export interface ApiRequestLogEntry {
   /** Plain-language description of what this call was doing, derived server-side — e.g. "Acquiring an EHR access
    *  token" rather than the raw URL. */
   step: string;
+  /** Temporary troubleshooting capture only — populated ONLY for the API Endpoint destination's own outbound
+   *  calls (see the backend's ApiRequestLog doc comment), null for every other row. Credential-bearing header
+   *  values are already masked server-side before this ever reaches the browser. Remove once no longer needed. */
+  requestHeaders?: string | null;
+  requestBody?: string | null;
+  responseHeaders?: string | null;
+  responseBody?: string | null;
 }
 
 /** Matches the backend's ExportHistoryDto (api/v1/operations/exports). */

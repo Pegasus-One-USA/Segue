@@ -253,6 +253,44 @@
 
 .trace-cell { color: var(--color-muted); cursor: help; }
 
+// Temporary troubleshooting capture only — see ApiRequestLogEntry's own doc comment; these only ever render
+// when a row carries the API Endpoint destination's captured request/response detail.
+.api-requests-table tr.clickable {
+  cursor: pointer;
+}
+.api-requests-table tr.clickable:hover {
+  background: var(--color-surface-subtle, #f8fafc);
+}
+
+.api-request-detail {
+  padding: 8px;
+  background: var(--color-surface-subtle, #f8fafc);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.api-request-detail .detail-section {
+  margin-top: 8px;
+
+  &:first-child {
+    margin-top: 0;
+  }
+}
+
+.api-request-detail .detail-pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: var(--color-background, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
 .severity-badge {
   padding: 2px 8px;
   border-radius: 999px;

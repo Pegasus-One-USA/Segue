@@ -60,7 +60,7 @@
         <ng-container matColumnDef="statusCode">
           <th mat-header-cell *matHeaderCellDef>Status</th>
           <td mat-cell *matCellDef="let r">
-            @if (r.error) {
+            @if (hasDetail(r)) {
               <span
                 class="status-badge clickable"
                 role="button"
@@ -72,7 +72,37 @@
                 (keydown.space)="toggleExpanded(r.id); $event.preventDefault()"
               >{{ r.statusCode ?? 'No response' }}</span>
               @if (expandedId() === r.id) {
-                <div class="detail-panel">{{ r.error }}</div>
+                <div class="detail-panel">
+                  @if (r.error) {
+                    <div class="detail-section"><strong>Error:</strong> {{ r.error }}</div>
+                  }
+                  <!-- Temporary troubleshooting capture only — populated ONLY for API Endpoint destination
+                       calls; every other row here has nothing beyond the error above. -->
+                  @if (r.requestHeaders) {
+                    <div class="detail-section">
+                      <strong>Request headers:</strong>
+                      <pre class="detail-pre">{{ r.requestHeaders }}</pre>
+                    </div>
+                  }
+                  @if (r.requestBody) {
+                    <div class="detail-section">
+                      <strong>Request body:</strong>
+                      <pre class="detail-pre">{{ r.requestBody }}</pre>
+                    </div>
+                  }
+                  @if (r.responseHeaders) {
+                    <div class="detail-section">
+                      <strong>Response headers:</strong>
+                      <pre class="detail-pre">{{ r.responseHeaders }}</pre>
+                    </div>
+                  }
+                  @if (r.responseBody) {
+                    <div class="detail-section">
+                      <strong>Response body:</strong>
+                      <pre class="detail-pre">{{ r.responseBody }}</pre>
+                    </div>
+                  }
+                </div>
               }
             } @else {
               <span class="status-badge" [class]="statusClass(r.statusCode)">{{ r.statusCode ?? 'No response' }}</span>

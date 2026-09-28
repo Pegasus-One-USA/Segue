@@ -66,4 +66,11 @@ export class ApiRequestsComponent implements OnInit {
   toggleExpanded(entryId: string): void {
     this.expandedId.set(this.expandedId() === entryId ? null : entryId);
   }
+
+  /** Whether this row has anything to expand into — either a real error message, or the temporary API Endpoint
+   *  capture (request/response headers/body). A non-2xx status with no thrown exception (e.g. a destination
+   *  server returning HTTP 500) leaves `error` null, so this can't just check `r.error`. */
+  hasDetail(r: ApiRequestLogEntry): boolean {
+    return !!(r.error || r.requestBody || r.responseBody || r.requestHeaders || r.responseHeaders);
+  }
 }

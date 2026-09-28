@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -9,6 +10,7 @@ using System.Web;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure.Destinations.Auth;
+using FHIRBridge.Infrastructure.Governance;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Destinations.ApiEndpoint;
@@ -27,6 +29,7 @@ public sealed class ApiEndpointSender : IApiEndpointSender, IDisposable
     private readonly ISecretProvider _secretProvider;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IFhirDestinationTokenProvider _tokenProvider;
+    private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<ApiEndpointSender> _logger;
 
     // Client-certificate (mTLS) handlers, cached per destination for the lifetime of this sender instance
@@ -48,11 +51,13 @@ public sealed class ApiEndpointSender : IApiEndpointSender, IDisposable
         ISecretProvider secretProvider,
         IHttpClientFactory httpClientFactory,
         IFhirDestinationTokenProvider tokenProvider,
+        ICurrentUserService currentUserService,
         ILogger<ApiEndpointSender> logger)
     {
         _secretProvider = secretProvider;
         _httpClientFactory = httpClientFactory;
         _tokenProvider = tokenProvider;
+        _currentUserService = currentUserService;
         _logger = logger;
     }
 
@@ -110,6 +115,22 @@ public sealed class ApiEndpointSender : IApiEndpointSender, IDisposable
                 using var request = BuildRequest(
                     requestUrl, settings, batch, payloadBytes, bodyBytes, secret, bearerToken, attempt);
 
+                // Temporary troubleshooting capture only (see ApiCallCaptureOptions' own doc comment) — set
+                // BEFORE sending so ApiRequestLoggingHandler, further down this same HttpClient's pipeline, both
+                // persists this call's full detail onto its ApiRequestLogs row AND stashes the response detail
+                // back onto this SAME request's Options for the read-back below (see IsEnabled(Debug) block).
+                // Gated identically to the file-log counterpart: off unless Debug logging is enabled, so turning
+                // that off turns off BOTH capture channels together.
+                var captureThisAttempt = _logger.IsEnabled(LogLevel.Debug);
+                if (captureThisAttempt)
+                {
+                    request.Options.Set(ApiCallCaptureOptions.Capture, true);
+                    request.Options.Set(ApiCallCaptureOptions.MaskedUrl, MaskUrlSecret(requestUrl, settings));
+                    request.Options.Set(
+                        ApiCallCaptureOptions.RequestHeaders, FormatHeaders(request.Headers, request.Content?.Headers, settings));
+                    request.Options.Set(ApiCallCaptureOptions.RequestBody, batch.Body);
+                }
+
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(settings.TimeoutSeconds));
 
@@ -123,14 +144,52 @@ public sealed class ApiEndpointSender : IApiEndpointSender, IDisposable
 
                 lastError = $"HTTP {lastStatusCode} {response.ReasonPhrase}".Trim();
 
+                // Local troubleshooting only — the posted body is the same mapped/de-identified payload FHIRBridge
+                // itself just sent (never the raw source resource), but it can still carry patient-adjacent field
+                // values, so this is deliberately LogDebug (off by default) rather than the always-on LogWarning
+                // below, and never routed through IGovernanceLogger/ApiRequestLogs — see ApiRequestLoggingHandler's
+                // own "bodies are never captured" comment for why that channel stays body-free.
+                if (captureThisAttempt)
+                {
+                    // Read back from THIS SAME request's Options rather than the response content directly —
+                    // ApiRequestLoggingHandler (further down this HttpClient's pipeline) already read and stashed
+                    // it there; a second direct read here could return empty for a non-seekable response stream.
+                    var responseBody = request.Options.TryGetValue(ApiCallCaptureOptions.ResponseBody, out var rb)
+                        ? rb : await SafeReadResponseBodyAsync(response, cancellationToken);
+                    var requestHeaders = request.Options.TryGetValue(ApiCallCaptureOptions.RequestHeaders, out var rh)
+                        ? rh : FormatHeaders(request.Headers, request.Content?.Headers, settings);
+                    var responseHeaders = request.Options.TryGetValue(ApiCallCaptureOptions.ResponseHeaders, out var rsh)
+                        ? rsh : FormatHeaders(response.Headers, response.Content.Headers, settings);
+                    var loggedUrl = request.Options.TryGetValue(ApiCallCaptureOptions.MaskedUrl, out var mu)
+                        ? mu : MaskUrlSecret(requestUrl, settings);
+                    _logger.LogDebug(
+                        "API Endpoint destination {DestinationId} attempt {Attempt}/{MaxAttempts} for batch " +
+                        "{IdempotencyKey} correlationId={CorrelationId} got {StatusCode}.\n" +
+                        "Request: {Method} {RequestUrl}\nRequest headers: {RequestHeaders}\nRequest body: {RequestBody}\n" +
+                        "Response headers: {ResponseHeaders}\nResponse body: {ResponseBody}",
+                        destination.Id,
+                        attempt,
+                        maxAttempts,
+                        batch.IdempotencyKey,
+                        _currentUserService.CurrentUser.CorrelationId,
+                        lastStatusCode,
+                        request.Method,
+                        loggedUrl,
+                        requestHeaders,
+                        batch.Body,
+                        responseHeaders,
+                        responseBody);
+                }
+
                 if (!IsRetryable(response.StatusCode))
                 {
                     _logger.LogWarning(
-                        "API Endpoint destination {DestinationId} got non-retryable {StatusCode} for batch {IdempotencyKey} ({RecordCount} records).",
+                        "API Endpoint destination {DestinationId} got non-retryable {StatusCode} for batch {IdempotencyKey} ({RecordCount} records) correlationId={CorrelationId}.",
                         destination.Id,
                         lastStatusCode,
                         batch.IdempotencyKey,
-                        batch.RecordCount);
+                        batch.RecordCount,
+                        _currentUserService.CurrentUser.CorrelationId);
                     return new ApiEndpointSendResult(false, lastStatusCode, attempt, lastError);
                 }
 
@@ -161,14 +220,82 @@ public sealed class ApiEndpointSender : IApiEndpointSender, IDisposable
         }
 
         _logger.LogWarning(
-            "API Endpoint destination {DestinationId} exhausted {Attempts} attempt(s) for batch {IdempotencyKey} ({RecordCount} records): {Error}",
+            "API Endpoint destination {DestinationId} exhausted {Attempts} attempt(s) for batch {IdempotencyKey} ({RecordCount} records) correlationId={CorrelationId}: {Error}",
             destination.Id,
             maxAttempts,
             batch.IdempotencyKey,
             batch.RecordCount,
+            _currentUserService.CurrentUser.CorrelationId,
             lastError);
 
         return new ApiEndpointSendResult(false, lastStatusCode, maxAttempts, lastError);
+    }
+
+    /// <summary>Local-troubleshooting only (see the LogDebug call site above) — a response body that fails to
+    /// read (already-disposed stream, network drop mid-read) must not blow up the retry loop over a log line.</summary>
+    private static async Task<string> SafeReadResponseBodyAsync(
+        HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            return $"<could not read response body: {exception.Message}>";
+        }
+    }
+
+    /// <summary>Local-troubleshooting only (see the LogDebug call site above) — renders both header collections
+    /// (a request/response's own headers plus its content headers, e.g. Content-Type, live in two disjoint .NET
+    /// collections) as one "Name: value" per line. The credential-bearing header for whichever auth mode this
+    /// destination uses (Authorization, or its own configured header name for ApiKeyHeader/HmacSha256) is masked —
+    /// this still lands in a log file on disk, so the actual secret/signature is never written verbatim.</summary>
+    private static string FormatHeaders(
+        HttpHeaders headers, HttpContentHeaders? contentHeaders, ApiEndpointSettings settings)
+    {
+        var sensitiveNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Authorization" };
+        if (settings.AuthMode is ApiEndpointAuthMode.ApiKeyHeader or ApiEndpointAuthMode.HmacSha256
+            && !string.IsNullOrWhiteSpace(settings.AuthHeaderName))
+        {
+            sensitiveNames.Add(settings.AuthHeaderName);
+        }
+
+        var all = contentHeaders is null ? headers : headers.Concat(contentHeaders);
+        var lines = all.Select(h =>
+        {
+            var value = sensitiveNames.Contains(h.Key) ? "***" : string.Join(", ", h.Value);
+            return $"{h.Key}: {value}";
+        });
+        var joined = string.Join(" | ", lines);
+        return string.IsNullOrEmpty(joined) ? "(none)" : joined;
+    }
+
+    /// <summary>Local-troubleshooting only — ApiKeyQuery mode puts the raw secret in the URL's own query string
+    /// (see BuildRequestUrl), so the URL itself must be masked before it lands in a log file the same way any
+    /// other credential here is.</summary>
+    private static string MaskUrlSecret(string requestUrl, ApiEndpointSettings settings)
+    {
+        if (settings.AuthMode != ApiEndpointAuthMode.ApiKeyQuery)
+        {
+            return requestUrl;
+        }
+
+        var paramName = settings.ApiKeyQueryParamName ?? "api_key";
+        if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var uri))
+        {
+            return requestUrl;
+        }
+
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        if (query[paramName] is null)
+        {
+            return requestUrl;
+        }
+
+        query[paramName] = "***";
+        var builder = new UriBuilder(uri) { Query = query.ToString() };
+        return builder.Uri.ToString();
     }
 
     /// <summary>Appends configured static query params, plus the API key when auth mode is ApiKeyQuery.</summary>

@@ -745,6 +745,22 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("OccurredOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("RequestBody")
+                        .HasMaxLength(32000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequestHeaders")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ResponseBody")
+                        .HasMaxLength(32000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ResponseHeaders")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("StatusCode")
                         .HasColumnType("int");
 

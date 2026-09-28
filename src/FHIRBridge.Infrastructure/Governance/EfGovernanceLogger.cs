@@ -209,7 +209,14 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.DurationMs,
             Truncate(entry.Error, 1000),
             entry.CorrelationId ?? current.CorrelationId,
-            entry.Direction));
+            entry.Direction,
+            // Temporary troubleshooting capture only — see ApiRequestLog's own doc comment. Truncated generously
+            // (not the 1000-char cap the fields above use) since a real request/response body needs far more
+            // room to be useful, but still bounded so one runaway payload can't bloat this table unboundedly.
+            Truncate(entry.RequestHeaders, 8000),
+            Truncate(entry.RequestBody, 32000),
+            Truncate(entry.ResponseHeaders, 8000),
+            Truncate(entry.ResponseBody, 32000)));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

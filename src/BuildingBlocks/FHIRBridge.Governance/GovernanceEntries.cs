@@ -88,7 +88,10 @@ public sealed record ErrorEntry(
     DiagnosisAction? DiagnosisAction = null,
     string? DiagnosisCause = null);
 
-/// <summary>One outbound HTTP call — method/URL/status/duration only, never headers, tokens, or bodies.</summary>
+/// <summary>One outbound HTTP call — method/URL/status/duration only, never headers, tokens, or bodies, EXCEPT
+/// for the four trailing optional fields below, which stay null for every caller except the temporary API
+/// Endpoint destination troubleshooting capture — see <see cref="Domain.Entities.Governance.ApiRequestLog"/>'s
+/// own doc comment for why, and remove that capture (and these fields) once no longer needed.</summary>
 public sealed record ApiRequestEntry(
     string Method,
     string Url,
@@ -98,7 +101,11 @@ public sealed record ApiRequestEntry(
     string? CorrelationId = null,
     /// <summary>"Outbound" (a call this system made) or "Inbound" (a call made to this system's API). Defaults
     /// to outbound so every existing caller — all of which are outbound HttpClient handlers — is unaffected.</summary>
-    string Direction = "Outbound");
+    string Direction = "Outbound",
+    string? RequestHeaders = null,
+    string? RequestBody = null,
+    string? ResponseHeaders = null,
+    string? ResponseBody = null);
 
 /// <summary>One destination write ("export") completing.</summary>
 public sealed record ExportEntry(

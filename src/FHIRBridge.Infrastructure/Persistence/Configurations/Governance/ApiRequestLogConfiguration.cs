@@ -18,6 +18,14 @@ public sealed class ApiRequestLogConfiguration : IEntityTypeConfiguration<ApiReq
         builder.Property(x => x.Direction).HasMaxLength(10).IsRequired()
             .HasDefaultValue(ApiRequestDirection.Outbound);
 
+        // Temporary troubleshooting capture only — see ApiRequestLog's own doc comment. Bounded (matching the
+        // Truncate calls in EfGovernanceLogger.LogApiRequestAsync) rather than left fully unbounded, so one
+        // captured call can't bloat this table without limit.
+        builder.Property(x => x.RequestHeaders).HasMaxLength(8000);
+        builder.Property(x => x.RequestBody).HasMaxLength(32000);
+        builder.Property(x => x.ResponseHeaders).HasMaxLength(8000);
+        builder.Property(x => x.ResponseBody).HasMaxLength(32000);
+
         builder.HasIndex(x => x.OccurredOnUtc);
         builder.HasIndex(x => x.CorrelationId);
         builder.HasIndex(x => x.StatusCode);

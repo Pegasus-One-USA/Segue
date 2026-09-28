@@ -127,7 +127,13 @@ public sealed record ApiRequestLogDto(
     string Direction = "Outbound",
     /// <summary>Plain-language description of what this call was doing — see <c>ApiRequestStepDescriber</c>.
     /// Derived at read time from the three fields above, never stored.</summary>
-    string Step = "");
+    string Step = "",
+    /// <summary>Temporary troubleshooting capture only — null for every call except the API Endpoint destination
+    /// capture (see <c>ApiRequestLog</c>'s own doc comment). Remove once no longer needed.</summary>
+    string? RequestHeaders = null,
+    string? RequestBody = null,
+    string? ResponseHeaders = null,
+    string? ResponseBody = null);
 
 public sealed record ExportHistoryDto(
     Guid Id,

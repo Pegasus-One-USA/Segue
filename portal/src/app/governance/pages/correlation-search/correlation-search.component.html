@@ -297,7 +297,13 @@
           @if (!isSectionCollapsed('sec-apiRequests')) {
             <table class="mini-table api-requests-table"><tr><th>Time</th><th>Step</th><th>Method</th><th>URL</th><th>Status</th><th>Duration</th></tr>
               @for (x of r.apiRequests; track x.id) {
-                <tr>
+                <tr
+                  [class.clickable]="hasApiRequestDetail(x)"
+                  [attr.role]="hasApiRequestDetail(x) ? 'button' : null"
+                  [attr.tabindex]="hasApiRequestDetail(x) ? 0 : null"
+                  (click)="hasApiRequestDetail(x) && toggleApiRequestDetail(x.id)"
+                  (keydown.enter)="hasApiRequestDetail(x) && toggleApiRequestDetail(x.id)"
+                >
                   <td class="nowrap">{{ x.occurredOnUtc | date:'h:mm:ss a' }}</td>
                   <td class="step-cell">{{ x.step }}</td>
                   <td class="nowrap">{{ x.method }}</td>
@@ -305,6 +311,43 @@
                   <td class="nowrap">{{ x.statusCode ?? '—' }}</td>
                   <td class="nowrap">{{ x.durationMs }} ms</td>
                 </tr>
+                @if (expandedApiRequestId() === x.id) {
+                  <tr>
+                    <td colspan="6">
+                      <div class="api-request-detail">
+                        @if (x.error) {
+                          <div class="detail-section"><strong>Error:</strong> {{ x.error }}</div>
+                        }
+                        <!-- Temporary troubleshooting capture only — populated ONLY for API Endpoint
+                             destination calls; every other row here has nothing beyond the error above. -->
+                        @if (x.requestHeaders) {
+                          <div class="detail-section">
+                            <strong>Request headers:</strong>
+                            <pre class="detail-pre">{{ x.requestHeaders }}</pre>
+                          </div>
+                        }
+                        @if (x.requestBody) {
+                          <div class="detail-section">
+                            <strong>Request body:</strong>
+                            <pre class="detail-pre">{{ x.requestBody }}</pre>
+                          </div>
+                        }
+                        @if (x.responseHeaders) {
+                          <div class="detail-section">
+                            <strong>Response headers:</strong>
+                            <pre class="detail-pre">{{ x.responseHeaders }}</pre>
+                          </div>
+                        }
+                        @if (x.responseBody) {
+                          <div class="detail-section">
+                            <strong>Response body:</strong>
+                            <pre class="detail-pre">{{ x.responseBody }}</pre>
+                          </div>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
               }
             </table>
           }

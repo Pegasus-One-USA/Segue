@@ -339,7 +339,7 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .Select(x => new ApiRequestLogDto(
                 // Every argument spelled out: an EF expression tree cannot use a record's optional parameters.
                 x.Id, x.OccurredOnUtc, x.Method, x.Url, x.StatusCode, x.DurationMs, x.Error, x.CorrelationId,
-                x.Direction, ""))
+                x.Direction, "", x.RequestHeaders, x.RequestBody, x.ResponseHeaders, x.ResponseBody))
             .ToListAsync(cancellationToken);
 
         // Described after materialization, not inside the projection: this is C# string matching that EF cannot
