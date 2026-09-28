@@ -46,15 +46,22 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     console.warn(`Refusing to send credentials to non-HTTPS request: ${req.url}`);
   }
 
-  const headers: Record<string, string> = {};
-  if (withCreds && STATE_CHANGING_METHODS.has(req.method.toUpperCase())) {
-    const csrfToken = tokens.getCsrfToken();
-    if (csrfToken) {
-      headers['X-CSRF-Token'] = csrfToken;
+  // Reads the CSRF cookie fresh each call rather than once up front — a silent token refresh (below)
+  // can rotate that cookie, and retrying a state-changing request with the header it captured BEFORE
+  // the refresh would fail CSRF validation on a perfectly healthy, just-refreshed session, which this
+  // interceptor can't distinguish from a real expired one and would force-logout an active user over.
+  const buildRequest = (): HttpRequest<unknown> => {
+    const headers: Record<string, string> = {};
+    if (withCreds && STATE_CHANGING_METHODS.has(req.method.toUpperCase())) {
+      const csrfToken = tokens.getCsrfToken();
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
     }
-  }
+    return req.clone({ withCredentials: withCreds, setHeaders: headers });
+  };
 
-  const cloned = req.clone({ withCredentials: withCreds, setHeaders: headers });
+  const cloned = buildRequest();
 
   const forceLogout = (err: HttpErrorResponse): Observable<never> => {
     tokens.clearTokens();
@@ -80,7 +87,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         () => authService.refreshToken(),
         () => authService.syncCurrentUser(),
       ).pipe(
-        switchMap(() => next(cloned)),
+        switchMap(() => next(buildRequest())),
         catchError(() => forceLogout(err)),
       );
     })
