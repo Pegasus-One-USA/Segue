@@ -304,13 +304,20 @@ public static class TransformNodeConfigSchemas
                     visibleWhen: OnlyWhen("mode", "split")),
                 Checkbox("splitIsRegex", "Treat split delimiter as a regex", false, advanced: true,
                     visibleWhen: OnlyWhen("mode", "split")),
-                // Deliberately NOT mode-scoped: a template renders the column's source fields in concat mode
-                // and the split's own pieces in split mode, so it is meaningful in both — but it means
-                // something DIFFERENT in each, which is why it resets on the switch rather than carrying a
-                // "{0} {1}" written for two joined source fields over onto whatever a split happened to
-                // produce. Visibility cannot express that: the field still applies, its content does not.
+                // A template is meaningful in BOTH modes but means something different in each — it binds the
+                // column's source fields under concat, and the split's own pieces under split — so each mode
+                // gets its OWN key rather than sharing one. That is not only tidiness: every rule saved before
+                // this node honoured a template carries a `template` key regardless of mode, because the old
+                // defaulting seeded every field, so reading that key in split mode would change what existing
+                // rules write (see ConcatenationTemplatingNode). A split-only key cannot be stale, because no
+                // saved rule has one.
+                //
+                // Both still reset on a mode switch, which is what stops a "{0} {1}" written for two joined
+                // source fields from being carried over and half-applied to whatever the other mode produces.
                 Text("template", "Template with {0} {1}... placeholders (optional)", placeholder: "e.g. {0} {1}, MD", advanced: true,
-                    resetOn: ["mode"]),
+                    visibleWhen: OnlyWhen("mode", "concat"), resetOn: ["mode"]),
+                Text("splitTemplate", "Template for the split parts — {0} {1}... (optional)", placeholder: "e.g. Hi {0}", advanced: true,
+                    visibleWhen: OnlyWhen("mode", "split"), resetOn: ["mode"]),
             ]),
             [TransformNodeType.ArrayListOperations] = new(TransformNodeType.ArrayListOperations, "Array/List Operations",
             [

@@ -29,21 +29,32 @@ public sealed class TransformNodeConfigSchemaTests
         visibility.Values.Should().Equal([mode]);
     }
 
-    [Fact]
-    public void ConcatenationTemplating_keeps_the_template_available_in_both_modes()
+    [Theory]
+    [InlineData("template", "concat")]
+    [InlineData("splitTemplate", "split")]
+    public void ConcatenationTemplating_gives_each_mode_its_own_template_key(string key, string mode)
     {
-        // concat binds the column's source fields; split binds the pieces the split produced.
-        Field(TransformNodeType.ConcatenationTemplating, "template").VisibleWhen.Should().BeNull();
+        // A template is meaningful in both modes — concat binds the column's source fields, split binds the
+        // pieces the split produced — but it means something different in each, so each mode owns its key
+        // rather than sharing one. That also makes the split template un-stale-able: every rule saved before
+        // this node honoured a template carries a `template` key whatever its mode, so reading that key in
+        // split mode would change what existing rules write.
+        var visibility = Field(TransformNodeType.ConcatenationTemplating, key).VisibleWhen;
+
+        visibility.Should().NotBeNull();
+        visibility!.Key.Should().Be("mode");
+        visibility.Values.Should().Equal([mode]);
     }
 
-    [Fact]
-    public void ConcatenationTemplating_resets_the_template_when_the_mode_changes()
+    [Theory]
+    [InlineData("template")]
+    [InlineData("splitTemplate")]
+    public void ConcatenationTemplating_resets_a_template_when_the_mode_changes(string key)
     {
-        // The template survives the switch (it applies in both modes) but its CONTENT does not: "{0} {1}"
-        // written against a joined column's two source fields describes nothing in particular once the same
-        // rule is splitting a string into however many pieces. Visibility cannot express "still applies, no
-        // longer valid", so the field declares the key whose change invalidates it.
-        Field(TransformNodeType.ConcatenationTemplating, "template").ResetOn.Should().Equal(["mode"]);
+        // "{0} {1}" written against a joined column's two source fields describes nothing in particular once
+        // the same rule is splitting a string into however many pieces, so neither template is carried across
+        // a mode switch to be half-applied to whatever the other mode produces.
+        Field(TransformNodeType.ConcatenationTemplating, key).ResetOn.Should().Equal(["mode"]);
     }
 
     [Theory]

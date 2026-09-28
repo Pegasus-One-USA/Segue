@@ -820,8 +820,94 @@ public sealed class JsonMappingEngineJoinedFieldsTests
         var result = _engine.Map(NestedContactJson, [field]);
 
         result.Errors.Should().ContainSingle()
-            .Which.Should().Contain("ContactPhone").And.Contain("nested deeper");
+            .Which.Should().Contain("ContactPhone").And.Contain("nested inside");
         result.Rows![0]["ContactPhone"].Should().BeNull("a wrong value is worse than none");
+    }
+
+    private const string TypedIdentifiersJson = """
+    {
+      "resourceType": "Patient",
+      "identifier": [
+        {
+          "system": "urn:oid:1.2.3",
+          "value": "SSN-111",
+          "type": { "coding": [ { "system": "http://terminology.hl7.org/CodeSystem/v2-0203", "code": "SS" } ] }
+        },
+        {
+          "system": "urn:oid:4.5.6",
+          "value": "MRN-222",
+          "type": { "coding": [ { "system": "http://terminology.hl7.org/CodeSystem/v2-0203", "code": "MR" } ] }
+        }
+      ]
+    }
+    """;
+
+    [Fact]
+    public void A_nested_criteria_over_scalar_joined_sources_still_selects_its_instance()
+    {
+        // The refusal must key off whether the JOINED SOURCES repeat below the row, not off how deep the
+        // criteria happens to sit. Here system/value are scalar under identifier[], so the outer index fully
+        // determines the row's content and a criteria inside type.coding[] still names exactly one row —
+        // there is nothing ambiguous to refuse. Refusing it would raise a mapping error, and
+        // ConfiguredPipelineService skips the WHOLE resource on one, so every Patient carrying an MR
+        // identifier would drop out of the run.
+        var field = new MappingFieldDto(
+            TargetField: "Mrn",
+            JsonPath: "$.identifier[*].system|$.identifier[*].value",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter=, ",
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.identifier[*].type.coding[*].code",
+            CorrelationCodeValue: "MR");
+
+        var result = _engine.Map(TypedIdentifiersJson, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Rows![0]["Mrn"].Should().Be("urn:oid:4.5.6, MRN-222");
+    }
+
+    private const string RelatedContactsJson = """
+    {
+      "resourceType": "Patient",
+      "contact": [
+        {
+          "relationship": [ { "coding": [ { "code": "N" } ] } ],
+          "name": { "given": ["Jo", "Ann"], "family": "Smith" }
+        },
+        {
+          "relationship": [ { "coding": [ { "code": "C" } ] } ],
+          "name": { "given": ["Sam"], "family": "Doe" }
+        }
+      ]
+    }
+    """;
+
+    [Fact]
+    public void A_nested_criteria_down_a_different_branch_than_the_repeating_source_still_selects_its_instance()
+    {
+        // given[*] DOES repeat below the row's contact[] key, so "do the sources repeat?" alone would refuse
+        // this — but the criteria is inside relationship[], a different array entirely. Both given names
+        // belong to the one contact the criteria picked, so the row is perfectly well determined. What makes
+        // a criteria unanswerable is sharing the source's nested array, not sitting at some depth.
+        var field = new MappingFieldDto(
+            TargetField: "EmergencyContact",
+            JsonPath: "$.contact[*].name.given[*]|$.contact[*].name.family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter= ",
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.contact[*].relationship[*].coding[*].code",
+            CorrelationCodeValue: "C");
+
+        var result = _engine.Map(RelatedContactsJson, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Rows![0]["EmergencyContact"].Should().Be("Sam Doe");
     }
 
     [Fact]

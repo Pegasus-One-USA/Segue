@@ -154,7 +154,7 @@ public sealed class StringStructureNodesTests
         {
             ["mode"] = "split",
             ["splitDelimiter"] = ",",
-            ["template"] = "Hi {0}",
+            ["splitTemplate"] = "Hi {0}",
         };
         var result = new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null);
 
@@ -170,7 +170,7 @@ public sealed class StringStructureNodesTests
         {
             ["mode"] = "split",
             ["splitDelimiter"] = ",",
-            ["template"] = "{1} - {0}",
+            ["splitTemplate"] = "{1} - {0}",
         };
         new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null)
             .Value.Should().BeEquivalentTo(new[] { "MD - Physician Family Medicine" });
@@ -192,7 +192,7 @@ public sealed class StringStructureNodesTests
         {
             ["mode"] = "split",
             ["splitDelimiter"] = ",",
-            ["template"] = "Hi {0} {5}",
+            ["splitTemplate"] = "Hi {0} {5}",
         };
         // The placeholder goes; the literal text around it (here the separating space) is the author's and stays.
         new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null)
@@ -207,9 +207,29 @@ public sealed class StringStructureNodesTests
         {
             ["mode"] = "split",
             ["splitDelimiter"] = ",",
-            ["template"] = "Hi {0}",
+            ["splitTemplate"] = "Hi {0}",
         };
         new ConcatenationTemplatingNode().Execute("Physician One Cardiology", config, null)
             .Value.Should().BeEquivalentTo(new[] { "Hi Physician One Cardiology" });
+    }
+
+    [Fact]
+    public void ConcatenationTemplatingNode_split_mode_ignores_a_leftover_concat_template()
+    {
+        // The migration case, and the reason split reads its own key. EVERY rule in the database carries a
+        // `template` key regardless of mode, because the old defaulting seeded every field — so a rule
+        // switched to split long ago can be sitting on a "Hi {0}" nobody meant for it. Reading it here would
+        // rewrite what that rule has always written: the parts below would collapse to
+        // ["Hi Physician Family Medicine"], which is a different column value AND the wrong item for any
+        // step after the split.
+        var config = new Dictionary<string, string>
+        {
+            ["mode"] = "split",
+            ["splitDelimiter"] = ",",
+            ["template"] = "Hi {0}",
+        };
+
+        new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null)
+            .Value.Should().BeEquivalentTo(new[] { "Physician Family Medicine", "MD" });
     }
 }

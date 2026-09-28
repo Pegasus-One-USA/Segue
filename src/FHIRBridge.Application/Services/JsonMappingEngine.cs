@@ -456,23 +456,42 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             .Where(ix => ix.Count > 0)
             .ToList();
 
-        // A joined row is keyed by its OUTERMOST array index alone (see ResolveJoinedFieldRows) — it stands
-        // for a whole contact[] entry, and has no identity at any level below that. A criteria reaching into
-        // a nested array therefore has nothing per-row to match against: IsIndexChainMatch compares only the
-        // depth the two chains share, so "contact[*].telecom[*].system = phone" agreed on the contact index
-        // and selected the ENTIRE contact — putting that contact's email into a column meant for its phone.
+        // A joined row is keyed by its OUTERMOST array index alone (see ResolveJoinedFieldRows), so when a
+        // SOURCE repeats below that key the row spans every one of that source's items —
+        // "contact[*].telecom[*].value" puts all of one contact's telecoms into a single row. A criteria
+        // inside THAT SAME nested array then has nothing per-item to select: IsIndexChainMatch compares only
+        // the depth two chains share, so "contact[*].telecom[*].system = phone" agreed on the contact index
+        // and selected the ENTIRE contact, putting that contact's email into a column meant for its phone.
+        // No single telecom is "the" match for a row holding all of them, so there is no right answer to
+        // compute; saying so leaves the column null rather than confidently wrong.
         //
-        // There is no right answer to compute here: the row genuinely spans every telecom of that contact,
-        // so no single one of them is "the" match. Saying so is the honest outcome, and it leaves the column
-        // null rather than confidently wrong. A criteria at the joined row's own level (name[*].use) is
-        // unaffected, and so is every criteria on a single-source column, which correlates on full chains.
-        if (isJoinedField && matchingIndexChains.Any(chain => chain.Count > 1))
+        // The test is SHARED ARRAY, not depth. A criteria merely being nested proves nothing about the row:
+        // "identifier[*].system|identifier[*].value" matched on "identifier[*].type.coding[*].code = MR" is
+        // scalar under identifier[], so the outer index fixes the row's entire content and the criteria names
+        // exactly one row. So is a criteria down a DIFFERENT branch than the source that repeats —
+        // "contact[*].relationship[*].coding[*].code" against joined "contact[*].name.given[*]", where every
+        // given name belongs to the one contact the criteria picked. Refusing those is not a null column: a
+        // mapping error makes ConfiguredPipelineService skip the WHOLE resource, so every Patient with an MR
+        // identifier would silently vanish from the run.
+        var criteriaNestedArray = NestedArrayPath(field.CorrelationCodeJsonPath);
+        var criteriaSharesASourcesNestedArray = isJoinedField
+            && criteriaNestedArray is not null
+            && field.JsonPath
+                .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(subPath => string.Equals(
+                    NestedArrayPath(subPath), criteriaNestedArray, StringComparison.OrdinalIgnoreCase));
+
+        // The chain check stays as the second half so a criteria that matched NOTHING is left alone: that
+        // already yields a null column, and adding an error would turn a mapping that writes no value into one
+        // that discards the resource.
+        if (criteriaSharesASourcesNestedArray && matchingIndexChains.Any(chain => chain.Count > 1))
         {
             errors.Add(
-                $"Field '{field.TargetField}' matches on '{field.CorrelationCodeJsonPath}', which is nested deeper " +
-                "than the array its joined sources repeat over — a joined column is selected one outer instance " +
-                "at a time, so a criteria inside a nested array cannot pick between that instance's items. " +
-                "Match on a field of the outer array, or map the nested field as its own column.");
+                $"Field '{field.TargetField}' matches on '{field.CorrelationCodeJsonPath}', which is nested inside " +
+                $"'{criteriaNestedArray}' — the same repeating array its joined sources span. A joined column is " +
+                "selected one outer instance at a time, and that instance holds every item of the nested array, so " +
+                "the criteria cannot pick between them. Match on a field of the outer array, or map the nested " +
+                "field as its own column.");
             return [];
         }
 
@@ -958,6 +977,42 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// Resolves a JSONPath into every matching element, supporting `[*]` (fan-out) and `[n]` (fixed index).
     /// Each match carries its array index path so SeparateDestination / RepeatParent can align rows.
     /// </summary>
+    /// <summary>
+    /// The path truncated after its SECOND bracket token — "$.contact[*].telecom[*].value" becomes
+    /// "$.contact[*].telecom[*]" — naming the nested array that path repeats over one level below a joined
+    /// row's key. Null when the path has fewer than two, i.e. it is scalar within its outer instance.
+    /// </summary>
+    /// <remarks>
+    /// Read off the path TEXT rather than from resolved indices because two different arrays produce
+    /// identical index chains — contact[0].telecom[1] and contact[0].name.given[1] are both [0,1] — so only
+    /// the path says WHICH array an index came from, which is the whole question in
+    /// <see cref="SelectCorrelatedPositions"/>. Safe to do because <see cref="ResolveAll"/> never iterates an
+    /// array on its own: every index in a chain comes from an explicit bracket token ([*], [n] or [?…]), so
+    /// bracket tokens and chain depth correspond exactly. Segments are split the same way ResolveAll splits
+    /// them, so the two agree on what a segment is even where that splitting is imperfect.
+    /// </remarks>
+    private static string? NestedArrayPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Length < 2 || path[0] != '$')
+        {
+            return null;
+        }
+
+        var segments = path[2..].Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var bracketed = 0;
+
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var (_, indexToken) = ParseSegment(segments[i]);
+            if (indexToken is not null && ++bracketed == 2)
+            {
+                return "$." + string.Join('.', segments.Take(i + 1));
+            }
+        }
+
+        return null;
+    }
+
     private static List<(JsonElement Element, IReadOnlyList<int> Indices)> ResolveAll(JsonElement root, string path)
     {
         var frontier = new List<(JsonElement Element, List<int> Indices)> { (root, []) };
