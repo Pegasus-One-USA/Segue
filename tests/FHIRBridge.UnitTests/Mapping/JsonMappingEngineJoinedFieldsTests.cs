@@ -410,12 +410,14 @@ public sealed class JsonMappingEngineJoinedFieldsTests
     }
 
     [Fact]
-    public void A_joined_value_declared_as_a_non_string_type_reports_the_mismatch_and_keeps_the_text()
+    public void A_joined_value_declared_as_a_non_string_type_is_still_written_without_an_error()
     {
-        // Declaring a join as Integer is a configuration mistake — two text fields concatenated can never be
-        // one. It has to SAY so rather than hand Postgres a string for an integer column, which fails at
-        // write time naming neither the field nor the mapping. ConvertValue's own mismatch fallback still
-        // passes the raw text on, so a rule chain downstream is unaffected.
+        // This case previously asserted the opposite — that a non-String declaration was reported as a
+        // mismatch — on the reading that declaring a join as Integer is a configuration mistake worth
+        // surfacing. It is not the author's mistake: the declared type is whatever serializeRowsFlat sent,
+        // and for a join that is sources[0].valueType, a value nobody chose for the COLUMN. Raising an error
+        // on it made ConfiguredPipelineService skip the entire record, so the "helpful" message cost the
+        // whole resource. A join is text; it is written as text and says nothing.
         var field = new MappingFieldDto(
             TargetField: "FullName",
             JsonPath: "$.name[*].given[*]|$.name[*].family",
@@ -427,7 +429,7 @@ public sealed class JsonMappingEngineJoinedFieldsTests
 
         var result = _engine.Map(EpicPatientJson, [field]);
 
-        result.Errors.Should().NotBeEmpty();
+        result.Errors.Should().BeEmpty();
         result.Rows![0]["FullName"].Should().Be("Warren James McGinnis");
     }
 
@@ -628,5 +630,92 @@ public sealed class JsonMappingEngineJoinedFieldsTests
         result.Errors.Should().ContainSingle()
             .Which.Should().Contain("Doc").And.Contain("CorrelationCodeJsonPath");
         result.Rows![0]["Doc"].Should().BeNull();
+    }
+
+    [Fact]
+    public void A_joined_value_is_typed_as_text_not_as_its_first_sources_type()
+    {
+        // serializeRowsFlat sends effectiveMappingValueType, which is sources[0].valueType — so a join of a
+        // Decimal value with a String unit arrives declaring Decimal. Coercing the joined "120 mmHg" to it
+        // recorded a conversion error, and ConfiguredPipelineService treats a mapping error as "skip this
+        // whole record": every Observation dropped, for a column only ever going to hold text.
+        const string observation = """
+        { "resourceType": "Observation", "valueQuantity": { "value": 120, "unit": "mmHg" } }
+        """;
+        var field = new MappingFieldDto(
+            TargetField: "Reading",
+            JsonPath: "$.valueQuantity.value|$.valueQuantity.unit",
+            ValueType: MappingValueType.Decimal,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter= ",
+            ResourceType: "Observation",
+            ArrayPolicy: ArrayPolicy.FirstItem);
+
+        var result = _engine.Map(observation, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Rows![0]["Reading"].Should().Be("120 mmHg");
+    }
+
+    [Fact]
+    public void A_join_ending_in_a_reference_keeps_every_field_not_just_the_id()
+    {
+        // IsFhirReferencePath tests the whole JsonPath, and a joined one is every sub-path concatenated —
+        // so a join merely ENDING in ".reference" looked like a bare "Type/id" pointer and was reduced to
+        // the id, discarding everything else the author joined onto it.
+        const string encounter = """
+        {
+          "resourceType": "Encounter",
+          "serviceType": { "text": "Office Visit" },
+          "subject": { "reference": "Patient/123" }
+        }
+        """;
+        var field = new MappingFieldDto(
+            TargetField: "Label",
+            JsonPath: "$.serviceType.text|$.subject.reference",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter=, ",
+            ResourceType: "Encounter",
+            ArrayPolicy: ArrayPolicy.FirstItem);
+
+        var result = _engine.Map(encounter, [field]);
+
+        result.Rows![0]["Label"].Should().Be("Office Visit, Patient/123").And.NotBe("123");
+    }
+
+    [Fact]
+    public void A_criteria_joining_several_values_is_checked_against_the_column_not_written_blind()
+    {
+        // The join of several matches is TEXT whatever the column was declared as. Writing it unchecked put
+        // "12, 34" into a Decimal column and turned an MRN upsert key into "123, 456" — a key matching no
+        // existing row, so every run inserts a duplicate instead of updating.
+        const string patient = """
+        {
+          "resourceType": "Patient",
+          "identifier": [
+            { "system": "mrn", "value": "123" },
+            { "system": "mrn", "value": "456" }
+          ]
+        }
+        """;
+        var field = new MappingFieldDto(
+            TargetField: "Mrn",
+            JsonPath: "$.identifier[*].value",
+            ValueType: MappingValueType.Integer,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "directField",
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.identifier[*].system",
+            CorrelationCodeValue: "mrn");
+
+        var result = _engine.Map(patient, [field]);
+
+        // Says so, rather than silently handing a numeric column a delimited string.
+        result.Errors.Should().NotBeEmpty();
     }
 }

@@ -146,7 +146,12 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             // via ExtractReferenceId below and are unaffected: that call is idempotent on a bare id. This is
             // what plain reference mappings — the ones WITHOUT "Resolves to" — were missing, which is why
             // Observation.EncounterId stored "Encounter/anon-…" while Encounter.PatientId stored the bare id.
-            if (IsFhirReferencePath(field.JsonPath))
+            // NOT for a joined column. Its JsonPath is every sub-path concatenated with "|", so one merely
+            // ENDING in ".reference" made the whole joined value look like a bare reference — and
+            // ExtractReferenceId then reduced "Office Visit, Patient/123" to "123", discarding every other
+            // field the author joined. A join's value is a delimited string, not a "Type/id" pointer, so
+            // the normalization that exists for a real reference column cannot apply to it.
+            if (!isJoinedFields && IsFhirReferencePath(field.JsonPath))
             {
                 values = values
                     .Select(value => value is string reference ? ExtractReferenceId(reference) : value)
@@ -280,7 +285,7 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
                     // correlatedPositions, not a second selection pass: resolving the criteria twice per
                     // field re-walked the whole document for the same answer, and recorded the "missing
                     // CorrelationCodeJsonPath/Value" configuration error twice for one misconfigured field.
-                    parent[field.TargetField] = CollapseCorrelatedValues(correlatedPositions, values);
+                    parent[field.TargetField] = CollapseCorrelatedValues(correlatedPositions, values, field, errors);
                     break;
 
                 case ArrayPolicy.Scalar:
@@ -375,22 +380,32 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// yields that item's value unchanged. A criteria that matches several yields all of them, joined; see the
     /// switch at the end for why the single-match case must not take the joining path.
     /// </summary>
-    private static object? CollapseCorrelatedValues(List<int>? positions, List<object?> values)
+    private static object? CollapseCorrelatedValues(
+        List<int>? positions, List<object?> values, MappingFieldDto field, List<string> errors)
     {
         var selected = positions is null ? [] : positions.Select(i => values[i]).ToList();
 
-        return selected.Count switch
+        if (selected.Count <= 1)
         {
-            0 => null,
             // A single match returns the value ITSELF, not a one-element string. This is what keeps the
             // ordinary case — a criteria written to identify exactly one item, e.g. the telecom whose
             // system is "phone" — byte-identical to before, types included: collapsing it to text here
             // would hand a Date or Integer column a string and break the write.
-            1 => selected[0],
-            // Several matches share one destination column, so they join the way every other "more than one
-            // value in one column" path does (JoinValues, the same ", " the csv aggregate uses).
-            _ => JoinValues(selected)
-        };
+            return selected.Count == 0 ? null : selected[0];
+        }
+
+        // Several matches share one destination column, so they join the way every other "more than one
+        // value in one column" path does (JoinValues, the same ", " the csv aggregate uses).
+        //
+        // That join is TEXT, whatever the column was declared as, so it has to be checked rather than
+        // written blind: a criteria matching several rows on a Decimal or Date column silently handed it
+        // "12, 34", and on an upsert-key column an MRN became "123, 456" — a key that matches no existing
+        // row, so every run inserts a duplicate instead of updating. Routed through ConvertValue with the
+        // column's real ValueType so a type that cannot hold a list says so as a mapping error, and
+        // MaxLength is applied to the joined result rather than only to each item.
+        return ConvertValue(
+            JoinValues(selected), field.ValueType, field.Format, field.TargetField, errors,
+            field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform);
     }
 
     /// <summary>
@@ -735,7 +750,17 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         List<string> errors) =>
         rows.Select(row => (
             ConvertValue(
-                string.Join(delimiter, row.Pieces), field.ValueType, field.Format, field.TargetField, errors,
+                string.Join(delimiter, row.Pieces),
+                // ALWAYS String, never field.ValueType. A join's value is string.Join(delimiter, pieces) —
+                // a delimited string by construction, whatever its first source's own type says. And
+                // field.ValueType IS that first source's type: serializeRowsFlat sends
+                // effectiveMappingValueType, which returns sources[0].valueType. So joining
+                // valueQuantity.value + unit asked "is '120 mmHg' a Decimal?", recorded a conversion
+                // error, and ConfiguredPipelineService treats a mapping error as "skip this whole record"
+                // — every Observation dropped, for a column that was only ever going to hold text.
+                // String still runs the MaxLength check this call exists for.
+                MappingValueType.String,
+                field.Format, field.TargetField, errors,
                 field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform),
             row.Indices)).ToList();
 
