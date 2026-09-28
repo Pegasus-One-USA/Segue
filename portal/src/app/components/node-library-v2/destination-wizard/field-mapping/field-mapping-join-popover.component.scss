@@ -355,6 +355,11 @@
   flex-direction: column;
   gap: var(--space-6);
   margin-top: var(--space-6);
+
+  // The shared hint carries the browser's default <p> margin, which here would stack on top of the gap
+  // above and push the Type control out of the section's rhythm. Scoped rather than reset on
+  // .fm-popover-hint itself, so the body-level hint keeps the spacing it already ships with.
+  .fm-popover-hint { margin: 0; }
 }
 
 .fm-popover-rule-actions {

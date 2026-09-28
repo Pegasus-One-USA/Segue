@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Caching;
+﻿using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities.Terminology;
@@ -7,6 +7,7 @@ using FHIRBridge.Infrastructure.Terminology;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -27,6 +28,13 @@ public sealed class HapiLocalTerminologyTests
     {
         var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
             .UseInMemoryDatabase(databaseName, root)
+            // Every distinct InMemoryDatabaseRoot makes EF build another internal service provider, and it
+            // throws once twenty exist in a process. That is a cumulative, ASSEMBLY-wide count, so these tests
+            // passed alone and failed in the full run purely according to how many other tests had already
+            // built one — and adding tests anywhere in this project moved which ones fell over. The isolation
+            // is deliberate here (a fresh database per test), so the provider count is expected rather than
+            // the leak the warning is meant to catch.
+            .ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
             .Options;
         return new FHIRBridgeDbContext(options);
     }

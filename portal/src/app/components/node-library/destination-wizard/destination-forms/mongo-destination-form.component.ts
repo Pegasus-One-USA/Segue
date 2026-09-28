@@ -39,9 +39,10 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     connectionString: ['', [Validators.required]],
     collection: ['', [Validators.required]],
     writeMode: ['upsert', []],
-    // Off by default: the collection must already exist unless explicitly opted out of (matches the writer's
-    // "customer owns the destination" default — see MappedMongoDestinationWriter.WriteAsync).
-    createIfNotExists: [false, []],
+    // No createIfNotExists control: MappedMongoDestinationWriter.EnsureCollectionExistsAsync now always
+    // creates a missing collection, so the opt-in governed nothing at run time any more. `collection` stays —
+    // unlike the workflow builder's own Mongo form, this screen's collection IS the saved
+    // DestinationConfiguration.Target (see destination-connection-dialog.component.ts's TARGET_FIELD_KEYS).
   });
 
   /** True while the host is reusing a previously-saved connection unchanged — connectionString is a secret that
@@ -87,8 +88,11 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     this.schemaSvc
       .testMongo({
         connectionString: v.connectionString ?? '',
+        // createIfNotExists: true — the collection-existence check must agree with what the pipeline
+        // actually does. Left false, Test Connection reported "collection does not exist" as a FAILURE for a
+        // collection the writer now creates on its first write, i.e. a failure for something that works.
         collection: v.collection || undefined,
-        createIfNotExists: v.createIfNotExists ?? false,
+        createIfNotExists: true,
         destinationId: this.existingDestinationId() ?? undefined,
       })
       .subscribe({
@@ -121,7 +125,6 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
       dest_connectionString: v.connectionString ?? '',
       dest_collection: v.collection ?? '',
       dest_writeMode: v.writeMode ?? 'upsert',
-      dest_createCollectionIfNotExists: String(v.createIfNotExists ?? false),
     };
   }
 
@@ -142,7 +145,6 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
       connectionString: '',
       collection: fields['dest_collection'] || target || '',
       writeMode: fields['dest_writeMode'] || 'upsert',
-      createIfNotExists: fields['dest_createCollectionIfNotExists'] === 'true',
     });
   }
 
@@ -152,7 +154,6 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
       connectionString: '',
       collection: '',
       writeMode: 'upsert',
-      createIfNotExists: false,
     });
     this.collections.set([]);
     this.probeState.set('idle');

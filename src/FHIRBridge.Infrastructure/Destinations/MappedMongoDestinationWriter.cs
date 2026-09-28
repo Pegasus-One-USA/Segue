@@ -2,6 +2,7 @@ using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -20,6 +21,13 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// WriteChildTablesAsync but honoring a per-child-collection upsert key when one is mapped (SQL Server's own
 /// child-table writer doesn't; see ResolveUpsertKeyField's per-DestinationObject scoping, already correct on
 /// the read side — this was the missing write-side half).
+///
+/// A <c>ValueType=Json</c> field (the mapping canvas's "whole node as JSON", and any array stored under
+/// <see cref="ArrayPolicy.StoreJson"/>) arrives here as raw JSON text. By default it is stored as exactly
+/// that — one BSON string — which is what every destination, relational included, has always done. When the
+/// mapping selects <see cref="JsonColumnWriteMode.Document"/> instead (see <see cref="MappingFieldFormat"/>,
+/// an option offered only for MongoDB destinations), that text is parsed and stored as a real nested BSON
+/// sub-document, so the collection can be indexed and queried inside the value with dotted paths.
 /// </summary>
 public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
 {
@@ -49,25 +57,22 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
         var database = client.GetDatabase(new MongoUrl(connectionString).DatabaseName
             ?? throw new InvalidOperationException("The Mongo connection string must include a database name."));
 
-        // Same flag governs the primary collection and every child collection below — one destination, one
-        // "am I allowed to create what's missing" setting, matching there being a single checkbox on the form.
-        var createIfNotExists = ConnectionMetadataReader.GetBool(
-            destination.ConnectionMetadataJson, "dest_createCollectionIfNotExists", fallback: false);
-
-        await EnsureCollectionExistsAsync(database, collectionName, createIfNotExists, cancellationToken);
+        await EnsureCollectionExistsAsync(database, collectionName, cancellationToken);
 
         var collection = database.GetCollection<BsonDocument>(collectionName);
         var keyField = ResolveUpsertKeyField(mappingProfile, mappingProfile.DestinationObject);
+        var documentJsonColumns = ResolveDocumentJsonColumns(mappingProfile, mappingProfile.DestinationObject);
 
         // Child collections referenced by this batch — resolved/ensured once, not per record: a child table's
         // name (and therefore its collection and key field) is fixed for the whole mapping profile, so every
         // record needing it reuses the same handle rather than re-listing/re-creating on every single record.
-        var childCollections = new Dictionary<string, (IMongoCollection<BsonDocument> Collection, string? KeyField)>(
+        var childCollections = new Dictionary<string,
+            (IMongoCollection<BsonDocument> Collection, string? KeyField, IReadOnlySet<string> DocumentJsonColumns)>(
             StringComparer.OrdinalIgnoreCase);
 
         foreach (var record in records)
         {
-            var document = ToBsonDocument(record);
+            var document = ToBsonDocument(record, documentJsonColumns);
 
             if (keyField is not null && record.Values.TryGetValue(keyField, out var keyValue) && keyValue is not null)
             {
@@ -84,7 +89,7 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
                 foreach (var childTable in childTables)
                 {
                     await WriteChildTableAsync(
-                        database, mappingProfile, record, childTable, createIfNotExists, childCollections, cancellationToken);
+                        database, mappingProfile, record, childTable, childCollections, cancellationToken);
                 }
             }
         }
@@ -110,8 +115,8 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
         MappingProfile mappingProfile,
         MappedDestinationRecord record,
         MappedChildTableRecord childTable,
-        bool createIfNotExists,
-        Dictionary<string, (IMongoCollection<BsonDocument> Collection, string? KeyField)> childCollections,
+        Dictionary<string,
+            (IMongoCollection<BsonDocument> Collection, string? KeyField, IReadOnlySet<string> DocumentJsonColumns)> childCollections,
         CancellationToken cancellationToken)
     {
         if (childTable.Rows.Count == 0)
@@ -132,14 +137,18 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
         if (!childCollections.TryGetValue(childTable.TableName, out var childInfo))
         {
             var childCollectionName = ValidateCollectionName(childTable.TableName);
-            await EnsureCollectionExistsAsync(database, childCollectionName, createIfNotExists, cancellationToken);
+            await EnsureCollectionExistsAsync(database, childCollectionName, cancellationToken);
             var childKeyField = ResolveUpsertKeyField(mappingProfile, childTable.TableName);
-            childInfo = (database.GetCollection<BsonDocument>(childCollectionName), childKeyField);
+            childInfo = (
+                database.GetCollection<BsonDocument>(childCollectionName),
+                childKeyField,
+                ResolveDocumentJsonColumns(mappingProfile, childTable.TableName));
             childCollections[childTable.TableName] = childInfo;
         }
 
         var childDocuments = childTable.Rows
-            .Select(row => ToChildBsonDocument(row, hasForeignKey ? childTable.ForeignKeyColumn : null, parentKeyValue))
+            .Select(row => ToChildBsonDocument(
+                row, hasForeignKey ? childTable.ForeignKeyColumn : null, parentKeyValue, childInfo.DocumentJsonColumns))
             .ToList();
 
         if (childInfo.KeyField is not null)
@@ -174,11 +183,21 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
         }
     }
 
-    /// <summary>Same "customer owns the destination by default, create-if-not-exists opts out of that"
-    /// contract every other writer enforces (MongoDB itself would otherwise auto-create on first write) —
-    /// shared by the primary collection and every child collection.</summary>
+    /// <summary>
+    /// Creates the collection when it isn't there yet — for the primary collection and every child collection
+    /// alike. Unconditional: the destination form's "Create collection if not exists" opt-in is gone, so a
+    /// missing collection is always created rather than failing the run. That restores MongoDB's own native
+    /// behaviour (it materializes a collection on first write regardless) and is what makes the mapping
+    /// canvas's "type a new collection name" option actually usable — the collection it names exists nowhere
+    /// until the first run. The explicit create is kept rather than just letting the insert do it, so the
+    /// collection also exists for a run that turns out to write no records.
+    ///
+    /// Note this drops the old "customer owns the destination, don't create anything they didn't ask for"
+    /// stance that the relational writers still take for tables. A Mongo collection is schemaless and free to
+    /// create, so there is nothing here to get wrong the way a guessed table shape would be.
+    /// </summary>
     private static async Task EnsureCollectionExistsAsync(
-        IMongoDatabase database, string collectionName, bool createIfNotExists, CancellationToken cancellationToken)
+        IMongoDatabase database, string collectionName, CancellationToken cancellationToken)
     {
         var existingNames = await (await database.ListCollectionNamesAsync(
             new ListCollectionNamesOptions { Filter = Builders<BsonDocument>.Filter.Eq("name", collectionName) },
@@ -186,12 +205,6 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
         if (existingNames.Count > 0)
         {
             return;
-        }
-
-        if (!createIfNotExists)
-        {
-            throw new InvalidOperationException(
-                $"Destination collection '{collectionName}' does not exist. Create it in your database before running this pipeline, or enable \"Create collection if not exists\" on this destination.");
         }
 
         try
@@ -210,13 +223,18 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
     /// native date type — <c>Demo_TestApp</c>'s <c>MongoPatientDataSourceReader.GetDateOnly</c> reads this same
     /// shape of document via <c>BsonValue.AsString</c>, which throws on a native BSON date, so every writer into
     /// this collection family must keep dates string-typed for read compatibility.
+    ///
+    /// <paramref name="documentJsonColumns"/> names the columns whose JSON text is to be stored as a real
+    /// nested BSON sub-document instead (see <see cref="ResolveDocumentJsonColumns"/>); every other column,
+    /// JSON-valued or not, is written exactly as before.
     /// </summary>
-    private static BsonDocument ToBsonDocument(MappedDestinationRecord record)
+    private static BsonDocument ToBsonDocument(
+        MappedDestinationRecord record, IReadOnlySet<string> documentJsonColumns)
     {
         var document = new BsonDocument();
         foreach (var (column, value) in record.Values)
         {
-            document[column] = ToBsonValue(value);
+            document[column] = ToBsonValue(value, documentJsonColumns.Contains(column));
         }
 
         return document;
@@ -233,11 +251,15 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
     /// MappedSqlServerDestinationWriter.InsertChildRowsAsync's own exclusion).
     /// </summary>
     private static BsonDocument ToChildBsonDocument(
-        IReadOnlyDictionary<string, object?> row, string? foreignKeyColumn, object? parentKeyValue)
+        IReadOnlyDictionary<string, object?> row,
+        string? foreignKeyColumn,
+        object? parentKeyValue,
+        IReadOnlySet<string> documentJsonColumns)
     {
         var document = new BsonDocument();
         if (!string.IsNullOrWhiteSpace(foreignKeyColumn) && parentKeyValue is not null)
         {
+            // The parent's key value copied verbatim — a link field, never a JSON payload of its own.
             document[foreignKeyColumn] = ToBsonValue(parentKeyValue);
         }
 
@@ -248,10 +270,30 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
                 continue;
             }
 
-            document[column] = ToBsonValue(value);
+            document[column] = ToBsonValue(value, documentJsonColumns.Contains(column));
         }
 
         return document;
+    }
+
+    /// <summary>
+    /// <see cref="ToBsonValue(object?)"/>, plus the one column-scoped exception: when this column's mapping
+    /// selected <see cref="JsonColumnWriteMode.Document"/>, its JSON text is parsed into the equivalent BSON
+    /// sub-document/array rather than stored as a string. Text that doesn't parse falls back to being stored
+    /// as-is — that IS the default behaviour, so a malformed value degrades to the old shape rather than
+    /// failing the batch and losing the record.
+    /// </summary>
+    private static BsonValue ToBsonValue(object? value, bool asDocument)
+    {
+        if (asDocument
+            && value is string json
+            && !string.IsNullOrWhiteSpace(json)
+            && MongoJsonValueConverter.TryParse(json, out var parsed))
+        {
+            return parsed;
+        }
+
+        return ToBsonValue(value);
     }
 
     private static BsonValue ToBsonValue(object? value) => value switch
@@ -297,6 +339,38 @@ public sealed class MappedMongoDestinationWriter : IConfiguredDestinationWriter
                 (isPrimaryObject && string.IsNullOrWhiteSpace(field.DestinationObject))));
 
         return keyField?.TargetField;
+    }
+
+    /// <summary>
+    /// The columns of <paramref name="destinationObject"/> (this profile's own primary collection, or one of
+    /// its child collections) whose mapping asked for its JSON to be stored as a native BSON sub-document
+    /// rather than as text. Scoped to the destination object exactly the way
+    /// <see cref="ResolveUpsertKeyField"/> is — a blank <see cref="MappingField.DestinationObject"/> only
+    /// ever means the profile's own primary collection — so a column of the same name on two collections
+    /// can make the choice independently.
+    ///
+    /// Only <see cref="MappingValueType.Json"/> fields qualify: those are the ones whose value is raw JSON
+    /// text by construction (see JsonMappingEngine). A String-typed field that merely happens to contain
+    /// something JSON-shaped is left alone, since "parse my text and restructure it" is not what its mapping
+    /// asked for.
+    /// </summary>
+    private static IReadOnlySet<string> ResolveDocumentJsonColumns(
+        MappingProfile mappingProfile, string destinationObject)
+    {
+        var isPrimaryObject = string.Equals(
+            destinationObject, mappingProfile.DestinationObject, StringComparison.OrdinalIgnoreCase);
+
+        return mappingProfile.Fields
+            .Where(field =>
+                field.IsEnabled &&
+                field.ValueType == MappingValueType.Json &&
+                MappingFieldFormat.ReadJsonWriteMode(field.Format) == JsonColumnWriteMode.Document &&
+                (string.IsNullOrWhiteSpace(field.ResourceType) ||
+                    string.Equals(field.ResourceType, mappingProfile.ResourceType, StringComparison.OrdinalIgnoreCase)) &&
+                (string.Equals(field.DestinationObject, destinationObject, StringComparison.OrdinalIgnoreCase) ||
+                    (isPrimaryObject && string.IsNullOrWhiteSpace(field.DestinationObject))))
+            .Select(field => field.TargetField)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     private static string ValidateCollectionName(string destinationObject)

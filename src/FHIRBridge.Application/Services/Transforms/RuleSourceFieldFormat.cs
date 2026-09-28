@@ -40,6 +40,12 @@ public static class RuleSourceFieldFormat
 
         var bare = jsonPath.StartsWith("$.", StringComparison.Ordinal) ? jsonPath[2..] : jsonPath.TrimStart('$', '.');
         bare = ArrayIndexAnnotation.Replace(bare, string.Empty);
-        return $"{resourceType}.{bare}";
+
+        // "$" is the whole-document path a whole-payload-as-JSON mapping carries (workflow-build-assembler-v2
+        // .service.ts's toJsonPath returns it for the resource's own root node) — it leaves nothing after the
+        // "$", so the interpolation below would produce a trailing-dot "Patient." that matches no persisted
+        // SourceField. The portal writes the bare node id for that row ("Patient", MappingRow.childNodeId),
+        // so a rule authored on a whole-node mapping would otherwise resolve to nothing at run time.
+        return bare.Length == 0 ? resourceType : $"{resourceType}.{bare}";
     }
 }

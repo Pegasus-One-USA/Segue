@@ -28,6 +28,18 @@
   // same default treatment NodeLibraryDialogComponent's `.nld` always gives the Source Connection
   // screen. `position: absolute` (not fixed) is deliberate here: the backdrop is already scoped to
   // .shell-content, so this just fills that box rather than escaping it — sidebar/topbar stay put.
+  //
+  // background overridden to --color-bg (not the base rule's --color-surface white, a couple lines
+  // up): --fill/--maximized host what is really a full ROUTED PAGE (EHR Endpoints, License, ...),
+  // which expects to sit on the page background the way it would outside a dialog, with its own cards
+  // (background: --color-surface) providing the white. Left on --color-surface, the gutter padding
+  // added below exposed a white margin around the page's grey body — a frame the routed version of
+  // the same page never has.
+  &--fill,
+  &--maximized {
+    background: var(--color-bg);
+  }
+
   &--fill {
     position: absolute;
     inset: 0;
@@ -51,6 +63,24 @@
   ::ng-deep > *:last-child:not(.app-dialog-chrome) {
     flex: 1 1 auto;
     min-height: 0;
+  }
+
+  // fillContent and maximized alike (toggling between them must not toggle this away) — the hosted
+  // component is one of the ordinary routed .list-page screens (EHR Endpoints, Allowed Origins, ...)
+  // reused as-is inside a dialog per settings-page-dialog.service.ts — as a route it gets its edge
+  // inset for free from .shell-content > * (styles.scss's --page-gutter-x/y rule), which never fires
+  // in here since this isn't .shell-content. Without this the page rendered edge-to-edge against the
+  // dialog panel itself, title and toolbar touching the chrome row/corners with no margin at all.
+  //
+  // A deliberately bigger inset than --page-gutter-x/y (8px): that token suits a routed page sitting
+  // directly in the browser viewport, but the same 8px read as cramped once there's a visible dialog
+  // panel edge (border-radius, shadow) framing it too — a box-within-a-box wants more breathing room
+  // than the outer box alone did. --space-10 also clears the chrome row (close/maximize, top:10px
+  // right:10px) with real margin instead of the two nearly touching.
+  &.app-dialog-panel--fill ::ng-deep > *:last-child:not(.app-dialog-chrome),
+  &.app-dialog-panel--maximized ::ng-deep > *:last-child:not(.app-dialog-chrome) {
+    padding: var(--space-10);
+    overflow-y: auto;
   }
 
   &--maximized {
