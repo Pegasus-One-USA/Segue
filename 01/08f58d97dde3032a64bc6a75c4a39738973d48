@@ -1,0 +1,40 @@
+portal/src/app/services/phase-config.service.ts
+  s_d8c85374db9f6f::t_979a2f0c671834 86-91
+  s_d8c85374db9f6f::t_91de6319ae2958 68
+portal/src/app/models/transform-v2.model.ts
+  s_d8c85374db9f6f::t_4a4090240efc0c 34-46
+portal/src/app/data/transforms-v2.data.ts
+  s_d8c85374db9f6f::t_519160a634f2f4 37
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d8c85374db9f6f::t_04d71be6827f99 579-585,852-854
+portal/src/app/components/node-library-v2/node-library-dialog.component.html
+  s_d8c85374db9f6f::t_04938e7f6e316a 336
+portal/src/app/components/node-library-v2/node-library-dialog.component.ts
+  s_d8c85374db9f6f::t_43adcff6cc52fe 77-79,597
+  s_d8c85374db9f6f::t_a7509b1ad86bc6 424-428,744-748,750-755,760,764,779,781,925-928,930
+  s_d8c85374db9f6f::t_718ccbd385c256 285-290,741,743
+  s_d8c85374db9f6f::t_79bd77e1bde2d1 957,959-964
+portal/src/app/services/phase-config-v2.service.ts
+  s_d8c85374db9f6f::t_91de6319ae2958 71
+  s_d8c85374db9f6f::t_979a2f0c671834 92-97
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_983261e03b059d 157-161,188-203
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_983261e03b059d 157-161,188-203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0108f58d97dde3032a64bc6a75c4a39738973d48",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

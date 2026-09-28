@@ -1,0 +1,41 @@
+tests/FHIRBridge.UnitTests/Transforms/FhirSourceJsonPatcherSiblingTests.cs
+  s_6fe240044cc58e::t_de29cf18f08518 38-40,61-64
+  s_6fe240044cc58e::t_884b56f0789817 41-60
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.spec.ts
+  s_6fe240044cc58e::t_383338902ce664 191,282,318,337,469
+  s_6fe240044cc58e::t_6fe54cc77d13c2 409-455,457-463
+  s_6fe240044cc58e::t_29030552280087 456
+src/FHIRBridge.Application/Services/Transforms/FhirSourceJsonPatcher.cs
+  s_6fe240044cc58e::t_c354dc4990266e 173-177
+  s_6fe240044cc58e::t_06f2fef23c3e21 179
+tests/FHIRBridge.UnitTests/Transforms/ValueTypeNodesTests.cs
+  s_6fe240044cc58e::t_daf59295c2e251 256-332
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_6fe240044cc58e::t_b1fac47ebee1df 2015-2017
+  s_6fe240044cc58e::t_fd045d24918e07 1979-1988
+  s_6fe240044cc58e::t_e10c7a76b66dc9 1903-1909,1916-1917,1923-1924
+  s_6fe240044cc58e::t_930cec39b0d6fd 1265,2018
+  s_6fe240044cc58e::t_21baf44f73f44d 1258-1264
+  s_6fe240044cc58e::t_db1f23ad56b7bb 1944-1950
+  s_6fe240044cc58e::t_ea6d496d7e1bd7 1925
+src/FHIRBridge.Application/Services/Transforms/Nodes/ValueTypeNodes.cs
+  s_6fe240044cc58e::t_0715150a1e4cc5 353-374,376
+  s_6fe240044cc58e::t_ac7cf1e35494d4 379
+  s_6fe240044cc58e::t_136b4036f24a62 274-278,286,289-292
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8305f39e3415d44f4fd50075a6d1d18face1a210",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

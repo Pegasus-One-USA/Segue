@@ -1,0 +1,27 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_7f4f158af8615d::t_d9eaaa0c3e3c0f 2455-2459
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_7f4f158af8615d::t_576b85245ddbc0 10,58,715,793-831
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.focused-join-save.spec.ts
+  s_7f4f158af8615d::t_71cce173d3e8d7 1-55,59-119
+  s_7f4f158af8615d::t_d4e05d3d7ad0e5 56-58
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_7f4f158af8615d::t_4ec9333dd6683a 1919-1921,1923,4586-4591
+  s_7f4f158af8615d::t_87c764875e67ac 4576-4580,4582
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "efb7b1e97f2cdd791dd4ec49aa006fd8d19ea9e8",
+  "prompts": {},
+  "sessions": {
+    "s_7f4f158af8615d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2fa22186-758b-45a6-bf17-f82593fb1fb7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}

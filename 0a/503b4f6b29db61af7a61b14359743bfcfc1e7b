@@ -1,0 +1,31 @@
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricDestinationSettings.cs
+  s_d8c85374db9f6f::t_a7b8b5e72b7729 366-367
+  s_d8c85374db9f6f::t_bbea8a53ad57f1 109-123
+  s_d8c85374db9f6f::t_19d9fe098749f1 81-93,108
+src/FHIRBridge.Infrastructure/Destinations/Fabric/LakehouseTableLandingStrategy.cs
+  s_d8c85374db9f6f::t_7de398f260c754 1-314
+tests/FHIRBridge.UnitTests/Destinations/Fabric/DeltaTransactionLogTests.cs
+  s_d8c85374db9f6f::t_7de398f260c754 1-257
+tests/FHIRBridge.UnitTests/Destinations/Fabric/LakehouseTableLandingStrategyTests.cs
+  s_d8c85374db9f6f::t_7de398f260c754 1-182
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d8c85374db9f6f::t_d7a7fb93e68aee 518
+src/FHIRBridge.Infrastructure/Destinations/Fabric/DeltaTransactionLog.cs
+  s_d8c85374db9f6f::t_7de398f260c754 1-189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0a503b4f6b29db61af7a61b14359743bfcfc1e7b",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
