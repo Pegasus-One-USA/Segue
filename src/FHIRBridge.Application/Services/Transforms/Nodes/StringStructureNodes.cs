@@ -107,8 +107,20 @@ public sealed class ConcatenationTemplatingNode : ITransformNode
             // "Physician Family Medicine, MD" gives "Hi Physician Family Medicine". Without one the parts are
             // handed on as an array, for a downstream node (ArrayListOperations, or a second pass in concat
             // mode) to consume — which is what split exists for.
+            //
+            // The rendered template is returned AS A ONE-ELEMENT ARRAY, not as a bare string, so split mode
+            // always answers with a list whatever its template says. Split rules predate this node honouring
+            // a template at all, and every one of them carries a `template` key because the old defaulting
+            // seeded every field regardless of mode — so a rule that switched to split after someone typed a
+            // template has one sitting there unused. Now that it fires, returning a bare string would change
+            // that rule's OUTPUT SHAPE, and a downstream ArrayListOperations step that had been reading real
+            // parts would silently start reading one opaque string. A single-element list keeps the contract
+            // "split returns a list" intact, and the destination write collapses it to exactly the same text
+            // a bare string would have produced (ToDestinationValue joins a list of plain values), so nothing
+            // visible changes for a rule with no downstream step.
             var splitTemplate = config.GetOrNull("template");
-            return TransformResult.Ok(splitTemplate is null ? splitParts : FillTemplate(splitTemplate, splitParts));
+            return TransformResult.Ok(
+                splitTemplate is null ? splitParts : new[] { FillTemplate(splitTemplate, splitParts) });
         }
 
         var parts = value.AsItems().Select(v => v?.ToString()).ToArray();

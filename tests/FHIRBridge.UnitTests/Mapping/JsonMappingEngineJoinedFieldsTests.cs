@@ -781,4 +781,69 @@ public sealed class JsonMappingEngineJoinedFieldsTests
         result.Errors.Should().BeEmpty();
         result.Rows![0]["Mrn"].Should().Be("123, 456");
     }
+
+    private const string NestedContactJson = """
+    {
+      "resourceType": "Patient",
+      "contact": [
+        {
+          "name": { "family": "Smith", "given": ["Jo"] },
+          "telecom": [
+            { "system": "email", "value": "jo@example.com" },
+            { "system": "phone", "value": "555-0100" }
+          ]
+        }
+      ]
+    }
+    """;
+
+    [Fact]
+    public void A_criteria_nested_deeper_than_the_joined_rows_own_array_is_refused_not_guessed()
+    {
+        // A joined row is keyed by its OUTERMOST index, so it stands for the whole contact[] entry and has no
+        // identity at telecom[] level. IsIndexChainMatch compares only the depth two chains share, so
+        // "telecom[*].system = phone" agreed on the contact index and selected the entire contact — putting
+        // that contact's EMAIL into a column meant for its phone. No single telecom is "the" match for a row
+        // spanning all of them, so this says so instead of picking one.
+        var field = new MappingFieldDto(
+            TargetField: "ContactPhone",
+            JsonPath: "$.contact[*].name.family|$.contact[*].telecom[*].value",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter=, ",
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.contact[*].telecom[*].system",
+            CorrelationCodeValue: "phone");
+
+        var result = _engine.Map(NestedContactJson, [field]);
+
+        result.Errors.Should().ContainSingle()
+            .Which.Should().Contain("ContactPhone").And.Contain("nested deeper");
+        result.Rows![0]["ContactPhone"].Should().BeNull("a wrong value is worse than none");
+    }
+
+    [Fact]
+    public void A_criteria_at_the_joined_rows_own_level_still_works()
+    {
+        // The refusal is about DEPTH, not about criteria on a join: matching a field of the outer array is
+        // exactly the supported case and must keep working.
+        var field = new MappingFieldDto(
+            TargetField: "FullName",
+            JsonPath: "$.name[*].given[*]|$.name[*].family",
+            ValueType: MappingValueType.String,
+            IsRequired: false,
+            DefaultValue: null,
+            Format: "joinedFields;delimiter= ",
+            ResourceType: "Patient",
+            ArrayPolicy: ArrayPolicy.CorrelateByCode,
+            CorrelationCodeJsonPath: "$.name[*].use",
+            CorrelationCodeValue: "nickname");
+
+        var result = _engine.Map(EpicPatientJson, [field]);
+
+        result.Errors.Should().BeEmpty();
+        result.Rows![0]["FullName"].Should().Be("Warren McGinnis");
+    }
 }

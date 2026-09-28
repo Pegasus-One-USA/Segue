@@ -185,7 +185,8 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             // chain's input. Anything else lets the two disagree, which is exactly what made "use equals
             // official" behave as though no criteria had been set once a concat rule was attached.
             var correlatedPositions = policy == ArrayPolicy.CorrelateByCode
-                ? SelectCorrelatedPositions(root, field, resolved.Select(r => r.Indices).ToList(), errors)
+                ? SelectCorrelatedPositions(
+                    root, field, resolved.Select(r => r.Indices).ToList(), errors, isJoinedFields)
                 : null;
 
             var joinedParts = joinedRows is not null
@@ -439,7 +440,8 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         JsonElement root,
         MappingFieldDto field,
         List<IReadOnlyList<int>> indices,
-        List<string> errors)
+        List<string> errors,
+        bool isJoinedField)
     {
         if (string.IsNullOrWhiteSpace(field.CorrelationCodeJsonPath) || string.IsNullOrWhiteSpace(field.CorrelationCodeValue))
         {
@@ -453,6 +455,26 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             .Select(m => m.Indices)
             .Where(ix => ix.Count > 0)
             .ToList();
+
+        // A joined row is keyed by its OUTERMOST array index alone (see ResolveJoinedFieldRows) — it stands
+        // for a whole contact[] entry, and has no identity at any level below that. A criteria reaching into
+        // a nested array therefore has nothing per-row to match against: IsIndexChainMatch compares only the
+        // depth the two chains share, so "contact[*].telecom[*].system = phone" agreed on the contact index
+        // and selected the ENTIRE contact — putting that contact's email into a column meant for its phone.
+        //
+        // There is no right answer to compute here: the row genuinely spans every telecom of that contact,
+        // so no single one of them is "the" match. Saying so is the honest outcome, and it leaves the column
+        // null rather than confidently wrong. A criteria at the joined row's own level (name[*].use) is
+        // unaffected, and so is every criteria on a single-source column, which correlates on full chains.
+        if (isJoinedField && matchingIndexChains.Any(chain => chain.Count > 1))
+        {
+            errors.Add(
+                $"Field '{field.TargetField}' matches on '{field.CorrelationCodeJsonPath}', which is nested deeper " +
+                "than the array its joined sources repeat over — a joined column is selected one outer instance " +
+                "at a time, so a criteria inside a nested array cannot pick between that instance's items. " +
+                "Match on a field of the outer array, or map the nested field as its own column.");
+            return [];
+        }
 
         // EVERY item the criteria selects, not merely the first. "type equals Practitioner" against a
         // generalPractitioner[] holding two Practitioner references is a criteria that matches both, and

@@ -158,7 +158,9 @@ public sealed class StringStructureNodesTests
         };
         var result = new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null);
 
-        result.Value.Should().Be("Hi Physician Family Medicine");
+        // A one-element LIST, not a bare string: split mode always answers with a list so a template
+        // cannot change the output shape out from under a downstream array step.
+        result.Value.Should().BeEquivalentTo(new[] { "Hi Physician Family Medicine" });
     }
 
     [Fact]
@@ -171,7 +173,7 @@ public sealed class StringStructureNodesTests
             ["template"] = "{1} - {0}",
         };
         new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null)
-            .Value.Should().Be("MD - Physician Family Medicine");
+            .Value.Should().BeEquivalentTo(new[] { "MD - Physician Family Medicine" });
     }
 
     [Fact]
@@ -194,7 +196,8 @@ public sealed class StringStructureNodesTests
         };
         // The placeholder goes; the literal text around it (here the separating space) is the author's and stays.
         new ConcatenationTemplatingNode().Execute("Physician Family Medicine, MD", config, null)
-            .Value.Should().Be("Hi Physician Family Medicine ").And.NotBe("Hi Physician Family Medicine {5}");
+            .Value.Should().BeEquivalentTo(new[] { "Hi Physician Family Medicine " })
+            .And.NotBeEquivalentTo(new[] { "Hi Physician Family Medicine {5}" });
     }
 
     [Fact]
@@ -207,6 +210,6 @@ public sealed class StringStructureNodesTests
             ["template"] = "Hi {0}",
         };
         new ConcatenationTemplatingNode().Execute("Physician One Cardiology", config, null)
-            .Value.Should().Be("Hi Physician One Cardiology");
+            .Value.Should().BeEquivalentTo(new[] { "Hi Physician One Cardiology" });
     }
 }
