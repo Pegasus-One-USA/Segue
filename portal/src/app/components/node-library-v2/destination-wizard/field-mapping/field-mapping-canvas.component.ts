@@ -1233,9 +1233,14 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
         r.resource === resource && r.tableName === oldName ? { ...r, tableName: trimmed } : r,
       ),
     );
-    // Any schema op queued against the old name (SQL-only in practice — Mongo never queues one) is stale now.
+    // Any schema op queued against the old name (SQL-only in practice — neither Mongo nor Delta queues one)
+    // is stale now.
     this.schemaOpsCancelledForTable.emit(oldName);
-    this.toast.success('Collection renamed', `${oldName} is now ${trimmed}.`);
+
+    // Renaming is offered for a Mongo collection and a Delta table; say which one was renamed rather than
+    // calling every target a collection.
+    const noun = this.destType() === 'mongo' ? 'Collection' : 'Table';
+    this.toast.success(`${noun} renamed`, `${oldName} is now ${trimmed}.`);
   }
 
   onRemoveTable(resource: string, tableName: string, isExtra: boolean): void {
