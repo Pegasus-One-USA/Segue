@@ -89,7 +89,11 @@ public sealed class GeneratedFileDownloadLinkServiceTests : IDisposable
         var service = CreateService();
         var url = await service.CreateLinkAsync(SampleFile(), TimeSpan.FromMinutes(60), CancellationToken.None);
         var token = url.Split('/').Last();
-        var tampered = token[..^1] + (token[^1] == 'a' ? 'b' : 'a');
+        // Convert.ToHexString always emits uppercase, so comparing against lowercase 'a'/'b' let a run where the
+        // real last digit was 'A' "tamper" the token into an identical byte (hex is case-insensitive) ~1/16 of the
+        // time, making the token verify successfully and this assertion flaky. Flipping between '0'/'1' against the
+        // digit's own value is guaranteed to change it regardless of case.
+        var tampered = token[..^1] + (token[^1] == '0' ? '1' : '0');
 
         var resolution = await service.TryResolveAsync(tampered, CancellationToken.None);
 

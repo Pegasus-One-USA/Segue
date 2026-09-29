@@ -169,8 +169,15 @@ internal sealed class OneLakeFilesLandingStrategy : IFabricLandingStrategy
         return stem;
     }
 
+    // A fixed, OS-independent set rather than Path.GetInvalidFileNameChars(): that call returns whatever the
+    // *running* OS considers invalid (just '/' and NUL on Linux), but this path is never touched by a local
+    // filesystem — it addresses a OneLake blob. Using the OS-reported set made this sanitizer's behavior (and
+    // whether "sanitizes to nothing" falls back to the resource type) depend on which OS built/ran the code.
+    private static readonly char[] InvalidNameChars =
+        "<>:\"/\\|?*".ToCharArray().Concat(Enumerable.Range(0, 32).Select(c => (char)c)).ToArray();
+
     private static string Sanitize(string value)
-        => string.Join("_", value.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+        => string.Join("_", value.Split(InvalidNameChars, StringSplitOptions.RemoveEmptyEntries));
 
     private static Dictionary<string, string> BuildMetadata(
         MappingProfile mappingProfile,
