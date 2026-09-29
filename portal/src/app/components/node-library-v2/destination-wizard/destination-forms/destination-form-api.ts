@@ -103,3 +103,25 @@ export function isFabricForm(x: WizardDestinationFormApi | null | undefined): x 
   return !!x && typeof (x as Partial<FabricFormApi>).probeOneLakeOk === 'function'
     && typeof (x as Partial<FabricFormApi>).sqlTables === 'function';
 }
+
+/** Extra members exposed only by CosmosDbFabricDestinationFormComponent. Shaped like MongoFormApi, because
+ *  the two answer the same question — "which document containers exist here?" — but kept separate: a Mongo
+ *  collection is always created on first write, whereas a Cosmos container is only created when the
+ *  destination opts in (its partition key is fixed at creation), so the two must not share a code path that
+ *  assumes a missing target is harmless. */
+export interface CosmosDbFabricFormApi extends WizardDestinationFormApi {
+  readonly probeState: Signal<'idle' | 'testing' | 'ok' | 'error'>;
+  readonly probeError: Signal<string | null>;
+  /** Real container names from the last successful Test Connection — copied into the wizard's own
+   *  cosmosContainers signal so the mapping canvas can offer them after Step 1's form is unmounted. */
+  readonly containers: Signal<string[]>;
+  testConnection(onSettled?: (result: { connected: boolean }) => void): void;
+}
+
+/** Keyed on `kind === 'cosmosFabric'` for the same reason isMongoForm is keyed on its own marker: several
+ *  unrelated forms define a testConnection()/probeState pair, so duck-typing would misroute them here. */
+export function isCosmosDbFabricForm(
+  x: WizardDestinationFormApi | null | undefined,
+): x is CosmosDbFabricFormApi {
+  return !!x && (x as Partial<{ kind: string }>).kind === 'cosmosFabric';
+}

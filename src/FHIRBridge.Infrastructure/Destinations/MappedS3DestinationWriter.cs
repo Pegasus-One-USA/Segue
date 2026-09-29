@@ -40,6 +40,10 @@ public sealed class MappedS3DestinationWriter : IConfiguredDestinationWriter
         var fileName = MappedDestinationSerialization.BuildFileName(destination, mappingProfile, "ndjson");
         var content = MappedDestinationSerialization.ToNdjson(records);
 
+        // Neither branch below reports a Connect stage, for different reasons: the pre-signed PUT opens no
+        // connection of its own and already appears in API Requests with its real status code (reporting it here
+        // too would duplicate one HTTP call across two screens), and the local-directory fallback has nothing to
+        // connect to at all. Both still get their Complete/Failed line from the decorator.
         if (Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
             (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
         {

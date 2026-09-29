@@ -35,9 +35,21 @@ internal static class SharedInMemoryDatabase
     /// <summary>Options for an isolated in-memory database that costs the suite no extra service provider.</summary>
     public static DbContextOptions<TContext> Options<TContext>(string databaseName)
         where TContext : DbContext =>
+        Options<TContext>(databaseName, interceptors: []);
+
+    /// <summary>
+    /// As <see cref="Options{TContext}(string)"/>, with interceptors. Interceptors are part of the options
+    /// configuration EF keys its provider cache on, so a test class that adds one without the shared internal
+    /// provider silently costs the suite another of its twenty — the reason this overload exists rather than each
+    /// class calling <c>AddInterceptors</c> on its own builder.
+    /// </summary>
+    public static DbContextOptions<TContext> Options<TContext>(
+        string databaseName, params IInterceptor[] interceptors)
+        where TContext : DbContext =>
         new DbContextOptionsBuilder<TContext>()
             .UseInMemoryDatabase(databaseName, Root)
             .UseInternalServiceProvider(_internalServiceProvider)
+            .AddInterceptors(interceptors)
             // The shared provider makes this warning unreachable for these contexts, but a test that opts in
             // here should never be the one that trips it for someone else either.
             .ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))

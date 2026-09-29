@@ -9,7 +9,7 @@ namespace FHIRBridge.Domain.Entities.Licensing;
 /// at "what did we apply, and when" without that history being overwritten each time a new license is
 /// activated.
 /// </summary>
-public sealed class LicenseHistoryEntry : Entity<Guid>
+public sealed class LicenseHistoryEntry : AuditTrackedEntity<Guid>
 {
     private LicenseHistoryEntry()
     {

@@ -82,7 +82,14 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
         var table = settings.QualifiedWarehouseTable(fallbackTable, fallbackSchema);
         var stagingBlobPath = BuildStagingBlobPath(settings, mappingProfile, DateTime.UtcNow);
 
-        var workspace = await _clientFactory.GetWorkspaceAsync(destination, settings, cancellationToken);
+        // A Warehouse load has two connections against two different audiences, and it can fail at either: OneLake
+        // (storage) for the staging file, then the Warehouse itself (TDS) for COPY INTO. They are reported
+        // separately, and named, because "the Fabric write failed" without saying which half is exactly the
+        // ambiguity this screen exists to remove — the identity often has grants on one and not the other.
+        var workspace = await context.ReportConnectAsync(
+            () => _clientFactory.GetWorkspaceAsync(destination, settings, cancellationToken),
+            cancellationToken,
+            detail: "OneLake staging");
         var stagingBlob = workspace.Container.GetBlobClient(stagingBlobPath);
 
         // Staged file carries exactly the columns COPY INTO will name, in the same order.
@@ -94,7 +101,10 @@ internal sealed class WarehouseTableLandingStrategy : IFabricLandingStrategy
 
         try
         {
-            await using var connection = await _connectionFactory.OpenAsync(destination, settings, cancellationToken);
+            await using var connection = await context.ReportConnectAsync(
+                () => _connectionFactory.OpenAsync(destination, settings, cancellationToken),
+                cancellationToken,
+                detail: "Warehouse SQL");
 
             await EnsureTableExistsAsync(connection, table, cancellationToken);
 

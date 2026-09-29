@@ -45,6 +45,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       return [{ value: 'warehouseTable', label: 'Warehouse table (COPY INTO)' }];
     }
     return ([{ value: 'oneLakeFiles', label: 'Lakehouse files (OneLake)' },
+      { value: 'lakehouseTable', label: 'Lakehouse table (Delta)' },
       { value: 'warehouseTable', label: 'Warehouse table (COPY INTO)' }])
       .filter(mode => this.phase.isFabricModeEnabled(mode.value));
   });
@@ -80,6 +81,14 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
 
   /** True when the Warehouse landing mode is selected — drives which fields are required and shown. */
   readonly isWarehouse = computed(() => this.modeValue() === 'warehouseTable');
+
+  /** True when landing rows in a Lakehouse Delta table. Shares the Lakehouse item type with OneLake Files but
+   *  writes under Tables/ with a transaction log, so it shows the table fields rather than the file ones. */
+  readonly isLakehouseTable = computed(() => this.modeValue() === 'lakehouseTable');
+
+  /** File-layout controls (format, partitioning, path) only mean something for a file drop: a Delta table's
+   *  layout is decided by the protocol, and a Warehouse load stages Parquet it then deletes. */
+  readonly isFileSurface = computed(() => this.modeValue() === 'oneLakeFiles');
 
   /** Mode as a signal so computed()s above react to it (valueChanges keeps it in step). */
   private readonly modeValue = signal<string>('oneLakeFiles');
@@ -127,6 +136,11 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
     warehouseTable: ['', []],
     warehouseSchema: ['dbo', []],
     warehouseWriteMode: ['append', []],
+    /** Schema name for a SCHEMA-ENABLED Lakehouse, whose tables sit at Tables/{schema}/{table}. Blank means a
+     *  classic Lakehouse (Tables/{table}). Deliberately not defaulted to 'dbo': the two layouts are different
+     *  places, and writing to the wrong one produces a folder Fabric never registers as a table. */
+    lakehouseSchema: ['', []],
+
     /** OFF by default, which is what the COPY INTO docs specify for a OneLake source: with no CREDENTIAL
      *  clause the statement runs as the executing user's Entra identity — the service principal that opened
      *  this connection. That identity already needs Contributor on both workspaces. Turning this ON asks
@@ -139,6 +153,11 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
   /** True while the host is reusing a previously-saved connection unchanged — the client secret is never
    *  repopulated when patching from an existing connection, so requiring it would block reuse. */
   readonly reusingExisting = input<boolean>(false);
+
+  /** Landing surface the picker row stood for, when that row is a MODE of this destination type rather than a
+   *  type of its own — today only Lakehouse Delta. Null means "no opinion", which is every other entry point:
+   *  the form then keeps whatever the user chooses, defaulting to OneLake Files. */
+  readonly fabricLandingMode = input<string | null>(null);
 
   constructor() {
     effect(() => {
@@ -166,6 +185,22 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
         this.fabricForm.controls.mode.setValue('warehouseTable');
       });
     });
+
+    // Same correction one level down, for the surfaces that SHARE a destination type: DataFabricAzure serves
+    // both OneLake Files and Lakehouse Delta, so the type cannot say which row was clicked and the picker
+    // passes the mode instead. Without this, choosing "Lakehouse Tables (Delta)" would open a form defaulted
+    // to OneLake Files and quietly save a file destination — the same class of mismatch the Warehouse effect
+    // above exists to prevent. Deliberately does not fight the user afterwards: it only corrects a mode that
+    // still holds the form's own default, so switching surfaces inside the form keeps working.
+    effect(() => {
+      const pinned = this.fabricLandingMode();
+      if (!pinned || this.isWarehouseType()) return;
+      untracked(() => {
+        const current = this.fabricForm.controls.mode.value;
+        if (current === pinned || current !== 'oneLakeFiles') return;
+        this.fabricForm.controls.mode.setValue(pinned);
+      });
+    });
   }
 
   /**
@@ -182,8 +217,15 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       control.updateValueAndValidity({ emitEvent: false });
     }
 
+    // Delta lands in a Lakehouse, like OneLake Files — only the Warehouse surface needs the other item type.
     this.fabricForm.controls.itemType.setValue(
       isWarehouse ? 'Warehouse' : 'Lakehouse', { emitEvent: false });
+
+    // A Delta table's location comes from its name and schema, never from a file path, so the path control is
+    // cleared rather than left showing a value the writer ignores.
+    if (mode === 'lakehouseTable') {
+      this.fabricForm.controls.path.setValue('', { emitEvent: false });
+    }
   }
 
   /** Mirrors FabricDestinationSettings.Parse: service principal needs tenant id, client id and a secret;
@@ -256,6 +298,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       dest_fabricWarehouseWriteMode: v.warehouseWriteMode ?? 'append',
       dest_fabricWarehouseUseWorkspaceIdentity: v.warehouseUseWorkspaceIdentity ? 'true' : 'false',
       dest_fabricWarehouseStagingPath: v.warehouseStagingPath ?? '_staging',
+      dest_fabricLakehouseSchema: v.lakehouseSchema ?? '',
     };
   }
 
@@ -294,6 +337,7 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       warehouseWriteMode: fields['dest_fabricWarehouseWriteMode'] || 'append',
       warehouseUseWorkspaceIdentity: fields['dest_fabricWarehouseUseWorkspaceIdentity'] === 'true',
       warehouseStagingPath: fields['dest_fabricWarehouseStagingPath'] || '_staging',
+      lakehouseSchema: fields['dest_fabricLakehouseSchema'] || '',
     });
     this._syncAuthModeValidators(this.fabricForm.value.authMode ?? null, this.reusingExisting());
     this.modeValue.set(this.fabricForm.value.mode ?? 'oneLakeFiles');
@@ -323,8 +367,15 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
    */
   getFabricProbeRequest(): DestinationProbeRequest {
     const v = this.fabricForm.value;
+    // One builder for both probeable Fabric surfaces. A Warehouse probes its TDS catalog; a Lakehouse Delta
+    // probe lists the Tables/ folders that carry a _delta_log. They need the same identity and the same
+    // workspace/item addressing, so only the destination type and the mode differ — and the mode has to be
+    // sent, because DataFabricAzure alone cannot say which surface this is.
+    const isLakehouseTable = v.mode === 'lakehouseTable';
     return {
-      destinationType: 'DataFabricWarehouse',
+      destinationType: isLakehouseTable ? 'DataFabricAzure' : 'DataFabricWarehouse',
+      fabricLandingMode: isLakehouseTable ? 'lakehouseTable' : undefined,
+      fabricLakehouseSchema: isLakehouseTable ? (v.lakehouseSchema || undefined) : undefined,
       fabricWorkspace: v.workspace ?? '',
       fabricItemName: v.itemName ?? '',
       fabricWarehouseSqlEndpoint: v.warehouseSqlEndpoint ?? '',
@@ -387,6 +438,9 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
         managedIdentityClientId: v.authMode === 'managedIdentity'
           ? (v.managedIdentityClientId ?? undefined) : undefined,
         endpointSuffix: v.endpointSuffix || undefined,
+        // Delta lists the Tables/ folders carrying a _delta_log, and a schema-enabled lakehouse nests them
+        // one level deeper — so the probe has to be told where a write would actually land.
+        lakehouseSchema: this.isLakehouseTable() ? (v.lakehouseSchema || undefined) : undefined,
         authorityHost: v.authorityHost || undefined,
         accountUrl: v.accountUrl || undefined,
         warehouseSqlEndpoint: this.isWarehouse() ? (v.warehouseSqlEndpoint ?? undefined) : undefined,

@@ -230,6 +230,31 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task LogDestinationActivityAsync(
+        DestinationActivityEntry entry, CancellationToken cancellationToken = default)
+    {
+        var current = _currentUserService.CurrentUser;
+
+        _dbContext.DestinationActivityLogs.Add(new DestinationActivityLog(
+            Guid.NewGuid(),
+            DateTime.UtcNow,
+            entry.DestinationId,
+            Truncate(entry.DestinationName, 200)!,
+            entry.DestinationType,
+            entry.Stage,
+            entry.Status,
+            Truncate(entry.ResourceType, 100),
+            entry.RecordCount,
+            entry.WrittenCount,
+            entry.DurationMs,
+            Truncate(entry.Detail, 500),
+            Truncate(entry.Error, 1000),
+            entry.CorrelationId ?? current.CorrelationId,
+            entry.PipelineRunId));
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task LogNotificationAsync(NotificationEntry entry, CancellationToken cancellationToken = default)
     {
         _dbContext.NotificationHistory.Add(new NotificationHistory(

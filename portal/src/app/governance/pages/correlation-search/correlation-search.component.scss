@@ -270,3 +270,36 @@
   color: var(--color-error-strong);
 }
 
+// Destination Activity reuses .severity-badge's shape, with its own status vocabulary. PartialSuccess reads as a
+// warning rather than a success on purpose: some records were rejected, and that needs to catch the eye.
+.status-succeeded {
+  background: var(--color-success-soft);
+  color: var(--color-success-strong);
+}
+
+.status-partialsuccess, .status-nodata {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+}
+
+.status-failed {
+  background: var(--color-error-soft);
+  color: var(--color-error-strong);
+}
+
+// The destination type sits beside the name as secondary context — "Warehouse" matters more than
+// "DataFabricWarehouse", but the type is what tells you which writer actually ran.
+.dest-type {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.activity-error-row td { border-top: none; padding-top: 0; }
+
+.activity-error {
+  color: var(--color-error-strong);
+  font-size: 13px;
+  white-space: normal;
+  word-break: break-word;
+}
+

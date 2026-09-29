@@ -31,6 +31,19 @@ export interface Transform {
    *  capabilities — use this so the picker shows one vendor row instead of several sibling rows that read as
    *  unrelated products. A vendor with a single surface sets nothing and stays a plain flat row. */
   parentId?: string;
+  /** For a Fabric entry whose surface is a LANDING MODE rather than its own destination type: the
+   *  `dest_fabricMode` this row selects, pinned into the Fabric form so the picker row and the form agree.
+   *
+   *  Two of Fabric's surfaces earned their own DestinationType because they answer differently to what the
+   *  system asks a destination — a Warehouse speaks TDS and has a live queryable schema, so field mapping
+   *  applies to it (see DestinationType.DataFabricWarehouse). Lakehouse Delta does not: it is OneLake over the
+   *  blob endpoint with no live schema, exactly like OneLake Files, and differs only in writing a _delta_log
+   *  beside the Parquet. Promoting it to its own type would add an enum value that every call site must learn
+   *  while answering every one of those questions identically to DataFabricAzure.
+   *
+   *  So it stays a mode and this field carries the distinction the picker needs. Unset for every other entry,
+   *  including OneLake Files, which is the Fabric form's own default. */
+  fabricMode?: string;
 }
 
 /** V2's simplified straight-chain sequence: Source → Destination → [Mapping →] Transformation →

@@ -47,7 +47,16 @@ public sealed record DestinationConnectionProbeRequest(
     string? FabricManagedIdentityClientId = null,
     string? FabricSecret = null,
     string? FabricEndpointSuffix = null,
-    string? FabricAuthorityHost = null);
+    string? FabricAuthorityHost = null,
+    // ── Fabric Lakehouse (Delta) only ────────────────────────────────────────────────────────────────────
+    // DataFabricAzure serves two surfaces — OneLake Files and Lakehouse Delta — and only Delta has tables to
+    // list, so the type alone cannot say whether this probe should read a schema at all. Carries the mode
+    // rather than inferring it, for the same reason FabricLandingMode exists on the wizard: an inferred
+    // surface is one a stale field can contradict.
+    string? FabricLandingMode = null,
+    // Schema level of a schema-enabled lakehouse, whose tables sit at Tables/{schema}/{table}. Blank means a
+    // classic lakehouse; the two are different places, so a probe must look where the writer would write.
+    string? FabricLakehouseSchema = null);
 
 /// <summary>Result of a connection probe: whether it connected, any error, and the introspected tables.</summary>
 public sealed record DestinationSchemaProbeDto(

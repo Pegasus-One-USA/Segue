@@ -65,7 +65,11 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // allowlist, and a filtered-out heading takes its children with it (see filteredCategories).
     'dest-fabric-group',
     'dest-fabric',
+    'dest-fabric-lakehouse-table',
     'dest-fabric-warehouse',
+    // Cosmos DB in Fabric — writer, node executor, validator, Step 1 form and wizard family are all in place
+    // (see MappedCosmosDbFabricDestinationWriter). Not yet confirmed against a live tenant.
+    'dest-fabric-cosmos',
     // General-purpose, fully configurable outbound REST API — writer, sender, validator, Step 1 form and
     // wizard family are all in place (see MappedApiEndpointDestinationWriter).
     'dest-apiendpoint',
@@ -79,13 +83,15 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // Phase 2+ analytics: 'hedis', 'anomaly', 'patient-agg'
   ],
 
-  // OneLake Files is verified end to end against a live Fabric tenant. Warehouse (staged Parquet + COPY INTO,
-  // MERGE on upsert) is listed alongside it but has NOT had a live write confirmed yet — its shape is the
-  // documented one, and the three things most likely to need adjusting on first contact are the COPY INTO
-  // credential clause, the abfss staging URL form, and whether the identity needs grants on the staging
-  // Lakehouse separately from the Warehouse. Note it also requires a pre-created target table: FHIRBridge
-  // never creates or alters destination schema.
-  enabledFabricModes: ['oneLakeFiles', 'warehouseTable'],
+  // OneLake Files and Warehouse are both verified end to end against a live Fabric tenant. Warehouse requires a
+  // pre-created target table: FHIRBridge never creates or alters destination schema.
+  //
+  // 'lakehouseTable' (Delta) is listed so its picker row can open — it has its own entry under the Microsoft
+  // Fabric group. It has NOT yet been confirmed against a live tenant, and it fails in a particularly
+  // unhelpful way when the log is wrong: the write reports success and the table simply never appears. Treat
+  // it as unproven until a real table has been opened in Fabric (see
+  // docs/backend/19-microsoft-fabric-surfaces.md for the test procedure and what to check first).
+  enabledFabricModes: ['oneLakeFiles', 'lakehouseTable', 'warehouseTable'],
 
   hiddenRanks: [
     2,   // Validation

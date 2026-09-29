@@ -51,9 +51,9 @@ import { DestinationConfigFormComponent } from '../../shared-v2/config-form/conf
 import { DESTINATION_FORM_REGISTRY } from './destination-forms/destination-form.registry';
 import {
   WizardDestinationFormApi,
-  SqlFamilyFormApi,
   isSqlFamilyForm,
   isFabricForm,
+  isCosmosDbFabricForm,
   isMongoForm,
 } from './destination-forms/destination-form-api';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
@@ -124,6 +124,8 @@ import {
 import { ToastService } from '../../../services/toast.service';
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants-v2.data';
 import { PipelineStoreV2 } from '../../../services/pipeline-v2.store';
+import { WorkflowApiService, ResourceTypeCriteriaDto } from '../../../services/workflow-api.service';
+import { WorkflowGraphMapperServiceV2 } from '../../../services/workflow-graph-mapper-v2.service';
 import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 
@@ -548,6 +550,8 @@ export class DestinationWizardComponent implements OnInit {
   );
   private readonly mappingProfileSvc = inject(MappingProfileService);
   private readonly pipelineStore = inject(PipelineStoreV2);
+  private readonly workflowApi = inject(WorkflowApiService);
+  private readonly graphMapper = inject(WorkflowGraphMapperServiceV2);
   private readonly injector = inject(Injector);
   private readonly dialogService = inject(DialogService);
   private readonly transformationRulesSvc = inject(TransformationRulesService);
@@ -584,6 +588,13 @@ export class DestinationWizardComponent implements OnInit {
   readonly pendingFreeColumnsByCard = signal<Record<string, string[]>>({});
 
   readonly destType = input.required<WizardDestType>();
+
+  /** Which Fabric landing surface the picker row stood for, when the row is a MODE rather than its own
+   *  destination type — today only Lakehouse Delta. Null for every other destination, including OneLake Files,
+   *  which is the Fabric form's own default. Passed straight through to the Fabric form, which pins it exactly
+   *  as it pins Warehouse from the destination type, so the row the user clicked and the surface the form
+   *  configures cannot disagree. */
+  readonly fabricLandingMode = input<string | null>(null);
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
@@ -805,6 +816,8 @@ export class DestinationWizardComponent implements OnInit {
         return 'DataFabricAzure';
       case 'fabricwarehouse':
         return 'DataFabricWarehouse';
+      case 'cosmosfabric':
+        return 'CosmosDbFabric';
       case 'apiendpoint':
         return 'ApiEndpoint';
       case 'medplum':
@@ -850,6 +863,9 @@ export class DestinationWizardComponent implements OnInit {
       // it — the Fabric form uses it to pin its landing mode, since DataFabricWarehouse IS the Warehouse
       // surface and must not present a mode choice that could contradict the type.
       destinationType: this.resolveDestinationTypeForRules(),
+      // And which surface WITHIN that type, for the one type serving more than one: DataFabricAzure covers
+      // both OneLake Files and Lakehouse Delta, so the type alone cannot say which row was picked.
+      fabricLandingMode: this.fabricLandingMode(),
     };
   }
 
@@ -1320,6 +1336,10 @@ export class DestinationWizardComponent implements OnInit {
   // additional resources.
   readonly mongoCollections = signal<string[]>([]);
 
+  /** Real container names from the Cosmos form's last successful Test Connection — seeds the mapping canvas's
+   *  "+ Add a container…" picker, the same role mongoCollections() plays for Mongo. */
+  readonly cosmosContainers = signal<string[]>([]);
+
   // ── extra target tables (child tables added alongside a group's primary table) ──
   // Keyed by data-group name; each entry is a list of additional already-probed SQL
   // table full-names the user chose to also map into for that same group's canvas
@@ -1568,7 +1588,14 @@ export class DestinationWizardComponent implements OnInit {
     ]);
     const known = this.isMongo()
       ? this.mongoCollections()
-      : this.sqlTables().map((t) => t.fullName);
+      // Cosmos containers come from its own Test Connection, the same way Mongo's collections do. Also not
+      // gated through hasSqlTables(): unlike a Mongo collection a Cosmos container is NOT always created on
+      // first write (that is opt-in, since its partition key is irreversible), but the right response to an
+      // unlisted name is still to let the user type it — the writer's own error names the container and the
+      // database far better than a greyed-out picker would.
+      : this.isCosmosFabric()
+        ? this.cosmosContainers()
+        : this.sqlTables().map((t) => t.fullName);
     return known.filter((t) => !used.has(t));
   };
 
@@ -2007,6 +2034,25 @@ export class DestinationWizardComponent implements OnInit {
    */
   readonly hasLiveRelationalSchema = computed(() => this.isSql() || this.isFabricWarehouse());
 
+  /** Lakehouse Delta — the Fabric FILE type with the Delta landing mode chosen. Shares destType() 'fabric'
+   *  with OneLake Files, so only the mode distinguishes them. */
+  readonly isLakehouseTable = computed(
+    () => this.destType() === 'fabric' && this.fabricLandingMode() === 'lakehouseTable');
+
+  /**
+   * Whether this destination can LIST the tables it already has, so the canvas offers a picker instead of a
+   * free-text name.
+   *
+   * Deliberately wider than hasLiveRelationalSchema() and deliberately not merged into it. A Lakehouse Delta
+   * table can be discovered — a folder under Tables/ carrying a _delta_log is one, which is what the backend's
+   * LakehouseDeltaSchemaReader lists — but it is NOT relational: it has no schema qualification, no
+   * ALTER TABLE, no CREATE TABLE. Folding it into hasLiveRelationalSchema() would have turned on
+   * "dbo."-style qualification and the DDL authoring buttons for a surface that supports neither, which is
+   * the mirror image of the bug that method's own comment describes for Fabric Warehouse.
+   */
+  readonly hasProbeableTableList = computed(
+    () => this.hasLiveRelationalSchema() || this.isLakehouseTable());
+
   readonly isMySql = computed(() => this.destType() === 'mysql');
   readonly isPostgres = computed(() => this.destType() === 'postgres');
   readonly isMongo = computed(() => this.destType() === 'mongo');
@@ -2031,6 +2077,10 @@ export class DestinationWizardComponent implements OnInit {
   /** Microsoft Fabric (Warehouse) — a real relational target, so it is included in isSql() below and gets the
    *  live schema probe and table picker. Distinct from isFabric(), which is the FILE surface. */
   readonly isFabricWarehouse = computed(() => this.destType() === 'fabricwarehouse');
+  /** Cosmos DB in Fabric. Grouped with the other Fabric surfaces in the picker, but its own destination
+   *  type with its own metadata shape (a Cosmos endpoint and database, not a workspace and item), so it is
+   *  never folded into isFabric(). */
+  readonly isCosmosFabric = computed(() => this.destType() === 'cosmosfabric');
   /** General-purpose outbound REST API — same file-shaped mapping (typed target fields, no live schema) as
    *  isDataLake()/isBlob(). */
   readonly isApiEndpoint = computed(() => this.destType() === 'apiendpoint');
@@ -2071,9 +2121,11 @@ export class DestinationWizardComponent implements OnInit {
                         ? 'Microsoft Fabric (OneLake)'
                         : this.destType() === 'fabricwarehouse'
                           ? 'Microsoft Fabric (Warehouse)'
-                          : this.destType() === 'apiendpoint'
-                            ? 'API Endpoint'
-                            : 'CSV',
+                          : this.destType() === 'cosmosfabric'
+                            ? 'Cosmos DB in Fabric'
+                            : this.destType() === 'apiendpoint'
+                              ? 'API Endpoint'
+                              : 'CSV',
   );
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -2083,6 +2135,20 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   constructor() {
+    // Criteria authored before the workflow existed are buffered locally (they key on a real workflow id),
+    // so send them as soon as a save supplies one. Also clears the load guard on a workflow switch, so
+    // reopening the editor against a different workflow refetches instead of showing the previous one's rows.
+    effect(() => {
+      const workflowId = this.currentWorkflowId();
+      untracked(() => {
+        if (!workflowId) return;
+        if (this.criteriaLoadedForWorkflowId !== workflowId) {
+          this.criteriaLoadedForWorkflowId = null;
+        }
+        this.flushCriteriaBuffer(workflowId);
+      });
+    });
+
     // Step 3's active tab follows whichever canvas node opened this wizard (Mapping / Transformation /
     // De-identification). Applied as the tab's starting value only — the user can still switch tabs
     // freely once the screen is open, so this never fights a manual selection.
@@ -2630,11 +2696,27 @@ export class DestinationWizardComponent implements OnInit {
         });
         return;
       }
+      // Cosmos: same "test then advance" gate. Unlike Mongo a missing container is NOT always created on
+      // first write, so reaching the database and seeing its real container list here is the difference
+      // between catching a typo now and catching it as a failed pipeline run.
+      if (isCosmosDbFabricForm(form) && form.probeState() !== 'ok') {
+        form.testConnection((result) => {
+          if (!result.connected) return;
+          this.cosmosContainers.set(form.containers());
+          const metadata = form.getMetadata();
+          if (metadata)
+            this.provisionDestinationConnection(metadata, () =>
+              this._advancePastStep1(),
+            );
+        });
+        return;
+      }
       // CSV/Blob (and SQL/Mongo once already probed 'ok'): provision (create/update) the real
       // DestinationConfiguration here, immediately on leaving Configure, then advance once it succeeds.
       // Mongo reaches here when the user already clicked Test Connection manually before Next — the branch
       // above only fires on a stale/idle probe, so this is the other place collections needs copying.
       if (isMongoForm(form)) this.mongoCollections.set(form.collections());
+      if (isCosmosDbFabricForm(form)) this.cosmosContainers.set(form.containers());
       // SQL: same "already tested manually before Next" case, and the same fix shape — the branch above only
       // fires on a stale/idle probe, so a user who clicks the form's own Test Connection button (getting
       // form.probeState() to 'ok' there) and only then clicks Next falls straight through to here, and this
@@ -2650,7 +2732,12 @@ export class DestinationWizardComponent implements OnInit {
       // so it has no getProbeRequest()/server/database/password to offer). Its own Test Connection already
       // returns the Warehouse's tables, so take them the same way the SQL branch above does — otherwise the
       // mapping canvas gets an empty table picker on a connection that tested fine.
-      if (this.isFabricWarehouse() && isFabricForm(form) && form.probeState() === 'ok') {
+      // Lakehouse Delta is listed alongside Warehouse here for the same reason and with one difference:
+      // its tables come from a OneLake listing rather than a TDS catalog, but they arrive on the same
+      // probe result, so the handoff is identical. Without this the canvas got an empty table picker on a
+      // Delta connection that tested fine — the exact failure the Warehouse line above was added to fix.
+      if ((this.isFabricWarehouse() || this.isLakehouseTable())
+        && isFabricForm(form) && form.probeState() === 'ok') {
         this.sqlTables.set(form.sqlTables());
         this.probeState.set('ok');
         this.schemaLoadState.set('loaded');
@@ -2695,7 +2782,7 @@ export class DestinationWizardComponent implements OnInit {
             this.selectedExistingId() ?? this.resolvedDestinationId(),
           targetByResource: this.targetByResource(),
         });
-        console.log(JSON.stringify(doc, null, 2));
+        console.info(JSON.stringify(doc, null, 2));
       }
       this.step.update((x) => x + 1);
       this._hasProgressed.set(true);
@@ -2733,6 +2820,22 @@ export class DestinationWizardComponent implements OnInit {
   private mappingRowsSnapshot: MappingRow[] | null = null;
   private targetByResourceSnapshot: Record<string, string> | null = null;
   readonly pendingExitConfirm = signal(false);
+
+  // ── Per-resource-type FHIR search criteria ─────────────────────────────────────────────────────────
+  // Keyed by resource type, holding the criteria currently stored for the launch source node. Buffered
+  // locally while the workflow has no id yet (a brand-new canvas): the rows key on a real workflow id, so
+  // they cannot be persisted until the workflow is saved — flushCriteriaBuffer() sends them once it is,
+  // rather than blocking the button behind a "save the workflow first" wall.
+  private readonly criteriaByResourceType = signal<Record<string, string>>({});
+  private criteriaBuffer: Record<string, string> = {};
+  private criteriaLoadedForWorkflowId: string | null = null;
+
+  /** Resource type whose criteria editor is open, or null. */
+  readonly criteriaEditorResource = signal<string | null>(null);
+  readonly criteriaDraft = signal('');
+  readonly criteriaReplace = signal(false);
+  readonly criteriaSaving = signal(false);
+  readonly criteriaError = signal<string | null>(null);
   /** Non-null while the "save anyway?" confirm dialog is up — see saveGroupMapping/buildParentReferenceWarnings. */
   readonly pendingSaveWarnings = signal<PendingParentReferenceWarning[] | null>(null);
   /** Non-null while the transform-rule-conflict dialog is up — see saveGroupMapping/validateRuleConflictsForSave.
@@ -3795,6 +3898,188 @@ export class DestinationWizardComponent implements OnInit {
     if (e.target === e.currentTarget) this.cancelExitMapping();
   }
 
+  // -- Per-resource-type FHIR search criteria ---------------------------------------------------------
+
+  /** The criteria currently stored for a resource type, or empty when it has none. */
+  criteriaFor(resourceType: string): string {
+    return this.criteriaByResourceType()[resourceType] ?? '';
+  }
+
+  openResourceCriteria(resourceType: string): void {
+    this.criteriaError.set(null);
+    this.criteriaReplace.set(false);
+    // Starts empty even when criteria exist: the default action is ADDING to them, and the current value is
+    // shown above the box instead. Prefilling would make "Add" re-send what is already stored.
+    this.criteriaDraft.set('');
+    this.criteriaEditorResource.set(resourceType);
+    this.loadResourceTypeCriteria();
+  }
+
+  closeResourceCriteria(): void {
+    this.criteriaEditorResource.set(null);
+    this.criteriaDraft.set('');
+    this.criteriaError.set(null);
+    this.criteriaReplace.set(false);
+  }
+
+  onCriteriaBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) this.closeResourceCriteria();
+  }
+
+  submitResourceCriteria(): void {
+    const resourceType = this.criteriaEditorResource();
+    if (!resourceType || this.criteriaSaving()) return;
+
+    const criteria = this.criteriaDraft().trim();
+    const replace = this.criteriaReplace();
+
+    // An append of nothing is a no-op; a replace with nothing is how the box clears criteria, so only the
+    // append path rejects an empty value (matching ResourceTypeCriteriaService's own validation).
+    if (!criteria && !replace) {
+      this.criteriaError.set('Enter at least one FHIR search parameter, e.g. gender=female.');
+      return;
+    }
+
+    const sourceNodeId = this.graphMapper.findLaunchSourceNodeId();
+    if (!sourceNodeId) {
+      this.criteriaError.set('No source node is wired up yet - add a source before setting criteria.');
+      return;
+    }
+
+    const merged = replace ? criteria : this.mergeCriteria(this.criteriaFor(resourceType), criteria);
+    const workflowId = this.currentWorkflowId();
+
+    // No workflow id yet (a canvas that has never been saved): keep it locally and let the first save flush
+    // it, so criteria can be authored in the same pass as everything else on a brand-new workflow.
+    if (!workflowId) {
+      this.criteriaBuffer = { ...this.criteriaBuffer, [resourceType]: merged };
+      this.criteriaByResourceType.update(current => ({ ...current, [resourceType]: merged }));
+      this.toast.info(`Criteria for ${resourceType} will be saved with the workflow.`);
+      this.closeResourceCriteria();
+      return;
+    }
+
+    this.criteriaSaving.set(true);
+    this.workflowApi
+      .saveResourceTypeCriteria(workflowId, { sourceNodeId, resourceType, criteria, replace })
+      .subscribe({
+        next: saved => {
+          this.criteriaByResourceType.update(current => ({ ...current, [resourceType]: saved.criteria }));
+          this.criteriaSaving.set(false);
+          this.toast.success(`Criteria saved for ${resourceType}.`);
+          this.closeResourceCriteria();
+        },
+        error: () => {
+          this.criteriaSaving.set(false);
+          this.criteriaError.set(`Could not save criteria for ${resourceType}. Please try again.`);
+        },
+      });
+  }
+
+  clearResourceCriteria(): void {
+    const resourceType = this.criteriaEditorResource();
+    if (!resourceType || this.criteriaSaving()) return;
+
+    const sourceNodeId = this.graphMapper.findLaunchSourceNodeId();
+    const workflowId = this.currentWorkflowId();
+
+    const dropLocally = () => {
+      // Omit-a-key destructuring: the named binding exists only so the rest object drops that key.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [resourceType]: _removed, ...rest } = this.criteriaByResourceType();
+      this.criteriaByResourceType.set(rest);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [resourceType]: _buffered, ...restBuffer } = this.criteriaBuffer;
+      this.criteriaBuffer = restBuffer;
+    };
+
+    if (!workflowId || !sourceNodeId) {
+      dropLocally();
+      this.closeResourceCriteria();
+      return;
+    }
+
+    this.criteriaSaving.set(true);
+    this.workflowApi.deleteResourceTypeCriteria(workflowId, sourceNodeId, resourceType).subscribe({
+      next: () => {
+        dropLocally();
+        this.criteriaSaving.set(false);
+        this.toast.success(`Criteria cleared for ${resourceType}.`);
+        this.closeResourceCriteria();
+      },
+      error: () => {
+        this.criteriaSaving.set(false);
+        this.criteriaError.set(`Could not clear criteria for ${resourceType}. Please try again.`);
+      },
+    });
+  }
+
+  /** Loads this workflow's stored criteria once per workflow id, so reopening the editor is not a refetch. */
+  private loadResourceTypeCriteria(): void {
+    const workflowId = this.currentWorkflowId();
+    const sourceNodeId = this.graphMapper.findLaunchSourceNodeId();
+    if (!workflowId || !sourceNodeId || this.criteriaLoadedForWorkflowId === workflowId) return;
+
+    this.criteriaLoadedForWorkflowId = workflowId;
+    this.workflowApi.listResourceTypeCriteria(workflowId).subscribe({
+      next: rows => {
+        const byResourceType: Record<string, string> = {};
+        for (const row of rows.filter((r: ResourceTypeCriteriaDto) => r.sourceNodeId === sourceNodeId)) {
+          byResourceType[row.resourceType] = row.criteria;
+        }
+        // Anything buffered before the workflow had an id wins - it is newer than what the server holds.
+        this.criteriaByResourceType.set({ ...byResourceType, ...this.criteriaBuffer });
+      },
+      // A failed load leaves the editor usable (it just shows no current value) rather than blocking it.
+      error: () => { this.criteriaLoadedForWorkflowId = null; },
+    });
+  }
+
+  /**
+   * Persists criteria authored before the workflow had an id. Called after a save supplies one; each entry
+   * goes up as a replace, since the buffered value is already the fully merged result.
+   */
+  private flushCriteriaBuffer(workflowId: string): void {
+    const buffered = Object.entries(this.criteriaBuffer);
+    if (buffered.length === 0) return;
+
+    const sourceNodeId = this.graphMapper.findLaunchSourceNodeId();
+    if (!sourceNodeId) return;
+
+    this.criteriaBuffer = {};
+    for (const [resourceType, criteria] of buffered) {
+      this.workflowApi
+        .saveResourceTypeCriteria(workflowId, { sourceNodeId, resourceType, criteria, replace: true })
+        .subscribe({
+          error: () => this.toast.error(`Could not save criteria for ${resourceType}.`),
+        });
+    }
+  }
+
+  /**
+   * Appends additional parameters to existing ones, dropping any whose key is already present. Mirrors the
+   * server-side merge (ResourceTypeCriteria.MergeCriteria) so the dialog previews exactly what will be stored:
+   * a repeated key is not additive filtering, and Epic rejects a duplicated identifier outright.
+   */
+  private mergeCriteria(existing: string, additional: string): string {
+    const merged: string[] = [];
+    const seenKeys = new Set<string>();
+
+    for (const source of [existing, additional]) {
+      for (const segment of source.trim().split('&')) {
+        const parameter = segment.trim().replace(/^[?&]+/, '');
+        if (!parameter) continue;
+        const equals = parameter.indexOf('=');
+        const key = (equals < 0 ? parameter : parameter.slice(0, equals)).toLowerCase();
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        merged.push(parameter);
+      }
+    }
+
+    return merged.join('&');
+  }
+
   confirmExitMapping(): void {
     if (this.mappingRowsSnapshot)
       this.mappingRows.set(this.mappingRowsSnapshot);
@@ -4181,7 +4466,7 @@ export class DestinationWizardComponent implements OnInit {
     // "only show a card for a table that really exists" check, which then short-circuited to true and
     // displayed a guessed table that had never been created.
     return (
-      this.hasLiveRelationalSchema() && this.probeState() === 'ok' && this.sqlTables().length > 0
+      this.hasProbeableTableList() && this.probeState() === 'ok' && this.sqlTables().length > 0
     );
   }
 
@@ -4802,7 +5087,10 @@ export class DestinationWizardComponent implements OnInit {
     // supports all three (SqlDestinationSchemaService.IsSupported), so this used to silently skip the
     // live-schema refresh for MySQL/PostgreSQL destinations, leaving their mapping canvas showing whatever
     // stale table/column list the last saved mapping summary happened to restore.
-    if (!this.hasLiveRelationalSchema()) return;
+    // hasProbeableTableList(), not hasLiveRelationalSchema(): a Lakehouse Delta destination has tables that
+    // can be listed (folders under Tables/ carrying a _delta_log) without being relational in any other way,
+    // and gating on the relational predicate left its canvas with no existing-table list at all.
+    if (!this.hasProbeableTableList()) return;
 
     // selectedExistingId() (set by selectExisting() — picking an already-saved connection from the "Existing
     // connection" dropdown) and resolvedDestinationId() (set by _populateFromNode()/provisionDestinationConnection()
@@ -4844,6 +5132,22 @@ export class DestinationWizardComponent implements OnInit {
     // and skipping just leaves the mapping-summary-restored (partial) table list in place, same fallback as
     // every other failure path here.
     const form = this.activeForm();
+
+    // A Fabric surface describes its connection with a workspace + item + Entra identity rather than
+    // server/database/password, so it builds its own request and skips the SQL-shaped completeness check
+    // below — which would reject every Fabric request for having no server.
+    if ((this.isFabricWarehouse() || this.isLakehouseTable()) && isFabricForm(form)) {
+      this.schemaLoadState.set('loading');
+      this.schemaSvc.probe(form.getFabricProbeRequest()).subscribe({
+        next: (res) => {
+          if (res.connected) applyTables(res.tables);
+          else this.schemaLoadState.set('failed');
+        },
+        error: () => this.schemaLoadState.set('failed'),
+      });
+      return;
+    }
+
     if (!isSqlFamilyForm(form)) {
       this.schemaLoadState.set('unavailable');
       return;
@@ -5068,6 +5372,7 @@ export class DestinationWizardComponent implements OnInit {
     const isDataLake = this.isDataLake();
     const isFabric = this.isFabric();
     const isFabricWarehouse = this.isFabricWarehouse();
+    const isCosmosFabric = this.isCosmosFabric();
     const isApiEndpoint = this.isApiEndpoint();
     const name =
       metadata.fields['dest_name'] ||
@@ -5089,9 +5394,11 @@ export class DestinationWizardComponent implements OnInit {
                       ? 'Microsoft Fabric Destination'
                       : isFabricWarehouse
                         ? 'Microsoft Fabric Warehouse Destination'
-                        : isApiEndpoint
-                          ? 'API Endpoint Destination'
-                          : 'File Destination');
+                        : isCosmosFabric
+                          ? 'Cosmos DB in Fabric Destination'
+                          : isApiEndpoint
+                            ? 'API Endpoint Destination'
+                            : 'File Destination');
     const secretName = newSecretName(name);
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
@@ -5228,6 +5535,27 @@ export class DestinationWizardComponent implements OnInit {
                   target: metadata.fields['dest_fabricWorkspace'] || null,
                   // Managed identity resolves no Key Vault secret at all; the form's getMetadata()
                   // already returns '' for it (see FabricDestinationSettings.RequiresSecret).
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
+              : isCosmosFabric
+              ? {
+                  name,
+                  // Its own type, NOT one of the two DataFabric* ones: Cosmos addresses an endpoint and
+                  // database rather than a workspace and item, and the API validates it against
+                  // ValidateCosmosDbFabricMetadata. Without this branch a Cosmos destination fell through to
+                  // the Csv default at the end of this chain and was rejected for a missing dest_filePattern
+                  // — the same failure the Warehouse branch above documents, for the same reason.
+                  destinationType: 'CosmosDbFabric',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  // The container is the target, the same dual read the Fabric branches do for their
+                  // workspace — CosmosDbFabricDestinationSettings.ResolveContainer falls back to the mapping
+                  // profile, so a blank container here is the normal case rather than a missing value.
+                  target: metadata.fields['dest_cosmosFabricContainer'] || null,
+                  // Managed identity resolves no Key Vault secret at all; the form's getMetadata() already
+                  // returns '' for it (see CosmosDbFabricDestinationSettings.RequiresSecret).
                   inlineSecret: metadata.secret ?? '',
                   connectionMetadataJson: JSON.stringify(metadata.fields),
                   deIdentificationProfileId,
@@ -5482,11 +5810,13 @@ export class DestinationWizardComponent implements OnInit {
                             ? 'dest-datalake-webhook'
                             : type === 'fabricwarehouse'
                               ? 'dest-fabric-warehouse'
-                              : type === 'fabric'
-                                ? 'dest-fabric'
-                                : type === 'apiendpoint'
-                                  ? 'dest-apiendpoint'
-                                  : 'dest-csv',
+                              : type === 'cosmosfabric'
+                                ? 'dest-fabric-cosmos'
+                                : type === 'fabric'
+                                  ? 'dest-fabric'
+                                  : type === 'apiendpoint'
+                                    ? 'dest-apiendpoint'
+                                    : 'dest-csv',
         status: 'enabled',
         config,
       });

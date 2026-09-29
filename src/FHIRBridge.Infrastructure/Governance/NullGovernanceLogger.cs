@@ -25,6 +25,8 @@ public sealed class NullGovernanceLogger : IGovernanceLogger
 
     public Task LogExportAsync(ExportEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
+    public Task LogDestinationActivityAsync(DestinationActivityEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
     public Task LogNotificationAsync(NotificationEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public Task LogValidationFailureAsync(ValidationFailureEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;

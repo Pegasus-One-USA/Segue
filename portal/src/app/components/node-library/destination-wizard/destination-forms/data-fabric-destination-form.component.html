@@ -185,7 +185,7 @@
       </button>
     </div>
 
-    @if (advancedOpen() || hasAdvancedError()) {      @if (!isWarehouse()) {
+    @if (advancedOpen() || hasAdvancedError()) {      @if (isFileSurface()) {
       <div class="dw-field dw-field--full" [class.dw-field--error]="fabricForm.get('path')!.invalid && fabricForm.get('path')!.touched">
         <label class="dw-label" for="dw-fab-path">Path under Files</label>
         <input id="dw-fab-path" class="dw-input" formControlName="path" placeholder="Default: fhirbridge" />
@@ -228,6 +228,14 @@
       </div>
 
 
+      }
+
+      @if (isLakehouseTable()) {
+        <div class="dw-field">
+          <label class="dw-label" for="dw-fab-lhSchema">Lakehouse schema</label>
+          <input id="dw-fab-lhSchema" class="dw-input" formControlName="lakehouseSchema" placeholder="Leave blank for a classic lakehouse" />
+          <span class="dw-hint">Only for a schema-enabled lakehouse, whose tables sit at Tables/&lbrace;schema&rbrace;/&lbrace;table&rbrace;. Leave blank otherwise — setting it on a classic lakehouse writes to a folder Fabric never registers as a table.</span>
+        </div>
       }
 
       @if (isWarehouse()) {

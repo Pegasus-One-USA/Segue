@@ -81,6 +81,10 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'dest-apiendpoint': 'ApiEndpointDestinationNode',
   'dest-fabric': 'DataFabricAzureDestinationNode',
   'dest-fabric-warehouse': 'DataFabricWarehouseDestinationNode',
+  // Lakehouse Delta shares the OneLake node type — the landing mode (dest_fabricMode) is what distinguishes
+  // the two surfaces, exactly as it does for the destination record.
+  'dest-fabric-lakehouse-table': 'DataFabricAzureDestinationNode',
+  'dest-fabric-cosmos': 'CosmosDbFabricDestinationNode',
   'dest-csv': 'CsvDestinationNode',
   'audit-lineage': 'AuditLineageNode',
   hedis: 'HedisMeasureReportNode',
@@ -98,6 +102,10 @@ const SECRET_FIELD_KEYS = new Set([
   // secret) and the Fabric service-principal client secret. Both live only in the provisioned Key
   // Vault entry — never on the node.
   'dest_dlwSecret', 'dest_fabricSecret',
+  // Cosmos DB in Fabric's service-principal client secret. Same "never on the node" rule — it was missing
+  // here while every other Fabric surface was listed, so a Cosmos node persisted its client secret in
+  // plaintext into WorkflowNodes.ConfigurationJson.
+  'dest_cosmosFabricSecret',
   // API Endpoint's single secret control — same "never on the node" rule as the two above.
   'dest_apiSecret',
 ]);
@@ -256,6 +264,13 @@ export class WorkflowGraphMapperServiceV2 {
       ?? source.fields['sourceConnectionId']
       ?? source.fields['source_connection_id']
       ?? null;
+  }
+
+  /** The launch source node's CANVAS id — what a per-resource-type criteria row is keyed by (the backend
+   *  stamps this same value onto the node's configuration as `canvasNodeId`; see nodeToRequest, which sends
+   *  node.id as the request id). Distinct from findLaunchSourceId above, which returns its saved CONNECTION id. */
+  findLaunchSourceNodeId(): string | null {
+    return this.store.nodes().find(node => !node.kind)?.id ?? null;
   }
 
   private nodeToRequest(node: CanvasNode, catalog: WorkflowCatalogItem[]): WorkflowNodeRequest {

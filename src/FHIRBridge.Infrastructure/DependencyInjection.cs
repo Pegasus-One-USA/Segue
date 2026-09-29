@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Aggregation;
+﻿using FHIRBridge.Application.Abstractions.Aggregation;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Governance;
@@ -328,6 +328,7 @@ public static class DependencyInjection
             services.AddScoped<ISchemaMappingRepository, EfSchemaMappingRepository>();
             services.AddScoped<ITransformationRuleRepository, EfTransformationRuleRepository>();
             services.AddScoped<IDeIdentificationProfileRepository, EfDeIdentificationProfileRepository>();
+            services.AddScoped<IResourceTypeCriteriaRepository, EfResourceTypeCriteriaRepository>();
             services.AddScoped<IDeIdentificationProfileSeeder, DeIdentificationProfileSeeder>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
@@ -514,8 +515,14 @@ public static class DependencyInjection
         services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.OneLakeFilesLandingStrategy>();
         services.AddScoped<Destinations.Fabric.IFabricWarehouseConnectionFactory, Destinations.Fabric.FabricWarehouseConnectionFactory>();
         services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.WarehouseTableLandingStrategy>();
+        services.AddScoped<Destinations.Fabric.IFabricLandingStrategy, Destinations.Fabric.LakehouseTableLandingStrategy>();
         services.AddScoped<Destinations.Fabric.IFabricLandingStrategyRegistry, Destinations.Fabric.FabricLandingStrategyRegistry>();
         services.AddScoped<MappedDataFabricDestinationWriter>();
+        // Cosmos DB in Fabric is grouped with the other Fabric surfaces in the picker, but shares no client,
+        // addressing or auth audience with them — it speaks the Cosmos NoSQL data plane, so it is its own
+        // writer rather than another landing strategy.
+        services.AddScoped<Destinations.Fabric.ICosmosDbFabricClientFactory, Destinations.Fabric.CosmosDbFabricClientFactory>();
+        services.AddScoped<MappedCosmosDbFabricDestinationWriter>();
         services.AddScoped<MappedMongoDestinationWriter>();
         services.AddHttpClient(nameof(MedplumTokenProvider));
         services.AddHttpClient(nameof(MappedMedplumDestinationWriter));
@@ -546,7 +553,15 @@ public static class DependencyInjection
         services.AddScoped<IArtifactDeliveryStrategyFactory, ArtifactDeliveryStrategyFactory>();
         services.Configure<GeneratedFileDownloadOptions>(configuration.GetSection("GeneratedFileDownload"));
         services.AddSingleton<IGeneratedFileDownloadLinkService, GeneratedFileDownloadLinkService>();
-        services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
+        // Lakehouse Delta decorates the SQL schema service rather than replacing it: a Delta "table" is a folder
+        // with a transaction log, so it shares this contract and nothing else. Every other destination type
+        // passes straight through, so the relational path is exactly what it was.
+        services.AddScoped<SqlDestinationSchemaService>();
+        services.AddScoped<IDestinationSchemaService>(provider => new Destinations.Fabric.LakehouseDeltaSchemaService(
+            provider.GetRequiredService<SqlDestinationSchemaService>(),
+            provider.GetRequiredService<Destinations.Fabric.IOneLakeClientFactory>(),
+            provider.GetRequiredService<Application.Abstractions.Persistence.IConfigurationRepository>(),
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Destinations.Fabric.LakehouseDeltaSchemaService>>()));
         services.AddSingleton<ISqlConnectionSecretMerger, Destinations.SqlConnectionSecretMerger>();
         services.AddScoped<ICsvDestinationConnectionTestService, SftpDestinationConnectionTestService>();
         services.AddHttpClient(nameof(Destinations.FhirDestinationConnectionTestService));
@@ -567,6 +582,10 @@ public static class DependencyInjection
         services.AddScoped<IMongoDestinationConnectionTestService, Destinations.MongoDestinationConnectionTestService>();
         services.AddScoped<IBlobDestinationConnectionTestService, Destinations.BlobDestinationConnectionTestService>();
         services.AddScoped<IFabricDestinationConnectionTestService, Destinations.FabricDestinationConnectionTestService>();
+        // Cosmos DB in Fabric gets its OWN test rather than sharing the Fabric one: that probes OneLake and the
+        // Warehouse TDS endpoint, and Cosmos is a different service on a different endpoint with a different
+        // token audience — passing it through there would test something Cosmos never uses.
+        services.AddScoped<ICosmosDbFabricDestinationConnectionTestService, Destinations.CosmosDbFabricDestinationConnectionTestService>();
 
         foreach (var registration in MappingSchemaProviderFactory.DefaultRegistrations)
         {
@@ -696,6 +715,7 @@ public static class DependencyInjection
         // rows (overrides the Application pass-through stub).
         services.AddScoped<IDeIdentificationService, SafeHarborDeIdentificationService>();
         services.AddScoped<IDeIdentificationProfileService, DeIdentificationProfileService>();
+        services.AddScoped<IResourceTypeCriteriaService, ResourceTypeCriteriaService>();
 
         // G4: configurable retention + a purge service over purgeable stores (immutable audit is never purged).
         // The lineage store (in-memory or EF-backed) is registered as IPurgeableStore in the DB-mode branch above.

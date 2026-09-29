@@ -114,6 +114,12 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  other than whichever one is presently being edited. */
   readonly allResources = input<string[]>([]);
   readonly destType = input.required<MappingDestType>();
+
+  /** Which Fabric surface, when destType() alone cannot say. 'fabric' covers both OneLake Files and
+   *  Lakehouse Delta — they share a destination type because they share a client, a credential and an
+   *  addressing scheme. What they do NOT share is what they produce: Files drops a file, Delta registers a
+   *  real table. The cards below say which, so this has to reach them. Null for every other destination. */
+  readonly fabricLandingMode = input<string | null>(null);
   /** The real backend DestinationType (e.g. 'SqlServer', 'Mongo') for this destination — distinct from
    *  destType above (which is the coarser 'sql'/'csv'/'mongo' family used to drive UI branching). Threaded
    *  down to the join popover so it can load/save a transformation rule scoped to the right destination.
@@ -1229,9 +1235,14 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
         r.resource === resource && r.tableName === oldName ? { ...r, tableName: trimmed } : r,
       ),
     );
-    // Any schema op queued against the old name (SQL-only in practice — Mongo never queues one) is stale now.
+    // Any schema op queued against the old name (SQL-only in practice — neither Mongo nor Delta queues one)
+    // is stale now.
     this.schemaOpsCancelledForTable.emit(oldName);
-    this.toast.success('Collection renamed', `${oldName} is now ${trimmed}.`);
+
+    // Renaming is offered for a Mongo collection and a Delta table; say which one was renamed rather than
+    // calling every target a collection.
+    const noun = this.destType() === 'mongo' ? 'Collection' : 'Table';
+    this.toast.success(`${noun} renamed`, `${oldName} is now ${trimmed}.`);
   }
 
   onRemoveTable(resource: string, tableName: string, isExtra: boolean): void {

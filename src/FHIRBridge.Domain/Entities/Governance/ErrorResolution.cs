@@ -8,7 +8,7 @@ namespace FHIRBridge.Domain.Entities.Governance;
 /// engineer marks an error Resolved, which must update in place. Kept separate from <see cref="ErrorLog"/>
 /// so the forensic error record itself stays immutable (HIPAA/SOC2). Absence of a row means status "Open".
 /// </summary>
-public sealed class ErrorResolution : Entity<Guid>
+public sealed class ErrorResolution : AuditTrackedEntity<Guid>
 {
     public const string StatusOpen = "Open";
     public const string StatusResolved = "Resolved";

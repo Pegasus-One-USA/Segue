@@ -30,7 +30,7 @@ public enum LicenseRequestStatus
 /// keeps identifying the same install/customer across its entire license lifetime, embedded as the
 /// <c>requestKey</c> claim in whatever gets minted against it.
 /// </summary>
-public sealed class LicenseRequest : Entity<Guid>
+public sealed class LicenseRequest : AuditTrackedEntity<Guid>
 {
     private LicenseRequest()
     {

@@ -151,6 +151,9 @@ export const DESTINATION_ENDPOINTS = {
   mongoTest:           `${API_V1_BASE}/destinations/mongo-test`,
   blobTest:            `${API_V1_BASE}/destinations/blob-test`,
   fabricTest:          `${API_V1_BASE}/destinations/fabric-test`,
+  // Its own endpoint, not fabric-test: Cosmos speaks a different service on a different endpoint with a
+  // different token audience, and returns the database's containers rather than OneLake/Warehouse results.
+  cosmosTest:          `${API_V1_BASE}/destinations/cosmos-test`,
   // WorkflowEndpoints, not ConfigurationsController — same reasoning as SOURCE_CONNECTIONS_ENDPOINTS.usage: the
   // usage check has to walk every workflow's Destination nodes, which only the Runtime workflow store can answer.
   usage:               `${API_V1_BASE}/workflows/destination-usage`,
@@ -502,6 +505,7 @@ export const WORKFLOW_ENDPOINTS = {
   configurationExport: (id: string) => `${API_V1_BASE}/workflows/${id}/configuration-export`,
   checkpointUrl:    (workflowId: string, nodeId: string) => `${API_V1_BASE}/workflows/${workflowId}/nodes/${nodeId}/checkpoint-url`,
   checkpointResult: (workflowRunId: string) => `${API_V1_BASE}/workflows/runs/${workflowRunId}/checkpoint-result`,
+  resourceTypeCriteria: (id: string) => `${API_V1_BASE}/workflows/${id}/resource-type-criteria`,
   runStatus:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/status`,
   cancelRun:       (runId: string) => `${API_V1_BASE}/workflow-runs/${runId}/cancel`,
 };

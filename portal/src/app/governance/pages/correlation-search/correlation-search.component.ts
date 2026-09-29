@@ -43,6 +43,8 @@ const SECTION_DEFS: { id: string; label: string; count: (r: CorrelationSearchRes
   { id: 'sec-retryHistory', label: 'Retry History', count: r => r.retryHistory.length },
   { id: 'sec-errors', label: 'Errors', count: (_r, visibleErrors) => visibleErrors },
   { id: 'sec-apiRequests', label: 'API Requests', count: r => r.apiRequests.length },
+  // Directly after API Requests so the trace reads source-then-destination, matching the order things happened.
+  { id: 'sec-destinationActivity', label: 'Destination Activity', count: r => r.destinationActivity.length },
   { id: 'sec-exports', label: 'Exports', count: r => r.exports.length },
   { id: 'sec-notifications', label: 'Notifications', count: r => r.notifications.length },
   { id: 'sec-validationFailures', label: 'Validation Failures', count: r => r.validationFailures.length },
@@ -103,6 +105,10 @@ function buildTimeline(result: CorrelationSearchResult): TimelineEntry[] {
   }
   for (const x of result.apiRequests) {
     entries.push({ timeUtc: x.occurredOnUtc, category: 'API Request', summary: `${x.method} ${x.url} — ${x.statusCode ?? '—'} (${x.durationMs}ms)`, raw: x });
+  }
+  for (const x of result.destinationActivity) {
+    const reason = x.error ? `: ${x.error}` : '';
+    entries.push({ timeUtc: x.occurredOnUtc, category: 'Destination', summary: `${x.destinationName} — ${x.step}${reason} (${x.durationMs}ms)`, raw: x });
   }
   for (const x of result.auditLogs) {
     entries.push({ timeUtc: x.occurredOnUtc, category: 'Audit', summary: `${x.module} — ${x.action} (${x.status})`, raw: x });

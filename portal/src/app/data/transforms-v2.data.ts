@@ -34,7 +34,9 @@ export const TRANSFORMS: Transform[] = [
   // Eventstream) is one more child here.
   { id: 'dest-fabric-group', rank: 1, category: 'Cloud / FHIR', name: 'Microsoft Fabric', sub: 'Choose a landing surface.' },
   { id: 'dest-fabric',      rank: 1, parentId: 'dest-fabric-group', category: 'Cloud / FHIR', destinationType: 'DataFabricAzure', name: 'OneLake Files', sub: 'Land files in a Fabric Lakehouse (OneLake).', permissionPrefix: 'sourceconnections' },
+  { id: 'dest-fabric-lakehouse-table', rank: 1, parentId: 'dest-fabric-group', category: 'Cloud / FHIR', destinationType: 'DataFabricAzure', fabricMode: 'lakehouseTable', name: 'Lakehouse Tables (Delta)', sub: 'Land rows as a Delta table in a Fabric Lakehouse.', permissionPrefix: 'sourceconnections' },
   { id: 'dest-fabric-warehouse', rank: 1, parentId: 'dest-fabric-group', category: 'Relational', destinationType: 'DataFabricWarehouse', name: 'Warehouse', sub: 'Load rows into a Fabric Warehouse table.', permissionPrefix: 'sourceconnections' },
+  { id: 'dest-fabric-cosmos', rank: 1, parentId: 'dest-fabric-group', category: 'Cloud / FHIR', destinationType: 'CosmosDbFabric', name: 'Cosmos DB', sub: 'Write documents to a Cosmos DB container in Fabric.', permissionPrefix: 'sourceconnections' },
   { id: 'dest-blob',        rank: 1, category: 'Cloud / FHIR', destinationType: 'BlobStorage',    name: 'Azure Blob Storage', sub: 'Write objects to Azure Blob.',      permissionPrefix: 'blobstorage' },
   { id: 'dest-s3',          rank: 1, category: 'Cloud / FHIR', destinationType: 'S3',             name: 'Amazon S3',          sub: 'Write objects to Amazon S3.',       permissionPrefix: 'sourceconnections' },
   { id: 'dest-fhir',        rank: 1, category: 'Cloud / FHIR', destinationType: 'FhirRepository', name: 'Aidbox',             sub: 'POST a transaction bundle to a FHIR store.', permissionPrefix: 'fhirrepository' },

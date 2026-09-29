@@ -68,7 +68,9 @@ public sealed class MappedSqlServerDestinationWriter : IConfiguredDestinationWri
             destination.Target ?? mappingProfile.DestinationObject,
             mappingProfile);
 
-        await using var connection = await SqlServerConnectionFactory.OpenConnectionAsync(connectionString, cancellationToken);
+        await using var connection = await context.ReportConnectAsync(
+            () => SqlServerConnectionFactory.OpenConnectionAsync(connectionString, cancellationToken),
+            cancellationToken);
 
         await EnsureTableAsync(
             connection,
