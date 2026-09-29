@@ -160,8 +160,15 @@
                     {{ ruleDeleting() ? 'Removing…' : 'Remove transformation' }}
                   </button>
                 }
-                <button type="button" class="fm-popover-save" [disabled]="ruleSaving()" (click)="saveRule()">
-                  {{ ruleSaving() ? 'Saving…' : (existingRule() ? 'Update rule' : 'Add rule') }}
+                <button
+                  type="button"
+                  class="fm-popover-save"
+                  [class.fm-popover-save--unsaved]="hasUnsavedRule()"
+                  [attr.title]="hasUnsavedRule() ? 'This transformation has not been saved yet' : null"
+                  [disabled]="ruleSaving()"
+                  (click)="saveRule()"
+                >
+                  {{ ruleSaving() ? 'Saving…' : (existingRule() ? 'Update rule' : 'Add rule') }}{{ hasUnsavedRule() ? ' •' : '' }}
                 </button>
               </div>
             </div>
@@ -175,6 +182,23 @@
       <div class="fm-popover-footer-actions">
         <button type="button" class="fm-popover-cancel" (click)="onClose()">Cancel</button>
         <button type="button" class="fm-popover-save" (click)="onSave()">Save</button>
+      </div>
+    </div>
+  }
+
+  <!-- Asked before the popover closes over a transformation that was configured but never saved.
+       Everything in the rule section lives in this component until "Add rule"/"Update rule" is
+       pressed, so closing without it leaves nothing on the server to recover. -->
+  @if (pendingUnsavedRuleAction(); as pendingAction) {
+    <div class="fm-popover-unsaved-confirm" role="alertdialog" aria-labelledby="fmjp-unsaved-title">
+      <p class="fm-popover-unsaved-title" id="fmjp-unsaved-title">This transformation is not saved</p>
+      <p class="fm-popover-unsaved-body">
+        {{ pendingAction === 'save' ? 'Saving the mapping does not save the transformation' : 'Close now' }} — the transformation you configured is discarded. Choose Keep editing, then
+        “{{ existingRule() ? 'Update rule' : 'Add rule' }}”, to save it.
+      </p>
+      <div class="fm-popover-unsaved-actions">
+        <button type="button" class="fm-popover-cancel" (click)="discardAndContinue()">{{ pendingAction === 'save' ? 'Discard and save mapping' : 'Discard' }}</button>
+        <button type="button" class="fm-popover-save" (click)="keepEditing()">Keep editing</button>
       </div>
     </div>
   }

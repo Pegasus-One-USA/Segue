@@ -112,7 +112,7 @@ describe('buildNodeDeletePlanV2', () => {
     expect(leftovers[0]).toContain('stay until deleted');
   });
 
-  it('still warns when the destination itself goes, and says what happens to the drafts', () => {
+  it('warns that deleting the destination deletes the rules it owns', () => {
     // This used to report nothing at all, on the reasoning that "the whole pipeline is gone, so there is no
     // surviving module the rules could still be reached from". That was wrong: deleting a canvas node does
     // not delete the destination CONNECTION, so its Rules screen — and the rules on it — are still there.
@@ -122,8 +122,11 @@ describe('buildNodeDeletePlanV2', () => {
     const leftovers = buildNodeDeletePlanV2('n5', graph.nodes, graph.edges)!.serverSideLeftovers;
 
     expect(leftovers.length).toBe(1);
-    expect(leftovers[0]).toContain('already saved with this workflow stay');
-    expect(leftovers[0]).toContain('discarded');
+    expect(leftovers[0]).toContain('deleted with it');
+    expect(leftovers[0]).toContain('already saved with this workflow');
+    // The promise this used to make was the opposite of what happens now: nothing removed a deleted
+    // destination's rules, so a replacement destination of the same type arrived with them applied.
+    expect(leftovers[0]).not.toContain('stay until deleted');
   });
 
   it('takes the whole pipeline when the source goes', () => {

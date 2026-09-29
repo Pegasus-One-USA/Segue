@@ -269,8 +269,8 @@ export function buildNodeDeletePlanV2(
     if (transformId === 'transformation' && owner) {
       serverSideLeftovers.push(
         removedIds.has(owner.id)
-          ? 'Transformation rules already saved with this workflow stay until deleted from the destination’s '
-            + 'Rules screen. Rules drafted here but never saved are discarded with the destination.'
+          ? 'The transformation rules this destination owns are deleted with it — including ones already '
+            + 'saved with this workflow. Rules on a destination that stays are untouched.'
           : 'Transformation rules are stored server-side, so they stay until deleted from the destination’s Rules screen.',
       );
     }

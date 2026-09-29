@@ -22,13 +22,24 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
     // wildcard" fallback below would otherwise match EVERY destination field for that resource type/scope,
     // masking fields the rule was never meant to touch.
     public async Task<IReadOnlyList<TransformationRule>> GetWorkflowScopedAsync(
-        Guid resourcePipelineRouteId, string resourceType, string destinationField, string? sourceSystem,
-        string? sourceField, CancellationToken cancellationToken) =>
+        Guid resourcePipelineRouteId, DestinationType? destinationType, Guid? destinationConfigurationId,
+        string resourceType, string destinationField, string? sourceSystem, string? sourceField,
+        CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
                 x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
                 x.Scope == TransformScope.Workflow &&
                 x.ResourcePipelineRouteId == resourcePipelineRouteId &&
+                // Belonging to a workflow was assumed to pin the destination too. It does not: a
+                // workflow can have its destination replaced, or hold two of different types, and then
+                // one column name matched a rule written for the other destination entirely.
+                (destinationType == null || x.DestinationType == null || x.DestinationType == destinationType) &&
+                // ...and the destination ITSELF, which the type cannot distinguish: a replaced PostgreSQL
+                // destination is still PostgreSQL, so without this the new one picks up the old one's
+                // rules and nothing ever retires them (the save-time pass drops a type from its "removed"
+                // set as soon as any surviving destination shares it).
+                (destinationConfigurationId == null || x.DestinationConfigurationId == null
+                    || x.DestinationConfigurationId == destinationConfigurationId) &&
                 x.ResourceType == resourceType &&
                 x.DestinationField == destinationField &&
                 (x.SourceSystem == null || x.SourceSystem == sourceSystem) &&
@@ -195,6 +206,30 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
                 (x.SourceSystem == null || x.SourceSystem == sourceSystem) &&
                 (x.SourceField == null || x.SourceField == sourceField))
             .ToListAsync(cancellationToken);
+
+    public async Task<int> DeleteWorkflowRulesForDestinationAsync(
+        Guid resourcePipelineRouteId, Guid destinationConfigurationId, DestinationType destinationType,
+        bool includeUnattributed, CancellationToken cancellationToken)
+    {
+        var doomed = await _db.TransformationRules
+            .Where(x =>
+                x.Scope == TransformScope.Workflow &&
+                x.ResourcePipelineRouteId == resourcePipelineRouteId &&
+                (x.DestinationConfigurationId == destinationConfigurationId
+                    || (includeUnattributed
+                        && x.DestinationConfigurationId == null
+                        && x.DestinationType == destinationType)))
+            .ToListAsync(cancellationToken);
+
+        if (doomed.Count == 0)
+        {
+            return 0;
+        }
+
+        _db.TransformationRules.RemoveRange(doomed);
+        await _db.SaveChangesAsync(cancellationToken);
+        return doomed.Count;
+    }
 
     public Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         _db.TransformationRules.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);

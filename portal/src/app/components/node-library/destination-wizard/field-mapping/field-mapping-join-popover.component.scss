@@ -444,3 +444,44 @@
 @media (prefers-reduced-motion: reduce) {
   .fm-popover-save { transition: none; }
 }
+
+// The rule section writes to the server only when this button is pressed, so while there are edits it
+// says so in place rather than looking like any other idle button. The dot comes from the template.
+.fm-popover-save--unsaved {
+  box-shadow: 0 0 0 2px var(--color-warning-bg, #fde68a);
+}
+
+// Asked before closing over an unsaved transformation — see the template's own note.
+.fm-popover-unsaved-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border-radius: inherit;
+}
+
+.fm-popover-unsaved-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.fm-popover-unsaved-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-muted, var(--color-text));
+}
+
+.fm-popover-unsaved-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

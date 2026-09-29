@@ -543,7 +543,7 @@ public sealed class MappingNodeExecutorTests
         var resolver = new Mock<IEffectiveRuleResolver>();
         resolver
             .Setup(r => r.ResolveAsync(
-                DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), null, "Patient.name.family",
+                DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), It.IsAny<Guid?>(), null, "Patient.name.family",
                 It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
@@ -615,12 +615,12 @@ public sealed class MappingNodeExecutorTests
         // Every other field (Active) still asks the resolver — without a catch-all it hands back a null task.
         resolver
             .Setup(r => r.ResolveAsync(
-                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         resolver
             .Setup(r => r.ResolveAsync(
-                DestinationType.SqlServer, "Patient", "Text", It.IsAny<Guid?>(), null, "Patient.name.text",
+                DestinationType.SqlServer, "Patient", "Text", It.IsAny<Guid?>(), It.IsAny<Guid?>(), null, "Patient.name.text",
                 It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
@@ -692,12 +692,12 @@ public sealed class MappingNodeExecutorTests
         var resolver = new Mock<IEffectiveRuleResolver>();
         resolver
             .Setup(r => r.ResolveAsync(
-                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         resolver
             .Setup(r => r.ResolveAsync(
-                DestinationType.SqlServer, "Patient", "Text", It.IsAny<Guid?>(), null, "Patient.name.text",
+                DestinationType.SqlServer, "Patient", "Text", It.IsAny<Guid?>(), It.IsAny<Guid?>(), null, "Patient.name.text",
                 It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
@@ -759,7 +759,7 @@ public sealed class MappingNodeExecutorTests
         var resolver = new Mock<IEffectiveRuleResolver>();
         resolver
             .Setup(r => r.ResolveAsync(
-                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
@@ -815,7 +815,7 @@ public sealed class MappingNodeExecutorTests
         var resolver = new Mock<IEffectiveRuleResolver>();
         resolver
             .Setup(r => r.ResolveAsync(
-                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
@@ -882,7 +882,7 @@ public sealed class MappingNodeExecutorTests
         var resolver = new Mock<IEffectiveRuleResolver>();
         resolver
             .Setup(r => r.ResolveAsync(
-                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
+                It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
@@ -936,7 +936,7 @@ public sealed class MappingNodeExecutorTests
         var resolver = new Mock<IEffectiveRuleResolver>();
         resolver
             .Setup(r => r.ResolveAsync(
-                DestinationType.SqlServer, "Observation", "Value", It.IsAny<Guid?>(), null, "Observation.valueQuantity.value",
+                DestinationType.SqlServer, "Observation", "Value", It.IsAny<Guid?>(), It.IsAny<Guid?>(), null, "Observation.valueQuantity.value",
                 It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
@@ -998,7 +998,7 @@ public sealed class MappingNodeExecutorTests
         var resolver = new Mock<IEffectiveRuleResolver>();
         resolver
             .Setup(r => r.ResolveAsync(
-                DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), null, "Patient.name.family",
+                DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), It.IsAny<Guid?>(), null, "Patient.name.family",
                 It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
@@ -1377,7 +1377,7 @@ public sealed class MappingNodeExecutorTests
         var resolver = new Mock<IEffectiveRuleResolver>();
         resolver
             .Setup(r => r.ResolveAsync(
-                DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), null, "Patient.name.family",
+                DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), It.IsAny<Guid?>(), null, "Patient.name.family",
                 It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[failingTypedRule, succeedingUntypedRule]);
 

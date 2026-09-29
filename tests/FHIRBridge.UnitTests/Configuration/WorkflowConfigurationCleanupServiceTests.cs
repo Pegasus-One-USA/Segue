@@ -201,8 +201,9 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         }
 
         public Task<IReadOnlyList<TransformationRule>> GetWorkflowScopedAsync(
-            Guid resourcePipelineRouteId, string resourceType, string destinationField, string? sourceSystem,
-            string? sourceField, CancellationToken cancellationToken) => throw new NotSupportedException();
+            Guid resourcePipelineRouteId, DestinationType? destinationType, Guid? destinationConfigurationId,
+            string resourceType, string destinationField, string? sourceSystem, string? sourceField,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<TransformationRule>> GetFieldScopedAsync(
             string resourceType, string destinationField, string? sourceSystem, string? sourceField,
@@ -230,6 +231,11 @@ public sealed class WorkflowConfigurationCleanupServiceTests
 
         public Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowRulesAsync(
             IReadOnlyCollection<DestinationType> destinationTypes, string? owner, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<int> DeleteWorkflowRulesForDestinationAsync(
+            Guid resourcePipelineRouteId, Guid destinationConfigurationId, DestinationType destinationType,
+            bool includeUnattributed, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<int> DeletePendingWorkflowRulesAsync(

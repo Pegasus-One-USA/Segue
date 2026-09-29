@@ -4381,6 +4381,9 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("DestinationConfigurationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("DestinationField")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");

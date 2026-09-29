@@ -41,7 +41,7 @@ public sealed class CreateMappingProfileRequestValidatorTests
         _ruleResolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
+                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
                 It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
 
@@ -283,7 +283,7 @@ public sealed class CreateMappingProfileRequestValidatorTests
         _ruleResolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
+                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
                 It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)
             [
@@ -323,7 +323,7 @@ public sealed class CreateMappingProfileRequestValidatorTests
 
         _ruleResolver.Verify(
             r => r.ResolveAsync(
-                DestinationType.SqlServer, "Patient", "PatientAge", workflowId, null, "Patient.birthDate",
+                DestinationType.SqlServer, "Patient", "PatientAge", workflowId, null, null, "Patient.birthDate",
                 It.IsAny<CancellationToken>(), It.IsAny<bool>(), true, It.IsAny<string?>()),
             Times.Once);
     }
@@ -475,7 +475,7 @@ public sealed class CreateMappingProfileRequestValidatorTests
         _ruleResolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
+                It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(),
                 It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 

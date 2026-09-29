@@ -11,9 +11,24 @@ public interface ITransformationRuleRepository
     /// <summary><paramref name="sourceSystem"/> returns rows with no source restriction OR matching this
     /// source (resolver prefers the latter — same pattern as the ResourceType/DestinationType tiers'
     /// destinationField parameter).</summary>
+    /// <param name="destinationType">The destination the values are being written to. Required because a
+    /// workflow does NOT imply one destination: replace a destination, or add a second of another type, and
+    /// a rule authored for the first would otherwise still be returned for the second's column of the same
+    /// name — which is how a Concatenation rule written against SQL Server reappeared, already applied, on a
+    /// freshly added PostgreSQL destination. A row with no DestinationType recorded still matches anything,
+    /// so rules written before this column was populated keep working rather than silently stopping.
+    /// Null means "any destination", for a caller genuinely asking across all of them — see
+    /// <c>ITransformationRuleService.GetRuleImpactSummaryAsync</c>, which counts how many routes already
+    /// override a field and has no one destination in view.</param>
     Task<IReadOnlyList<TransformationRule>> GetWorkflowScopedAsync(
-        Guid resourcePipelineRouteId, string resourceType, string destinationField, string? sourceSystem,
-        string? sourceField, CancellationToken cancellationToken);
+    /// <param name="destinationConfigurationId">The destination being written to, when the caller knows it.
+    /// This is what separates two destinations of the SAME type: replacing a PostgreSQL destination with
+    /// another one leaves every type-based check matching, so the new destination inherited the old one's
+    /// rules. A rule that recorded no configuration id still matches anything, so rules written before the
+    /// column existed keep applying.</param>
+        Guid resourcePipelineRouteId, DestinationType? destinationType, Guid? destinationConfigurationId,
+        string resourceType, string destinationField, string? sourceSystem, string? sourceField,
+        CancellationToken cancellationToken);
 
     Task<IReadOnlyList<TransformationRule>> GetFieldScopedAsync(
         string resourceType, string destinationField, string? sourceSystem, string? sourceField,
@@ -102,6 +117,18 @@ public interface ITransformationRuleRepository
     Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowScopedAsync(
         DestinationType destinationType, string resourceType, string destinationField, string? sourceSystem,
         string? sourceField, string? owner, CancellationToken cancellationToken);
+
+    /// <summary>Deletes the workflow-scoped rules belonging to one destination that is being removed from a
+    /// workflow — what the builder calls when a destination node is deleted from the canvas.</summary>
+    /// <param name="includeUnattributed">
+    /// Whether to also take rules that record NO DestinationConfigurationId but match this destination's TYPE.
+    /// Every rule authored before that column existed is in that state, so without this the cleanup would
+    /// miss exactly the rules that are already stuck — but a null-id rule could equally belong to another
+    /// destination of the same type, so the caller passes true only when no such destination survives.
+    /// </param>
+    Task<int> DeleteWorkflowRulesForDestinationAsync(
+        Guid resourcePipelineRouteId, Guid destinationConfigurationId, DestinationType destinationType,
+        bool includeUnattributed, CancellationToken cancellationToken);
 
     Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

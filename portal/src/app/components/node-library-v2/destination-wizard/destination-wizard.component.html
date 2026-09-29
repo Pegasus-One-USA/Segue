@@ -824,6 +824,7 @@
           [allResources]="selectedResources()"
           [destType]="nonFhirDestType()"
           [rulesDestinationType]="resolveDestinationTypeForRules()"
+          [rulesDestinationConfigurationId]="selectedExistingId() ?? resolvedDestinationId()"
           [workflowId]="currentWorkflowId()"
           [deIdentificationProfiles]="deIdentificationProfiles()"
           [selectedDeIdentificationProfileId]="selectedDeIdentificationProfileId()"

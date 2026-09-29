@@ -28,6 +28,9 @@ export interface TransformationRule {
   id: string;
   scope: TransformScope;
   destinationType?: DestinationType | null;
+  /** Which DestinationConfiguration the rule is authored against — see the v2 service for why
+   *  destinationType alone cannot answer it. */
+  destinationConfigurationId?: string | null;
   resourceType?: string | null;
   destinationField?: string | null;
   resourcePipelineRouteId?: string | null;
@@ -210,6 +213,8 @@ export class TransformationRulesService {
   getEffectiveRules(filter: {
     destinationType: DestinationType; resourceType: string; destinationField: string;
     resourcePipelineRouteId?: string; sourceSystem?: string | null; sourceField?: string | null;
+    /** Narrows to one destination — omitted means "any". */
+    destinationConfigurationId?: string | null;
   }): Observable<TransformationRule[]> {
     const params = new URLSearchParams();
     Object.entries(filter).forEach(([key, value]) => {

@@ -49,6 +49,10 @@ export class CanvasComponent {
 
   /** True once the workflow has a saved id — a checkpoint URL can only be generated against a persisted node. */
   readonly workflowSaved = input<boolean>(false);
+  /** The workflow being edited, when it has been saved at least once. Needed to clean up the rules a
+   *  deleted destination owned — those are attached to the workflow, not to the canvas, so nothing else
+   *  here can identify them. Null on a workflow that has never been saved, which has no attached rules. */
+  readonly workflowId = input<string | null>(null);
 
   /** True when the current role lacks the permission to mutate THIS workflow (workflow.create for a
    *  brand-new one, workflow.edit for an existing one — see WorkflowBuilderComponent.canMutate). Hides
@@ -241,6 +245,7 @@ export class CanvasComponent {
 
     // Computed BEFORE the removals: it has to resolve the destination type of nodes that are about to go,
     // and once removeNode has run they are no longer in the store to look up.
+    const removedDestinations = this.destinationsBeingRemoved(plan);
     const orphanedDestinationTypes = this.destinationTypesLosingTheirLastNode(plan);
 
     for (const removal of plan.removals) this.store.removeNode(removal.id);
@@ -271,6 +276,27 @@ export class CanvasComponent {
       });
     }
 
+    // Rules the removed destinations owned. Deleting a destination always looked like it took its
+    // transformations with it; it did not, and the save-time retirement pass could not see a like-for-like
+    // replacement at all (it drops a type from its "removed" set as soon as any surviving destination
+    // shares it), so a new PostgreSQL destination arrived with the previous one's rules already applied.
+    const workflowId = this.workflowId();
+    if (workflowId) {
+      for (const removed of removedDestinations) {
+        this.transformationRules.deleteForDestination({
+          workflowId,
+          destinationConfigurationId: removed.destinationId,
+          destinationType: removed.destinationType,
+          // A rule that records no destination id could belong to a surviving destination of the same
+          // type, so it is only claimed for this one when none is left.
+          otherDestinationsOfThisTypeRemain: !orphanedDestinationTypes.includes(removed.destinationType),
+        }).subscribe({
+          next: () => { /* silent: the user deleted the destination, the rules went with it */ },
+          error: () => { /* the next delete or the next workflow save retries the cleanup */ },
+        });
+      }
+    }
+
     const count = plan.removals.length;
     this.toast.show(
       count === 1 ? 'Module removed' : `${count} modules removed`,
@@ -279,6 +305,19 @@ export class CanvasComponent {
         : `${plan.removals.map(removal => removal.label).join(', ')} deleted.`,
     );
     this.pendingDelete.set(null);
+  }
+
+  /** The destinations this delete removes, as (configuration id, type) pairs — the identity their rules
+   *  are recorded against. A node with no destinationId was never provisioned, so it owns no rules. */
+  private destinationsBeingRemoved(plan: NodeDeletePlan): { destinationId: string; destinationType: DestinationType }[] {
+    return plan.removals.flatMap(removal => {
+      const node = this.store.byId(removal.id);
+      if (!node || node.kind !== 'transform') return [];
+      const destinationType = TRANSFORMS.find(t => t.id === (node as TransformNode).transformId)?.destinationType as
+        DestinationType | undefined;
+      const destinationId = (node.fields ?? {})['destinationId'];
+      return destinationType && destinationId ? [{ destinationId, destinationType }] : [];
+    });
   }
 
   /** The destination types whose LAST node this delete removes — the only ones whose pending rules are

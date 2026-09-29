@@ -167,7 +167,7 @@ public sealed class PendingTransformationRuleClaimingTests
         // The new node's mapping, workflow still unsaved (no route id) — the flags the field-mapping list and
         // the join popover actually send, both of which pass includePending: true.
         var effective = await resolver.ResolveAsync(
-            DestinationType.PostgreSql, "Patient", "Fullname", null, null, null, default,
+            DestinationType.PostgreSql, "Patient", "Fullname", null, null, null, null, default,
             workflowScopedOnly: true, includePendingWorkflowRules: true, pendingOwner: SomeoneElse);
 
         effective.Should().BeEmpty();
@@ -185,7 +185,7 @@ public sealed class PendingTransformationRuleClaimingTests
         var resolver = new EffectiveRuleResolver(new EfTransformationRuleRepository(db));
 
         var effective = await resolver.ResolveAsync(
-            DestinationType.PostgreSql, "Patient", "Fullname", null, null, null, default,
+            DestinationType.PostgreSql, "Patient", "Fullname", null, null, null, null, default,
             workflowScopedOnly: true, includePendingWorkflowRules: true, pendingOwner: Author);
 
         effective.Select(r => r.Id).Should().Contain(mine.Id);
@@ -201,7 +201,7 @@ public sealed class PendingTransformationRuleClaimingTests
         var resolver = new EffectiveRuleResolver(new EfTransformationRuleRepository(db));
 
         var effective = await resolver.ResolveAsync(
-            DestinationType.PostgreSql, "Patient", "Fullname", null, null, null, default,
+            DestinationType.PostgreSql, "Patient", "Fullname", null, null, null, null, default,
             workflowScopedOnly: true, includePendingWorkflowRules: false, pendingOwner: Author);
 
         effective.Should().BeEmpty();

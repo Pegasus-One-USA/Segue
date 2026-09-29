@@ -99,7 +99,8 @@ public sealed class TransformationRuleService : ITransformationRuleService
                 request.FhirWriteBackJsonPath,
                 request.ExecutionPhase,
                 request.DeIdentificationProfileId,
-                request.ExpectedValueType);
+                request.ExpectedValueType,
+                request.DestinationConfigurationId);
             rule.SetEnabled(request.IsEnabled);
             await _repository.AddAsync(rule, cancellationToken);
             return ToDto(rule);
@@ -126,6 +127,11 @@ public sealed class TransformationRuleService : ITransformationRuleService
         existing.Retarget(
             request.Scope, request.DestinationType, request.ResourceType,
             request.DestinationField, request.SourceSystem, request.SourceField);
+        // Re-saving from a destination that knows its own configuration id is what backfills a rule
+        // written before the column existed, so an existing rule stops being ambiguous the first time
+        // someone edits it rather than needing a data migration.
+        existing.SetDestinationConfiguration(
+            request.DestinationConfigurationId ?? existing.DestinationConfigurationId);
         existing.Update(
             configJson, request.Order, request.OnNull, request.ErrorPolicy,
             request.OnNullDefaultValue, request.ArrayMode, request.FhirWriteBackJsonPath,
@@ -245,7 +251,10 @@ public sealed class TransformationRuleService : ITransformationRuleService
     {
         var rules = await _resolver.ResolveAsync(
             request.DestinationType, request.ResourceType, request.DestinationField,
-            request.ResourcePipelineRouteId, request.SourceSystem, request.SourceField, cancellationToken);
+            // destinationConfigurationId: null — the preview request carries no destination id, and null
+            // matches permissively, so the preview keeps resolving exactly what it always did.
+            request.ResourcePipelineRouteId, destinationConfigurationId: null,
+            request.SourceSystem, request.SourceField, cancellationToken);
 
         if (rules.Count == 0)
         {
@@ -310,13 +319,32 @@ public sealed class TransformationRuleService : ITransformationRuleService
         string? sourceField,
         CancellationToken cancellationToken = default,
         bool workflowScopedOnly = false,
-        bool includePendingWorkflowRules = false)
+        bool includePendingWorkflowRules = false,
+        Guid? destinationConfigurationId = null)
     {
         var rules = await _resolver.ResolveAsync(
-            destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
-            cancellationToken, workflowScopedOnly, includePendingWorkflowRules, PendingOwner);
+            destinationType, resourceType, destinationField, resourcePipelineRouteId, destinationConfigurationId,
+            sourceSystem, sourceField, cancellationToken, workflowScopedOnly, includePendingWorkflowRules,
+            PendingOwner);
         return rules.Select(ToDto).ToList();
     }
+
+    public Task<int> DeleteRulesForDestinationAsync(
+        Guid resourcePipelineRouteId,
+        Guid destinationConfigurationId,
+        DestinationType destinationType,
+        bool otherDestinationsOfThisTypeRemain,
+        CancellationToken cancellationToken = default) =>
+        _repository.DeleteWorkflowRulesForDestinationAsync(
+            resourcePipelineRouteId,
+            destinationConfigurationId,
+            destinationType,
+            // Rules with no recorded destination can only be claimed for this one when no other destination
+            // of the same type is left to own them. That is the case that matters in practice: every rule
+            // authored before the id column existed has none, which is why narrowing the lookup alone left
+            // every existing workflow still showing its old destination's transformations.
+            includeUnattributed: !otherDestinationsOfThisTypeRemain,
+            cancellationToken);
 
     public Task<int> DeletePendingRulesAsync(
         IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken = default) =>
@@ -351,8 +379,11 @@ public sealed class TransformationRuleService : ITransformationRuleService
         {
             var mappingResourceType = mappingProfilesById[route.MappingProfileId].ResourceType;
 
+            // destinationType: null — this is counting how many routes ALREADY override the field,
+            // whatever they write to, so narrowing to one destination would undercount the impact.
             var workflowRules = await _repository.GetWorkflowScopedAsync(
-                route.Id, mappingResourceType, destinationField, sourceSystem: null, sourceField: null, cancellationToken);
+                route.Id, destinationType: null, destinationConfigurationId: null, mappingResourceType,
+                destinationField, sourceSystem: null, sourceField: null, cancellationToken);
             if (workflowRules.Count > 0)
             {
                 withOverride++;

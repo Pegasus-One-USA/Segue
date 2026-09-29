@@ -16,6 +16,7 @@ public sealed class NoOpEffectiveRuleResolver : IEffectiveRuleResolver
         string resourceType,
         string destinationField,
         Guid? resourcePipelineRouteId,
+        Guid? destinationConfigurationId,
         string? sourceSystem,
         string? sourceField,
         CancellationToken cancellationToken,

@@ -1,4 +1,4 @@
-using FHIRBridge.Api.Security;
+﻿using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.DTOs.Transforms;
 using FHIRBridge.Application.Security;
@@ -117,6 +117,31 @@ public sealed class TransformationRulesController : ControllerBase
     /// unattached rows, and only ones this caller authored, so a canvas edit can never reach into a saved
     /// workflow or another author's drafts.
     /// </remarks>
+    /// <summary>Removes the rules a destination owned, called when that destination node is deleted from a
+    /// workflow's canvas — "delete the destination, and its transformations go with it".</summary>
+    /// <param name="otherDestinationsOfThisTypeRemain">Whether the canvas still holds another destination of
+    /// the same type after this removal. When it does, rules that record no destination id are LEFT ALONE,
+    /// since they could belong to that survivor; when it does not, they are taken too — which is what clears
+    /// the rules authored before destination ids were recorded at all.</param>
+    [HttpDelete("for-destination")]
+    [StandardPermission(
+        PermissionGroupCode.TransformationRules,
+        PermissionActionCode.Delete,
+        description: "Delete a scoped transformation rule.")]
+    [ProducesResponseType(typeof(int), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeleteRulesForDestination(
+        [FromQuery] Guid workflowId,
+        [FromQuery] Guid destinationConfigurationId,
+        [FromQuery] DestinationType destinationType,
+        [FromQuery] bool otherDestinationsOfThisTypeRemain,
+        CancellationToken cancellationToken)
+    {
+        var deleted = await _service.DeleteRulesForDestinationAsync(
+            workflowId, destinationConfigurationId, destinationType, otherDestinationsOfThisTypeRemain,
+            cancellationToken);
+        return Ok(deleted);
+    }
+
     [HttpDelete("pending")]
     [StandardPermission(
         PermissionGroupCode.TransformationRules,
@@ -177,12 +202,16 @@ public sealed class TransformationRulesController : ControllerBase
         /// no route id yet). Set by the builder's save-time type check, which otherwise cannot see a rule the
         /// user has just attached to a field on a pipeline that has no id yet. Never set by the executors —
         /// those rows stay inert at run time.</summary>
+        /// <summary>The DestinationConfiguration whose column is being asked about. Two destinations of the
+        /// SAME type are otherwise indistinguishable, so a replaced destination inherited the rules of the
+        /// one it replaced. Omitted means "any", which is how every caller behaved before this existed.</summary>
+        [FromQuery] Guid? destinationConfigurationId,
         [FromQuery] bool includePending,
         CancellationToken cancellationToken)
     {
         var rules = await _service.GetEffectiveRulesAsync(
             destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
-            cancellationToken, workflowScopedOnly, includePending);
+            cancellationToken, workflowScopedOnly, includePending, destinationConfigurationId);
         return Ok(rules);
     }
 

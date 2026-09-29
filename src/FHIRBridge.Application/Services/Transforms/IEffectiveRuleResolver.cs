@@ -41,6 +41,10 @@ public interface IEffectiveRuleResolver
         string resourceType,
         string destinationField,
         Guid? resourcePipelineRouteId,
+        // Which destination configuration the column belongs to. Two destinations of the SAME type are
+        // indistinguishable without it, which is how a replaced PostgreSQL destination inherited the old
+        // one's rules. Null means "not known", and matches permissively.
+        Guid? destinationConfigurationId,
         string? sourceSystem,
         string? sourceField,
         CancellationToken cancellationToken,
@@ -65,6 +69,10 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
         string resourceType,
         string destinationField,
         Guid? resourcePipelineRouteId,
+        // Which destination configuration the column belongs to. Two destinations of the SAME type are
+        // indistinguishable without it, which is how a replaced PostgreSQL destination inherited the old
+        // one's rules. Null means "not known", and matches permissively.
+        Guid? destinationConfigurationId,
         string? sourceSystem,
         string? sourceField,
         CancellationToken cancellationToken,
@@ -77,7 +85,8 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
             var workflowRules = PreferSourceFieldSpecific(
                 PreferSourceSpecific(
                     Enabled(await _repository.GetWorkflowScopedAsync(
-                        resourcePipelineRouteId.Value, resourceType, destinationField, sourceSystem, sourceField, cancellationToken)),
+                        resourcePipelineRouteId.Value, destinationType, destinationConfigurationId,
+                        resourceType, destinationField, sourceSystem, sourceField, cancellationToken)),
                     sourceSystem),
                 sourceField);
             if (workflowRules.Count > 0)

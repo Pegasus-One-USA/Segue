@@ -813,7 +813,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
-                    destinationType, resourceType, targetField, resourcePipelineRouteId, sourceSystem,
+                    // destinationConfigurationId is deliberately null at RUN time: null matches
+                    // permissively, so execution resolves exactly the rules it always has. Narrowing
+                    // here would change what already-running pipelines transform, which is a separate
+                    // decision from stopping a NEW destination inheriting an old one's rules in the UI.
+                    destinationType, resourceType, targetField, resourcePipelineRouteId, null, sourceSystem,
                     RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
                     workflowScopedOnly: resourcePipelineRouteId is not null);
                 ruleCache[cacheKey] = rules;
@@ -871,7 +875,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
-                    destinationType, resourceType, targetField, resourcePipelineRouteId, sourceSystem,
+                    // destinationConfigurationId is deliberately null at RUN time: null matches
+                    // permissively, so execution resolves exactly the rules it always has. Narrowing
+                    // here would change what already-running pipelines transform, which is a separate
+                    // decision from stopping a NEW destination inheriting an old one's rules in the UI.
+                    destinationType, resourceType, targetField, resourcePipelineRouteId, null, sourceSystem,
                     RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
                     workflowScopedOnly: resourcePipelineRouteId is not null);
                 ruleCache[cacheKey] = rules;
@@ -1183,7 +1191,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
             if (!ruleCache.TryGetValue(cacheKey, out var rules))
             {
                 rules = await _ruleResolver.ResolveAsync(
-                    destinationType.Value, resourceType, destinationField, resourcePipelineRouteId, sourceSystem,
+                    // destinationConfigurationId is deliberately null at RUN time: null matches
+                    // permissively, so execution resolves exactly the rules it always has. Narrowing
+                    // here would change what already-running pipelines transform, which is a separate
+                    // decision from stopping a NEW destination inheriting an old one's rules in the UI.
+                    destinationType.Value, resourceType, destinationField, resourcePipelineRouteId, null, sourceSystem,
                     RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
                     // A node carrying a workflow id was authored by the V2 builder, whose rules are
                     // pipeline-private — so it must not inherit another workflow's. A V1 graph never carries
