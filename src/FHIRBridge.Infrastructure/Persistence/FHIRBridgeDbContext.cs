@@ -1,4 +1,4 @@
-using FHIRBridge.Domain.Entities;
+﻿using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Domain.Entities.Licensing;
 using FHIRBridge.Domain.Entities.Terminology;
@@ -64,6 +64,9 @@ public sealed class FHIRBridgeDbContext : DbContext
 
     /// <summary>Per-period counters behind generated workflow numbers (WLW-ddMMyy-NNNN).</summary>
     public DbSet<WorkflowNumberSequence> WorkflowNumberSequences => Set<WorkflowNumberSequence>();
+
+    /// <summary>Per-resource-type FHIR search criteria, authored per source node of a workflow.</summary>
+    public DbSet<ResourceTypeCriteria> ResourceTypeCriteria => Set<ResourceTypeCriteria>();
     public DbSet<UserFhirContextBinding> UserFhirContextBindings => Set<UserFhirContextBinding>();
     public DbSet<LoincConcept> LoincConcepts => Set<LoincConcept>();
     public DbSet<LoincPart> LoincParts => Set<LoincPart>();
@@ -133,6 +136,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<ErrorResolution> ErrorResolutions => Set<ErrorResolution>();
     public DbSet<ApiRequestLog> ApiRequestLogs => Set<ApiRequestLog>();
     public DbSet<ExportHistory> ExportHistory => Set<ExportHistory>();
+    public DbSet<DestinationActivityLog> DestinationActivityLogs => Set<DestinationActivityLog>();
     public DbSet<NotificationHistory> NotificationHistory => Set<NotificationHistory>();
     public DbSet<ValidationFailureLog> ValidationFailureLogs => Set<ValidationFailureLog>();
     public DbSet<EndpointHealthCheck> EndpointHealthChecks => Set<EndpointHealthCheck>();
@@ -258,6 +262,9 @@ public sealed class FHIRBridgeDbContext : DbContext
                 .HasIndex(x => new { x.Vendor, x.VendorEndpointId }).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<SystemSetting>()
                 .HasIndex(x => x.Key).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<ResourceTypeCriteria>()
+                .HasIndex(x => new { x.WorkflowId, x.SourceNodeId, x.ResourceType })
+                .IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<User>()
                 .HasIndex(x => x.ExternalUserId).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<ErrorLog>()

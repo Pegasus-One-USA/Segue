@@ -26,7 +26,7 @@ public enum FhirContextResourceType
 ///   UserIdentity); CallerIdentity holds whichever caller identity first established this (issuer, patient) pair,
 ///   and is what a later authorization's caller identity is compared against.
 /// </summary>
-public sealed class UserFhirContextBinding : Entity<Guid>
+public sealed class UserFhirContextBinding : AuditTrackedEntity<Guid>
 {
     private UserFhirContextBinding()
     {

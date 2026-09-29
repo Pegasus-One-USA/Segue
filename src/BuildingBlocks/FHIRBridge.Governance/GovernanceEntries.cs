@@ -110,6 +110,30 @@ public sealed record ExportEntry(
     Guid? PipelineRunId = null,
     string? CorrelationId = null);
 
+/// <summary>
+/// One stage of one destination write — connecting, and the write completing/failing. Complements
+/// <see cref="ApiRequestEntry"/>, which only ever covers destinations that speak HTTP because the handler
+/// producing it wraps <c>HttpClient</c>; most destinations use ADO.NET or a vendor SDK instead.
+/// <para><b>PHI-free by construction:</b> counts, identifiers and timings only. Never pass record data —
+/// including through <paramref name="Detail"/> or <paramref name="Error"/>.</para>
+/// </summary>
+public sealed record DestinationActivityEntry(
+    Guid DestinationId,
+    string DestinationName,
+    string DestinationType,
+    /// <summary>"Connect" or "Complete" — see <c>DestinationActivityStage</c>.</summary>
+    string Stage,
+    /// <summary>"Succeeded", "Failed", "PartialSuccess" or "NoData" — see <c>DestinationActivityStatus</c>.</summary>
+    string Status,
+    string? ResourceType = null,
+    int? RecordCount = null,
+    int? WrittenCount = null,
+    long DurationMs = 0,
+    string? Detail = null,
+    string? Error = null,
+    string? CorrelationId = null,
+    Guid? PipelineRunId = null);
+
 /// <summary>One outbound notification (currently: export-delivery email).</summary>
 public sealed record NotificationEntry(
     string NotificationType,

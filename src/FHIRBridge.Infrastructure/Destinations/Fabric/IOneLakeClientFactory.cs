@@ -19,4 +19,15 @@ public interface IOneLakeClientFactory
         DestinationConfiguration destination,
         FabricDestinationSettings settings,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Same client for a destination that has not been saved yet — the wizard's "test connection, then pick a
+    /// table" flow, which runs before anything is provisioned. The service-principal secret is passed directly
+    /// rather than resolved from Key Vault, because there is no stored secret reference to resolve. Mirrors
+    /// <see cref="IFabricWarehouseConnectionFactory.OpenAdHocAsync"/>, which exists for the same reason.
+    /// </summary>
+    Task<BlobDestinationTarget> GetWorkspaceAdHocAsync(
+        FabricDestinationSettings settings,
+        string? secret,
+        CancellationToken cancellationToken);
 }

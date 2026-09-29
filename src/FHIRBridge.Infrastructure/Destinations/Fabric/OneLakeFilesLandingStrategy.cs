@@ -58,7 +58,12 @@ internal sealed class OneLakeFilesLandingStrategy : IFabricLandingStrategy
         PipelineWriteContext context,
         CancellationToken cancellationToken)
     {
-        var workspace = await _clientFactory.GetWorkspaceAsync(destination, settings, cancellationToken);
+        // Resolving the workspace is where this destination's Entra credential is built and the OneLake item
+        // addressed, so an unusable identity or an unresolvable workspace/item fails here rather than mid-upload.
+        var workspace = await context.ReportConnectAsync(
+            () => _clientFactory.GetWorkspaceAsync(destination, settings, cancellationToken),
+            cancellationToken,
+            detail: "OneLake");
 
         var (payload, contentType) = await SerializeAsync(settings, records, cancellationToken);
         var filePath = BuildFilePath(settings, mappingProfile, DateTime.UtcNow);

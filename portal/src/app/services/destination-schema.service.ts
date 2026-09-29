@@ -70,6 +70,11 @@ export interface DestinationProbeRequest {
   fabricSecret?: string;
   fabricEndpointSuffix?: string;
   fabricAuthorityHost?: string;
+  // ── Fabric Lakehouse (Delta) only ────────────────────────────────────────────────────────────────────
+  // DataFabricAzure serves two surfaces and only Delta has tables to list, so the type alone cannot say
+  // whether this probe should read a schema. Mirrors DestinationConnectionProbeRequest's own fields.
+  fabricLandingMode?: string;
+  fabricLakehouseSchema?: string;
 }
 
 export interface SchemaMutationResult {
@@ -203,6 +208,27 @@ export interface MongoConnectionTestResult extends ConnectionTestResult {
   collections?: string[];
 }
 
+/** Ad-hoc Cosmos DB in Fabric connection test. Discrete fields rather than a connection string, because
+ *  Cosmos DB in Fabric is Entra-only — there are no account keys, so there is nothing string-shaped to send. */
+export interface CosmosDbFabricConnectionTestRequest {
+  endpoint: string;
+  database: string;
+  authMode?: string;
+  tenantId?: string;
+  clientId?: string;
+  secret?: string;
+  managedIdentityClientId?: string;
+  authorityHost?: string;
+  /** Set when re-testing a SAVED destination without retyping its client secret. */
+  destinationId?: string;
+}
+
+export interface CosmosDbFabricConnectionTestResult extends ConnectionTestResult {
+  /** The database's container names. Connected with an empty list is a legitimate answer — a new Fabric
+   *  Cosmos database has none — so the form distinguishes that from a failure. */
+  containers?: string[];
+}
+
 // Azure Blob connection test — split auth fields (no metadata blob). `secret` is the connection string /
 // account key / SAS / service-principal client secret per authMode; omitted for managedIdentity.
 export interface BlobConnectionTestRequest {
@@ -221,7 +247,8 @@ export interface BlobConnectionTestRequest {
 }
 
 export interface FabricConnectionTestRequest {
-  /** "oneLakeFiles" or "warehouseTable" — decides which endpoints the backend probes. */
+  /** "oneLakeFiles", "lakehouseTable" or "warehouseTable" — decides which endpoints the backend probes and
+   *  whether it has tables to list. */
   mode: string;
   authMode: string;
   workspace: string;
@@ -236,6 +263,8 @@ export interface FabricConnectionTestRequest {
   accountUrl?: string;
   warehouseSqlEndpoint?: string;
   warehouseStagingLakehouse?: string;
+  /** Delta mode only — schema level of a schema-enabled lakehouse (Tables/{schema}/{table}). */
+  lakehouseSchema?: string;
   /** When re-testing an already-saved destination without retyping its secret, carries the destination's id so
    *  the backend can resolve the stored one instead. */
   destinationId?: string;
@@ -334,5 +363,18 @@ export class DestinationSchemaService {
    */
   testFabric(request: FabricConnectionTestRequest): Observable<FabricConnectionTestResult> {
     return this.http.post<FabricConnectionTestResult>(DESTINATION_ENDPOINTS.fabricTest, request);
+  }
+
+  /**
+   * Tests a Cosmos DB in Fabric connection and returns the database's containers.
+   *
+   * The container list is the substantive half: unless the destination opts into creating them, a container
+   * must already exist, so seeing the real names here is what stops a typo becoming a failed pipeline run.
+   * A pass does NOT prove the identity may CREATE a container — that needs a higher data-plane role.
+   */
+  testCosmosDbFabric(
+    request: CosmosDbFabricConnectionTestRequest,
+  ): Observable<CosmosDbFabricConnectionTestResult> {
+    return this.http.post<CosmosDbFabricConnectionTestResult>(DESTINATION_ENDPOINTS.cosmosTest, request);
   }
 }

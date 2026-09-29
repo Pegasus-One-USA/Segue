@@ -29,8 +29,9 @@ public sealed class EpicSourceNodeExecutor : SourceNodeExecutor
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
         Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
-        EhrDataDumpWriter? ehrDataDumpWriter = null)
-        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
+        EhrDataDumpWriter? ehrDataDumpWriter = null,
+        FHIRBridge.Application.Abstractions.Persistence.IResourceTypeCriteriaRepository? resourceTypeCriteriaRepository = null)
+        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter, resourceTypeCriteriaRepository)
     {
     }
 }
@@ -48,8 +49,9 @@ public sealed class CernerSourceNodeExecutor : SourceNodeExecutor
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
         Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
-        EhrDataDumpWriter? ehrDataDumpWriter = null)
-        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
+        EhrDataDumpWriter? ehrDataDumpWriter = null,
+        FHIRBridge.Application.Abstractions.Persistence.IResourceTypeCriteriaRepository? resourceTypeCriteriaRepository = null)
+        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter, resourceTypeCriteriaRepository)
     {
     }
 }
@@ -67,8 +69,9 @@ public sealed class EClinicalWorksSourceNodeExecutor : SourceNodeExecutor
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
         Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
-        EhrDataDumpWriter? ehrDataDumpWriter = null)
-        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
+        EhrDataDumpWriter? ehrDataDumpWriter = null,
+        FHIRBridge.Application.Abstractions.Persistence.IResourceTypeCriteriaRepository? resourceTypeCriteriaRepository = null)
+        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter, resourceTypeCriteriaRepository)
     {
     }
 }
@@ -86,8 +89,9 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
         Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
-        EhrDataDumpWriter? ehrDataDumpWriter = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.Athenahealth, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
+        EhrDataDumpWriter? ehrDataDumpWriter = null,
+        FHIRBridge.Application.Abstractions.Persistence.IResourceTypeCriteriaRepository? resourceTypeCriteriaRepository = null)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.Athenahealth, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter, resourceTypeCriteriaRepository)
     {
     }
 }
@@ -105,8 +109,9 @@ public sealed class AllscriptsSourceNodeExecutor : SourceNodeExecutor
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
         Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
-        EhrDataDumpWriter? ehrDataDumpWriter = null)
-        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
+        EhrDataDumpWriter? ehrDataDumpWriter = null,
+        FHIRBridge.Application.Abstractions.Persistence.IResourceTypeCriteriaRepository? resourceTypeCriteriaRepository = null)
+        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter, resourceTypeCriteriaRepository)
     {
     }
 }
@@ -124,8 +129,9 @@ public sealed class MeditechSourceNodeExecutor : SourceNodeExecutor
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
         Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
-        EhrDataDumpWriter? ehrDataDumpWriter = null)
-        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
+        EhrDataDumpWriter? ehrDataDumpWriter = null,
+        FHIRBridge.Application.Abstractions.Persistence.IResourceTypeCriteriaRepository? resourceTypeCriteriaRepository = null)
+        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter, resourceTypeCriteriaRepository)
     {
     }
 }
@@ -143,8 +149,9 @@ public sealed class GenericFhirSourceNodeExecutor : SourceNodeExecutor
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
         Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
-        EhrDataDumpWriter? ehrDataDumpWriter = null)
-        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
+        EhrDataDumpWriter? ehrDataDumpWriter = null,
+        FHIRBridge.Application.Abstractions.Persistence.IResourceTypeCriteriaRepository? resourceTypeCriteriaRepository = null)
+        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter, resourceTypeCriteriaRepository)
     {
     }
 }
@@ -162,8 +169,9 @@ public sealed class SampleSourceNodeExecutor : SourceNodeExecutor
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
         Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
-        EhrDataDumpWriter? ehrDataDumpWriter = null)
-        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
+        EhrDataDumpWriter? ehrDataDumpWriter = null,
+        FHIRBridge.Application.Abstractions.Persistence.IResourceTypeCriteriaRepository? resourceTypeCriteriaRepository = null)
+        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter, resourceTypeCriteriaRepository)
     {
     }
 }
@@ -215,6 +223,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     private readonly IFhirAccessTokenProvider? _accessTokenProvider;
     private readonly FHIRBridge.Application.Services.BulkExportConcurrencyOptions _bulkExportConcurrencyOptions;
     private readonly EhrDataDumpWriter? _ehrDataDumpWriter;
+    private readonly FHIRBridge.Application.Abstractions.Persistence.IResourceTypeCriteriaRepository? _resourceTypeCriteriaRepository;
     private readonly Microsoft.Extensions.Logging.ILogger _logger;
 
     protected SourceNodeExecutor(
@@ -230,7 +239,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
         Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
-        EhrDataDumpWriter? ehrDataDumpWriter = null)
+        EhrDataDumpWriter? ehrDataDumpWriter = null,
+        FHIRBridge.Application.Abstractions.Persistence.IResourceTypeCriteriaRepository? resourceTypeCriteriaRepository = null)
         : base(nodeType, WorkflowDataContract.ResourceBatch)
     {
         // Named for the concrete vendor executor (EpicSourceNodeExecutor, AthenahealthSourceNodeExecutor, ...) rather
@@ -249,6 +259,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         _accessTokenProvider = accessTokenProvider;
         _bulkExportConcurrencyOptions = bulkExportConcurrencyOptions?.Value ?? new FHIRBridge.Application.Services.BulkExportConcurrencyOptions();
         _ehrDataDumpWriter = ehrDataDumpWriter;
+        _resourceTypeCriteriaRepository = resourceTypeCriteriaRepository;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -294,6 +305,13 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         {
             return await base.ExecuteAsync(context, node, inputs, cancellationToken);
         }
+
+        // Per-resource-type criteria authored in the destination wizard's Map-fields step, keyed by workflow +
+        // canvas node id (both stamped onto every node's configuration by the API's StampNodeIdentity — the
+        // persisted WorkflowNode.Id is regenerated on every save and so cannot key durable rows). Applied per
+        // request in SearchWithPolicyAsync; a resource type with no row keeps the connection-wide
+        // SearchCriteria fallback that SourceConnectionRuntimeResolver already composed into SearchParameters.
+        source = await ApplyResourceTypeCriteriaAsync(source, node, cancellationToken);
 
         // See TrustResolverSourceType's own remarks — trust the resolver's real SourceType for a vendor whose
         // client is actually registered; every other vendor keeps the existing override behavior unchanged.
@@ -965,6 +983,74 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             : $"{searchParameters.TrimEnd('&', '?')}&{parameter}";
 
     /// <summary>
+    /// Merges <paramref name="additional"/>'s FHIR search parameters into <paramref name="searchParameters"/>,
+    /// skipping any whose key is already present. Key-aware (unlike <see cref="AppendSearchParameter"/>, which
+    /// appends unconditionally) because the same parameter sent twice is not additive filtering: Epic rejects a
+    /// repeated identifier outright ("Don't support searching by IDENTIFIER AND IDENTIFIER"), and an existing
+    /// value here is either the caller's own connection-wide criteria or a patient scope the connector
+    /// established — both of which should win over a per-resource-type default of the same key. Mirrors
+    /// SourceConnectionRuntimeResolver.ComposeSearchParameters, which dedupes the same way for the same reason.
+    /// </summary>
+    private static string MergeSearchParameters(string? searchParameters, string? additional)
+    {
+        var merged = new List<string>();
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var segment in SplitSearchParameters(searchParameters).Concat(SplitSearchParameters(additional)))
+        {
+            var equals = segment.IndexOf('=');
+            var key = equals < 0 ? segment : segment[..equals];
+            if (seenKeys.Add(key))
+            {
+                merged.Add(segment);
+            }
+        }
+
+        return string.Join('&', merged);
+    }
+
+    /// <summary>
+    /// Loads this node's <c>ResourceTypeCriteria</c> rows into
+    /// <see cref="FhirSourceConfiguration.SearchCriteriaByResourceType"/>. A node with no stamped identity (a
+    /// hand-authored config, or the route→graph projection), no configured repository (test constructions), or no
+    /// rows at all is returned unchanged — the connection-wide fallback then applies exactly as before.
+    /// </summary>
+    private async Task<FhirSourceConfiguration> ApplyResourceTypeCriteriaAsync(
+        FhirSourceConfiguration source,
+        WorkflowNode node,
+        CancellationToken cancellationToken)
+    {
+        if (_resourceTypeCriteriaRepository is null)
+        {
+            return source;
+        }
+
+        var canvasNodeId = ReadStringConfiguration(node, "canvasNodeId");
+        if (string.IsNullOrWhiteSpace(canvasNodeId)
+            || !Guid.TryParse(ReadStringConfiguration(node, "workflowId"), out var workflowId))
+        {
+            return source;
+        }
+
+        var rows = await _resourceTypeCriteriaRepository.ListForWorkflowAsync(workflowId, cancellationToken);
+        var criteriaByResourceType = rows
+            .Where(row => string.Equals(row.SourceNodeId, canvasNodeId, StringComparison.OrdinalIgnoreCase))
+            .Where(row => !string.IsNullOrWhiteSpace(row.Criteria))
+            .GroupBy(row => row.ResourceType, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Criteria, StringComparer.OrdinalIgnoreCase);
+
+        return criteriaByResourceType.Count == 0
+            ? source
+            : source with { SearchCriteriaByResourceType = criteriaByResourceType };
+    }
+
+    private static IEnumerable<string> SplitSearchParameters(string? searchParameters) =>
+        string.IsNullOrWhiteSpace(searchParameters)
+            ? []
+            : searchParameters.Trim().TrimStart('?').Trim('&')
+                .Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>
     /// Narrows <paramref name="resourceTypes"/> down to whatever this node's downstream destination node(s) actually
     /// selected — each destination's own wizard-authored "dest_resources" field, unioned across every destination
     /// reachable from this node in the workflow graph. Prevents the over-fetch (and, further upstream, over-broad
@@ -1142,9 +1228,30 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // in ExecuteAsync, because SearchCohortScopedAsync deliberately clears SearchParameters for sibling types —
         // baking the watermark into that string upstream would have been wiped out along with it.
         var effectiveSource = source;
+
+        // Per-resource-type criteria (ResourceTypeCriteria, authored by the "Criteria" button on each row of the
+        // destination wizard's Map-fields step) are applied here for the same reason the watermark below is, and
+        // one more: both search paths that funnel through this method deliberately clear SearchParameters for
+        // types a connection-wide criteria cannot describe (SearchCohortScopedAsync for cohort siblings,
+        // ExecuteAsync for non-patient-compartment types). Criteria keyed by THIS resource type were chosen for
+        // it explicitly, so they must survive that scrub — hence applied after it, at the choke point, rather
+        // than upstream where they would be wiped along with the connection-wide string.
+        if (source.SearchCriteriaByResourceType?.TryGetValue(resourceType, out var resourceCriteria) == true
+            && !string.IsNullOrWhiteSpace(resourceCriteria))
+        {
+            var mergedParameters = MergeSearchParameters(effectiveSource.SearchParameters, resourceCriteria);
+            effectiveSource = effectiveSource with { SearchParameters = mergedParameters };
+
+            _logger.LogDebug(
+                "Applying per-resource-type criteria to the {ResourceType} search for {SourceName}.",
+                resourceType, source.Name);
+        }
+
         if (source.LastUpdatedWatermarks?.TryGetValue(resourceType, out var watermark) == true)
         {
-            effectiveSource = source with { SearchParameters = AppendSearchParameter(source.SearchParameters, $"_lastUpdated=gt{watermark:yyyy-MM-ddTHH:mm:ssZ}") };
+            // Built from effectiveSource, not source, so any per-resource-type criteria merged just above is
+            // preserved rather than overwritten.
+            effectiveSource = effectiveSource with { SearchParameters = AppendSearchParameter(effectiveSource.SearchParameters, $"_lastUpdated=gt{watermark:yyyy-MM-ddTHH:mm:ssZ}") };
 
             // Debug: one event per resource type per run, and the same facts are summarised on the
             // ResourceTypeExtracted event above. Useful when the question is specifically "was this run

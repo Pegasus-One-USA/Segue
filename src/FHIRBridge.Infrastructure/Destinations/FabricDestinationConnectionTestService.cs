@@ -61,6 +61,7 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
         }
 
         var isWarehouse = string.Equals(request.Mode, "warehouseTable", StringComparison.OrdinalIgnoreCase);
+        var isLakehouseTable = string.Equals(request.Mode, "lakehouseTable", StringComparison.OrdinalIgnoreCase);
         if (isWarehouse && string.IsNullOrWhiteSpace(request.WarehouseSqlEndpoint))
         {
             return Failure("Warehouse SQL connection string is required for the Warehouse landing mode.");
@@ -104,8 +105,14 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
 
         if (!isWarehouse)
         {
-            // A file surface has no tables to list.
-            return new FabricConnectionTestResultDto(true, null, true, null, null, []);
+            // OneLake Files genuinely has no tables. Delta does — a folder under Tables/ carrying a
+            // _delta_log is one — and listing them here is what lets the mapping canvas offer the same
+            // existing-table picker the relational surfaces get, on a destination that is not yet saved.
+            var deltaTables = isLakehouseTable
+                ? await ListDeltaTablesAsync(request, credential, timeoutCts.Token)
+                : [];
+
+            return new FabricConnectionTestResultDto(true, null, true, null, null, deltaTables);
         }
 
         // ── Warehouse (TDS) ────────────────────────────────────────────────────────────────────────────────
@@ -124,6 +131,50 @@ public sealed class FabricDestinationConnectionTestService : IFabricDestinationC
                 false,
                 warehousePermissionHint,
                 []);
+    }
+
+    /// <summary>
+    /// Lists the Delta tables already in the lakehouse, for the canvas's existing-table picker.
+    ///
+    /// <para>Runs only after the OneLake probe has succeeded, so it is never the thing that reports a
+    /// connection failure. A listing that throws returns an empty list rather than failing the test: the
+    /// connection genuinely worked, and an empty picker is a far better outcome than telling someone their
+    /// working connection is broken. An empty lakehouse returns empty for the same reason — that is the
+    /// normal state before a first write, not an error.</para>
+    /// </summary>
+    private static async Task<IReadOnlyList<DestinationTableSchemaDto>> ListDeltaTablesAsync(
+        FabricConnectionTestRequest request,
+        TokenCredential credential,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var settings = new FabricDestinationSettings(
+                Mode: FabricLandingMode.LakehouseTable,
+                AuthMode: FabricAuthMode.ManagedIdentity,
+                Workspace: request.Workspace,
+                ItemName: request.ItemName,
+                ItemType: "Lakehouse",
+                BasePath: string.Empty,
+                FileFormat: FabricFileFormat.Parquet,
+                Partitioning: FabricPartitionScheme.None,
+                TenantId: null,
+                ClientId: null,
+                ManagedIdentityClientId: null,
+                AuthorityHost: null,
+                EndpointSuffix: Blank(request.EndpointSuffix) ? "fabric.microsoft.com" : request.EndpointSuffix!.Trim(),
+                AccountUrlOverride: Blank(request.AccountUrl) ? null : request.AccountUrl!.Trim(),
+                LakehouseSchema: Blank(request.LakehouseSchema) ? null : request.LakehouseSchema!.Trim());
+
+            var workspace = new BlobServiceClient(new Uri(settings.AccountUrl), credential)
+                .GetBlobContainerClient(settings.Workspace);
+
+            return await LakehouseDeltaSchemaReader.ListTablesAsync(workspace, settings, cancellationToken);
+        }
+        catch (Exception)
+        {
+            return [];
+        }
     }
 
     private static async Task<(bool Ok, string? Error, string? PermissionHint)> ProbeOneLakeAsync(

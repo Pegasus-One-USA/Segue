@@ -78,7 +78,19 @@ public sealed record FabricDestinationSettings(
     /// identity, and the executing identity must hold at least the Viewer workspace role to impersonate it
     /// (item permissions alone are not enough).</para>
     /// </summary>
-    bool WarehouseUseWorkspaceIdentity = false)
+    bool WarehouseUseWorkspaceIdentity = false,
+
+    // ---- Lakehouse Delta landing (FabricLandingMode.LakehouseTable) only; default otherwise ----
+
+    /// <summary>
+    /// Schema name for a SCHEMA-ENABLED Lakehouse, whose tables live at <c>Tables/{schema}/{table}</c> rather than
+    /// <c>Tables/{table}</c>.
+    ///
+    /// <para>Null (the default) means a classic Lakehouse, and is deliberately not defaulted to <c>dbo</c>: the
+    /// two layouts are not interchangeable, and writing to the wrong one produces a folder Fabric never registers
+    /// as a table rather than an error. A customer whose Lakehouse is schema-enabled sets this explicitly.</para>
+    /// </summary>
+    string? LakehouseSchema = null)
 {
     /// <summary>
     /// OneLake path prefix of the staging Lakehouse's Files area, e.g. <c>Stage.Lakehouse/Files/_staging</c>.
@@ -92,6 +104,22 @@ public sealed record FabricDestinationSettings(
     /// </remarks>
     public string WarehouseStagingRootPath =>
         $"{FormatItemSegment(WarehouseStagingLakehouse, "Lakehouse")}/Files/{WarehouseStagingPath}".TrimEnd('/');
+
+    /// <summary>
+    /// OneLake path prefix of one Delta table in the Lakehouse's managed <c>Tables/</c> area, e.g.
+    /// <c>Sales.Lakehouse/Tables/Patient</c> — or <c>Sales.Lakehouse/Tables/gold/Patient</c> when
+    /// <see cref="LakehouseSchema"/> is set for a schema-enabled Lakehouse.
+    ///
+    /// <para>Note this is <c>Tables/</c>, the one prefix <see cref="NormalizeBasePath"/> refuses for
+    /// <see cref="FabricLandingMode.OneLakeFiles"/>. The refusal is not about the path being dangerous — it is
+    /// that bare files there never become a table. This mode writes the <c>_delta_log</c> that does, so it is the
+    /// one surface allowed to address <c>Tables/</c>, and it ignores <see cref="BasePath"/> entirely: a table's
+    /// location is decided by its name and schema, not by a file path the user chose.</para>
+    /// </summary>
+    public string LakehouseTableRootPath(string tableName)
+        => string.IsNullOrWhiteSpace(LakehouseSchema)
+            ? $"{ItemPathSegment}/Tables/{tableName}"
+            : $"{ItemPathSegment}/Tables/{LakehouseSchema.Trim()}/{tableName}";
 
     /// <summary>
     /// True when the configured name is actually a GUID. Some tenants disable OneLake's friendly-name support, so
@@ -335,7 +363,8 @@ public sealed record FabricDestinationSettings(
                 "true",
                 StringComparison.OrdinalIgnoreCase),
             WarehouseStagingPath: NormalizeStagingPath(
-                ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseStagingPath")));
+                ConnectionMetadataReader.GetString(json, "dest_fabricWarehouseStagingPath")),
+            LakehouseSchema: NullIfBlank(ConnectionMetadataReader.GetString(json, "dest_fabricLakehouseSchema")));
     }
 
     /// <summary>

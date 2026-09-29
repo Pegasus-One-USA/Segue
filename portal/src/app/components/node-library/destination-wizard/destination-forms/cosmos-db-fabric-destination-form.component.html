@@ -1,0 +1,113 @@
+<form [formGroup]="cosmosForm" class="dw-form" autocomplete="off">
+  <div class="dw-grid-2">
+
+    <div class="dw-field" [class.dw-field--error]="showError('name')">
+      <label class="dw-label" for="dw-cos-name">Destination name <span class="dw-req">*</span></label>
+      <input id="dw-cos-name" class="dw-input" formControlName="name" placeholder="e.g. Clinical Documents" />
+      @if (showError('name')) {
+        <span class="dw-error">Destination name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="showError('endpoint')">
+      <label class="dw-label" for="dw-cos-endpoint">Endpoint <span class="dw-req">*</span></label>
+      <input id="dw-cos-endpoint" class="dw-input" formControlName="endpoint" placeholder="https://….documents.fabric.microsoft.com" />
+      @if (cosmosForm.get('endpoint')!.hasError('required') && cosmosForm.get('endpoint')!.touched) {
+        <span class="dw-error">Endpoint is required.</span>
+      } @else if (cosmosForm.get('endpoint')!.hasError('pattern') && cosmosForm.get('endpoint')!.touched) {
+        <span class="dw-error">Must be a full URL including https://, not just the host name.</span>
+      } @else {
+        <span class="dw-hint">In Fabric: open the database, Settings &rarr; Connection, and copy "Endpoint for Cosmos DB NoSQL database".</span>
+      }
+    </div>
+
+    <div class="dw-field" [class.dw-field--error]="showError('database')">
+      <label class="dw-label" for="dw-cos-database">Database <span class="dw-req">*</span></label>
+      <input id="dw-cos-database" class="dw-input" formControlName="database" placeholder="e.g. Clinical" />
+      @if (showError('database')) {
+        <span class="dw-error">Database name is required.</span>
+      }
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-cos-container">Container</label>
+      <input id="dw-cos-container" class="dw-input" formControlName="container" placeholder="Default: from the mapping" />
+      <span class="dw-hint">Leave blank to use each mapping's own target, so one destination can serve several resource types. The container must already exist — FHIRBridge never creates one, because its partition key is fixed at creation and cannot be changed afterwards.</span>
+    </div>
+
+    <div class="dw-field">
+      <label class="dw-label" for="dw-cos-authMode">Authentication</label>
+      <div class="dw-select-wrap">
+        <select id="dw-cos-authMode" class="dw-select" formControlName="authMode">
+          <option value="managedIdentity">Managed identity</option>
+          <option value="servicePrincipal">Service principal</option>
+        </select>
+      </div>
+      <span class="dw-hint">Cosmos DB in Fabric accepts Entra identities only — there are no account keys. Access is granted by a data-plane role on the database in Fabric.</span>
+    </div>
+
+    @if (isServicePrincipal()) {
+      <div class="dw-field" [class.dw-field--error]="showError('tenantId')">
+        <label class="dw-label" for="dw-cos-tenantId">Tenant ID <span class="dw-req">*</span></label>
+        <input id="dw-cos-tenantId" class="dw-input" formControlName="tenantId" placeholder="Directory (tenant) ID" />
+        @if (showError('tenantId')) {
+          <span class="dw-error">Tenant ID is required for a service principal.</span>
+        }
+      </div>
+
+      <div class="dw-field" [class.dw-field--error]="showError('clientId')">
+        <label class="dw-label" for="dw-cos-clientId">Client ID <span class="dw-req">*</span></label>
+        <input id="dw-cos-clientId" class="dw-input" formControlName="clientId" placeholder="Application (client) ID" />
+        @if (showError('clientId')) {
+          <span class="dw-error">Client ID is required for a service principal.</span>
+        }
+      </div>
+
+      <div class="dw-field dw-field--full" [class.dw-field--error]="showError('secretValue')">
+        <label class="dw-label" for="dw-cos-secret">Client secret <span class="dw-req">*</span></label>
+        <input id="dw-cos-secret" type="password" class="dw-input" formControlName="secretValue" autocomplete="new-password" placeholder="Stored in Key Vault, never shown again" />
+        @if (showError('secretValue')) {
+          <span class="dw-error">Client secret is required for a service principal.</span>
+        } @else {
+          <span class="dw-hint">A service principal also needs the Fabric tenant setting "Service principals can use Fabric APIs" enabled — without it, a correctly-permissioned principal is still refused.</span>
+        }
+      </div>
+    }
+
+    <div class="dw-field dw-field--full dlw-adv">
+      <button type="button" class="dlw-adv-toggle" (click)="toggleAdvanced()"
+        [attr.aria-expanded]="advancedOpen() || hasAdvancedError()">
+        <span class="dlw-adv-caret" [class.dlw-adv-caret--open]="advancedOpen() || hasAdvancedError()">&#9656;</span>
+        Advanced options
+        @if (hasAdvancedError()) {
+          <span class="dlw-adv-badge">needs attention</span>
+        } @else if (!advancedOpen()) {
+          <span class="dlw-adv-sub">identity, sovereign clouds, partition key</span>
+        }
+      </button>
+    </div>
+
+    @if (advancedOpen() || hasAdvancedError()) {
+      @if (!isServicePrincipal()) {
+        <div class="dw-field">
+          <label class="dw-label" for="dw-cos-miClientId">Managed identity client ID</label>
+          <input id="dw-cos-miClientId" class="dw-input" formControlName="managedIdentityClientId" placeholder="Blank for the system-assigned identity" />
+          <span class="dw-hint">Only needed for a user-assigned managed identity.</span>
+        </div>
+      }
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-cos-authorityHost">Authority host</label>
+        <input id="dw-cos-authorityHost" class="dw-input" formControlName="authorityHost" placeholder="Default: https://login.microsoftonline.com/" />
+        <span class="dw-hint">Only for a sovereign cloud.</span>
+      </div>
+
+      <div class="dw-field">
+        <label class="dw-label" for="dw-cos-partitionKey">Partition key path</label>
+        <input id="dw-cos-partitionKey" class="dw-input" formControlName="partitionKeyPath" placeholder="e.g. /resourceType" />
+        <span class="dw-hint">Recorded for reference only — this does not create or change a container. Noting the key the container was built with saves the next reader a trip to Fabric.</span>
+      </div>
+    }
+
+  </div>
+</form>

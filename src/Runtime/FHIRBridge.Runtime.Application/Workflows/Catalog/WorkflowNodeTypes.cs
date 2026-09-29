@@ -73,6 +73,12 @@ public static class WorkflowNodeTypes
     /// different protocols; see DestinationType.DataFabricWarehouse.</summary>
     public const string DataFabricWarehouseDestination = "DataFabricWarehouseDestinationNode";
 
+    /// <summary>Cosmos DB in Microsoft Fabric — documents into a container over the Cosmos NoSQL data plane.
+    /// Grouped with the other Fabric nodes for the user, but sharing nothing technical with them: it speaks its
+    /// own SDK against its own endpoint, and it is NOT reachable through the Mongo destination, which was the
+    /// original assumption (see DestinationType.CosmosDbFabric).</summary>
+    public const string CosmosDbFabricDestination = "CosmosDbFabricDestinationNode";
+
     /// <summary>General-purpose, fully configurable outbound REST API — the "bring your own endpoint" destination.
     /// Widest auth surface of any destination node (see <c>ApiEndpointAuthMode</c>); unlike
     /// <see cref="RestApiDestination"/> it supports batching, retry and every auth mode a real integration needs.</summary>

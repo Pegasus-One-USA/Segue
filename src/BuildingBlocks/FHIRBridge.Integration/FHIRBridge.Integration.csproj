@@ -14,4 +14,8 @@
     <ProjectReference Include="..\..\Runtime\FHIRBridge.Runtime.Domain\FHIRBridge.Runtime.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="FHIRBridge.UnitTests" />
+  </ItemGroup>
+
 </Project>

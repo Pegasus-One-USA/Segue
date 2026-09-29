@@ -27,6 +27,8 @@ public interface IGovernanceLogger
 
     Task LogExportAsync(ExportEntry entry, CancellationToken cancellationToken = default);
 
+    Task LogDestinationActivityAsync(DestinationActivityEntry entry, CancellationToken cancellationToken = default);
+
     Task LogNotificationAsync(NotificationEntry entry, CancellationToken cancellationToken = default);
 
     Task LogValidationFailureAsync(ValidationFailureEntry entry, CancellationToken cancellationToken = default);

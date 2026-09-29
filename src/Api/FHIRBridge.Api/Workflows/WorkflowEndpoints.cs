@@ -2714,9 +2714,45 @@ public static class WorkflowEndpoints
 
         // Permanently delete a workflow definition (and its nodes/edges/config). The referenced source/destination/
         // mapping records are NOT deleted — they may be shared with other workflows/routes. Admin-only.
+        // ── Per-resource-type FHIR search criteria ──────────────────────────────────────────────────────
+        // Authored by the "Criteria" button on each row of the destination wizard's "Map fields" step. Read as
+        // workflow.view / written as workflow.edit: criteria change what a run extracts, which is an edit to the
+        // workflow's behavior, not a separate permission of its own.
+        group.MapGet("/workflows/{workflowId:guid}/resource-type-criteria", async (
+            Guid workflowId,
+            IResourceTypeCriteriaService criteriaService,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await criteriaService.ListAsync(workflowId, cancellationToken)))
+        .RequireAuthorization(AuthorizationPolicies.HasPermission(
+            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
+
+        // Appends by default (request.Replace == false) — the button adds to whatever criteria the resource type
+        // already has rather than overwriting it. Creates the row on first save.
+        group.MapPost("/workflows/{workflowId:guid}/resource-type-criteria", async (
+            Guid workflowId,
+            SaveResourceTypeCriteriaRequest request,
+            IResourceTypeCriteriaService criteriaService,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await criteriaService.SaveAsync(workflowId, request, cancellationToken)))
+        .RequireAuthorization(AuthorizationPolicies.HasPermission(
+            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.Edit)));
+
+        group.MapDelete("/workflows/{workflowId:guid}/resource-type-criteria", async (
+            Guid workflowId,
+            string sourceNodeId,
+            string resourceType,
+            IResourceTypeCriteriaService criteriaService,
+            CancellationToken cancellationToken) =>
+        {
+            await criteriaService.DeleteAsync(workflowId, sourceNodeId, resourceType, cancellationToken);
+            return Results.NoContent();
+        }).RequireAuthorization(AuthorizationPolicies.HasPermission(
+            PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.Edit)));
+
         group.MapDelete("/workflows/{workflowId:guid}", async (
             Guid workflowId,
             IWorkflowDefinitionStore store,
+            IResourceTypeCriteriaService criteriaService,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -2726,6 +2762,12 @@ public static class WorkflowEndpoints
             }
 
             await store.DeleteAsync(workflowId, cancellationToken);
+
+            // ResourceTypeCriteria.WorkflowId is a plain scalar, not a cascading FK (see that entity's remarks —
+            // an FK would be cascade-deleted by SqlWorkflowDefinitionStore's delete-then-re-add save), so the
+            // rows have to be retired explicitly here or they outlive the workflow they belong to.
+            await criteriaService.DeleteForWorkflowAsync(workflowId, cancellationToken);
+
             return Results.NoContent();
         // Workflow-module gate: can this role delete a workflow at all.
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
@@ -3818,6 +3860,48 @@ public static class WorkflowEndpoints
         return config.ToJsonString();
     }
 
+    /// <summary>
+    /// Records the workflow id and the portal's own canvas node key on every node's configuration, so a run can
+    /// look up that node's <c>ResourceTypeCriteria</c> rows (keyed by workflow + canvas node id + resource type).
+    /// </summary>
+    /// <remarks>
+    /// The canvas key has to be carried in configuration because it is otherwise discarded: <see cref="BuildWorkflow"/>
+    /// mints a fresh <see cref="WorkflowNode.Id"/> Guid per node on every save (the client key only ever survives
+    /// locally, to resolve edges), and SqlWorkflowDefinitionStore persists by deleting the whole definition and
+    /// re-inserting it. Criteria keyed on the persisted node Guid would therefore be orphaned by the next edit;
+    /// keyed on the canvas key, they survive it.
+    /// <para>Existing values are never overwritten — a node whose config already carries these (a re-save, or the
+    /// route→graph projection) keeps what it has.</para>
+    /// </remarks>
+    private static string StampNodeIdentity(string? configurationJson, string clientNodeId, Guid workflowId)
+    {
+        // Same "never make a bad save worse" stance as StampWorkflowId: unparseable config is returned exactly
+        // as it arrived rather than replaced with a bare stamped object.
+        if (TryParseConfiguration(configurationJson) is not { } root)
+        {
+            return configurationJson ?? "{}";
+        }
+
+        // Written into the node's SETTINGS (the "config" object when enveloped, else the root itself), because
+        // that is where ReadStringConfiguration looks — see WorkflowNodeConfigurationEnvelope.ResolveSettings.
+        // Stamping the root unconditionally would be invisible to an enveloped node, silently disabling its
+        // criteria. The ROOT is what gets re-serialized: settings is a child of it by reference, so mutating
+        // settings and serializing root preserves the envelope and every sibling key.
+        var settings = root[WorkflowNodeConfigurationEnvelope.ConfigProperty] as JsonObject ?? root;
+
+        if (settings["workflowId"]?.ToString() is not { Length: > 0 })
+        {
+            settings["workflowId"] = workflowId.ToString();
+        }
+
+        if (settings["canvasNodeId"]?.ToString() is not { Length: > 0 })
+        {
+            settings["canvasNodeId"] = clientNodeId;
+        }
+
+        return root.ToJsonString();
+    }
+
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request, int version = 1)
     {
         var workflow = new WorkflowDefinition(
@@ -3832,7 +3916,10 @@ public static class WorkflowEndpoints
                 nodeRequest.Rank,
                 nodeRequest.SubRank,
                 nodeRequest.DisplayName,
-                StampWorkflowId(nodeRequest.ConfigurationJson, nodeRequest.NodeType, workflowId),
+                StampNodeIdentity(
+                    StampWorkflowId(nodeRequest.ConfigurationJson, nodeRequest.NodeType, workflowId),
+                    nodeRequest.Id,
+                    workflowId),
                 nodeRequest.PositionX,
                 nodeRequest.PositionY,
                 nodeRequest.IsEnabled,

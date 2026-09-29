@@ -1,4 +1,4 @@
-using FHIRBridge.Runtime.Domain.Enums;
+﻿using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.SharedKernel.Enums;
 
 namespace FHIRBridge.Runtime.Application.DTOs;
@@ -71,4 +71,12 @@ public sealed record FhirSourceConfiguration(
     string? PracticeId = null,
     // Where OAuth2ClientCredentialsTokenProvider places client id/secret — "post" (default) or "basic". Null
     // behaves as "post", unchanged from before this field existed.
-    string? AuthPlacement = null);
+    string? AuthPlacement = null,
+    // Per-resource-type FHIR search criteria (ResourceTypeCriteria rows for the workflow + source node being
+    // executed), keyed by resource type. Deliberately separate from the connection-wide SearchParameters: that
+    // one string applies to every resource type, which is why the executor has to discard it for types it cannot
+    // describe (see SearchCohortScopedAsync and ExecuteAsync's non-compartment branch — an "identifier=<MRN list>"
+    // that scopes Patient is meaningless on Condition). Criteria here were explicitly authored for the one type
+    // they are keyed by, so they are applied AFTER those scrubs rather than being removed by them. Null/absent
+    // for a type leaves it on the pre-existing connection-wide fallback, unchanged.
+    IReadOnlyDictionary<string, string>? SearchCriteriaByResourceType = null);

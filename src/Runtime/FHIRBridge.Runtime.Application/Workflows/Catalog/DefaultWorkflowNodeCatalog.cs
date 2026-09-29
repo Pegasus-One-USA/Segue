@@ -84,6 +84,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.DataLakeWebhookDestination),
         Destination(WorkflowNodeTypes.DataFabricAzureDestination),
         Destination(WorkflowNodeTypes.DataFabricWarehouseDestination),
+        Destination(WorkflowNodeTypes.CosmosDbFabricDestination),
         Destination(WorkflowNodeTypes.ApiEndpointDestination),
         // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FhirRepository +
         // AzureFhirService + Blob destinations are exposed in the palette. The writers below remain registered in
@@ -263,6 +264,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.DataLakeWebhookDestination => "dest-datalake-webhook",
             WorkflowNodeTypes.DataFabricAzureDestination => "dest-fabric",
             WorkflowNodeTypes.DataFabricWarehouseDestination => "dest-fabric-warehouse",
+            WorkflowNodeTypes.CosmosDbFabricDestination => "dest-fabric-cosmos",
             WorkflowNodeTypes.ApiEndpointDestination => "dest-apiendpoint",
             WorkflowNodeTypes.AuditLineage => "audit-lineage",
             WorkflowNodeTypes.HedisMeasureReport => "hedis",
@@ -292,6 +294,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.DataLakeWebhookDestination => "Data Lake Webhook",
             WorkflowNodeTypes.DataFabricAzureDestination => "Microsoft Fabric (OneLake)",
             WorkflowNodeTypes.DataFabricWarehouseDestination => "Microsoft Fabric (Warehouse)",
+            WorkflowNodeTypes.CosmosDbFabricDestination => "Cosmos DB in Fabric",
             WorkflowNodeTypes.ApiEndpointDestination => "API Endpoint",
             WorkflowNodeTypes.AuditLineage => "Audit & Lineage",
             WorkflowNodeTypes.HedisMeasureReport => "HEDIS Measure Report",
@@ -322,6 +325,8 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
                 "Land mapped records as files in a Microsoft Fabric Lakehouse (OneLake Files; NDJSON, Parquet or CSV).",
             WorkflowNodeTypes.DataFabricWarehouseDestination =>
                 "Load mapped records as rows into a Microsoft Fabric Warehouse table (staged Parquet + COPY INTO over TDS).",
+            WorkflowNodeTypes.CosmosDbFabricDestination =>
+                "Write mapped records as documents to a container in Cosmos DB in Microsoft Fabric (NoSQL API, Entra auth).",
             WorkflowNodeTypes.ApiEndpointDestination =>
                 "Send mapped records to an arbitrary outbound REST API — configurable method, auth, batching and retry.",
             WorkflowNodeTypes.AuditLineage => "Hash-chained audit and record-level lineage.",

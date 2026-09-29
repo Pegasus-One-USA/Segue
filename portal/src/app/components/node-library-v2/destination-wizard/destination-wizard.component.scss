@@ -702,6 +702,96 @@
   width: 460px;
 }
 
+/* ── Per-resource-type search criteria editor ─────────────────────────────── */
+
+/* Marks a data-group row whose resource type already has criteria stored, so the table shows at a glance
+   which types are filtered without opening each one. */
+.dw-criteria-dot {
+  margin-left: 5px;
+  font-size: 15px;
+  line-height: 1;
+  vertical-align: middle;
+  color: var(--color-primary);
+}
+
+.dw-criteria-current-label,
+.dw-criteria-label {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--color-ink);
+}
+
+.dw-criteria-label {
+  display: block;
+  margin-top: 14px;
+}
+
+/* The stored value, shown read-only above the input: saving ADDS to it, so the box itself starts empty
+   and this is the only place the current criteria appear. Wraps rather than truncating — a cohort
+   identifier list is legitimately long, and a silently clipped filter is worse than a tall dialog. */
+.dw-criteria-current {
+  display: block;
+  padding: 7px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface-muted, rgba(127, 127, 127, 0.08));
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  text-align: left;
+  word-break: break-all;
+  color: var(--color-ink);
+}
+
+.dw-criteria-empty {
+  margin: 0;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--color-muted);
+}
+
+.dw-criteria-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--color-ink);
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+  }
+}
+
+.dw-criteria-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  text-align: left;
+  color: var(--color-muted);
+}
+
+.dw-criteria-replace {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.dw-criteria-error {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--color-danger);
+}
+
 .dw-ref-warning {
   text-align: left;
 

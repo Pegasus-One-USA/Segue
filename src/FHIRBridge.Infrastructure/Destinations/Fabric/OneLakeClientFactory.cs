@@ -53,6 +53,22 @@ internal sealed class OneLakeClientFactory : IOneLakeClientFactory
         return _cache.GetOrAdd(cacheKey, () => Build(destination, settings, secret));
     }
 
+    /// <inheritdoc />
+    public Task<BlobDestinationTarget> GetWorkspaceAdHocAsync(
+        FabricDestinationSettings settings,
+        string? secret,
+        CancellationToken cancellationToken)
+    {
+        // Deliberately NOT cached: an unsaved connection has no destination id to key on, and the fields behind
+        // it change on every keystroke in the wizard. Caching by value would fill the shared cache with entries
+        // for connections that never get saved.
+        var credential = BuildCredential(settings, secret);
+        var container = new BlobServiceClient(new Uri(settings.AccountUrl), credential)
+            .GetBlobContainerClient(settings.Workspace);
+
+        return Task.FromResult(new BlobDestinationTarget(container, SupportsContainerCreate: false));
+    }
+
     private BlobDestinationTarget Build(
         DestinationConfiguration destination, FabricDestinationSettings settings, string? secret)
     {

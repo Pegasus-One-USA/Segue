@@ -787,15 +787,23 @@ export class WorkflowBuildAssemblerServiceV2 {
     const isFabricWarehouse =
       node.nodeType.includes('DataFabricWarehouse') ||
       (fields['__transformId'] ?? '') === 'dest-fabric-warehouse';
+    // Grouped under Microsoft Fabric in the picker but its own destination type: it addresses a Cosmos NoSQL
+    // endpoint and database, not a workspace and item. Excluded from isFabric below for the same reason the
+    // Warehouse is — falling through to a Fabric (or, past that, the CSV) branch would send the wrong
+    // DestinationType and the wrong metadata shape, which the API then rejects against the wrong validator.
+    const isCosmosFabric =
+      node.nodeType.includes('CosmosDbFabric') ||
+      (fields['__transformId'] ?? '') === 'dest-fabric-cosmos';
     const isFabric =
       !isFabricWarehouse &&
+      !isCosmosFabric &&
       (node.nodeType.includes('DataFabric') ||
         (fields['__transformId'] ?? '') === 'dest-fabric');
     const isApiEndpoint =
       node.nodeType.includes('ApiEndpoint') ||
       (fields['__transformId'] ?? '') === 'dest-apiendpoint';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : isDataLake ? 'Data Lake Webhook Destination' : isFabricWarehouse ? 'Microsoft Fabric Warehouse Destination' : isFabric ? 'Microsoft Fabric Destination' : isApiEndpoint ? 'API Endpoint Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : isDataLake ? 'Data Lake Webhook Destination' : isFabricWarehouse ? 'Microsoft Fabric Warehouse Destination' : isCosmosFabric ? 'Cosmos DB in Fabric Destination' : isFabric ? 'Microsoft Fabric Destination' : isApiEndpoint ? 'API Endpoint Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -1000,6 +1008,30 @@ export class WorkflowBuildAssemblerServiceV2 {
       };
     }
 
+    if (isCosmosFabric) {
+      return {
+        name,
+        destinationType: 'CosmosDbFabric',
+        keyVaultName,
+        secretName,
+        // The container is the target, mirroring the dual read every other writer does:
+        // CosmosDbFabricDestinationSettings.ResolveContainer prefers the explicit dest_cosmosFabricContainer
+        // and otherwise takes it from the mapping profile, so a blank one here is the normal case rather
+        // than a missing value.
+        target: fields['dest_cosmosFabricContainer'] || null,
+        // Managed identity resolves no Key Vault secret at all
+        // (CosmosDbFabricDestinationSettings.RequiresSecret) — same "don't overwrite an already-provisioned
+        // secret unless the user typed a new one" guard the Fabric branches above use.
+        inlineSecret:
+          fields['dest_cosmosFabricAuthMode'] !== 'servicePrincipal'
+            ? ''
+            : hasExistingSecret && !fields['dest_cosmosFabricSecret']
+              ? null
+              : fields['dest_cosmosFabricSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'cosmosFabric'),
+      };
+    }
+
     if (isApiEndpoint) {
       return {
         name,
@@ -1048,7 +1080,7 @@ export class WorkflowBuildAssemblerServiceV2 {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'apiendpoint',
+    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'cosmosFabric' | 'apiendpoint',
   ): string {
     const keys =
       kind === 'apiendpoint'
@@ -1131,6 +1163,24 @@ export class WorkflowBuildAssemblerServiceV2 {
             'dest_fabricWarehouseWriteMode',
             'dest_fabricWarehouseStagingPath',
             'dest_fabricWarehouseUseWorkspaceIdentity',
+            'dest_fabricLakehouseSchema',
+          ]
+        // Cosmos DB in Fabric: same vendor, none of the same keys — an endpoint and database rather than a
+        // workspace and item. Missing a key here drops it silently before the save, which is what made the
+        // Warehouse fields above fail validation for fields the form had just posted.
+        : kind === 'cosmosFabric'
+        ? [
+            'dest_name',
+            'dest_cosmosFabricEndpoint',
+            'dest_cosmosFabricDatabase',
+            'dest_cosmosFabricContainer',
+            'dest_cosmosFabricAuthMode',
+            'dest_cosmosFabricTenantId',
+            'dest_cosmosFabricClientId',
+            'dest_cosmosFabricManagedIdentityClientId',
+            'dest_cosmosFabricAuthorityHost',
+            'dest_cosmosFabricPartitionKeyPath',
+            'dest_cosmosFabricContainerCreationMode',
           ]
         : kind === 'sql'
         ? [

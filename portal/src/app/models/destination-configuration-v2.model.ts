@@ -34,6 +34,10 @@ export type DestinationTypeV2 =
    *  meant every gate below had to re-derive the landing mode from connection metadata to answer a question the
    *  type itself should answer. See DestinationType.DataFabricWarehouse for the full reasoning. */
   | 'DataFabricWarehouse'
+  /** Cosmos DB in Microsoft Fabric — documents into a container over the Cosmos NoSQL data plane. Grouped with
+   *  the other Fabric destinations in the picker, but sharing nothing technical with them, and deliberately NOT
+   *  reachable through 'Mongo': Fabric's Cosmos DB is the NoSQL API and speaks no MongoDB wire protocol. */
+  | 'CosmosDbFabric'
   | 'ApiEndpoint';
 
 /** SQL-family destinations are the only ones Mapping applies to in the V2 chain (Source → Destination →
