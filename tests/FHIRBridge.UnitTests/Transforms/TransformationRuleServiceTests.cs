@@ -36,7 +36,7 @@ public sealed class TransformationRuleServiceTests
             .Setup(x => x.GetFieldScopedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         repository
-            .Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<DestinationType?>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
 
         var service = new TransformationRuleService(
@@ -360,7 +360,7 @@ public sealed class TransformationRuleServiceTests
 
     private static void SetupEmptyRepository(Mock<ITransformationRuleRepository> repository, bool exceptResourceType = false)
     {
-        repository.Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<DestinationType?>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+        repository.Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         repository.Setup(x => x.GetFieldScopedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);

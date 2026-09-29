@@ -60,12 +60,11 @@ public sealed class WorkflowScopedRuleDestinationTests
         return rule;
     }
 
-    private async Task<IReadOnlyList<TransformationRule>> QueryAsync(
-        DestinationType? destinationType, Guid? destinationConfigurationId)
+    private async Task<IReadOnlyList<TransformationRule>> QueryAsync(Guid? destinationConfigurationId)
     {
         await using var db = CreateContext();
         return await new EfTransformationRuleRepository(db).GetWorkflowScopedAsync(
-            Workflow, destinationType, destinationConfigurationId, "Patient", "Resource", null, null, default);
+            Workflow, destinationConfigurationId, "Patient", "Resource", null, null, default);
     }
 
     [Fact]
@@ -75,7 +74,7 @@ public sealed class WorkflowScopedRuleDestinationTests
         // configuration id separates them.
         var rule = await SeedAsync(DestinationType.PostgreSql, OldPostgres);
 
-        var forTheNewDestination = await QueryAsync(DestinationType.PostgreSql, NewPostgres);
+        var forTheNewDestination = await QueryAsync(NewPostgres);
 
         forTheNewDestination.Select(r => r.Id).Should().NotContain(rule.Id,
             "a rule belongs to the destination it was authored against, not to every destination of that kind");
@@ -87,7 +86,7 @@ public sealed class WorkflowScopedRuleDestinationTests
         // The half a narrowing fix can break: reopening the SAME destination must still show the rule.
         var rule = await SeedAsync(DestinationType.PostgreSql, OldPostgres);
 
-        var forItsOwnDestination = await QueryAsync(DestinationType.PostgreSql, OldPostgres);
+        var forItsOwnDestination = await QueryAsync(OldPostgres);
 
         forItsOwnDestination.Select(r => r.Id).Should().Contain(rule.Id);
     }
@@ -100,7 +99,7 @@ public sealed class WorkflowScopedRuleDestinationTests
         // mis-attached rule does not fix itself; it has to be deleted once.
         var legacy = await SeedAsync(DestinationType.PostgreSql, destinationConfigurationId: null);
 
-        var forTheNewDestination = await QueryAsync(DestinationType.PostgreSql, NewPostgres);
+        var forTheNewDestination = await QueryAsync(NewPostgres);
 
         forTheNewDestination.Select(r => r.Id).Should().Contain(legacy.Id);
     }
@@ -112,25 +111,24 @@ public sealed class WorkflowScopedRuleDestinationTests
         // and the executors resolve with null so run-time behaviour is unchanged by this narrowing.
         var rule = await SeedAsync(DestinationType.PostgreSql, OldPostgres);
 
-        var acrossAll = await QueryAsync(destinationType: null, destinationConfigurationId: null);
+        var acrossAll = await QueryAsync(destinationConfigurationId: null);
 
         acrossAll.Select(r => r.Id).Should().Contain(rule.Id);
     }
 
     [Fact]
-    public async Task A_different_destination_TYPE_is_still_excluded()
+    public async Task A_rule_saved_against_a_MISREPORTED_destination_type_still_applies()
     {
-        // The coarser narrowing added earlier still holds, and covers rules that predate the id column.
-        var rule = await SeedAsync(DestinationType.SqlServer, destinationConfigurationId: null);
+        // Deliberately NOT filtered by destination type. The v2 wizard reports "Csv" for every type it does
+        // not list explicitly (resolveDestinationTypeForRules), so a rule authored against e.g. a Fabric
+        // Cosmos destination carries a type that never matches the real one at run time. Filtering on it
+        // silently stopped those workflows transforming — the destination id is what identifies a rule.
+        var misreported = await SeedAsync(DestinationType.Csv, OldPostgres);
 
-        var forPostgres = await QueryAsync(DestinationType.PostgreSql, NewPostgres);
+        var forItsRealDestination = await QueryAsync(OldPostgres);
 
-        forPostgres.Select(r => r.Id).Should().NotContain(rule.Id);
+        forItsRealDestination.Select(r => r.Id).Should().Contain(misreported.Id);
     }
-
-
-    // ── deleting a destination takes its rules with it ──────────────────────────────────────────
-
     [Fact]
     public async Task Deleting_a_destination_removes_the_rules_it_owned()
     {

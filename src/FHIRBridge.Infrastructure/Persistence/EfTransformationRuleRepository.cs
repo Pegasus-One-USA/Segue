@@ -22,8 +22,8 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
     // wildcard" fallback below would otherwise match EVERY destination field for that resource type/scope,
     // masking fields the rule was never meant to touch.
     public async Task<IReadOnlyList<TransformationRule>> GetWorkflowScopedAsync(
-        Guid resourcePipelineRouteId, DestinationType? destinationType, Guid? destinationConfigurationId,
-        string resourceType, string destinationField, string? sourceSystem, string? sourceField,
+        Guid resourcePipelineRouteId, Guid? destinationConfigurationId, string resourceType,
+        string destinationField, string? sourceSystem, string? sourceField,
         CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
@@ -33,11 +33,10 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
                 // Belonging to a workflow was assumed to pin the destination too. It does not: a
                 // workflow can have its destination replaced, or hold two of different types, and then
                 // one column name matched a rule written for the other destination entirely.
-                (destinationType == null || x.DestinationType == null || x.DestinationType == destinationType) &&
-                // ...and the destination ITSELF, which the type cannot distinguish: a replaced PostgreSQL
-                // destination is still PostgreSQL, so without this the new one picks up the old one's
-                // rules and nothing ever retires them (the save-time pass drops a type from its "removed"
-                // set as soon as any surviving destination shares it).
+                // The destination itself. Deliberately NOT the destination TYPE as well: the wizard reports
+                // "Csv" for every type it does not list explicitly (resolveDestinationTypeForRules), so a
+                // rule saved against e.g. a Fabric Cosmos destination carries a type that never matches the
+                // real one at run time — filtering on it silently stopped those workflows transforming.
                 (destinationConfigurationId == null || x.DestinationConfigurationId == null
                     || x.DestinationConfigurationId == destinationConfigurationId) &&
                 x.ResourceType == resourceType &&

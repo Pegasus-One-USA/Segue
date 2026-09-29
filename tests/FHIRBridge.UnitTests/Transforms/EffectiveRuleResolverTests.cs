@@ -19,7 +19,7 @@ public sealed class EffectiveRuleResolverTests
     {
         var repository = new Mock<ITransformationRuleRepository>();
         repository
-            .Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<DestinationType?>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         repository
             .Setup(x => x.GetFieldScopedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
@@ -98,7 +98,7 @@ public sealed class EffectiveRuleResolverTests
             destinationField: DestinationField, resourcePipelineRouteId: WorkflowId);
         repository
             .Setup(x => x.GetWorkflowScopedAsync(
-                WorkflowId, It.IsAny<DestinationType?>(), It.IsAny<Guid?>(), ResourceType, DestinationField, It.IsAny<string?>(),
+                WorkflowId, It.IsAny<Guid?>(), ResourceType, DestinationField, It.IsAny<string?>(),
                 It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[attachedRule]);
 
@@ -174,7 +174,7 @@ public sealed class EffectiveRuleResolverTests
             TransformScope.Workflow, TransformNodeType.DefaultNullHandling, "{}",
             resourceType: ResourceType, destinationField: DestinationField, resourcePipelineRouteId: WorkflowId);
         repository
-            .Setup(x => x.GetWorkflowScopedAsync(WorkflowId, It.IsAny<DestinationType?>(), It.IsAny<Guid?>(), ResourceType, DestinationField, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetWorkflowScopedAsync(WorkflowId, It.IsAny<Guid?>(), ResourceType, DestinationField, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[workflowRule]);
 
         var resolver = new EffectiveRuleResolver(repository.Object);

@@ -74,6 +74,10 @@ export interface SaveTransformationRuleRequest {
   nodeType: TransformNodeType;
   config: Record<string, string>;
   destinationType?: DestinationType | null;
+  /** Which DestinationConfiguration this rule is authored against. Without it the rule is stored
+   *  with a null destination, which matches ANY destination of the same type — so a replacement
+   *  destination inherits it and delete-by-destination cannot identify it. */
+  destinationConfigurationId?: string | null;
   resourceType?: string | null;
   destinationField?: string | null;
   resourcePipelineRouteId?: string | null;

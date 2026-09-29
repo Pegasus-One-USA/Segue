@@ -85,7 +85,7 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
             var workflowRules = PreferSourceFieldSpecific(
                 PreferSourceSpecific(
                     Enabled(await _repository.GetWorkflowScopedAsync(
-                        resourcePipelineRouteId.Value, destinationType, destinationConfigurationId,
+                        resourcePipelineRouteId.Value, destinationConfigurationId,
                         resourceType, destinationField, sourceSystem, sourceField, cancellationToken)),
                     sourceSystem),
                 sourceField);

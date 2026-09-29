@@ -26,8 +26,8 @@ public interface ITransformationRuleRepository
     /// another one leaves every type-based check matching, so the new destination inherited the old one's
     /// rules. A rule that recorded no configuration id still matches anything, so rules written before the
     /// column existed keep applying.</param>
-        Guid resourcePipelineRouteId, DestinationType? destinationType, Guid? destinationConfigurationId,
-        string resourceType, string destinationField, string? sourceSystem, string? sourceField,
+        Guid resourcePipelineRouteId, Guid? destinationConfigurationId, string resourceType,
+        string destinationField, string? sourceSystem, string? sourceField,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<TransformationRule>> GetFieldScopedAsync(

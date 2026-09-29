@@ -201,8 +201,8 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         }
 
         public Task<IReadOnlyList<TransformationRule>> GetWorkflowScopedAsync(
-            Guid resourcePipelineRouteId, DestinationType? destinationType, Guid? destinationConfigurationId,
-            string resourceType, string destinationField, string? sourceSystem, string? sourceField,
+            Guid resourcePipelineRouteId, Guid? destinationConfigurationId, string resourceType,
+            string destinationField, string? sourceSystem, string? sourceField,
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<TransformationRule>> GetFieldScopedAsync(

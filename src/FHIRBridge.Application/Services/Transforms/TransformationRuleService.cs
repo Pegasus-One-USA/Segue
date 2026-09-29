@@ -382,7 +382,7 @@ public sealed class TransformationRuleService : ITransformationRuleService
             // destinationType: null — this is counting how many routes ALREADY override the field,
             // whatever they write to, so narrowing to one destination would undercount the impact.
             var workflowRules = await _repository.GetWorkflowScopedAsync(
-                route.Id, destinationType: null, destinationConfigurationId: null, mappingResourceType,
+                route.Id, destinationConfigurationId: null, mappingResourceType,
                 destinationField, sourceSystem: null, sourceField: null, cancellationToken);
             if (workflowRules.Count > 0)
             {

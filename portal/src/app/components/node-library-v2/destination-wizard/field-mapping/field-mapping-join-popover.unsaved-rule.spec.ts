@@ -31,6 +31,7 @@ function popoverSuite(label: string, component: Type<unknown>): void {
       hasUnsavedRule(): boolean;
       onClose(): void;
       onSave(): void;
+      saveRule(): void;
       discardAndContinue(): void;
       toggleRuleSection(): void;
     };
@@ -46,6 +47,7 @@ function popoverSuite(label: string, component: Type<unknown>): void {
       fixture = TestBed.createComponent(component);
       fixture.componentRef.setInput('row', row());
       fixture.componentRef.setInput('rulesDestinationType', 'SqlServer');
+      fixture.componentRef.setInput('rulesDestinationConfigurationId', 'dest-1');
       fixture.detectChanges();
 
       // The popover looks up any existing rule on open; answer "none authored yet".
@@ -97,6 +99,23 @@ function popoverSuite(label: string, component: Type<unknown>): void {
         .withContext('closing must ask first — the config was never sent to the server, so there is '
           + 'nothing to recover once the popover is gone')
         .toBe(0);
+    });
+
+    it('sends the destination it was authored against when saving the rule', () => {
+      // Without this the rule is stored with a null destination, which matches ANY destination of the same
+      // type — so a replacement destination inherits it and delete-by-destination cannot identify it. The
+      // whole point of recording the id is lost, silently, with every other test still green.
+      popover.toggleRuleSection();
+      fixture.detectChanges();
+      popover.ruleConfig.set({ ...popover.ruleConfig(), mode: 'concat', separator: '|' });
+      fixture.detectChanges();
+
+      popover.saveRule();
+
+      const http = TestBed.inject(HttpTestingController);
+      const posted = http.match(r => r.method === 'POST');
+      expect(posted.length).withContext('the rule save must be issued').toBe(1);
+      expect(posted[0].request.body.destinationConfigurationId).toBe('dest-1');
     });
 
     it('closes immediately when there is nothing unsaved', () => {

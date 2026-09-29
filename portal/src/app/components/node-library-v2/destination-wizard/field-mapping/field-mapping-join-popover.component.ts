@@ -229,6 +229,10 @@ export class FieldMappingJoinPopoverComponent {
         nodeType: this.ruleNodeType(),
         config: this.ruleConfig(),
         destinationType,
+        // Which destination this rule belongs to. Omitting it stores a null, which matches ANY
+        // destination of the same type — so a replacement destination inherits the rule and
+        // delete-by-destination cannot identify it. Covered by a test on the POSTed body.
+        destinationConfigurationId: this.rulesDestinationConfigurationId(),
         resourceType: row.resource,
         destinationField: row.targetName,
         sourceField: this.ruleSourceField(row),
@@ -332,6 +336,10 @@ export class FieldMappingJoinPopoverComponent {
         this.ruleDeleting.set(false);
         this.existingRule.set(null);
         this.ruleConfig.set(applyNodeDefaults(this.ruleSchema(), {}));
+        // The rule is gone and the config is back to defaults, so there is nothing pending — without
+        // this the baseline still describes the DELETED rule and closing or saving warns about
+        // unsaved changes that do not exist.
+        this.captureRuleBaseline();
         this.toast.success('Transformation rule removed', '');
       },
       error: err => {
