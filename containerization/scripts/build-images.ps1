@@ -56,11 +56,17 @@ $Images = @{
 # segue-app bakes $Tag into its Angular build (footer version display) -
 # segue-worker has no UI, so it doesn't take this build-arg.
 $UiImages = @("segue-app")
+# Both .NET images stamp SourceRevisionId into their assemblies' InformationalVersion (see
+# Directory.Build.props) so a running binary can name the exact commit it was built from.
+$DotnetImages = @("segue-app", "segue-worker")
+$GitSha = try { (git -C $RepoRoot rev-parse HEAD) 2>$null } catch { "" }
 
 foreach ($name in $Images.Keys) {
     $dockerfile = Join-Path $RepoRoot $Images[$name]
     $fullTag = "$Prefix$name`:$Tag"
-    $buildArgs = if ($UiImages -contains $name) { @("--build-arg", "APP_VERSION=$Tag") } else { @() }
+    $buildArgs = @()
+    if ($UiImages -contains $name) { $buildArgs += @("--build-arg", "APP_VERSION=$Tag") }
+    if ($DotnetImages -contains $name) { $buildArgs += @("--build-arg", "SOURCE_REVISION_ID=$GitSha") }
 
     Write-Host "==> Building $fullTag ($($Images[$name]))"
     docker build -f $dockerfile -t $fullTag @buildArgs $RepoRoot
