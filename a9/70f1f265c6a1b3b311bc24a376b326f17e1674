@@ -1,0 +1,216 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 10-12,15-23,52,254,268
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-summary.model.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 14-17,99-105,113-119,208,250-256,259-263,266-267,271,276-278,281,690-694,696,706,721
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 10,25,99,440,459,826,943-944,1233,1269-1276,1588-1612,1626,1630-1632,1636-1637,1651-1654,1657-1659,1703,1887,1891,1896-2041,2055-2059,2062,2080,2117-2131,2399,2466-2476
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 3-10
+portal/src/app/components/node-library/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 42-45,91-93,95
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 2-4,285,627-631
+src/FHIRBridge.Application/Services/Transforms/ITransformNode.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,30-46
+src/FHIRBridge.Application/Services/Transforms/FhirSourceJsonPatcher.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 54-57,60-64,74-108,113-118,123-150,154,160-166,168,170-182,184,187,191-195,203
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.focused-join-save.spec.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-122
+portal/src/app/layout/app-shell/app-shell.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 6,27-30,32-41,43,45-50,81-84
+portal/src/app/operations/layout/operations-shell.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-2
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 255
+portal/src/app/settings/layout/settings-shell.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-3
+src/FHIRBridge.Application/Services/Transforms/Nodes/ValueTypeNodes.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 269-292,328-440
+portal/src/app/auth/services/session-expired-dialog.service.spec.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-3,14-24,30,34,45-53,61,70,79,88,97,104-160
+portal/src/app/auth/services/session-expired-dialog.service.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 2-3,36-57
+portal/src/app/auth/services/session.service.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 137-141
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 51-58,1164-1167,1436-1440,1643-1646
+portal/src/app/user/components/user-menu/user-menu.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 2,8-9,21-33,37-38,74-81
+src/FHIRBridge.Application/DTOs/MongoConnectionTestRequest.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 13-17
+portal/src/app/services/layout.service.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-37
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.spec.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-446
+src/FHIRBridge.Application/Services/Transforms/Nodes/StringStructureNodes.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,86-87,104-126,137,145-165,174-177
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 91-92,191-193
+tests/FHIRBridge.UnitTests/Infrastructure/HapiLocalTerminologyTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,10,31-37
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-summary.model.spec.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 17-90,178-211,711-752
+portal/src/app/user-management/pages/role-list/role-list.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 3-10
+portal/src/app/auth/services/session.service.spec.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-55
+portal/src/styles.scss
+  s_102cddd76c43e9::t_fa3cdde888bd95 285,1485-1533,1540-1543,1949-2060
+tests/FHIRBridge.UnitTests/Transforms/ValueTypeNodesTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,149-384
+portal/src/app/layout/app-shell/app-shell.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,12,48,52-54
+src/FHIRBridge.Domain/ValueObjects/MappingFieldFormat.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-55
+portal/src/app/services/density.service.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-47
+portal/src/app/settings/layout/terminology-configurations-shell/terminology-configurations-shell.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-2
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,572-576,579,587-592,595-605,610,612-613,615,618-623,625,627,645-906,1340-1405
+src/FHIRBridge.Application/Services/MappingImportService.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 389,407-422
+src/FHIRBridge.Infrastructure/Destinations/MappedMongoDestinationWriter.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 5,24-30,70,75-76,81,98,124-125,146,148-151,156-157,192-204,206,232-235,237-238,243,260-263,268,279,285-304,350-381
+  s_102cddd76c43e9::t_1b75a563c12c66 65
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineArrayPolicyTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 225,227-229,233,310-314,317,355-356
+src/FHIRBridge.Application/Services/Transforms/TransformNodeApplier.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-3,11-26,33,35,41,65,67,73,85-219
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,85-91,149-154,174-217,286-289,369,379-428,430-439,443-444,452,459-487,489-495,498-502,507,511,715-732,737-743,745-751,754-755,757-783,789-858,866-869,872,881-891,898-902,916-927,980-1015,1064-1086,1107-1171
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 259-334,403,411-413,444-453,480-494,504-518,523,544-558,591-653,662-665,678-691,697-715,867-874,879,891-904,906
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 3-8
+portal/src/app/auth/interceptors/auth.interceptor.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 49-59,61-62,64,90-94,96
+portal/src/app/app.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 4,38-40
+portal/src/app/user/components/user-menu/user-menu.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,4-10,14-22,32,81-132
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.spec.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 2-3,7-8,24-27,30-34,136-478
+src/FHIRBridge.Infrastructure/Destinations/MappedDataLakeWebhookDestinationWriter.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,213-222
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineMatchCriteriaTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-115
+tests/FHIRBridge.UnitTests/Sources/EpicSourceConnectionScopeSyncServiceTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 45-65,203-267
+tests/FHIRBridge.UnitTests/Destinations/MongoJsonWriteModeTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-104
+tests/FHIRBridge.UnitTests/Destinations/Webhook/MappedDataLakeWebhookDestinationWriterTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,175-228
+src/FHIRBridge.Domain/Enums/JsonColumnWriteMode.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-23
+tests/FHIRBridge.UnitTests/Transforms/FhirComplexTypeNodesTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 47-229
+tests/FHIRBridge.UnitTests/Transforms/FhirResourceTransformServiceTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 79,106-144
+tests/FHIRBridge.UnitTests/Transforms/HumanNameArrayModeSpecTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-101
+tests/FHIRBridge.UnitTests/Transforms/TransformNodeApplierTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-239
+portal/src/app/user/components/user-menu/user-menu.component.scss
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-3,16,20,28-35,75-90,98-102,202-228
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 31-32,187,256-261,296-320,325-336
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 28-37,96,98-109,111-161,163-164,171,186-197,209
+src/FHIRBridge.Application/Services/Transforms/ReservedTransformConfigKeys.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 29-36
+src/FHIRBridge.Infrastructure/Destinations/MongoDestinationConnectionTestService.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 92
+src/FHIRBridge.Application/Services/Transforms/RuleSourceFieldFormat.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 41-54,56-62
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-model.spec.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 6-7,159,178-218,232-491,759-771,862-913,917,919,1074-1114,1169-1215
+src/FHIRBridge.Application/Services/Transforms/IFhirResourceTransformService.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 172-186,248-251,256-261
+tests/FHIRBridge.UnitTests/Transforms/RuleSourceFieldFormatTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-85
+portal/src/app/auth/interceptors/auth.interceptor.spec.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-105
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowExecutionContext.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,13-14,24,63-77
+portal/src/app/dashboard/layout/sidebar/sidebar.component.scss
+  s_102cddd76c43e9::t_fa3cdde888bd95 16-17,53-93,101-112
+tests/FHIRBridge.UnitTests/Validation/CreateDestinationConfigurationRequestValidatorTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 76-79,81,83
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/mongo-destination-form.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 50
+portal/src/app/dashboard/layout/sidebar/sidebar.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 2-6,21-29,107-113
+portal/src/app/dashboard/layout/sidebar/sidebar.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,7-8,90,96-100,105
+portal/src/app/governance/layout/governance-shell.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-2
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/rule-config-form/rule-config-form.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,10-12,15-21,50,191-195,257,271,273-282
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 10,58,715,793-831
+src/FHIRBridge.Application/DTOs/Transforms/TransformationRuleDtos.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 106-114
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 9,77,173,190,220,227-242
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 151-155
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 678-688,724,726-729,1295-1303,1359-1372,1377-1378,1587-1597,1605-1668,1681,1686,1719-1840
+tests/FHIRBridge.UnitTests/Mapping/JsonMappingEngineJoinedFieldsTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-935
+portal/src/app/core/components/dialog-shell/dialog-shell.component.scss
+  s_102cddd76c43e9::t_fa3cdde888bd95 31-42,68-85
+tests/FHIRBridge.UnitTests/Transforms/StringStructureNodesTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 119-234
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 4-8,13,57-68,115,137-144,146-151,189,194-195,225-245,306-309,344-392,402,428-446,479-497,499,503-523
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 71,513-522,1577-1578,1934-1936,1938,3129-3141,3160,3186,3357,3481,3483,3485-3486,3526,3555,3561-3566,3575,4255-4256,4827-4831,4833,4837-4842,4913-4916,5144-5187,5192
+src/FHIRBridge.Application/Abstractions/Destinations/PipelineWriteContext.cs
+  s_102cddd76c43e9::t_36c906d33faa85 68
+  s_102cddd76c43e9::t_fa3cdde888bd95 1
+  s_102cddd76c43e9::t_475bef9bdc8be5 38-47
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_102cddd76c43e9::t_fa3cdde888bd95 358-362
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 631-632,638-639,880-885,892,921-925,953-954,964-969,1003-1004
+tests/FHIRBridge.UnitTests/Transforms/FhirSourceJsonPatcherSiblingTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-119
+portal/src/app/services/destination-schema.service.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 197-198
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,912-915
+portal/src/app/settings/layout/workflow-configurations-shell/workflow-configurations-shell.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-5
+tests/FHIRBridge.UnitTests/Transforms/TransformNodeConfigSchemaTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-142
+src/FHIRBridge.Infrastructure/Destinations/MongoJsonValueConverter.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1-65
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_102cddd76c43e9::t_fa3cdde888bd95 6-7
+tests/FHIRBridge.Runtime.UnitTests/Workflows/LakeDestinationNodeExecutorTests.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 1,171-258
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_102cddd76c43e9::t_fa3cdde888bd95 25-28,43-49,75-77,82-88,140-143
+src/FHIRBridge.Application/Services/Transforms/Nodes/FhirComplexTypeNodes.cs
+  s_102cddd76c43e9::t_fa3cdde888bd95 147-150,156-160,168-201,207-228,237-239,242-281,283-288,291-301,304-308,315-333,346-347,349-356,364,366,368-373,375,427
+package-lock.json
+  s_102cddd76c43e9::t_c1a9a10dca1b23 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "a970f1f265c6a1b3b311bc24a376b326f17e1674",
+  "prompts": {},
+  "sessions": {
+    "s_102cddd76c43e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "267708a9-2483-411a-abaf-536b681fbfb5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

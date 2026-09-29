@@ -1,0 +1,81 @@
+src/FHIRBridge.Infrastructure/Destinations/MappedCosmosDbFabricDestinationWriter.cs
+  s_d8c85374db9f6f::t_5063320cc23b35 41-48,79,125,140-152,168-258,265-271,273-274,276,282,285,332-351
+src/FHIRBridge.Application/DTOs/CosmosDbFabricConnectionTestRequest.cs
+  s_d8c85374db9f6f::t_5063320cc23b35 1-37
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d8c85374db9f6f::t_606263089899d0 585-588
+portal/src/app/components/nodes-v2/transform-node/transform-node.component.ts
+  s_d8c85374db9f6f::t_657818f3dbacec 32-39
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/cosmos-db-fabric-destination-form.component.html
+  s_d8c85374db9f6f::t_5063320cc23b35 107-135,141-171
+src/FHIRBridge.Infrastructure/Destinations/Fabric/CosmosDbFabricDestinationSettings.cs
+  s_d8c85374db9f6f::t_5063320cc23b35 23-24,26-51,114-121,135-163
+src/FHIRBridge.Application/Abstractions/Destinations/ICosmosDbFabricDestinationConnectionTestService.cs
+  s_d8c85374db9f6f::t_5063320cc23b35 1-15
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_d8c85374db9f6f::t_b6fe95bfeac6da 790-796,799
+  s_d8c85374db9f6f::t_e91ce6e5901e04 1183
+  s_d8c85374db9f6f::t_c5595c42f34e1a 1011-1034
+  s_d8c85374db9f6f::t_4f0ad3482eec21 806
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_d8c85374db9f6f::t_5063320cc23b35 84-87,105-108
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-target-card.component.ts
+  s_d8c85374db9f6f::t_17a3928b106eca 80-88
+  s_d8c85374db9f6f::t_b8121622298715 90-92,96-98,103
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_d8c85374db9f6f::t_1841abd49b3c0f 121-134
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d8c85374db9f6f::t_3bac2443a9620e 5813-5819
+  s_d8c85374db9f6f::t_91f0f4d76423fb 2124-2128
+  s_d8c85374db9f6f::t_bacc91f3d6110f 1591-1598
+  s_d8c85374db9f6f::t_13cf23ec8eb6b5 2080-2083
+  s_d8c85374db9f6f::t_1a6f31cd488660 2699-2713
+  s_d8c85374db9f6f::t_33a160f7ed56a0 56
+  s_d8c85374db9f6f::t_bf97b2ede97946 5375
+  s_d8c85374db9f6f::t_6a057303ac11e6 5397-5401
+  s_d8c85374db9f6f::t_aab3431f52b2eb 2719
+  s_d8c85374db9f6f::t_a342fc0895d0f2 1339-1342
+  s_d8c85374db9f6f::t_74f95f151aa188 5542-5562
+src/Api/FHIRBridge.Api/Controllers/V1/DestinationSchemaController.cs
+  s_d8c85374db9f6f::t_83613e20f870cb 1,26,35-36,45
+  s_d8c85374db9f6f::t_f78c8fdb9f6295 203-220
+tests/FHIRBridge.UnitTests/Destinations/Fabric/CosmosDbFabricDestinationSettingsTests.cs
+  s_d8c85374db9f6f::t_e405ec7fd5d0cc 173-284
+  s_d8c85374db9f6f::t_5063320cc23b35 1
+src/FHIRBridge.Infrastructure/Destinations/CosmosDbFabricDestinationConnectionTestService.cs
+  s_d8c85374db9f6f::t_5063320cc23b35 1-175
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_d8c85374db9f6f::t_e91ce6e5901e04 149
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/destination-form-api.ts
+  s_d8c85374db9f6f::t_5063320cc23b35 106-127
+portal/src/app/core/api-endpoints.ts
+  s_d8c85374db9f6f::t_5063320cc23b35 154-156
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/cosmos-db-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_5063320cc23b35 4,14-17,29-32,34,40-43,67-68,70-72,79-98,110-128,181,185-237
+tests/FHIRBridge.UnitTests/Destinations/Fabric/MappedCosmosDbFabricDestinationWriterTests.cs
+  s_d8c85374db9f6f::t_5dd4c644731d03 1,201-253
+  s_d8c85374db9f6f::t_5063320cc23b35 52,66,80,96,110,124-125
+src/FHIRBridge.Infrastructure/Destinations/Fabric/CosmosDbFabricClientFactory.cs
+  s_d8c85374db9f6f::t_5063320cc23b35 22-28,70-78
+src/FHIRBridge.Infrastructure/Destinations/Fabric/FabricEnums.cs
+  s_d8c85374db9f6f::t_5063320cc23b35 99-137
+portal/src/app/services/destination-schema.service.ts
+  s_d8c85374db9f6f::t_52eda9218ca888 367-379
+  s_d8c85374db9f6f::t_b5f56599c627d1 211-231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0ec0228fde717dbef4d2a12e7598e160bf37f459",
+  "prompts": {},
+  "sessions": {
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
