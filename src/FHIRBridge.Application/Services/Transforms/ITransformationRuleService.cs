@@ -1,4 +1,4 @@
-using FHIRBridge.Application.DTOs.Transforms;
+﻿using FHIRBridge.Application.DTOs.Transforms;
 using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services.Transforms;
@@ -34,6 +34,14 @@ public interface ITransformationRuleService
     /// (its attach call failed, or it was written before the id had propagated) is invisible to the executor's
     /// workflow-scoped resolution and so silently never transforms anything, with the wizard still showing it
     /// as configured. Rules already belonging to a workflow are skipped, never re-pointed.</summary>
+    /// <summary>Deletes the caller's own pending (unattached) Workflow-scope rules for the given
+    /// destination types — called when the destination node they were authored against is removed from an
+    /// unsaved canvas and no other node of that type remains to own them. Returns how many were removed.</summary>
+    /// <remarks>Deliberately narrow: it never touches an ATTACHED rule (those belong to a saved workflow,
+    /// not to the canvas) and never touches another author's drafts.</remarks>
+    Task<int> DeletePendingRulesAsync(
+        IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken = default);
+
     Task<int> AttachPendingRulesToWorkflowAsync(
         Guid workflowId,
         IReadOnlyCollection<DestinationType> destinationTypes,

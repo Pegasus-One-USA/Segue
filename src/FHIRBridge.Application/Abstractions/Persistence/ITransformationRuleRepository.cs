@@ -1,4 +1,4 @@
-using FHIRBridge.Domain.Entities;
+﻿using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Abstractions.Persistence;
@@ -60,8 +60,31 @@ public interface ITransformationRuleRepository
     /// <summary>Workflow-scoped rules authored before their workflow existed — Workflow scope with a null
     /// <c>ResourcePipelineRouteId</c>, which makes them inert until attached. See
     /// <c>ITransformationRuleService.AttachPendingRulesToWorkflowAsync</c>.</summary>
+    /// <param name="owner">
+    /// The provenance value (<c>CreatedBy</c>, i.e. <c>CurrentUserInfo.AuditName</c>) whose pending rules may
+    /// be returned. Pending rows carry no workflow and no node, so before this existed the ONLY filter was the
+    /// destination type — meaning a builder session abandoned months ago handed its rules to whoever next saved
+    /// a workflow writing to the same destination type, in a different workflow and under a different user.
+    /// CreatedBy is a REQUIRED column stamped by AuditingSaveChangesInterceptor from CurrentUserInfo.AuditName,
+    /// so no persisted rule is unowned and the narrowing leaves no gap. Note the grain: AuditName identifies a
+    /// USER, not a browser session, so one person with two builder tabs open on the same destination type still
+    /// shares pending rules between them — narrower than before, not zero.
+    /// Null <paramref name="owner"/> disables the check entirely, for callers with no user context.
+    /// </param>
     Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowRulesAsync(
-        IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken);
+        IReadOnlyCollection<DestinationType> destinationTypes, string? owner, CancellationToken cancellationToken);
+
+    /// <summary>Deletes the pending (unattached) Workflow-scope rules <paramref name="owner"/> authored against
+    /// the given destination types — what the builder calls when the destination node those rules were written
+    /// for is removed from the canvas and no other node of that type remains to own them.</summary>
+    /// <remarks>
+    /// Scoped by owner for the same reason the read is (see <see cref="GetPendingWorkflowRulesAsync"/>): an
+    /// unscoped delete would destroy another session's drafts rather than merely borrowing them, which is the
+    /// same defect with a worse ending. Attached rules are never touched — removing a node from an unsaved
+    /// canvas must not reach into a workflow that already persisted these rules.
+    /// </remarks>
+    Task<int> DeletePendingWorkflowRulesAsync(
+        IReadOnlyCollection<DestinationType> destinationTypes, string? owner, CancellationToken cancellationToken);
 
     /// <summary>The same pending (unattached) Workflow-scope rows as <see cref="GetPendingWorkflowRulesAsync"/>,
     /// but narrowed to ONE destination field the way the live tiers are — so a save-time check can answer "will
@@ -71,9 +94,14 @@ public interface ITransformationRuleRepository
     /// so treating a null route as "applies to anything" would fire one builder session's draft rules inside
     /// every other workflow) — <c>EffectiveRuleResolver</c> reaches this tier only when a caller explicitly
     /// opts in via its <c>includePendingWorkflowRules</c> flag, which the executors never do.</summary>
+    /// <param name="owner">Same ownership narrowing as <see cref="GetPendingWorkflowRulesAsync"/>, and needed
+    /// here for a second reason: this tier matches on destination type + resource type + destination field
+    /// alone, so a rule authored against a node that has since been DELETED is indistinguishable from one
+    /// authored against the node now occupying that column — which is how a freshly created mapping shows a
+    /// transformation nobody selected.</param>
     Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowScopedAsync(
         DestinationType destinationType, string resourceType, string destinationField, string? sourceSystem,
-        string? sourceField, CancellationToken cancellationToken);
+        string? sourceField, string? owner, CancellationToken cancellationToken);
 
     Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

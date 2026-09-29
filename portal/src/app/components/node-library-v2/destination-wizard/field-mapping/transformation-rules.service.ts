@@ -256,6 +256,19 @@ export class TransformationRulesService {
     return this.http.post<number>(qs ? `${url}?${qs}` : url, {});
   }
 
+  /** Discards this user's own pending (unattached) rules for the given destination types — called when the
+   *  destination node they were drafted against leaves the canvas and no other node of that type remains.
+   *  Without it the drafts outlive the node, and because the pending tier matches on destination type +
+   *  resource type + destination field alone, re-creating the same column on a NEW node silently re-applies a
+   *  transformation nobody selected. Never touches an attached rule, nor another author's drafts. */
+  deletePending(destinationTypes: DestinationType[]): Observable<number> {
+    const params = new URLSearchParams();
+    for (const destinationType of destinationTypes) params.append('destinationTypes', destinationType);
+    const qs = params.toString();
+    const url = TRANSFORMATION_RULES_ENDPOINTS.deletePending;
+    return this.http.delete<number>(qs ? `${url}?${qs}` : url);
+  }
+
   delete(ruleId: string): Observable<void> {
     return this.http.delete<void>(TRANSFORMATION_RULES_ENDPOINTS.delete(ruleId));
   }

@@ -107,10 +107,23 @@ describe('buildNodeDeletePlanV2', () => {
 
   it('reports transformation rules as a server-side leftover, since they are not on the canvas', () => {
     const graph = chainGraph();
-    expect(buildNodeDeletePlanV2('n3', graph.nodes, graph.edges)!.serverSideLeftovers.length).toBe(1);
-    // Not reported when the destination goes too — the whole pipeline is gone, so there is no
-    // surviving module the rules could still be reached from.
-    expect(buildNodeDeletePlanV2('n5', graph.nodes, graph.edges)!.serverSideLeftovers).toEqual([]);
+    const leftovers = buildNodeDeletePlanV2('n3', graph.nodes, graph.edges)!.serverSideLeftovers;
+    expect(leftovers.length).toBe(1);
+    expect(leftovers[0]).toContain('stay until deleted');
+  });
+
+  it('still warns when the destination itself goes, and says what happens to the drafts', () => {
+    // This used to report nothing at all, on the reasoning that "the whole pipeline is gone, so there is no
+    // surviving module the rules could still be reached from". That was wrong: deleting a canvas node does
+    // not delete the destination CONNECTION, so its Rules screen — and the rules on it — are still there.
+    // Deleting the destination is also the case users actually hit, and the one that left drafts behind to
+    // be re-applied to the next node mapped to the same column.
+    const graph = chainGraph();
+    const leftovers = buildNodeDeletePlanV2('n5', graph.nodes, graph.edges)!.serverSideLeftovers;
+
+    expect(leftovers.length).toBe(1);
+    expect(leftovers[0]).toContain('already saved with this workflow stay');
+    expect(leftovers[0]).toContain('discarded');
   });
 
   it('takes the whole pipeline when the source goes', () => {

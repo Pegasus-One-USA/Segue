@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -34,7 +34,7 @@ public sealed class EffectiveRuleResolverTests
             .Setup(x => x.GetGlobalScopedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         repository
-            .Setup(x => x.GetPendingWorkflowScopedAsync(It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetPendingWorkflowScopedAsync(It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         return repository;
     }
@@ -54,7 +54,7 @@ public sealed class EffectiveRuleResolverTests
         repository
             .Setup(x => x.GetPendingWorkflowScopedAsync(
                 DestinationType.SqlServer, ResourceType, DestinationField, It.IsAny<string?>(), It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
         return repository;
     }
@@ -72,7 +72,7 @@ public sealed class EffectiveRuleResolverTests
         repository.Verify(
             x => x.GetPendingWorkflowScopedAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 

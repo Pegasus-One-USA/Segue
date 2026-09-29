@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Services.Transforms;
+﻿using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 
@@ -20,6 +20,7 @@ public sealed class NoOpEffectiveRuleResolver : IEffectiveRuleResolver
         string? sourceField,
         CancellationToken cancellationToken,
         bool workflowScopedOnly = false,
-        bool includePendingWorkflowRules = false) =>
+        bool includePendingWorkflowRules = false,
+        string? pendingOwner = null) =>
         Task.FromResult<IReadOnlyList<TransformationRule>>([]);
 }

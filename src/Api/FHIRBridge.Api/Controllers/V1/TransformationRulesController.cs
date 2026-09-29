@@ -107,6 +107,30 @@ public sealed class TransformationRulesController : ControllerBase
         return Ok(attached);
     }
 
+    /// <summary>Discards the caller's own pending (unattached) rules for the given destination types — what the
+    /// builder calls when the destination node those rules were drafted against is removed from an unsaved
+    /// canvas and no other node of that type is left to own them.</summary>
+    /// <remarks>
+    /// Without this, the drafts outlive the node: nothing deletes them, and because the pending tier matches on
+    /// destination type + resource type + destination field alone, re-creating the same column on a NEW node
+    /// silently re-applies a transformation the user never chose. Deliberately narrow — it removes only
+    /// unattached rows, and only ones this caller authored, so a canvas edit can never reach into a saved
+    /// workflow or another author's drafts.
+    /// </remarks>
+    [HttpDelete("pending")]
+    [StandardPermission(
+        PermissionGroupCode.TransformationRules,
+        PermissionActionCode.Delete,
+        description: "Delete a scoped transformation rule.")]
+    [ProducesResponseType(typeof(int), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeletePendingRules(
+        [FromQuery] DestinationType[]? destinationTypes,
+        CancellationToken cancellationToken)
+    {
+        var deleted = await _service.DeletePendingRulesAsync(destinationTypes ?? [], cancellationToken);
+        return Ok(deleted);
+    }
+
     [HttpDelete("{ruleId:guid}")]
     [StandardPermission(
         PermissionGroupCode.TransformationRules,

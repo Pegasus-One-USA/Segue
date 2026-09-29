@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 
@@ -45,7 +45,10 @@ public interface IEffectiveRuleResolver
         string? sourceField,
         CancellationToken cancellationToken,
         bool workflowScopedOnly = false,
-        bool includePendingWorkflowRules = false);
+        bool includePendingWorkflowRules = false,
+        // Whose pending rules may be seen. Only consulted when includePendingWorkflowRules is set, so
+        // the executors are unaffected. See ITransformationRuleRepository.GetPendingWorkflowScopedAsync.
+        string? pendingOwner = null);
 }
 
 public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
@@ -66,7 +69,8 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
         string? sourceField,
         CancellationToken cancellationToken,
         bool workflowScopedOnly = false,
-        bool includePendingWorkflowRules = false)
+        bool includePendingWorkflowRules = false,
+        string? pendingOwner = null)
     {
         if (resourcePipelineRouteId is not null)
         {
@@ -95,7 +99,8 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
             var pendingRules = PreferSourceFieldSpecific(
                 PreferSourceSpecific(
                     Enabled(await _repository.GetPendingWorkflowScopedAsync(
-                        destinationType, resourceType, destinationField, sourceSystem, sourceField, cancellationToken)),
+                        destinationType, resourceType, destinationField, sourceSystem, sourceField,
+                        pendingOwner, cancellationToken)),
                     sourceSystem),
                 sourceField);
             if (pendingRules.Count > 0)

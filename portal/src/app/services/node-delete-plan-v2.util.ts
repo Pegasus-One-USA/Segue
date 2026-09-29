@@ -258,9 +258,20 @@ export function buildNodeDeletePlanV2(
     const transformId = transformIdOf(node)!;
     const owner = destinationFor(node, nodes, edges);
 
-    if (transformId === 'transformation' && owner && !removedIds.has(owner.id)) {
+    // A transformation rule is written to the server the moment it is configured, so it never goes away just
+    // because the canvas changed. That was only said when the rule's DESTINATION survived the delete — but it
+    // is just as true when the destination is what you are deleting, and that case is the one users actually
+    // hit, so it used to remove a node and be told nothing at all.
+    //
+    // The two cases now differ in what happens, so they say different things. With the destination gone the
+    // canvas discards this user's unsaved drafts for that type (see canvas.component's confirmDelete), and
+    // only rules already attached to a saved workflow remain.
+    if (transformId === 'transformation' && owner) {
       serverSideLeftovers.push(
-        'Transformation rules are stored server-side, so they stay until deleted from the destination’s Rules screen.',
+        removedIds.has(owner.id)
+          ? 'Transformation rules already saved with this workflow stay until deleted from the destination’s '
+            + 'Rules screen. Rules drafted here but never saved are discarded with the destination.'
+          : 'Transformation rules are stored server-side, so they stay until deleted from the destination’s Rules screen.',
       );
     }
     if (!owner || removedIds.has(owner.id)) continue;

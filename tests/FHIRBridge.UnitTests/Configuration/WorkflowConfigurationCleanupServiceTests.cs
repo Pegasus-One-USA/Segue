@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -229,12 +229,16 @@ public sealed class WorkflowConfigurationCleanupServiceTests
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowRulesAsync(
-            IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken) =>
+            IReadOnlyCollection<DestinationType> destinationTypes, string? owner, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<int> DeletePendingWorkflowRulesAsync(
+            IReadOnlyCollection<DestinationType> destinationTypes, string? owner, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowScopedAsync(
             DestinationType destinationType, string resourceType, string destinationField, string? sourceSystem,
-            string? sourceField, CancellationToken cancellationToken) =>
+            string? sourceField, string? owner, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>

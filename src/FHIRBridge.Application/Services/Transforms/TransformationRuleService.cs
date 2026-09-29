@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.DTOs.Transforms;
@@ -15,19 +15,31 @@ public sealed class TransformationRuleService : ITransformationRuleService
     private readonly IConfigurationRepository _configurationRepository;
     private readonly IAppSecretAccessor? _secretAccessor;
 
+    // Who is asking. Pending (unattached) workflow rules carry no workflow and no node, so provenance is
+    // the only thing that distinguishes one builder session's drafts from another's — see
+    // ITransformationRuleRepository.GetPendingWorkflowRulesAsync. Optional so the non-HTTP callers that
+    // construct this service directly keep working; those never opt into the pending tier anyway.
+    private readonly ICurrentUserService? _currentUser;
+
     public TransformationRuleService(
         ITransformationRuleRepository repository,
         IEffectiveRuleResolver resolver,
         ITransformNodeRegistry nodeRegistry,
         IConfigurationRepository configurationRepository,
-        IAppSecretAccessor? secretAccessor = null)
+        IAppSecretAccessor? secretAccessor = null,
+        ICurrentUserService? currentUser = null)
     {
         _repository = repository;
         _resolver = resolver;
         _nodeRegistry = nodeRegistry;
         _configurationRepository = configurationRepository;
         _secretAccessor = secretAccessor;
+        _currentUser = currentUser;
     }
+
+    /// <summary>The provenance value a pending rule authored by this caller would carry — null when there
+    /// is no user context, which disables the ownership narrowing rather than matching nothing.</summary>
+    private string? PendingOwner => _currentUser?.CurrentUser.AuditName;
 
     public async Task<List<TransformationRuleDto>> ListRulesAsync(
         TransformScope? scope,
@@ -196,7 +208,7 @@ public sealed class TransformationRuleService : ITransformationRuleService
         IReadOnlyCollection<DestinationType> destinationTypes,
         CancellationToken cancellationToken = default)
     {
-        var pending = await _repository.GetPendingWorkflowRulesAsync(destinationTypes, cancellationToken);
+        var pending = await _repository.GetPendingWorkflowRulesAsync(destinationTypes, PendingOwner, cancellationToken);
 
         var attached = 0;
         foreach (var rule in pending)
@@ -302,9 +314,15 @@ public sealed class TransformationRuleService : ITransformationRuleService
     {
         var rules = await _resolver.ResolveAsync(
             destinationType, resourceType, destinationField, resourcePipelineRouteId, sourceSystem, sourceField,
-            cancellationToken, workflowScopedOnly, includePendingWorkflowRules);
+            cancellationToken, workflowScopedOnly, includePendingWorkflowRules, PendingOwner);
         return rules.Select(ToDto).ToList();
     }
+
+    public Task<int> DeletePendingRulesAsync(
+        IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken = default) =>
+        destinationTypes.Count == 0
+            ? Task.FromResult(0)
+            : _repository.DeletePendingWorkflowRulesAsync(destinationTypes, PendingOwner, cancellationToken);
 
     public IReadOnlyList<TransformNodeSchemaDto> GetNodeSchemas() => TransformNodeConfigSchemas.All;
 

@@ -544,7 +544,7 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), null, "Patient.name.family",
-                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
@@ -616,12 +616,12 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
-                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         resolver
             .Setup(r => r.ResolveAsync(
                 DestinationType.SqlServer, "Patient", "Text", It.IsAny<Guid?>(), null, "Patient.name.text",
-                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
@@ -693,12 +693,12 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
-                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         resolver
             .Setup(r => r.ResolveAsync(
                 DestinationType.SqlServer, "Patient", "Text", It.IsAny<Guid?>(), null, "Patient.name.text",
-                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
@@ -760,7 +760,7 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
-                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new HumanNameParsingNode()]);
@@ -816,7 +816,7 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
-                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
@@ -883,7 +883,7 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Guid?>(),
-                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new ConcatenationTemplatingNode()]);
@@ -937,7 +937,7 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 DestinationType.SqlServer, "Observation", "Value", It.IsAny<Guid?>(), null, "Observation.valueQuantity.value",
-                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new UnitConversionNode()]);
@@ -999,7 +999,7 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), null, "Patient.name.family",
-                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
 
         var registry = new TransformNodeRegistry([new StringNormalizationNode()]);
@@ -1378,7 +1378,7 @@ public sealed class MappingNodeExecutorTests
         resolver
             .Setup(r => r.ResolveAsync(
                 DestinationType.SqlServer, "Patient", "FamilyName", It.IsAny<Guid?>(), null, "Patient.name.family",
-                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>()))
+                It.IsAny<CancellationToken>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[failingTypedRule, succeedingUntypedRule]);
 
         var registry = new TransformNodeRegistry([new NumberCastNode(), new StringNormalizationNode()]);
