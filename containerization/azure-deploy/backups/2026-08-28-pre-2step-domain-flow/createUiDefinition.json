@@ -346,9 +346,9 @@
       "hapiTerminologyExternalAccess": "[steps('customDomains').hapiTerminologyExternalAccess]",
       "bindCustomDomainCertificates": "[steps('customDomains').bindCustomDomainCertificates]",
       "imageTag": "[steps('imageSettings').imageTag]",
-      "imageRegistryServer": "seguebuilds.azurecr.io",
-      "imageRegistryUsername": "one-click-pull",
-      "imageRegistryPassword": "401K4t2K0LniPnjsqlSjjXDaUof0VPIzLyDodMHeXgWv2WYgGmn2JQQJ99CHACYeBjFEqg7NAAABAZCREYP3"
+      "imageRegistryServer": "ghcr.io/pegasus-one-usa",
+      "imageRegistryUsername": "",
+      "imageRegistryPassword": ""
     }
   }
 }

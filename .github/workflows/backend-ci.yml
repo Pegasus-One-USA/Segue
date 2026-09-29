@@ -4,14 +4,14 @@ name: Backend CI
 # and secret scanning. Pair with a branch-protection rule on `main` requiring these checks.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, release]
     paths:
       - 'src/**'
       - 'tests/**'
       - 'FHIRBridge.sln'
       - '.github/workflows/backend-ci.yml'
   push:
-    branches: [main]
+    branches: [main, release]
     paths:
       - 'src/**'
       - 'tests/**'

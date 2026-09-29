@@ -73,13 +73,20 @@ declare -A IMAGES=(
 # segue-app bakes $TAG into its Angular build (footer version display) -
 # segue-worker has no UI, so it doesn't take this build-arg.
 UI_IMAGES=("segue-app")
+# Both .NET images stamp SourceRevisionId into their assemblies' InformationalVersion (see
+# Directory.Build.props) so a running binary can name the exact commit it was built from.
+DOTNET_IMAGES=("segue-app" "segue-worker")
+GIT_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
 
 for name in "${!IMAGES[@]}"; do
   dockerfile="${IMAGES[$name]}"
   full_tag="${PREFIX}${name}:${TAG}"
   build_args=()
   for ui in "${UI_IMAGES[@]}"; do
-    if [[ "$ui" == "$name" ]]; then build_args=(--build-arg "APP_VERSION=${TAG}"); fi
+    if [[ "$ui" == "$name" ]]; then build_args+=(--build-arg "APP_VERSION=${TAG}"); fi
+  done
+  for dn in "${DOTNET_IMAGES[@]}"; do
+    if [[ "$dn" == "$name" ]]; then build_args+=(--build-arg "SOURCE_REVISION_ID=${GIT_SHA}"); fi
   done
   echo "==> Building ${full_tag} (${dockerfile})"
   docker build -f "${REPO_ROOT}/${dockerfile}" -t "${full_tag}" "${build_args[@]}" "${REPO_ROOT}"
