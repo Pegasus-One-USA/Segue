@@ -582,6 +582,10 @@ public static class DependencyInjection
         services.AddScoped<IMongoDestinationConnectionTestService, Destinations.MongoDestinationConnectionTestService>();
         services.AddScoped<IBlobDestinationConnectionTestService, Destinations.BlobDestinationConnectionTestService>();
         services.AddScoped<IFabricDestinationConnectionTestService, Destinations.FabricDestinationConnectionTestService>();
+        // Cosmos DB in Fabric gets its OWN test rather than sharing the Fabric one: that probes OneLake and the
+        // Warehouse TDS endpoint, and Cosmos is a different service on a different endpoint with a different
+        // token audience — passing it through there would test something Cosmos never uses.
+        services.AddScoped<ICosmosDbFabricDestinationConnectionTestService, Destinations.CosmosDbFabricDestinationConnectionTestService>();
 
         foreach (var registration in MappingSchemaProviderFactory.DefaultRegistrations)
         {

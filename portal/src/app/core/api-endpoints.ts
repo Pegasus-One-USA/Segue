@@ -151,6 +151,9 @@ export const DESTINATION_ENDPOINTS = {
   mongoTest:           `${API_V1_BASE}/destinations/mongo-test`,
   blobTest:            `${API_V1_BASE}/destinations/blob-test`,
   fabricTest:          `${API_V1_BASE}/destinations/fabric-test`,
+  // Its own endpoint, not fabric-test: Cosmos speaks a different service on a different endpoint with a
+  // different token audience, and returns the database's containers rather than OneLake/Warehouse results.
+  cosmosTest:          `${API_V1_BASE}/destinations/cosmos-test`,
   // WorkflowEndpoints, not ConfigurationsController — same reasoning as SOURCE_CONNECTIONS_ENDPOINTS.usage: the
   // usage check has to walk every workflow's Destination nodes, which only the Runtime workflow store can answer.
   usage:               `${API_V1_BASE}/workflows/destination-usage`,

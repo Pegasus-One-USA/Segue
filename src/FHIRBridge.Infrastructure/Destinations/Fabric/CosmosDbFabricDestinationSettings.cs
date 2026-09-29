@@ -20,8 +20,35 @@ public sealed record CosmosDbFabricDestinationSettings(
     string? ClientId,
     string? ManagedIdentityClientId,
     string? AuthorityHost,
-    string? PartitionKeyPath)
+    string? PartitionKeyPath,
+    CosmosContainerCreationMode ContainerCreationMode)
 {
+    /// <summary>The partition key <see cref="CosmosContainerCreationMode.UseDefaultPartitionKey"/> falls back to.</summary>
+    internal const string DefaultPartitionKeyPath = "/id";
+
+    /// <summary>Whether a missing container may be created at all.</summary>
+    public bool CanCreateContainer => ContainerCreationMode != CosmosContainerCreationMode.Never;
+
+    /// <summary>
+    /// The partition key a newly created container gets, or null when this destination does not create them.
+    /// Never guesses: the default only applies under the mode that explicitly asks for it.
+    /// </summary>
+    public string? PartitionKeyPathForNewContainer => ContainerCreationMode switch
+    {
+        CosmosContainerCreationMode.UseConfiguredPartitionKey => PartitionKeyPath,
+        CosmosContainerCreationMode.UseDefaultPartitionKey => PartitionKeyPath ?? DefaultPartitionKeyPath,
+        _ => null,
+    };
+
+    /// <summary>
+    /// True when a container would be created on a key the user did not choose. The writer logs a warning for
+    /// this on every create — the choice is irreversible, so it belongs in the run's own record rather than
+    /// only on the screen where the box was ticked.
+    /// </summary>
+    public bool CreatesOnUnchosenPartitionKey =>
+        ContainerCreationMode == CosmosContainerCreationMode.UseDefaultPartitionKey
+            && string.IsNullOrWhiteSpace(PartitionKeyPath);
+
     /// <summary>Only a service principal resolves a Key Vault secret; managed identity carries none.</summary>
     public bool RequiresSecret => AuthMode == FabricAuthMode.ServicePrincipal;
 
@@ -84,6 +111,14 @@ public sealed record CosmosDbFabricDestinationSettings(
             Require(clientId, "client id (dest_cosmosFabricClientId)", destination.Name);
         }
 
+        var partitionKeyPath = NormalizePartitionKeyPath(
+            ConnectionMetadataReader.GetString(json, "dest_cosmosFabricPartitionKeyPath"));
+
+        var containerCreationMode = ParseContainerCreationMode(
+            ConnectionMetadataReader.GetString(json, "dest_cosmosFabricContainerCreationMode"),
+            partitionKeyPath,
+            destination.Name);
+
         return new CosmosDbFabricDestinationSettings(
             AuthMode: authMode,
             Endpoint: endpoint!,
@@ -97,8 +132,35 @@ public sealed record CosmosDbFabricDestinationSettings(
             ManagedIdentityClientId: NullIfBlank(
                 ConnectionMetadataReader.GetString(json, "dest_cosmosFabricManagedIdentityClientId")),
             AuthorityHost: NullIfBlank(ConnectionMetadataReader.GetString(json, "dest_cosmosFabricAuthorityHost")),
-            PartitionKeyPath: NormalizePartitionKeyPath(
-                ConnectionMetadataReader.GetString(json, "dest_cosmosFabricPartitionKeyPath")));
+            PartitionKeyPath: partitionKeyPath,
+            ContainerCreationMode: containerCreationMode);
+    }
+
+    /// <summary>
+    /// Reads the container-creation mode, refusing "create on my configured key" when no key is configured.
+    ///
+    /// <para>Refused rather than quietly falling back to <c>/id</c>: that fallback IS
+    /// <see cref="CosmosContainerCreationMode.UseDefaultPartitionKey"/>, and choosing it on the user's behalf
+    /// would commit them to an irreversible layout they did not pick — precisely what selecting the configured
+    /// mode says they wanted to avoid. The error names the fix.</para>
+    /// </summary>
+    private static CosmosContainerCreationMode ParseContainerCreationMode(
+        string? raw, string? partitionKeyPath, string destinationName)
+    {
+        var mode = Enum.TryParse<CosmosContainerCreationMode>(raw, ignoreCase: true, out var parsed)
+            ? parsed
+            : CosmosContainerCreationMode.Never;
+
+        if (mode == CosmosContainerCreationMode.UseConfiguredPartitionKey
+            && string.IsNullOrWhiteSpace(partitionKeyPath))
+        {
+            throw new InvalidOperationException(
+                $"Destination '{destinationName}' is set to create missing Cosmos DB containers using its "
+                    + "configured partition key, but no partition key path is set. Set one (e.g. '/id'), or "
+                    + "switch container creation off.");
+        }
+
+        return mode;
     }
 
     /// <summary>

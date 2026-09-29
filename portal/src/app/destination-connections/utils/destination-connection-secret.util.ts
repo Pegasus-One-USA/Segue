@@ -146,7 +146,7 @@ export function buildConnectionMetadata(
       ? ['dest_name', 'dest_cosmosFabricEndpoint', 'dest_cosmosFabricDatabase', 'dest_cosmosFabricContainer',
          'dest_cosmosFabricAuthMode', 'dest_cosmosFabricTenantId', 'dest_cosmosFabricClientId',
          'dest_cosmosFabricManagedIdentityClientId', 'dest_cosmosFabricAuthorityHost',
-         'dest_cosmosFabricPartitionKeyPath']
+         'dest_cosmosFabricPartitionKeyPath', 'dest_cosmosFabricContainerCreationMode']
     : kind === 'sql'
       ? ['dest_name', 'dest_engine', 'dest_server', 'dest_database', 'dest_auth', 'dest_username', 'dest_schema', 'dest_writeMode', 'dest_requireSsl']
       : kind === 'fhir'

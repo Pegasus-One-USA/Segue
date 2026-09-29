@@ -1,6 +1,7 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
+import { DestinationSchemaService } from '../../../../services/destination-schema.service';
 import { WizardDestinationFormApi } from './destination-form-api';
 
 /**
@@ -10,9 +11,10 @@ import { WizardDestinationFormApi } from './destination-form-api';
  * - **Auth beyond Entra.** Cosmos DB in Fabric relies exclusively on Microsoft Entra ID and built-in data-plane
  *   roles. There are no account keys or connection strings to paste, so this has the same two auth modes as the
  *   other Fabric surfaces rather than the wider set a self-hosted database would need.
- * - **Creating the container.** A container's partition key is fixed at creation and can never be changed, so
- *   choosing one here would silently commit the customer to a layout they did not pick, and the cost of the
- *   wrong choice is rebuilding the container and re-loading its data. The container must already exist.
+ * - **Creating a container on a key nobody chose.** A container's partition key is fixed at creation and can
+ *   never be changed, and the cost of a wrong one is rebuilding the container and re-loading its data. Creation
+ *   is therefore offered as an explicit three-way choice (never / use my key / use the default), not as a
+ *   silent convenience — see the containerCreationMode control.
  * - **A connection mode.** Fabric supports only Gateway connectivity, so there is nothing to choose — the
  *   backend pins it (the .NET SDK defaults to Direct, which cannot connect at all).
  */
@@ -24,11 +26,20 @@ import { WizardDestinationFormApi } from './destination-form-api';
   styleUrls: ['../destination-wizard.component.scss'],
 })
 export class CosmosDbFabricDestinationFormComponent implements WizardDestinationFormApi {
+  /** Discriminator for isCosmosDbFabricForm — see that guard's doc comment for why this is a marker rather
+   *  than a duck-type on testConnection/probeState. */
+  readonly kind = 'cosmosFabric' as const;
+
   private readonly fb = inject(FormBuilder);
+  private readonly schemaSvc = inject(DestinationSchemaService);
 
   /** True while the host is reusing a previously-saved connection unchanged — the client secret is never
    *  repopulated when patching from an existing connection, so requiring it would block reuse. */
   readonly reusingExisting = input<boolean>(false);
+
+  /** The saved destination's id when reusing one, so Test Connection can resolve its stored client secret
+   *  instead of demanding it be retyped (the form never re-displays a stored secret). */
+  readonly existingDestinationId = input<string | null>(null);
 
   /** Whether the Advanced disclosure is expanded. Collapsed by default: every control inside it has a working
    *  default, so a first-time connection never needs to open it. */
@@ -53,15 +64,37 @@ export class CosmosDbFabricDestinationFormComponent implements WizardDestination
     clientId: ['', []],
     managedIdentityClientId: ['', []],
     authorityHost: ['', []],
-    /** Recorded for documentation only — the backend never creates a container, so this is not used to make
-     *  one. It is here because a reader of the saved configuration otherwise has no record of which key the
-     *  target container was built with. */
+    /** The partition key a container is CREATED with under 'useConfiguredPartitionKey'. Under 'never' it is
+     *  documentation only — a record of which key the existing container was built with. */
     partitionKeyPath: ['', []],
+    /** What happens when a mapping's target container does not exist. Defaults to 'never', the only mode
+     *  under which FHIRBridge cannot commit the customer to an irreversible partition key. */
+    containerCreationMode: ['never', [Validators.required]],
   });
 
   readonly isServicePrincipal = computed(() => this.authModeValue() === 'servicePrincipal');
 
   private readonly authModeValue = signal<string>('managedIdentity');
+
+  private readonly creationModeValue = signal<string>('never');
+
+  /** The partition key used when nothing is configured — mirrors
+   *  CosmosDbFabricDestinationSettings.DefaultPartitionKeyPath, and shown in the warning so the user sees the
+   *  key they are accepting rather than just the words "the default". */
+  readonly defaultPartitionKeyPath = '/id';
+
+  /** True for the mode that creates containers on a key the user did not choose. Drives the warning banner:
+   *  the choice is irreversible, so it is stated at the point of selection rather than left in a tooltip. */
+  readonly warnsAboutDefaultPartitionKey = computed(
+    () => this.creationModeValue() === 'useDefaultPartitionKey'
+      && !this.cosmosForm.controls.partitionKeyPath.value?.trim());
+
+  /** Real container names from the last successful Test Connection — seeds the mapping canvas's picker, the
+   *  same role MongoDestinationFormComponent.collections plays. */
+  readonly containers = signal<string[]>([]);
+
+  readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  readonly probeError = signal<string | null>(null);
 
   constructor() {
     effect(() => {
@@ -74,6 +107,25 @@ export class CosmosDbFabricDestinationFormComponent implements WizardDestination
       this.authModeValue.set(mode ?? 'managedIdentity');
       this._syncAuthModeValidators(mode, this.reusingExisting());
     });
+
+    this.cosmosForm.controls.containerCreationMode.valueChanges.subscribe(mode => {
+      this.creationModeValue.set(mode ?? 'never');
+      this._syncCreationModeValidators(mode);
+    });
+
+    // A key typed after the mode was chosen flips the warning off, so the banner tracks the real state
+    // rather than only the moment the radio was clicked.
+    this.cosmosForm.controls.partitionKeyPath.valueChanges.subscribe(
+      () => this.creationModeValue.set(this.cosmosForm.controls.containerCreationMode.value ?? 'never'));
+  }
+
+  /** Mirrors CosmosDbFabricDestinationSettings.ParseContainerCreationMode: "create using my configured key"
+   *  requires a key. The backend REFUSES that combination rather than falling back to the default, so the
+   *  form must too — silently downgrading here would hand the user the very outcome the mode rejects. */
+  private _syncCreationModeValidators(mode: string | null): void {
+    const control = this.cosmosForm.controls.partitionKeyPath;
+    control.setValidators(mode === 'useConfiguredPartitionKey' ? [Validators.required] : []);
+    control.updateValueAndValidity({ emitEvent: false });
   }
 
   /** Mirrors CosmosDbFabricDestinationSettings.Parse: a service principal needs tenant id, client id and a
@@ -126,7 +178,61 @@ export class CosmosDbFabricDestinationFormComponent implements WizardDestination
       dest_cosmosFabricManagedIdentityClientId: v.managedIdentityClientId ?? '',
       dest_cosmosFabricAuthorityHost: v.authorityHost ?? '',
       dest_cosmosFabricPartitionKeyPath: v.partitionKeyPath ?? '',
+      dest_cosmosFabricContainerCreationMode: v.containerCreationMode ?? 'never',
     };
+  }
+
+  /** Endpoint + database are the minimum the probe needs; a saved destination can test on its stored secret. */
+  canTest(): boolean {
+    const v = this.cosmosForm.value;
+    return !!v.endpoint?.trim() && !!v.database?.trim();
+  }
+
+  /**
+   * Live connectivity check before saving: reads the database and lists its containers server-side (see
+   * CosmosDbFabricDestinationConnectionTestService).
+   *
+   * The container list is the substantive half. Under the default 'never' creation mode the target container
+   * must already exist, so a typo previously surfaced only as a failed pipeline run — this is what moves that
+   * to the wizard. Never blocks Save; `onSettled` lets the wizard's Next advance on success, mirroring
+   * MongoDestinationFormComponent.testConnection.
+   */
+  testConnection(onSettled?: (result: { connected: boolean }) => void): void {
+    if (!this.canTest()) return;
+    this.probeState.set('testing');
+    this.probeError.set(null);
+
+    const v = this.cosmosForm.value;
+    this.schemaSvc
+      .testCosmosDbFabric({
+        endpoint: v.endpoint ?? '',
+        database: v.database ?? '',
+        authMode: v.authMode ?? 'managedIdentity',
+        tenantId: v.tenantId ?? undefined,
+        clientId: v.clientId ?? undefined,
+        // Blank on a reused connection — the service then resolves the stored secret from the vault.
+        secret: v.secretValue ?? undefined,
+        managedIdentityClientId: v.managedIdentityClientId ?? undefined,
+        authorityHost: v.authorityHost ?? undefined,
+        destinationId: this.existingDestinationId() ?? undefined,
+      })
+      .subscribe({
+        next: res => {
+          this.containers.set(res.containers ?? []);
+          if (res.connected) {
+            this.probeState.set('ok');
+          } else {
+            this.probeState.set('error');
+            this.probeError.set(res.error ?? 'Connection failed.');
+          }
+          onSettled?.({ connected: res.connected });
+        },
+        error: err => {
+          this.probeState.set('error');
+          this.probeError.set(err?.error?.error ?? err?.error?.detail ?? err?.message ?? 'Connection failed.');
+          onSettled?.({ connected: false });
+        },
+      });
   }
 
   getMetadata(): { fields: Record<string, string>; secret?: string | null } | null {

@@ -77,21 +77,30 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
    *  does here: the first write CREATES that table and fixes its schema to the mapped columns. */
   /** Whether this card's name can be renamed in place.
    *
-   *  True where the name is something the user DECLARES — a Mongo collection and a Lakehouse Delta table are
-   *  both created by the first write, so the name is theirs to choose. False for SQL Server, MySQL,
-   *  PostgreSQL and Fabric Warehouse, where the table must already exist: renaming the card there would
-   *  repoint the mapping at a different real table while looking like a cosmetic edit, which is why those
-   *  pick from the probed list instead. */
+   *  True where the name is something the user STATES rather than picks off a probed list. For a Mongo
+   *  collection and a Lakehouse Delta table that is because the first write creates them, so the name is
+   *  theirs to choose. A Cosmos container is renameable for the opposite-sounding but equivalent reason:
+   *  it must already exist (its partition key is fixed at creation, so FHIRBridge never creates one — see
+   *  MappedCosmosDbFabricDestinationWriter), and there is no probe to list the containers that do, so
+   *  typing the name is the only way to name one. False for SQL Server, MySQL, PostgreSQL and Fabric
+   *  Warehouse, where the table must already exist AND is probeable: renaming the card there would repoint
+   *  the mapping at a different real table while looking like a cosmetic edit, which is why those pick from
+   *  the probed list instead. */
   readonly canRenameTarget = computed(
-    () => this.destType() === 'mongo' || this.fabricLandingMode() === 'lakehouseTable');
+    () => this.destType() === 'mongo'
+      || this.destType() === 'cosmosfabric'
+      || this.fabricLandingMode() === 'lakehouseTable');
 
   /** What the rename button calls the thing, so the tooltip matches what the user is actually naming. */
   readonly renameTargetNoun = computed(
-    () => this.destType() === 'mongo' ? 'collection' : 'table');
+    () => this.destType() === 'mongo' ? 'collection'
+      : this.destType() === 'cosmosfabric' ? 'container'
+      : 'table');
 
   readonly targetKindLabel = computed(() =>
     this.isSqlFamily() ? 'table'
       : this.destType() === 'mongo' ? 'collection'
+      : this.destType() === 'cosmosfabric' ? 'container'
       : this.destType() === 'blob' ? 'blob'
       : this.fabricLandingMode() === 'lakehouseTable' ? 'delta table'
       : 'file');

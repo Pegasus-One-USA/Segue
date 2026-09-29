@@ -1,4 +1,4 @@
-using FHIRBridge.Api.Security;
+﻿using FHIRBridge.Api.Security;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
@@ -23,6 +23,7 @@ public sealed class DestinationSchemaController : ControllerBase
     private readonly IMongoDestinationConnectionTestService _mongoConnectionTestService;
     private readonly IBlobDestinationConnectionTestService _blobConnectionTestService;
     private readonly IFabricDestinationConnectionTestService _fabricConnectionTestService;
+    private readonly ICosmosDbFabricDestinationConnectionTestService _cosmosConnectionTestService;
 
     public DestinationSchemaController(
         IDestinationSchemaService schemaService,
@@ -31,7 +32,8 @@ public sealed class DestinationSchemaController : ControllerBase
         IMedplumDestinationConnectionTestService medplumConnectionTestService,
         IMongoDestinationConnectionTestService mongoConnectionTestService,
         IBlobDestinationConnectionTestService blobConnectionTestService,
-        IFabricDestinationConnectionTestService fabricConnectionTestService)
+        IFabricDestinationConnectionTestService fabricConnectionTestService,
+        ICosmosDbFabricDestinationConnectionTestService cosmosConnectionTestService)
     {
         _schemaService = schemaService;
         _csvConnectionTestService = csvConnectionTestService;
@@ -40,6 +42,7 @@ public sealed class DestinationSchemaController : ControllerBase
         _mongoConnectionTestService = mongoConnectionTestService;
         _blobConnectionTestService = blobConnectionTestService;
         _fabricConnectionTestService = fabricConnectionTestService;
+        _cosmosConnectionTestService = cosmosConnectionTestService;
     }
 
     /// <summary>Tables/columns of an already-saved relational destination.</summary>
@@ -197,4 +200,22 @@ public sealed class DestinationSchemaController : ControllerBase
         [FromBody] FabricConnectionTestRequest request,
         CancellationToken cancellationToken)
         => Ok(await _fabricConnectionTestService.TestConnectionAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Tests an ad-hoc Cosmos DB in Fabric connection for a not-yet-saved <c>CosmosDbFabric</c> destination, and
+    /// returns the database's containers.
+    ///
+    /// <para>Separate from <c>fabric-test</c> deliberately: that probes OneLake and the Warehouse TDS endpoint,
+    /// which Cosmos uses neither of. The container list matters as much as the pass/fail — a container must
+    /// already exist unless the destination opts into creating them, so listing them here is what stops a typo
+    /// becoming a failed pipeline run.</para>
+    ///
+    /// <para>Always returns 200; failures come back as <c>connected:false</c> + <c>error</c>.</para>
+    /// </summary>
+    [HttpPost("cosmos-test")]
+    [ProducesResponseType(typeof(CosmosDbFabricConnectionTestResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestCosmosDbFabricConnection(
+        [FromBody] CosmosDbFabricConnectionTestRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _cosmosConnectionTestService.TestConnectionAsync(request, cancellationToken));
 }

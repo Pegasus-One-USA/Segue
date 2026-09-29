@@ -1,4 +1,4 @@
-using FHIRBridge.Application.DTOs;
+﻿using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
@@ -169,5 +169,117 @@ public sealed class CosmosDbFabricDestinationSettingsTests
         var settings = CosmosDbFabricDestinationSettings.Parse(Destination(ValidMetadata));
 
         settings.ResolveContainer(Mapping("Observation", destinationObject: "")).Should().Be("Observation");
+    }
+
+    /// <summary>
+    /// The default is the only mode under which FHIRBridge cannot commit the customer to a partition key at
+    /// all. A destination that says nothing about container creation must therefore not create them.
+    /// </summary>
+    [Fact]
+    public void Containers_are_never_created_unless_the_destination_opts_in()
+    {
+        var settings = CosmosDbFabricDestinationSettings.Parse(Destination(ValidMetadata));
+
+        settings.ContainerCreationMode.Should().Be(CosmosContainerCreationMode.Never);
+        settings.CanCreateContainer.Should().BeFalse();
+        settings.PartitionKeyPathForNewContainer.Should().BeNull();
+        settings.CreatesOnUnchosenPartitionKey.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Creating on the user's own key uses exactly that key — the whole point of the mode is that nothing is
+    /// guessed, so nothing here may substitute a default.
+    /// </summary>
+    [Fact]
+    public void Creating_on_a_configured_key_uses_that_key()
+    {
+        var settings = CosmosDbFabricDestinationSettings.Parse(Destination(
+            """
+            {"dest_cosmosFabricEndpoint":"https://abc.documents.fabric.microsoft.com",
+             "dest_cosmosFabricDatabase":"Clinical",
+             "dest_cosmosFabricContainerCreationMode":"useConfiguredPartitionKey",
+             "dest_cosmosFabricPartitionKeyPath":"/subject/reference"}
+            """));
+
+        settings.CanCreateContainer.Should().BeTrue();
+        settings.PartitionKeyPathForNewContainer.Should().Be("/subject/reference");
+        // The user chose it, so there is nothing to warn about.
+        settings.CreatesOnUnchosenPartitionKey.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Refused, NOT silently downgraded to the default key. Falling back would hand the user the exact outcome
+    /// selecting this mode says they want to avoid, and a partition key cannot be changed after creation.
+    /// </summary>
+    [Fact]
+    public void Creating_on_a_configured_key_is_refused_when_no_key_is_configured()
+    {
+        var parse = () => CosmosDbFabricDestinationSettings.Parse(Destination(
+            """
+            {"dest_cosmosFabricEndpoint":"https://abc.documents.fabric.microsoft.com",
+             "dest_cosmosFabricDatabase":"Clinical",
+             "dest_cosmosFabricContainerCreationMode":"useConfiguredPartitionKey"}
+            """));
+
+        parse.Should().Throw<InvalidOperationException>()
+            .WithMessage("*partition key*");
+    }
+
+    /// <summary>
+    /// The default-key mode falls back to /id and reports that nobody chose it, which is what drives the
+    /// writer's warning. The flag matters more than the path: it is the only signal that an irreversible
+    /// decision was made by a default rather than by a person.
+    /// </summary>
+    [Fact]
+    public void The_default_key_mode_uses_slash_id_and_says_it_was_not_chosen()
+    {
+        var settings = CosmosDbFabricDestinationSettings.Parse(Destination(
+            """
+            {"dest_cosmosFabricEndpoint":"https://abc.documents.fabric.microsoft.com",
+             "dest_cosmosFabricDatabase":"Clinical",
+             "dest_cosmosFabricContainerCreationMode":"useDefaultPartitionKey"}
+            """));
+
+        settings.CanCreateContainer.Should().BeTrue();
+        settings.PartitionKeyPathForNewContainer.Should().Be("/id");
+        settings.CreatesOnUnchosenPartitionKey.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A key configured alongside the default-key mode still wins — the mode says "a default is acceptable",
+    /// not "ignore what I typed". Nothing is then unchosen, so no warning is raised.
+    /// </summary>
+    [Fact]
+    public void A_configured_key_beats_the_default_even_under_the_default_mode()
+    {
+        var settings = CosmosDbFabricDestinationSettings.Parse(Destination(
+            """
+            {"dest_cosmosFabricEndpoint":"https://abc.documents.fabric.microsoft.com",
+             "dest_cosmosFabricDatabase":"Clinical",
+             "dest_cosmosFabricContainerCreationMode":"useDefaultPartitionKey",
+             "dest_cosmosFabricPartitionKeyPath":"resourceType"}
+            """));
+
+        // Also confirms the leading slash is added, as it is for every other path.
+        settings.PartitionKeyPathForNewContainer.Should().Be("/resourceType");
+        settings.CreatesOnUnchosenPartitionKey.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// An unrecognized mode falls back to Never rather than to a creating one. A destination saved by a newer
+    /// portal, or hand-edited, must not start creating containers because this could not read its setting.
+    /// </summary>
+    [Fact]
+    public void An_unrecognized_creation_mode_falls_back_to_never_creating()
+    {
+        var settings = CosmosDbFabricDestinationSettings.Parse(Destination(
+            """
+            {"dest_cosmosFabricEndpoint":"https://abc.documents.fabric.microsoft.com",
+             "dest_cosmosFabricDatabase":"Clinical",
+             "dest_cosmosFabricContainerCreationMode":"createEverythingPlease"}
+            """));
+
+        settings.ContainerCreationMode.Should().Be(CosmosContainerCreationMode.Never);
+        settings.CanCreateContainer.Should().BeFalse();
     }
 }

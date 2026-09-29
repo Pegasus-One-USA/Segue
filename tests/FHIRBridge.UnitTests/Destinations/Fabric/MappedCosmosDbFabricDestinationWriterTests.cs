@@ -1,3 +1,4 @@
+﻿using System.Text.Json.Nodes;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -48,7 +49,7 @@ public sealed class MappedCosmosDbFabricDestinationWriterTests
             Record(new() { ["GivenName"] = "Franklin" }), keyField: null);
 
         document["id"].Should().NotBeNull();
-        document["id"]!.GetValue<string>().Should().NotBeEmpty();
+        document["id"].Should().BeOfType<string>().Which.Should().NotBeEmpty();
     }
 
     /// <summary>
@@ -62,7 +63,7 @@ public sealed class MappedCosmosDbFabricDestinationWriterTests
             Record(new() { ["SourceResourceId"] = "patient-42", ["GivenName"] = "Franklin" }),
             keyField: "SourceResourceId");
 
-        document["id"]!.GetValue<string>().Should().Be("patient-42");
+        document["id"].Should().Be("patient-42");
     }
 
     /// <summary>
@@ -76,7 +77,7 @@ public sealed class MappedCosmosDbFabricDestinationWriterTests
             Record(new() { ["id"] = "chosen-by-mapping", ["SourceResourceId"] = "patient-42" }),
             keyField: "SourceResourceId");
 
-        document["id"]!.GetValue<string>().Should().Be("chosen-by-mapping");
+        document["id"].Should().Be("chosen-by-mapping");
     }
 
     /// <summary>
@@ -92,7 +93,7 @@ public sealed class MappedCosmosDbFabricDestinationWriterTests
         var second = MappedCosmosDbFabricDestinationWriter.ToJsonDocument(
             Record(new() { ["GivenName"] = "Franklin" }), keyField: null);
 
-        first["id"]!.GetValue<string>().Should().NotBe(second["id"]!.GetValue<string>());
+        first["id"].Should().NotBe(second["id"]);
     }
 
     /// <summary>
@@ -106,7 +107,7 @@ public sealed class MappedCosmosDbFabricDestinationWriterTests
             Record(new() { ["SourceResourceId"] = null, ["GivenName"] = "Franklin" }),
             keyField: "SourceResourceId");
 
-        document["id"]!.GetValue<string>().Should().NotBeEmpty();
+        document["id"].Should().BeOfType<string>().Which.Should().NotBeEmpty();
     }
 
     /// <summary>
@@ -120,8 +121,8 @@ public sealed class MappedCosmosDbFabricDestinationWriterTests
         var document = MappedCosmosDbFabricDestinationWriter.ToJsonDocument(
             Record(new() { ["GivenName"] = "Franklin", ["Age"] = 42 }), keyField: null);
 
-        document["GivenName"]!.GetValue<string>().Should().Be("Franklin");
-        document["Age"]!.GetValue<string>().Should().Be("42");
+        document["GivenName"].Should().Be("Franklin");
+        document["Age"].Should().Be("42");
     }
 
     /// <summary>
@@ -196,5 +197,58 @@ public sealed class MappedCosmosDbFabricDestinationWriterTests
             Field("ContactId", isUpsertKey: true, destinationObject: "PatientContacts"));
 
         MappedCosmosDbFabricDestinationWriter.ResolveUpsertKeyField(mapping).Should().BeNull();
+    }
+
+    /// <summary>
+    /// The document must contain no System.Text.Json node types at all.
+    ///
+    /// <para>The Cosmos SDK serializes items with NEWTONSOFT, which walks a JsonObject as an IDictionary and
+    /// follows every child's Parent back to the root — "Self referencing loop detected for property 'Parent'".
+    /// It only surfaces against a real container, so this asserts the property that prevents it rather than the
+    /// symptom: every value is a plain CLR type both serializers agree on.</para>
+    /// </summary>
+    [Fact]
+    public void A_document_carries_no_system_text_json_nodes()
+    {
+        var address = JsonNode.Parse("""[{"city":"Boston","line":["1 Main St"]}]""");
+
+        var document = MappedCosmosDbFabricDestinationWriter.ToJsonDocument(
+            Record(new Dictionary<string, object?> { ["Address"] = address }), keyField: null);
+
+        document.Values.Should().NotContain(value => value is JsonNode);
+    }
+
+    /// <summary>
+    /// A field routed through a Transformation node arrives as a LIVE JsonNode rather than as the raw JSON text
+    /// an ordinary StoreJson field carries. Both must land as the same JSON text, so a transform in the graph
+    /// cannot change what is stored.
+    /// </summary>
+    [Fact]
+    public void A_live_json_node_is_stored_as_its_json_text()
+    {
+        const string json = """{"city":"Boston"}""";
+
+        var fromTransform = MappedCosmosDbFabricDestinationWriter.ToJsonDocument(
+            Record(new Dictionary<string, object?> { ["Address"] = JsonNode.Parse(json) }), keyField: null);
+
+        var fromMapping = MappedCosmosDbFabricDestinationWriter.ToJsonDocument(
+            Record(new Dictionary<string, object?> { ["Address"] = json }), keyField: null);
+
+        fromTransform["Address"].Should().Be(json);
+        fromTransform["Address"].Should().Be(fromMapping["Address"]);
+    }
+
+    /// <summary>
+    /// A JsonValue holding a string stores the bare value, not a quoted one. ToJsonString() would write
+    /// "\"Smith\"" into the document — visible only once someone read the data back.
+    /// </summary>
+    [Fact]
+    public void A_scalar_json_value_is_stored_unquoted()
+    {
+        var document = MappedCosmosDbFabricDestinationWriter.ToJsonDocument(
+            Record(new Dictionary<string, object?> { ["LastName"] = JsonValue.Create("Smith") }),
+            keyField: null);
+
+        document["LastName"].Should().Be("Smith");
     }
 }

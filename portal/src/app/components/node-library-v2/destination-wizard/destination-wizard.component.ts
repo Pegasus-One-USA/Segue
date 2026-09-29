@@ -53,6 +53,7 @@ import {
   WizardDestinationFormApi,
   isSqlFamilyForm,
   isFabricForm,
+  isCosmosDbFabricForm,
   isMongoForm,
 } from './destination-forms/destination-form-api';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
@@ -1335,6 +1336,10 @@ export class DestinationWizardComponent implements OnInit {
   // additional resources.
   readonly mongoCollections = signal<string[]>([]);
 
+  /** Real container names from the Cosmos form's last successful Test Connection — seeds the mapping canvas's
+   *  "+ Add a container…" picker, the same role mongoCollections() plays for Mongo. */
+  readonly cosmosContainers = signal<string[]>([]);
+
   // ── extra target tables (child tables added alongside a group's primary table) ──
   // Keyed by data-group name; each entry is a list of additional already-probed SQL
   // table full-names the user chose to also map into for that same group's canvas
@@ -1583,7 +1588,14 @@ export class DestinationWizardComponent implements OnInit {
     ]);
     const known = this.isMongo()
       ? this.mongoCollections()
-      : this.sqlTables().map((t) => t.fullName);
+      // Cosmos containers come from its own Test Connection, the same way Mongo's collections do. Also not
+      // gated through hasSqlTables(): unlike a Mongo collection a Cosmos container is NOT always created on
+      // first write (that is opt-in, since its partition key is irreversible), but the right response to an
+      // unlisted name is still to let the user type it — the writer's own error names the container and the
+      // database far better than a greyed-out picker would.
+      : this.isCosmosFabric()
+        ? this.cosmosContainers()
+        : this.sqlTables().map((t) => t.fullName);
     return known.filter((t) => !used.has(t));
   };
 
@@ -2065,6 +2077,10 @@ export class DestinationWizardComponent implements OnInit {
   /** Microsoft Fabric (Warehouse) — a real relational target, so it is included in isSql() below and gets the
    *  live schema probe and table picker. Distinct from isFabric(), which is the FILE surface. */
   readonly isFabricWarehouse = computed(() => this.destType() === 'fabricwarehouse');
+  /** Cosmos DB in Fabric. Grouped with the other Fabric surfaces in the picker, but its own destination
+   *  type with its own metadata shape (a Cosmos endpoint and database, not a workspace and item), so it is
+   *  never folded into isFabric(). */
+  readonly isCosmosFabric = computed(() => this.destType() === 'cosmosfabric');
   /** General-purpose outbound REST API — same file-shaped mapping (typed target fields, no live schema) as
    *  isDataLake()/isBlob(). */
   readonly isApiEndpoint = computed(() => this.destType() === 'apiendpoint');
@@ -2105,9 +2121,11 @@ export class DestinationWizardComponent implements OnInit {
                         ? 'Microsoft Fabric (OneLake)'
                         : this.destType() === 'fabricwarehouse'
                           ? 'Microsoft Fabric (Warehouse)'
-                          : this.destType() === 'apiendpoint'
-                            ? 'API Endpoint'
-                            : 'CSV',
+                          : this.destType() === 'cosmosfabric'
+                            ? 'Cosmos DB in Fabric'
+                            : this.destType() === 'apiendpoint'
+                              ? 'API Endpoint'
+                              : 'CSV',
   );
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -2678,11 +2696,27 @@ export class DestinationWizardComponent implements OnInit {
         });
         return;
       }
+      // Cosmos: same "test then advance" gate. Unlike Mongo a missing container is NOT always created on
+      // first write, so reaching the database and seeing its real container list here is the difference
+      // between catching a typo now and catching it as a failed pipeline run.
+      if (isCosmosDbFabricForm(form) && form.probeState() !== 'ok') {
+        form.testConnection((result) => {
+          if (!result.connected) return;
+          this.cosmosContainers.set(form.containers());
+          const metadata = form.getMetadata();
+          if (metadata)
+            this.provisionDestinationConnection(metadata, () =>
+              this._advancePastStep1(),
+            );
+        });
+        return;
+      }
       // CSV/Blob (and SQL/Mongo once already probed 'ok'): provision (create/update) the real
       // DestinationConfiguration here, immediately on leaving Configure, then advance once it succeeds.
       // Mongo reaches here when the user already clicked Test Connection manually before Next — the branch
       // above only fires on a stale/idle probe, so this is the other place collections needs copying.
       if (isMongoForm(form)) this.mongoCollections.set(form.collections());
+      if (isCosmosDbFabricForm(form)) this.cosmosContainers.set(form.containers());
       // SQL: same "already tested manually before Next" case, and the same fix shape — the branch above only
       // fires on a stale/idle probe, so a user who clicks the form's own Test Connection button (getting
       // form.probeState() to 'ok' there) and only then clicks Next falls straight through to here, and this
@@ -5338,6 +5372,7 @@ export class DestinationWizardComponent implements OnInit {
     const isDataLake = this.isDataLake();
     const isFabric = this.isFabric();
     const isFabricWarehouse = this.isFabricWarehouse();
+    const isCosmosFabric = this.isCosmosFabric();
     const isApiEndpoint = this.isApiEndpoint();
     const name =
       metadata.fields['dest_name'] ||
@@ -5359,9 +5394,11 @@ export class DestinationWizardComponent implements OnInit {
                       ? 'Microsoft Fabric Destination'
                       : isFabricWarehouse
                         ? 'Microsoft Fabric Warehouse Destination'
-                        : isApiEndpoint
-                          ? 'API Endpoint Destination'
-                          : 'File Destination');
+                        : isCosmosFabric
+                          ? 'Cosmos DB in Fabric Destination'
+                          : isApiEndpoint
+                            ? 'API Endpoint Destination'
+                            : 'File Destination');
     const secretName = newSecretName(name);
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
     const request: CreateDestinationConfigurationRequest = isSql
@@ -5498,6 +5535,27 @@ export class DestinationWizardComponent implements OnInit {
                   target: metadata.fields['dest_fabricWorkspace'] || null,
                   // Managed identity resolves no Key Vault secret at all; the form's getMetadata()
                   // already returns '' for it (see FabricDestinationSettings.RequiresSecret).
+                  inlineSecret: metadata.secret ?? '',
+                  connectionMetadataJson: JSON.stringify(metadata.fields),
+                  deIdentificationProfileId,
+                }
+              : isCosmosFabric
+              ? {
+                  name,
+                  // Its own type, NOT one of the two DataFabric* ones: Cosmos addresses an endpoint and
+                  // database rather than a workspace and item, and the API validates it against
+                  // ValidateCosmosDbFabricMetadata. Without this branch a Cosmos destination fell through to
+                  // the Csv default at the end of this chain and was rejected for a missing dest_filePattern
+                  // — the same failure the Warehouse branch above documents, for the same reason.
+                  destinationType: 'CosmosDbFabric',
+                  keyVaultName: 'workflow-secrets',
+                  secretName,
+                  // The container is the target, the same dual read the Fabric branches do for their
+                  // workspace — CosmosDbFabricDestinationSettings.ResolveContainer falls back to the mapping
+                  // profile, so a blank container here is the normal case rather than a missing value.
+                  target: metadata.fields['dest_cosmosFabricContainer'] || null,
+                  // Managed identity resolves no Key Vault secret at all; the form's getMetadata() already
+                  // returns '' for it (see CosmosDbFabricDestinationSettings.RequiresSecret).
                   inlineSecret: metadata.secret ?? '',
                   connectionMetadataJson: JSON.stringify(metadata.fields),
                   deIdentificationProfileId,
@@ -5752,11 +5810,13 @@ export class DestinationWizardComponent implements OnInit {
                             ? 'dest-datalake-webhook'
                             : type === 'fabricwarehouse'
                               ? 'dest-fabric-warehouse'
-                              : type === 'fabric'
-                                ? 'dest-fabric'
-                                : type === 'apiendpoint'
-                                  ? 'dest-apiendpoint'
-                                  : 'dest-csv',
+                              : type === 'cosmosfabric'
+                                ? 'dest-fabric-cosmos'
+                                : type === 'fabric'
+                                  ? 'dest-fabric'
+                                  : type === 'apiendpoint'
+                                    ? 'dest-apiendpoint'
+                                    : 'dest-csv',
         status: 'enabled',
         config,
       });

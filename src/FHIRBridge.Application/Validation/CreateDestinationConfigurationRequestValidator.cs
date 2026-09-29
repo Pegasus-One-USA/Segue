@@ -118,6 +118,20 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
 
         RequireField(context, metadata, "dest_cosmosFabricDatabase", "Database name is required.");
 
+        // "Create using my configured partition key" needs one. Mirrors
+        // CosmosDbFabricDestinationSettings.ParseContainerCreationMode, which REFUSES rather than falling back
+        // to the default: that fallback is a different mode, and picking it silently would commit the customer
+        // to an irreversible container layout they explicitly declined.
+        var creationMode = metadata.GetValueOrDefault("dest_cosmosFabricContainerCreationMode", "never");
+        if (string.Equals(creationMode, "useConfiguredPartitionKey", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(metadata.GetValueOrDefault("dest_cosmosFabricPartitionKeyPath")))
+        {
+            context.AddFailure(
+                "dest_cosmosFabricPartitionKeyPath",
+                "A partition key path is required when containers are created using your own key. Set one "
+                    + "(e.g. '/id'), or choose a different container-creation option.");
+        }
+
         // Entra only — Cosmos DB in Fabric has no account keys, so there is no third mode to accept here.
         var authMode = metadata.GetValueOrDefault("dest_cosmosFabricAuthMode", "managedIdentity");
         if (string.Equals(authMode, "servicePrincipal", StringComparison.OrdinalIgnoreCase))

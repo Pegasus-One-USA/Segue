@@ -29,6 +29,14 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-fhir':        { abbr: 'AB',  color: '#00A89D' },
   'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
   'dest-azurefhir':   { abbr: 'AZF', color: '#0078D4' },
+  // Microsoft Fabric surfaces. Spelled out here rather than left to a fallback: this map has none, so a
+  // missing entry renders the node with no badge at all.
+  'dest-fabric':      { abbr: 'OLF', color: '#117865' },
+  'dest-fabric-lakehouse-table': { abbr: 'LAK', color: '#0F6B5C' },
+  'dest-fabric-warehouse': { abbr: 'FWH', color: '#0F6B5C' },
+  'dest-fabric-cosmos': { abbr: 'COS', color: '#117865' },
+  'dest-datalake-webhook': { abbr: 'DLW', color: '#7C3AED' },
+  'dest-apiendpoint': { abbr: 'API', color: '#DB2777' },
   'dest-csv':         { abbr: 'CSV', color: '#374151' },
   'dest-xlsx':        { abbr: 'XLS', color: '#217346' },
   'dest-ndjson':      { abbr: 'NDJ', color: '#475569' },

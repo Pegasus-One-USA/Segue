@@ -19,6 +19,13 @@ public interface ICosmosDbFabricClientFactory
         DestinationConfiguration destination,
         CosmosDbFabricDestinationSettings settings,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Builds a client for an UNSAVED destination — the wizard's Test Connection button, where there is no
+    /// destination row and therefore no Key Vault reference to resolve, so the typed secret is passed straight
+    /// through. Mirrors <c>IOneLakeClientFactory.GetWorkspaceAdHocAsync</c>, which exists for the same reason.
+    /// </summary>
+    CosmosClient GetClientAdHoc(CosmosDbFabricDestinationSettings settings, string? secret);
 }
 
 /// <inheritdoc />
@@ -59,6 +66,15 @@ internal sealed class CosmosDbFabricClientFactory : ICosmosDbFabricClientFactory
 
         return new CosmosClient(settings.Endpoint, BuildCredential(settings, secret), options);
     }
+
+    /// <inheritdoc />
+    public CosmosClient GetClientAdHoc(CosmosDbFabricDestinationSettings settings, string? secret)
+        // Same Gateway-mode requirement as the saved path above — an ad-hoc test that connected in Direct mode
+        // would be testing something the writer never does.
+        => new(
+            settings.Endpoint,
+            BuildCredential(settings, secret),
+            new CosmosClientOptions { ConnectionMode = ConnectionMode.Gateway });
 
     /// <summary>
     /// Same two-mode Entra dispatch the OneLake and Warehouse factories perform, kept deliberately in step with

@@ -38,6 +38,14 @@ public sealed class MappedCosmosDbFabricDestinationWriter : IConfiguredDestinati
     private readonly ICosmosDbFabricClientFactory _clientFactory;
     private readonly ILogger<MappedCosmosDbFabricDestinationWriter> _logger;
 
+    /// <summary>
+    /// The smallest autoscale maximum Cosmos DB accepts. An autoscale container scales between 10% and 100% of
+    /// this, so 1000 idles at 100 RU/s — the cheapest a created container can be while still satisfying
+    /// Fabric's autoscale-only rule. Whoever owns the data raises it in Fabric if the workload needs more;
+    /// FHIRBridge does not guess a capacity for a container it is creating on someone else's behalf.
+    /// </summary>
+    private const int MinimumAutoscaleMaxRuPerSecond = 1000;
+
     public MappedCosmosDbFabricDestinationWriter(
         ICosmosDbFabricClientFactory clientFactory,
         ILogger<MappedCosmosDbFabricDestinationWriter> logger)
@@ -68,7 +76,7 @@ public sealed class MappedCosmosDbFabricDestinationWriter : IConfiguredDestinati
         // Reporting "Connected" there would claim a connection that has not happened yet — the same reasoning
         // MappedMongoDestinationWriter documents for its own lazily-connecting driver.
         var container = await context.ReportConnectAsync(
-            () => GetContainerAsync(client, settings, containerName, destination, cancellationToken),
+            () => GetContainerAsync(client, settings, containerName, destination, _logger, cancellationToken),
             cancellationToken,
             detail: "Cosmos DB (Fabric)");
 
@@ -114,6 +122,7 @@ public sealed class MappedCosmosDbFabricDestinationWriter : IConfiguredDestinati
         CosmosDbFabricDestinationSettings settings,
         string containerName,
         DestinationConfiguration destination,
+        ILogger logger,
         CancellationToken cancellationToken)
     {
         var container = client.GetContainer(settings.Database, containerName);
@@ -128,12 +137,19 @@ public sealed class MappedCosmosDbFabricDestinationWriter : IConfiguredDestinati
         }
         catch (CosmosException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
-            throw new InvalidOperationException(
-                $"Destination '{destination.Name}': container '{containerName}' does not exist in Cosmos DB "
-                    + $"database '{settings.Database}'. Create it in Fabric before running this pipeline — "
-                    + "FHIRBridge does not create containers, because a container's partition key is chosen at "
-                    + "creation and cannot be changed afterwards.",
-                exception);
+            if (!settings.CanCreateContainer)
+            {
+                throw new InvalidOperationException(
+                    $"Destination '{destination.Name}': container '{containerName}' does not exist in Cosmos DB "
+                        + $"database '{settings.Database}'. Create it in Fabric before running this pipeline, or "
+                        + "set this destination to create missing containers — FHIRBridge does not create them by "
+                        + "default, because a container's partition key is chosen at creation and cannot be "
+                        + "changed afterwards.",
+                    exception);
+            }
+
+            return await CreateContainerAsync(
+                client, settings, containerName, destination, logger, cancellationToken);
         }
         catch (CosmosException exception) when (
             exception.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized)
@@ -150,24 +166,123 @@ public sealed class MappedCosmosDbFabricDestinationWriter : IConfiguredDestinati
     }
 
     /// <summary>
+    /// Creates a missing container, for a destination that opted into it.
+    ///
+    /// <para>The partition key is whatever <see cref="CosmosDbFabricDestinationSettings.PartitionKeyPathForNewContainer"/>
+    /// resolves — the user's configured path, or <c>/id</c> under the mode that explicitly accepts a default.
+    /// Every create is logged with the key it used, because the choice cannot be revisited: a container built on
+    /// the wrong key is replaced, not altered, and the run log is where someone investigating that later will
+    /// look. A create on a key the user did not choose is logged as a WARNING rather than information, since
+    /// that is the case most likely to be regretted.</para>
+    /// </summary>
+    private static async Task<Container> CreateContainerAsync(
+        CosmosClient client,
+        CosmosDbFabricDestinationSettings settings,
+        string containerName,
+        DestinationConfiguration destination,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var partitionKeyPath = settings.PartitionKeyPathForNewContainer!;
+
+        if (settings.CreatesOnUnchosenPartitionKey)
+        {
+            logger.LogWarning(
+                "Creating Cosmos DB container {Database}/{Container} for destination {DestinationId} with the "
+                    + "DEFAULT partition key {PartitionKeyPath}, which nobody chose for this data. A partition "
+                    + "key cannot be changed after creation: if this container is later queried by anything "
+                    + "other than id, or needs cross-document transactions, it has to be rebuilt and reloaded. "
+                    + "Set a partition key path on the destination to choose deliberately.",
+                settings.Database,
+                containerName,
+                destination.Id,
+                partitionKeyPath);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Creating Cosmos DB container {Database}/{Container} for destination {DestinationId} with "
+                    + "partition key {PartitionKeyPath}.",
+                settings.Database,
+                containerName,
+                destination.Id,
+                partitionKeyPath);
+        }
+
+        try
+        {
+            // CreateContainerIfNotExistsAsync rather than CreateContainerAsync: two resource types mapped to
+            // the same container can reach here concurrently, and losing that race must not fail the run.
+            //
+            // Autoscale is REQUIRED, not a preference. Cosmos DB in Fabric restricts accounts to autoscale
+            // offers, and omitting throughput entirely asks for a MANUAL one — which the service rejects with
+            // "Offer Type is restricted to Autoscale for your account", an error naming neither the container
+            // nor the setting that caused it. The minimum autoscale maximum (1000 RU/s, which idles down to
+            // 100) is used deliberately: this is a container FHIRBridge is creating on the customer's behalf,
+            // so it takes the smallest offer the service allows and leaves scaling up to whoever owns the
+            // bill. Autoscale means that costs nothing extra while the container is idle.
+            var database = client.GetDatabase(settings.Database);
+            var response = await database.CreateContainerIfNotExistsAsync(
+                new ContainerProperties(containerName, partitionKeyPath),
+                ThroughputProperties.CreateAutoscaleThroughput(MinimumAutoscaleMaxRuPerSecond),
+                cancellationToken: cancellationToken);
+
+            return response.Container;
+        }
+        catch (CosmosException exception) when (
+            exception.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized)
+        {
+            // Creating needs a strictly stronger role than writing, so this fails for identities that could
+            // otherwise run the pipeline perfectly well against an existing container.
+            throw new InvalidOperationException(
+                $"Destination '{destination.Name}': the configured identity reached Cosmos DB but was not "
+                    + $"allowed to create container '{containerName}' in database '{settings.Database}'. "
+                    + "Creating a container needs a higher data-plane role than writing to one — either grant "
+                    + "it in Fabric, or create the container there and set this destination back to not "
+                    + "creating them.",
+                exception);
+        }
+        catch (CosmosException exception) when (exception.StatusCode == HttpStatusCode.BadRequest)
+        {
+            // A 400 here is about the OFFER or the container definition, not about connectivity, and the SDK
+            // reports it as a wall of request-routing detail with the real sentence buried inside. Restated
+            // with the container named, since that is what the reader has to act on.
+            throw new InvalidOperationException(
+                $"Destination '{destination.Name}': Cosmos DB refused to create container '{containerName}' in "
+                    + $"database '{settings.Database}'. This is usually the throughput offer or the partition "
+                    + $"key path ('{partitionKeyPath}') rather than a connection problem. The underlying "
+                    + $"message was: {exception.ResponseBody}",
+                exception);
+        }
+    }
+
+    /// <summary>
     /// Builds one document, with the <c>id</c> Cosmos requires.
     ///
     /// <para>Values are written as JSON strings, matching what the mapping pipeline actually produces (see
     /// <see cref="MappedDestinationSerialization.GetCell"/>): every cell arrives already stringly-typed, so
     /// emitting numbers or booleans here would mean guessing at a type the pipeline did not assert.</para>
+    ///
+    /// <para><b>A plain Dictionary, deliberately — not a <c>JsonObject</c>.</b> The Cosmos SDK serializes items
+    /// with <b>Newtonsoft.Json</b>, which does not understand <c>System.Text.Json</c>'s node types: handed a
+    /// <see cref="JsonObject"/> it serializes it as an <c>IDictionary</c> and walks each child's <c>Parent</c>
+    /// back to the root, failing with "Self referencing loop detected for property 'Parent'". That is a
+    /// serializer mismatch rather than anything wrong with the document, and it surfaces only at write time
+    /// against a real container — so the document is built out of types both serializers agree on.</para>
     /// </summary>
-    internal static JsonObject ToJsonDocument(MappedDestinationRecord record, string? keyField)
+    internal static Dictionary<string, object?> ToJsonDocument(
+        MappedDestinationRecord record, string? keyField)
     {
-        var document = new JsonObject();
+        var document = new Dictionary<string, object?>(StringComparer.Ordinal);
 
         foreach (var (column, value) in record.Values)
         {
             // "id" is Cosmos's own document identifier. A mapping that targets it wins over the derived id
             // below — the customer has said explicitly what identifies the document.
-            document[column] = value is null ? null : JsonValue.Create(Stringify(value));
+            document[column] = value is null ? null : Stringify(value);
         }
 
-        if (document["id"] is null)
+        if (!document.TryGetValue("id", out var existingId) || existingId is null)
         {
             var keyValue = keyField is not null
                 && record.Values.TryGetValue(keyField, out var mapped)
@@ -214,6 +329,24 @@ public sealed class MappedCosmosDbFabricDestinationWriter : IConfiguredDestinati
             : null;
     }
 
-    private static string Stringify(object value)
-        => value as string ?? value.ToString() ?? string.Empty;
+    /// <summary>
+    /// A cell as the string this writer stores.
+    ///
+    /// <para>A <see cref="JsonNode"/> is serialized to its JSON text rather than left as a node. Most cells
+    /// arrive as raw JSON TEXT already (see <c>ArrayPolicy.StoreJson</c>), but a field routed through a
+    /// Transformation node arrives as a LIVE node instead — the two are indistinguishable downstream, and
+    /// letting the live one through is what produced Newtonsoft's self-referencing-loop failure. Converting
+    /// here means both shapes land in Cosmos as the same JSON text.</para>
+    /// </summary>
+    private static string Stringify(object value) => value switch
+    {
+        string text => text,
+        // ToJsonString(), not ToString(): for a JsonObject the two agree, but for a JsonValue holding a string
+        // ToString() returns the bare value while ToJsonString() returns it quoted. The bare form is what the
+        // rest of the pipeline stores for a scalar, so the node's own text is taken for objects and arrays and
+        // the scalar path is left to GetValue below.
+        JsonValue scalar => scalar.TryGetValue<string>(out var text) ? text : scalar.ToJsonString(),
+        JsonNode node => node.ToJsonString(),
+        _ => value.ToString() ?? string.Empty,
+    };
 }

@@ -96,3 +96,42 @@ public enum FabricTableWriteMode
     /// </summary>
     Upsert = 1,
 }
+
+/// <summary>
+/// What the Cosmos DB writer does when a mapping's target container does not exist.
+///
+/// <para>A container's partition key is fixed at creation and can NEVER be changed — the only remedy for a
+/// wrong one is creating a new container, copying the data across and deleting the old one. That is why this
+/// is a deliberate three-way choice rather than a boolean: the modes differ in who chooses that irreversible
+/// key, and the cost of getting it wrong is paid later, at scale, by whoever owns the data.</para>
+/// </summary>
+public enum CosmosContainerCreationMode
+{
+    /// <summary>
+    /// Never create. A missing container fails the run with an actionable message naming the container and
+    /// database. The safest mode and the default, because it is the only one under which FHIRBridge cannot
+    /// commit the customer to a partition key at all.
+    /// </summary>
+    Never = 0,
+
+    /// <summary>
+    /// Create a missing container using the partition key path configured on the destination. The key is the
+    /// user's own explicit choice, made once, so nothing is guessed — but it is applied automatically from then
+    /// on, which is what makes this useful for a pipeline that maps many resource types. Requires
+    /// <c>PartitionKeyPath</c>; without it the destination is refused at parse time rather than falling back to
+    /// a default, which would be <see cref="UseDefaultPartitionKey"/> by another name.
+    /// </summary>
+    UseConfiguredPartitionKey = 1,
+
+    /// <summary>
+    /// Create a missing container using <c>/id</c> when no partition key path is configured.
+    ///
+    /// <para><b>Chosen by the operator, not recommended as a default.</b> <c>/id</c> gives every document its
+    /// own logical partition: cross-document transactions become impossible and any query not filtered by id
+    /// fans out across every partition. It suits a test or a small, id-addressed collection, and it is a poor
+    /// fit for a large one queried by anything else. It is offered because the alternative — silently refusing
+    /// to run until someone visits Fabric — is its own kind of failure, but a configured key is better whenever
+    /// the query pattern is known.</para>
+    /// </summary>
+    UseDefaultPartitionKey = 2,
+}

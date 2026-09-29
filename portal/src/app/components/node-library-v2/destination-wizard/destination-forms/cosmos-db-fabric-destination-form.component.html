@@ -104,10 +104,68 @@
 
       <div class="dw-field">
         <label class="dw-label" for="dw-cos-partitionKey">Partition key path</label>
-        <input id="dw-cos-partitionKey" class="dw-input" formControlName="partitionKeyPath" placeholder="e.g. /resourceType" />
-        <span class="dw-hint">Recorded for reference only — this does not create or change a container. Noting the key the container was built with saves the next reader a trip to Fabric.</span>
+        <input id="dw-cos-partitionKey" class="dw-input" formControlName="partitionKeyPath" placeholder="e.g. /id" />
+        @if (showError('partitionKeyPath')) {
+          <span class="dw-error">A partition key path is required when creating containers with your own key.</span>
+        } @else {
+          <span class="dw-hint">Used when creating a missing container. Under "Never create", it is recorded for reference only.</span>
+        }
+      </div>
+    }
+
+    <div class="dw-field dw-field--full">
+      <label class="dw-label" for="dw-cos-createMode">If a container does not exist</label>
+      <div class="dw-select-wrap">
+        <select id="dw-cos-createMode" class="dw-select" formControlName="containerCreationMode">
+          <option value="never">Never create it — fail the run (recommended)</option>
+          <option value="useConfiguredPartitionKey">Create it using my partition key path</option>
+          <option value="useDefaultPartitionKey">Create it using the default partition key ({{ defaultPartitionKeyPath }})</option>
+        </select>
+      </div>
+      <span class="dw-hint">A container's partition key is fixed when it is created and can never be changed afterwards — the only way to correct a wrong one is to build a new container, copy the data across and delete the old one.</span>
+    </div>
+
+    @if (warnsAboutDefaultPartitionKey()) {
+      <div class="dw-field dw-field--full">
+        <span class="dw-error">
+          Containers will be created with <strong>{{ defaultPartitionKeyPath }}</strong>, which nobody chose for this data.
+          That gives every document its own logical partition: cross-document transactions become impossible, and any
+          query not filtered by id fans out across every partition. Reasonable for a test or a small id-addressed
+          collection; for anything queried by patient, date or resource type, set a partition key path above instead.
+        </span>
       </div>
     }
 
   </div>
 </form>
+
+<div class="sf-actions" style="margin-top: 20px;">
+  <button type="button" class="dw-btn"
+    [disabled]="probeState() === 'testing' || !canTest()"
+    (click)="testConnection()">
+    {{ probeState() === 'testing' ? 'Testing…' : 'Test Connection' }}
+  </button>
+</div>
+@if (probeState() === 'testing') {
+  <div class="dw-callout dw-callout--info" style="margin-top: 12px;">Testing connection…</div>
+}
+@if (probeState() === 'error') {
+  <div class="dw-callout dw-callout--warn" style="margin-top: 12px;">{{ probeError() }}</div>
+}
+@if (probeState() === 'ok') {
+  <div class="dw-callout dw-callout--info" style="margin-top: 12px;">
+    @if (containers().length) {
+      Connected — database reachable. Containers: {{ containers().join(', ') }}.
+    } @else {
+      Connected — database reachable, but it has no containers yet.
+      @if (cosmosForm.value.containerCreationMode === 'never') {
+        Each mapping writes to a container named after its target, and this destination is set never to create
+        one, so create them in Fabric before running the pipeline.
+      } @else {
+        Missing containers will be created on the first write.
+      }
+    }
+    <br />
+    <small>Reaching the database does not prove the identity may <em>create</em> a container — that needs a higher data-plane role in Fabric.</small>
+  </div>
+}
