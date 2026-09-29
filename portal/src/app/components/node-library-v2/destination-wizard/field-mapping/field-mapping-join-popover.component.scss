@@ -453,7 +453,7 @@
 // The rule section writes to the server only when this button is pressed, so while there are edits it
 // says so in place rather than looking like any other idle button. The dot comes from the template.
 .fm-popover-save--unsaved {
-  box-shadow: 0 0 0 2px var(--color-warning-bg, #fde68a);
+  box-shadow: 0 0 0 2px var(--color-warning-soft);
 }
 
 // Asked before closing over an unsaved transformation — see the template's own note.
