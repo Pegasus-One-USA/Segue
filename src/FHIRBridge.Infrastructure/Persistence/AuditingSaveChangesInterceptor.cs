@@ -206,6 +206,12 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                 EntityState.Added => "Created",
                 EntityState.Modified when entry.Entity is ISoftDeletable { IsDeleted: true } => "Deleted",
                 EntityState.Modified => "Updated",
+                // A physical delete. Only reachable for an auditable entity that is NOT ISoftDeletable — pass 1
+                // above converts every soft-deletable Remove() into the Modified case handled just above, so this
+                // never double-counts one. UserRole is the motivating case: revoking a role really does remove the
+                // row, and without this branch the revocation would leave no trace whatsoever. Note the snapshot
+                // must be taken from ORIGINAL values here; the row is about to cease to exist.
+                EntityState.Deleted => "Deleted",
                 _ => null,
             };
 
@@ -228,7 +234,7 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
 
         foreach (var (entry, action) in pending)
         {
-            var entityId = entry.Property("Id").CurrentValue?.ToString();
+            var entityId = ResolveEntityId(entry);
             var entityType = entry.Metadata.ClrType.Name;
             var entityName = entry.Entity is IHasAuditDisplayName named ? named.AuditDisplayName : null;
 
@@ -242,7 +248,12 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                 entityId,
                 entityName,
                 oldValueJson: action == "Updated" || action == "Deleted" ? SerializeValues(entry, useOriginalValues: true) : null,
-                newValueJson: SerializeValues(entry, useOriginalValues: false),
+                // A physically-deleted row has no meaningful "after" state — and asking EF for CurrentValues on a
+                // Deleted entry is not safe to rely on. The row's last known state is carried by oldValueJson above,
+                // which for a physical delete is the only surviving record of what was removed.
+                newValueJson: entry.State == EntityState.Deleted
+                    ? null
+                    : SerializeValues(entry, useOriginalValues: false),
                 status: "Success",
                 remarks: null,
                 current.IpAddress,
@@ -255,12 +266,65 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
         }
     }
 
-    /// <summary>AuditLogConfiguration caps OldValueJson/NewValueJson at this length — never emit more.</summary>
-    private const int MaxValueJsonLength = 4000;
+    /// <summary>
+    /// The audited entity's key, as a string for <c>AuditLog.EntityId</c>.
+    /// <para>Resolved from the entity's real primary key rather than a property literally named "Id", because not
+    /// every auditable entity has one: <c>UserRole</c> is keyed on (<c>UserId</c>, <c>RoleId</c>) and has no <c>Id</c>
+    /// property at all. Asking for one by name throws here — inside <c>SavingChangesAsync</c>, where it would fail
+    /// the entire save (the real entity change included), not merely the audit row.</para>
+    /// <para>A single-key entity yields exactly what the old <c>Property("Id")</c> lookup did, so existing rows keep
+    /// their shape and remain matchable by the <c>(EntityType, EntityId)</c> index. A composite key is joined with
+    /// '|' in the key's own declared order, which EF keeps stable.</para>
+    /// </summary>
+    private static string? ResolveEntityId(EntityEntry entry)
+    {
+        var primaryKey = entry.Metadata.FindPrimaryKey();
+        if (primaryKey is null)
+        {
+            return null;
+        }
+
+        var values = primaryKey.Properties
+            .Select(property => entry.Property(property.Name).CurrentValue?.ToString());
+
+        return string.Join("|", values);
+    }
+
+    /// <summary>
+    /// Overall snapshot cap. The column itself is now unbounded (see AuditLogConfiguration), so this is a sanity
+    /// bound on one entity's whole snapshot rather than a hard storage limit.
+    /// </summary>
+    private const int MaxValueJsonLength = 64_000;
 
     /// <summary>Per-property cap so one oversized column (e.g. a raw FHIR CapabilityStatement blob) can't by
     /// itself blow the whole snapshot past <see cref="MaxValueJsonLength"/>.</summary>
     private const int MaxPropertyValueLength = 200;
+
+    /// <summary>
+    /// Properties that carry the substance of a config change rather than incidental metadata, and so are exempt
+    /// from <see cref="MaxPropertyValueLength"/>. <c>WorkflowNode.ConfigurationJson</c> holds the field mapping,
+    /// transform rules and destination settings — clipping it at 200 chars would leave an audit row that shows the
+    /// opening brace of a mapping and nothing that changed. Bounded by <see cref="MaxValueJsonLength"/> instead.
+    /// </summary>
+    private static readonly HashSet<string> UncappedProperties = new(StringComparer.Ordinal)
+    {
+        "ConfigurationJson",
+    };
+
+    /// <summary>
+    /// Properties whose value is replaced with a placeholder in the audit snapshot. The audit trail records
+    /// <em>that</em> a secret was provisioned or rotated, by whom and when — never the material itself.
+    /// <para><c>AuditLog</c> is append-only and retained for years, so anything landing here is effectively
+    /// permanent: copying even a DataProtection-encrypted value into it widens the blast radius of that key and
+    /// undoes <c>ProvisionedSecret</c>'s own "only the protected value is persisted" guarantee. The change is
+    /// still fully auditable — a rotation shows old and new as redacted, with the actor and timestamp intact.</para>
+    /// </summary>
+    private static readonly HashSet<string> RedactedProperties = new(StringComparer.Ordinal)
+    {
+        "ProtectedValue",
+    };
+
+    private const string RedactedPlaceholder = "***redacted***";
 
     /// <summary>
     /// Flattens an entry's own scalar properties to JSON for the audit trail's old/new value columns.
@@ -278,7 +342,16 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                 continue;
             }
 
-            snapshot[property.Metadata.Name] = ToAuditValue(values[property.Metadata]);
+            if (RedactedProperties.Contains(property.Metadata.Name))
+            {
+                // Placeholder only when there was actually a value, so "was unset, now set" stays visible.
+                snapshot[property.Metadata.Name] = values[property.Metadata] is null ? null : RedactedPlaceholder;
+                continue;
+            }
+
+            snapshot[property.Metadata.Name] = ToAuditValue(
+                values[property.Metadata],
+                uncapped: UncappedProperties.Contains(property.Metadata.Name));
         }
 
         var json = JsonSerializer.Serialize(snapshot);
@@ -304,7 +377,7 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
     /// and any string form is capped at <see cref="MaxPropertyValueLength"/> so a single large text/JSON column
     /// can't dominate the snapshot's total size.
     /// </summary>
-    private static object? ToAuditValue(object? value)
+    private static object? ToAuditValue(object? value, bool uncapped = false)
     {
         if (value is null)
         {
@@ -313,20 +386,20 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
 
         if (value is string text)
         {
-            return Truncate(text);
+            return Truncate(text, uncapped);
         }
 
         if (value is System.Collections.IEnumerable enumerable)
         {
-            return enumerable.Cast<object?>().Select(item => Truncate(item?.ToString())).ToList();
+            return enumerable.Cast<object?>().Select(item => Truncate(item?.ToString(), uncapped)).ToList();
         }
 
-        return Truncate(value.ToString());
+        return Truncate(value.ToString(), uncapped);
     }
 
-    private static string? Truncate(string? value)
+    private static string? Truncate(string? value, bool uncapped = false)
     {
-        if (value is null || value.Length <= MaxPropertyValueLength)
+        if (value is null || uncapped || value.Length <= MaxPropertyValueLength)
         {
             return value;
         }

@@ -73,12 +73,17 @@ public sealed class AuditLogDeleteCoverageTests
     }
 
     /// <summary>
-    /// The gap: WorkflowDefinition is a Runtime-domain aggregate implementing neither IAuditableEntity nor
-    /// ISoftDeletable, so DELETE /api/v1/workflows/{id} physically removes the workflow and all its nodes,
-    /// edges and configuration with no audit row of any kind — nothing records that it ever existed.
+    /// WorkflowDefinition is a Runtime-domain aggregate implementing neither IAuditableEntity nor ISoftDeletable,
+    /// so the interceptor still writes nothing for it — by design. Its audit trail is produced explicitly by
+    /// SqlWorkflowDefinitionStore instead (see SqlWorkflowDefinitionStoreAuditTests), because every save there is
+    /// a delete-and-re-add that EF reports as "Added", which the generic mechanism would log as "Created" on
+    /// every edit.
+    /// <para>This test therefore pins the INTERCEPTOR's behaviour, not the feature's: it guards against someone
+    /// "fixing" the gap by adding IAuditableEntity to WorkflowDefinition, which would silently produce a wrong
+    /// trail (every edit a Create, plus a spurious Delete) on top of the correct one the store writes.</para>
     /// </summary>
     [Fact]
-    public async Task Deleting_a_workflow_writes_no_audit_row_at_all()
+    public async Task Deleting_a_workflow_writes_no_interceptor_audit_row_the_store_owns_that_trail()
     {
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "Nightly Epic Sync", version: 1);
         // WorkflowDefinition sits outside the interceptor's IAuditableEntity stamping, so nothing fills in its
@@ -109,7 +114,8 @@ public sealed class AuditLogDeleteCoverageTests
                 .ToListAsync();
 
             anyAuditRow.Should().BeEmpty(
-                "documents the current gap: deleting a workflow leaves no audit trail whatsoever");
+                "the interceptor deliberately ignores WorkflowDefinition — SqlWorkflowDefinitionStore writes its "
+                + "audit trail explicitly, because a save there is a delete-and-re-add EF reports as 'Added'");
         }
     }
 }
