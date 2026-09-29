@@ -97,6 +97,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # redis.crt/redis.key are gitignored (never commit a private key) so segue-redis's Dockerfile has
+      # nothing to COPY on a fresh checkout — generate a fresh pair here before the image build needs them.
+      - name: Generate the redis-tls certificate for this build
+        run: |
+          chmod +x containerization/docker/redis-tls/generate-cert.sh
+          ./containerization/docker/redis-tls/generate-cert.sh
+
       # Images are tagged with the exact version and pushed. The tag is immutable by convention:
       # a published version is never rebuilt or overwritten — if it is wrong, the fix ships as the
       # next number. Older tags are never deleted either; a customer who has not upgraded yet still
