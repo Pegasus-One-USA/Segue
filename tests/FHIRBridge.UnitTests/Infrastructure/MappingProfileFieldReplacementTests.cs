@@ -5,7 +5,6 @@ using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Moq;
 
 namespace FHIRBridge.UnitTests.Infrastructure;
@@ -25,13 +24,8 @@ namespace FHIRBridge.UnitTests.Infrastructure;
 /// </summary>
 public sealed class MappingProfileFieldReplacementTests
 {
-    // static: xUnit builds a new instance of this class for EVERY test, and each distinct
-    // InMemoryDatabaseRoot makes EF build another internal service provider — past twenty, EF raises
-    // ManyServiceProvidersCreatedWarning as an error in whichever test happens to cross the line, which
-    // reads as an unrelated failure elsewhere in the suite. Sharing one root costs no isolation: each test
-    // still gets its own database via the unique _databaseName below. (Same pattern as WorkflowSqlStoreTests.)
-    private static readonly InMemoryDatabaseRoot _root = new();
-    private readonly string _databaseName = Guid.NewGuid().ToString();
+    // See SharedInMemoryDatabase for why this is routed through the process-wide shared provider.
+    private readonly string _databaseName = SharedInMemoryDatabase.NewDatabaseName();
 
     private FHIRBridgeDbContext CreateContext()
     {
@@ -39,8 +33,7 @@ public sealed class MappingProfileFieldReplacementTests
         currentUser.SetupGet(x => x.CurrentUser)
             .Returns(new CurrentUserInfo("admin", "admin@example.com", "Admin", ["Administrator"], true));
 
-        var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(_databaseName, _root)
+        var options = SharedInMemoryDatabase.OptionsBuilder<FHIRBridgeDbContext>(_databaseName)
             .AddInterceptors(new AuditingSaveChangesInterceptor(currentUser.Object))
             .Options;
 

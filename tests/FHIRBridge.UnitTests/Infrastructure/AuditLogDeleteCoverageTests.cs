@@ -6,7 +6,6 @@ using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Moq;
 
 namespace FHIRBridge.UnitTests.Infrastructure;
@@ -22,9 +21,8 @@ namespace FHIRBridge.UnitTests.Infrastructure;
 /// </summary>
 public sealed class AuditLogDeleteCoverageTests
 {
-    // See DestinationConfigurationSoftDeleteTests for why this root is shared and static.
-    private static readonly InMemoryDatabaseRoot _root = new();
-    private readonly string _databaseName = Guid.NewGuid().ToString();
+    // See SharedInMemoryDatabase for why this is routed through the process-wide shared provider.
+    private readonly string _databaseName = SharedInMemoryDatabase.NewDatabaseName();
 
     private FHIRBridgeDbContext CreateContext()
     {
@@ -32,8 +30,7 @@ public sealed class AuditLogDeleteCoverageTests
         currentUser.SetupGet(x => x.CurrentUser)
             .Returns(new CurrentUserInfo("admin", "admin@example.com", "Admin", ["Administrator"], true));
 
-        var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(_databaseName, _root)
+        var options = SharedInMemoryDatabase.OptionsBuilder<FHIRBridgeDbContext>(_databaseName)
             .AddInterceptors(new AuditingSaveChangesInterceptor(currentUser.Object))
             .Options;
 

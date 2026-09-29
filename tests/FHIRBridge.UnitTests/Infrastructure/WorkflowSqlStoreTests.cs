@@ -7,8 +7,6 @@ using FHIRBridge.Infrastructure.Persistence.Workflows;
 using FHIRBridge.Infrastructure.Workflows.Numbering;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Moq;
 
 namespace FHIRBridge.UnitTests.Infrastructure;
@@ -19,23 +17,15 @@ namespace FHIRBridge.UnitTests.Infrastructure;
 public sealed class WorkflowSqlStoreTests
 {
     // static, not per-instance: xUnit gives every [Fact] its own class instance, so instance fields here
-    // would mean a fresh InMemory database name (and a fresh EF internal service provider) per test method —
-    // EF warns-as-error once more than 20 such distinct configurations exist across a full run, and this
-    // suite is close enough to that ceiling that this class alone tipped it over. Sharing one database across
-    // every Fact here is safe: each test already keys its own rows with fresh random GUIDs (WorkflowId,
-    // WorkflowRunId, TransformationRule.Id, ...), so there's no cross-test collision risk — xUnit runs
-    // methods within one class sequentially by default anyway.
-    private static readonly InMemoryDatabaseRoot _root = new();
-    private static readonly string _databaseName = Guid.NewGuid().ToString();
+    // would mean a fresh InMemory database name per test method. Sharing one database across every Fact here
+    // is safe: each test already keys its own rows with fresh random GUIDs (WorkflowId, WorkflowRunId,
+    // TransformationRule.Id, ...), so there's no cross-test collision risk — xUnit runs methods within one
+    // class sequentially by default anyway. Routed through SharedInMemoryDatabase's process-wide provider —
+    // see its own remarks for why a distinct root/provider per class matters at this suite's size.
+    private static readonly string _databaseName = SharedInMemoryDatabase.NewDatabaseName();
 
-    private FHIRBridgeDbContext CreateContext()
-    {
-        var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(_databaseName, _root)
-            .Options;
-
-        return new FHIRBridgeDbContext(options);
-    }
+    private FHIRBridgeDbContext CreateContext() =>
+        new(SharedInMemoryDatabase.Options<FHIRBridgeDbContext>(_databaseName));
 
     private static ICurrentUserService CurrentUserAs(string email)
     {
