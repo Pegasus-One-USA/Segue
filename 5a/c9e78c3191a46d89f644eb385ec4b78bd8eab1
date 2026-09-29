@@ -1,0 +1,21 @@
+tests/FHIRBridge.UnitTests/Transforms/TransformNodeConfigSchemaTests.cs
+  s_6fe240044cc58e::t_f0a07d790df2ad 17-43
+src/FHIRBridge.Application/Services/Transforms/TransformNodeConfigSchemas.cs
+  s_6fe240044cc58e::t_0e1b1c092fa717 325-336
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5ac9e78c3191a46d89f644eb385ec4b78bd8eab1",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
