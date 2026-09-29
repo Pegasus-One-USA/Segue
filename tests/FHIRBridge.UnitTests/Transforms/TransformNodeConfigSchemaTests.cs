@@ -15,6 +15,39 @@ public sealed class TransformNodeConfigSchemaTests
         TransformNodeConfigSchemas.Get(nodeType)!.Fields.Single(f => f.Key == key);
 
     [Theory]
+    [InlineData("baseUrl", "absolute")]
+    [InlineData("identifierSystem", "logical")]
+    public void ReferenceConstruction_scopes_a_field_to_the_single_style_that_reads_it(string key, string style)
+    {
+        var field = Field(TransformNodeType.ReferenceConstruction, key);
+
+        field.VisibleWhen.Should().NotBeNull();
+        field.VisibleWhen!.Key.Should().Be("style");
+        field.VisibleWhen.Values.Should().Equal([style]);
+
+        field.IsAdvanced.Should().BeFalse(
+            "the style that shows it cannot produce a valid reference without it, and a required field "
+            + "behind a collapsed Advanced panel is how a blank Base URL ends up writing \"/Patient/123\"");
+    }
+
+    [Theory]
+    [InlineData("resourceType")]
+    [InlineData("style")]
+    [InlineData("display")]
+    [InlineData("allowedTargetTypes")]
+    public void ReferenceConstruction_leaves_every_cross_style_field_unscoped(string key)
+    {
+        // The rule this whole schema rests on: a field may only be scoped when its key is read nowhere
+        // outside the styles it is visible for, because the config form PRUNES hidden keys on save and the
+        // node then falls back to that key's default. resourceType is the trap — it looks unused under urn
+        // and logical, but allowedTargetTypes is checked against it on every style before the style switch,
+        // so scoping it would silently re-default it to "Patient" (see ReferenceConstructionStyleMatrixTests'
+        // Allowed_target_types_are_enforced_for_every_style). display and allowedTargetTypes are likewise
+        // read by all four branches.
+        Field(TransformNodeType.ReferenceConstruction, key).VisibleWhen.Should().BeNull();
+    }
+
+    [Theory]
     [InlineData("index", new[] { "nth" })]
     [InlineData("separator", new[] { "join", "filter" })]
     [InlineData("predicateField", new[] { "filter" })]
