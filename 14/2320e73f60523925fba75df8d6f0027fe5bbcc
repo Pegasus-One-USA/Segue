@@ -1,0 +1,74 @@
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d8c85374db9f6f::t_0dec62498dfb4e 2687-2692
+src/BuildingBlocks/FHIRBridge.SharedKernel/Abstractions/AuditTrackedEntity.cs
+  s_102cddd76c43e9::t_ea7ddbb49dd262 1-31
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_2abde6bd773431 441-443
+src/FHIRBridge.Domain/Entities/Licensing/LicenseRequest.cs
+  s_102cddd76c43e9::t_c2750ee93e7b33 33
+src/FHIRBridge.Domain/Entities/Governance/ErrorResolution.cs
+  s_102cddd76c43e9::t_c2750ee93e7b33 11
+portal/src/app/services/destination-schema.service.ts
+  s_8456d737a0ba1a::t_52034c5394fb11 228-229,244-245
+src/FHIRBridge.Domain/Entities/ProvisionedSecret.cs
+  s_102cddd76c43e9::t_52c94d49ee75f4 10,39,65
+  s_102cddd76c43e9::t_9074112ba4c941 40-46,53-64
+  s_102cddd76c43e9::t_0ae79b9d34cd29 1-2
+src/FHIRBridge.Domain/Entities/UserRole.cs
+  s_102cddd76c43e9::t_c29116dc4e8b11 1-2,5,14-15,34-38,43-54
+  s_102cddd76c43e9::t_6284413d545bb8 6-13
+src/FHIRBridge.Infrastructure/Persistence/AuditingSaveChangesInterceptor.cs
+  s_102cddd76c43e9::t_0ea74f1122d74a 380,389,394,397,400,402
+  s_102cddd76c43e9::t_795474e25efd6f 237,313-314
+  s_102cddd76c43e9::t_5040e4f1ee2e81 293-297,303-312
+  s_102cddd76c43e9::t_6082fdd07e6f2b 209-214
+  s_102cddd76c43e9::t_969d7191907812 251-256
+  s_102cddd76c43e9::t_24de6eb6df2c16 315-328
+  s_102cddd76c43e9::t_8b94095fdb9ffc 345-351
+  s_102cddd76c43e9::t_7c82ff9d8ca98c 352-354
+  s_102cddd76c43e9::t_a81a3d5a357c74 269-292
+src/FHIRBridge.Domain/Entities/UserFhirContextBinding.cs
+  s_102cddd76c43e9::t_c2750ee93e7b33 29
+src/FHIRBridge.Infrastructure/Persistence/Configurations/Governance/AuditLogConfiguration.cs
+  s_102cddd76c43e9::t_c0f52d3076e1bf 21-27
+src/FHIRBridge.Domain/Entities/Licensing/LicenseHistoryEntry.cs
+  s_102cddd76c43e9::t_c2750ee93e7b33 12
+portal/src/app/components/node-library/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d8c85374db9f6f::t_2abde6bd773431 441-443
+src/FHIRBridge.Application/DTOs/FabricConnectionTestRequest.cs
+  s_d8c85374db9f6f::t_2029cfd6d23c94 9-13,30-35
+src/FHIRBridge.Infrastructure/Destinations/FabricDestinationConnectionTestService.cs
+  s_d8c85374db9f6f::t_54518c7edf973b 64,108-115,136-179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "142320e73f60523925fba75df8d6f0027fe5bbcc",
+  "prompts": {},
+  "sessions": {
+    "s_102cddd76c43e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "267708a9-2483-411a-abaf-536b681fbfb5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_8456d737a0ba1a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ff13a48-3ca8-4aaf-ab78-1c910a123765",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d8c85374db9f6f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a22c943-39b4-4d77-a05f-43d704de93cd",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
