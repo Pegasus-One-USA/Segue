@@ -69,31 +69,4 @@ public sealed class EfDataLineageService : IDataLineageService
             fields,
             exports);
     }
-
-    public async Task<LineageFieldValueDto> RevealFieldValueAsync(
-        Guid resourceRecordId, string targetField, CancellationToken cancellationToken)
-    {
-        var record = await _dbContext.PipelineRunResourceRecords
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == resourceRecordId, cancellationToken);
-
-        if (record?.MappedValuesJson is null)
-        {
-            return new LineageFieldValueDto(targetField, null);
-        }
-
-        var decrypted = _phiFieldEncryptor.Decrypt(record.MappedValuesJson);
-
-        using var document = JsonDocument.Parse(decrypted);
-        if (!document.RootElement.TryGetProperty(targetField, out var valueElement))
-        {
-            return new LineageFieldValueDto(targetField, null);
-        }
-
-        var value = valueElement.ValueKind == JsonValueKind.String
-            ? valueElement.GetString()
-            : valueElement.GetRawText();
-
-        return new LineageFieldValueDto(targetField, value);
-    }
 }

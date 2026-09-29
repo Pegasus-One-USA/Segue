@@ -4,6 +4,7 @@ import { Observable, catchError, of, throwError } from 'rxjs';
 import { EXECUTION_HISTORY_ENDPOINTS, WORKFLOW_ENDPOINTS } from '../../core/api-endpoints';
 import { SKIP_LOADER } from '../../core/loading.interceptor';
 import {
+  BulkExportStatus,
   FieldLineageChain,
   FieldLineageFilter,
   LineageSummary,
@@ -16,6 +17,8 @@ import {
   RouteExecutionFilter,
   RouteExecutionPage,
   WorkflowRunStatusCounts,
+  NodeLineageBreakdown,
+  ConfiguredResourceTypeRules,
 } from '../models/execution-history.model';
 
 @Injectable({ providedIn: 'root' })
@@ -34,6 +37,10 @@ export class ExecutionHistoryApiService {
     if (filter.status) params = params.set('status', filter.status);
     if (filter.source) params = params.set('source', filter.source);
     for (const source of filter.sources ?? []) params = params.append('sources', source);
+    for (const value of filter.statuses ?? []) params = params.append('statuses', value);
+    for (const value of filter.destinationTypes ?? []) params = params.append('destinationTypes', value);
+    for (const value of filter.applicationTypes ?? []) params = params.append('applicationTypes', value);
+    for (const value of filter.resourceTypes ?? []) params = params.append('resourceTypes', value);
     if (filter.triggeredBy) params = params.set('triggeredBy', filter.triggeredBy);
     if (filter.search) params = params.set('search', filter.search);
     if (filter.sortColumn) params = params.set('sortColumn', filter.sortColumn);
@@ -92,6 +99,19 @@ export class ExecutionHistoryApiService {
     return this.http.get<PagedResult<FieldLineageChain>>(EXECUTION_HISTORY_ENDPOINTS.fieldLineage(id), { params });
   }
 
+  /** A live read of this run's bulk-export job, proxied by the server against the source's status URL —
+   *  backs the Status column's "Bulk Data Status Request" popup. A 404 (this run never deferred to an
+   *  export, or one was kicked off but has no status URL yet) resolves to null rather than erroring,
+   *  same as nodeRunPayload above: it's an expected outcome, not a failure.
+   *
+   *  Deliberately not `silent` — the click is an explicit user action, so the global loader is correct
+   *  feedback while the source server is being called. */
+  bulkExportStatus(id: string): Observable<BulkExportStatus | null> {
+    return this.http.get<BulkExportStatus>(EXECUTION_HISTORY_ENDPOINTS.bulkExportStatus(id)).pipe(
+      catchError((error: HttpErrorResponse) => error.status === 404 ? of(null) : throwError(() => error)),
+    );
+  }
+
   /** Run-wide field-lineage totals — backs the Lineage panel's stat strip. */
   lineageSummary(id: string): Observable<LineageSummary> {
     return this.http.get<LineageSummary>(EXECUTION_HISTORY_ENDPOINTS.lineageSummary(id));
@@ -99,6 +119,24 @@ export class ExecutionHistoryApiService {
 
   /** Every resource type touched by this run's field lineage, with the destination fields under it — backs
    *  the Lineage panel's resource-tree sidebar. */
+  /** What each node actually applied — field mappings and transformation rules, per node. Backs the per-node
+   *  summary lines in the node list, which otherwise showed every node the same resource-type counts. */
+  lineageNodeBreakdown(id: string): Observable<NodeLineageBreakdown[]> {
+    return this.http.get<NodeLineageBreakdown[]>(EXECUTION_HISTORY_ENDPOINTS.lineageNodeBreakdown(id));
+  }
+
+  /** The transformation rules configured on this run's workflow, grouped by resource type — backs the
+   *  transform node's rule list. Configuration, not runtime: see ConfiguredResourceTypeRules. */
+  configuredRules(id: string): Observable<ConfiguredResourceTypeRules[]> {
+    return this.http.get<ConfiguredResourceTypeRules[]>(EXECUTION_HISTORY_ENDPOINTS.configuredRules(id));
+  }
+
+  /** The de-identification rules configured for this run, grouped by resource type — same shape as
+   *  configuredRules, read from the de-identification profile rather than the workflow's own rules. */
+  configuredDeIdRules(id: string): Observable<ConfiguredResourceTypeRules[]> {
+    return this.http.get<ConfiguredResourceTypeRules[]>(EXECUTION_HISTORY_ENDPOINTS.configuredDeIdRules(id));
+  }
+
   lineageResourceTree(id: string): Observable<ResourceTypeSummary[]> {
     return this.http.get<ResourceTypeSummary[]>(EXECUTION_HISTORY_ENDPOINTS.lineageResourceTree(id));
   }

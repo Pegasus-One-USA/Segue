@@ -81,3 +81,25 @@ export interface MongoFormApi extends WizardDestinationFormApi {
 export function isMongoForm(x: WizardDestinationFormApi | null | undefined): x is MongoFormApi {
   return !!x && (x as Partial<{ kind: string }>).kind === 'mongo';
 }
+
+/** Extra members exposed by DataFabricDestinationFormComponent. It is relational in the Warehouse surface but
+ *  deliberately NOT an isSqlFamilyForm: it authenticates with an Entra token, so it has no getProbeRequest()
+ *  (server/database/password) to offer and must never be routed through the SQL probe-then-advance branch.
+ *  What it does share is a table list from its own Test Connection, which the wizard copies into sqlTables()
+ *  exactly as it does for the SQL family. */
+export interface FabricFormApi extends WizardDestinationFormApi {
+  readonly probeState: Signal<'idle' | 'testing' | 'ok' | 'error'>;
+  readonly sqlTables: () => DestinationTable[];
+  readonly probeOneLakeOk: Signal<boolean>;
+  /** Ad-hoc connection details for the canvas's live probe and its real DDL calls — the Fabric counterpart
+   *  of SqlFamilyFormApi.getProbeRequest, under its own name so isSqlFamilyForm() keeps rejecting this form. */
+  getFabricProbeRequest(): DestinationProbeRequest;
+}
+
+/** Keyed on probeOneLakeOk — unique to the Fabric form. Deliberately not keyed on testConnection/probeState
+ *  (CSV and SFTP define their own unrelated pair) nor on sqlTables alone (the SQL family has that too); see
+ *  the isSqlFamilyForm doc comment above for the exact footgun loose duck-typing caused here before. */
+export function isFabricForm(x: WizardDestinationFormApi | null | undefined): x is FabricFormApi {
+  return !!x && typeof (x as Partial<FabricFormApi>).probeOneLakeOk === 'function'
+    && typeof (x as Partial<FabricFormApi>).sqlTables === 'function';
+}

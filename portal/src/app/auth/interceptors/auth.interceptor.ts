@@ -1,10 +1,10 @@
 import { HttpInterceptorFn, HttpErrorResponse, HttpRequest } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { Router } from '@angular/router';
 import { Observable, catchError, switchMap, throwError } from 'rxjs';
 import { TokenService } from '../services/token.service';
 import { AuthService } from '../services/auth.service';
 import { TokenRefreshCoordinator } from '../services/token-refresh-coordinator.service';
+import { SessionExpiredDialogService } from '../services/session-expired-dialog.service';
 
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -36,29 +36,40 @@ function isSafeForCredentials(url: string): boolean {
  *     the refresh-token cookie) before giving up.
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const tokens      = inject(TokenService);
-  const router      = inject(Router);
-  const authService = inject(AuthService);
-  const coordinator = inject(TokenRefreshCoordinator);
+  const tokens        = inject(TokenService);
+  const authService   = inject(AuthService);
+  const coordinator   = inject(TokenRefreshCoordinator);
+  const sessionExpired = inject(SessionExpiredDialogService);
 
   const withCreds = isSafeForCredentials(req.url);
   if (!withCreds) {
     console.warn(`Refusing to send credentials to non-HTTPS request: ${req.url}`);
   }
 
-  const headers: Record<string, string> = {};
-  if (withCreds && STATE_CHANGING_METHODS.has(req.method.toUpperCase())) {
-    const csrfToken = tokens.getCsrfToken();
-    if (csrfToken) {
-      headers['X-CSRF-Token'] = csrfToken;
+  // Reads the CSRF cookie fresh each call rather than once up front — a silent token refresh (below)
+  // can rotate that cookie, and retrying a state-changing request with the header it captured BEFORE
+  // the refresh would fail CSRF validation on a perfectly healthy, just-refreshed session, which this
+  // interceptor can't distinguish from a real expired one and would force-logout an active user over.
+  const buildRequest = (): HttpRequest<unknown> => {
+    const headers: Record<string, string> = {};
+    if (withCreds && STATE_CHANGING_METHODS.has(req.method.toUpperCase())) {
+      const csrfToken = tokens.getCsrfToken();
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
     }
-  }
+    return req.clone({ withCredentials: withCreds, setHeaders: headers });
+  };
 
-  const cloned = req.clone({ withCredentials: withCreds, setHeaders: headers });
+  const cloned = buildRequest();
 
   const forceLogout = (err: HttpErrorResponse): Observable<never> => {
     tokens.clearTokens();
-    router.navigate(['/auth/login']);
+    // Global, un-dismissable prompt instead of navigating straight to /auth/login — every 401 that
+    // reaches here (silent refresh already failed) now surfaces the same "Session expired" dialog
+    // regardless of which page the user was on, rather than the old per-page toasts that only some
+    // components happened to show.
+    sessionExpired.show();
     return throwError(() => err);
   };
 
@@ -72,9 +83,17 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         return throwError(() => err);
       }
 
-      return coordinator.refresh(() => authService.refreshToken()).pipe(
-        switchMap(() => next(cloned)),
+      return coordinator.refresh(
+        () => authService.refreshToken(),
+        () => authService.syncCurrentUser(),
+      ).pipe(
+        // catchError before switchMap: only a FAILED refresh should force a logout. Ordering it
+        // after switchMap (as before) also caught errors from the retried request itself — a
+        // refresh that succeeds followed by e.g. a 400 validation error or 409 concurrency conflict
+        // on the retry would still show "Session expired" and log an active user out, swallowing
+        // the real error in the process.
         catchError(() => forceLogout(err)),
+        switchMap(() => next(buildRequest())),
       );
     })
   );

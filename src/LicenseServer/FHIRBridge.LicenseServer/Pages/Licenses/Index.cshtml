@@ -1,0 +1,53 @@
+@page
+@model FHIRBridge.LicenseServer.Pages.Licenses.IndexModel
+@{
+    ViewData["Title"] = "Issued Licenses";
+}
+
+<div class="page-header">
+    <h1>Issued Licenses</h1>
+    <p class="page-subtitle">Audit trail of every license minted by this server. <a href="/Licenses/Create">Mint a new one</a>.</p>
+</div>
+
+@if (Model.Licenses.Count == 0)
+{
+    <div class="panel empty-state">
+        <p>No licenses have been minted yet.</p>
+    </div>
+}
+else
+{
+    @foreach (var license in Model.Licenses)
+    {
+        <details class="panel" style="margin-bottom:12px;">
+            <summary>
+                <strong>@license.CustomerName</strong> (@license.CustomerId) &mdash;
+                <span class="badge">@license.Edition</span>
+                &mdash; issued @license.IssuedAtUtc.ToString("u"), expires @license.ExpiresUtc.ToString("u")
+            </summary>
+            <table style="margin-top:14px;">
+                <tbody>
+                    <tr><th>Max Users</th><td>@(license.MaxUsers == -1 ? "unlimited" : license.MaxUsers.ToString())</td></tr>
+                    <tr><th>Max Workflows</th><td>@(license.MaxWorkflows == -1 ? "unlimited" : license.MaxWorkflows.ToString())</td></tr>
+                    <tr><th>Max Source Connections</th><td>@(license.MaxSourceConnections == -1 ? "unlimited" : license.MaxSourceConnections.ToString())</td></tr>
+                    <tr><th>Max Processed Records / Month</th><td>@(license.MaxProcessedRecordsPerMonth == -1 ? "unlimited" : license.MaxProcessedRecordsPerMonth.ToString())</td></tr>
+                    <tr><th>Max Successful Workflow Executions / Month</th><td>@(license.MaxSuccessfulWorkflowExecutionsPerMonth == -1 ? "unlimited" : license.MaxSuccessfulWorkflowExecutionsPerMonth.ToString())</td></tr>
+                    <tr><th>Activation Window</th><td>@(license.ActivationWindowMinutes is null ? "no deadline" : $"{license.ActivationWindowMinutes} minutes")</td></tr>
+                    <tr><th>Requesting URL</th><td>@(license.RequestHost ?? "(not requested via this server)")</td></tr>
+                    <tr><th>Allowed Source Types</th><td>@license.AllowedSourceTypesSummary</td></tr>
+                    <tr><th>Allowed Resource Types</th><td>@license.AllowedResourceTypesSummary</td></tr>
+                    <tr><th>Allowed Destination Types</th><td>@license.AllowedDestinationTypesSummary</td></tr>
+                    <tr><th>Features</th><td>@license.FeaturesSummary</td></tr>
+                </tbody>
+            </table>
+            @if (Model.RequestIdByLicenseId.TryGetValue(license.Id, out var requestId))
+            {
+                <p style="margin-top:16px;"><a href="/LicenseRequests/Details/@requestId">View License Request</a></p>
+            }
+            <h2 style="margin-top:20px;">Claims JSON</h2>
+            <textarea class="token-output" readonly onclick="this.select()">@license.ClaimsJson</textarea>
+            <h2>Token</h2>
+            <textarea class="token-output" readonly onclick="this.select()">@license.Token</textarea>
+        </details>
+    }
+}

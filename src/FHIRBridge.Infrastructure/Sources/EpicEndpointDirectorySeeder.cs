@@ -78,6 +78,12 @@ public sealed class EpicEndpointDirectorySeeder : IEhrEndpointDirectorySeeder
         }
         catch (Exception exception)
         {
+            // BootstrapDatabase shares one FHIRBridgeDbContext (and one change tracker) across every seeder
+            // it runs. Left tracked, the failed Add() above would ride along on the NEXT unrelated
+            // SaveChangesAsync call elsewhere in that same boot (e.g. SystemSettingsSeeder), turning its
+            // single-row insert into a multi-row batch that fails and rolls back for a reason that call site
+            // has nothing to do with — Clear() prevents this failure from outliving this method.
+            _dbContext.ChangeTracker.Clear();
             _logger.LogWarning(exception, "Failed to seed the Epic FHIR sandbox endpoint; will retry on next boot.");
         }
     }
@@ -126,6 +132,10 @@ public sealed class EpicEndpointDirectorySeeder : IEhrEndpointDirectorySeeder
         }
         catch (Exception exception)
         {
+            // See EnsureSandboxEndpointAsync's remarks: clears the entities Add()ed above (possibly many,
+            // across several imported pages) so this failure can't poison a later, unrelated
+            // SaveChangesAsync call sharing this same BootstrapDatabase-scoped DbContext.
+            _dbContext.ChangeTracker.Clear();
             _logger.LogWarning(
                 exception,
                 "Failed to import Epic's endpoint directory from {DirectoryUrl}; will retry on next boot.",

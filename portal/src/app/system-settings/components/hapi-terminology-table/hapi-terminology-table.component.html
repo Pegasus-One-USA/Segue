@@ -10,8 +10,28 @@
 </div>
 
 <div class="table-card">
-  @if (loading()) {
-    <!-- The global loader already shows this page is busy — no local spinner here. -->
+  @if (loading() && !configs().length) {
+    <!-- Only the very FIRST load has nothing to draw. Every later fetch (a Run Now, a row refresh, a
+         reload after Edit) leaves the existing rows on screen and shows its progress on the affected row
+         instead — replacing the whole table with placeholders would hide 13 rows of still-valid settings
+         to report that one of them is busy. The app-wide loader is skipped for the same reason; see the
+         service's silent() remarks. -->
+    <div class="table-wrapper" aria-busy="true" aria-live="polite">
+      <table class="data-table skeleton-table">
+        <tr><th></th><th>Code System</th><th>Version</th><th>Scheduler Enabled</th><th>Frequency</th><th>Execution Time</th><th>Last Run</th></tr>
+        @for (placeholder of skeletonRows; track placeholder) {
+          <tr>
+            <td><span class="skeleton-text skeleton-cell-sm"></span></td>
+            <td><span class="skeleton-text"></span></td>
+            <td><span class="skeleton-text"></span></td>
+            <td><span class="skeleton-text"></span></td>
+            <td><span class="skeleton-text"></span></td>
+            <td><span class="skeleton-text"></span></td>
+            <td><span class="skeleton-text"></span></td>
+          </tr>
+        }
+      </table>
+    </div>
   } @else {
     <div class="table-wrapper">
       <table mat-table [dataSource]="filteredConfigs()" class="data-table">
@@ -43,6 +63,12 @@
                   <span>{{ check.storedVersion ?? 'Up to date' }}</span>
                 }
               </div>
+            } @else if (isScanning(row.code) || scanning()) {
+              <!-- Per row, because the checks run independently: each cell resolves as its own external
+                   source answers. A bare "—" here would read as "no version" rather than "not yet checked". -->
+              <span class="muted scanning-cell">
+                <mat-spinner diameter="14"></mat-spinner> Checking…
+              </span>
             } @else {
               <span class="muted">—</span>
             }
@@ -72,7 +98,11 @@
           <th mat-header-cell *matHeaderCellDef>Last Run</th>
           <td mat-cell *matCellDef="let row">
             @if (isRunning(row.code)) {
-              <span class="status-badge status-medium">Running…</span>
+              <!-- Per-row progress: the sync runs server-side per code system, so the feedback belongs on
+                   the row that is actually busy rather than over the whole page. -->
+              <span class="status-badge status-medium running-badge" [attr.aria-label]="row.displayName + ' sync running'">
+                <mat-spinner diameter="14"></mat-spinner> Running…
+              </span>
             } @else if (row.lastRunUtc) {
               {{ row.lastRunUtc | date: 'medium' }}
             } @else {

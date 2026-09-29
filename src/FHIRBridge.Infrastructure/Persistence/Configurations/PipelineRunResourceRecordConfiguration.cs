@@ -16,10 +16,9 @@ public sealed class PipelineRunResourceRecordConfiguration : IEntityTypeConfigur
         builder.Property(x => x.Stage).HasMaxLength(50).IsRequired();
         builder.Property(x => x.ErrorMessage).HasMaxLength(2000);
 
-        // Encrypted PHI payloads — ciphertext (base64) is longer than the source JSON, hence nvarchar(max).
-        builder.Property(x => x.FetchedJson).IsRequired();
-        builder.Property(x => x.NormalizedJson);
-        builder.Property(x => x.MappedValuesJson);
+        // The fetched/normalized/mapped JSON columns were removed — they held whole FHIR resources and mapped
+        // field values, which is PHI whether or not it is encrypted at rest. This record now tracks the STAGE
+        // each resource reached and how it scored, not what it contained.
 
         builder.Property(x => x.AppliedProfiles);
         builder.Property(x => x.Warnings);

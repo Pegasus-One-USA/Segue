@@ -11,7 +11,7 @@
 // glyph's line box match its font-size everywhere in this component, regardless of size.
 mat-icon { line-height: 1; }
 
-.mono { font-family: monospace; font-size: 12.5px; }
+.mono { font-family: var(--font-mono); font-size: 12.5px; }
 .cell-muted   { font-size: 12.5px; color: var(--color-muted); display: block; }
 .cell-primary { font-size: 13.5px; font-weight: 600; color: var(--color-ink); }
 .stat-label   { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-muted); display: block; }
@@ -411,7 +411,7 @@ mat-icon { line-height: 1; }
     // The FHIR path (e.g. "Patient.name.given/name.family") is one long unbroken token — without this,
     // it overflows past this flex child's own box (flex items don't wrap text by default) and visually
     // sits on top of the __value chip sitting beside it instead of stopping short of it.
-    .mono { overflow-wrap: anywhere; word-break: break-word; }
+    .mono { overflow-wrap: anywhere; }
   }
 
   &__title { font-size: 12.5px; font-weight: 700; color: var(--color-ink); }

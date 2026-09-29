@@ -7,9 +7,10 @@
     <p class="confirm-message">{{ data.message }}</p>
   </div>
   <div class="confirm-footer">
-    <button mat-stroked-button class="btn-cancel" (click)="dialogRef.close(false)">Cancel</button>
+    <button mat-stroked-button class="btn-cancel" data-testid="confirm-cancel" (click)="dialogRef.close(false)">Cancel</button>
     <button
       mat-flat-button
+      data-testid="confirm-accept"
       class="btn-action"
       [class.btn-action--danger]="data.danger"
       (click)="dialogRef.close(true)"

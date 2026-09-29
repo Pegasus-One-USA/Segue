@@ -1,11 +1,16 @@
 import { Component, HostBinding, computed, inject, input, output, signal, effect } from '@angular/core';
 import { A11yModule } from '@angular/cdk/a11y';
 import { FormsModule } from '@angular/forms';
-import { MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCandidate } from './field-mapping-model';
+import {
+  MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCandidate, defaultInstanceType,
+  wholeNodeInstanceIndex, instanceCriteriaPredicate,
+  JsonColumnWriteMode, supportsJsonWriteMode, resolveJsonWriteMode,
+} from './field-mapping-model';
+import { MappingValueType } from '../../../../mapping-profiles/models/mapping-profile.model';
 import { DestinationTypeV2 as DestinationType } from '../../../../models/destination-configuration-v2.model';
 import { ToastService } from '../../../../services/toast.service';
 import {
-  TransformationRulesService, TransformationRule, TransformNodeType, TransformNodeSchema,
+  TransformationRulesService, TransformationRule, TransformNodeType, TransformNodeSchema, TransformArrayMode,
   TRANSFORM_NODE_DEFAULT_VALUE_TYPES,
 } from './transformation-rules.service';
 import { RuleConfigFormComponent, applyNodeDefaults } from './rule-config-form/rule-config-form.component';
@@ -49,6 +54,18 @@ export class FieldMappingJoinPopoverComponent {
    *  0 so a host that never passes it (there are none today) just never shows "Show all sources" rather
    *  than throwing on a missing required input. */
   readonly totalSourceCount = input<number>(0);
+  /** Whether this destination stores structure natively, i.e. is MongoDB — the one destination family where
+   *  a JSON value has a choice to make ("keep it as one escaped string" vs "expand it into a real BSON
+   *  sub-document"). Every other destination writes JSON as text with no alternative, so the control is
+   *  hidden there rather than offering a choice that would do nothing. */
+  readonly isDocumentDestination = input<boolean>(false);
+  /** For a whole-node ('childJson') row only: the display label of the repeating node it reads — its own,
+   *  when that node is the array (Patient.name), or the nearest enclosing one when it is not
+   *  (Patient.contact.name repeats through "Contact"). Null means the node does not repeat at all, which
+   *  hides the instance picker. Resolved by the host, which is the only side holding the source tree
+   *  (FieldMappingCanvasComponent.childArrayLabelFor) — a childJson row carries no `sources`, so unlike an
+   *  ordinary field mapping there is no per-source `arrays` metadata on the row itself to read it from. */
+  readonly childArrayLabel = input<string | null>(null);
 
   readonly save = output<MappingRow>();
   readonly remove = output<void>();
@@ -95,7 +112,7 @@ export class FieldMappingJoinPopoverComponent {
         destinationType,
         resourceType: row.resource,
         destinationField: row.targetName,
-        sourceField: row.sources[0]?.fhirPath ?? null,
+        sourceField: this.ruleSourceField(row),
         resourcePipelineRouteId: this.workflowId() ?? undefined,
         // Only THIS workflow's rule may show here. Without this the popover opened in "update" mode over a
         // rule some other pipeline had authored against the same column.
@@ -117,7 +134,21 @@ export class FieldMappingJoinPopoverComponent {
           if (rule) {
             this.ruleNodeType.set(rule.nodeType);
             this.ruleConfig.set({ ...rule.config });
+            // A rule LOADED in split mode restricts the instance picker exactly as one switched into it
+            // does, so the same reconciliation has to run here. Without it a row whose saved selection is
+            // "All records" and whose saved rule is already split — written by the API, duplicated from
+            // another row, or authored before this restriction existed — opened showing a DISABLED option
+            // as its current value. The author could not re-select it to clear it, and saving without
+            // touching the picker wrote the invalid pair straight back, silently keeping the very
+            // combination the restriction exists to prevent.
+            this.reconcileInstanceWithRuleMode();
             this.ruleSectionOpen.set(true);
+          } else {
+            // Nothing authored yet — start on whichever node type actually fits this row's value shape.
+            // A childJson row's value is a whole JSON array (ArrayPolicy.StoreJson), which is what
+            // ArrayListOperationsNode alone knows how to unwrap into real items; every other node would see
+            // one opaque blob. Still only a starting point — the Type dropdown offers all of them.
+            this.ruleNodeType.set(row.mode === 'childJson' ? 'ArrayListOperations' : 'StringNormalization');
           }
         },
         error: () => this.existingRule.set(null),
@@ -155,12 +186,13 @@ export class FieldMappingJoinPopoverComponent {
         destinationType,
         resourceType: row.resource,
         destinationField: row.targetName,
-        sourceField: row.sources[0]?.fhirPath ?? null,
+        sourceField: this.ruleSourceField(row),
         order: 0,
         onNull: 'Skip',
         errorPolicy: 'NullOut',
         isEnabled: true,
-        arrayMode: 'Whole',
+        // See resolveArrayMode.
+        arrayMode: this.resolveArrayMode(),
         executionPhase: 'PostMapping',
         // A rule that reshapes the value (e.g. DateMathAge turning a Date into an Integer) must declare
         // that output type, or CreateMappingProfileRequestValidator falls back to comparing the RAW
@@ -168,7 +200,14 @@ export class FieldMappingJoinPopoverComponent {
         // Integer), but this field is mapped as Date." The Rules dialog has always sent this; saving the
         // same rule from this inline popover left it null, so which UI attached the rule decided whether
         // the workflow could be saved at all.
-        expectedValueType: TRANSFORM_NODE_DEFAULT_VALUE_TYPES[this.ruleNodeType()] ?? null,
+        //
+        // NumberCast is a special case: its own "Target type" config field (integer/decimal — see
+        // TransformNodeConfigSchemas.cs) is what actually decides the output type, not the node type alone
+        // (unlike DateMathAge, which always produces an Integer). Blindly using the static per-node-type
+        // default here always declared 'Decimal' (NumberCast's schema default), even when the author had
+        // explicitly picked "integer" in this same popover — so an integer-typed destination column always
+        // failed CreateMappingProfileRequestValidator's mismatch check regardless of what was configured.
+        expectedValueType: this.resolveExpectedValueType(),
       })
       .subscribe({
         next: saved => {
@@ -181,6 +220,59 @@ export class FieldMappingJoinPopoverComponent {
           this.toast.error('Could not save the transformation rule', err?.error?.detail ?? err?.message ?? '');
         },
       });
+  }
+
+  /** Node types that operate ON a collection (first/last/count/join/…) and so must see the whole array — the
+   *  client-side mirror of ITransformNode.AcceptsCollections. Running one per element would count 1 per name. */
+  private static readonly COLLECTION_NODE_TYPES: ReadonlySet<TransformNodeType> = new Set<TransformNodeType>(['ArrayListOperations']);
+
+  /** 'PerItem' exactly when the value can be an array — a whole-node row not pinned to one index — AND the node
+   *  converts a single value. The node then runs once per element and the results are reassembled for the
+   *  column, instead of the whole array being handed to a scalar node as one opaque string (which parsed the
+   *  JSON source text itself as a value). A collection node keeps 'Whole': fanning it out would apply every
+   *  aggregate to a single element.
+   *
+   *  An existing rule keeps the mode it was saved with while its node type is unchanged, so editing an
+   *  unrelated setting never silently changes what the column receives — there is no control for this mode. */
+  private resolveArrayMode(): TransformArrayMode {
+    const existing = this.existingRule();
+    if (existing?.arrayMode && existing.nodeType === this.ruleNodeType()) return existing.arrayMode;
+    return this.isChildJson() && this.valueCanBeArray()
+      && !FieldMappingJoinPopoverComponent.COLLECTION_NODE_TYPES.has(this.ruleNodeType())
+      ? 'PerItem'
+      : 'Whole';
+  }
+
+  // Both NumberCast and DateTimeFormat have a "targetType" config field (see TransformNodeConfigSchemas.cs)
+  // that is what the author actually used to pick the output type in this popover, and it overrides the node
+  // type's static default when present. Every other node type has no such ambiguity (its output type is fixed
+  // by the node type alone) and keeps using the static per-node-type default.
+  private static readonly TARGET_TYPE_VALUE_TYPES: Partial<Record<string, MappingValueType>> = {
+    integer: 'Integer',
+    decimal: 'Decimal',
+    date: 'Date',
+    dateTime: 'DateTime',
+    // MappingValueType has no separate 'Instant' tier — an instant-typed column is validated the same as
+    // DateTime (see MappingImportService's DB-type mapping), so both targetType values fold to the same tier.
+    instant: 'DateTime',
+  };
+
+  private resolveExpectedValueType(): MappingValueType | null {
+    if (this.ruleNodeType() === 'NumberCast' || this.ruleNodeType() === 'DateTimeFormat') {
+      const targetType = this.ruleConfig()['targetType'] as string | undefined;
+      const resolved = targetType ? FieldMappingJoinPopoverComponent.TARGET_TYPE_VALUE_TYPES[targetType] : undefined;
+      if (resolved) return resolved;
+    }
+    // DateMathAge's static default (Integer) only holds for its "age" operation — DateMathAgeNode's "add" and
+    // "shift" operations both return a "yyyy-MM-dd" date STRING instead (a de-identification date-shift, not an
+    // age calculation), so a rule configured for either must declare Date, or the runtime coercion this powers
+    // (TransformNodeExecutors.CoerceToExpectedValueType) tries to long.TryParse a date string, fails, and the
+    // unconverted string still hits Postgres's 42804 on a date-typed destination column.
+    if (this.ruleNodeType() === 'DateMathAge') {
+      const operation = this.ruleConfig()['operation'] as string | undefined;
+      if (operation === 'add' || operation === 'shift') return 'Date';
+    }
+    return TRANSFORM_NODE_DEFAULT_VALUE_TYPES[this.ruleNodeType()] ?? null;
   }
 
   deleteRule(): void {
@@ -211,6 +303,10 @@ export class FieldMappingJoinPopoverComponent {
    *  combination is reopened (constructor effect above), so the checkbox — always disabled while type is
    *  'all' — never shows unchecked-but-locked. */
   private withForcedAggregate(row: MappingRow): MappingRow {
+    // Never on a whole-node row: its "All records" already writes the entire node as one JSON array on one
+    // row (ArrayPolicy.StoreJson), so there is no row duplication to prevent and no delimited string to
+    // aggregate into — stamping 'csv' there would only persist a setting nothing reads.
+    if (row.mode === 'childJson') return row;
     if (row.instance?.type !== 'all' || row.instance.aggregate === 'csv') return row;
     return { ...row, instance: { ...row.instance, aggregate: 'csv' } };
   }
@@ -245,7 +341,55 @@ export class FieldMappingJoinPopoverComponent {
     this.dragOffset = null;
   }
 
-  hasArrayAncestors = computed(() => (this.draft()?.sources[0]?.arrays?.length ?? 0) > 0);
+  /** What a transformation rule is keyed by on the source side, for BOTH row shapes. An ordinary 'value'
+   *  row has a real source field; a 'childJson' row has `sources: []` (see MappingRow.sources) and carries its
+   *  path as childNodeId instead — passing null for it there would have keyed the rule to "any source field"
+   *  on that column, so a rule authored on one array node would have been picked up by any other mapping onto
+   *  the same column. Both shapes already agree on the format the backend re-derives at run time
+   *  (RuleSourceFieldFormat.FromJsonPath): serializeRowsFlat sends the childJson row's path as childNodeId,
+   *  which workflow-build-assembler-v2 turns into the same "$.name" JsonPath that normalizes back to
+   *  "Patient.name" — exactly what is persisted here. */
+  private ruleSourceField(row: MappingRow): string | null {
+    return row.sources[0]?.fhirPath ?? row.childNodeId ?? null;
+  }
+
+  /** The whole-node-as-JSON row shape (ArrayPolicy.StoreJson) — no source chips, and a value that reaches
+   *  a transformation rule as one JSON string rather than a scalar. */
+  isChildJson = computed(() => this.draft()?.mode === 'childJson');
+  /** A whole-node row has no per-source `arrays` metadata to read (its `sources` is empty by construction),
+   *  so whether it repeats is the host's answer — see childArrayLabel. */
+  hasArrayAncestors = computed(() =>
+    this.isChildJson()
+      ? this.childArrayLabel() !== null
+      : (this.draft()?.sources[0]?.arrays?.length ?? 0) > 0);
+  /** True while a whole-node row still reads every repeat — what it has always done, and what both of its
+   *  hints describe. False once one instance is singled out, since the value is then a single JSON object
+   *  rather than a JSON array. */
+  readsWholeNode = computed(() => {
+    const instance = this.draft()?.instance;
+    // A criteria selection narrows the node too, even though it resolves to a filter rather than an index.
+    return wholeNodeInstanceIndex(instance) === null && instanceCriteriaPredicate(instance) === null;
+  });
+  /** Whether the whole-node value can arrive as a JSON array — unlike readsWholeNode (which drives the hints),
+   *  a criteria selection counts: its "[?field=value]" filter selects EVERY matching element, so two phone
+   *  numbers still arrive as an array. Only a first/nth selection pins the value to one element. */
+  valueCanBeArray = computed(() => wholeNodeInstanceIndex(this.draft()?.instance) === null);
+  /** Names the single instance a whole-node row reads, for the hints — only ever read while readsWholeNode()
+   *  is false, so the "every instance" case has no phrasing here. */
+  instanceSummary = computed(() => {
+    const d = this.draft();
+    if (d?.instance?.type === 'nth') return `instance #${Math.max(1, Math.floor(d.instance.n ?? 1))}`;
+    // Deliberately not restating the criteria itself — its three inputs sit directly above this line, and
+    // repeating them back reads as noise rather than as confirmation.
+    if (d?.instance?.type === 'criteria') return 'the matching instances';
+    return 'the first instance';
+  });
+  /** The effective instance selection shown in the picker — an unset one means different things per row
+   *  shape (see defaultInstanceType), so the fallback can't be a literal 'first' in the template. */
+  instanceType = computed<MappingInstanceSelection['type']>(() => {
+    const d = this.draft();
+    return d ? (d.instance?.type ?? defaultInstanceType(d)) : 'first';
+  });
   isJoin = computed(() => (this.draft()?.sources.length ?? 0) > 1);
   /** True while `row` is a deliberately narrowed single-source VIEW of a real join with more sources than
    *  are actually shown here (see FieldMappingCanvasComponent.popoverDisplayRow) — gates the "Show all N
@@ -255,6 +399,7 @@ export class FieldMappingJoinPopoverComponent {
 
   onShowAllSources(): void { this.showAllSources.emit(); }
   arrayAncestorLabel = computed(() => {
+    if (this.isChildJson()) return this.childArrayLabel() ?? '';
     const arrays = this.draft()?.sources[0]?.arrays;
     return arrays?.length ? arrays[arrays.length - 1] : '';
   });
@@ -279,6 +424,25 @@ export class FieldMappingJoinPopoverComponent {
     if (!d) return undefined;
     return this.dataTypeForTable()(d.tableName, d.targetName);
   });
+
+  /** Whether to offer the "store as JSON string / as a JSON document" choice: only where it changes
+   *  anything — a destination that can store structure (MongoDB) AND a row whose value actually is JSON
+   *  text (a whole-node mapping, or a Json-typed source field). */
+  showJsonWriteMode = computed(() => {
+    const d = this.draft();
+    return !!d && this.isDocumentDestination() && supportsJsonWriteMode(d);
+  });
+
+  /** Current selection, defaulted to today's behaviour for a row that has never made the choice. */
+  jsonWriteMode = computed<JsonColumnWriteMode>(() => {
+    const d = this.draft();
+    return d ? resolveJsonWriteMode(d) : 'string';
+  });
+
+  onJsonWriteModeChange(value: string): void {
+    const mode: JsonColumnWriteMode = value === 'document' ? 'document' : 'string';
+    this.draft.update(d => (d ? { ...d, jsonWriteMode: mode } : d));
+  }
 
   approximationNote = computed(() => {
     const d = this.draft();
@@ -312,12 +476,62 @@ export class FieldMappingJoinPopoverComponent {
     this.draft.update(d => (d ? { ...d, delimiter: value } : d));
   }
 
+  /**
+   * True while the attached rule is a Concatenation/Templating in SPLIT mode, which is the one configuration
+   * that cannot cope with more than one instance.
+   *
+   * Split takes a single string apart. Under "All records" the chain is handed every instance instead, and
+   * the split branch stringifies that list rather than its items — writing the literal type name into the
+   * column. "Match criteria" is only a problem when the criteria matches several instances, but it is
+   * blocked alongside it so the rule is one a person can hold: split reads one value.
+   *
+   * Concat is unaffected and keeps every option — joining across instances is exactly what it is for.
+   */
+  readonly splitModeRestrictsInstances = computed(() =>
+    this.ruleNodeType() === 'ConcatenationTemplating' && this.ruleConfig()['mode'] === 'split');
+
+  /** Whether one instance-picker option can be chosen right now — see splitModeRestrictsInstances. */
+  isInstanceTypeDisabled(type: MappingInstanceSelection['type']): boolean {
+    return this.splitModeRestrictsInstances() && (type === 'all' || type === 'criteria');
+  }
+
   onInstanceTypeChange(type: MappingInstanceSelection['type']): void {
+    if (this.isInstanceTypeDisabled(type)) return;
     this.draft.update(d => (d ? this.withForcedAggregate({ ...d, instance: { ...(d.instance ?? { type: 'first' }), type } }) : d));
+  }
+
+  /** The config form mutates its @Input object in place, so neither the signal nor change detection sees an
+   *  edit on its own. Re-setting the signal with a copy is what makes splitModeRestrictsInstances recompute
+   *  when the mode changes — without it the picker would keep whatever enabled/disabled state it had when
+   *  the popover opened. */
+  onRuleConfigChanged(config: Record<string, string>): void {
+    this.ruleConfig.set({ ...config });
+    this.reconcileInstanceWithRuleMode();
+  }
+
+  /**
+   * Switching the rule INTO split mode while a now-blocked instance type is selected falls back to "First
+   * instance" rather than leaving the picker showing a disabled option as the current value. Disabling an
+   * option the row is already on would otherwise save the exact combination the disabling exists to prevent.
+   */
+  private reconcileInstanceWithRuleMode(): void {
+    if (!this.splitModeRestrictsInstances()) return;
+    const current = this.instanceType();
+    if (current !== 'all' && current !== 'criteria') return;
+    this.draft.update(d => (d ? { ...d, instance: { type: 'first' } } : d));
   }
 
   onInstanceField(patch: Partial<MappingInstanceSelection>): void {
     this.draft.update(d => (d ? { ...d, instance: { ...(d.instance ?? { type: 'first' }), ...patch } } : d));
+  }
+
+  /** Parses the "Instance #" input into a valid 1-based instance number (1 = first). Falls back to 1
+   *  (rather than a bare `+value || 1`, which would be fine here since 0 was never a meaningful typed
+   *  value for a 1-based field — kept as its own named method anyway to match
+   *  field-mapping-list.component.ts's identical helper and stay consistent if the minimum ever changes). */
+  parseInstanceNumber(raw: string): number {
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 1 ? Math.trunc(n) : 1;
   }
 
   onReferenceResourceChange(value: string): void {

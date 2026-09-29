@@ -51,6 +51,49 @@
         }
       </mat-form-field>
 
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Short description</mat-label>
+        <input
+          matInput
+          formControlName="shortDescription"
+          placeholder="e.g. Type 2 diabetes w/o comp"
+          autocomplete="off"
+        />
+        @if (hasError('shortDescription', 'maxlength')) {
+          <mat-error>Maximum 4000 characters allowed.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Long description</mat-label>
+        <textarea
+          matInput
+          formControlName="longDescription"
+          rows="2"
+          placeholder="The full-length description published by the source"
+        ></textarea>
+        @if (hasError('longDescription', 'maxlength')) {
+          <mat-error>Maximum 8000 characters allowed.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="form-field">
+        <mat-label>Long common name</mat-label>
+        <input
+          matInput
+          formControlName="longCommonName"
+          placeholder="e.g. LOINC LONG_COMMON_NAME or SNOMED fully specified name"
+          autocomplete="off"
+        />
+        @if (hasError('longCommonName', 'maxlength')) {
+          <mat-error>Maximum 4000 characters allowed.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-checkbox formControlName="isActive" class="form-checkbox">
+        Active
+      </mat-checkbox>
+
     </form>
   </mat-dialog-content>
 

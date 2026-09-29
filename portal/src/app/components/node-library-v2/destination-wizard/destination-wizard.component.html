@@ -738,7 +738,7 @@
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
           <span class="dw-section-hint">
-            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : isFhir() ? 'Map FHIR paths to FHIR repository resource fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : isDataLake() ? 'Map FHIR paths to the fields sent in each webhook record.' : isFabric() ? 'Map FHIR paths to OneLake file columns.' : 'Map FHIR paths to CSV file columns.' }}
+            {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : isFhir() ? 'Map FHIR paths to FHIR repository resource fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : isDataLake() ? 'Map FHIR paths to the fields sent in each webhook record.' : isFabric() ? 'Map FHIR paths to OneLake file columns.' : isApiEndpoint() ? 'Map FHIR paths to the fields sent in each request.' : 'Map FHIR paths to CSV file columns.' }}
             Choose a data group to configure.
           </span>
         </div>
@@ -801,14 +801,11 @@
                        of the mapping list for a SQL destination, and opens the payload-tree rules panel
                        for a FHIR one — so a second entry point from this row is redundant. The
                        TransformationRules:Hidden setting (rulesHidden) still gates the rules UI itself. -->
-                  @if (canSelectExistingProfile()) {
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-secondary"
-                      title="Reuse a mapping profile already saved for this source connection, destination, and resource type"
-                      (click)="openExistingProfilePicker(r)"
-                    >Select Existing</button>
-                  }
+                  <!-- "Select Existing" used to sit here, reusing a mapping profile already saved for this
+                       source connection + destination + resource type. Hidden on request, leaving "Map" as
+                       the single way into a data group's mapping. canSelectExistingProfile() and
+                       openExistingProfilePicker() (and ExistingMappingProfileDialogComponent behind them)
+                       are left intact, so restoring it is putting this block back. -->
                 </td>
               </tr>
             }
@@ -837,13 +834,15 @@
           (createDeIdentificationProfileRequested)="createDeIdentificationProfile()"
           [mappingRows]="mappingRows()"
           [targetByResource]="targetByResource()"
+          [pendingFreeColumns]="pendingFreeColumnsByCard()"
+          (pendingFreeColumnsChange)="pendingFreeColumnsByCard.set($event)"
           [availableFields]="availableFieldsFn"
           [defaultAvailableFields]="defaultAvailableFieldsFn"
           [columnsForResourceTarget]="columnsForResourceTargetFn"
           [hasSqlTables]="hasSqlTables()"
           [sqlTableOptions]="sqlTableOptions()"
           [sqlTableNames]="sqlTableBareNames()"
-          [schemaAuthoringEnabled]="isSql()"
+          [schemaAuthoringEnabled]="hasLiveRelationalSchema()"
           [schemaLoadState]="schemaLoadState()"
           [csvDelimiterKey]="activeFormConfig()['dest_delimiter'] ?? 'comma'"
           [extraTables]="extraTablesFor(activeMappingGroup()!)"
@@ -876,6 +875,7 @@
           (schemaOpsCancelledForTable)="onSchemaOpsCancelledForTable($event)"
           (sourcePayloadLoaded)="onSourcePayloadLoaded($event)"
           (sourcePayloadReset)="onSourcePayloadReset($event)"
+          (destinationTemplateGenerated)="onDestinationTemplateGenerated($event)"
           (childTableRelationAdded)="onChildTableRelationAdded($event)"
           (retrySchemaLoad)="retrySchemaLoad()"
         />
@@ -903,13 +903,17 @@
         </div>
         <div class="dw-review-card">
           <span class="dw-review-key">De-identification</span>
-          <span class="dw-review-val" [class.dw-review-val--warn]="!selectedDeIdentificationProfileId() || !selectedProfileHasRules()">
-            @if (!selectedDeIdentificationProfileId()) {
-              ⚠ No policy assigned
-            } @else if (!selectedProfileHasRules()) {
-              ⚠ {{ selectedDeIdentificationProfileName() }} (no active rules)
+          <!-- The rule COUNT, not the policy name. The policy is created automatically and named with the
+               workflow id, which tells a reader nothing — and read "None" whenever the freshly created policy
+               had not yet reached the loaded profile list. What matters here is whether anything is actually
+               being redacted, and how much. -->
+          <span class="dw-review-val" [class.dw-review-val--warn]="selectedProfileRuleCount() === 0">
+            @if (selectedProfileRuleCount() === null) {
+              Rule count unavailable
+            } @else if (selectedProfileRuleCount() === 0) {
+              ⚠ No rules
             } @else {
-              {{ selectedDeIdentificationProfileName() }}
+              {{ selectedProfileRuleCount() }} {{ selectedProfileRuleCount() === 1 ? 'rule' : 'rules' }}
             }
           </span>
         </div>
@@ -938,10 +942,6 @@
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
-          <div class="dw-review-card">
-            <span class="dw-review-key">Collection</span>
-            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_collection'] || '—' }}</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Write mode</span>
@@ -1068,6 +1068,23 @@
           <div class="dw-review-card">
             <span class="dw-review-key">Authentication</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_fabricAuthMode'] === 'servicePrincipal' ? 'Service principal' : 'Managed identity' }}</span>
+          </div>
+        } @else if (isApiEndpoint()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Endpoint</span>
+            <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_apiHttpMethod'] }} {{ activeFormConfig()['dest_apiEndpointUrl'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Authentication</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_apiAuthMode'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Payload</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_apiPayloadShape'] }}, up to {{ activeFormConfig()['dest_apiBatchSize'] }} records per request{{ activeFormConfig()['dest_apiBodyTemplateJson'] ? ' (custom body template)' : '' }}</span>
           </div>
         } @else if (isAzureFhir()) {
           <div class="dw-review-card">

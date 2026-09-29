@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -7,10 +7,18 @@ import { TransformConfigFieldSchema, TransformNodeSchema } from '../transformati
 /** Whether a schema field applies given the config's current values — false for a field scoped to another
  *  field's value (see TransformConfigFieldSchema.visibleWhen) when that value isn't currently selected, e.g.
  *  keepLength while mode is "hash". A field with no visibleWhen always applies. */
-export function isConfigFieldVisible(field: TransformConfigFieldSchema, config: Record<string, string>): boolean {
+export function isConfigFieldVisible(
+  field: TransformConfigFieldSchema, config: Record<string, string>,
+  schema?: TransformNodeSchema): boolean {
   const rule = field.visibleWhen;
   if (!rule) return true;
-  return rule.values.includes(config[rule.key]);
+  // An ABSENT controlling key falls back to that field's schema default, because that is what the node
+  // itself does: ConcatenationTemplatingNode reads config.Get("mode", "concat"), so a rule saved before
+  // `mode` was ever written still RUNS as concat. Comparing against undefined instead hid its "Join
+  // separator", and pruneInapplicableConfig then deleted the separator on the next save — silently
+  // reverting a rule's configured separator to the default space, with nothing on screen to show it.
+  const current = config[rule.key] ?? schema?.fields.find(f => f.key === rule.key)?.defaultValue ?? undefined;
+  return current !== undefined && rule.values.includes(current);
 }
 
 /** Merges a node type's schema defaults into an existing config object — any key the config doesn't
@@ -39,7 +47,7 @@ export function pruneInapplicableConfig(
   if (!schema) return config;
   const pruned = { ...config };
   for (const field of schema.fields) {
-    if (!isConfigFieldVisible(field, pruned)) delete pruned[field.key];
+    if (!isConfigFieldVisible(field, pruned, schema)) delete pruned[field.key];
   }
   return pruned;
 }
@@ -180,6 +188,11 @@ interface KeyValueRow {
 export class RuleConfigFormComponent {
   @Input() schema: TransformNodeSchema | undefined;
   @Input() config: Record<string, string> = {};
+  /** Fires after every edit, carrying the same object `config` points at. The host already holds that
+   *  reference and saves from it, so this is not how the value reaches the save — it exists so a host that
+   *  DERIVES something from the config (the join popover gates its instance picker on mode === "split") is
+   *  told when to re-derive. Mutating in place is invisible to a signal or an OnPush parent otherwise. */
+  @Output() readonly configChange = new EventEmitter<Record<string, string>>();
   /** Renders every applicable field as one wrapping row with no "Advanced Options" collapse, for a host
    *  form that wants its controls on a single line. Only sensible for a short schema — the de-identification
    *  rule's mode plus whichever single field that mode uses. Left false everywhere else, where the default
@@ -241,7 +254,7 @@ export class RuleConfigFormComponent {
   /** The schema's fields minus those scoped to a mode that isn't selected — e.g. keepLength disappears the
    *  moment mode switches off "mask", rather than sitting there implying it still does something. */
   private applicableFields(): TransformConfigFieldSchema[] {
-    return (this.schema?.fields ?? []).filter(f => isConfigFieldVisible(f, this.config));
+    return (this.schema?.fields ?? []).filter(f => isConfigFieldVisible(f, this.config, this.schema));
   }
 
   setValue(key: string, value: string | number | null): void {
@@ -255,8 +268,18 @@ export class RuleConfigFormComponent {
     // typed under "redact" would still be sitting in the config after switching to "hash". Mutated in
     // place because `config` is an @Input object the parent holds a reference to and saves from.
     for (const field of this.schema?.fields ?? []) {
-      if (!isConfigFieldVisible(field, this.config)) delete this.config[field.key];
+      if (!isConfigFieldVisible(field, this.config, this.schema)) delete this.config[field.key];
     }
+
+    // And a field that survives the switch but no longer means what it did must be cleared too. Visibility
+    // cannot express that case: ConcatenationTemplating's template applies in both modes, binding "{0} {1}"
+    // to a joined column's source fields under concat and to a split's own pieces under split — so carrying
+    // one across looked like the setting had been kept when it had really been re-pointed at other inputs.
+    for (const field of this.schema?.fields ?? []) {
+      if (field.resetOn?.includes(key)) delete this.config[field.key];
+    }
+
+    this.configChange.emit(this.config);
   }
 
   /** A combo field is in "custom" mode (dropdown shows "Custom…", text box visible) whenever its current

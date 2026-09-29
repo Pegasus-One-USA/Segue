@@ -1,11 +1,14 @@
 namespace FHIRBridge.Runtime.Domain.Workflows;
 
 /// <summary>
-/// The actual data a node produced during a workflow run — what an extraction node fetched, what a transform
-/// node produced, what a destination node wrote — captured so the Execution History screen can answer "what was
-/// fetched/mapped/stored" for a workflow run, not just its status. Unlike <see cref="WorkflowNodeRun.LineageJson"/>
-/// (node/contract/metadata only), <see cref="PayloadJson"/> holds the real (potentially PHI-bearing) output, so
-/// implementations are expected to encrypt it at rest.
+/// What a node produced during a workflow run — how much an extraction node fetched, a transform node produced,
+/// or a destination node wrote — so the Execution History screen can answer "how much was fetched/mapped/stored"
+/// for a run, not just its status.
+///
+/// DELIBERATELY METADATA ONLY: this record carries counts and resource-type names, never the resource content
+/// itself. The former PayloadJson column held whole Epic FHIR resources and was removed — encrypted-at-rest PHI
+/// is still PHI, and the screens that used it only ever needed the counts, which are now recorded directly at
+/// write time instead of being re-derived by parsing the stored payload back out.
 /// </summary>
 public sealed class WorkflowNodeRunPayload
 {
@@ -15,8 +18,9 @@ public sealed class WorkflowNodeRunPayload
         Guid workflowNodeRunId,
         string nodeType,
         string contract,
-        string payloadJson,
         int? itemCount,
+        string? resourceTypeCountsJson,
+        string? deliveryDetailJson,
         DateTimeOffset recordedAtUtc)
     {
         Id = id == Guid.Empty ? Guid.NewGuid() : id;
@@ -24,8 +28,9 @@ public sealed class WorkflowNodeRunPayload
         WorkflowNodeRunId = workflowNodeRunId;
         NodeType = nodeType;
         Contract = contract;
-        PayloadJson = payloadJson;
         ItemCount = itemCount;
+        ResourceTypeCountsJson = resourceTypeCountsJson;
+        DeliveryDetailJson = deliveryDetailJson;
         RecordedAtUtc = recordedAtUtc;
     }
 
@@ -34,7 +39,17 @@ public sealed class WorkflowNodeRunPayload
     public Guid WorkflowNodeRunId { get; }
     public string NodeType { get; }
     public string Contract { get; }
-    public string PayloadJson { get; }
+
+    /// <summary>How many items this node emitted (resources fetched, records mapped, rows written).</summary>
     public int? ItemCount { get; }
+
+    /// <summary>Per-resource-type counts as a JSON object, e.g. {"Patient":1,"Observation":42} — resource TYPE
+    /// names and totals only, no identifiers or content. Null for contracts that aren't resource batches.</summary>
+    public string? ResourceTypeCountsJson { get; }
+
+    /// <summary>A destination node's delivery metadata (records written, download URL, email envelope) as JSON —
+    /// how much went where, never what was in it. Null for non-destination nodes.</summary>
+    public string? DeliveryDetailJson { get; }
+
     public DateTimeOffset RecordedAtUtc { get; }
 }

@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Destination — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+    --hidden: #64748B;
+    --hidden-bg: #F1F5F9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 32px 0 12px;
+  }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  h4 { font-size: 14.5px; font-weight: 700; margin: 24px 0 8px; }
+  p { margin: 0 0 14px; color: #334155; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 12px 0 20px;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-active   { color: var(--new);      background: var(--new-bg); }
+  .pill-hidden   { color: var(--hidden);   background: var(--hidden-bg); }
+  .pill-required { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-optional { color: var(--muted);    background: var(--hidden-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  ul.feature-list { padding-left: 20px; margin: 0 0 16px; }
+  ul.feature-list li { margin-bottom: 10px; }
+  ul.feature-list li strong { color: var(--ink); }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.danger { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+  .call-type {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 22px;
+  }
+  .call-type .call-type-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+  .call-type .call-type-head h3 { margin: 0; }
+  .call-type .call-type-meta { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  .call-type .call-type-meta code { margin-right: 4px; }
+
+  .setup-steps {
+    display: flex; flex-direction: column; gap: 8px;
+    margin: 14px 0 18px;
+    background: #F8FAFC; border: 1px dashed var(--border); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .setup-steps .setup-steps-title { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 2px; }
+  .setup-step { display: flex; gap: 10px; align-items: flex-start; }
+  .setup-step .step-num {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--primary); color: #fff; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
+  }
+  .setup-step .step-body { font-size: 13px; color: #334155; }
+  .setup-step .step-body strong { color: var(--ink); }
+
+  .auth-mode {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 20px;
+  }
+  .auth-mode .auth-mode-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .auth-mode .auth-mode-head h3 { margin: 0; }
+  .auth-mode .auth-mode-value { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  table.spec-table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 13px; }
+  table.spec-table th {
+    text-align: left;
+    padding: 8px 10px;
+    background: #F1F5F9;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    width: 210px;
+  }
+  table.spec-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: #334155; }
+  table.spec-table tr:last-child td, table.spec-table tr:last-child th { border-bottom: none; }
+
+  table.config-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 20px;
+    font-size: 12.8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  table.config-table th {
+    background: #F1F5F9;
+    text-align: left;
+    padding: 9px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  table.config-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.config-table tr:last-child td { border-bottom: none; }
+  table.config-table tr:hover td { background: #FAFBFC; }
+  table.config-table td.key { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; color: #0F172A; }
+  table.config-table td.default { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  table.config-table td span.default, table.spec-table td span.default { color: var(--muted); font-size: 0.93em; }
+
+  details.trace {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    padding: 0;
+  }
+  details.trace summary {
+    cursor: pointer;
+    padding: 12px 18px;
+    font-weight: 700;
+    font-size: 13.5px;
+    list-style: none;
+  }
+  details.trace summary::-webkit-details-marker { display: none; }
+  details.trace summary::before { content: "▸ "; color: var(--primary); }
+  details.trace[open] summary::before { content: "▾ "; }
+  details.trace .trace-body { padding: 0 18px 16px; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+    details.trace { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>API Destination (ApiEndpoint)</h1>
+    <p class="subtitle">Configuration reference — every call-setup type and every authentication mode the destination supports, with example wizard field values you can copy straight into a destination row.</p>
+    <div class="meta">
+      <div><strong>Destination type</strong>ApiEndpoint (21st destination type)</div>
+      <div><strong>Backend</strong><code style="background:rgba(255,255,255,.15);color:#fff;">ApiEndpointSettings</code> / <code style="background:rgba(255,255,255,.15);color:#fff;">MappedApiEndpointDestinationWriter</code></div>
+      <div><strong>Test harness</strong>Demo_TestApp API Test Console (<code style="background:rgba(255,255,255,.15);color:#fff;">/apitest</code>)</div>
+      <div><strong>Config storage</strong>flat <code style="background:rgba(255,255,255,.15);color:#fff;">dest_*</code>-keyed <code style="background:rgba(255,255,255,.15);color:#fff;">ConnectionMetadataJson</code> bag</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#core-fields">Core configuration fields</a></li>
+      <li><a href="#call-types">Call-setup types (7)</a></li>
+      <li><a href="#ct-single">&nbsp;&nbsp;1. Single object (RecordPerRequest)</a></li>
+      <li><a href="#ct-array">&nbsp;&nbsp;2. JSON array (default)</a></li>
+      <li><a href="#ct-ndjson">&nbsp;&nbsp;3. NDJSON</a></li>
+      <li><a href="#ct-envelope">&nbsp;&nbsp;4. Envelope (meta + records)</a></li>
+      <li><a href="#ct-custom">&nbsp;&nbsp;5. Custom shape (Request Body Template)</a></li>
+      <li><a href="#ct-flat">&nbsp;&nbsp;6. Multi-resource — Flat</a></li>
+      <li><a href="#ct-nested">&nbsp;&nbsp;7. Multi-resource — Nested</a></li>
+      <li><a href="#ct-nested-deep">&nbsp;&nbsp;&nbsp;&nbsp;— N levels deep</a></li>
+      <li><a href="#mr-howto">How to configure multi-resource mapping (step-by-step)</a></li>
+      <li><a href="#mr-select">&nbsp;&nbsp;Step 1 — Select resources</a></li>
+      <li><a href="#mr-structure">&nbsp;&nbsp;Step 2 — Give each resource its destination JSON structure</a></li>
+      <li><a href="#mr-map">&nbsp;&nbsp;Step 3 — Map fields onto each resource's own card</a></li>
+      <li><a href="#mr-relations">&nbsp;&nbsp;Step 4 — Configure the multi-resource settings</a></li>
+      <li><a href="#mr-pitfalls">&nbsp;&nbsp;Common mistakes</a></li>
+      <li><a href="#mr-worked-example">&nbsp;&nbsp;Worked example: diagnosing this exact symptom</a></li>
+      <li><a href="#auth-modes">Authentication modes (8)</a></li>
+      <li><a href="#test-harness">Demo_TestApp test endpoints reference</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="overview"><span class="num">1.</span>Overview</h2>
+  <p class="section-intro">
+    <strong>ApiEndpoint</strong> is FHIRBridge's general-purpose, fully-configurable outbound REST destination — the
+    one built specifically so an arbitrary customer- or partner-owned API never forces a workaround. Every other
+    destination type assumes a fixed shape (a SQL table, a CSV file, a specific vendor's ingestion contract);
+    ApiEndpoint instead lets the caller describe exactly what their API expects — HTTP method, batching, payload
+    framing, and (via the <strong>Request Body Template</strong>) the literal JSON shape the receiving API needs —
+    and FHIRBridge substitutes each record's mapped values into it.
+  </p>
+  <div class="summary-grid">
+    <div class="card"><div class="num">7</div><div class="label">Call-setup / payload types</div></div>
+    <div class="card"><div class="num">8</div><div class="label">Authentication modes</div></div>
+    <div class="card"><div class="num">4</div><div class="label">HTTP methods (POST/PUT/PATCH/DELETE)</div></div>
+    <div class="card"><div class="num">2</div><div class="label">Multi-resource combine modes (Flat / Nested)</div></div>
+  </div>
+  <div class="callout">
+    <strong>Try every example live</strong>
+    Every example on this page has a matching sample receiver in Demo_TestApp's API Test Console
+    (<code>http://localhost:4300/api-test-console</code> in local dev, backend at <code>http://localhost:5500</code>) —
+    point a real ApiEndpoint destination at the listed path, run it, and the console's "Received calls" tab shows
+    exactly what arrived and whether that sample's strict validation accepted it. See §13.
+  </div>
+
+  <h2 id="core-fields"><span class="num">2.</span>Core configuration fields</h2>
+  <p class="section-intro">Every ApiEndpoint destination sets these regardless of which call-setup type or auth mode it uses. All are read from the destination's flat <code>dest_*</code>-keyed connection-metadata bag by <code>ApiEndpointSettings.Parse</code>.</p>
+  <table class="config-table">
+    <tr><th>Field</th><th>Metadata key</th><th>Example value</th><th>Default</th></tr>
+    <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>https://api.partner.com/v1/records</code></td><td class="default">—required—</td></tr>
+    <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code> / <code>PUT</code> / <code>PATCH</code> / <code>DELETE</code></td><td class="default">POST</td></tr>
+    <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>true</code></td><td class="default">false</td></tr>
+    <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td><code>application/json</code></td><td class="default">application/json (application/x-ndjson for NDJSON)</td></tr>
+    <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>250</code></td><td class="default">500 (max 50000)</td></tr>
+    <tr><td>Max request size (bytes)</td><td class="key">dest_apiMaxRequestBytes</td><td><code>2097152</code> (2 MB)</td><td class="default">4194304 (4 MB, max 96 MB)</td></tr>
+    <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td><td class="default">30 (max 600)</td></tr>
+    <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td><td class="default">3 (max 10)</td></tr>
+    <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td><td class="default">2 (doubles each attempt, max 60)</td></tr>
+    <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td><code>200, 201, 202</code></td><td class="default">any 2xx</td></tr>
+    <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>gzip</code></td><td class="default">none</td></tr>
+    <tr><td>On failure</td><td class="key">dest_apiOnFailure</td><td><code>isolateBatch</code></td><td class="default">fail (fails the whole run)</td></tr>
+    <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td><code>{"X-Tenant":"acme"}</code></td><td class="default">none</td></tr>
+    <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td><code>{"version":"2"}</code></td><td class="default">none</td></tr>
+    <tr><td>Include full source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td><td class="default">false</td></tr>
+  </table>
+
+  <h2 id="call-types"><span class="num">3.</span>Call-setup types</h2>
+  <p class="section-intro">Set via <code>dest_apiPayloadShape</code> (and, for the last two, <code>dest_apiMultiResourceMode</code>) — how a batch of mapped records is framed into the request body. Every "Setup steps" box below references the destination card's <strong>"⇩ Load JSON payload"</strong> button — a solid blue pill on the card's toolbar, deliberately styled to stand out from the small "+"/"Add" buttons next to it (and to read as the same weight of action as the source-side tree's own "⇩ Load JSON payload" toolbar button above it).</p>
+
+  <div class="call-type" id="ct-single">
+    <div class="call-type-head"><h3>1. Single object — one record per request</h3><span class="pill pill-required">RecordPerRequest</span></div>
+    <div class="call-type-meta">Matches Demo_TestApp's <code>SingleRecord</code> sample &middot; <code>POST http://localhost:5500/api/apitest/single-record</code></div>
+    <p>For an API that can't accept a batch at all. Every batching setting (<code>dest_apiBatchSize</code>, <code>dest_apiMaxRequestBytes</code>) is ignored — the destination sends one bare JSON object per mapped record, one request per record.</p>
+    <div class="setup-steps">
+      <div class="setup-steps-title">Setup steps</div>
+      <div class="setup-step"><span class="step-num">1</span><span class="step-body"><strong>Select resources:</strong> check <strong>Patient</strong> only — a single resource type, one card.</span></div>
+      <div class="setup-step"><span class="step-num">2</span><span class="step-body"><strong>Destination structure:</strong> on the Patient card, "Load JSON payload" with <code>{"mrn":"...","firstName":"...","lastName":"...","dateOfBirth":"...","gender":"..."}</code> — no separate template needed, this shape IS the request body (this is the default fixed shape's <code>values</code> object; you can skip Load JSON payload entirely and just let mapped fields flow through unmapped-to-a-template).</span></div>
+      <div class="setup-step"><span class="step-num">3</span><span class="step-body"><strong>Map fields:</strong> drag <code>Patient.identifier[MRN].value</code> → <code>mrn</code>, <code>Patient.name.given</code> → <code>firstName</code>, <code>Patient.name.family</code> → <code>lastName</code>, <code>Patient.birthDate</code> → <code>dateOfBirth</code>, <code>Patient.gender</code> → <code>gender</code>.</span></div>
+    </div>
+    <p><strong>Every wizard field, filled in</strong> (fields not relevant to this setup — auth, multi-resource — are left at their defaults/blank):</p>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Single Record</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/single-record</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>none</code> (see §4 for auth examples)</td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td>—</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>recordPerRequest</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—<span class="default"> (application/json)</span></td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code> <span class="default">(ignored — RecordPerRequest pins it to 1)</span></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code> <span class="default">(ignored)</span></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td><code>200, 201</code></td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—<span class="default"> (uses the default record shape below)</span></td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+    <p><strong>Example request body</strong> (default fixed shape — no Request Body Template configured):</p>
+    <pre><code>{
+  "pipelineRunId": "b6f1...",
+  "resourceType": "Patient",
+  "destinationObject": "Patient",
+  "sourceResourceId": "pat-1001",
+  "writtenOnUtc": "2026-09-15T10:00:00Z",
+  "values": { "mrn": "MRN-1001", "firstName": "Alice", "lastName": "Johnson", "dateOfBirth": "1985-03-14", "gender": "female" }
+}</code></pre>
+  </div>
+
+  <div class="call-type" id="ct-array">
+    <div class="call-type-head"><h3>2. JSON array of records</h3><span class="pill pill-active">Default</span></div>
+    <div class="call-type-meta">Matches Demo_TestApp's <code>RecordsBatch</code> sample &middot; <code>POST http://localhost:5500/api/apitest/records-batch</code></div>
+    <p>The destination's default — batches many mapped records into a single JSON array per request, split whenever <code>dest_apiBatchSize</code> or <code>dest_apiMaxRequestBytes</code> is reached.</p>
+    <div class="setup-steps">
+      <div class="setup-steps-title">Setup steps</div>
+      <div class="setup-step"><span class="step-num">1</span><span class="step-body"><strong>Select resources:</strong> check <strong>Patient</strong> only.</span></div>
+      <div class="setup-step"><span class="step-num">2</span><span class="step-body"><strong>Destination structure:</strong> on the Patient card, "Load JSON payload" with <code>{"mrn":"...","firstName":"...","lastName":"..."}</code>.</span></div>
+      <div class="setup-step"><span class="step-num">3</span><span class="step-body"><strong>Map fields:</strong> <code>Patient.identifier[MRN].value</code> → <code>mrn</code>, <code>Patient.name.given</code> → <code>firstName</code>, <code>Patient.name.family</code> → <code>lastName</code>. No auth, no multi-resource settings needed.</span></div>
+    </div>
+    <p><strong>Every wizard field, filled in</strong>:</p>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Bulk Import</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/records-batch</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>none</code> (see §4)</td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td>—</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—<span class="default"> (application/json)</span></td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td><code>200, 202</code></td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td><code>{"X-Tenant":"acme"}</code></td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>isolateBatch</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+    <pre><code>[
+  { "pipelineRunId": "b6f1...", "resourceType": "Patient", "sourceResourceId": "pat-2001", "values": { "mrn": "MRN-2001", "firstName": "Bob", "lastName": "Smith" } },
+  { "pipelineRunId": "b6f1...", "resourceType": "Patient", "sourceResourceId": "pat-2002", "values": { "mrn": "MRN-2002", "firstName": "Carla", "lastName": "Diaz" } }
+]</code></pre>
+  </div>
+
+  <div class="call-type" id="ct-ndjson">
+    <div class="call-type-head"><h3>3. NDJSON — one record per line</h3></div>
+    <div class="call-type-meta">Matches Demo_TestApp's <code>RecordsNdjson</code> sample &middot; <code>POST http://localhost:5500/api/apitest/records-ndjson</code></div>
+    <p>Each mapped record is its own JSON object on its own line — no surrounding array, no commas between records. For an API that streams/parses line by line rather than buffering a whole array.</p>
+    <div class="setup-steps">
+      <div class="setup-steps-title">Setup steps</div>
+      <div class="setup-step"><span class="step-num">1</span><span class="step-body"><strong>Select resources:</strong> check <strong>Patient</strong> only.</span></div>
+      <div class="setup-step"><span class="step-num">2</span><span class="step-body"><strong>Destination structure:</strong> on the Patient card, "Load JSON payload" with <code>{"mrn":"...","firstName":"...","lastName":"..."}</code> — identical to §3.2's structure; only <code>dest_apiPayloadShape</code> differs.</span></div>
+      <div class="setup-step"><span class="step-num">3</span><span class="step-body"><strong>Map fields:</strong> same three mappings as §3.2 (JSON array).</span></div>
+    </div>
+    <p><strong>Every wizard field, filled in</strong>:</p>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Streamed Records</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/records-ndjson</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>none</code> (see §4)</td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td>—</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>ndjson</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—<span class="default"> (auto-set to application/x-ndjson)</span></td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>gzip</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>1000</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—<span class="default"> (any 2xx)</span></td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+    <pre><code>{"pipelineRunId":"b6f1...","resourceType":"Patient","values":{"mrn":"MRN-7001","firstName":"Grace","lastName":"Kim"}}
+{"pipelineRunId":"b6f1...","resourceType":"Patient","values":{"mrn":"MRN-7002","firstName":"Hiro","lastName":"Tanaka"}}</code></pre>
+  </div>
+
+  <div class="call-type" id="ct-envelope">
+    <div class="call-type-head"><h3>4. Envelope — run metadata plus records</h3></div>
+    <div class="call-type-meta">Matches Demo_TestApp's <code>RecordsEnvelope</code> sample &middot; <code>POST http://localhost:5500/api/apitest/records-envelope</code></div>
+    <p>Wraps the batch with provenance — <code>{ "meta": {...}, "records": [...] }</code> — for an API that wants to know what a batch IS before reading what's in it. <code>meta</code> fields are regular mappable columns on the Mapping Profile screen (prefixed "Meta"), resolved from the batch's first record; <code>recordCount</code> is the one field auto-computed from the real batch size, never mapped.</p>
+    <div class="setup-steps">
+      <div class="setup-steps-title">Setup steps</div>
+      <div class="setup-step"><span class="step-num">1</span><span class="step-body"><strong>Select resources:</strong> check <strong>Patient</strong> only — the envelope wraps ONE resource type's records, same as JSON array.</span></div>
+      <div class="setup-step"><span class="step-num">2</span><span class="step-body"><strong>Destination structure:</strong> on the Patient card, "Load JSON payload" with the FULL envelope shape — <code>{"meta":{"resourceType":"...","recordCount":0,"routeName":"..."},"records":[{"mrn":"...","firstName":"...","lastName":"..."}]}</code> — this is what makes "MetaResourceType"/"MetaRouteName" appear as their own mappable columns, distinct from the per-record ones.</span></div>
+      <div class="setup-step"><span class="step-num">3</span><span class="step-body"><strong>Map fields:</strong> <code>mrn</code>/<code>firstName</code>/<code>lastName</code> as usual, PLUS (optionally) a source field onto <code>MetaResourceType</code>/<code>MetaRouteName</code> if your API needs real values there — leave them unmapped and they render as their literal template text. Never map anything onto <code>recordCount</code> — it's auto-computed, not a mapping target.</span></div>
+    </div>
+    <p><strong>Every wizard field, filled in</strong>:</p>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Batch With Metadata</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/records-envelope</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>none</code> (see §4)</td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td>—</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>envelope</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—<span class="default"> (application/json)</span></td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—<span class="default"> (any 2xx)</span></td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td><code>{"meta":{"resourceType":"{{MetaResourceType}}","recordCount":"{{recordCount}}","routeName":"{{MetaRouteName}}"},"records":[{"mrn":"{{mrn}}","firstName":"{{firstName}}","lastName":"{{lastName}}"}]}</code> (optional — a custom envelope shape; blank uses the fixed one shown below)</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+    <pre><code>{
+  "meta": { "resourceType": "Patient", "recordCount": 2, "routeName": "Nightly Patient Sync" },
+  "records": [
+    { "mrn": "MRN-3001", "firstName": "Dana", "lastName": "Lee" },
+    { "mrn": "MRN-3002", "firstName": "Evan", "lastName": "Wright" }
+  ]
+}</code></pre>
+  </div>
+
+  <div class="call-type" id="ct-custom">
+    <div class="call-type-head"><h3>5. Custom shape — Request Body Template</h3></div>
+    <div class="call-type-meta">Matches Demo_TestApp's <code>CustomEvent</code> sample &middot; <code>POST http://localhost:5500/api/apitest/custom-event</code></div>
+    <p>Pairs with <strong>any</strong> payload shape above. Paste the exact JSON your partner API expects into <code>dest_apiBodyTemplateJson</code>, with <code>{{fieldName}}</code> placeholders anywhere inside it — a value that is <em>exactly</em> one placeholder keeps its real JSON type (a number stays a number); a placeholder embedded in a longer string is text-substituted. <code>sourceResourceId</code>, <code>resourceType</code>, <code>destinationObject</code> and <code>pipelineRunId</code> are addressable by name alongside your mapped field names. The destination wizard's "Load JSON payload" feature (mapping canvas) can auto-generate this template — and its matching mappable columns — straight from a pasted example of the target API's shape, so no hand-typed <code>{{}}</code> is required.</p>
+    <div class="setup-steps">
+      <div class="setup-steps-title">Setup steps</div>
+      <div class="setup-step"><span class="step-num">1</span><span class="step-body"><strong>Select resources:</strong> check <strong>Patient</strong> only.</span></div>
+      <div class="setup-step"><span class="step-num">2</span><span class="step-body"><strong>Destination structure:</strong> on the Patient card, "Load JSON payload" with the partner's OWN event shape — <code>{"eventType":"PatientUpdated","patient":{"id":"...","fullName":"...","age":0},"source":"FHIRBridge"}</code> — even though it's nested and not FHIRBridge's own conventions, this becomes the columns <code>FullName</code>/<code>Age</code> etc. AND auto-fills <code>dest_apiBodyTemplateJson</code> in one step.</span></div>
+      <div class="setup-step"><span class="step-num">3</span><span class="step-body"><strong>Map fields:</strong> <code>Patient.name.text</code> → <code>FullName</code>, a computed/derived age field → <code>Age</code>. <code>eventType</code> and <code>source</code> stay as the literal static text from your pasted example unless you also map something onto them — a template value only becomes dynamic where you actually dragged a field onto it.</span></div>
+    </div>
+    <p><strong>Every wizard field, filled in</strong>:</p>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Custom Event</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/custom-event</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>none</code> (see §4)</td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td>—</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code> <span class="default">(any shape — the template describes one record; framing still applies around it)</span></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—<span class="default"> (application/json)</span></td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—<span class="default"> (any 2xx)</span></td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td><code>{"eventType":"PatientUpdated","patient":{"id":"{{sourceResourceId}}","fullName":"{{FullName}}","age":"{{Age}}"},"source":"FHIRBridge"}</code></td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+    <pre><code>{
+  "eventType": "PatientUpdated",
+  "patient": { "id": "MRN-4001", "fullName": "Farah Khan", "age": 42 },
+  "source": "FHIRBridge"
+}</code></pre>
+  </div>
+
+  <div class="call-type" id="ct-flat">
+    <div class="call-type-head"><h3>6. Multi-resource — Flat</h3><span class="pill pill-modified">Combine mode</span></div>
+    <div class="call-type-meta">Matches Demo_TestApp's <code>MultiResourceFlat</code> sample &middot; <code>POST http://localhost:5500/api/apitest/multi-resource-flat</code></div>
+    <p>Combines more than one mapped resource type (e.g. Patient + Encounter) into ONE outgoing document as top-level sibling arrays, with no nesting — correlation is left to the receiving API (e.g. via its own <code>patientMrn</code>-style field). Handled entirely inside <code>MappedApiEndpointDestinationWriter</code> via an in-process accumulator that holds each resource type's records until every declared type has landed for the run — no change to how the pipeline calls the writer, and every other destination is unaffected.</p>
+    <div class="setup-steps">
+      <div class="setup-steps-title">Setup steps (full walkthrough in §4)</div>
+      <div class="setup-step"><span class="step-num">1</span><span class="step-body"><strong>Select resources:</strong> check BOTH <strong>Patient</strong> AND <strong>Encounter</strong> — two separate checkboxes, two separate cards.</span></div>
+      <div class="setup-step"><span class="step-num">2</span><span class="step-body"><strong>Destination structure:</strong> on the <em>Patient</em> card, Load JSON payload with <code>{"mrn":"...","firstName":"...","lastName":"..."}</code>. Separately, on the <em>Encounter</em> card, Load JSON payload with <code>{"encounterId":"...","patientMrn":"...","reason":"..."}</code> — two independent operations, one per card, never one combined paste covering both.</span></div>
+      <div class="setup-step"><span class="step-num">3</span><span class="step-body"><strong>Map fields:</strong> Patient fields onto the Patient card as usual. On the Encounter card: <code>Encounter.id</code> → <code>encounterId</code>, a reason field → <code>reason</code>, and — the important one — <code>Encounter.subject.reference</code> (flattened to the same MRN format Patient uses) → <code>patientMrn</code>. This last mapping must live on the Encounter card, not Patient's.</span></div>
+      <div class="setup-step"><span class="step-num">4</span><span class="step-body"><strong>Destination settings:</strong> set <code>dest_apiMultiResourceMode=flat</code> and <code>dest_apiResourceRelationsJson</code> referencing <code>patientMrn</code> exactly as it's spelled on the Encounter card.</span></div>
+    </div>
+    <p><strong>Every wizard field, filled in</strong>:</p>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Patients + Encounters (Flat)</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/multi-resource-flat</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>none</code> (see §4)</td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td>—</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code> <span class="default">(irrelevant once multi-resource combines the document — batching still governs how many records accumulate per resource type)</span></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—<span class="default"> (application/json)</span></td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—<span class="default"> (any 2xx)</span></td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—<span class="default"> (this field is hidden entirely in the UI once multi-resource mode is on — see below)</span></td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>flat</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td><code>[{"resourceType":"Patient","nestKey":"patients"},{"resourceType":"Encounter","nestKey":"encounters"}]</code> <span class="default">— set via the "Participating resource types" builder (add-a-row UI), not typed; see §4 Step 4</span></td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td><code>{"Encounter":"{\"encounterId\":\"{{sourceResourceId}}\",\"patientMrn\":\"{{PatientMrn}}\",\"reason\":\"{{Reason}}\"}"}</code> <span class="default">— auto-filled by "⇩ Load JSON payload" on the Encounter card; shown here as a "Configured for:" pill, not raw text</span></td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td><code>{"patients":"{{patients}}","encounters":"{{encounters}}"}</code> <span class="default">(optional — blank sends a plain object keyed by each nestKey)</span></td></tr>
+    </table>
+    <pre><code>{
+  "patients": [ { "mrn": "MRN-5001", "firstName": "Grace", "lastName": "Kim" } ],
+  "encounters": [ { "encounterId": "ENC-9001", "patientMrn": "MRN-5001", "reason": "Annual checkup" } ]
+}</code></pre>
+  </div>
+
+  <div class="call-type" id="ct-nested">
+    <div class="call-type-head"><h3>7. Multi-resource — Nested</h3><span class="pill pill-modified">Combine mode</span></div>
+    <div class="call-type-meta">Matches Demo_TestApp's <code>MultiResourceNested</code> sample &middot; <code>POST http://localhost:5500/api/apitest/multi-resource-nested</code></div>
+    <p>Correlates a child resource type to its parent (by a mapped reference field) and nests it directly inside the parent's own record — <code>{ "patients": [{ ..., "encounters": [...] }] }</code>. <code>CorrelationColumn</code> is the mapped column ON THE CHILD holding the parent's key; <code>ParentKeyColumn</code> is the mapped column ON THE PARENT it's matched against. Only the (now-nested) parent array is placed at the top level — the child never also appears there.</p>
+    <div class="setup-steps">
+      <div class="setup-steps-title">Setup steps (full walkthrough in §4)</div>
+      <div class="setup-step"><span class="step-num">1</span><span class="step-body"><strong>Select resources:</strong> check BOTH <strong>Patient</strong> AND <strong>Encounter</strong>.</span></div>
+      <div class="setup-step"><span class="step-num">2</span><span class="step-body"><strong>Destination structure:</strong> Patient card gets <code>{"mrn":"...","firstName":"...","lastName":"..."}</code>. Encounter card gets <code>{"encounterId":"...","reason":"..."}</code> — note NO <code>patientMrn</code> field needed here in Nested mode (unlike Flat), since the correlation column just needs to exist as a mapped value, not necessarily appear in the outgoing shape itself.</span></div>
+      <div class="setup-step"><span class="step-num">3</span><span class="step-body"><strong>Map fields:</strong> on the Patient card, also map a field onto an <code>Id</code> column (Load JSON payload it in, or add it as a free column) — this is the <code>parentKeyColumn</code> every child correlates against. On the Encounter card, map <code>Encounter.subject.reference</code> onto a <code>PatientId</code> column (also add it as a free column if it's not part of your pasted sample) — this is the <code>correlationColumn</code>.</span></div>
+      <div class="setup-step"><span class="step-num">4</span><span class="step-body"><strong>Destination settings:</strong> set <code>dest_apiMultiResourceMode=nested</code> and <code>dest_apiResourceRelationsJson</code>'s <code>correlationColumn</code>/<code>parentKeyColumn</code> to those exact mapped column names (<code>PatientId</code> on Encounter, <code>Id</code> on Patient).</span></div>
+    </div>
+    <p><strong>Every wizard field, filled in</strong>:</p>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Patients With Encounters (Nested)</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/multi-resource-nested</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>none</code> (see §4)</td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td>—</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code> <span class="default">(irrelevant once multi-resource combines the document)</span></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—<span class="default"> (application/json)</span></td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—<span class="default"> (any 2xx)</span></td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—<span class="default"> (hidden in the UI once multi-resource mode is on)</span></td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>nested</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td><code>[{"resourceType":"Patient","nestKey":"patients"},{"resourceType":"Encounter","parentResourceType":"Patient","correlationColumn":"PatientId","parentKeyColumn":"Id","nestKey":"encounters"}]</code> <span class="default">— set via the builder: pick "Encounter" → Parent "Patient", then fill Correlation/Parent key columns; see §4 Step 4</span></td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td><code>{"Encounter":"{\"encounterId\":\"{{sourceResourceId}}\",\"reason\":\"{{Reason}}\"}"}</code> <span class="default">— auto-filled by "⇩ Load JSON payload" on the Encounter card</span></td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td><code>{"patients":"{{patients}}"}</code> <span class="default">(optional — blank sends a plain object keyed by each root nestKey)</span></td></tr>
+    </table>
+    <pre><code>{
+  "patients": [
+    {
+      "mrn": "MRN-6001", "firstName": "Henry", "lastName": "Osei",
+      "encounters": [ { "encounterId": "ENC-9101", "reason": "Follow-up" } ]
+    }
+  ]
+}</code></pre>
+
+    <h4 id="ct-nested-deep">N levels deep, not just 2 — Patient → Encounter → Observation → Component</h4>
+    <p><strong>Nesting depth is unbounded.</strong> Any resource type's <code>ParentResourceType</code> can itself be another entry's <code>ResourceType</code>, and that entry's own <code>ParentResourceType</code> can point further up again — nothing in <code>MappedApiEndpointDestinationWriter</code> caps how long that chain can be. It resolves nesting depth-first (by walking each relation's <code>ParentResourceType</code> back to its root), so the order entries appear in <code>dest_apiResourceRelationsJson</code> never matters — the deepest relation is always folded into its immediate parent before that parent is folded into <em>its</em> own parent, all the way up to the root, for as many levels as you declare.</p>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Patients → Encounters → Observations</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>https://api.partner.com/v1/patients-bundle</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>none</code> (see §4)</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code> <span class="default">(irrelevant once multi-resource combines the document)</span></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>nested</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td><code>[{"resourceType":"Patient","nestKey":"patients"},{"resourceType":"Encounter","parentResourceType":"Patient","correlationColumn":"PatientId","parentKeyColumn":"Id","nestKey":"encounters"},{"resourceType":"Observation","parentResourceType":"Encounter","correlationColumn":"EncounterId","parentKeyColumn":"Id","nestKey":"observations"},{"resourceType":"Component","parentResourceType":"Observation","correlationColumn":"ObservationId","parentKeyColumn":"Id","nestKey":"components"}]</code></td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—<span class="default"> (blank sends a plain object keyed by the one root nestKey, "patients")</span></td></tr>
+      <tr><td>All other fields</td><td>—</td><td>same as the 2-level example above</td></tr>
+    </table>
+    <p>Add one row in the "Participating resource types" builder per level, however many you need — there's no fixed count, and the builder's Parent dropdown can point at any row already added, including one that's itself someone else's child. Every resource type that isn't the true root or an innermost leaf needs BOTH: a Parent key column (a mapped column identifying it, matched against by whatever nests inside <em>it</em>) and a Correlation column (a mapped column identifying which of ITS OWN parent's records it belongs to) — <code>Encounter</code> above needs its own <code>Id</code> (for <code>Observation</code> to match against) as well as <code>PatientId</code> (to match against <code>Patient.Id</code>); <code>Observation</code> needs its own <code>Id</code> (for <code>Component</code>) as well as <code>EncounterId</code>. The JSON shown in the table is what those four builder rows produce.</p>
+    <pre><code>{
+  "patients": [
+    {
+      "mrn": "MRN-8001", "firstName": "Ivy", "lastName": "Martinez",
+      "encounters": [
+        {
+          "encounterId": "ENC-9201", "reason": "Annual checkup",
+          "observations": [
+            {
+              "observationId": "OBS-1001", "code": "8480-6",
+              "components": [
+                { "componentCode": "8480-6", "componentValue": "128" },
+                { "componentCode": "8462-4", "componentValue": "82" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}</code></pre>
+    <div class="callout">
+      <strong>Verified: no hardcoded depth limit</strong>
+      Two dedicated tests in <code>MappedApiEndpointDestinationWriterTests</code> cover this:
+      <code>Multi_resource_nested_mode_supports_three_levels_regardless_of_declaration_order</code> (Patient → Encounter →
+      Observation, declared top-down — the exact order that broke a naive array-order implementation) and
+      <code>Multi_resource_nested_mode_has_no_hardcoded_depth_limit</code> (a 4th level, Component, added on top —
+      proving the fix generalizes to N levels rather than special-casing 3). Both assert the deepest record reaches
+      the document at its correct nested position, with nothing dropped or left dangling at the top level.
+    </div>
+  </div>
+
+  <h2 id="mr-howto"><span class="num">4.</span>How to configure multi-resource mapping (step-by-step)</h2>
+  <p class="section-intro">
+    §3.6/3.7 above showed the <em>destination settings</em> (<code>dest_apiMultiResourceMode</code>,
+    <code>dest_apiResourceRelationsJson</code>, …) for Flat and Nested combining. Those settings only reference
+    field names — they don't create the mappings themselves. <strong>Every participating resource type needs its
+    own, separate field mapping</strong> on the Mapping Profile / mapping canvas screen, done in exactly the same
+    way any other multi-table destination (SQL Server, MySQL, Mongo…) maps more than one resource type: each
+    selected resource gets its own destination card, and you map that resource's own FHIR fields onto that card's
+    own columns. The walkthrough below builds the running Patient + Encounter (Flat) example from §3.6 end to end.
+  </p>
+  <div class="callout warn">
+    <strong>This is the step people skip</strong>
+    A destination row can have <code>dest_apiResourceRelationsJson</code> and <code>dest_apiRecordTemplatesByResourceType</code>
+    filled in perfectly and still send nulls, because those two settings are just JSON text — they don't verify
+    that the column names they reference actually exist as real mappings on the resource type they're supposed to
+    belong to. If a field ends up mapped on the wrong resource's card (see §4.5 below), FHIRBridge has no way to
+    know that was a mistake — it just resolves that placeholder to nothing for the resource type that's actually
+    missing it, every run, silently.
+  </div>
+
+  <h3 id="mr-select">Step 1 — Select resources</h3>
+  <p>On the wizard's Resources step, check off <strong>every</strong> resource type that participates in the
+  combined document — not just the root. For the running example, check both <strong>Patient</strong> and
+  <strong>Encounter</strong>. Each checked resource gets its own destination card further down the wizard,
+  each with its own independent set of columns and mappings — they do not share anything by default.</p>
+
+  <h3 id="mr-structure">Step 2 — Give each resource its destination JSON structure</h3>
+  <p>On the Mapping step, you'll now see two destination cards: one for <strong>Patient</strong>, one for
+  <strong>Encounter</strong>. On <em>each card separately</em>, click "Load JSON payload" and paste that ONE
+  resource's own record shape — not the combined document, just the one resource's own per-record object:</p>
+  <table class="config-table">
+    <tr><th>Card</th><th>Paste this (that resource's own record shape only)</th></tr>
+    <tr><td>Patient card</td><td><code>{"mrn":"MRN-5001","firstName":"Grace","lastName":"Kim"}</code></td></tr>
+    <tr><td>Encounter card</td><td><code>{"encounterId":"ENC-9001","patientMrn":"MRN-5001","reason":"Annual checkup"}</code></td></tr>
+  </table>
+  <p>This creates real columns on each card — <code>Mrn</code>/<code>FirstName</code>/<code>LastName</code> on
+  Patient, <code>EncounterId</code>/<code>PatientMrn</code>/<code>Reason</code> on Encounter — and auto-generates
+  that card's own Request Body Template. <strong>The Encounter card's <code>PatientMrn</code> column is the
+  correlation field</strong> — it exists on Encounter specifically so a mapped value can land there identifying
+  which patient this encounter belongs to (see Step 3).</p>
+
+  <h3 id="mr-map">Step 3 — Map fields onto each resource's own card</h3>
+  <p>Drag FHIR fields onto columns exactly as you would for any single-resource destination — the source tree
+  above each card is already scoped to that card's own resource type, so there's no way to drag an Encounter
+  field onto the Patient card by accident. Map:</p>
+  <ul class="feature-list">
+    <li><strong>Patient card:</strong> <code>Patient.identifier[MRN].value</code> → <code>Mrn</code>,
+    <code>Patient.name.given</code> → <code>FirstName</code>, <code>Patient.name.family</code> → <code>LastName</code>.</li>
+    <li><strong>Encounter card:</strong> <code>Encounter.id</code> → <code>EncounterId</code>,
+    <code>Encounter.type.text</code> (or similar) → <code>Reason</code>, and — the field that makes correlation
+    work — <code>Encounter.subject.reference</code> (the FHIR reference back to the patient, flattened to the
+    patient's MRN/id by your source connector) → <code>PatientMrn</code>. This mapping must exist ON THE ENCOUNTER
+    CARD. Nothing needs to be mapped on the Patient card for this relationship — Patient doesn't need to know
+    which encounters reference it.</li>
+  </ul>
+
+  <h3 id="mr-relations">Step 4 — Configure the multi-resource settings</h3>
+  <div class="callout">
+    <strong>Now a builder, not raw JSON</strong>
+    <code>dest_apiResourceRelationsJson</code> and <code>dest_apiRecordTemplatesByResourceType</code> are still the
+    underlying values FHIRBridge reads — but you no longer type JSON by hand to set them. The destination's own
+    settings panel now shows a "Participating resource types" builder (add/remove rows, plain fields, a Parent
+    dropdown for Nested mode) that writes <code>dest_apiResourceRelationsJson</code> for you, and
+    <code>dest_apiRecordTemplatesByResourceType</code> fills itself in automatically the moment you use "⇩ Load
+    JSON payload" on each resource's own card back in Step 2 — no separate step here at all for that one. The raw
+    JSON shown below is what those two end up producing, useful for understanding what's actually stored or for
+    troubleshooting, but you'll rarely type it directly.
+  </div>
+  <p>On the destination's own settings (not the mapping canvas), set "Multiple resources in one document" to
+  <strong>Flat</strong>, then use the <strong>Participating resource types</strong> builder — click "+ Add
+  resource" once per resource type, filling in each row:</p>
+  <table class="config-table">
+    <tr><th>Builder field</th><th>Row 1 (Patient)</th><th>Row 2 (Encounter)</th></tr>
+    <tr><td>Resource type</td><td><code>Patient</code></td><td><code>Encounter</code></td></tr>
+    <tr><td>Nest key</td><td><code>patients</code></td><td><code>encounters</code></td></tr>
+  </table>
+  <p>That produces the exact same <code>dest_apiResourceRelationsJson</code> as before —
+  <code>[{"resourceType":"Patient","nestKey":"patients"},{"resourceType":"Encounter","nestKey":"encounters"}]</code>
+  — just without typing a brace or an escaped quote. <code>dest_apiRecordTemplatesByResourceType</code> needs no
+  action here: it already picked up Encounter's template
+  (<code>{"encounterId":"{{EncounterId}}","patientMrn":"{{PatientMrn}}","reason":"{{Reason}}"}</code>) the moment
+  you ran "Load JSON payload" on the Encounter card in Step 2, keyed automatically — you'll see it listed as a
+  pill under "Configured for:" above that field.</p>
+  <p>For <strong>Nested</strong> mode, each non-root row's builder gets a <strong>Parent</strong> dropdown
+  (populated from your other rows' resource types) plus <strong>Correlation column</strong> and <strong>Parent
+  key column</strong> inputs once a parent is picked — same rule as before, just as builder fields instead of
+  JSON keys: Correlation column must be a column mapped on the CHILD's own card (Encounter's
+  <code>PatientMrn</code>), and Parent key column must be a column mapped on the PARENT's own card (Patient's
+  <code>Mrn</code>) — see §3.7. The same builder chains to any depth (§3.7's "N levels deep") by picking an
+  already-added row as another row's Parent.</p>
+
+  <h3 id="mr-pitfalls">Common mistakes</h3>
+  <div class="callout danger">
+    <strong>The correlation field gets mapped on the wrong card</strong>
+    The single most common failure: instead of mapping the patient-link field on the Encounter card (Step 3
+    above), it gets mapped on the Patient card instead — often because "Load JSON payload" was run with a
+    combined, nested sample pasted onto ONE card instead of each resource's own flat shape pasted onto its OWN
+    card (Step 2). The symptom looks exactly like a bug: the combined document comes out with the correlation
+    value sitting under <code>patients[].values</code> (e.g. as some auto-named column like
+    <code>EncountersPatientMrn</code>) while every encounter's own <code>patientMrn</code> field is <code>null</code>
+    — because Encounter's mapping profile genuinely has nothing mapped to that name. <strong>Fix:</strong> map the
+    correlation field on the CHILD resource's own card, matching whatever name you reference as
+    <code>correlationColumn</code>/the template placeholder for that resource type.
+  </div>
+  <div class="callout warn">
+    <strong>Field names are case-sensitive</strong>
+    <code>{{PatientMrn}}</code> and a mapped column named <code>patientMrn</code> do NOT match. Whatever casing
+    "Load JSON payload" (or you, typing a column name by hand) actually produced is the casing every reference to
+    it — in <code>dest_apiRecordTemplatesByResourceType</code>, <code>correlationColumn</code>, and
+    <code>parentKeyColumn</code> — must use exactly.
+  </div>
+  <div class="callout warn">
+    <strong>A resource type declared in dest_apiResourceRelationsJson but not selected in Step 1</strong>
+    never contributes any records — the accumulator waits forever for a resource type that's never actually
+    routed to this destination, and the combined document never sends at all. Every <code>resourceType</code> in
+    the JSON must have a matching checked box on the Resources step.
+  </div>
+
+  <h3 id="mr-worked-example">Worked example: diagnosing this exact symptom</h3>
+  <p>A real Flat-mode run produced this (trimmed to one patient/encounter pair):</p>
+  <pre><code>{
+  "patients": [{
+    "resourceType": "Patient",
+    "values": {
+      "PatientsFirstName": null,
+      "PatientsLastName": null,
+      "PatientsMrn": "egqBHVfQlt4Bw3XGXoxVxHg3",
+      "EncountersPatientMrn": "egqBHVfQlt4Bw3XGXoxVxHg3"
+    }
+  }],
+  "encounters": [{
+    "encounterId": "emhwuharfnf8VhCQg97qP7Q3",
+    "patientMrn": null,
+    "reason": null
+  }]
+}</code></pre>
+  <table class="config-table">
+    <tr><th>Symptom</th><th>What it means</th></tr>
+    <tr><td><code>PatientsFirstName</code> / <code>PatientsLastName</code> are <code>null</code></td><td>Patient is using its DEFAULT record shape (no per-resource-type template configured for it) — these two are unmapped/unresolved FHIR source fields, unrelated to the multi-resource setup itself; check the Patient card's own mappings.</td></tr>
+    <tr><td>A field named <code>EncountersPatientMrn</code> holds the real MRN, but it's sitting under <code>patients[]</code></td><td>Someone mapped the correlation field on the <strong>Patient</strong> card (giving it that auto-generated name) instead of on the <strong>Encounter</strong> card — see the "correlation field gets mapped on the wrong card" callout above.</td></tr>
+    <tr><td><code>encounters[].encounterId</code> resolves fine, but <code>patientMrn</code> and <code>reason</code> are both <code>null</code></td><td>Encounter DOES have its own per-resource-type Request Body Template (that's why its shape is flat, not the default envelope) — but its <code>{{PatientMrn}}</code>/<code>{{Reason}}</code> placeholders don't match any column actually mapped on the Encounter card, because (per the row above) the real mapping never landed there.</td></tr>
+  </table>
+  <p><strong>Fix, following Steps 2–3 above:</strong></p>
+  <ol style="padding-left:20px;margin:0 0 16px;">
+    <li>On the <strong>Encounter</strong> card, run "Load JSON payload" with <code>{"encounterId":"...","patientMrn":"...","reason":"..."}</code> if that card doesn't already have a <code>PatientMrn</code> column.</li>
+    <li>Drag the FHIR field that identifies the encounter's patient (e.g. <code>Encounter.subject.reference</code>, flattened to the same MRN format as Patient's own MRN field) onto the Encounter card's <code>PatientMrn</code> column — not the Patient card.</li>
+    <li>Remove the stray <code>EncountersPatientMrn</code> mapping from the Patient card if it's not otherwise needed there.</li>
+    <li>Separately, fix Patient's own <code>FirstName</code>/<code>LastName</code> mappings — that <code>null</code> is a plain unmapped-field issue, not a multi-resource one.</li>
+  </ol>
+  <div class="callout">
+    <strong>A related cause is now fixed automatically</strong>
+    The Patient card's own <code>values</code>-wrapped shape above (instead of a flat one like Encounter's) used
+    to also happen when someone ran "Load JSON payload" on the Encounter card but never on the Patient card at
+    all — <code>dest_apiRecordTemplatesByResourceType</code> simply had no entry for Patient. "⇩ Load JSON
+    payload" now always writes into the correct resource type's own entry the moment multi-resource mode is on
+    (previously it silently overwrote the single-resource <code>dest_apiBodyTemplateJson</code> field instead,
+    which does nothing in multi-resource mode) — so running it once per card, per resource, is now enough. The
+    "Configured for: …" pill list above the (now-collapsed) raw JSON field is the fastest way to confirm every
+    resource type actually has one before running the destination.
+  </div>
+
+  <h2 id="auth-modes"><span class="num">5.</span>Authentication modes</h2>
+  <p class="section-intro">Set via <code>dest_apiAuthMode</code>. The credential itself is never stored in the metadata bag — it lives only in the destination's Key Vault <code>SecretReference</code>. Every mode below has a matching Demo_TestApp <code>/api/apitest/auth/*</code> endpoint with a fixed, documented test credential (see <code>ApiTestAuthCredentials.cs</code>) so it can be exercised end to end without any real partner API.</p>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>1. None</h3><span class="pill pill-hidden">Default</span></div>
+    <div class="auth-mode-value">wizard value: <code>none</code></div>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — No Auth</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/auth/none</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>none</code></td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td>— (none required)</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—</td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—</td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>2. Bearer token</h3></div>
+    <div class="auth-mode-value">wizard value: <code>bearer</code> &middot; sent as <code>Authorization: Bearer &lt;secret&gt;</code></div>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Bearer Token</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/auth/bearer</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>bearer</code></td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td><code>fhirbridge-test-bearer-8f2c91a4d6e7</code></td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—</td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—</td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>3. API key (header)</h3></div>
+    <div class="auth-mode-value">wizard value: <code>apiKeyHeader</code></div>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — API Key Header</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/auth/apikey-header</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>apiKeyHeader</code></td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td><code>fhirbridge-test-apikey-3b7a05c9f1e2</code></td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td><code>X-Api-Key</code> <span class="default">(default when this mode is chosen)</span></td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—</td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—</td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>4. API key (query string)</h3></div>
+    <div class="auth-mode-value">wizard value: <code>apiKeyQuery</code></div>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — API Key Query</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/auth/apikey-query</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>apiKeyQuery</code></td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td><code>fhirbridge-test-apikey-query-6d4e18b0a7c3</code></td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td><code>api_key</code> <span class="default">(default when this mode is chosen)</span></td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—</td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—</td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:-8px;">Wire format: <code>GET/POST ...?api_key=fhirbridge-test-apikey-query-6d4e18b0a7c3</code> — the destination appends it to the URL itself; do not include the query string in Endpoint URL.</p>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>5. Basic auth</h3></div>
+    <div class="auth-mode-value">wizard value: <code>basic</code></div>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Basic Auth</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/auth/basic</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>basic</code></td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td><code>fhirbridge-test:test-password-2c8f4a91</code> <span class="default">("username:password")</span></td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—</td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—</td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>6. HMAC-SHA256 body signature</h3></div>
+    <div class="auth-mode-value">wizard value: <code>hmacSha256</code> &middot; signs HMAC-SHA256 over <code>"{unix timestamp}.{body}"</code>, rejected if the timestamp is &gt;5 minutes old</div>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — HMAC Signed</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/auth/hmac</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>hmacSha256</code></td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td><code>fhirbridge-test-hmac-secret-9e1d7c4b2a68</code> (shared secret)</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td><code>X-Signature-256</code> <span class="default">(default)</span></td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td><code>X-Signature-Timestamp</code> <span class="default">(default)</span></td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—</td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—</td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>7. OAuth2 client credentials</h3></div>
+    <div class="auth-mode-value">wizard value: <code>oauth2ClientCredentials</code> &middot; token acquired/cached by FHIRBridge itself — no manual token handling required</div>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — OAuth2 Client Credentials</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>http://localhost:5500/api/apitest/auth/oauth2</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>oauth2ClientCredentials</code></td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td><code>fhirbridge-test-client-secret-4f6b8d2e</code> (client secret)</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td><code>http://localhost:5500/api/apitest/oauth/token</code></td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td><code>fhirbridge-test-client</code></td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>— <span class="default">(optional — e.g. https://api.partner.com/.default)</span></td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—</td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>false</code></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—</td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+  </div>
+
+  <div class="auth-mode">
+    <div class="auth-mode-head"><h3>8. Client certificate (mutual TLS)</h3></div>
+    <div class="auth-mode-value">wizard value: <code>clientCertificate</code> &middot; credential fetched live, never fixed (Demo_TestApp mints a fresh self-signed cert every process start)</div>
+    <table class="config-table">
+      <tr><th>Wizard field</th><th>Metadata key</th><th>Example value</th></tr>
+      <tr><td>Destination name</td><td class="key">dest_name</td><td><code>Partner API — Client Certificate (mTLS)</code></td></tr>
+      <tr><td>Endpoint URL</td><td class="key">dest_apiEndpointUrl</td><td><code>https://localhost:&lt;port&gt;/api/apitest/auth/client-certificate</code></td></tr>
+      <tr><td>HTTP method</td><td class="key">dest_apiHttpMethod</td><td><code>POST</code></td></tr>
+      <tr><td>Authentication</td><td class="key">dest_apiAuthMode</td><td><code>clientCertificate</code></td></tr>
+      <tr><td>Credential</td><td class="key">dest_apiSecret</td><td><code>&lt;base64 PFX&gt;|test-cert-password</code> — fetch the current base64 PFX from <code>GET /api/apitest/auth/client-certificate/credential</code> and paste its <code>formattedSecret</code> value here verbatim</td></tr>
+      <tr><td>Auth header name</td><td class="key">dest_apiAuthHeaderName</td><td>—</td></tr>
+      <tr><td>API key query param name</td><td class="key">dest_apiKeyQueryParamName</td><td>—</td></tr>
+      <tr><td>Signature header</td><td class="key">dest_apiSignatureHeaderName</td><td>—</td></tr>
+      <tr><td>Timestamp header</td><td class="key">dest_apiTimestampHeaderName</td><td>—</td></tr>
+      <tr><td>Token endpoint</td><td class="key">dest_apiTokenEndpoint</td><td>—</td></tr>
+      <tr><td>Client ID</td><td class="key">dest_apiClientId</td><td>—</td></tr>
+      <tr><td>Scope</td><td class="key">dest_apiScope</td><td>—</td></tr>
+      <tr><td>Payload shape</td><td class="key">dest_apiPayloadShape</td><td><code>jsonArray</code></td></tr>
+      <tr><td>Content type override</td><td class="key">dest_apiContentType</td><td>—</td></tr>
+      <tr><td>Compression</td><td class="key">dest_apiCompression</td><td><code>none</code></td></tr>
+      <tr><td>Require HTTPS</td><td class="key">dest_apiRequireHttps</td><td><code>true</code> <span class="default">(mTLS requires HTTPS by definition)</span></td></tr>
+      <tr><td>Records per request</td><td class="key">dest_apiBatchSize</td><td><code>500</code></td></tr>
+      <tr><td>Max request size</td><td class="key">dest_apiMaxRequestBytes</td><td><code>4194304</code></td></tr>
+      <tr><td>Timeout (seconds)</td><td class="key">dest_apiTimeoutSeconds</td><td><code>30</code></td></tr>
+      <tr><td>Retries per batch</td><td class="key">dest_apiRetryCount</td><td><code>3</code></td></tr>
+      <tr><td>Retry backoff (seconds)</td><td class="key">dest_apiRetryBackoffSeconds</td><td><code>2</code></td></tr>
+      <tr><td>Accepted status codes</td><td class="key">dest_apiExpectedStatusCodes</td><td>—</td></tr>
+      <tr><td>Static headers</td><td class="key">dest_apiHeadersJson</td><td>—</td></tr>
+      <tr><td>Static query params</td><td class="key">dest_apiQueryParamsJson</td><td>—</td></tr>
+      <tr><td>Request body template</td><td class="key">dest_apiBodyTemplateJson</td><td>—</td></tr>
+      <tr><td>Include source FHIR JSON</td><td class="key">dest_apiIncludeSourceJson</td><td><code>false</code></td></tr>
+      <tr><td>If a batch still fails</td><td class="key">dest_apiOnFailure</td><td><code>fail</code></td></tr>
+      <tr><td>Multiple resources in one document</td><td class="key">dest_apiMultiResourceMode</td><td><code>none</code></td></tr>
+      <tr><td>Participating resource types</td><td class="key">dest_apiResourceRelationsJson</td><td>—</td></tr>
+      <tr><td>Per-resource-type record template</td><td class="key">dest_apiRecordTemplatesByResourceType</td><td>—</td></tr>
+      <tr><td>Combined document template</td><td class="key">dest_apiBatchTemplateJson</td><td>—</td></tr>
+    </table>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:-8px;">Only works when this app is reached directly over HTTPS by its own Kestrel listener, not through a reverse proxy that doesn't forward client certificates.</p>
+  </div>
+
+  <h2 id="test-harness"><span class="num">6.</span>Demo_TestApp test endpoints reference</h2>
+  <p class="section-intro">All 7 call-setup samples plus all 8 auth-mode samples land in one shared table (<code>ApiTestCallEntity</code>), readable from the API Test Console's "Received calls" tab — filterable by API name, each row showing whether it passed that sample's strict validation and why not when it didn't (every field the sample expects must be present with the right type, and any field NOT in that sample's expected shape is itself rejected).</p>
+  <table class="config-table">
+    <tr><th>Sample</th><th>Path</th><th>Matches</th></tr>
+    <tr><td>SingleRecord</td><td class="key">/api/apitest/single-record</td><td>RecordPerRequest</td></tr>
+    <tr><td>RecordsBatch</td><td class="key">/api/apitest/records-batch</td><td>JsonArray</td></tr>
+    <tr><td>RecordsNdjson</td><td class="key">/api/apitest/records-ndjson</td><td>Ndjson</td></tr>
+    <tr><td>RecordsEnvelope</td><td class="key">/api/apitest/records-envelope</td><td>Envelope</td></tr>
+    <tr><td>CustomEvent</td><td class="key">/api/apitest/custom-event</td><td>Request Body Template</td></tr>
+    <tr><td>MultiResourceFlat</td><td class="key">/api/apitest/multi-resource-flat</td><td>Multi-resource — Flat</td></tr>
+    <tr><td>MultiResourceNested</td><td class="key">/api/apitest/multi-resource-nested</td><td>Multi-resource — Nested</td></tr>
+    <tr><td>Auth:*</td><td class="key">/api/apitest/auth/{mode}</td><td>Each of the 8 auth modes above</td></tr>
+  </table>
+  <div class="callout warn">
+    <strong>Multi-resource is per-writer, not per-call</strong>
+    Flat and Nested modes are handled entirely inside <code>MappedApiEndpointDestinationWriter</code> via an
+    in-process accumulator keyed by (destination, pipeline run) — it holds each resource type's mapped records
+    until every declared <code>ApiEndpointResourceRelation</code> entry has landed for that run, then sends ONE
+    combined request. No other destination type, and no ApiEndpoint destination that doesn't opt into
+    <code>dest_apiMultiResourceMode</code>, is affected in any way.
+  </div>
+
+  <footer>
+    FHIRBridge — API Destination (ApiEndpoint) configuration reference. Generated to accompany the ApiEndpoint destination feature work; keep in sync with <code>ApiEndpointSettings.cs</code>, <code>ApiEndpointEnums.cs</code>, and Demo_TestApp's <code>ApiEndpointTestEndpoints.cs</code>/<code>ApiAuthTestEndpoints.cs</code> as those evolve.
+  </footer>
+
+</div>
+</body>
+</html>

@@ -34,8 +34,19 @@ public static class SignedLicenseValidator
     private const string ExpectedIssuer = "pegasusone";
 
     /// <summary>Small allowance for clock drift between the machine that minted the token and the one
-    /// validating it, applied to both the <c>nbf</c> and <c>exp</c> checks below.</summary>
+    /// validating it, applied to both the <c>nbf</c> and <c>exp</c> checks below. 5 minutes is generous on
+    /// purpose: a real license's <c>nbf</c>/<c>exp</c> span months or years, so padding either end by a few
+    /// minutes has no practical effect on when the product actually considers it not-yet-valid or
+    /// expired.</summary>
     private static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(5);
+
+    /// <summary>Separate, much smaller allowance for the <c>activateByUtc</c> check specifically — reusing
+    /// <see cref="ClockSkew"/> here would silently turn every activation window into "window + 5 minutes"
+    /// (e.g. a 1-minute window not actually rejecting until 6 minutes had passed), which defeats the point
+    /// of a short window at all. 30 seconds is still enough to absorb real clock drift between the
+    /// LicenseServer that minted the token and the customer's API host, without meaningfully padding a
+    /// deadline that's meant to be minutes-scale and tight.</summary>
+    private static readonly TimeSpan ActivationWindowClockSkew = TimeSpan.FromSeconds(30);
 
     /// <summary>Lazily-imported, never-disposed ECDsa for <see cref="LicensePublicKey.PublicKeyBase64"/> —
     /// see this class's remarks for why it's long-lived rather than per-call. A malformed embedded key
@@ -52,14 +63,30 @@ public static class SignedLicenseValidator
     /// <summary>
     /// Never throws — any failure (malformed input, bad/tampered signature, wrong issuer, garbage string)
     /// comes back as <see cref="LicenseState.Invalid"/> with <see cref="LicenseStatus.InvalidReason"/> set.
+    /// Equivalent to <c>Validate(licenseToken, enforceActivationWindow: false)</c> — see that overload's
+    /// remarks for why re-validating an already-applied license (every process restart) must never enforce
+    /// the activation window.
     /// </summary>
-    public static LicenseStatus Validate(string? licenseToken)
-    {
-        if (string.IsNullOrWhiteSpace(licenseToken))
-        {
-            return Invalid("No license token was provided.");
-        }
+    public static LicenseStatus Validate(string? licenseToken) => Validate(licenseToken, enforceActivationWindow: false);
 
+    /// <summary>
+    /// Same as <see cref="Validate(string?)"/>, plus one more check when <paramref name="enforceActivationWindow"/>
+    /// is true: a token carrying an <c>activateByUtc</c> claim (see <c>tools/FHIRBridge.LicenseMinter</c>'s
+    /// <c>--activation-window-minutes</c>) is reported <see cref="LicenseState.Invalid"/> if the current time
+    /// is past that deadline — the license key was generated but never applied within its allotted window.
+    /// A token with no <c>activateByUtc</c> claim at all is never affected by this check (older licenses, or
+    /// ones minted without a window, keep working exactly as before).
+    ///
+    /// Pass <c>true</c> ONLY from the "apply a new license" path (<c>LicenseService.ApplyAsync</c>) — NEVER
+    /// from the "re-resolve the already-applied license on process startup" path
+    /// (<c>LicenseService.ReloadAsync</c>). The activation window is a one-time gate on getting a freshly
+    /// minted key installed in the first place; once a license is active and stored, re-checking this same
+    /// deadline on every future restart would eventually and permanently brick an otherwise perfectly valid,
+    /// already-running license the moment enough real time passed — which is not what an "activation window"
+    /// is supposed to mean.
+    /// </summary>
+    public static LicenseStatus Validate(string? licenseToken, bool enforceActivationWindow)
+    {
         ECDsa ecdsa;
         try
         {
@@ -70,6 +97,24 @@ public static class SignedLicenseValidator
             // Failing to load OUR OWN embedded public key is a configuration bug, not a bad token — but it
             // must still never throw out of this method, so it's reported the same way as any other failure.
             return Invalid($"License public key could not be loaded: {ex.Message}");
+        }
+
+        return ValidateCore(licenseToken, enforceActivationWindow, ecdsa);
+    }
+
+    /// <summary>Test-only seam: validates against an explicitly supplied public key instead of the
+    /// compiled-in <see cref="LicensePublicKey.PublicKeyBase64"/>. Exists so
+    /// <c>SignedLicenseValidatorTests</c> can mint and verify tokens against its own throwaway keypair
+    /// regardless of whatever real key <see cref="LicensePublicKey.PublicKeyBase64"/> currently holds —
+    /// that suite must never need (or embed) the real production private key.</summary>
+    internal static LicenseStatus ValidateWithPublicKey(string? licenseToken, bool enforceActivationWindow, ECDsa publicKey) =>
+        ValidateCore(licenseToken, enforceActivationWindow, publicKey);
+
+    private static LicenseStatus ValidateCore(string? licenseToken, bool enforceActivationWindow, ECDsa ecdsa)
+    {
+        if (string.IsNullOrWhiteSpace(licenseToken))
+        {
+            return Invalid("No license token was provided.");
         }
 
         var validationParameters = new TokenValidationParameters
@@ -102,13 +147,12 @@ public static class SignedLicenseValidator
 
         if (!result.IsValid || result.SecurityToken is not JsonWebToken jsonWebToken)
         {
-            var reason = result.Exception?.Message ?? "Signature or issuer validation failed.";
-            return Invalid(Truncate(reason));
+            return Invalid(FriendlyValidationFailureReason(result.Exception));
         }
 
         try
         {
-            return BuildStatus(jsonWebToken);
+            return BuildStatus(jsonWebToken, enforceActivationWindow);
         }
         catch (Exception ex)
         {
@@ -119,7 +163,7 @@ public static class SignedLicenseValidator
         }
     }
 
-    private static LicenseStatus BuildStatus(JsonWebToken jsonWebToken)
+    private static LicenseStatus BuildStatus(JsonWebToken jsonWebToken, bool enforceActivationWindow)
     {
         var nowUtc = DateTime.UtcNow;
         // The claims shape carries "nbf" (not-before) but no separate "iat" — nbf doubles as the
@@ -130,6 +174,17 @@ public static class SignedLicenseValidator
         if (issuedUtc.HasValue && nowUtc < issuedUtc.Value - ClockSkew)
         {
             return Invalid("License is not valid yet (nbf is in the future).");
+        }
+
+        if (enforceActivationWindow)
+        {
+            var activateByUtc = GetUnixTimeClaim(jsonWebToken, "activateByUtc");
+            if (activateByUtc.HasValue && nowUtc > activateByUtc.Value + ActivationWindowClockSkew)
+            {
+                return Invalid(
+                    "This license key's activation window has expired — it must be applied within the " +
+                    "allotted time of being generated. Request a new license key.");
+            }
         }
 
         var limits = new LicenseLimits(
@@ -155,13 +210,34 @@ public static class SignedLicenseValidator
             expiresUtc,
             limits,
             GetStringArray(jsonWebToken, "features"),
-            null);
+            null,
+            GetString(jsonWebToken, "requestKey"));
     }
 
     private static LicenseStatus Invalid(string reason) =>
         new(LicenseState.Invalid, null, null, null, null, null, Array.Empty<string>(), reason);
 
     private static string Truncate(string value) => value.Length > 200 ? value[..200] : value;
+
+    /// <summary>Translates a token-validation failure into plain language for the admin pasting a token
+    /// into the portal. The underlying Microsoft.IdentityModel.Tokens exception (e.g. "IDX10517: Signature
+    /// validation failed. The token's kid is missing. Keys tried: '...', InternalId: '...'.") is an
+    /// internal library diagnostic meant for a developer reading logs, not something a non-technical admin
+    /// can act on — it never gets surfaced to the portal as-is.</summary>
+    private static string FriendlyValidationFailureReason(Exception? ex) => ex switch
+    {
+        SecurityTokenInvalidIssuerException =>
+            "This token was not issued by PegasusOne and cannot be trusted.",
+        SecurityTokenInvalidSignatureException or SecurityTokenSignatureKeyNotFoundException =>
+            "This token's signature could not be verified. It may have been copied incorrectly, " +
+            "tampered with, or signed for a different environment than this one. Request a fresh token " +
+            "from your license provider.",
+        SecurityTokenInvalidAlgorithmException =>
+            "This token uses a signing method this installation does not support.",
+        _ =>
+            "This token's signature could not be verified. It may have been copied incorrectly or " +
+            "tampered with — request a fresh token from your license provider.",
+    };
 
     // NOTE: deliberately routed through TryGetPayloadValue<object> + a manual pattern match below, rather
     // than TryGetPayloadValue<int?>/<long?> directly. Microsoft.IdentityModel.JsonWebTokens' JsonWebToken

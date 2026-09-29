@@ -1,0 +1,41 @@
+<Project>
+
+  <!--
+    Single source of truth for the product version.
+
+    The number lives in the repo-root VERSION file (one line, e.g. 1.0.0) and is read from there
+    by everything that needs it: these .NET assemblies, the Angular portal (containerization's
+    Dockerfiles write src/app/version.ts), and the container image tags (build-images.ps1|sh).
+    Nobody hand-edits a version into a .csproj — change VERSION, and every artifact follows.
+
+    Api/Worker/Portal are versioned as ONE product, not independently: they ship from one deploy
+    template, share one database schema, and a customer cannot mix versions of them. Independent
+    version numbers would buy nothing and cost a compatibility matrix.
+
+    CI overrides for a release build (see .github/workflows/release.yml):
+      -p:VersionSuffix=rc.1          pre-release  -> 1.0.0-rc.1
+      -p:SourceRevisionId=<git sha>  stamped into InformationalVersion, so a running binary can
+                                     name the exact commit it was built from
+    A non-tagged CI build passes VersionSuffix=dev.<run>+<sha> so it can never be mistaken for a
+    released version.
+  -->
+  <PropertyGroup>
+    <VersionPrefix>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</VersionPrefix>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- AssemblyVersion stays MAJOR.0.0.0 on purpose: it is the binding identity, and bumping it on
+         every patch would break assembly references for no gain. FileVersion/InformationalVersion
+         carry the real, precise number. -->
+    <AssemblyVersion>$(VersionPrefix.Split('.')[0]).0.0.0</AssemblyVersion>
+    <FileVersion>$(VersionPrefix).0</FileVersion>
+    <Product>Segue</Product>
+    <Company>Pegasus One</Company>
+  </PropertyGroup>
+
+  <!-- InformationalVersion is deliberately NOT set here. The .NET SDK already appends
+       $(SourceRevisionId) to it on its own, producing 1.0.0-rc.1+abc1234 — setting it manually
+       as well yields a duplicated sha (1.0.0-rc.1+abc1234.abc1234). CI passes SourceRevisionId
+       and the SDK does the rest. -->
+
+</Project>

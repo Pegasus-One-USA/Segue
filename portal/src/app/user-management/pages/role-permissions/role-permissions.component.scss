@@ -2,10 +2,10 @@
 @use '../../../_permission-checkbox' as *;
 
 // ─── Page layout ─────────────────────────────────────────────────────────────
+// A form, not a table: keeps a reading measure (padding still comes from the app-wide page
+// gutter in styles.scss) so long permission rows don't stretch across a wide monitor.
 .role-permissions-page {
-  padding: 32px;
-  max-width: 1280px;
-  margin: 0 auto;
+  max-width: var(--page-max-width-form);
   display: flex;
   flex-direction: column;
   gap: 24px;

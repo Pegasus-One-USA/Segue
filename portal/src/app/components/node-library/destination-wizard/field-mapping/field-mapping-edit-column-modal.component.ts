@@ -1,5 +1,5 @@
-import { AfterViewInit, Component, ElementRef, OnInit, ViewChild, computed, input, output, signal } from '@angular/core';
-import { FM_ADD_COLUMN_DATA_TYPES } from './field-mapping-add-column-modal.component';
+import { AfterViewInit, Component, ElementRef, OnInit, ViewChild, computed, effect, input, output, signal, untracked } from '@angular/core';
+import { FM_ADD_COLUMN_DATA_TYPES, addColumnDataTypesFor } from './field-mapping-add-column-modal.component';
 
 export interface FmEditColumnSubmit {
   newColumnName: string;
@@ -45,11 +45,26 @@ export class FieldMappingEditColumnModalComponent implements OnInit, AfterViewIn
    *  option instead of the real current value, making an untouched save look like a type change.
    *  computed() is safe here (unlike the field initializers above) because its callback only runs when
    *  first read, which happens during change detection — well after inputs are set. */
+  /** See FieldMappingAddColumnModalComponent.destType — same dialect-aware type list. */
+  readonly destType = input<string>('sql');
   readonly dataTypes = computed(() => {
+    const offered = addColumnDataTypesFor(this.destType());
     const current = this.currentDataType();
-    return current && !FM_ADD_COLUMN_DATA_TYPES.includes(current)
-      ? [current, ...FM_ADD_COLUMN_DATA_TYPES]
-      : FM_ADD_COLUMN_DATA_TYPES;
+    return current && !offered.includes(current)
+      ? [current, ...offered]
+      : offered;
+  });
+
+  /** Keeps the selection inside the offered list when destType makes the list under it disjoint from the
+   *  fallback ngOnInit seeded — mirrors FieldMappingAddColumnModalComponent's own _pinDefault. Without this,
+   *  an off-list value (e.g. the SQL-Server-only fallback landing on a MySQL/Postgres list that doesn't
+   *  contain it) stays bound to the signal even though the rendered <select> silently shows a different
+   *  option, so an untouched save would submit a type the user never actually saw selected. */
+  private readonly _pinDefault = effect(() => {
+    const types = this.dataTypes();
+    untracked(() => {
+      if (!types.includes(this.dataType())) this.dataType.set(types[2] ?? types[0]);
+    });
   });
 
   canSubmit(): boolean {
@@ -58,7 +73,11 @@ export class FieldMappingEditColumnModalComponent implements OnInit, AfterViewIn
 
   ngOnInit(): void {
     this.columnName.set(this.currentColumnName());
-    this.dataType.set(this.currentDataType() ?? FM_ADD_COLUMN_DATA_TYPES[2]);
+    // this.dataTypes() (not the raw, SQL-Server-only FM_ADD_COLUMN_DATA_TYPES) so the fallback for an
+    // unknown current type is the CORRECT engine's own default, not always SQL Server's "nvarchar(255)" —
+    // which isn't in the MySQL/Postgres lists at all and would leave the <select> showing one option while
+    // this signal (and an untouched save's submitted value) silently held another.
+    this.dataType.set(this.currentDataType() ?? this.dataTypes()[2]);
   }
 
   ngAfterViewInit(): void {

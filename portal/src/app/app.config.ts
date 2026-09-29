@@ -9,6 +9,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { of, switchMap, firstValueFrom, tap } from 'rxjs';
 import { routes } from './app.routes';
 import { BrandingService } from './services/branding.service';
+import { VersionService } from './services/version.service';
 import { authInterceptor } from './auth/interceptors/auth.interceptor';
 import { httpErrorSanitizerInterceptor } from './core/http-error-sanitizer.interceptor';
 import { loadingInterceptor } from './core/loading.interceptor';
@@ -40,6 +41,7 @@ function initApp(
   ssoAuthApi: SsoAuthApiService,
   router: Router,
   branding: BrandingService,
+  version: VersionService,
 ) {
   // Runs on EVERY app boot, including the one where the browser has just come back from Entra's
   // loginRedirect (see sso.service.ts) — handleRedirectResponse() resolves to null on a normal
@@ -80,6 +82,11 @@ function initApp(
     // result. resolve() already falls back to DEFAULT_BRANDING internally on any network/server error
     // (see BrandingService), so this can never fail or hang boot indefinitely.
     await firstValueFrom(branding.resolve().pipe(tap(config => branding.applyToDocument(config))));
+
+    // Deliberately NOT awaited: the footer's version display is informational, and boot must never
+    // block on it. It resolves into a signal a moment later and the footer re-renders itself; if the
+    // call fails the footer simply shows the portal's own compiled-in version.
+    version.load();
 
     const handledViaSso = await completeEntraRedirectIfReturning();
     if (handledViaSso) return;
@@ -135,7 +142,7 @@ export const appConfig: ApplicationConfig = {
     {
       provide: APP_INITIALIZER,
       useFactory: initApp,
-      deps: [AuthService, AppInitService, SsoService, SsoAuthApiService, Router, BrandingService],
+      deps: [AuthService, AppInitService, SsoService, SsoAuthApiService, Router, BrandingService, VersionService],
       multi: true,
     },
   ],

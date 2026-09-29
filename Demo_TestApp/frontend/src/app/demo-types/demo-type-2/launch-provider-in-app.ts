@@ -240,11 +240,24 @@ export class LaunchProviderInAppComponent implements OnInit {
     await this.refresh();
   }
 
+  // Binds the patient the run LANDED in HealthAppDb's Patient_NewMapped table (keyed by the run id, which is the
+  // same GUID FHIRBridge puts on the post-launch ?workflowRunId=), rather than the raw pre-mapping FHIR resource
+  // from FHIRBridge's launch-result. Resource counts still come from launch-result, which is the only source for
+  // them — it's fetched alongside and is non-fatal, so the patient still binds if that call fails.
   private loadPatientByRunId(workflowRunId: string): void {
-    this.patientService.getPatient(workflowRunId).subscribe({
-      next: (outcome) => {
-        this.patient.set(outcome.patient);
-        this.resourceCounts.set(outcome.resourceCounts);
+    this.patientService.getMappedPatient(workflowRunId).subscribe({
+      next: (patient) => {
+        if (!patient) {
+          // Run completed but landed no Patient row — a real outcome, not an error, so say so plainly and offer
+          // a retry instead of rendering a card full of blank fields that looks like a load failure.
+          this.launchError.set(
+            `FHIRBridge's run ${workflowRunId} wrote no Patient row to Patient_NewMapped — check this workflow's destination mapping.`,
+          );
+          this.isPatientLoading.set(false);
+          this.canRetry.set(true);
+          return;
+        }
+        this.patient.set(patient);
         this.isPatientLoading.set(false);
         this.canRetry.set(false);
       },
@@ -253,6 +266,17 @@ export class LaunchProviderInAppComponent implements OnInit {
         this.isPatientLoading.set(false);
         this.canRetry.set(true);
       },
+    });
+    this.loadResourceCounts(workflowRunId);
+  }
+
+  // "Resources Fetched" counts have no Patient_NewMapped equivalent (that table holds landed Patient rows only),
+  // so they still come from FHIRBridge's launch-result. Deliberately fire-and-forget: a failure here leaves the
+  // card empty but must never block or fail the patient binding above.
+  private loadResourceCounts(workflowRunId: string): void {
+    this.patientService.getPatient(workflowRunId).subscribe({
+      next: (outcome) => this.resourceCounts.set(outcome.resourceCounts),
+      error: () => this.resourceCounts.set({}),
     });
   }
 
@@ -308,8 +332,11 @@ export class LaunchProviderInAppComponent implements OnInit {
     }
   }
 
+  // Blank, not "Not Available": this screen binds Patient_NewMapped, where an unmapped/NULL column and "the
+  // patient has no such value" are indistinguishable — so every missing field renders as empty rather than
+  // asserting anything about why it's missing.
   displayValue(value: string | null | undefined): string {
-    return value && value.trim().length > 0 ? value : 'Not Available';
+    return value && value.trim().length > 0 ? value : '';
   }
 
   private calculateAge(dateOfBirth: string): number {

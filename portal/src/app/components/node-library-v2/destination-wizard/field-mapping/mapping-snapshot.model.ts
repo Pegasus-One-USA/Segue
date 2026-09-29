@@ -33,6 +33,10 @@ export interface MappingSnapshot {
   /** Fields derived from a pasted JSON payload (Load JSON payload), per resource, when used instead of
    *  the backend FHIR catalog. */
   payloadFieldsByResource: Record<string, ResourceFieldDef[]>;
+  /** Unmapped free-text destination columns, keyed by "resource::tableName" — optional so a snapshot
+   *  saved before this field existed still restores fine (falls back to {}, same convention as
+   *  childTableRelationsByTable below). */
+  pendingFreeColumnsByCard?: Record<string, string[]>;
   mappingRows: MappingRow[];
   /** Parent/FK relationship for any table created as a child, keyed by table full name — global, not
    *  per-resource (see DestinationWizardComponent.childTableRelationsByTable). */

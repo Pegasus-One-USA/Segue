@@ -36,6 +36,12 @@ public static class WorkflowNodeOutputMetadataKeys
     /// at this node rather than treating the output as a normal completed result.</summary>
     public const string BulkExportDeferredJobId = "bulkExportDeferredJobId";
 
+    /// <summary>Set alongside <see cref="BulkExportDeferredJobId"/> to the SOURCE VENDOR's own id for that export
+    /// job, parsed from its status URL (see <c>BulkRequestIds.FromStatusUrl</c>). The orchestrator records it onto
+    /// the paused <c>WorkflowRun</c> so Execution History can show it and offer a live status lookup. Absent when
+    /// the status URL yielded nothing parseable — which pauses the run exactly as normal, just without the id.</summary>
+    public const string BulkExportRequestId = "bulkExportRequestId";
+
     /// <summary>Set by <c>DeIdentificationNodeExecutor</c> to a
     /// <c>Dictionary&lt;string, IReadOnlyList&lt;FHIRBridge.Application.Abstractions.Governance.DeIdentificationFieldHop&gt;&gt;</c>
     /// keyed by resource id — each resource's PreMapping redactions, so the downstream Mapping node can merge

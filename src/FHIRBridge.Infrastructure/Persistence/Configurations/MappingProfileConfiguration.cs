@@ -58,6 +58,7 @@ public sealed class MappingProfileConfiguration : IEntityTypeConfiguration<Mappi
             field.Property(x => x.IsUpsertKey).IsRequired().HasDefaultValue(false);
             field.Property(x => x.CorrelationCodeJsonPath).HasMaxLength(500);
             field.Property(x => x.CorrelationCodeValue).HasMaxLength(100);
+            field.Property(x => x.CorrelationCodeOperator).HasMaxLength(20);
             field.Property(x => x.ParentTable).HasMaxLength(300);
             field.Property(x => x.ParentKeyColumn).HasMaxLength(200);
             field.Property(x => x.ForeignKeyColumn).HasMaxLength(200);

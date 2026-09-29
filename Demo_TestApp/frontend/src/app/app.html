@@ -1,4 +1,8 @@
-@if (isProviderInAppLaunchFlow) {
+@if (isApiTestConsole) {
+  <!-- Login-free developer console for the ApiEndpoint destination's sample test APIs — see app.ts's
+       API_TEST_CONSOLE_PATH remarks for why this bypasses the login gate entirely. -->
+  <app-api-test-console></app-api-test-console>
+} @else if (isProviderInAppLaunchFlow) {
   <!-- EHR-launch round-trip (inbound iss/launch OR post-OAuth workflowRunId) hands off directly to the launch
        component BEFORE the login gate — an embedded launch has no hb_session cookie, so gating on login here
        would trap it on the sign-in screen and its FHIRBridge hand-off / iframe break-out would never run. -->
@@ -28,6 +32,8 @@
       }
 
       <button type="button" class="connect-btn" (click)="login()">Log In</button>
+
+      <a class="api-test-console-link" href="/api-test-console">ApiEndpoint destination test console →</a>
     </div>
   </main>
 } @else if (role() === 'ProviderInApp') {

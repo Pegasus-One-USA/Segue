@@ -1,4 +1,4 @@
-using FHIRBridge.Domain.Enums;
+﻿using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.Services.Transforms;
 
@@ -26,6 +26,23 @@ public interface ITransformNode
     TransformNodeType NodeType { get; }
 
     TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret);
+
+    /// <summary>
+    /// Whether this node reads a COLLECTION as a single value. False for every node that converts one scalar
+    /// (a date, a code, a display string) — handing those a JSON array is a mapping/rule mismatch that
+    /// <see cref="TransformNodeApplier"/> rejects rather than letting the node parse the JSON source text as
+    /// if it were data. Declared here rather than checked per node type in the caller, so a new node states
+    /// its own contract instead of the shared layer keeping a list.
+    /// </summary>
+    bool AcceptsCollections => false;
+
+    /// <summary>
+    /// Whether this node reads a structured FHIR element itself. False for every node that converts one scalar,
+    /// so <see cref="TransformNodeApplier"/> reduces an element to its own <c>text</c> before calling them —
+    /// the same value a mapping of <c>&lt;element&gt;.text</c> would have produced. A node that overrides this
+    /// receives the element whole, because it reads fields the display string cannot carry.
+    /// </summary>
+    bool AcceptsStructuredValue => false;
 
     /// <summary>Async counterpart of <see cref="Execute"/> — only overridden by a node whose transformation
     /// genuinely needs an await (e.g. a DB-backed terminology lookup); every other node gets this for free via

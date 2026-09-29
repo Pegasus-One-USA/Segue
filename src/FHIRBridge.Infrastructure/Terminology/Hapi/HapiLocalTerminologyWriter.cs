@@ -32,11 +32,27 @@ public sealed class HapiLocalTerminologyWriter
         _logger = logger;
     }
 
-    public async Task WriteConceptsAsync(
+    /// <summary>Back-compat overload for callers that only have code+display. Every concept is stored
+    /// with no extra descriptions and IsActive=true, matching the documented default for a source that
+    /// publishes no status signal.</summary>
+    public Task WriteConceptsAsync(
         string codeSystemUri,
         string? csName,
         string? version,
         IEnumerable<(string Code, string Display)> concepts,
+        CancellationToken cancellationToken) =>
+        WriteConceptsAsync(
+            codeSystemUri,
+            csName,
+            version,
+            concepts.Select(c => new TerminologyConceptRecord(c.Code, c.Display)),
+            cancellationToken);
+
+    public async Task WriteConceptsAsync(
+        string codeSystemUri,
+        string? csName,
+        string? version,
+        IEnumerable<TerminologyConceptRecord> concepts,
         CancellationToken cancellationToken)
     {
         var versionId = string.IsNullOrWhiteSpace(version) ? UnversionedVersionId : version.Trim();
@@ -94,9 +110,16 @@ public sealed class HapiLocalTerminologyWriter
 
         var batch = new List<TrmConcept>(InsertBatchSize);
         var insertedSoFar = 0;
-        foreach (var (code, display) in concepts)
+        foreach (var concept in concepts)
         {
-            batch.Add(new TrmConcept(codeSystemVer.Pid, code, display));
+            batch.Add(new TrmConcept(
+                codeSystemVer.Pid,
+                concept.Code,
+                concept.Display,
+                concept.ShortDescription,
+                concept.LongDescription,
+                concept.LongCommonName,
+                concept.IsActive));
             if (batch.Count < InsertBatchSize)
             {
                 continue;

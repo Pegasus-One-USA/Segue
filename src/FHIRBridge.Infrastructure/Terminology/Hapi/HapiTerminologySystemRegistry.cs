@@ -72,7 +72,7 @@ public sealed class HapiTerminologySystemRegistry
             new("Hcpcs", "HCPCS", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiHcpcsTerminologySyncService>().SyncAsync(ct);
-                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+                return new HapiSyncOutcome(r.TotalConceptCount, r.Version, r.Duration);
             },
             CheckLatestVersionAsync: (sp, ct) =>
                 sp.GetRequiredService<IHapiHcpcsTerminologySyncService>() is IHapiVersionCheckable c
@@ -87,7 +87,7 @@ public sealed class HapiTerminologySystemRegistry
             new("Icd10Pcs", "ICD-10-PCS", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiIcd10PcsTerminologySyncService>().SyncAsync(ct);
-                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+                return new HapiSyncOutcome(r.TotalConceptCount, r.Version, r.Duration);
             },
             CheckLatestVersionAsync: (sp, ct) =>
                 sp.GetRequiredService<IHapiIcd10PcsTerminologySyncService>() is IHapiVersionCheckable c
@@ -117,7 +117,7 @@ public sealed class HapiTerminologySystemRegistry
             new("Mesh", "MeSH", HapiCredentialKind.None, async (sp, ct) =>
             {
                 var r = await sp.GetRequiredService<IHapiMeshTerminologySyncService>().SyncAsync(ct);
-                return new HapiSyncOutcome(r.TotalConceptCount, null, r.Duration);
+                return new HapiSyncOutcome(r.TotalConceptCount, r.Version, r.Duration);
             },
             CheckLatestVersionAsync: (sp, ct) =>
                 sp.GetRequiredService<IHapiMeshTerminologySyncService>() is IHapiVersionCheckable c

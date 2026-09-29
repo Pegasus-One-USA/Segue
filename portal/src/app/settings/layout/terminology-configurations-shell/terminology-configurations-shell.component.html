@@ -1,3 +1,5 @@
+<!-- No title of its own — every section's own page (LOINC Terminology, ...) already carries one
+     right underneath, same reasoning as settings-shell.component.html. -->
 <nav class="shell-tabs">
   @for (section of sections(); track section.route) {
     <a class="shell-tab" [class.shell-tab--locked]="section.locked" [routerLink]="section.route" routerLinkActive="active">

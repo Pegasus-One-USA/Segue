@@ -11,8 +11,8 @@ export interface AllowedHospital {
   displayName: string | null;
 }
 
-/** Sentinel used by every numeric field on `LicenseLimits`/`DevLicenseMintRequest` to mean "unlimited for
- *  that dimension" — mirrors the backend's `LicenseLimits.Unlimited`. */
+/** Sentinel used by every numeric field on `LicenseLimits` to mean "unlimited for that dimension" —
+ *  mirrors the backend's `LicenseLimits.Unlimited`. */
 export const LICENSE_UNLIMITED = -1;
 
 /** Mirrors LicenseLimitsDto — every numeric field uses `LICENSE_UNLIMITED` (-1) to mean unlimited for that
@@ -66,6 +66,14 @@ export interface LicenseStatus {
   daysRemaining: number | null;
   /** Only populated when `isPresent` — nothing meaningful to show usage against otherwise. */
   usage: LicenseUsage | null;
+  /** Only ever `true` on the response to `POST /api/v1/license`, and only when the exact same token as
+   *  the currently-active license was submitted again — nothing was re-persisted and no new history row
+   *  was added. Always `false` on `GET /api/v1/license`. */
+  alreadyActive: boolean;
+  /** Mirrors `License:AllowTestingUtilities` server-side (off by default) — whether the "Clear
+   *  License"/"Clear License History" testing/support buttons should render at all. The endpoints
+   *  themselves enforce the same setting, so this only controls whether the button is shown. */
+  allowTestingUtilities: boolean;
 }
 
 /** Body of `POST /api/v1/license`. */
@@ -73,32 +81,69 @@ export interface ApplyLicenseRequest {
   token: string;
 }
 
-// ─── ⚠ TEMPORARY / DEV-ONLY — backs the "Dev: Mint a test license" page (settings/license/mint-dev) ───
-// Delete these two types alongside that page, LicenseService.mintDev(), and LICENSE_ENDPOINTS.devMint
-// once license minting moves to its own separate internal tool. Mirrors the backend's
-// DevLicenseMintRequestDto/DevLicenseMintResponse (DevLicenseMintingController) field for field.
-
-/** Body of the temporary `POST /api/v1/dev/license-mint` endpoint. Every numeric limit uses
- *  `LICENSE_UNLIMITED` (-1) for unlimited; an empty `features`/`allowedSourceTypes`/`allowedHospitals` list
- *  means no extra features / unrestricted for that dimension. */
-export interface DevLicenseMintRequest {
-  customerId: string;
+/** Mirrors LicenseHistoryEntryDto, one row from `GET /api/v1/license/history` — every license this
+ *  install has ever successfully applied, newest first, including every quota/restriction dimension
+ *  re-parsed from that entry's own stored token, for the row-click detail modal. */
+export interface LicenseHistoryEntry {
+  id: string;
+  appliedUtc: string;
   customerName: string | null;
   edition: string | null;
-  expiresUtc: string;
-  maxUsers: number;
-  maxWorkflows: number;
-  maxSourceConnections: number;
+  state: string;
+  expiresUtc: string | null;
+  /** True for exactly one row — whichever token matches the currently-active license. */
+  isCurrent: boolean;
+  /** When this token was minted (its `nbf` claim) — distinct from `appliedUtc` (when THIS install
+   *  activated it), which can be well after issuance. */
+  issuedUtc: string | null;
+  limits: LicenseLimits | null;
   features: string[];
-  allowedSourceTypes: string[];
-  allowedHospitals: AllowedHospital[];
-  maxProcessedRecordsPerMonth: number | null;
-  allowedResourceTypes: string[];
-  allowedDestinationTypes: string[];
-  maxSuccessfulWorkflowExecutionsPerMonth: number;
+  /** The `requestKey` claim, when this license was minted against a specific License Request. */
+  requestKey: string | null;
 }
 
-/** Response of the temporary `POST /api/v1/dev/license-mint` endpoint. */
-export interface DevLicenseMintResponse {
-  token: string;
+/** Lifecycle of this install's own outbound license request — mirrors the backend's
+ *  `LicenseRequestStatus` enum. */
+export type LicenseRequestState = 'Pending' | 'Submitted' | 'Failed';
+
+/** Mirrors LicenseRequestStatusResult, one row from `GET /api/v1/license-request` — this install can have
+ *  any number of these, each independent and identified by `id`. */
+export interface LicenseRequestStatus {
+  id: string;
+  clientName: string;
+  email: string;
+  companyName: string | null;
+  address: string | null;
+  phoneNumber: string;
+  status: LicenseRequestState;
+  createdUtc: string;
+  lastAttemptUtc: string | null;
+  submissionError: string | null;
+  /** Populated only when `status` is 'Failed' — a single copy-pasteable string to share with the
+   *  licensor manually instead of the direct API call that didn't succeed. */
+  encodedPayload: string | null;
+  /** The admin's own browser origin (`window.location.origin`) at the most recent submission —
+   *  informational only, shown to the licensor, never back to this install. */
+  requestHost: string | null;
+}
+
+/** Body of `POST /api/v1/license-request` (the blank first-time request form) and, unchanged, of
+ *  `PUT /api/v1/license-request` (editing an existing request's details). */
+export interface CreateLicenseRequestRequest {
+  clientName: string;
+  email: string;
+  companyName: string | null;
+  address: string | null;
+  phoneNumber: string;
+  /** `window.location.origin` at submit time — the URL this admin was actually looking at, which the API
+   *  itself has no way to know (its own Host header only reflects where the API is bound, e.g.
+   *  localhost:5000, never the portal's own port). Purely informational for the licensor; never shown
+   *  back to this install. */
+  requestedFromUrl: string;
+}
+
+/** Mirrors LicensorApplicationUrlDto, the wire shape for GET/PUT
+ *  `api/v1/license-request/licensor-url` — the one system setting reachable while unlicensed. */
+export interface LicensorApplicationUrl {
+  url: string;
 }

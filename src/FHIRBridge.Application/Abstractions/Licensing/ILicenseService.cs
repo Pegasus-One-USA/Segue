@@ -6,7 +6,10 @@ namespace FHIRBridge.Application.Abstractions.Licensing;
 /// is left unchanged — see <c>LicenseService.ApplyAsync</c>'s remarks ("a bad token is rejected at the
 /// door rather than bricking the next restart").
 /// </summary>
-public sealed record LicenseApplyResult(bool Succeeded, string? ErrorMessage, LicenseStatus? Status);
+/// <param name="AlreadyActive">True when <paramref name="Status"/> was already the currently-applied,
+/// Active license — the exact same token was submitted again, so nothing was re-persisted and no new
+/// <c>LicenseHistoryEntry</c> row was added. Always <c>false</c> on a genuinely new/changed application.</param>
+public sealed record LicenseApplyResult(bool Succeeded, string? ErrorMessage, LicenseStatus? Status, bool AlreadyActive = false);
 
 /// <summary>
 /// Resolves, verifies, and reports the product's current signed license. Registered as a singleton by
@@ -45,4 +48,13 @@ public interface ILicenseService
     /// <summary>Re-runs the same source-resolution-and-verification flow used at startup, refreshing
     /// <see cref="Current"/> from whichever source (DB setting / env var / file) currently wins.</summary>
     Task ReloadAsync(CancellationToken cancellationToken);
+
+    /// <summary>Testing/support utility only — removes the currently-applied license entirely (deletes
+    /// the <c>SystemSetting["License:Token"]</c> row and resets <see cref="Current"/> to
+    /// <see cref="LicenseStatus.Unlicensed"/>). Never called from the normal apply flow; see
+    /// <c>LicenseController</c>'s dedicated "Clear License" endpoint. Leaves <c>LicenseHistoryEntry</c>
+    /// rows untouched — that's
+    /// <see cref="FHIRBridge.Application.Abstractions.Persistence.ILicenseHistoryRepository.ClearAllAsync"/>'s
+    /// job.</summary>
+    Task ClearAsync(CancellationToken cancellationToken);
 }

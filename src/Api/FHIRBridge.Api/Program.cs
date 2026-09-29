@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
 using FHIRBridge.Api.Hubs;
+using FHIRBridge.Application.Services.Terminology;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
@@ -13,6 +14,7 @@ using FHIRBridge.Application.Exceptions;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Security;
+using FHIRBridge.Infrastructure.Terminology;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Application.Validation;
@@ -228,8 +230,59 @@ builder.Services.AddHostedService<LineageCaptureProcessor>();
 // Workflow List live, instead of those screens only ever finding out on their next REST poll. See IRunStatusNotifier's
 // remarks: only registered in this host, so RankedWorkflowOrchestrator resolves it as null (and simply skips the
 // live push) wherever it isn't — e.g. the Worker process, which has no hub of its own to push into.
-builder.Services.AddSignalR();
+//
+// Multi-instance: SignalRRunStatusNotifier pushes via Clients.All, which — without a backplane — only reaches
+// clients connected to the SAME process instance that made the call. On a deployment that scales this
+// container to multiple replicas (main.bicep: maxReplicas 3), a status change raised on replica A would
+// silently never reach a browser whose hub connection landed on replica B/C (falling back to that screen's own
+// REST poll where one exists, or simply staying stale on Workflow List, which has none). The Redis backplane
+// below — same ConnectionStrings:Redis already used for the token/terminology distributed cache — fans a
+// SendAsync out to every replica's own local clients, closing that gap. No-op (single-process pub/sub only) when
+// Redis isn't configured, same as the distributed cache falling back to AddDistributedMemoryCache.
+var signalRRedisConnectionString = builder.Configuration.GetConnectionString("Redis");
+var signalRBuilder = builder.Services.AddSignalR();
+if (!string.IsNullOrWhiteSpace(signalRRedisConnectionString))
+{
+    // HIPAA #15, same rule as the distributed cache's Redis wiring: refuse a plaintext backplane outside
+    // Development. RunStatusChangedEvent carries no PHI (workflow id/name/status/timestamps only), but the
+    // connection itself is shared with the token/terminology caches, so it's held to the same bar regardless.
+    if (!signalRRedisConnectionString.Contains("ssl=true", StringComparison.OrdinalIgnoreCase) &&
+        !builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "ConnectionStrings:Redis must include 'ssl=true' outside Development — refusing to start with a plaintext Redis SignalR backplane.");
+    }
+
+    signalRBuilder.AddStackExchangeRedis(signalRRedisConnectionString, options =>
+    {
+        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("fhirbridge-signalr");
+        // StackExchange.Redis defaults AbortOnConnectFail to true, which would throw out of the hub's own
+        // connection/reconnect attempts (surfacing as a broken SignalR connection for every client) the moment
+        // Redis is briefly unreachable. false lets it keep retrying in the background instead — a down/flaky
+        // Redis degrades the live push (falls back to each screen's own REST poll, same as "not configured"
+        // above), it does not take the hub, or the rest of the API, down with it.
+        options.Configuration.AbortOnConnectFail = false;
+    });
+}
 builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
+// Backs TerminologyStatusHub — same arrangement, for the Terminology Server table's per-row sync status.
+// Also API-host-only: HapiTerminologyConfigurationService takes this as an optional dependency, so the
+// Worker (where the scheduled syncs run) resolves null and simply records history without a live push.
+builder.Services.AddSingleton<ITerminologyStatusNotifier, SignalRTerminologyStatusNotifier>();
+
+// Closes out import-history rows left at "Running" by a host that stopped mid-import. API-host-only on
+// purpose: its correctness argument ("no import can have survived the restart that just happened") holds
+// only for the process that owns the imports. Registered in shared infrastructure it would also run in the
+// Worker and in every extra API replica, each marking the others' in-flight imports as Interrupted.
+//
+// This does mean a multi-replica API deployment needs revisiting — see the class remarks.
+//
+// This registers after AddFHIRBridgeInfrastructure's drain loop, so the loop's ExecuteAsync starts first.
+// That is harmless rather than merely lucky: the loop immediately parks on an empty channel, and the only
+// things that enqueue a job are user-initiated requests, which cannot arrive before the host finishes
+// starting. The reconciler's StartAsync therefore completes while the loop is still waiting for its first
+// job, so no import it could interrupt has begun.
+builder.Services.AddHostedService<TerminologyImportOrphanReconciler>();
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>
@@ -683,9 +736,17 @@ app.Use(async (context, next) =>
     // never have. CSRF only protects cookie-AUTHENTICATED state-changing requests — authenticated endpoints
     // (e.g. internal/change-password) keep the check. GetEndpoint is populated here because WebApplication
     // auto-inserts UseRouting ahead of user middleware once endpoints are mapped.
-    var isAnonymousEndpoint = context.GetEndpoint()?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
+    var endpoint = context.GetEndpoint();
+    var isAnonymousEndpoint = endpoint?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
 
-    if (isStateChanging && !isAnonymousEndpoint &&
+    // Explicitly-declared exemption, for an endpoint that IS authorized but not by the session cookie — it
+    // carries its own non-cookie credential (e.g. /workflows/{id}/run's unguessable callerId token-cache key)
+    // and so has nothing for a cross-site form to silently ride along on, yet cannot be [AllowAnonymous]
+    // because a portal-triggered call must still satisfy workflow.run. See CsrfExemptAttribute for why the
+    // IAllowAnonymous check alone silently missed exactly that case.
+    var isCsrfExemptEndpoint = endpoint?.Metadata.GetMetadata<CsrfExemptAttribute>() is not null;
+
+    if (isStateChanging && !isAnonymousEndpoint && !isCsrfExemptEndpoint &&
         context.Request.Path.StartsWithSegments("/api/v1") &&
         context.Request.Cookies.ContainsKey("fhirbridge_access_token"))
     {
@@ -719,8 +780,10 @@ app.UseAuthentication();
 // License gate: once the license isn't Active (no token applied yet, expired, or invalid), every
 // /api/v1 action is blocked — including anonymous ones — except the handful of endpoints needed to
 // register the first admin, log in/out, see why (GET /auth/me, the setup-status check the portal
-// polls at boot), and actually fix it (the License screen, plus its dev-only minting helper). Without
-// that carve-out an inactive license would be permanently unrecoverable through the app itself. This
+// polls at boot), and actually fix it (the License screen — status/apply/history plus the license
+// request flow, including its own narrow GET/PUT .../license-request/licensor-url pair — and its
+// dev-only minting helper). Without that carve-out an inactive license would be permanently
+// unrecoverable through the app itself. This
 // is the enforcement stage ILicenseService/LicenseStatus's own doc comments said was still to come —
 // everything before this was verification/reporting only.
 var licenseGateAllowedPrefixes = new[]
@@ -740,6 +803,10 @@ var licenseGateAllowedPrefixes = new[]
     "/api/v1/auth/internal/reset-password",
     "/api/v1/config",
     "/api/v1/license",
+    // Deliberately NOT the general-purpose /api/v1/system/settings (which would open every OTHER
+    // setting to read/write while unlicensed) — license-request's own controller exposes a narrow
+    // GET/PUT .../license-request/licensor-url pair for just the one key the License screen needs.
+    "/api/v1/license-request",
     "/api/v1/dev/license-mint",
 };
 var licenseGateService = app.Services.GetRequiredService<FHIRBridge.Application.Abstractions.Licensing.ILicenseService>();
@@ -816,6 +883,10 @@ if (rateLimitingEnabled)
 app.MapControllers();
 app.MapWorkflowEndpoints();
 app.MapHub<RunStatusHub>("/hubs/run-status").RequireAuthorization();
+// The hub class carries [Authorize(SuperAdminOnly)] itself — this RequireAuthorization() is the same
+// belt-and-braces the run-status hub above uses, keeping an unauthenticated connection off the endpoint
+// before it ever reaches the hub's own policy.
+app.MapHub<TerminologyStatusHub>("/hubs/terminology-status").RequireAuthorization();
 
 // Client-side (Angular) routes have no server-side match — fall back to index.html so deep links
 // and refreshes on e.g. /workflows/123 resolve instead of 404ing. No-ops if wwwroot/index.html
@@ -840,6 +911,14 @@ static void BootstrapDatabase(WebApplication app)
     var bootstrapStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
 
     var dbContext = scope.ServiceProvider.GetService<FHIRBridgeDbContext>();
+
+    // Multiple replicas/instances (Azure Container Apps scale-out, a rolling restart overlapping the old
+    // revision, or the Worker host starting at the same moment) can all run migrations/seeding at the same
+    // time against the same database. Every step below — Migrate(), the RBAC bootstrapper, the
+    // endpoint-directory seeders, the system-settings seeder — is written as "check if it's already there,
+    // then insert", which is only safe against one runner at a time. See DatabaseBootstrapLock's remarks.
+    using var bootstrapLock = dbContext is null ? null : DatabaseBootstrapLock.TryAcquire(dbContext, logger);
+
     if (dbContext is not null)
     {
         // Enumerated before migrating so the log names the migrations this boot is about to apply — afterwards
@@ -938,6 +1017,16 @@ static void LoadLicense(WebApplication app)
 {
     var licenseService = app.Services.GetRequiredService<FHIRBridge.Application.Abstractions.Licensing.ILicenseService>();
     licenseService.ReloadAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+    // One-time, startup-only warning (not logged per-request from the scoped LicenseRequestService
+    // itself) — see LicenseRequestSharedKey's remarks for what this key does and does not protect.
+    if (FHIRBridge.Infrastructure.Licensing.LicenseRequestSharedKey.IsUsingDevPlaceholder)
+    {
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("LicenseRequestSharedKey").LogWarning(
+            "License request shared key: using the EMBEDDED DEV-ONLY placeholder (FHIRBRIDGE_LICENSE_REQUEST_SHARED_KEY " +
+            "is not set). Set that env var to a real, non-committed 32-byte base64 secret — shared out of band with " +
+            "the licensor's FHIRBridge-LicenseServer deployment — for anything beyond local development.");
+    }
 }
 
 // Reflection discovers every [StandardPermission] code in use (see PermissionCatalog), but only

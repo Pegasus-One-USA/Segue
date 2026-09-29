@@ -53,6 +53,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.Governance", "sr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.Infrastructure.Migrations.PostgreSql", "src\FHIRBridge.Infrastructure.Migrations.PostgreSql\FHIRBridge.Infrastructure.Migrations.PostgreSql.csproj", "{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LicenseServer", "LicenseServer", "{72B57477-FC9A-FAB5-E15F-940B3D235F44}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FHIRBridge.LicenseServer", "src\LicenseServer\FHIRBridge.LicenseServer\FHIRBridge.LicenseServer.csproj", "{D44AC512-E693-464B-B276-7F555F748EA8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -291,6 +295,18 @@ Global
 		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Release|x64.Build.0 = Release|Any CPU
 		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Release|x86.ActiveCfg = Release|Any CPU
 		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A}.Release|x86.Build.0 = Release|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Debug|x64.Build.0 = Debug|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Debug|x86.Build.0 = Debug|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Release|x64.ActiveCfg = Release|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Release|x64.Build.0 = Release|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Release|x86.ActiveCfg = Release|Any CPU
+		{D44AC512-E693-464B-B276-7F555F748EA8}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -319,6 +335,7 @@ Global
 		{0C32E477-F4BF-BD78-46DF-E25693463DAA} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{80DAA888-84BF-4979-A2E4-69B9685AD93B} = {90298CBA-BD6F-3A0A-69D5-97CAD7B05E7E}
 		{D63B6A39-6C50-4C66-86D3-9E0C4612AA0A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{D44AC512-E693-464B-B276-7F555F748EA8} = {72B57477-FC9A-FAB5-E15F-940B3D235F44}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {3D3F029B-E6AC-4D16-9551-75C0409A78CD}

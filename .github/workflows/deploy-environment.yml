@@ -79,6 +79,27 @@ jobs:
           -c Release -r win-x64 --self-contained false
           -o publish/DemoApi
 
+      # Stamp the portal bundle's version, the same job containerization's segue-app Dockerfile
+      # does for the container path (it writes this file from an APP_VERSION build-arg). Without
+      # this the committed 'local' placeholder compiles straight through and every VM
+      # environment's footer claims to be an unversioned dev build.
+      #
+      # The environment suffix is deliberate: a VM build must never be mistakable for a released
+      # version -- the same reason version.ts ships as 'local' rather than a number. The run
+      # number makes a footer screenshot traceable back to the exact build. Released container
+      # images carry the bare number and only ever come from release.yml.
+      #
+      # VERSION is read exactly the way release.yml reads it, so the number is typed in one place
+      # only: the repo-root VERSION file.
+      - name: Stamp portal version
+        shell: bash
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          SUFFIX="$(echo '${{ inputs.environment }}' | tr '[:upper:]' '[:lower:]')"
+          STAMP="${VERSION}-${SUFFIX}.${{ github.run_number }}"
+          echo "export const APP_VERSION = '${STAMP}';" > portal/src/app/version.ts
+          echo "Stamped portal version: ${STAMP}"
+
       - name: Build portal
         working-directory: portal
         run: |

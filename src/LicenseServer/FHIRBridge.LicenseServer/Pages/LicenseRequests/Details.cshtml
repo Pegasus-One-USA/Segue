@@ -1,0 +1,126 @@
+@page "{id:guid}"
+@model FHIRBridge.LicenseServer.Pages.LicenseRequests.DetailsModel
+@{
+    ViewData["Title"] = "License Request Details";
+}
+
+<div class="page-header">
+    <h1>@Model.RequestRecord.ClientName</h1>
+    <p class="page-subtitle">
+        <a href="/LicenseRequests">&larr; License Requests</a> &middot;
+        <a href="/LicenseRequests/History">Request History</a>
+    </p>
+</div>
+
+@if (Model.SaveSucceeded)
+{
+    <div class="panel" style="border-color:var(--warn-border); background:var(--warn-soft); margin-bottom:20px;">
+        Changes saved.
+    </div>
+}
+
+<div class="panel">
+    <table>
+        <tbody>
+            <tr><th>Requesting URL</th><td>@(Model.RequestRecord.RequestHost ?? "(unknown)")</td></tr>
+            <tr><th>Request Key</th><td><code>@Model.RequestRecord.UniqueKey</code></td></tr>
+            <tr><th>Received Via</th><td>@(Model.RequestRecord.ReceivedManually ? "Manual code" : "Direct API")</td></tr>
+            <tr><th>First Received</th><td>@Model.RequestRecord.ReceivedAtUtc.ToString("u")</td></tr>
+            <tr><th>Last Submitted</th><td>@Model.RequestRecord.LastSubmittedUtc.ToString("u")</td></tr>
+            <tr><th>Submission Count</th><td>@Model.RequestRecord.SubmissionCount</td></tr>
+            <tr>
+                <th>Status</th>
+                <td>
+                    @if (Model.RequestRecord.FulfilledAtUtc is not null)
+                    {
+                        <span class="badge">Fulfilled @Model.RequestRecord.FulfilledAtUtc.Value.ToString("u")</span>
+                    }
+                    else if (Model.RequestRecord.DeniedAtUtc is not null)
+                    {
+                        <span class="badge badge-suspended">Denied @Model.RequestRecord.DeniedAtUtc.Value.ToString("u")</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-pending">Pending</span>
+                    }
+                </td>
+            </tr>
+            @if (Model.RequestRecord.DeniedAtUtc is not null && Model.RequestRecord.DenialReason is not null)
+            {
+                <tr><th>Denial Reason</th><td>@Model.RequestRecord.DenialReason</td></tr>
+            }
+            @if (Model.RequestRecord.FulfilledIssuedLicense is not null)
+            {
+                <tr>
+                    <th>Issued License</th>
+                    <td>
+                        @Model.RequestRecord.FulfilledIssuedLicense.CustomerName
+                        (@Model.RequestRecord.FulfilledIssuedLicense.CustomerId) &mdash;
+                        <a href="/Licenses">view on Issued Licenses</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (Model.RequestRecord.FulfilledAtUtc is null && Model.RequestRecord.DeniedAtUtc is null)
+    {
+        <div class="form-actions" style="margin-top:16px;">
+            <a href="/Licenses/Create?RequestId=@Model.RequestRecord.Id">Create License</a>
+        </div>
+
+        <form method="post" asp-page-handler="Deny" style="margin-top:16px;"
+              onsubmit="return confirm('Deny this license request? The install will not be notified automatically.');">
+            <input type="hidden" name="Id" value="@Model.RequestRecord.Id" />
+            <div class="field">
+                <label for="DenialReason">Denial reason <span class="hint">(optional, internal only)</span></label>
+                <input type="text" id="DenialReason" name="DenialReason" placeholder="e.g. contract lapsed" />
+            </div>
+            <button type="submit" class="btn-danger">Deny Request</button>
+        </form>
+    }
+</div>
+
+<div class="panel" style="margin-top:16px;">
+    <h2>Edit Request Details</h2>
+    <p class="muted">
+        Correct anything the client got wrong when they submitted. The request key above is never affected
+        by these edits — it's what already ties (or will tie) a minted license back to this install.
+    </p>
+    <form method="post" asp-page-handler="Save">
+        <input type="hidden" asp-for="Id" />
+        <div class="field-grid">
+            <div class="field">
+                <label for="ClientName">Client Name</label>
+                <input type="text" id="ClientName" asp-for="ClientName" />
+            </div>
+            <div class="field">
+                <label for="Email">Email</label>
+                <input type="email" id="Email" asp-for="Email" />
+            </div>
+            <div class="field">
+                <label for="CompanyName">Company</label>
+                <input type="text" id="CompanyName" asp-for="CompanyName" />
+            </div>
+            <div class="field">
+                <label for="PhoneNumber">Phone</label>
+                <input type="text" id="PhoneNumber" asp-for="PhoneNumber" />
+            </div>
+            <div class="field">
+                <label for="Address">Address</label>
+                <input type="text" id="Address" asp-for="Address" />
+            </div>
+            <div class="field">
+                <label for="RequestHost">Requesting URL</label>
+                <input type="text" id="RequestHost" asp-for="RequestHost" placeholder="e.g. fhirbridge.acmehealth.com" />
+            </div>
+        </div>
+        @if (!ModelState.IsValid)
+        {
+            <p class="error">Client Name, Email and Phone are required.</p>
+        }
+        <div class="form-actions" style="margin-top:8px;">
+            <button type="submit">Save Changes</button>
+        </div>
+    </form>
+</div>

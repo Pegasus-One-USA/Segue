@@ -27,12 +27,14 @@ RUN npm run build -- --configuration=${PORTAL_CONFIG}
 
 # ---- Stage 2: .NET publish (Api + Gateway) ----
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build
+ARG SOURCE_REVISION_ID=
 WORKDIR /src
+COPY Directory.Build.props VERSION ./
 COPY src/ ./src/
 RUN dotnet publish src/Api/FHIRBridge.Api/FHIRBridge.Api.csproj \
-      -c Release --no-self-contained -o /app/publish/api \
+      -c Release --no-self-contained -o /app/publish/api -p:SourceRevisionId=${SOURCE_REVISION_ID} \
     && dotnet publish src/Gateway/FHIRBridge.Gateway/FHIRBridge.Gateway.csproj \
-      -c Release --no-self-contained -o /app/publish/gateway
+      -c Release --no-self-contained -o /app/publish/gateway -p:SourceRevisionId=${SOURCE_REVISION_ID}
 
 # ---- Stage 3: runtime ----
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final

@@ -376,3 +376,216 @@ public sealed class TransformationRuleServiceTests
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
     }
 }
+
+/// <summary>
+/// Saving an EDITED rule (id supplied) rewrote only what the rule does — its config, order and failure
+/// handling — and silently kept the address it was originally authored against. The de-identification editor
+/// made that plainest: resource and source field are nearly all it lets you change, so "Edit" returned 200,
+/// the row came back unchanged, and the edit appeared to do nothing. Retarget is what persists the move.
+/// </summary>
+public sealed class TransformationRuleRetargetOnSaveTests
+{
+    private static readonly Guid ProfileId = Guid.NewGuid();
+
+    private static TransformationRule DeIdRule(string resourceType, string sourceField, string mode) =>
+        new(TransformScope.ResourceType, TransformNodeType.HashingMasking,
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["mode"] = mode }),
+            resourceType: resourceType, sourceField: sourceField,
+            executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId);
+
+    private static (TransformationRuleService Service, Mock<ITransformationRuleRepository> Repository) BuildSut(
+        TransformationRule existing)
+    {
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository.Setup(x => x.GetByIdAsync(existing.Id, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
+        // The save path now checks the natural key for a collision before retargeting, so this has to answer.
+        repository.Setup(x => x.ListAsync(
+                It.IsAny<TransformScope>(), It.IsAny<DestinationType?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<TransformExecutionPhase?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
+
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object),
+            new TransformNodeRegistry([new HashingMaskingNode()]), Mock.Of<IConfigurationRepository>());
+
+        return (service, repository);
+    }
+
+    private static SaveTransformationRuleRequest EditTo(
+        TransformationRule existing, string resourceType, string sourceField, string mode) =>
+        new(existing.Id, TransformScope.ResourceType, TransformNodeType.HashingMasking,
+            new Dictionary<string, string> { ["mode"] = mode },
+            ResourceType: resourceType,
+            SourceField: sourceField,
+            ExecutionPhase: TransformExecutionPhase.PreMapping,
+            DeIdentificationProfileId: ProfileId);
+
+    [Fact]
+    public async Task Editing_a_rules_source_field_persists_the_new_field()
+    {
+        var existing = DeIdRule("Patient", "$.gender", "redact");
+        var (service, repository) = BuildSut(existing);
+
+        var saved = await service.SaveRuleAsync(EditTo(existing, "Patient", "$.birthDate", "redact"));
+
+        saved.SourceField.Should().Be("$.birthDate");
+        existing.SourceField.Should().Be("$.birthDate", "the stored entity is what the next run reads");
+        repository.Verify(x => x.UpdateAsync(existing, It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(x => x.AddAsync(It.IsAny<TransformationRule>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Editing_a_rules_resource_type_persists_the_new_resource()
+    {
+        var existing = DeIdRule("Patient", "$.id", "hash");
+        var (service, _) = BuildSut(existing);
+
+        var saved = await service.SaveRuleAsync(EditTo(existing, "Encounter", "$.id", "hash"));
+
+        saved.ResourceType.Should().Be("Encounter");
+        existing.ResourceType.Should().Be("Encounter");
+    }
+
+    [Fact]
+    public async Task Editing_only_the_config_still_leaves_the_address_alone()
+    {
+        var existing = DeIdRule("Patient", "$.gender", "redact");
+        var (service, _) = BuildSut(existing);
+
+        var saved = await service.SaveRuleAsync(EditTo(existing, "Patient", "$.gender", "hash"));
+
+        saved.Config["mode"].Should().Be("hash");
+        existing.ResourceType.Should().Be("Patient");
+        existing.SourceField.Should().Be("$.gender");
+    }
+
+    /// <summary>
+    /// Retargeting onto an address another rule already holds leaves two rules sharing a natural key. That
+    /// permanently defeats FindByNaturalKeyAsync's `matches.Count == 1` guard, so every later id-less save
+    /// inserts another clone rather than updating one — the duplicate multiplies, and deleting the row you can
+    /// see leaves the rest running.
+    /// </summary>
+    [Fact]
+    public async Task An_edit_cannot_move_a_rule_onto_an_address_another_rule_already_holds()
+    {
+        var edited = DeIdRule("Patient", "$.gender", "redact");
+        var occupant = DeIdRule("Patient", "$.birthDate", "redact");
+
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository.Setup(x => x.GetByIdAsync(edited.Id, It.IsAny<CancellationToken>())).ReturnsAsync(edited);
+        repository.Setup(x => x.ListAsync(
+                It.IsAny<TransformScope>(), It.IsAny<DestinationType?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<TransformExecutionPhase?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[occupant]);
+
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object),
+            new TransformNodeRegistry([new HashingMaskingNode()]), Mock.Of<IConfigurationRepository>());
+
+        var act = async () => await service.SaveRuleAsync(EditTo(edited, "Patient", "$.birthDate", "redact"));
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        edited.SourceField.Should().Be("$.gender", "the rejected edit must not have been applied");
+        repository.Verify(x => x.UpdateAsync(It.IsAny<TransformationRule>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The address is ALREADY duplicated. FindByNaturalKeyAsync returns null here (it refuses to choose between
+    /// duplicates), so using it as the collision test would read "free" for the most crowded address there is
+    /// and let a move add a third copy.
+    /// </summary>
+    [Fact]
+    public async Task An_edit_is_rejected_even_when_the_target_address_is_already_duplicated()
+    {
+        var edited = DeIdRule("Patient", "$.gender", "redact");
+        var occupantA = DeIdRule("Patient", "$.birthDate", "redact");
+        var occupantB = DeIdRule("Patient", "$.birthDate", "hash");
+
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository.Setup(x => x.GetByIdAsync(edited.Id, It.IsAny<CancellationToken>())).ReturnsAsync(edited);
+        repository.Setup(x => x.ListAsync(
+                It.IsAny<TransformScope>(), It.IsAny<DestinationType?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<TransformExecutionPhase?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[occupantA, occupantB]);
+
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object),
+            new TransformNodeRegistry([new HashingMaskingNode()]), Mock.Of<IConfigurationRepository>());
+
+        var act = async () => await service.SaveRuleAsync(EditTo(edited, "Patient", "$.birthDate", "redact"));
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        edited.SourceField.Should().Be("$.gender");
+    }
+
+    /// <summary>
+    /// ListAsync treats a null argument as "no filter", and a de-identification rule has null DestinationField,
+    /// DestinationType, SourceSystem and route id — so the repository hands back a SUPERSET of the address.
+    /// Rejecting on any returned row would block a perfectly legal edit because some unrelated rule happened to
+    /// survive the loose query.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_that_only_matches_the_loose_query_is_not_treated_as_a_collision()
+    {
+        var edited = DeIdRule("Patient", "$.gender", "redact");
+        // Same node type and same profile, but a DIFFERENT source field — not the address being moved onto.
+        var unrelated = DeIdRule("Patient", "$.name[*].family", "mask");
+
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository.Setup(x => x.GetByIdAsync(edited.Id, It.IsAny<CancellationToken>())).ReturnsAsync(edited);
+        repository.Setup(x => x.ListAsync(
+                It.IsAny<TransformScope>(), It.IsAny<DestinationType?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<TransformExecutionPhase?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[unrelated]);
+
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object),
+            new TransformNodeRegistry([new HashingMaskingNode()]), Mock.Of<IConfigurationRepository>());
+
+        var saved = await service.SaveRuleAsync(EditTo(edited, "Patient", "$.birthDate", "redact"));
+
+        saved.SourceField.Should().Be("$.birthDate", "nothing actually occupies that address");
+        edited.SourceField.Should().Be("$.birthDate");
+    }
+
+    [Fact]
+    public async Task An_edit_that_leaves_the_rule_where_it_is_is_not_a_collision_with_itself()
+    {
+        // The rule's own row comes back from the natural-key lookup; matching on it must not block a plain
+        // config-only edit.
+        var existing = DeIdRule("Patient", "$.gender", "redact");
+
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository.Setup(x => x.GetByIdAsync(existing.Id, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
+        repository.Setup(x => x.ListAsync(
+                It.IsAny<TransformScope>(), It.IsAny<DestinationType?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<TransformExecutionPhase?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<TransformationRule>)[existing]);
+
+        var service = new TransformationRuleService(
+            repository.Object, new EffectiveRuleResolver(repository.Object),
+            new TransformNodeRegistry([new HashingMaskingNode()]), Mock.Of<IConfigurationRepository>());
+
+        var saved = await service.SaveRuleAsync(EditTo(existing, "Patient", "$.gender", "hash"));
+
+        saved.Config["mode"].Should().Be("hash");
+    }
+
+    [Fact]
+    public async Task An_edit_cannot_move_a_pre_mapping_rule_to_a_scope_it_may_not_hold()
+    {
+        // Retarget must enforce the same invariant the constructor does, or an edit becomes a way around it.
+        var existing = DeIdRule("Patient", "$.gender", "redact");
+        var (service, _) = BuildSut(existing);
+
+        var request = EditTo(existing, "Patient", "$.gender", "redact") with { Scope = TransformScope.Field };
+        var act = async () => await service.SaveRuleAsync(request);
+
+        await act.Should().ThrowAsync<ArgumentException>();
+    }
+}

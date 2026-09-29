@@ -100,6 +100,14 @@ Report back to the user:
 
 ## Gotchas worth knowing
 
+- **The build passes `-p:UseAppHost=false`.** On a machine where an EDR/security policy blocks writing new
+  `.exe` files under `bin\Debug` (observed on at least one dev box here), MSBuild's apphost-copy step fails
+  with `MSB3021: ... Access to the path ... FHIRBridge.Api.exe is denied` even though the folder is otherwise
+  writable — a plain `New-Item`/`Copy-Item` of a `.exe` there fails identically outside MSBuild, confirming
+  it isn't a project/build bug. Skipping the native apphost sidesteps the write entirely; the script already
+  launches hosts via `dotnet <dll>` when no `.exe` is present (`Get-BuiltAssembly`'s extension fallback), so
+  this changes nothing about how the hosts start. If you ever see that MSB3021 again from a hand-rolled build
+  outside this script, add the same flag rather than trying to grant the process write access.
 - **Two Postgres containers look alike.** `fhirbridge-controlplane-pg` is the one actually published on
   host port **5434** and holding the dev data (`FHIRBridge`, `FHIRBridge_v2`, `ErrorLogger`). The
   compose-defined `fhirbridge-controlplane-postgres` also runs but does **not** publish 5434. The script

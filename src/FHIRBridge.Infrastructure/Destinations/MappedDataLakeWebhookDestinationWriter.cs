@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -209,6 +209,16 @@ public sealed class MappedDataLakeWebhookDestinationWriter : IConfiguredDestinat
             ["correlationId"] = context.CorrelationId,
             ["emittedOnUtc"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
         };
+
+        // The identity of the person whose sign-in authorized this run, in the CONSUMER's own vocabulary — the
+        // account id they supplied as userIdentity when the launch URL was minted. Without it a push consumer sees
+        // only the EHR's patient id and must keep its own mapping table to answer "whose data is this". Omitted
+        // entirely (rather than emitted as null) when absent: a scheduled or webhook run has no signed-in user, and
+        // a present-but-null field would suggest one was expected and lost.
+        if (!string.IsNullOrWhiteSpace(context.UserIdentity))
+        {
+            meta["userIdentity"] = context.UserIdentity;
+        }
 
         return $"{{\"meta\":{meta.ToJsonString()},\"records\":[{string.Join(',', lines)}]}}";
     }

@@ -50,6 +50,15 @@ public sealed class TrmConceptConfiguration : IEntityTypeConfiguration<TrmConcep
         // cost to leaving it unbounded — EF already maps an unconstrained string to nvarchar(max)/text
         // on both providers, so no explicit HasColumnType is needed.
         builder.Property(x => x.Display);
+        // Left unbounded for the same reason as Display above: these come from the same word-wrapped
+        // fixed-width sources (HCPCS long descriptions, MeSH ScopeNote) and are likewise never
+        // filtered/joined/indexed on, only read back for a single already-located concept.
+        builder.Property(x => x.ShortDescription);
+        builder.Property(x => x.LongDescription);
+        builder.Property(x => x.LongCommonName);
+        // Defaulted true so the column backfills as "active" for every concept already stored by an
+        // earlier sync — matches the documented rule that a source with no status signal is active.
+        builder.Property(x => x.IsActive).IsRequired().HasDefaultValue(true);
         builder.HasIndex(x => new { x.CodeSystemPid, x.CodeVal }).IsUnique();
         // A standalone (non-unique) index on CodeVal alone, for HapiLocalTerminologyLookupService's
         // cross-system search (CodeableConceptBuilder's opt-in auto-detect) — the composite index above

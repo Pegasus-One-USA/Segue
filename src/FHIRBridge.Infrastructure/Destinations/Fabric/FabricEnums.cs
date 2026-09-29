@@ -16,9 +16,9 @@ public enum FabricLandingMode
     OneLakeFiles = 0,
 
     /// <summary>
-    /// Rows into a Fabric Warehouse table, via staged files plus <c>COPY INTO</c> over the TDS endpoint. Declared
-    /// but NOT implemented — the destination fails fast rather than half-writing. Note that a Lakehouse's SQL
-    /// analytics endpoint is read-only, so this mode means a real Warehouse item, not that endpoint.
+    /// Rows into a Fabric Warehouse table, via staged Parquet in a Lakehouse plus <c>COPY INTO</c> over the TDS
+    /// endpoint. Note that a Lakehouse's SQL analytics endpoint is read-only, so this mode means a real Warehouse
+    /// item, not that endpoint — which is also why <see cref="LakehouseTable"/> cannot be served the same way.
     /// </summary>
     WarehouseTable = 1,
 
@@ -29,6 +29,14 @@ public enum FabricLandingMode
     /// better than a second, thinner implementation of the same wire protocol.
     /// </summary>
     Eventstream = 2,
+
+    /// <summary>
+    /// Rows into a Lakehouse <c>Tables/</c> Delta table. Distinct from <see cref="OneLakeFiles"/> in one decisive
+    /// way: a registered Fabric table is a Delta table, defined by the <c>_delta_log</c> transaction log beside
+    /// the Parquet, so the data files alone are not a table. This mode writes that log; OneLakeFiles refuses a
+    /// <c>Tables/</c> path precisely because it does not.
+    /// </summary>
+    LakehouseTable = 3,
 }
 
 /// <summary>Serialization format for files landed in OneLake.</summary>
@@ -72,4 +80,19 @@ public enum FabricPartitionScheme
 
     /// <summary>Both, resource type outermost — the layout a Spark reader partition-prunes best.</summary>
     ResourceTypeAndIngestDate = 3,
+}
+
+/// <summary>How rows are applied to a Fabric table destination (Warehouse or Lakehouse Delta).</summary>
+public enum FabricTableWriteMode
+{
+    /// <summary>Every batch appends. No key needed, and duplicates are the caller's problem downstream.</summary>
+    Append = 0,
+
+    /// <summary>
+    /// Match on the mapping field flagged <c>IsUpsertKey</c> (falling back to <c>SourceResourceId</c>, the same
+    /// convention the SQL Server writer uses) and update in place, else insert. The reason a table surface can
+    /// offer this at all and <see cref="FabricLandingMode.OneLakeFiles"/> cannot: a file drop has nothing to
+    /// match against.
+    /// </summary>
+    Upsert = 1,
 }

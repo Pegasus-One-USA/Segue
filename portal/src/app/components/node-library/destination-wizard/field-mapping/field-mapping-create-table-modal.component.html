@@ -154,7 +154,7 @@
             (change)="onColumnTypeChange(i, $any($event.target).value)"
             [disabled]="submitting()"
           >
-            @for (t of dataTypes; track t) { <option [value]="t">{{ t }}</option> }
+            @for (t of dataTypes(); track t) { <option [value]="t">{{ t }}</option> }
           </select>
           <button
             type="button"

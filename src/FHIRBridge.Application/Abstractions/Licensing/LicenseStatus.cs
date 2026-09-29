@@ -89,7 +89,13 @@ public sealed record LicenseStatus(
     DateTime? ExpiresUtc,
     LicenseLimits? Limits,
     IReadOnlyList<string> Features,
-    string? InvalidReason)
+    string? InvalidReason,
+    /// <summary>The <c>requestKey</c> claim, when the license was minted against a specific
+    /// <c>LicenseRequest</c> — <c>null</c> for a license minted with no request tied to it (every license
+    /// minted before this feature existed, or one deliberately minted without a request). Checked against
+    /// this install's own <c>LicenseRequest.UniqueKey</c> only at Apply time
+    /// (<c>LicenseService.ApplyAsync</c>), never at Reload — see that method's remarks.</summary>
+    string? RequestKey = null)
 {
     /// <summary>True for every state except <see cref="LicenseState.Unlicensed"/> — i.e. some token was
     /// found and parsed, even if it turned out to be expired or invalid.</summary>

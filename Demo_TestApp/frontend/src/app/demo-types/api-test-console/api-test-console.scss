@@ -1,0 +1,415 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #f4f6f8;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #1f2937;
+}
+
+.console {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 20px 64px;
+}
+
+.console__header {
+  margin-bottom: 20px;
+}
+
+.console__brand {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.console__subtitle {
+  margin: 4px 0 16px;
+  color: #6b7280;
+  font-size: 14px;
+  max-width: 640px;
+}
+
+.console__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.console__tab {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.console__tab:hover {
+  color: #111827;
+}
+
+.console__tab--active {
+  color: #00a89d;
+  border-bottom-color: #00a89d;
+}
+
+.panel {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  padding: 20px;
+  margin-top: 16px;
+}
+
+.panel__intro {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.panel__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  appearance: none;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.chip--active {
+  background: #00a89d;
+  border-color: #00a89d;
+  color: #fff;
+}
+
+.btn {
+  appearance: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn--ghost {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #e5e7eb;
+}
+
+.btn--ghost:hover {
+  background: #e5e7eb;
+}
+
+.btn--danger {
+  background: #fff;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.btn--danger:hover {
+  background: #fef2f2;
+}
+
+.btn--small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.error-banner {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.empty-state {
+  color: #6b7280;
+  font-size: 13px;
+  padding: 20px 0;
+}
+
+.call-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.call-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.call-card--invalid {
+  border-color: #fecaca;
+}
+
+.call-card__summary {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.call-card__summary:hover {
+  background: #f9fafb;
+}
+
+.call-card__badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.call-card__badge--valid {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.call-card__badge--invalid {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.call-card__method {
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  background: #f3f4f6;
+  border-radius: 4px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
+.call-card__api-name {
+  font-weight: 600;
+  color: #111827;
+  flex-shrink: 0;
+}
+
+.call-card__auth-mode {
+  font-size: 11px;
+  color: #0f766e;
+  background: #ccfbf1;
+  border-radius: 999px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+.call-card__id {
+  color: #9ca3af;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.call-card__received {
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.call-card__caret {
+  color: #9ca3af;
+  transition: transform 120ms ease;
+  flex-shrink: 0;
+}
+
+.call-card__caret--open {
+  transform: rotate(90deg);
+}
+
+.call-card__error {
+  margin: 0;
+  padding: 0 14px 10px 14px;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.call-card__body {
+  border-top: 1px solid #f3f4f6;
+  padding: 10px 14px 14px;
+  background: #fafafa;
+}
+
+.call-card__body-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.call-card__body-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #9ca3af;
+}
+
+.call-card__content {
+  margin: 0;
+  background: #111827;
+  color: #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.api-doc {
+  padding: 16px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.api-doc:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.api-doc__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 6px;
+}
+
+.api-doc__description {
+  font-size: 13px;
+  color: #4b5563;
+  margin: 0 0 10px;
+}
+
+.api-doc__meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  font-size: 12px;
+  margin: 0 0 14px;
+}
+
+.api-doc__meta dt {
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.api-doc__meta dd {
+  margin: 0;
+  color: #111827;
+}
+
+.api-doc__examples {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 700px) {
+  .api-doc__examples {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.api-doc__example-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.api-doc__example-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.api-doc__example-label--valid {
+  color: #166534;
+}
+
+.api-doc__example-label--invalid {
+  color: #b91c1c;
+}
+
+.api-doc__code {
+  margin: 0;
+  background: #111827;
+  color: #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.api-doc__invalid-reason {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.api-doc__cert {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.api-doc__cert-meta {
+  margin-top: 12px;
+}
+
+.api-doc__cert-note {
+  color: #6b7280;
+}
+
+code {
+  background: #f3f4f6;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}

@@ -14,6 +14,80 @@ const PATIENT_FIELDS: ResourceFieldDef[] = [
 
 function availableFields(r: string): ResourceFieldDef[] { return r === 'Patient' ? PATIENT_FIELDS : []; }
 
+// Regression: the Mapping JSON summary — not dest_mappings_v2 — is what a reopened destination node is
+// rebuilt from (destination-wizard.component.ts returns early on that branch), so anything this document
+// drops is a setting the user silently loses on edit. That is exactly what happened to the MongoDB
+// "store as JSON string / as a JSON document" choice: the dropdown reverted to "JSON string" on reopen.
+describe('jsonWriteMode round-trip', () => {
+  function mongoDoc(rows: MappingRow[]): MappingSummaryDocument {
+    return buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType: 'mongo', destLabel: 'MongoDB',
+      mappingRows: rows, sqlTables: [], childTableRelationsByTable: {}, availableFields,
+      sourceConnectionId: null, destinationId: null,
+      targetByResource: { Patient: 'patients_local' },
+    });
+  }
+
+  function wholeNodeRow(jsonWriteMode?: 'string' | 'document'): MappingRow {
+    return {
+      resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient',
+      targetName: 'Patient', tableName: 'patients_local',
+      ...(jsonWriteMode ? { jsonWriteMode } : {}),
+    };
+  }
+
+  it("records a 'document' choice on the column", () => {
+    const doc = mongoDoc([wholeNodeRow('document')]);
+    expect(doc.mappings[0].tables[0].columns[0].jsonWriteMode).toBe('document');
+  });
+
+  it("restores it, so reopening the node shows the choice the user made", () => {
+    const doc = mongoDoc([wholeNodeRow('document')]);
+    const restored = applyMappingSummaryDocument(doc, 'mongo').mappingRows;
+    expect(restored[0].jsonWriteMode).toBe('document');
+  });
+
+  // A DEFAULT column can be Json-valued too (defaultValueType), and serializeRowsFlat sends that as its
+  // ValueType — so its 'document' choice is as real as a mapped column's and has to round-trip identically.
+  // Both halves matter: toSummaryColumn writing the key, and applyMappingSummaryDocument reading it back.
+  it('round-trips the choice on a Json-valued default column', () => {
+    const dflt: MappingRow = {
+      resource: 'Patient', sources: [], mode: 'default', defaultToken: '@default',
+      defaultValue: '{"a":1}', defaultValueType: 'Json',
+      targetName: 'Meta', tableName: 'patients_local', jsonWriteMode: 'document',
+    };
+    const doc = mongoDoc([dflt]);
+    expect(doc.mappings[0].tables[0].columns[0].jsonWriteMode).toBe('document');
+    expect(applyMappingSummaryDocument(doc, 'mongo').mappingRows[0].jsonWriteMode).toBe('document');
+  });
+
+  // A join has no such choice to make (see field-mapping-model.spec.ts), so its column carries no key —
+  // this pins that the omission is deliberate rather than the same drop-on-reopen bug in another branch.
+  it('writes no key for a join, whose value is a delimited string by construction', () => {
+    const join: MappingRow = {
+      resource: 'Patient',
+      sources: [
+        { fhirPath: 'Patient.name.given', label: 'Given', valueType: 'Json' },
+        { fhirPath: 'Patient.name.family', label: 'Family', valueType: 'String' },
+      ],
+      mode: 'value', instance: { type: 'first' }, delimiter: ', ',
+      targetName: 'Name', tableName: 'patients_local', jsonWriteMode: 'document',
+    };
+    const doc = mongoDoc([join]);
+    expect(doc.mappings[0].tables[0].columns[0].mode).toBe('joinedFields');
+    expect(doc.mappings[0].tables[0].columns[0].jsonWriteMode).toBeUndefined();
+  });
+
+  it("adds no key at all for the default 'string' choice — the document stays what it was", () => {
+    for (const row of [wholeNodeRow(), wholeNodeRow('string')]) {
+      const doc = mongoDoc([row]);
+      expect(doc.mappings[0].tables[0].columns[0].jsonWriteMode).toBeUndefined();
+      expect(JSON.stringify(doc)).not.toContain('jsonWriteMode');
+      expect(applyMappingSummaryDocument(doc, 'mongo').mappingRows[0].jsonWriteMode).toBeUndefined();
+    }
+  });
+});
+
 describe('buildMappingSummaryDocument', () => {
   it('wraps every mapped resource under {source, destination, mappings[]}', () => {
     const rows: MappingRow[] = [{
@@ -99,6 +173,40 @@ describe('buildMappingSummaryDocument', () => {
     expect(col.mode).toBe('wholeNodeAsJson');
     expect(col.sourceNode).toBe('Patient.name');
     expect(col.sources).toBeUndefined();
+  });
+
+  // An unset instance means "every repeat" for a whole-node mapping and "the first one" for a field
+  // mapping, so the default stamped here cannot be the same for both -- see defaultInstanceType.
+  it('stamps an unset whole-node instance as "all", not "first"', () => {
+    const rows: MappingRow[] = [{
+      resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient.name',
+      targetName: 'NameJson', tableName: 'dbo.Patient',
+    }];
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType: 'sql', destLabel: 'SQL Server',
+      mappingRows: rows, sqlTables: [], childTableRelationsByTable: {}, availableFields, sourceConnectionId: null, destinationId: null,
+    });
+    const col = doc.mappings[0].tables[0].columns[0];
+    expect(col.instance).toEqual({ arrayContext: 'Patient.name', type: 'all' });
+    expect(col.instanceIsExplicit).toBeTrue();
+  });
+
+  it('round-trips a deliberate whole-node instance choice', () => {
+    const rows: MappingRow[] = [{
+      resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient.name',
+      instance: { type: 'nth', n: 2 }, targetName: 'NameJson', tableName: 'dbo.Patient',
+    }];
+    const doc = buildMappingSummaryDocument({
+      sourceVendor: 'EPIC', destType: 'sql', destLabel: 'SQL Server',
+      mappingRows: rows, sqlTables: [], childTableRelationsByTable: {}, availableFields, sourceConnectionId: null, destinationId: null,
+    });
+    expect(doc.mappings[0].tables[0].columns[0].instance)
+      .toEqual({ arrayContext: 'Patient.name', type: 'nth', n: 2 });
+
+    const restored = applyMappingSummaryDocument(doc, 'sql');
+    expect(restored.mappingRows[0].instance).toEqual({
+      type: 'nth', n: 2, field: undefined, op: undefined, value: undefined, aggregate: undefined,
+    });
   });
 
   it('emits mode "default" with defaultToken/defaultValue/defaultValueType, never sources', () => {
@@ -598,5 +706,47 @@ describe('pruneOrphanedMappingRows', () => {
 
     expect(pruned).toHaveSize(1);
     expect(pruned[0].resource).toBe('Patient');
+  });
+});
+
+/**
+ * Before the whole-node instance picker existed, toSummaryInstance stamped {type:'first'} onto EVERY
+ * whole-node column by default. That was inert then -- nothing read it for this mode -- but it is
+ * indistinguishable from a deliberate "first instance" now that the selection is honoured, and honouring
+ * it would turn every already-saved whole-node mapping into a first-instance-only one on reopen. The
+ * instanceIsExplicit marker is what separates the two.
+ */
+describe('applyMappingSummaryDocument - legacy whole-node instance stamp', () => {
+  function docWithWholeNodeColumn(
+    instance: Record<string, unknown> | null, extra: Record<string, unknown> = {},
+  ): MappingSummaryDocument {
+    return {
+      source: 'EPIC', destination: 'SQL', sourceConnectionId: null, destinationId: null,
+      mappings: [{
+        resourceType: 'Patient', rank: 0, generatedAt: '2026-01-01T00:00:00.000Z',
+        schemaChanges: { tablesToCreate: [], columnsToAdd: [], summary: '' },
+        processingOrder: [], destination: { type: 'sql', label: 'SQL Server' },
+        tables: [{
+          name: 'Patient', isNew: false, isPrimary: true, relation: null,
+          columns: [{
+            column: 'NameJson', mode: 'wholeNodeAsJson', sourceNode: 'Patient.name',
+            instance, ...extra,
+          }],
+        }],
+      }],
+    } as unknown as MappingSummaryDocument;
+  }
+
+  it('drops the inert stamp from an older document, so the column keeps storing the whole node', () => {
+    const doc = docWithWholeNodeColumn({ arrayContext: 'Patient.name', type: 'first' });
+    const restored = applyMappingSummaryDocument(doc, 'sql');
+    expect(restored.mappingRows[0].mode).toBe('childJson');
+    expect(restored.mappingRows[0].instance).toBeUndefined();
+  });
+
+  it('keeps the same selection when the document marks it as explicit', () => {
+    const doc = docWithWholeNodeColumn({ arrayContext: 'Patient.name', type: 'first' }, { instanceIsExplicit: true });
+    const restored = applyMappingSummaryDocument(doc, 'sql');
+    expect(restored.mappingRows[0].instance?.type).toBe('first');
   });
 });

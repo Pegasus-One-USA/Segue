@@ -22,6 +22,7 @@ public sealed class DestinationSchemaController : ControllerBase
     private readonly IMedplumDestinationConnectionTestService _medplumConnectionTestService;
     private readonly IMongoDestinationConnectionTestService _mongoConnectionTestService;
     private readonly IBlobDestinationConnectionTestService _blobConnectionTestService;
+    private readonly IFabricDestinationConnectionTestService _fabricConnectionTestService;
 
     public DestinationSchemaController(
         IDestinationSchemaService schemaService,
@@ -29,7 +30,8 @@ public sealed class DestinationSchemaController : ControllerBase
         IFhirDestinationConnectionTestService fhirConnectionTestService,
         IMedplumDestinationConnectionTestService medplumConnectionTestService,
         IMongoDestinationConnectionTestService mongoConnectionTestService,
-        IBlobDestinationConnectionTestService blobConnectionTestService)
+        IBlobDestinationConnectionTestService blobConnectionTestService,
+        IFabricDestinationConnectionTestService fabricConnectionTestService)
     {
         _schemaService = schemaService;
         _csvConnectionTestService = csvConnectionTestService;
@@ -37,6 +39,7 @@ public sealed class DestinationSchemaController : ControllerBase
         _medplumConnectionTestService = medplumConnectionTestService;
         _mongoConnectionTestService = mongoConnectionTestService;
         _blobConnectionTestService = blobConnectionTestService;
+        _fabricConnectionTestService = fabricConnectionTestService;
     }
 
     /// <summary>Tables/columns of an already-saved relational destination.</summary>
@@ -181,4 +184,17 @@ public sealed class DestinationSchemaController : ControllerBase
         [FromBody] BlobConnectionTestRequest request,
         CancellationToken cancellationToken)
         => Ok(await _blobConnectionTestService.TestConnectionAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Tests an ad-hoc Microsoft Fabric connection for a not-yet-saved <c>DataFabricAzure</c> destination.
+    /// Probes OneLake and, for the Warehouse landing mode, the Warehouse TDS endpoint as well — they use
+    /// different token audiences and fail independently, so the result reports them separately rather than as a
+    /// single pass/fail. Always returns 200; failures come back as <c>connected:false</c> + <c>error</c>.
+    /// </summary>
+    [HttpPost("fabric-test")]
+    [ProducesResponseType(typeof(FabricConnectionTestResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestFabricConnection(
+        [FromBody] FabricConnectionTestRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await _fabricConnectionTestService.TestConnectionAsync(request, cancellationToken));
 }

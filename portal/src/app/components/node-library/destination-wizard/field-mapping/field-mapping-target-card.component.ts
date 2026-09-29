@@ -1,7 +1,7 @@
 import {
   Component, ElementRef, computed, effect, inject, input, output, signal, viewChild, viewChildren, AfterViewInit, OnDestroy,
 } from '@angular/core';
-import { MappingRow, MappingDestType } from './field-mapping-model';
+import { MappingRow, MappingDestType, isSqlFamilyDestType } from './field-mapping-model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
 import { ChildTableRelation, detectRelationFromColumns } from './field-mapping-summary.model';
 import { autoCardWidth } from './field-mapping-card-size.util';
@@ -64,9 +64,9 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
    *  schema and ALTER TABLE-backed schema authoring (see DestinationWizardComponent.isSql/hasSqlTables,
    *  which this mirrors). Distinct from a plain destType() === 'sql' check, which used to leave
    *  MySQL/PostgreSQL wrongly falling through to CSV's free-text-only column handling everywhere below. */
-  readonly isSqlFamily = computed(
-    () => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres',
-  );
+  // Routed through the shared predicate rather than re-listing the engines inline: the list now includes
+  // Fabric Warehouse, and an inline copy is exactly how this gate drifted out of step before.
+  readonly isSqlFamily = computed(() => isSqlFamilyDestType(this.destType()));
   readonly targetValue = input.required<string>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();
@@ -110,6 +110,10 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
 
   readonly addFreeColumn = output<string>();
   readonly openAddColumn = output<void>();
+  /** "⇩ Load JSON payload" on a file-shaped card (never shown for a real SQL table — see the template's
+   *  isSqlFamily() branch) — the parent opens FieldMappingLoadDestinationPayloadModalComponent for this
+   *  specific card (see FieldMappingCanvasComponent.openLoadDestinationPayloadModal). */
+  readonly loadDestinationPayload = output<void>();
   readonly columnActivate = output<string>();
   /** A mapped (or unmapped — the canvas no-ops then) column was clicked, not dragged onto — a row here
    *  is a drop TARGET (drag always starts from the source tree), so unlike a source leaf there's no

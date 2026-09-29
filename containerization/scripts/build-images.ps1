@@ -25,13 +25,25 @@
 #                         logged in to the registry, e.g. `az acr login` / `aws ecr get-login-password | docker login`)
 param(
     [string]$Registry = "",
-    [string]$Tag = "local",
+    [string]$Tag = "",
     [switch]$Push
 )
 
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "../..")
+
+# Default the tag to the product version in the repo-root VERSION file — the same single source
+# every .NET assembly (Directory.Build.props) and the Angular footer already read. Left empty by
+# the caller, images are tagged with the version this working tree actually IS, so a hand-built
+# image can never silently claim to be some other release. Pass -Tag explicitly to override.
+if ($Tag -eq "") {
+    $VersionFile = Join-Path $RepoRoot "VERSION"
+    if (-not (Test-Path $VersionFile)) { throw "VERSION not found at $VersionFile" }
+    $Tag = (Get-Content $VersionFile -Raw).Trim()
+    if ($Tag -eq "") { throw "VERSION at $VersionFile is empty" }
+    Write-Host "==> Tag not specified; using version $Tag from VERSION"
+}
 $Prefix = if ($Registry -ne "") { "$($Registry.TrimEnd('/'))/" } else { "" }
 
 $Images = @{
@@ -44,11 +56,17 @@ $Images = @{
 # segue-app bakes $Tag into its Angular build (footer version display) -
 # segue-worker has no UI, so it doesn't take this build-arg.
 $UiImages = @("segue-app")
+# Both .NET images stamp SourceRevisionId into their assemblies' InformationalVersion (see
+# Directory.Build.props) so a running binary can name the exact commit it was built from.
+$DotnetImages = @("segue-app", "segue-worker")
+$GitSha = try { (git -C $RepoRoot rev-parse HEAD) 2>$null } catch { "" }
 
 foreach ($name in $Images.Keys) {
     $dockerfile = Join-Path $RepoRoot $Images[$name]
     $fullTag = "$Prefix$name`:$Tag"
-    $buildArgs = if ($UiImages -contains $name) { @("--build-arg", "APP_VERSION=$Tag") } else { @() }
+    $buildArgs = @()
+    if ($UiImages -contains $name) { $buildArgs += @("--build-arg", "APP_VERSION=$Tag") }
+    if ($DotnetImages -contains $name) { $buildArgs += @("--build-arg", "SOURCE_REVISION_ID=$GitSha") }
 
     Write-Host "==> Building $fullTag ($($Images[$name]))"
     docker build -f $dockerfile -t $fullTag @buildArgs $RepoRoot

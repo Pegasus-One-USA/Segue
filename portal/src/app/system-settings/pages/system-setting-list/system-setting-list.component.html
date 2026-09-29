@@ -1,5 +1,13 @@
 <div class="list-page">
 
+  <!-- Page Header — System Settings has no tab strip of its own (single section) and this is its
+       only page, so unlike Branding/Audit Logs/LOINC Terminology (each titled by their OWN page,
+       under a shell that deliberately isn't), nothing above this in the tree carries a title at all. -->
+  <div class="page-header">
+    <h1 class="page-title">System Settings</h1>
+    <p class="page-sub">General configuration, secrets, and the terminology server</p>
+  </div>
+
   <!-- Decrypt Provisioned Secret tool.
        Elevated-only: it recovers secret plaintext (private key PEMs), which is the most sensitive thing on
        this page. It used to be protected by the page's own superAdminGuard; now that General is reachable
@@ -197,12 +205,12 @@
             <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
             <td mat-cell *matCellDef="let row" class="col-actions">
               <div class="actions-cell">
-                <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
+                <button mat-icon-button class="btn-more" data-testid="settings-row-menu" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
                   @if ($any(row).isLauncher) {
-                    <button mat-menu-item (click)="openLauncher($any(row))">
+                    <button mat-menu-item data-testid="settings-launcher-open" (click)="openLauncher($any(row))">
                       <mat-icon>edit</mat-icon>
                       Edit
                     </button>
@@ -232,7 +240,8 @@
 
           <tr mat-row *matRowDef="let row; columns: ['groupHeader']; when: isGroupHeaderRow" class="group-header-row"></tr>
           <tr mat-row *matRowDef="let row; columns: ['codeGroupHeader']; when: isCodeGroupHeaderRow" class="code-group-header-row"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedCols; when: isLauncherRow" class="data-row"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols; when: isLauncherRow" class="data-row"
+              data-testid="settings-launcher-row" [attr.data-launcher-code]="$any(row).code"></tr>
           <tr mat-row *matRowDef="let row; columns: displayedCols; when: isGeneralGroupRow" class="data-row"></tr>
           <tr mat-row *matRowDef="let row; columns: displayedCols; when: isDataRow" class="data-row"></tr>
 

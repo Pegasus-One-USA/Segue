@@ -59,7 +59,10 @@ internal static partial class SqlServerDdlTypeValidator
 
     private static readonly HashSet<string> FixedDataTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "int", "bigint", "smallint", "tinyint", "bit", "date", "datetime2", "time", "uniqueidentifier", "float", "real"
+        // datetimeoffset is SQL Server's timezone-aware date/time type — the only one of the three engines'
+        // allowlists that already had a native name identical to what the frontend would send, so it needs no
+        // FixedTypeMap-style rename (unlike Postgres's/MySQL's own timezone-aware types below).
+        "int", "bigint", "smallint", "tinyint", "bit", "date", "datetime2", "datetimeoffset", "time", "uniqueidentifier", "float", "real"
     };
 
     [GeneratedRegex(@"^(nvarchar|varchar|char|nchar)\((max|\d{1,4})\)$", RegexOptions.IgnoreCase)]

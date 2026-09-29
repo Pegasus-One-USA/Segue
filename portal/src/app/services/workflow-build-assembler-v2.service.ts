@@ -10,6 +10,7 @@ import {
   MappingBuildSpec,
   MappingFieldRequest,
   ParentReferenceSpec,
+  SourceAuthenticationRequest,
   SourceBuildSpec,
   SourceRetrievalConfigurationRequest,
   WorkflowBuildRequest,
@@ -43,8 +44,25 @@ interface DestMappingRow {
   terminologyCodeJsonPath?: string;
   arrayPolicy?: string;
   cardinality?: string;
-  correlationCodeJsonPath?: string;
+  // Set by field-mapping-model.ts's serializeRowsFlat for a "Match criteria" row — a bare sibling field NAME
+  // (e.g. "use"), not yet an absolute JsonPath: that layer frequently has no catalog jsonPath to build one
+  // from (see MappingSourceRef.jsonPath), so buildMappingForResource derives the real
+  // MappingFieldRequest.correlationCodeJsonPath itself, off this row's OWN already-resolved `jsonPath`.
+  // Every source of a MULTI-SOURCE (joined) row, in the order the user arranged them — the join
+  // JsonMappingEngine.ResolveJoinedFields executes from a "|"-delimited JsonPath. Carried as individual
+  // paths rather than a pre-joined string because a source's catalog `jsonPath` is only populated "when
+  // present" (see MappingSourceRef.jsonPath): field-mapping-model.ts cannot build the absolute path for a
+  // source that lacks one, and silently falling back to the primary source alone is exactly what made a
+  // two-field join write only its first field. This layer HAS toJsonPath, so it derives the missing ones —
+  // the same division of labour correlationSiblingField above already uses.
+  joinSources?: { path: string; jsonPath?: string; arrays?: string[] }[];
+  correlationSiblingField?: string;
   correlationCodeValue?: string;
+  // "Equals" | "Contains" | "NotEquals" — how correlationCodeValue is compared against the sibling field's
+  // own value. Forwarded to MappingFieldRequest.correlationCodeOperator as-is; omitted (undefined) means
+  // JsonMappingEngine's own default, exact match, same as every CorrelateByCode field saved before this
+  // operator existed.
+  correlationOperator?: string;
   isEnabled?: boolean;
   // True when this row's field-mapping metadata (JsonPath/arrayPolicy/etc.) was derived by naive path
   // conversion rather than the backend FHIR catalog's own authoritative shape — see field-mapping-model.ts.
@@ -70,6 +88,126 @@ function newInlineSecretName(connectionName: string): string {
   const slug = connectionName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'src';
   const suffix = Math.random().toString(36).slice(2, 8);
   return `src-${slug}-${suffix}`;
+}
+
+/** The three client-authentication mechanisms the shared EHR-vendor source form offers, as written into a canvas
+ *  node's field bag under 'Auth method' (see EhrVendorSourceFormComponent's authMethod control). 'public' is
+ *  PKCE — no client credential at all — and is only offered for the interactive audiences. */
+type WizardAuthMethod = 'public' | 'secret' | 'jwt';
+
+/** What the caller must tell {@link buildAuthentication} about the vendor branch it is building for, beyond the
+ *  field bag itself. */
+interface AuthenticationBuildOptions {
+  /** Resolved ApplicationType ('Backend' | 'Standalone' | 'EhrLaunch' | 'Patient'). */
+  applicationType: string;
+  /** Already-resolved OAuth scope list — each vendor derives this differently (destination-mapped resource types
+   *  for athenahealth/eCW, the wizard's own 'Scopes' field for Epic), so it stays the caller's job. */
+  scopes: string[];
+  /** Slug used when minting a fresh vault secret name for a newly typed client secret (e.g. 'athena'). */
+  secretSlug: string;
+  /** Epic's Backend audience is required by ConfigurationService.ValidateEpicSourceConnection to be
+   *  SmartBackendServices regardless of what the form's Auth Method dropdown says — so that one branch pins the
+   *  value rather than deriving it. Every other vendor derives it from the selected auth method. */
+  forceBackendAuthenticationType?: string;
+  /** athenahealth only — the bare practice id sent as ah-practice on every request. */
+  practiceId?: string | null;
+  /** Epic only — scopes actually granted on the last successful Discover token exchange. */
+  discoveredScopes?: string[] | null;
+}
+
+/**
+ * Builds the `authentication` block of a {@link CreateSourceConnectionRequest} from a canvas node's field bag.
+ *
+ * This mirrors WizardServiceV2.save()'s own authentication block (the Settings → Source Connections "master"
+ * path) field for field, so a connection created on the fly from the workflow canvas persists exactly what the
+ * same wizard inputs would have persisted from Settings. It exists because that mapping was previously written
+ * out once per vendor branch inside buildSource() and had drifted three different ways:
+ *
+ *  - athenahealth ignored 'Auth method' entirely and never emitted keyId/privateKey* at all, so a Backend System
+ *    connection registered for private_key_jwt persisted with no key material. At run time
+ *    BackendServicesApplicationStrategy.UsesJwtAssertion() tests PrivateKeyPem, found none, routed to the
+ *    client-secret provider — which had no secret either — and the run failed. (AuthenticationType itself has no
+ *    runtime dispatch role; the missing key reference is what actually broke it.)
+ *  - Epic emitted keyId/privateKey* ungated, so an interactive (PKCE) connection persisted stale key material the
+ *    master path would have nulled, and emitted no client-secret fields at all.
+ *  - eClinicalWorks alone read 'Auth method' and forked correctly — the reference this helper generalizes.
+ *
+ * Deriving every credential field from the one selected auth method (rather than from the vendor or the
+ * application type) is what keeps the two creation paths in agreement, and means a new vendor branch gets the
+ * correct behaviour by calling this rather than by copying a neighbouring block.
+ */
+function buildAuthentication(
+  fields: Record<string, string>,
+  options: AuthenticationBuildOptions,
+): SourceAuthenticationRequest {
+  const isBackend = options.applicationType === 'Backend';
+  // Backend System has no public/PKCE option (no authorization code to protect), so it defaults to a client
+  // secret; the interactive audiences default to public. Matches the form's own defaultAuthMethodFor().
+  const authMethod = (fields['Auth method'] || (isBackend ? 'secret' : 'public')) as WizardAuthMethod;
+  const typedSecret = (fields['Client Secret'] ?? '').trim() || null;
+
+  // Resolved FIRST, because every credential field below gates on THIS rather than on the raw auth method.
+  // The two can legitimately disagree: Epic's Backend audience pins SmartBackendServices (see
+  // forceBackendAuthenticationType) while 'Auth method' may still arrive as 'secret' — the form writes
+  // `v.authMethod ?? 'secret'`, a vendor-agnostic fallback that fires whenever discovery didn't advertise
+  // private_key_jwt. Gating the signing key on the raw method there would persist SmartBackendServices with no
+  // key material AND no client secret — precisely the unrunnable combination this helper exists to prevent:
+  // BackendServicesApplicationStrategy.UsesJwtAssertion() tests PrivateKeyPem, finds none, routes to the
+  // client-secret provider, and that has nothing either. So the invariant is: key material follows the RESOLVED
+  // authentication type, and a client secret is only ever carried by a type that actually sends one.
+  const authenticationType =
+    isBackend && options.forceBackendAuthenticationType
+      ? options.forceBackendAuthenticationType
+      : authMethod === 'jwt'
+        ? 'SmartBackendServices'
+        : authMethod === 'secret'
+          ? 'OAuthClientCredentials'
+          : 'None';
+  const signsJwtAssertion = authenticationType === 'SmartBackendServices';
+  const usesClientSecret = authenticationType === 'OAuthClientCredentials';
+
+  // A non-interactive (client_credentials) app never performs a browser redirect, so it has no authorize
+  // endpoint to store — master gates this on the audience's own showRedirect flag, not on whether the wizard
+  // happened to discover a URL.
+  const authorizationEndpoint = isBackend ? null : fields['Authorize endpoint'] || null;
+
+  return {
+    // Derived from the selected auth method, exactly as the master path's
+    // AUTH_METHOD_TO_AUTHENTICATION_TYPE lookup does — public (PKCE) stores no client credential, so 'None'
+    // (a real AuthenticationType member, value 0).
+    authenticationType,
+    clientId: fields['Client ID'] || fields['Active client ID'] || null,
+    tokenEndpoint: fields['Token endpoint'] || null,
+    authorizationEndpoint,
+    scopes: options.scopes,
+    // Client Secret auth only. A freshly typed secret is provisioned via inlineClientSecret under a brand-new
+    // vault reference; a blank box sends nulls, which ConfigurationService.PreserveSecretsIfBlank reads as
+    // "leave whatever is already stored untouched" rather than as "clear it".
+    clientSecretKeyVaultName: usesClientSecret && typedSecret ? 'workflow-secrets' : null,
+    clientSecretName:
+      usesClientSecret && typedSecret
+        ? newInlineSecretName(fields['__name'] || options.secretSlug)
+        : null,
+    inlineClientSecret: usesClientSecret ? typedSecret : null,
+    // private_key_jwt (SMART Backend Services) only — the signing key is referenced by (Key Vault Name, Secret
+    // Name) and identified by kid. Gated on the RESOLVED type so an interactive connection can't persist stale
+    // key material, and so an audience pinned to SmartBackendServices always carries the key it must sign with.
+    keyId: signsJwtAssertion ? fields['JWT kid'] || null : null,
+    privateKeyKeyVaultName: signsJwtAssertion ? fields['Key vault reference'] || null : null,
+    privateKeySecretName: signsJwtAssertion ? fields['Secret Name'] || null : null,
+    // Informational only (FHIRBridge never fetches it), but eCW requires this URL's host to be allow-listed on
+    // its own servers, so persisting what was really registered is what makes a later bare invalid_client
+    // diagnosable. Previously never sent from this path at all — and since PreserveSecretsIfBlank guards only
+    // ClientSecret/PrivateKey, every workflow rebuild silently nulled it on an existing row.
+    jwksUrl: signsJwtAssertion ? fields['JWKS URL'] || null : null,
+    // Where OAuth2ClientCredentialsTokenProvider places the client id/secret — only meaningful for a type that
+    // actually sends one. Null (a nullable column the backend reads as "post") for every other type.
+    authPlacement: usesClientSecret
+      ? (fields['Auth placement'] as 'post' | 'basic') || 'post'
+      : null,
+    practiceId: options.practiceId ?? null,
+    discoveredScopes: options.discoveredScopes ?? null,
+  };
 }
 
 /**
@@ -286,12 +424,12 @@ export class WorkflowBuildAssemblerServiceV2 {
       };
     }
 
-    // athenahealth — same shared-form field bag as Epic, but Backend audience authenticates via client_credentials
-    // + client secret (not private_key_jwt), and every request needs the Practice ID field's ah-practice scoping.
-    // A freshly typed secret (fields['Client Secret'], non-blank) is provisioned via inlineClientSecret under a
-    // brand-new vault reference — see WizardServiceV2.save()'s identical pattern for entity mode. Canvas mode has
-    // no prior connection to preserve an existing reference from here (this always builds a fresh
-    // CreateSourceConnectionRequest), so a blank secret simply omits it — matching a brand-new "New Source" node.
+    // athenahealth — same shared-form field bag as Epic, and every request needs the Practice ID field's
+    // ah-practice scoping. Its Backend System registrations exist BOTH as client-secret (plain client_credentials)
+    // and as private_key_jwt apps, and the form offers both, so the credential fields are derived from the selected
+    // Auth Method by buildAuthentication() rather than assumed from the vendor. Canvas mode has no prior connection
+    // to preserve an existing secret reference from (this always builds a fresh CreateSourceConnectionRequest), so a
+    // blank secret sends nulls, which ConfigurationService.PreserveSecretsIfBlank keeps rather than clears.
     if (/athenahealth/i.test(connector)) {
       const athenaAppType = this.applicationTypeFor(fields);
       // Resource types (and therefore OAuth scopes) come from what the destination actually maps — see
@@ -308,7 +446,6 @@ export class WorkflowBuildAssemblerServiceV2 {
       const athenaScopes = athenaResourceTypes.length
         ? athenaResourceTypes.map((rt) => `system/${rt}.read`)
         : (fields['Scopes'] ?? '').split(/[\s,]+/).filter(Boolean);
-      const athenaTypedSecret = (fields['Client Secret'] ?? '').trim() || null;
       const athenaBaseRetrieval = (athenaAppType === 'Backend' || athenaAppType === 'Standalone') ? this.buildRetrieval(fields) : null;
       const athenaRetrieval = athenaBaseRetrieval
         ? { ...athenaBaseRetrieval, resourceTypes: athenaResourceTypes.length ? athenaResourceTypes : athenaBaseRetrieval.resourceTypes }
@@ -317,21 +454,17 @@ export class WorkflowBuildAssemblerServiceV2 {
         name: fields['__name'] || 'Athenahealth',
         sourceSystemType: 'Athenahealth',
         baseUrl: fields['FHIR base URL'] || '',
-        authentication: {
-          authenticationType: athenaAppType === 'Backend' ? 'OAuthClientCredentials' : 'None',
-          clientId: fields['Client ID'] || fields['Active client ID'] || null,
-          tokenEndpoint: fields['Token endpoint'] || null,
-          // Carried through so a canvas-built connection persists the same authorize URL the wizard
-          // discovered, exactly as entity mode does — null for a non-interactive (client_credentials)
-          // app, which has no authorize endpoint at all.
-          authorizationEndpoint: fields['Authorize endpoint'] || null,
+        // Backend System dispatches on the credential the connection actually carries, not on the vendor:
+        // athenahealth registrations exist both as client-secret and as private_key_jwt apps, and the form's Auth
+        // Method dropdown offers both. buildAuthentication() derives every credential field from that choice — the
+        // key material this branch previously never emitted included, which is what left a JWT-registered Backend
+        // connection with no signing key and no secret at run time.
+        authentication: buildAuthentication(fields, {
+          applicationType: athenaAppType,
           scopes: athenaScopes,
+          secretSlug: 'athena',
           practiceId: fields['Practice ID'] || null,
-          clientSecretKeyVaultName: athenaTypedSecret ? 'workflow-secrets' : null,
-          clientSecretName: athenaTypedSecret ? newInlineSecretName(fields['__name'] || 'athena') : null,
-          inlineClientSecret: athenaTypedSecret,
-          authPlacement: (fields['Auth placement'] as 'post' | 'basic') || 'post',
-        },
+        }),
         applicationType: athenaAppType,
         interactive:
           athenaAppType === 'Backend'
@@ -397,46 +530,22 @@ export class WorkflowBuildAssemblerServiceV2 {
         healowScopes.unshift('system/Group.read');
       }
       const healowAppType = this.applicationTypeFor(fields);
-      // Auth-method-driven, mirroring the Athenahealth branch above (same shared form field-bag). The previous
-      // version hardcoded authenticationType:'None' and dropped clientSecret/authPlacement, so a Client-Secret
-      // edit assembled a request byte-identical to the stored row → EF no-op → nothing persisted (ModifiedOnUtc
-      // stayed null). Guarded on 'Auth method' so the Healow Patient/public (PKCE) flow stays byte-identical:
-      // non-'secret' → authenticationType 'None', null secret refs, null placement — exactly as before.
-      const healowAuthMethod = fields['Auth method'] || 'public';
-      const healowTypedSecret = (fields['Client Secret'] ?? '').trim() || null;
       return {
         name: fields['__name'] || 'eCW',
         sourceSystemType: 'Healow',
         baseUrl: fields['FHIR base URL'] || '',
-        authentication: {
-          // Backend System uses SMART Backend Services (private_key_jwt / RS384); Client Secret uses plain OAuth2
-          // client_credentials; Patient/public (PKCE) stores no client credentials at all. The previous version
-          // collapsed everything non-'secret' to 'None', which silently dropped the JWT key material for the
-          // Backend audience (authType None, keyId/privateKey* null) → token acquisition fell back to client-secret
-          // and threw "requires a client id and secret". Mirror the Epic backend branch below.
-          authenticationType:
-            healowAuthMethod === 'jwt'
-              ? 'SmartBackendServices'
-              : healowAuthMethod === 'secret'
-                ? 'OAuthClientCredentials'
-                : 'None',
-          clientId: fields['Client ID'] || fields['Active client ID'] || null,
-          tokenEndpoint: fields['Token endpoint'] || null,
-          // Carried through so a canvas-built connection persists the same authorize URL the wizard
-          // discovered, exactly as entity mode does — null for a non-interactive (client_credentials)
-          // app, which has no authorize endpoint at all.
-          authorizationEndpoint: fields['Authorize endpoint'] || null,
+        // Backend System uses SMART Backend Services (private_key_jwt / RS384); Client Secret uses plain OAuth2
+        // client_credentials; Patient/public (PKCE) stores no client credentials at all. This branch was the first
+        // to be made auth-method-driven (an earlier version collapsed everything non-'secret' to 'None', silently
+        // dropping the Backend audience's JWT key material so token acquisition fell back to client-secret and threw
+        // "requires a client id and secret"); buildAuthentication() now generalizes exactly that behaviour to every
+        // vendor, and additionally persists jwksUrl — whose host eCW requires to be allow-listed on its own servers,
+        // making a later bare invalid_client diagnosable.
+        authentication: buildAuthentication(fields, {
+          applicationType: healowAppType,
           scopes: healowScopes,
-          clientSecretKeyVaultName: healowTypedSecret ? 'workflow-secrets' : null,
-          clientSecretName: healowTypedSecret ? newInlineSecretName(fields['__name'] || 'ecw') : null,
-          inlineClientSecret: healowTypedSecret,
-          authPlacement: healowAuthMethod === 'secret' ? ((fields['Auth placement'] as 'post' | 'basic') || 'post') : null,
-          // Backend Services signs its JWT assertion with a private key referenced by (Key Vault Name, Secret Name)
-          // and identified by kid — same shape as the Epic backend branch. Null for the public/secret flows.
-          keyId: healowAuthMethod === 'jwt' ? (fields['JWT kid'] || null) : null,
-          privateKeyKeyVaultName: healowAuthMethod === 'jwt' ? (fields['Key vault reference'] || null) : null,
-          privateKeySecretName: healowAuthMethod === 'jwt' ? (fields['Secret Name'] || null) : null,
-        },
+          secretSlug: 'ecw',
+        }),
         applicationType: healowAppType,
         // Backend System has no interactive login — mirror the Epic branch (interactive: null for Backend). This is
         // not just cosmetic: EpicSourceConnectionScopeSyncService only rewrites the scopes of connections whose
@@ -495,23 +604,19 @@ export class WorkflowBuildAssemblerServiceV2 {
       name: fields['__name'] || 'Epic',
       sourceSystemType: 'Epic',
       baseUrl: fields['FHIR base URL'] || '',
-      authentication: {
-        authenticationType:
-          appType === 'Backend' ? 'SmartBackendServices' : 'None',
-        clientId: fields['Client ID'] || fields['Active client ID'] || null,
-        tokenEndpoint: fields['Token endpoint'] || null,
-        // Carried through so a canvas-built connection persists the same authorize URL the wizard
-        // discovered, exactly as entity mode does — null for a non-interactive (client_credentials)
-        // app, which has no authorize endpoint at all.
-        authorizationEndpoint: fields['Authorize endpoint'] || null,
+      // Epic's Backend audience is pinned to SmartBackendServices because
+      // ConfigurationService.ValidateEpicSourceConnection rejects anything else outright ("A Backend Services Epic
+      // source connection must use SMART Backend Services authentication") — so the Auth Method dropdown cannot
+      // override it here, and a Client-Secret pick still fails validation exactly as it does from the master path.
+      // Every other credential field is auth-method-driven: previously keyId/privateKey* were emitted ungated, so an
+      // interactive (PKCE) Epic connection persisted stale key material the master path would have nulled.
+      authentication: buildAuthentication(fields, {
+        applicationType: appType,
         scopes,
-        keyId: fields['JWT kid'] || null,
-        // Backend Services signs its JWT assertion with a private key referenced by (Key Vault Name, Secret Name) —
-        // required by ConfigurationService.ValidateEpicSourceConnection for any non-interactive Epic source.
-        privateKeyKeyVaultName: fields['Key vault reference'] || null,
-        privateKeySecretName: fields['Secret Name'] || null,
+        secretSlug: 'epic',
+        forceBackendAuthenticationType: 'SmartBackendServices',
         discoveredScopes: discoveredScopes.length ? discoveredScopes : null,
-      },
+      }),
       applicationType: appType,
       interactive,
       // Provider Standalone gets a curated Search REST subset too (Resource Types/Search Criteria/Max Results/
@@ -676,11 +781,21 @@ export class WorkflowBuildAssemblerServiceV2 {
     const isDataLake =
       node.nodeType.includes('DataLakeWebhook') ||
       (fields['__transformId'] ?? '') === 'dest-datalake-webhook';
+    // Tested BEFORE isFabric, and isFabric excludes it: the Warehouse node type also contains "DataFabric",
+    // so an unguarded includes() check would classify a Warehouse node as the file-landing type and write it
+    // away as DataFabricAzure — the exact mis-routing splitting the type was meant to make impossible.
+    const isFabricWarehouse =
+      node.nodeType.includes('DataFabricWarehouse') ||
+      (fields['__transformId'] ?? '') === 'dest-fabric-warehouse';
     const isFabric =
-      node.nodeType.includes('DataFabric') ||
-      (fields['__transformId'] ?? '') === 'dest-fabric';
+      !isFabricWarehouse &&
+      (node.nodeType.includes('DataFabric') ||
+        (fields['__transformId'] ?? '') === 'dest-fabric');
+    const isApiEndpoint =
+      node.nodeType.includes('ApiEndpoint') ||
+      (fields['__transformId'] ?? '') === 'dest-apiendpoint';
     const name =
-      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : isDataLake ? 'Data Lake Webhook Destination' : isFabric ? 'Microsoft Fabric Destination' : 'File Destination');
+      fields['dest_name'] || (isMySql ? 'MySQL Destination' : isPostgres ? 'PostgreSQL Destination' : isSql ? 'SQL Destination' : isMongo ? 'MongoDB Destination' : isMedplum ? 'Medplum Destination' : isFhir ? 'FHIR Repository Destination' : isAzureFhir ? 'Azure FHIR Service Destination' : isBlob ? 'Azure Blob Destination' : isDataLake ? 'Data Lake Webhook Destination' : isFabricWarehouse ? 'Microsoft Fabric Warehouse Destination' : isFabric ? 'Microsoft Fabric Destination' : isApiEndpoint ? 'API Endpoint Destination' : 'File Destination');
     // Reuse the secret reference from a prior build (injected back onto this node's config as secretKeyVaultName/
     // secretName — see WorkflowEndpoints.MapWorkflowEndpoints's Destinations step) so re-saving an existing
     // destination overwrites its ProvisionedSecrets row via WriteSecretAsync's (KeyVaultName, SecretName) upsert
@@ -848,6 +963,23 @@ export class WorkflowBuildAssemblerServiceV2 {
       };
     }
 
+    // Shares every field with the Files branch below — same workspace/item/Entra-auth shape — differing only
+    // in the destination type, which is what carries "this is the Warehouse surface" from here on.
+    if (isFabricWarehouse) {
+      return {
+        name,
+        destinationType: 'DataFabricWarehouse',
+        keyVaultName,
+        secretName,
+        target: fields['dest_fabricWorkspace'] || null,
+        inlineSecret:
+          fields['dest_fabricAuthMode'] !== 'servicePrincipal'
+            ? null
+            : (fields['dest_fabricSecret'] || null),
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'fabric'),
+      };
+    }
+
     if (isFabric) {
       return {
         name,
@@ -865,6 +997,28 @@ export class WorkflowBuildAssemblerServiceV2 {
               ? null
               : fields['dest_fabricSecret'] || '',
         connectionMetadataJson: this.buildConnectionMetadata(fields, 'fabric'),
+      };
+    }
+
+    if (isApiEndpoint) {
+      return {
+        name,
+        destinationType: 'ApiEndpoint',
+        keyVaultName,
+        secretName,
+        // The endpoint URL doubles as the target — ApiEndpointSettings.Parse reads Target as the fallback
+        // for dest_apiEndpointUrl.
+        target: fields['dest_apiEndpointUrl'] || null,
+        // Auth mode 'none' resolves no credential at all (see ApiEndpointSettings.RequiresSecret) — same
+        // "don't overwrite an already-provisioned secret unless the user typed a new one" guard the other
+        // HTTP destinations above use.
+        inlineSecret:
+          fields['dest_apiAuthMode'] === 'none'
+            ? ''
+            : hasExistingSecret && !fields['dest_apiSecret']
+              ? null
+              : fields['dest_apiSecret'] || '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'apiendpoint'),
       };
     }
 
@@ -894,10 +1048,39 @@ export class WorkflowBuildAssemblerServiceV2 {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric',
+    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'apiendpoint',
   ): string {
     const keys =
-      kind === 'datalake'
+      kind === 'apiendpoint'
+        ? [
+            'dest_name',
+            'dest_apiEndpointUrl',
+            'dest_apiHttpMethod',
+            'dest_apiAuthMode',
+            'dest_apiAuthHeaderName',
+            'dest_apiKeyQueryParamName',
+            'dest_apiSignatureHeaderName',
+            'dest_apiTimestampHeaderName',
+            'dest_apiTokenEndpoint',
+            'dest_apiClientId',
+            'dest_apiScope',
+            'dest_apiPayloadShape',
+            'dest_apiContentType',
+            'dest_apiCompression',
+            'dest_apiRequireHttps',
+            'dest_apiBatchSize',
+            'dest_apiMaxRequestBytes',
+            'dest_apiTimeoutSeconds',
+            'dest_apiRetryCount',
+            'dest_apiRetryBackoffSeconds',
+            'dest_apiExpectedStatusCodes',
+            'dest_apiHeadersJson',
+            'dest_apiQueryParamsJson',
+            'dest_apiBodyTemplateJson',
+            'dest_apiIncludeSourceJson',
+            'dest_apiOnFailure',
+          ]
+        : kind === 'datalake'
         ? [
             'dest_name',
             'dest_dlwEndpointUrl',
@@ -939,6 +1122,15 @@ export class WorkflowBuildAssemblerServiceV2 {
             'dest_fabricEndpointSuffix',
             'dest_fabricAuthorityHost',
             'dest_fabricAccountUrl',
+            // Warehouse landing mode. Allowlist, so a missing key is silently dropped before the save — which
+            // made the server reject the request for the very fields the form had just posted.
+            'dest_fabricWarehouseSqlEndpoint',
+            'dest_fabricWarehouseStagingLakehouse',
+            'dest_fabricWarehouseTable',
+            'dest_fabricWarehouseSchema',
+            'dest_fabricWarehouseWriteMode',
+            'dest_fabricWarehouseStagingPath',
+            'dest_fabricWarehouseUseWorkspaceIdentity',
           ]
         : kind === 'sql'
         ? [
@@ -952,7 +1144,10 @@ export class WorkflowBuildAssemblerServiceV2 {
             'dest_requireSsl',
           ]
         : kind === 'mongo'
-          ? ['dest_name', 'dest_collection', 'dest_writeMode', 'dest_createCollectionIfNotExists']
+          // No dest_collection / dest_createCollectionIfNotExists: the Mongo form no longer offers either.
+          // Which collection a resource writes to is a per-resource mapping-canvas choice (this branch
+          // already sends target: null so those win), and a missing collection is always created.
+          ? ['dest_name', 'dest_writeMode']
           : kind === 'medplum'
             ? [
                 'dest_name',
@@ -1221,9 +1416,30 @@ export class WorkflowBuildAssemblerServiceV2 {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the
       // naive conversion only when the catalog was unavailable.
       const arrays = row.arrays ?? [];
-      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource, arrays);
+      const jsonPath = row.joinSources?.length
+        ? row.joinSources
+            .map(source => source.jsonPath ?? this.toJsonPath(source.path, resource, source.arrays ?? arrays))
+            .join('|')
+        : (row.jsonPath ?? this.toJsonPath(row.path, resource, arrays));
       this.assertArrayWildcardsIntact(resource, row.column, jsonPath, arrays);
       const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
+      // field-mapping-model.ts only ever hands this row a bare sibling field NAME ("use"), not an absolute
+      // JsonPath — the catalog-derived jsonPath a "Match criteria" row's own field needs to build
+      // "$.telecom[*].use" from is frequently unavailable at that layer (see MappingSourceRef.jsonPath's own
+      // "when present" doc comment), but THIS row's `jsonPath` above is always present by now (falling back
+      // to the naive toJsonPath conversion) — so the sibling path is derived here instead, off the one
+      // jsonPath value both this field and its sibling actually share an outermost array with.
+      const correlationCodeJsonPath = row.correlationSiblingField
+        ? this.siblingCorrelationJsonPath(arrays, resource, row.correlationSiblingField)
+        : undefined;
+      // A "Match criteria" row whose sibling path couldn't be derived (jsonPath has no repeating ancestor at
+      // all) has nothing to correlate against — CorrelateByCode with a missing CorrelationCodeJsonPath is a
+      // run-time mapping ERROR (JsonMappingEngine.ResolveCorrelatedValue), not a silent no-op, so this falls
+      // back to the same safe default an unresolved instance selection already gets rather than shipping a
+      // half-configured policy.
+      const arrayPolicy = row.arrayPolicy === 'CorrelateByCode' && !correlationCodeJsonPath
+        ? 'FirstItem'
+        : (row.arrayPolicy ?? (isArrayPath ? 'FirstItem' : 'Scalar'));
       // A row whose own table differs from this resource's baseDestinationObject is a genuine child-table
       // field (e.g. Patient.name.use -> dbo.PatientName) — route it there explicitly via a per-field
       // destinationObject override, same as MappingImportService.BuildFieldAsync does for mapping-profiles
@@ -1262,11 +1478,12 @@ export class WorkflowBuildAssemblerServiceV2 {
         cardinality: row.cardinality,
         // A flat destination column takes the first match when the path crosses an array; multi-value
         // fan-out (RepeatParent / SeparateDestination) is a deliberate per-field choice, not the default.
-        arrayPolicy: row.arrayPolicy ?? (isArrayPath ? 'FirstItem' : 'Scalar'),
+        arrayPolicy,
         arrayAncestors: arrays.length > 0 ? arrays : null,
         isUpsertKey: row.isUpsertKey ?? row === idRow,
-        correlationCodeJsonPath: row.correlationCodeJsonPath ?? null,
+        correlationCodeJsonPath: correlationCodeJsonPath ?? null,
         correlationCodeValue: row.correlationCodeValue ?? null,
+        correlationCodeOperator: row.correlationOperator ?? null,
         isEnabled: row.isEnabled,
       };
     });
@@ -1344,6 +1561,39 @@ export class WorkflowBuildAssemblerServiceV2 {
    * silently went NULL. Each save→reload cycle re-applied the degradation, which is why a field could work
    * once and then stop the moment any unrelated field was added to the same mapping node.
    */
+  /**
+   * Builds the absolute JsonPath MappingFieldRequest.correlationCodeJsonPath needs for a "Match criteria"
+   * row's sibling field — the mapped field's own JsonPath with its trailing leaf segment swapped for the
+   * criteria's bare field name ("$.telecom[*].value" + "use" -> "$.telecom[*].use"). This is a genuine
+   * SIBLING within the mapped field's own immediately-enclosing object, at whatever nesting depth that is —
+   * "$.contact[*].telecom[*].value" + "system" correlates within the SAME telecom item
+   * ("$.contact[*].telecom[*].system"), not merely within the same contact (a bug this fixes: matching
+   * only on the outermost "[*]" let a "system contains mail" criteria match ANY contact that happened to
+   * have SOME matching telecom, then return that contact's FIRST telecom value — not necessarily the one
+   * whose own system actually matched). JsonMappingEngine.ResolveCorrelatedValue correlates on the full
+   * index chain this produces, not just its first level — see that method's own doc comment. Undefined
+   * when `jsonPath` has no repeating ancestor at all ("$.gender") — nothing to correlate against.
+   */
+  private siblingCorrelationJsonPath(
+    arrays: readonly string[], resourceType: string, siblingField: string,
+  ): string | undefined {
+    if (arrays.length === 0) return undefined;
+    // arrays[length - 1] is the row's own INNERMOST repeating ancestor (the same one
+    // arrayAncestorLabel() in the join-popover shows as "<X> repeats — which instance?") — e.g.
+    // "contact.telecom" for a field nested two levels deep, or plain "contact" for one mapped straight
+    // onto a contact-level property. Running it back through toJsonPath's own wildcarding gives exactly
+    // the fully-wildcarded PARENT path this field's sibling shares, at whatever depth that really is —
+    // "$.contact[*].telecom[*]" or "$.contact[*]" respectively — regardless of how many further
+    // non-repeating segments (e.g. a nested "address" object) the mapped field's OWN path goes on to
+    // cross past that point. Appending the bare sibling field name onto THAT (not onto the mapped
+    // field's own full path) is what a naive "swap the last path segment" string trick got wrong for
+    // "contact[*].address.city" correlated by a contact-level "relationship": that produced
+    // "contact[*].address.relationship" (address has no such property) instead of
+    // "contact[*].relationship".
+    const innermostAncestor = arrays[arrays.length - 1];
+    return `${this.toJsonPath(innermostAncestor, resourceType, arrays)}.${siblingField}`;
+  }
+
   private toJsonPath(path: string, resourceType: string, arrays: readonly string[] = []): string {
     let p = path.trim();
     if (p.startsWith(`${resourceType}.`)) p = p.slice(resourceType.length + 1);
@@ -1373,7 +1623,10 @@ export class WorkflowBuildAssemblerServiceV2 {
     const missing = arrays
       .map(a => (a.startsWith(`${resource}.`) ? a.slice(resource.length + 1) : a))
       .map(a => a.replace(/\[\*\]/g, '').trim())
-      .filter(a => a.length > 0 && !jsonPath.includes(`${a}[*]`));
+      // "[?field=value]" addresses that ancestor just as deliberately as "[*]" does — it selects the repeats
+      // matching the mapping's own criteria rather than all of them — so a filtered ancestor is intact, not
+      // missing. Without this every "Match criteria" mapping warns that it resolves to nothing.
+      .filter(a => a.length > 0 && !jsonPath.includes(`${a}[*]`) && !jsonPath.includes(`${a}[?`));
     if (missing.length > 0) {
       console.warn(
         `[mapping] ${resource}.${column}: jsonPath "${jsonPath}" does not wildcard its array ancestor(s) ` +

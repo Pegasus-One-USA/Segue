@@ -28,8 +28,9 @@ public sealed class EpicSourceNodeExecutor : SourceNodeExecutor
         IGlobalExceptionManager? exceptionManager = null,
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
-        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        EhrDataDumpWriter? ehrDataDumpWriter = null)
+        : base(WorkflowNodeTypes.EpicSource, RuntimeSourceType.Epic, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
     {
     }
 }
@@ -46,8 +47,9 @@ public sealed class CernerSourceNodeExecutor : SourceNodeExecutor
         IGlobalExceptionManager? exceptionManager = null,
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
-        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        EhrDataDumpWriter? ehrDataDumpWriter = null)
+        : base(WorkflowNodeTypes.CernerSource, RuntimeSourceType.Cerner, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
     {
     }
 }
@@ -64,8 +66,9 @@ public sealed class EClinicalWorksSourceNodeExecutor : SourceNodeExecutor
         IGlobalExceptionManager? exceptionManager = null,
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
-        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        EhrDataDumpWriter? ehrDataDumpWriter = null)
+        : base(WorkflowNodeTypes.EClinicalWorksSource, RuntimeSourceType.Healow, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
     {
     }
 }
@@ -82,8 +85,9 @@ public sealed class AthenahealthSourceNodeExecutor : SourceNodeExecutor
         IGlobalExceptionManager? exceptionManager = null,
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
-        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.Athenahealth, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        EhrDataDumpWriter? ehrDataDumpWriter = null)
+        : base(WorkflowNodeTypes.AthenahealthSource, RuntimeSourceType.Athenahealth, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
     {
     }
 }
@@ -100,8 +104,9 @@ public sealed class AllscriptsSourceNodeExecutor : SourceNodeExecutor
         IGlobalExceptionManager? exceptionManager = null,
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
-        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        EhrDataDumpWriter? ehrDataDumpWriter = null)
+        : base(WorkflowNodeTypes.AllscriptsSource, RuntimeSourceType.Allscripts, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
     {
     }
 }
@@ -118,8 +123,9 @@ public sealed class MeditechSourceNodeExecutor : SourceNodeExecutor
         IGlobalExceptionManager? exceptionManager = null,
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
-        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        EhrDataDumpWriter? ehrDataDumpWriter = null)
+        : base(WorkflowNodeTypes.MeditechSource, RuntimeSourceType.MeditechGreenfield, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
     {
     }
 }
@@ -136,8 +142,9 @@ public sealed class GenericFhirSourceNodeExecutor : SourceNodeExecutor
         IGlobalExceptionManager? exceptionManager = null,
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
-        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        EhrDataDumpWriter? ehrDataDumpWriter = null)
+        : base(WorkflowNodeTypes.GenericFhirSource, RuntimeSourceType.GenericFhir, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
     {
     }
 }
@@ -154,8 +161,9 @@ public sealed class SampleSourceNodeExecutor : SourceNodeExecutor
         IGlobalExceptionManager? exceptionManager = null,
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
-        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        EhrDataDumpWriter? ehrDataDumpWriter = null)
+        : base(WorkflowNodeTypes.SampleSource, RuntimeSourceType.Sample, sourceClientFactory, sourceResolver, syncCursorStore, bulkExportClient, workflowDefinitionStore, bulkExportJobRepository, exceptionManager, accessTokenProvider, bulkExportConcurrencyOptions, loggerFactory, ehrDataDumpWriter)
     {
     }
 }
@@ -206,6 +214,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     private readonly IGlobalExceptionManager? _exceptionManager;
     private readonly IFhirAccessTokenProvider? _accessTokenProvider;
     private readonly FHIRBridge.Application.Services.BulkExportConcurrencyOptions _bulkExportConcurrencyOptions;
+    private readonly EhrDataDumpWriter? _ehrDataDumpWriter;
     private readonly Microsoft.Extensions.Logging.ILogger _logger;
 
     protected SourceNodeExecutor(
@@ -220,7 +229,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         IGlobalExceptionManager? exceptionManager = null,
         IFhirAccessTokenProvider? accessTokenProvider = null,
         Microsoft.Extensions.Options.IOptions<FHIRBridge.Application.Services.BulkExportConcurrencyOptions>? bulkExportConcurrencyOptions = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        EhrDataDumpWriter? ehrDataDumpWriter = null)
         : base(nodeType, WorkflowDataContract.ResourceBatch)
     {
         // Named for the concrete vendor executor (EpicSourceNodeExecutor, AthenahealthSourceNodeExecutor, ...) rather
@@ -238,6 +248,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         _exceptionManager = exceptionManager;
         _accessTokenProvider = accessTokenProvider;
         _bulkExportConcurrencyOptions = bulkExportConcurrencyOptions?.Value ?? new FHIRBridge.Application.Services.BulkExportConcurrencyOptions();
+        _ehrDataDumpWriter = ehrDataDumpWriter;
     }
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
@@ -563,6 +574,10 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                     new Dictionary<string, object?>
                     {
                         [WorkflowNodeOutputMetadataKeys.BulkExportDeferredJobId] = job.Id.ToString(),
+                        // The vendor's own id for this job (Epic: the BulkRequest/{id} segment), carried to the
+                        // orchestrator so it lands on the paused WorkflowRun row. Null when unparseable — the
+                        // orchestrator treats that the same as absent and pauses the run as normal.
+                        [WorkflowNodeOutputMetadataKeys.BulkExportRequestId] = BulkRequestIds.FromStatusUrl(statusUrl),
                     });
             }
 
@@ -819,6 +834,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             (long)System.Diagnostics.Stopwatch.GetElapsedTime(extractionStartedAt).TotalMilliseconds,
             resources.Count, syncedResourceTypes.Count, skippedResourceTypes.Count);
 
+        await WriteExtractedDataDumpAsync(node, context, source, resources, skippedResourceTypes, cancellationToken);
+
         var payload = new ResourceBatch(resources.ToArray());
 
         return new WorkflowNodeOutput(
@@ -850,6 +867,47 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 // for them — the orchestrator surfaces these as a PartialSuccess rather than silently dropping them.
                 ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.ToArray() : null
             });
+    }
+
+    /// <summary>
+    /// Hands this node's freshly fetched resources to the shared dump writer. The bulk-export path does the same
+    /// from RankedWorkflowOrchestrator.ResumeAfterBulkExportAsync, where its resources actually materialize.
+    /// </summary>
+    private Task WriteExtractedDataDumpAsync(
+        WorkflowNode node,
+        WorkflowExecutionContext context,
+        FhirSourceConfiguration source,
+        IReadOnlyList<ResourceEnvelope> resources,
+        IReadOnlyList<string> skippedResourceTypes,
+        CancellationToken cancellationToken)
+    {
+        if (_ehrDataDumpWriter is not { IsEnabled: true } writer)
+        {
+            return Task.CompletedTask;
+        }
+
+        return writer.WriteAsync(
+            node.WorkflowDefinitionId,
+            new Dictionary<string, string?>
+            {
+                ["WorkflowRunId"] = context.WorkflowRunId.ToString(),
+                ["CorrelationId"] = context.CorrelationId,
+                ["NodeId"] = node.Id.ToString(),
+                ["NodeType"] = node.NodeType,
+                ["Source"] = $"{source.Name} ({_sourceType})",
+                ["BaseUrl"] = source.BaseUrl,
+                ["RetrievalMethod"] = source.RetrievalMethod ?? "search-rest",
+            },
+            resources
+                // Payload is the connector's raw FHIR JSON string on every source path that reaches here;
+                // ToString() keeps the dump working rather than throwing if a future executor puts an object in it.
+                .Select(resource => new EhrDataDumpRecord(
+                    resource.ResourceType,
+                    resource.ResourceId,
+                    resource.Payload as string ?? resource.Payload?.ToString() ?? string.Empty))
+                .ToList(),
+            skippedResourceTypes,
+            cancellationToken);
     }
 
     /// <summary>

@@ -299,8 +299,13 @@ try {
     & dotnet restore $SolutionPath
     if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed (exit $LASTEXITCODE)" }
 
+    # -p:UseAppHost=false: on machines where an EDR/security policy blocks writing new .exe files under
+    # bin\Debug (observed on this dev box), MSBuild's apphost copy step fails with MSB3021 "Access to the
+    # path ... FHIRBridge.Api.exe is denied" even though the directory is otherwise writable. Skipping the
+    # native apphost avoids the write entirely; the hosts are launched via `dotnet <dll>` below anyway; see
+    # Get-BuiltAssembly's .dll fallback.
     $buildLog = Join-Path $LogDir 'build.log'
-    & dotnet build $SolutionPath -c Debug --no-restore 2>&1 | Tee-Object -FilePath $buildLog
+    & dotnet build $SolutionPath -c Debug --no-restore -p:UseAppHost=false 2>&1 | Tee-Object -FilePath $buildLog
     if ($LASTEXITCODE -ne 0) {
         Write-Err2 "build failed - nothing was launched. See $buildLog"
         exit 1

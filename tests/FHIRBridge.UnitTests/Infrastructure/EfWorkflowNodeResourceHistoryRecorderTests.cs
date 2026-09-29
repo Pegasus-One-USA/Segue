@@ -1,25 +1,24 @@
-using FHIRBridge.Application.Abstractions.Security;
-using FHIRBridge.Infrastructure.Persistence;
+﻿using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
+using FHIRBridge.Runtime.Application.Workflows.Payloads;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 
 namespace FHIRBridge.UnitTests.Infrastructure;
 
 /// <summary>
 /// Covers the fix for a real gap: a failed/cancelled node never wrote a <see cref="WorkflowNodeRunPayload"/>
 /// (only the success path does), so the Execution History screen's old resources-only query silently omitted
-/// it — indistinguishable from "never part of the workflow." GetNodeRunHistoryPagedAsync sources from
+/// it â€” indistinguishable from "never part of the workflow." GetNodeRunHistoryPagedAsync sources from
 /// <see cref="WorkflowNodeRun"/> instead (written on every path), so a node that started always has a row.
 /// </summary>
 public sealed class EfWorkflowNodeResourceHistoryRecorderTests
 {
     // static: xUnit builds a new instance of this class for EVERY test, and each distinct
-    // InMemoryDatabaseRoot makes EF build another internal service provider — past twenty, EF raises
+    // InMemoryDatabaseRoot makes EF build another internal service provider â€” past twenty, EF raises
     // ManyServiceProvidersCreatedWarning as an error in whichever test happens to cross the line, which
     // reads as an unrelated failure elsewhere in the suite. Sharing one root costs no isolation: each test
     // still gets its own database via the unique _databaseName below. (Same pattern as WorkflowSqlStoreTests.)
@@ -34,14 +33,6 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         return new FHIRBridgeDbContext(options);
     }
 
-    private static IPhiFieldEncryptor PassthroughEncryptor()
-    {
-        var mock = new Mock<IPhiFieldEncryptor>();
-        mock.Setup(e => e.Encrypt(It.IsAny<string>())).Returns((string s) => s);
-        mock.Setup(e => e.Decrypt(It.IsAny<string>())).Returns((string s) => s);
-        return mock.Object;
-    }
-
     [Fact]
     public async Task A_failed_node_appears_with_its_error_message_even_though_it_never_wrote_a_payload()
     {
@@ -54,14 +45,15 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         await using (var context = CreateContext())
         {
             context.WorkflowNodeRuns.AddRange(succeededNodeRun, failedNodeRun);
-            // Only the succeeded node ever gets a payload row — mirrors real RankedWorkflowOrchestrator behavior.
+            // Only the succeeded node ever gets a payload row â€” mirrors real RankedWorkflowOrchestrator behavior.
             context.WorkflowNodeRunPayloads.Add(new WorkflowNodeRunPayload(
-                Guid.NewGuid(), workflowRunId, succeededNodeRun.Id, "EpicSourceNode", "ResourceBatch", "{\"count\":1}", 1, DateTimeOffset.UtcNow));
+                Guid.NewGuid(), workflowRunId, succeededNodeRun.Id, "EpicSourceNode", "ResourceBatch",
+                1, "{\"Patient\":1}", null, DateTimeOffset.UtcNow));
             await context.SaveChangesAsync();
         }
 
         await using var readContext = CreateContext();
-        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor(), NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
+        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
 
         var result = await recorder.GetNodeRunHistoryPagedAsync(workflowRunId, page: 1, pageSize: 25, CancellationToken.None);
 
@@ -69,20 +61,18 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         var failedEntry = result.Items.Single(x => x.WorkflowNodeRunId == failedNodeRun.Id);
         failedEntry.Status.Should().Be("Failed");
         failedEntry.ErrorMessage.Should().Be("Destination write failed: timeout.");
-        failedEntry.PayloadJson.Should().BeNull();
+        failedEntry.ItemCount.Should().BeNull();
 
         var succeededEntry = result.Items.Single(x => x.WorkflowNodeRunId == succeededNodeRun.Id);
         succeededEntry.Status.Should().Be("Succeeded");
         succeededEntry.ErrorMessage.Should().BeNull();
         succeededEntry.Contract.Should().Be("ResourceBatch");
         succeededEntry.ItemCount.Should().Be(1);
-        // The list never decrypts a payload — see WorkflowNodeRunHistoryDto.PayloadJson's remarks. Fetching the
-        // real value is GetNodeRunPayloadAsync's job, covered separately below.
-        succeededEntry.PayloadJson.Should().BeNull();
+        succeededEntry.ResourceTypeCountsJson.Should().Be("{\"Patient\":1}");
     }
 
     [Fact]
-    public async Task GetNodeRunPayloadAsync_returns_the_decrypted_payload_for_one_node_run()
+    public async Task GetNodeRunPayloadAsync_returns_counts_not_content_for_one_node_run()
     {
         var workflowRunId = Guid.NewGuid();
         var nodeRunId = Guid.NewGuid();
@@ -90,26 +80,27 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         await using (var context = CreateContext())
         {
             context.WorkflowNodeRunPayloads.Add(new WorkflowNodeRunPayload(
-                Guid.NewGuid(), workflowRunId, nodeRunId, "EpicSourceNode", "ResourceBatch", "{\"count\":1}", 1, DateTimeOffset.UtcNow));
+                Guid.NewGuid(), workflowRunId, nodeRunId, "EpicSourceNode", "ResourceBatch",
+                1, "{\"Patient\":1}", null, DateTimeOffset.UtcNow));
             await context.SaveChangesAsync();
         }
 
         await using var readContext = CreateContext();
-        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor(), NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
+        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
 
         var result = await recorder.GetNodeRunPayloadAsync(workflowRunId, nodeRunId, CancellationToken.None);
 
         result.Should().NotBeNull();
         result!.Contract.Should().Be("ResourceBatch");
-        result.PayloadJson.Should().Be("{\"count\":1}");
         result.ItemCount.Should().Be(1);
+        result.ResourceTypeCountsJson.Should().Be("{\"Patient\":1}");
     }
 
     [Fact]
     public async Task GetNodeRunPayloadAsync_returns_null_when_the_node_run_never_wrote_a_payload()
     {
         await using var readContext = CreateContext();
-        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor(), NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
+        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
 
         var result = await recorder.GetNodeRunPayloadAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
@@ -132,10 +123,69 @@ public sealed class EfWorkflowNodeResourceHistoryRecorderTests
         }
 
         await using var readContext = CreateContext();
-        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, PassthroughEncryptor(), NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
+        var recorder = new EfWorkflowNodeResourceHistoryRecorder(readContext, NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
 
         var result = await recorder.GetNodeRunHistoryPagedAsync(workflowRunId, page: 1, pageSize: 25, CancellationToken.None);
 
         result.Items.Select(x => x.NodeType).Should().Equal("EpicSourceNode", "DestinationNode");
+    }
+
+    /// <summary>
+    /// A destination node's stored delivery detail must never contain the email envelope. Subject, Body, the
+    /// To/Cc addresses and the attachment file names all routinely carry patient identifiers, and the signed
+    /// DownloadUrl is a bearer link to the exported dataset. An earlier revision of this change serialized the
+    /// whole DestinationWriteResult, which put all of it in the database in PLAINTEXT — worse than the
+    /// encrypted payload column the change set out to remove. This pins the allow-list so a future edit that
+    /// reaches for JsonSerializer.Serialize(payload) again fails here instead of in production.
+    /// </summary>
+    [Fact]
+    public async Task Destination_delivery_detail_records_counts_and_status_but_never_the_email_content()
+    {
+        var workflowRunId = Guid.NewGuid();
+        var nodeRunId = Guid.NewGuid();
+
+        var payload = new DestinationWriteResult(
+            DestinationId: "dest-1",
+            RecordsWritten: 42,
+            WrittenAt: DateTimeOffset.UtcNow,
+            DownloadUrl: "https://storage.example/export.csv?sig=SECRET-BEARER-TOKEN",
+            EmailDelivery: new EmailDeliveryDetail(
+                From: "noreply@example.org",
+                To: new[] { "dr.smith@clinic.example" },
+                Cc: new[] { "records@clinic.example" },
+                Subject: "Lab results for John Smith (MRN 12345)",
+                Body: "Attached are the results for John Smith, DOB 1970-01-01.",
+                AttachmentNames: new[] { "smith-john-labs.csv" },
+                Status: "Sent"));
+
+        await using (var writeContext = CreateContext())
+        {
+            var recorder = new EfWorkflowNodeResourceHistoryRecorder(
+                writeContext, NullLogger<EfWorkflowNodeResourceHistoryRecorder>.Instance);
+
+            await recorder.RecordNodeOutputAsync(
+                workflowRunId, nodeRunId, "DestinationNode", "DestinationWriteResult", payload, CancellationToken.None);
+        }
+
+        await using var readContext = CreateContext();
+        var stored = await readContext.WorkflowNodeRunPayloads.SingleAsync();
+
+        stored.DeliveryDetailJson.Should().NotBeNull();
+
+        // Nothing that identifies a patient, addresses a person, or grants access to the export.
+        stored.DeliveryDetailJson.Should().NotContain("John Smith");
+        stored.DeliveryDetailJson.Should().NotContain("12345");
+        stored.DeliveryDetailJson.Should().NotContain("1970-01-01");
+        stored.DeliveryDetailJson.Should().NotContain("dr.smith@clinic.example");
+        stored.DeliveryDetailJson.Should().NotContain("records@clinic.example");
+        stored.DeliveryDetailJson.Should().NotContain("smith-john-labs.csv");
+        stored.DeliveryDetailJson.Should().NotContain("SECRET-BEARER-TOKEN");
+
+        // What the Execution History card actually needs still survives.
+        stored.DeliveryDetailJson.Should().Contain("\"RecordsWritten\":42");
+        stored.DeliveryDetailJson.Should().Contain("\"Status\":\"Sent\"");
+        stored.DeliveryDetailJson.Should().Contain("\"ToCount\":1");
+        stored.DeliveryDetailJson.Should().Contain("\"AttachmentCount\":1");
+        stored.DeliveryDetailJson.Should().Contain("\"HasDownload\":true");
     }
 }

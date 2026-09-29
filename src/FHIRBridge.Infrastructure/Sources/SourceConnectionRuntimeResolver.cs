@@ -107,8 +107,18 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         // Backend Services JWT strategy. Real (non-loopback) sources are completely unaffected.
         var isLoopback = Uri.TryCreate(sourceConnection.BaseUrl, UriKind.Absolute, out var baseUri) && baseUri.IsLoopback;
 
+        // Gated on AuthenticationType, not just "is the field populated" — PrivateKey/PrivateKeyKeyVaultName can be
+        // left over from an earlier SmartBackendServices configuration after the connection was switched to a
+        // different auth method (PreserveSecretsIfBlank in ConfigurationService never clears a field the request
+        // left blank, by design, so switching auth methods doesn't silently destroy a key the user might switch
+        // back to). Only SmartBackendServices ever signs with this key; resolving it for any other auth method
+        // both fetches a secret the run doesn't need and, if that secret was never provisioned in the CURRENT
+        // environment's vault (e.g. after a database restore into a new Key Vault), fails the entire run over a
+        // stale reference nothing in this run actually depends on.
         string? privateKeyPem = null;
-        if (!isLoopback && sourceConnection.Authentication.PrivateKey is not null)
+        if (!isLoopback &&
+            sourceConnection.Authentication.AuthenticationType == AuthenticationType.SmartBackendServices &&
+            sourceConnection.Authentication.PrivateKey is not null)
         {
             privateKeyPem = await _secretProvider.GetSecretAsync(sourceConnection.Authentication.PrivateKey, cancellationToken);
             SigningKeySecretGuard.EnsurePemShaped(privateKeyPem, sourceConnection.Authentication.PrivateKey, sourceConnection.Name);

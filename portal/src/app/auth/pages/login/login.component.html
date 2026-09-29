@@ -139,6 +139,7 @@
               matInput
               type="email"
               formControlName="email"
+              data-testid="login-email"
               autocomplete="email"
               (keydown)="onKeydown($event)"
               aria-required="true"
@@ -160,6 +161,7 @@
               matInput
               [type]="showPassword() ? 'text' : 'password'"
               formControlName="password"
+              data-testid="login-password"
               autocomplete="current-password"
               (keydown)="onKeydown($event)"
               aria-required="true"
@@ -208,6 +210,7 @@
             type="submit"
             class="submit-btn"
             [disabled]="isLoading()"
+            data-testid="login-submit"
             aria-label="Sign in"
           >
             @if (isLoading()) {

@@ -6,13 +6,19 @@ import { AuthStore } from '../store/auth.store';
 import { TokenService } from './token.service';
 import { IAuthService } from './i-auth.service';
 import { MappingSnapshotService } from '../../components/node-library-v2/destination-wizard/field-mapping/mapping-snapshot.service';
+import { SessionExpiredDialogService } from './session-expired-dialog.service';
 
  const IDLE_MS = 30 * 60 * 1000; // 30-minute idle timeout
 // Deliberately excludes 'mousemove' — that fires dozens of times a second while the user's hand merely
-// rests near the mouse, far too noisy a signal for "the user is actively working" even throttled. These
-// five already cover every real interaction (clicking a button, typing a field, a canvas drag starting
-// with mousedown, scrolling a list/canvas) without needing to throttle a firehose event.
-const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'touchstart', 'scroll', 'click'] as const;
+// rests near the mouse, far too noisy a signal for "the user is actively working" even throttled.
+// Includes 'pointerdown'/'wheel' alongside the legacy 'mousedown'/'touchstart'/'scroll': the workflow
+// and field-mapping canvases drive node dragging, panning and zoom entirely off Pointer Events, and a
+// canvas that calls preventDefault() on its own pointerdown (several do, to suppress touch scrolling/
+// text-selection while dragging) also suppresses the browser's synthetic 'mousedown' compatibility
+// event — so a user who spends 30+ minutes only dragging/connecting/zooming nodes, never touching a
+// button or a keyboard, would otherwise silently register as idle. These seven cover every real
+// interaction without needing to throttle a firehose event.
+const ACTIVITY_EVENTS = ['mousedown', 'pointerdown', 'keydown', 'touchstart', 'scroll', 'wheel', 'click'] as const;
 // Re-touch at most once a minute — plenty to keep the idle timer perpetually reset during any real
 // activity (a 60s cadence against a 30-minute timeout has enormous margin) without spamming an AuthStore
 // write (and the resulting resetIdleTimer() churn) on every single click/keystroke.
@@ -26,6 +32,7 @@ export class SessionService {
   private readonly zone   = inject(NgZone);
   private readonly mappingSnapshots = inject(MappingSnapshotService);
   private readonly authApi = inject(IAuthService);
+  private readonly sessionExpiredDialog = inject(SessionExpiredDialogService);
 
   private idleTimer?: ReturnType<typeof setTimeout>;
   private activityListenersActive = false;
@@ -127,8 +134,22 @@ export class SessionService {
       catchError(() => EMPTY),
       finalize(() => {
         this.end();
-        this.store.setError('Your session has expired due to inactivity. Please sign in again.');
-        this.router.navigate(['/auth/login']);
+        // Deliberately NOT store.setError() here: that signal drives the login page's own inline
+        // error banner (see LoginComponent), which would then render the exact same "session expired"
+        // text a second time, underneath/after the SweetAlert prompt below — the prompt is already the
+        // single source of truth for this message (see SessionExpiredDialogService's doc comment).
+        //
+        // Unlike the interceptor's 401 path (user is actively at the keyboard, so the prompt can sit
+        // over whatever they were looking at), idle timeout exists specifically FOR the unattended
+        // workstation — showing the prompt without navigating first would leave PHI (execution history
+        // rows, field-lineage values, mapping previews) rendered behind the dialog's translucent
+        // backdrop for as long as the browser stays open on a shared clinical machine. Navigate away
+        // first so the routed content is actually gone, then show the same unified prompt over the now-
+        // blank login page.
+        void this.router.navigate(['/auth/login']).then(() => {
+          this.sessionExpiredDialog.show(
+            'Your session has expired due to inactivity. Please log in again to continue.', true);
+        });
       }),
     ).subscribe();
   }

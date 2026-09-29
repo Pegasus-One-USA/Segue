@@ -57,17 +57,33 @@ public sealed class PatientScopedSearchTests
         handler.RequestUri.Should().NotContain("_id=");
     }
 
+    /// <summary>
+    /// A failure message must never carry the patient identifier — it reaches logs and run history, and the
+    /// scoped query string carries the id verbatim. Both halves are redacted: the URL's whole query string, and
+    /// any identifier echoed back inside the response body.
+    ///
+    /// AllergyIntolerance, not Observation: Observation is one of the five resource types whose default
+    /// category/status parameter gets split into one request per value (GetDefaultParameterValuesToSplit), and
+    /// that path deliberately catches a rejected value, records the run as incomplete, and continues rather than
+    /// throwing — so a split type can never surface this exception to a caller at all. AllergyIntolerance is
+    /// patient-compartment scoped (so the id is genuinely in the query) but not split, which is what makes it the
+    /// right vehicle for asserting on the thrown message.
+    /// </summary>
     [Fact]
     public async Task Failed_patient_scoped_request_redacts_patient_identifier_from_exception()
     {
         var handler = new CapturingHandler(HttpStatusCode.BadRequest);
         var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(PatientId));
 
-        var act = () => client.SearchAsync("Observation", Source, CancellationToken.None);
+        var act = () => client.SearchAsync("AllergyIntolerance", Source, CancellationToken.None);
 
         var exception = await act.Should().ThrowAsync<InvalidOperationException>();
-        exception.Which.Message.Should().Contain("/Observation?[redacted]");
+        exception.Which.Message.Should().Contain("/AllergyIntolerance?[redacted]");
         exception.Which.Message.Should().NotContain(PatientId);
+
+        // The id really was in the outgoing request — proving the assertion above is about redaction working,
+        // not about the identifier having never been there.
+        handler.RequestUri.Should().Contain($"patient={PatientId}");
     }
 
     [Fact]

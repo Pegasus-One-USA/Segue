@@ -25,7 +25,16 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-tableau',     rank: 1, category: 'Analytics',    destinationType: 'Tableau',        name: 'Tableau',            sub: 'Publish to Tableau.',               permissionPrefix: 'sourceconnections' },
   { id: 'dest-databricks',  rank: 1, category: 'Analytics',    destinationType: 'Databricks',     name: 'Databricks',         sub: 'Load into Databricks.',             permissionPrefix: 'sourceconnections' },
   { id: 'dest-datalake-webhook', rank: 1, category: 'Cloud / FHIR', destinationType: 'DataLakeWebhook', name: 'Data Lake Webhook', sub: 'Push batched records to a lake ingestion endpoint.', permissionPrefix: 'sourceconnections' },
-  { id: 'dest-fabric',      rank: 1, category: 'Cloud / FHIR', destinationType: 'DataFabricAzure', name: 'Microsoft Fabric', sub: 'Land files in a Fabric Lakehouse (OneLake).', permissionPrefix: 'sourceconnections' },
+  // Microsoft Fabric is one vendor with several landing surfaces, and they are NOT interchangeable: OneLake
+  // Files drops files over the blob endpoint and has no schema, while a Warehouse loads rows over TDS and has
+  // a live table/column schema (so field mapping applies to it — see SQL_FAMILY_DESTINATION_TYPES). They are
+  // separate destination types for that reason, and the picker nests them under one vendor row via parentId
+  // so they read as two surfaces of one product rather than two unrelated destinations. The parent below is a
+  // heading only — it carries no destinationType and opens no wizard; a future surface (Lakehouse Delta,
+  // Eventstream) is one more child here.
+  { id: 'dest-fabric-group', rank: 1, category: 'Cloud / FHIR', name: 'Microsoft Fabric', sub: 'Choose a landing surface.' },
+  { id: 'dest-fabric',      rank: 1, parentId: 'dest-fabric-group', category: 'Cloud / FHIR', destinationType: 'DataFabricAzure', name: 'OneLake Files', sub: 'Land files in a Fabric Lakehouse (OneLake).', permissionPrefix: 'sourceconnections' },
+  { id: 'dest-fabric-warehouse', rank: 1, parentId: 'dest-fabric-group', category: 'Relational', destinationType: 'DataFabricWarehouse', name: 'Warehouse', sub: 'Load rows into a Fabric Warehouse table.', permissionPrefix: 'sourceconnections' },
   { id: 'dest-blob',        rank: 1, category: 'Cloud / FHIR', destinationType: 'BlobStorage',    name: 'Azure Blob Storage', sub: 'Write objects to Azure Blob.',      permissionPrefix: 'blobstorage' },
   { id: 'dest-s3',          rank: 1, category: 'Cloud / FHIR', destinationType: 'S3',             name: 'Amazon S3',          sub: 'Write objects to Amazon S3.',       permissionPrefix: 'sourceconnections' },
   { id: 'dest-fhir',        rank: 1, category: 'Cloud / FHIR', destinationType: 'FhirRepository', name: 'Aidbox',             sub: 'POST a transaction bundle to a FHIR store.', permissionPrefix: 'fhirrepository' },
@@ -40,6 +49,7 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-pdf',         rank: 1, category: 'File',         destinationType: 'Pdf',            name: 'PDF Report',         sub: 'Render a PDF report.',              permissionPrefix: 'sourceconnections' },
   { id: 'dest-sftp',        rank: 1, category: 'Delivery',     destinationType: 'Sftp',           name: 'SFTP',               sub: 'Deliver files over SFTP.',          permissionPrefix: 'sftp' },
   { id: 'dest-restapi',     rank: 1, category: 'Delivery',     destinationType: 'RestApi',        name: 'REST API',           sub: 'POST to an outbound REST endpoint.', permissionPrefix: 'sourceconnections' },
+  { id: 'dest-apiendpoint', rank: 1, category: 'Delivery',     destinationType: 'ApiEndpoint',     name: 'API Endpoint',       sub: 'Fully configurable outbound API — auth, batching, retry.', permissionPrefix: 'sourceconnections' },
   { id: 'dest-inmemory',    rank: 1, category: 'Delivery',     destinationType: 'InMemory',       name: 'In-memory (test)',   sub: 'Sink for testing — discards output.', permissionPrefix: 'sourceconnections' },
 
   { id: 'field-mapping',    rank: 2, name: 'Mapping',           sub: 'Map FHIR paths to destination fields — SQL-family destinations only.' },

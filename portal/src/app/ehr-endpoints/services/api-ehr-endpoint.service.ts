@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpContext } from '@angular/common/http';
+import { SKIP_LOADER } from '../../core/loading.interceptor';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { EHR_ENDPOINTS_ENDPOINTS } from '../../core/api-endpoints';
@@ -16,7 +17,10 @@ export class ApiEhrEndpointService extends IEhrEndpointService {
     );
   }
 
-  getPaged(filter: EhrEndpointFilter): Observable<EhrEndpointPage> {
+  /** `silent` (passed only from a debounced search-box keystroke) sends SKIP_LOADER so this request
+   *  bypasses the app-wide global loader — which dims the screen and marks the routed content [inert],
+   *  blurring the very input being typed into. The caller shows a small in-field spinner instead. */
+  getPaged(filter: EhrEndpointFilter, silent = false): Observable<EhrEndpointPage> {
     let params = new HttpParams()
       .set('page', String(filter.page))
       .set('pageSize', String(filter.pageSize));
@@ -26,7 +30,8 @@ export class ApiEhrEndpointService extends IEhrEndpointService {
     if (filter.isActive !== undefined) params = params.set('isActive', String(filter.isActive));
     if (filter.sortDescending !== undefined) params = params.set('sortDescending', String(filter.sortDescending));
 
-    return this.http.get<EhrEndpointPage>(EHR_ENDPOINTS_ENDPOINTS.paged, { params }).pipe(
+    const context = silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<EhrEndpointPage>(EHR_ENDPOINTS_ENDPOINTS.paged, { params, context }).pipe(
       catchError(err => throwError(() => err))
     );
   }

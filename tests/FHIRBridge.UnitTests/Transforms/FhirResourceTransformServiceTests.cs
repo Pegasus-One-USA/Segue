@@ -76,6 +76,7 @@ public sealed class FhirResourceTransformServiceTests
             new RoundingScalingNode(),
             new StringNormalizationNode(),
             new DefaultNullHandlingNode(),
+            new QuantityRangeAssemblyNode(),
         ]);
 
     private static async Task<FhirResourceTransformResult> RunAsync(FhirResourceTransformService sut) =>
@@ -100,6 +101,45 @@ public sealed class FhirResourceTransformServiceTests
         document.RootElement.GetProperty("status").GetString().Should().Be("final");
         document.RootElement.GetProperty("valueQuantity").GetProperty("unit").GetString().Should().Be("kg");
         document.RootElement.GetProperty("id").GetString().Should().Be("obs-1");
+    }
+
+    [Fact]
+    public async Task Quantity_assembly_keeps_the_sources_own_unit_on_the_FhirResource_path()
+    {
+        // The headline bug, on THIS execution path rather than the Runtime pipeline's mapped-column loop.
+        // The rule reads "$.valueQuantity.value", so the node is handed the scalar 70.30681818 and its
+        // whole-Quantity branch never fires — leaving the rule's own (unset) unit as the only candidate,
+        // which is how an assembled Quantity came out as "unit": "". It matters more here than on the
+        // mapped-column path: the write-back replaces the whole element, so the source's "kg" is not merely
+        // missed, it is ERASED from a FHIR-native destination.
+        var sut = CreateSut(Rule(
+            TransformNodeType.QuantityRangeAssembly,
+            "Observation.valueQuantity.value",
+            new { },
+            writeBackPath: "valueQuantity"));
+
+        var result = await RunAsync(sut);
+
+        var quantity = JsonDocument.Parse(result.Json).RootElement.GetProperty("valueQuantity");
+        quantity.GetProperty("unit").GetString().Should().Be("kg");
+        quantity.GetProperty("value").GetDouble().Should().Be(70.30681818);
+    }
+
+    [Fact]
+    public async Task An_explicitly_configured_unit_still_wins_over_the_sources_own()
+    {
+        // The hint is a FALLBACK, not an override — a rule that names its unit is making a deliberate
+        // choice (a conversion, or a source whose unit is wrong) and must not be second-guessed.
+        var sut = CreateSut(Rule(
+            TransformNodeType.QuantityRangeAssembly,
+            "Observation.valueQuantity.value",
+            new { unit = "lb" },
+            writeBackPath: "valueQuantity"));
+
+        var result = await RunAsync(sut);
+
+        JsonDocument.Parse(result.Json).RootElement
+            .GetProperty("valueQuantity").GetProperty("unit").GetString().Should().Be("lb");
     }
 
     [Fact]

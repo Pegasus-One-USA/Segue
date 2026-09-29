@@ -9,7 +9,64 @@
   @if (variant() === 'full') {
     @if (authStore.isAuthenticated()) {
       <span class="af-sep" aria-hidden="true">&middot;</span>
-      <span class="af-version">Version {{ appVersion }}</span>
+      <span class="af-version-wrap">
+        <button
+          type="button"
+          class="af-version"
+          [class.af-version--mismatch]="version.isMismatched()"
+          [attr.aria-expanded]="showDetails()"
+          aria-haspopup="dialog"
+          (click)="toggleDetails()">
+          Version {{ version.portalVersion }}
+          @if (version.isMismatched()) {
+            <span class="af-version-warn" aria-hidden="true">&#9888;</span>
+          }
+        </button>
+
+        @if (showDetails()) {
+          <!-- Backdrop is a click-away target only; the button above is the real control, so this
+               carries no role and no keyboard handler (Escape is handled on the panel itself). -->
+          <div class="af-about-backdrop" (click)="toggleDetails()"></div>
+
+          <div class="af-about" role="dialog" aria-label="Build details" (keydown.escape)="toggleDetails()">
+            <div class="af-about-row">
+              <span class="af-about-key">Portal</span>
+              <span class="af-about-val">{{ version.portalVersion }}</span>
+            </div>
+
+            @if (version.apiVersion(); as api) {
+              <div class="af-about-row">
+                <span class="af-about-key">API</span>
+                <span class="af-about-val">{{ api.version }}</span>
+              </div>
+              @if (api.commit) {
+                <div class="af-about-row">
+                  <span class="af-about-key">Commit</span>
+                  <span class="af-about-val af-about-mono">{{ api.commit.slice(0, 12) }}</span>
+                </div>
+              }
+              @if (api.buildDateUtc) {
+                <div class="af-about-row">
+                  <span class="af-about-key">Built</span>
+                  <span class="af-about-val">{{ api.buildDateUtc | date: 'medium' : 'UTC' }} UTC</span>
+                </div>
+              }
+            } @else {
+              <div class="af-about-row">
+                <span class="af-about-key">API</span>
+                <span class="af-about-val af-about-muted">unavailable</span>
+              </div>
+            }
+
+            @if (version.isMismatched()) {
+              <p class="af-about-mismatch">
+                Portal and API versions differ. Reload the page; if this persists, the upgrade may be
+                incomplete.
+              </p>
+            }
+          </div>
+        }
+      </span>
     }
 
     @if (branding.current().supportEmail) {

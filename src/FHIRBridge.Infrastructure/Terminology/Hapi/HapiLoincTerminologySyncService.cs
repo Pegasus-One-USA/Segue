@@ -58,7 +58,17 @@ public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncS
         var concepts = ParseLoincCsv(zipPath);
         _logger.LogInformation("Parsed {Total} LOINC codes from release {Version}.", concepts.Count, release.Version);
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "LOINC", release.Version, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "LOINC",
+            release.Version,
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                ShortDescription: c.ShortDescription,
+                LongDescription: c.LongDescription,
+                LongCommonName: c.LongCommonName,
+                IsActive: c.IsActive)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -102,7 +112,7 @@ public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncS
             return string.Empty;
         }
 
-        var byCode = new Dictionary<string, string>(120_000, StringComparer.Ordinal);
+        var byCode = new Dictionary<string, Concept>(120_000, StringComparer.Ordinal);
         while (!parser.EndOfData)
         {
             var row = parser.ReadFields();
@@ -115,17 +125,38 @@ public sealed class HapiLoincTerminologySyncService : IHapiLoincTerminologySyncS
             var status = Get(row, "STATUS");
             var display = Get(row, "LONG_COMMON_NAME", "SHORTNAME");
 
-            if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(display)
-                || string.Equals(status, "DEPRECATED", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(display))
             {
                 continue;
             }
 
-            byCode.TryAdd(code, display);
+            // DEPRECATED codes are now RETAINED as inactive rather than dropped outright: a historical
+            // resource can legitimately carry one, and silently having no row at all makes that look
+            // like an unknown code instead of a known-retired one. Of LOINC 2.83's four STATUS values
+            // only DEPRECATED is treated as inactive — TRIAL and DISCOURAGED codes are still in use.
+            var isActive = !string.Equals(status, "DEPRECATED", StringComparison.OrdinalIgnoreCase);
+            var longCommonName = Get(row, "LONG_COMMON_NAME");
+            var shortName = Get(row, "SHORTNAME");
+
+            byCode.TryAdd(code, new Concept(
+                code,
+                display,
+                string.IsNullOrWhiteSpace(shortName) ? null : shortName,
+                // LOINC has no single "long description" column; DefinitionDescription is the nearest
+                // real prose definition and is populated on ~15.7k of the 112k codes.
+                Get(row, "DefinitionDescription") is { Length: > 0 } definition ? definition : null,
+                string.IsNullOrWhiteSpace(longCommonName) ? null : longCommonName,
+                isActive));
         }
 
-        return byCode.Select(kv => new Concept(kv.Key, kv.Value)).ToList();
+        return byCode.Values.ToList();
     }
 
-    private sealed record Concept(string Code, string Display);
+    private sealed record Concept(
+        string Code,
+        string Display,
+        string? ShortDescription,
+        string? LongDescription,
+        string? LongCommonName,
+        bool IsActive);
 }

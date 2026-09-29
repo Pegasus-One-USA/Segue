@@ -53,10 +53,26 @@ public sealed class TrmConcept
     private TrmConcept() { }
 
     public TrmConcept(long codeSystemPid, string codeVal, string? display)
+        : this(codeSystemPid, codeVal, display, null, null, null, true)
+    {
+    }
+
+    public TrmConcept(
+        long codeSystemPid,
+        string codeVal,
+        string? display,
+        string? shortDescription,
+        string? longDescription,
+        string? longCommonName,
+        bool isActive)
     {
         CodeSystemPid = codeSystemPid;
         CodeVal = codeVal.Trim();
         Display = display?.Trim();
+        ShortDescription = Normalize(shortDescription);
+        LongDescription = Normalize(longDescription);
+        LongCommonName = Normalize(longCommonName);
+        IsActive = isActive;
     }
 
     public long Pid { get; private set; }
@@ -64,9 +80,41 @@ public sealed class TrmConcept
     public string CodeVal { get; private set; } = default!;
     public string? Display { get; private set; }
 
+    /// <summary>The source's own abbreviated description, where it publishes one distinct from the long
+    /// form (e.g. ICD-10-CM order-file positions 17-76, HCPCS field 8, LOINC SHORTNAME). Null for the
+    /// sources that publish only a single description string.</summary>
+    public string? ShortDescription { get; private set; }
+
+    /// <summary>The source's own full-length description (e.g. ICD-10-CM order-file position 77+,
+    /// HCPCS field 7, DCM skos:definition, MeSH ScopeNote). Null where the source has no long form.</summary>
+    public string? LongDescription { get; private set; }
+
+    /// <summary>LOINC's LONG_COMMON_NAME and its per-source equivalents (SNOMED's Fully Specified Name,
+    /// RxNorm's prescribable name). Null where the source publishes no such field.</summary>
+    public string? LongCommonName { get; private set; }
+
+    /// <summary>Whether this concept is currently in force. Computed at import from whatever status or
+    /// expiry signal the source publishes (LOINC STATUS, SNOMED active, RxNorm SUPPRESS, CVX Vaccine
+    /// Status, HCPCS termination date, NDC exclude flag, DCM owl:deprecated); defaults to true for the
+    /// sources that publish no such signal at all.</summary>
+    public bool IsActive { get; private set; } = true;
+
     public void Update(string codeVal, string? display)
     {
         CodeVal = codeVal.Trim();
         Display = display?.Trim();
     }
+
+    public void UpdateDescriptions(string? shortDescription, string? longDescription, string? longCommonName, bool isActive)
+    {
+        ShortDescription = Normalize(shortDescription);
+        LongDescription = Normalize(longDescription);
+        LongCommonName = Normalize(longCommonName);
+        IsActive = isActive;
+    }
+
+    /// <summary>Collapses whitespace-only source fields to null so "no value" is a single representation —
+    /// several sources pad fixed-width columns with spaces, which would otherwise read as a present-but-blank
+    /// description and defeat the resolution fallback in CodeableConceptBuilderNode.</summary>
+    private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

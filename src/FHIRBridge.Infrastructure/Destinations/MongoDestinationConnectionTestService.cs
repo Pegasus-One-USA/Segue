@@ -89,7 +89,7 @@ public sealed class MongoDestinationConnectionTestService : IMongoDestinationCon
                 {
                     return new MongoConnectionTestResultDto(
                         false,
-                        $"Connected, but collection '{collectionName}' does not exist. Create it in your database, or enable \"Create collection if not exists\".",
+                        $"Connected, but collection '{collectionName}' does not exist. Create it in your database, or omit the collection from this test — the pipeline creates a missing collection on its first write.",
                         collections);
                 }
             }

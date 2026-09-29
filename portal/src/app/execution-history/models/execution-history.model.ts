@@ -15,6 +15,12 @@ export interface RouteExecution {
   sourceName: string | null;
   sourceSystemType: string | null;
   status: ExecutionStatus;
+  /** Destination types the run's workflow writes to — a list, since a workflow can fan out. */
+  destinationTypes?: string[] | null;
+  /** FHIR resource types the run's workflow names in its source-node configuration. */
+  resourceTypes?: string[] | null;
+  /** The audience of the workflow's source connection. */
+  applicationType?: string | null;
   startedAt: string;
   completedAt: string | null;
   durationMs: number | null;
@@ -28,6 +34,50 @@ export interface RouteExecution {
    *  persisted to ErrorLogs — null if capture never ran or failed to persist (never a placeholder). Link
    *  straight to /operations/errors?errorReferenceId=... rather than asking the user to search by execution id. */
   errorReferenceId: string | null;
+  /** The source vendor's own id for the Bulk Data $export job this run deferred to — Epic's
+   *  `BulkRequest/{id}` segment, e.g. 0000000000176E6DC7DB51C0082DA988. Null for every run that
+   *  never deferred to an async export. Shown as its own column, and keyed on by the Status cell's
+   *  info icon (see ExecutionHistoryListComponent.showBulkInfoIcon). */
+  bulkRequestId: string | null;
+}
+
+/** Matches the backend's BulkExportResourceTypeStatusDto — one resource type's state within an export.
+ *  `fileCount` is NDJSON FILES, never records: one file may hold a single resource or fifty thousand, and
+ *  the real total is knowable only after download. Null while the type is still pending. */
+export interface BulkExportResourceTypeStatus {
+  resourceType: string;
+  fileCount: number | null;
+  state: 'Pending' | 'Ready';
+}
+
+/** Matches the backend's BulkExportStatusDto — a live, server-proxied read of one run's $export job.
+ *
+ *  Two states, one shape. While the job runs the source server answers 202 with no body at all, so
+ *  `resourceTypes` is built from what the run REQUESTED (every entry Pending, no count) and `progress` —
+ *  the server's free-text X-Progress header — is the only live detail on offer. Once it completes, the
+ *  same list is rebuilt from the manifest with real file counts. The template binds one table either way.
+ *
+ *  Carries no output URLs by design: the manifest's signed links are directly downloadable NDJSON of bulk
+ *  PHI, and the server groups them into counts so they never reach the browser. */
+export interface BulkExportStatus {
+  bulkRequestId: string | null;
+  status: 'InProgress' | 'Completed' | 'Failed';
+  /** e.g. "Searched 0 of 2 patients". Null on servers that don't send X-Progress (it is optional in the
+   *  Bulk Data spec — Epic populates it reliably, others may not) and on a completed job. */
+  progress: string | null;
+  kickedOffOnUtc: string;
+  nextPollNotBeforeUtc: string | null;
+  pollAttemptCount: number;
+  transactionTime: string | null;
+  /** The kick-off URL the server echoes back in its manifest. Completed jobs only. */
+  request: string | null;
+  requiresAccessToken: boolean | null;
+  resourceTypes: BulkExportResourceTypeStatus[];
+  /** Free-text issues from the manifest's `error` array — where a server reports resource types it tried
+   *  and refused even though the job as a whole succeeded. */
+  errors: string[];
+  retryAfterSeconds: number | null;
+  errorMessage: string | null;
 }
 
 export interface PagedResult<T> {
@@ -42,6 +92,14 @@ export interface PagedResult<T> {
  *  Workflows list already uses). */
 export interface RouteExecutionPage extends PagedResult<RouteExecution> {
   availableSourceSystemTypes: string[];
+  /** Destination types configured in this tenant (the same catalog the workflow builder offers). */
+  availableDestinationTypes: string[];
+  /** Every WorkflowRunStatus value, not only those a run has reached. */
+  availableStatuses: string[];
+  /** Every ApplicationType value. */
+  availableApplicationTypes: string[];
+  /** Resource types named by the source-node configuration of the workflows behind these runs. */
+  availableResourceTypes: string[];
 }
 
 export interface RouteExecutionFilter {
@@ -53,6 +111,12 @@ export interface RouteExecutionFilter {
   /** Multi-select Source filter — sent as repeated `sources` params. `source` above stays for single-value
    *  callers (Dashboard links). */
   sources?: string[];
+  /** Multi-select Status filter — repeated `statuses` params. `status` above stays for the single-value
+   *  Dashboard tile links that deep-link straight here. */
+  statuses?: string[];
+  destinationTypes?: string[];
+  applicationTypes?: string[];
+  resourceTypes?: string[];
   triggeredBy?: string;
   search?: string;
   page: number;
@@ -83,37 +147,41 @@ export interface ResourceHistoryEntry {
   recordedAtUtc: string;
 }
 
-/** Shape of a DestinationWriteResult-contract node's decrypted payload JSON (PascalCase — serialized straight off
- *  the backend's Runtime.Application.Workflows.Payloads.DestinationWriteResult record, no naming policy applied).
- *  Parsed client-side from NodeRunPayloadDetail.payloadJson so the CSV destination node's Execution History row
- *  can render a download link / email delivery card instead of the raw JSON dump. */
+/** Shape of a destination node's stored delivery SUMMARY (PascalCase — written by
+ *  EfWorkflowNodeResourceHistoryRecorder.SummarizeDelivery), parsed client-side from
+ *  NodeRunPayloadDetail.deliveryDetailJson.
+ *
+ *  Counts and status only, deliberately. The email Subject/Body, the To/Cc addresses, the attachment file names
+ *  and the signed download link are no longer persisted — they carry patient identifiers, and storing them in a
+ *  table this screen reads is exactly what the PHI removal exists to stop. What an operator needs from this card
+ *  is whether the delivery happened and how big it was, which is what remains. */
 export interface DestinationWriteResultPayload {
-  DestinationId: string;
-  RecordsWritten: number;
-  WrittenAt: string;
-  DownloadUrl: string | null;
+  DestinationId: string | null;
+  RecordsWritten: number | null;
+  WrittenAt: string | null;
+  /** Whether a download was produced. The URL itself is not stored. */
+  HasDownload: boolean;
   EmailDelivery: EmailDeliveryDetail | null;
 }
 
 export interface EmailDeliveryDetail {
-  From: string;
-  To: string[];
-  Cc: string[];
-  Subject: string;
-  Body: string;
-  AttachmentNames: string[];
   Status: 'Sent' | 'Failed' | 'Skipped' | string;
   Error: string | null;
+  ToCount: number;
+  CcCount: number;
+  AttachmentCount: number;
 }
 
 export type NodeRunStatus = 'Running' | 'Succeeded' | 'Failed' | 'Cancelled';
 
 /** Matches the backend's WorkflowNodeRunHistoryDto — one row per node that actually started this run, with
  *  its real outcome (success, failure, or cancellation) always present, unlike ResourceHistoryEntry which
- *  only ever reflects the success path. payloadJson is always null here — the list never decrypts a node's
- *  output; fetch it on demand via ExecutionHistoryApiService.nodeRunPayload() once a row is expanded. */
+ *  only ever reflects the success path. Metadata only: node output is no longer retained anywhere, so a row
+ *  reports HOW MUCH a node produced (itemCount, resourceTypeCountsJson), never the data itself. */
 export interface NodeRunHistoryEntry {
   workflowNodeRunId: string;
+  /** The definition node this run executed — field lineage is recorded against this, not the run id. */
+  workflowNodeId: string;
   nodeType: string;
   rank: number;
   subRank: number;
@@ -122,27 +190,30 @@ export interface NodeRunHistoryEntry {
   startedAt: string;
   completedAt: string | null;
   contract: string | null;
-  payloadJson: string | null;
   itemCount: number | null;
+  /** Destination delivery metadata as JSON (records written, download URL, email envelope). Null otherwise. */
+  deliveryDetailJson: string | null;
+  /** Per-resource-type counts as JSON, e.g. {"Patient":1,"Observation":42} — type names and totals only. */
+  resourceTypeCountsJson: string | null;
 }
 
-/** Matches the backend's WorkflowNodeRunPayloadDetailDto — one node run's decrypted output, fetched only when
- *  its row is expanded (see ExecutionHistoryApiService.nodeRunPayload()). */
+/** Matches the backend's WorkflowNodeRunPayloadDetailDto — one node run's output SUMMARY, fetched when its
+ *  row is expanded (see ExecutionHistoryApiService.nodeRunPayload()). Counts only; output is not retained. */
 export interface NodeRunPayloadDetail {
   workflowNodeRunId: string;
   contract: string | null;
-  payloadJson: string | null;
   itemCount: number | null;
+  resourceTypeCountsJson: string | null;
+  deliveryDetailJson: string | null;
 }
 
-/** Matches the backend's FieldLineageHopDto — one transform node's before/after value for a destination field.
- *  sourceValueJson/destinationValueJson arrive here already decrypted server-side. */
+/** Matches the backend's FieldLineageHopDto — one transform node applied to a destination field. Describes the
+ *  TRANSFORMATION (which node, what config, did it succeed, how long) — the field's before/after values are no
+ *  longer captured, since those are raw patient data. */
 export interface FieldLineageHop {
   nodeOrder: number;
   nodeType: string;
   configJson: string;
-  sourceValueJson: string | null;
-  destinationValueJson: string | null;
   success: boolean;
   errorMessage: string | null;
   durationMs: number | null;
@@ -179,6 +250,50 @@ export interface LineageSummary {
   fieldsTransformed: number;
   transformationNodesExecuted: number;
   successRate: number;
+}
+
+/** Matches the backend's LineageRuleCountDto — one rule type a node applied, and how many times. */
+export interface LineageRuleCount {
+  nodeType: string;
+  applications: number;
+  failedApplications: number;
+}
+
+/** Matches the backend's ConfiguredRuleCountDto — one rule type and how many of it the workflow defines. */
+export interface ConfiguredRuleCount {
+  nodeType: string;
+  rulesDefined: number;
+}
+
+/** Matches the backend's ConfiguredResourceTypeRulesDto — the transformation rules CONFIGURED for one
+ *  resource type on this run's workflow. Distinct from what executed: a rule defined but never triggered
+ *  still appears, which is the point of showing configuration rather than runtime lineage. */
+export interface ConfiguredResourceTypeRules {
+  resourceType: string;
+  distinctRuleTypes: number;
+  rules: ConfiguredRuleCount[];
+}
+
+/** Matches the backend's LineageResourceTypeCountDto — one resource type's share of a node's work. */
+export interface LineageResourceTypeCount {
+  resourceType: string;
+  mappings: number;
+  resources: number;
+  fields: number;
+  /** Transformation rules applied to THIS resource type. Often empty — rules are configured per resource
+   *  type, so a type that is only copied field-for-field genuinely has none. */
+  rules: LineageRuleCount[];
+}
+
+/** Matches the backend's NodeLineageBreakdownDto — what one node actually applied to the data. Nodes that
+ *  record no field-level work (source fetches, whole-resource normalization) are absent from the response. */
+export interface NodeLineageBreakdown {
+  workflowNodeId: string;
+  totalApplications: number;
+  distinctFields: number;
+  distinctResources: number;
+  rules: LineageRuleCount[];
+  resourceTypes: LineageResourceTypeCount[];
 }
 
 /** Matches the backend's FieldSummaryDto — one destination field's footprint within a resource type. */

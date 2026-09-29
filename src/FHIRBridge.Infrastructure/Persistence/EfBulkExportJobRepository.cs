@@ -48,6 +48,15 @@ public sealed class EfBulkExportJobRepository : IBulkExportJobRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<BulkExportJob?> GetLatestByWorkflowRunAsync(Guid workflowRunId, CancellationToken cancellationToken)
+    {
+        return await _dbContext.BulkExportJobs
+            .AsNoTracking()
+            .Where(x => x.WorkflowRunId == workflowRunId)
+            .OrderByDescending(x => x.KickedOffOnUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public Task<int> CountActiveBySourceConnectionAsync(Guid sourceConnectionId, CancellationToken cancellationToken)
         => _dbContext.BulkExportJobs
             .AsNoTracking()

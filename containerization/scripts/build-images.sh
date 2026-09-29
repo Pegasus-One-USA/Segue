@@ -15,7 +15,7 @@
 # instead of using the managed Azure Database for PostgreSQL path; see that Dockerfile's own comment.
 #
 # Usage:
-#   ./build-images.sh                                   # local tags only, no push
+#   ./build-images.sh                                   # tag from VERSION, no push
 #   ./build-images.sh -t v1.2.0                          # local tags with a specific version
 #   ./build-images.sh -r myregistry.azurecr.io -t v1.2.0 -p   # build+push all 5, ACR
 #   ./build-images.sh -r 123456789012.dkr.ecr.us-east-1.amazonaws.com/segue -t v1.2.0 -p  # ECR, all 5
@@ -27,7 +27,7 @@
 set -euo pipefail
 
 REGISTRY=""
-TAG="local"
+TAG=""
 PUSH="false"
 
 while getopts "r:t:p" opt; do
@@ -40,6 +40,24 @@ while getopts "r:t:p" opt; do
 done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# Default the tag to the product version in the repo-root VERSION file — the same single source
+# every .NET assembly (Directory.Build.props) and the Angular footer already read. Left unset by the
+# caller, images are tagged with the version this working tree actually IS, so a hand-built image can
+# never silently claim to be some other release. Pass -t explicitly to override.
+if [[ -z "$TAG" ]]; then
+  if [[ ! -f "${REPO_ROOT}/VERSION" ]]; then
+    echo "Error: VERSION not found at ${REPO_ROOT}/VERSION" >&2
+    exit 1
+  fi
+  TAG="$(tr -d '[:space:]' < "${REPO_ROOT}/VERSION")"
+  if [[ -z "$TAG" ]]; then
+    echo "Error: VERSION at ${REPO_ROOT}/VERSION is empty" >&2
+    exit 1
+  fi
+  echo "==> Tag not specified; using version ${TAG} from VERSION"
+fi
+
 PREFIX=""
 if [[ -n "$REGISTRY" ]]; then
   PREFIX="${REGISTRY%/}/"
@@ -55,13 +73,20 @@ declare -A IMAGES=(
 # segue-app bakes $TAG into its Angular build (footer version display) -
 # segue-worker has no UI, so it doesn't take this build-arg.
 UI_IMAGES=("segue-app")
+# Both .NET images stamp SourceRevisionId into their assemblies' InformationalVersion (see
+# Directory.Build.props) so a running binary can name the exact commit it was built from.
+DOTNET_IMAGES=("segue-app" "segue-worker")
+GIT_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
 
 for name in "${!IMAGES[@]}"; do
   dockerfile="${IMAGES[$name]}"
   full_tag="${PREFIX}${name}:${TAG}"
   build_args=()
   for ui in "${UI_IMAGES[@]}"; do
-    if [[ "$ui" == "$name" ]]; then build_args=(--build-arg "APP_VERSION=${TAG}"); fi
+    if [[ "$ui" == "$name" ]]; then build_args+=(--build-arg "APP_VERSION=${TAG}"); fi
+  done
+  for dn in "${DOTNET_IMAGES[@]}"; do
+    if [[ "$dn" == "$name" ]]; then build_args+=(--build-arg "SOURCE_REVISION_ID=${GIT_SHA}"); fi
   done
   echo "==> Building ${full_tag} (${dockerfile})"
   docker build -f "${REPO_ROOT}/${dockerfile}" -t "${full_tag}" "${build_args[@]}" "${REPO_ROOT}"

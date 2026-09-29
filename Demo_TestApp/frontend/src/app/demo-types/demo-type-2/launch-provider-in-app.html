@@ -5,6 +5,7 @@
       <span class="login-type-badge">{{ loginTypeLabel() }}</span>
     </div>
     <div class="fullscreen-shell__actions">
+      <a class="topbar-link" href="/api-test-console" target="_blank" rel="noopener">API Test Console</a>
       <button type="button" class="icon-btn" (click)="refresh()" [disabled]="isPatientLoading()" aria-label="Refresh patient data" title="Refresh (no re-launch)">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="23 4 23 10 17 10"></polyline>
@@ -55,8 +56,8 @@
       </p>
     } @else if (launchError()) {
       <p class="error-banner">
-        The workflow FHIRBridge triggered for this launch failed to complete, so there is no patient data to
-        show ({{ launchError() }}). Check FHIRBridge's Execution History for this run's error detail.
+        No patient data could be shown for this launch: {{ launchError() }} If the workflow itself failed,
+        FHIRBridge's Execution History has the error detail for this run.
       </p>
     } @else if (patient(); as p) {
       <div class="patient-cards-grid">
@@ -96,11 +97,11 @@
             </div>
             <div class="field-row">
               <span class="field-label">Date of Birth</span>
-              <span class="field-value">{{ p.dateOfBirth ? (p.dateOfBirth | date: 'MMMM d, y') : 'Not Available' }}</span>
+              <span class="field-value">{{ p.dateOfBirth ? (p.dateOfBirth | date: 'MMMM d, y') : '' }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">Age</span>
-              <span class="field-value">{{ age() }}</span>
+              <span class="field-value">{{ age() ?? '' }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">Marital Status</span>
@@ -108,11 +109,11 @@
             </div>
             <div class="field-row">
               <span class="field-label">Status</span>
-              <span class="field-value">{{ p.active ? 'Active' : 'Inactive' }}</span>
+              <span class="field-value">{{ p.active ? 'Active' : '' }}</span>
             </div>
             <div class="field-row">
               <span class="field-label">Deceased</span>
-              <span class="field-value">{{ p.deceased ? 'Yes' : 'No' }}</span>
+              <span class="field-value">{{ p.deceased ? 'Yes' : '' }}</span>
             </div>
           </mat-card-content>
         </mat-card>

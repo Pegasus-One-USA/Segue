@@ -165,22 +165,12 @@ export class FieldLineagePanelComponent implements OnInit {
     return chain.hops.every(h => h.success);
   }
 
-  firstSourceValue(chain: FieldLineageChain): string {
-    return this.formatValue(chain.hops[0]?.sourceValueJson ?? null);
-  }
-
-  lastDestinationValue(chain: FieldLineageChain): string {
-    const last = chain.hops[chain.hops.length - 1];
-    return this.formatValue(last?.destinationValueJson ?? null);
-  }
-
-  formatValue(json: string | null): string {
-    if (json === null) return '—';
-    try {
-      return JSON.stringify(JSON.parse(json));
-    } catch {
-      return json;
-    }
+  /** The chain's transform nodes in order, e.g. "DirectMapping → DateFormat". Replaces the old
+   *  before/after value columns: the values were raw patient data and are no longer captured, but WHICH
+   *  transformations ran is the part that actually explains how a destination field was produced. */
+  transformationSummary(chain: FieldLineageChain): string {
+    const nodeTypes = chain.hops.map(hop => hop.nodeType).filter(Boolean);
+    return nodeTypes.length === 0 ? '—' : nodeTypes.join(' → ');
   }
 
   formatConfig(configJson: string): string {

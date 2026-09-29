@@ -1,4 +1,4 @@
-namespace FHIRBridge.Api.Workflows;
+﻿namespace FHIRBridge.Api.Workflows;
 
 /// <summary>
 /// One row of the (Runtime Plane) Execution History screen — a workflow run joined with its workflow's name and
@@ -20,7 +20,17 @@ public sealed record WorkflowRunHistoryDto(
     string? ErrorMessage,
     int WorkflowDefinitionVersion,
     string? CorrelationId,
-    string? ErrorReferenceId)
+    string? ErrorReferenceId,
+    string? BulkRequestId,
+    /// <summary>The destination types the run's workflow writes to — a list, since a workflow can fan out to
+    /// several destinations. Read off the workflow definition, not the run: it is what the run was configured to
+    /// write to, which is the question the Destination filter asks.</summary>
+    IReadOnlyList<string>? DestinationTypes = null,
+    /// <summary>The FHIR resource types the run's workflow names in its source-node configuration.</summary>
+    IReadOnlyList<string>? ResourceTypes = null,
+    /// <summary>The audience (<see cref="FHIRBridge.SharedKernel.Enums.ApplicationType"/>) of the workflow's
+    /// source connection, so this screen's Audience filter matches the Workflows list's.</summary>
+    string? ApplicationType = null)
 {
     public long? DurationMs => CompletedAt.HasValue
         ? (long)(CompletedAt.Value - StartedAt).TotalMilliseconds
@@ -38,7 +48,60 @@ public sealed record WorkflowRunHistoryPageDto(
     int TotalCount,
     int Page,
     int PageSize,
-    IReadOnlyList<string> AvailableSourceSystemTypes);
+    IReadOnlyList<string> AvailableSourceSystemTypes,
+    /// <summary>Destination types configured in this tenant, from the same catalog the workflow builder offers —
+    /// see <c>WorkflowSummaryPageDto</c> for why these come from configuration rather than from the rows.</summary>
+    IReadOnlyList<string> AvailableDestinationTypes,
+    /// <summary>Every <see cref="FHIRBridge.Runtime.Domain.Workflows.WorkflowRunStatus"/> value, not only those a
+    /// run has actually reached, so the Status filter offers a roster that doesn't shift as the history does.</summary>
+    IReadOnlyList<string> AvailableStatuses,
+    /// <summary>Every <see cref="FHIRBridge.SharedKernel.Enums.ApplicationType"/> value.</summary>
+    IReadOnlyList<string> AvailableApplicationTypes,
+    /// <summary>FHIR resource types named by the source-node configuration of the workflows behind these runs.</summary>
+    IReadOnlyList<string> AvailableResourceTypes);
+
+/// <summary>
+/// A live read of one run's FHIR Bulk Data <c>$export</c> job, proxied from the source server on demand — backs the
+/// Execution History row's "Bulk Data Status Request" popup.
+///
+/// <para>Renders two genuinely different states off ONE list. While the job runs, the server answers 202 with no
+/// body, so <see cref="ResourceTypes"/> is built from what the run REQUESTED (every entry <c>Pending</c>, no file
+/// count) and <see cref="Progress"/> — the server's free-text <c>X-Progress</c> — is the only live detail. Once it
+/// completes, the same list is rebuilt from the manifest with real file counts. One shape, so the UI binds a single
+/// table either way.</para>
+///
+/// <para>Deliberately carries NO output URLs. The manifest's <c>output[].url</c> entries are signed, directly
+/// downloadable NDJSON of bulk PHI; they are grouped into counts server-side so they never reach a browser.</para>
+/// </summary>
+public sealed record BulkExportStatusDto(
+    string? BulkRequestId,
+    /// <summary>InProgress, Completed or Failed — the live read, not <c>BulkExportJob.Status</c>.</summary>
+    string Status,
+    /// <summary>The <c>X-Progress</c> header verbatim, e.g. "Searched 0 of 2 patients". Null on servers that
+    /// don't send it (it is optional in the spec) and on a completed job.</summary>
+    string? Progress,
+    DateTime KickedOffOnUtc,
+    DateTime? NextPollNotBeforeUtc,
+    int PollAttemptCount,
+    DateTimeOffset? TransactionTime,
+    /// <summary>The kick-off URL the server echoes back in its manifest. Completed jobs only.</summary>
+    string? Request,
+    bool? RequiresAccessToken,
+    IReadOnlyList<BulkExportResourceTypeStatusDto> ResourceTypes,
+    /// <summary>Free-text issues from the manifest's <c>error</c> array — where a server reports resource types it
+    /// tried and refused even though the job as a whole succeeded.</summary>
+    IReadOnlyList<string> Errors,
+    int? RetryAfterSeconds,
+    string? ErrorMessage);
+
+/// <summary>One resource type's state within an export. <paramref name="FileCount"/> is the number of NDJSON FILES
+/// the server produced, never a record count — a single file may hold one resource or fifty thousand, and the real
+/// total is knowable only after download. Null while the type is still <c>Pending</c>.</summary>
+public sealed record BulkExportResourceTypeStatusDto(
+    string ResourceType,
+    int? FileCount,
+    /// <summary><c>Pending</c> or <c>Ready</c>.</summary>
+    string State);
 
 /// <summary>All-time run count per <see cref="FHIRBridge.Runtime.Domain.Workflows.WorkflowRunStatus"/>, across
 /// every workflow definition — backs the Dashboard's status stat tiles.</summary>

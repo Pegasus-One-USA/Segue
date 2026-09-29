@@ -411,6 +411,40 @@
   }
 }
 
+// ── Vendor tree (a product with several landing surfaces — see Transform.parentId) ───────────────
+// A heading row and its surfaces. The indent plus a connector rule is what makes a child read as
+// "inside" its vendor rather than as another sibling destination.
+.nld-item {
+  &.is-child {
+    padding-left: 38px;
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 24px;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--color-border);
+    }
+  }
+
+  &.is-parent {
+    // A heading is a control, not a destination — the lighter weight keeps it from competing with the
+    // real, selectable rows around it.
+    font-weight: 500;
+  }
+}
+
+.nld-item-chevron {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--color-muted-2);
+}
+
 .nld-item-avatar {
   width: 26px;
   height: 26px;

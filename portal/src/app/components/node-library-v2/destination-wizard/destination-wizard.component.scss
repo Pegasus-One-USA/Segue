@@ -1286,3 +1286,70 @@
     &.dw-btn--invalid { opacity: 0.5; }
   }
 }
+
+/* ── Advanced disclosure ──────────────────────────────────────────────────────
+   Shared by the lake-shaped destination forms (Data Lake Webhook, Microsoft Fabric): everything inside has a
+   working default, so it stays collapsed until asked for. The markup existed before these styles did and was
+   rendering as a bare user-agent button. */
+.dlw-adv {
+  margin-top: var(--space-2);
+}
+
+.dlw-adv-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-6) var(--space-8);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-base), border-color var(--transition-base);
+
+  &:hover { background: var(--color-primary-soft); border-color: var(--color-primary-mid); }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(0, 168, 157, 0.2);
+  }
+}
+
+.dlw-adv-caret {
+  display: inline-block;
+  color: var(--color-muted);
+  /* transform only — animating this is free at 60fps, unlike a width/margin tweak. */
+  transition: transform var(--transition-slow);
+
+  &--open { transform: rotate(90deg); }
+}
+
+/* Pushed to the right so the toggle reads "Advanced options ........ what is in there". */
+.dlw-adv-sub {
+  margin-left: auto;
+  color: var(--color-muted);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+/* Amber rather than red: the section is force-open and the real error sits on the field itself, so this is a
+   pointer to where to look, not a second error message. */
+.dlw-adv-badge {
+  margin-left: auto;
+  padding: var(--space-1) var(--space-4);
+  background: var(--color-warning-soft);
+  border-radius: var(--radius-pill);
+  color: var(--color-warning-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dlw-adv-caret { transition: none; }
+}

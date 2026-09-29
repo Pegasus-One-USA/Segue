@@ -509,7 +509,7 @@
             "name": "imageTag",
             "type": "Microsoft.Common.TextBox",
             "label": "Version to install",
-            "defaultValue": "v1.2.1",
+            "defaultValue": "2.0.0",
             "toolTip": "The published version tag to deploy (see the vendor registry's release list for available versions).",
             "constraints": {
               "required": true
@@ -588,9 +588,9 @@
       "seqSize": "[steps('containerSizing').seqSize]",
       "segueAppIntendedDomain": "[steps('customDomains').segueAppIntendedDomain]",
       "imageTag": "[steps('imageSettings').imageTag]",
-      "imageRegistryServer": "seguebuilds.azurecr.io",
-      "imageRegistryUsername": "one-click-pull",
-      "imageRegistryPassword": "401K4t2K0LniPnjsqlSjjXDaUof0VPIzLyDodMHeXgWv2WYgGmn2JQQJ99CHACYeBjFEqg7NAAABAZCREYP3"
+      "imageRegistryServer": "ghcr.io/pegasus-one-usa",
+      "imageRegistryUsername": "",
+      "imageRegistryPassword": ""
     }
   }
 }

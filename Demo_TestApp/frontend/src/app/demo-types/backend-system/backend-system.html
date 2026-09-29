@@ -5,6 +5,7 @@
       <span class="login-type-badge">{{ loginTypeLabel() }}</span>
     </div>
     <div class="fullscreen-shell__actions">
+      <a class="topbar-link" href="/api-test-console" target="_blank" rel="noopener">API Test Console</a>
       <button type="button" class="btn-clear-data" [disabled]="clearingData()" (click)="clearData()">
         {{ clearingData() ? 'Clearing…' : 'Clear Data' }}
       </button>

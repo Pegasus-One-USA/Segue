@@ -1,3 +1,4 @@
+using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Application.Services.Transforms.Nodes;
 using FluentAssertions;
 
@@ -143,6 +144,242 @@ public sealed class ValueTypeNodesTests
         var range = (System.Text.Json.Nodes.JsonObject)result.Value!;
         range["low"]!["value"]!.GetValue<decimal>().Should().Be(10m);
         range["high"]!["value"]!.GetValue<decimal>().Should().Be(20m);
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_falls_back_to_the_sources_own_unit_when_the_rule_configures_none()
+    {
+        var config = new Dictionary<string, string> { [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL" };
+        var result = new QuantityRangeAssemblyNode().Execute("187", config, null);
+        var quantity = (System.Text.Json.Nodes.JsonObject)result.Value!;
+        quantity["value"]!.GetValue<decimal>().Should().Be(187m);
+        quantity["unit"]!.GetValue<string>().Should().Be("mg/dL", "a blank rule unit must not erase the unit the source resource already carried");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_prefers_the_rules_configured_unit_over_the_source_hint()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["unit"] = "mmol/L",
+            [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL"
+        };
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode().Execute("187", config, null).Value!;
+        quantity["unit"]!.GetValue<string>().Should().Be("mmol/L");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_carries_the_source_unit_into_both_ends_of_a_range()
+    {
+        var config = new Dictionary<string, string> { [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL" };
+        var range = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode().Execute("10-20", config, null).Value!;
+        range["low"]!["unit"]!.GetValue<string>().Should().Be("mg/dL");
+        range["high"]!["unit"]!.GetValue<string>().Should().Be("mg/dL");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_reads_a_whole_Quantity_element_instead_of_stringifying_it()
+    {
+        var source = System.Text.Json.Nodes.JsonNode.Parse(
+            """{"value":187,"unit":"mg/dL","system":"http://unitsofmeasure.org","code":"mg/dL"}""");
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(source, new Dictionary<string, string>(), null).Value!;
+
+        quantity["value"]!.GetValue<decimal>().Should().Be(187m);
+        quantity["unit"]!.GetValue<string>().Should().Be("mg/dL");
+        quantity.ContainsKey("text").Should().BeFalse("a Quantity element must not fall through to the non-numeric text branch");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_keeps_the_sources_own_system_and_code()
+    {
+        // Rebuilding a Quantity from value+unit alone strips its machine-readable half. With a write-back path
+        // pointed at the element, the patcher replaces it wholesale — so a FHIR-native destination would get a
+        // measurement that can only be read, never unit-converted or compared.
+        var source = System.Text.Json.Nodes.JsonNode.Parse(
+            """{"value":187,"unit":"mg/dL","system":"http://unitsofmeasure.org","code":"mg/dL","comparator":"<"}""");
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(source, new Dictionary<string, string>(), null).Value!;
+
+        quantity["system"]!.GetValue<string>().Should().Be("http://unitsofmeasure.org");
+        quantity["code"]!.GetValue<string>().Should().Be("mg/dL");
+        quantity["comparator"]!.GetValue<string>().Should().Be("<");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_omits_system_and_code_the_source_never_had()
+    {
+        var source = System.Text.Json.Nodes.JsonNode.Parse("""{"value":187,"unit":"mg/dL"}""");
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(source, new Dictionary<string, string>(), null).Value!;
+
+        quantity.ContainsKey("system").Should().BeFalse();
+        quantity.ContainsKey("code").Should().BeFalse();
+    }
+
+    /// <summary>A scored Observation: "score" is the human label, "1" is the UCUM code for a dimensionless
+    /// quantity. The two legitimately DIFFER, which is why the coding is matched against the source's unit
+    /// OR its code rather than the two being assumed equal.</summary>
+    private const string ScoreQuantityJson =
+        """{"value":11,"unit":"score","system":"http://unitsofmeasure.org","code":"1"}""";
+
+    [Theory]
+    // Rule configures nothing — the fallback emits the source's own unit, so the coding still describes it.
+    [InlineData(null, "score")]
+    // Rule restates the source's own unit, including sloppily. Retyping what the source said must not cost
+    // the author their coding.
+    [InlineData("score", "score")]
+    // Emitted VERBATIM, padding and all — trimming happens only for the comparison, so recognising this as
+    // the source's own unit costs nothing while the author still gets exactly the text they typed.
+    [InlineData("  SCORE ", "  SCORE ")]
+    // Rule states the UCUM code instead of the display unit — still the source's own unit, by its other name.
+    [InlineData("1", "1")]
+    public void QuantityRangeAssemblyNode_keeps_the_coding_when_it_still_describes_the_emitted_unit(
+        string? configuredUnit, string expectedUnit)
+    {
+        var config = new Dictionary<string, string>();
+        if (configuredUnit is not null)
+        {
+            config["unit"] = configuredUnit;
+        }
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(ScoreQuantityJson, config, null).Value!;
+
+        quantity["unit"]!.GetValue<string>().Should().Be(expectedUnit);
+        quantity["system"]!.GetValue<string>().Should().Be("http://unitsofmeasure.org");
+        quantity["code"]!.GetValue<string>().Should().Be("1");
+    }
+
+    /// <summary>What UnitConversionNode hands the next node in a chain: a complete Quantity carrying the
+    /// unit the value now has, not the one it started with.</summary>
+    private const string ConvertedQuantityJson =
+        """{"value":4.85,"unit":"mmol/L","system":"http://unitsofmeasure.org","code":"mmol/L"}""";
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_prefers_an_incoming_elements_own_unit_over_a_stale_hint()
+    {
+        // The chain UnitConversion(mg/dL -> mmol/L) then QuantityRangeAssembly-on-defaults. The hint is read
+        // once from the RAW source and handed to this rule wherever it sits, so it still says "mg/dL" — the
+        // unit the value was converted AWAY from. Trusting it stamped the converted 4.85 with "mg/dL": a
+        // number off by ~38x wearing a label that makes it look right, which is worse than the "unit": ""
+        // the same chain produced before the hint existed.
+        var config = new Dictionary<string, string>
+        {
+            [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL"
+        };
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(ConvertedQuantityJson, config, null).Value!;
+
+        quantity["unit"]!.GetValue<string>().Should().Be("mmol/L");
+        quantity["value"]!.GetValue<double>().Should().Be(4.85);
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_keeps_the_coding_of_a_converted_element_rather_than_stripping_it()
+    {
+        // Follows from the above: fed a stale hint, emitsTheSourcesOwnUnit compared "mg/dL" against the
+        // element's real "mmol/L", saw a mismatch, and stripped a system/code that were entirely correct —
+        // producing exactly the non-computable Quantity that check exists to prevent.
+        var config = new Dictionary<string, string>
+        {
+            [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL"
+        };
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(ConvertedQuantityJson, config, null).Value!;
+
+        quantity["system"]!.GetValue<string>().Should().Be("http://unitsofmeasure.org");
+        quantity["code"]!.GetValue<string>().Should().Be("mmol/L");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_still_lets_the_rules_own_unit_beat_an_incoming_element()
+    {
+        // Precedence is configured unit > element's own > hint. A rule that names a unit is still making a
+        // deliberate choice and must outrank both.
+        var config = new Dictionary<string, string>
+        {
+            ["unit"] = "g/L",
+            [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL"
+        };
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(ConvertedQuantityJson, config, null).Value!;
+
+        quantity["unit"]!.GetValue<string>().Should().Be("g/L");
+        quantity.ContainsKey("code").Should().BeFalse("an overridden unit still drops a coding it contradicts");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_falls_back_to_the_hint_for_an_element_carrying_no_unit_at_all()
+    {
+        // The hint's remaining job on this path: an element with a value but no unit or code of its own has
+        // nothing better to offer, so the source's unit is still the best available answer.
+        var config = new Dictionary<string, string>
+        {
+            [ReservedTransformConfigKeys.SourceUnitHint] = "mg/dL"
+        };
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute("""{"value":187}""", config, null).Value!;
+
+        quantity["unit"]!.GetValue<string>().Should().Be("mg/dL");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_drops_the_coding_when_the_rule_overrides_the_unit()
+    {
+        // The node assembles, it does not convert — `value` stays 11 whatever the unit box says. Carrying the
+        // source's coding here emitted unit "mg/g" beside code "1": the machine-readable half asserting the
+        // opposite of the human-readable one, which misleads precisely the consumer the coding is kept for.
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(ScoreQuantityJson, new Dictionary<string, string> { ["unit"] = "mg/g" }, null).Value!;
+
+        quantity["value"]!.GetValue<int>().Should().Be(11);
+        quantity["unit"]!.GetValue<string>().Should().Be("mg/g");
+        quantity.ContainsKey("system").Should().BeFalse();
+        quantity.ContainsKey("code").Should().BeFalse();
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_keeps_a_comparator_even_when_the_unit_is_overridden()
+    {
+        // A comparator qualifies the VALUE, which an overridden unit leaves untouched — so unlike the coding
+        // it stays true and must survive.
+        var source = System.Text.Json.Nodes.JsonNode.Parse(
+            """{"value":187,"unit":"mg/dL","system":"http://unitsofmeasure.org","code":"mg/dL","comparator":"<"}""");
+
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(source, new Dictionary<string, string> { ["unit"] = "mmol/L" }, null).Value!;
+
+        quantity["comparator"]!.GetValue<string>().Should().Be("<");
+        quantity.ContainsKey("code").Should().BeFalse();
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_falls_back_to_the_UCUM_code_when_a_Quantity_element_carries_no_unit()
+    {
+        var source = System.Text.Json.Nodes.JsonNode.Parse("""{"value":187,"code":"mg/dL"}""");
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute(source, new Dictionary<string, string>(), null).Value!;
+        quantity["unit"]!.GetValue<string>().Should().Be("mg/dL");
+    }
+
+    [Fact]
+    public void QuantityRangeAssemblyNode_emits_an_unescaped_comparator()
+    {
+        var quantity = (System.Text.Json.Nodes.JsonObject)new QuantityRangeAssemblyNode()
+            .Execute("<=200", new Dictionary<string, string>(), null).Value!;
+
+        quantity["comparator"]!.GetValue<string>().Should().Be("<=");
+        quantity.ToJsonString(new System.Text.Json.JsonSerializerOptions
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        }).Should().Contain("\"comparator\":\"<=\"").And.NotContain("u003C");
     }
 
     [Fact]

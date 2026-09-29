@@ -22,8 +22,6 @@ public sealed class FieldLineageEntry
         int nodeOrder,
         string nodeType,
         string configJson,
-        string? sourceValueJson,
-        string? destinationValueJson,
         bool success,
         string? errorMessage,
         double? durationMs,
@@ -44,8 +42,6 @@ public sealed class FieldLineageEntry
         NodeOrder = nodeOrder;
         NodeType = nodeType;
         ConfigJson = configJson;
-        SourceValueJson = sourceValueJson;
-        DestinationValueJson = destinationValueJson;
         Success = success;
         ErrorMessage = errorMessage;
         DurationMs = durationMs;
@@ -68,11 +64,10 @@ public sealed class FieldLineageEntry
     public string NodeType { get; }
     public string ConfigJson { get; }
 
-    /// <summary>Encrypted at rest via <see cref="Application.Abstractions.Security.IPhiFieldEncryptor"/> — a
-    /// hop's before/after value can carry raw PHI (birthdates, names, clinical values). Never read directly;
-    /// always go through <c>LineageCaptureCommandHandler</c>/<c>EfWorkflowNodeResourceHistoryRecorder</c>.</summary>
-    public string? SourceValueJson { get; }
-    public string? DestinationValueJson { get; }
+    // SourceValueJson/DestinationValueJson removed: a hop's before/after value is raw PHI (birthdates, names,
+    // clinical values). Encrypting it at rest did not change that it was retained and decryptable, so it is no
+    // longer captured at all. Everything else on this entry — the field names, node type/order, config, outcome
+    // and timing — describes the TRANSFORMATION rather than the data, and is kept.
     public bool Success { get; }
     public string? ErrorMessage { get; }
     public double? DurationMs { get; }

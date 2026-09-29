@@ -40,7 +40,6 @@ public sealed class EfExecutionResourceHistoryRecorder : IExecutionResourceHisto
             routeExecutionId,
             resourceType,
             sourceResourceId,
-            _encryptor.Encrypt(fetchedJson),
             DateTime.UtcNow);
 
         _dbContext.PipelineRunResourceRecords.Add(record);
@@ -65,7 +64,6 @@ public sealed class EfExecutionResourceHistoryRecorder : IExecutionResourceHisto
         }
 
         record.MarkNormalized(
-            _encryptor.Encrypt(normalizedJson),
             JsonSerializer.Serialize(appliedProfiles),
             JsonSerializer.Serialize(warnings),
             dataQualityScore,
@@ -88,7 +86,7 @@ public sealed class EfExecutionResourceHistoryRecorder : IExecutionResourceHisto
             return;
         }
 
-        record.MarkMapped(_encryptor.Encrypt(JsonSerializer.Serialize(values)), DateTime.UtcNow);
+        record.MarkMapped(DateTime.UtcNow);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 

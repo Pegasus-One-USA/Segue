@@ -61,7 +61,18 @@ public sealed class HapiIcd10TerminologySyncService : IHapiIcd10TerminologySyncS
             billableCount);
 
         await _localWriter.WriteConceptsAsync(
-            SystemUrl, "ICD10CM", ReleaseYear, concepts.Select(c => (c.Code, c.Display)), cancellationToken);
+            SystemUrl,
+            "ICD10CM",
+            ReleaseYear,
+            // Display stays the long description, exactly as before, so existing lookups are unchanged;
+            // the short description (positions 17-76) is now carried alongside it instead of skipped.
+            concepts.Select(c => new TerminologyConceptRecord(
+                c.Code,
+                c.Display,
+                ShortDescription: c.ShortDescription,
+                LongDescription: c.Display,
+                IsActive: true)),
+            cancellationToken);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -97,6 +108,10 @@ public sealed class HapiIcd10TerminologySyncService : IHapiIcd10TerminologySyncS
 
             var rawCode = line.Substring(6, 7).Trim();
             var billable = line.Substring(14, 1) == "1";
+            // Positions 17-76 are CMS's own abbreviated title; 55,081 of the 97,584 codes in the real
+            // 2025 release carry a genuinely different short form (e.g. "Enterocolitis d/t Clostridium
+            // difficile, not spcf as recur" vs the full long title).
+            var shortDescription = line.Substring(16, 60).Trim();
             var longDescription = line.Substring(76).Trim();
 
             if (string.IsNullOrEmpty(rawCode) || string.IsNullOrEmpty(longDescription))
@@ -105,11 +120,11 @@ public sealed class HapiIcd10TerminologySyncService : IHapiIcd10TerminologySyncS
             }
 
             var code = rawCode.Length > 3 ? string.Concat(rawCode.AsSpan(0, 3), ".", rawCode.AsSpan(3)) : rawCode;
-            results.Add(new Concept(code, longDescription, billable));
+            results.Add(new Concept(code, longDescription, shortDescription, billable));
         }
 
         return results;
     }
 
-    private sealed record Concept(string Code, string Display, bool Billable);
+    private sealed record Concept(string Code, string Display, string? ShortDescription, bool Billable);
 }

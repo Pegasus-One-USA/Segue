@@ -4,10 +4,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 24px;
   // Run full-bleed (like the other Logs & Compliance tabs) rather than the shared partial's 1400px
   // centered width, so switching tabs never jumps the content width.
-  max-width: none;
 }
 
 .page-header h1 {

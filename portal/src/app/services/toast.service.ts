@@ -20,11 +20,30 @@ export class ToastService {
   readonly current = signal<Toast | null>(null);
 
   private timer: ReturnType<typeof setTimeout> | null = null;
+  // Set by SessionExpiredDialogService while the session-expired prompt is open. Every page's own
+  // error handler still runs when a 401 reaches it (spinners need to stop, etc.), and many of them
+  // call toast.error() with whatever message the backend sent back — which is often literally
+  // "Your session has expired..." itself. Without this, that produces a dismissable toast stacked
+  // behind/next-to the un-dismissable session dialog, on some pages but not others depending on
+  // whether that page happens to have its own error handler. Suppressing every toast for the
+  // duration keeps the one dialog as the single source of truth for "you've been logged out."
+  private suppressed = false;
 
   show(title: string, text = '', type: ToastType = 'info', durationMs?: number): void {
+    if (this.suppressed) return;
     if (this.timer) clearTimeout(this.timer);
     this.current.set({ title, text, type });
     this.timer = setTimeout(() => this.current.set(null), durationMs ?? DURATIONS[type]);
+  }
+
+  /** Hides any toast on screen and blocks new ones until resume() — see SessionExpiredDialogService. */
+  suppress(): void {
+    this.suppressed = true;
+    this.dismiss();
+  }
+
+  resume(): void {
+    this.suppressed = false;
   }
 
   // Two call shapes are supported so both the existing (title, text) call sites and the migrated

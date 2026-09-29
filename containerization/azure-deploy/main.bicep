@@ -54,8 +54,8 @@ param jwtSigningKey string
 @description('Registry every custom image this deployment references was published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package) — segue-app/-worker/-redis/-postgres always, plus segue-postgres-backup too if useAzurePostgresql is false.')
 param imageRegistryServer string
 
-@description('Tag every custom image this deployment references was published under.')
-param imageTag string = 'latest'
+@description('Tag every custom image this deployment references was published under. Pinned to a released version on purpose — NOT \'latest\'. A customer deploying this template months from now must get exactly the build that was tested and published as that version, not whatever happens to be sitting in the registry that day; \'latest\' also makes "which version is broken?" unanswerable on a support call. The release pipeline (.github/workflows/release.yml) rewrites this default to the version being released, so the published template always names its own build.')
+param imageTag string = '1.0.0'
 
 @description('Registry username. Leave blank if the registry allows anonymous/public pull (e.g. a public GHCR package) — no registry credentials are configured in that case.')
 @secure()
@@ -910,6 +910,11 @@ resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: containerAppEnv.id
     configuration: {
+      // Required for stickySessions below — Container Apps rejects sticky-session affinity outright
+      // (ContainerAppInvalidIngressStickySessionRevisionMode) under the platform default 'Multiple'
+      // revisions mode. This app has no multi-revision traffic-splitting use case, so pinning to
+      // 'Single' costs nothing here.
+      activeRevisionsMode: 'Single'
       secrets: concat([
         { name: 'postgres-password', value: postgresPassword }
         { name: 'jwt-signing-key', value: jwtSigningKey }
@@ -919,6 +924,15 @@ resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
         external: true
         targetPort: 80
         transport: 'auto'
+        // segueApp scales to multiple replicas (see scale below); without this, Container Apps' own
+        // ingress load-balances each request independently, so a SignalR negotiate on one replica
+        // followed by its connect/long-poll landing on another fails with "No Connection with that ID"
+        // on every transport — the replica that took the connect has never heard of that connection.
+        // The Redis SignalR backplane (FHIRBridge.Api's Program.cs) fans messages out across replicas but
+        // doesn't fix this: it's the connection itself, not just messages, that only replica A knows about.
+        stickySessions: {
+          affinity: 'sticky'
+        }
         // Phase 1: Disabled registers the hostname without a cert (required before managed cert).
         // Phase 2: SniEnabled + certificateId after bindCustomDomainCertificates=true.
         customDomains: !empty(segueAppCustomDomain) ? [
@@ -953,7 +967,18 @@ resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ApiBaseUrl', value: 'http://127.0.0.1:5000/' }
             { name: 'AllowedHosts', value: '*' }
             { name: 'Swagger__Enabled', value: 'true' }
-          ], !useAzureCacheForRedis ? [
+          ], !empty(segueAppCustomDomain) ? [
+            // The OAuth redirect_uri (OAuthController.BuildCallbackUri et al.) is registered verbatim with
+            // each EHR — it must be exactly this fixed, known-correct value regardless of what Host/Scheme
+            // Front Door's WAF (which overrides originHostHeader to this app's own default FQDN — see
+            // frontDoorOrigin below) or Container Apps ingress present to the app. Only set when a custom
+            // domain is actually configured: direct-to-container access with no WAF/Front Door in front has
+            // no proxy lying about the Host header, so Request.Scheme/Host is already correct there and the
+            // app's own fallback handles it without this override. This only seeds the INITIAL value
+            // (SystemSettingsSeeder) — an operator can later correct it live from Settings > System
+            // Settings > OAuth (e.g. after moving to a new custom domain) with no redeploy needed.
+            { name: 'OAuth__PublicBaseUrl', value: 'https://${segueAppCustomDomain}' }
+          ] : [], !useAzureCacheForRedis ? [
             { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
           ] : [], enableTenantSecretsKeyVault ? [
             { name: 'KeyVault__UseAzureKeyVault', value: 'true' }
@@ -1292,12 +1317,11 @@ var frontDoorManifestItems = enableFrontDoorWaf ? [
 ] : []
 
 // Every resource this deployment created, in a dependency-safe DELETION order (children before
-// their parents — e.g. the Container Apps before the environment they run in). Azure keeps this
-// output in the deployment's own history (`az deployment group show --name main --query
-// properties.outputs.resourceManifest.value`) indefinitely, with no extra resource needed to store
-// it — cleanup.sh|ps1 reads this first and deletes exactly these IDs in order, falling back to a
-// tag-based scan only if this deployment record isn't found (e.g. deployment history was purged).
-output resourceManifest array = concat(
+// their parents — e.g. the Container Apps before the environment they run in). Extracted to a var
+// (not left inline in the output below) so deploymentManifest's own "resources" property can reuse
+// the exact same list without duplicating this expression — Bicep outputs can't reference each
+// other directly.
+var resourceManifestItems = concat(
   postgresManifestItems,
   redisManifestItems,
   seqManifestItems,
@@ -1326,3 +1350,35 @@ output resourceManifest array = concat(
   enableTenantSecretsKeyVault ? [tenantSecretsKeyVault.id] : [],
   frontDoorManifestItems
 )
+
+// Azure keeps this output in the deployment's own history (`az deployment group show --name main
+// --query properties.outputs.resourceManifest.value`) indefinitely, with no extra resource needed
+// to store it — cleanup.sh|ps1 reads this first and deletes exactly these IDs in order, falling
+// back to a tag-based scan only if this deployment record isn't found (e.g. deployment history was
+// purged).
+output resourceManifest array = resourceManifestItems
+
+@description('Every non-secret setting this deployment was run with, plus the same resourceManifest list above, in one object — read back by containerization/scripts/update-application.ps1|sh and upgrade-resources.ps1|sh (via `az deployment group show --name main --query properties.outputs.deploymentManifest.value`) so a later version update or resize does not need these re-entered and cannot silently drift back to main.bicep\'s defaults. Deliberately excludes every @secure() parameter (postgresPassword, jwtSigningKey, redisPassword, image registry credentials) — Azure never exposes those back through this or any other mechanism, so those 3 always have to be supplied fresh by whoever runs update-application/upgrade-resources. schemaVersion exists so a future breaking change to this shape (e.g. the planned Managed<->Containerized migration tooling) can detect and handle an older manifest instead of misreading it.')
+output deploymentManifest object = {
+  schemaVersion: 1
+  namePrefix: namePrefix
+  location: location
+  imageTag: imageTag
+  imageRegistryServer: imageRegistryServer
+  useAzurePostgresql: useAzurePostgresql
+  azurePostgresqlSku: azurePostgresqlSku
+  azurePostgresqlStorageMb: azurePostgresqlStorageMb
+  postgresSize: postgresSize
+  useAzureCacheForRedis: useAzureCacheForRedis
+  azureCacheForRedisTier: azureCacheForRedisTier
+  redisSize: redisSize
+  segueAppSize: segueAppSize
+  workerSize: workerSize
+  enableTenantSecretsKeyVault: enableTenantSecretsKeyVault
+  storageRedundancy: storageRedundancy
+  enableSeq: enableSeq
+  seqSize: seqSize
+  enableFrontDoorWaf: enableFrontDoorWaf
+  wafPolicyMode: wafPolicyMode
+  resources: resourceManifestItems
+}

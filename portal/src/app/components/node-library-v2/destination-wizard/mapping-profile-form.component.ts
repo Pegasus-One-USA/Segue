@@ -1,7 +1,7 @@
 import { Component, input, signal, computed, effect, untracked, inject } from '@angular/core';
 import { DestinationColumn, DestinationTable } from '../../../services/destination-schema.service';
 import { MappingCatalogService, FhirElement, resolveParentReferenceField } from '../../../services/mapping-catalog.service';
-import { isJsonSafeForColumn } from './field-mapping/field-mapping-model';
+import { isJsonSafeForColumn, isSqlFamilyDestType } from './field-mapping/field-mapping-model';
 
 // ── Resource / field definitions (from HTML prototype) ─────────────────────────
 
@@ -179,7 +179,7 @@ export class MappingProfileFormComponent {
   // reference field to both. A resource can have several parents at once (see _reconcileParentRefRows).
   readonly parentSelections = signal<Record<string, string[]>>({});
 
-  readonly isSql   = computed(() => this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres');
+  readonly isSql   = computed(() => isSqlFamilyDestType(this.destType()));
   readonly isMongo = computed(() => this.destType() === 'mongo');
 
   /** Resource field/target definition — the built-in catalog entry, or a generic fallback for any other resource. */

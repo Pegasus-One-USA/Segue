@@ -426,14 +426,71 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
             return;
         }
 
+        // FHIR repeats primitives everywhere — name.given, address.line, and every other 0..* string element —
+        // so the value at a rule's path is often an ARRAY of strings rather than one string. Every element is a
+        // string with a perfectly good masked/hashed form, but the scalar-only check further down matched only
+        // JsonValue and skipped the whole node: a mask rule on "$.name[*].given[*]" did nothing at all while the
+        // sibling rule on "$.name[*].family" worked, so unredacted given names and street lines reached the
+        // destination under a policy the UI showed as active — the silent failure de-identification can least
+        // afford.
+        //
+        // Only arrays that actually carry strings are handled here. An array of OBJECTS (name, identifier, ...)
+        // falls through to the behaviour below, where Redact still removes it wholesale rather than quietly
+        // leaving the objects in place.
+        if (current is JsonArray array && array.Any(element => element is JsonValue v && v.TryGetValue<string>(out _)))
+        {
+            // A MIXED array — some strings, some not — is the one shape this branch must not half-handle under
+            // Redact. Transforming the strings and returning would leave every non-string element in place, and
+            // an object element carries exactly the identifying text the rule exists to remove: ["Camila",
+            // {"text":"Camila Maria"}] would write the token over the first and pass the second through, under a
+            // policy the UI reports as active. Before arrays were handled at all, Redact removed the whole
+            // property here, so half-handling it would be a straight regression on the one strategy whose
+            // contract is "this value is gone". Fall through to that wholesale removal instead.
+            //
+            // Mask and Hash deliberately do NOT fall through: they have no meaningful form for a non-string (the
+            // same reason the scalar path below leaves numbers, bools and objects alone), and deleting data under
+            // a "mask" rule would be a bigger surprise than leaving it. They transform every string element and
+            // leave the rest — strictly more than the nothing-at-all they did before this branch existed.
+            var hasNonString = array.Any(element => element is not JsonValue v || !v.TryGetValue<string>(out _));
+            if (!(hasNonString && strategy == DeIdentificationStrategy.Redact))
+            {
+                for (var i = 0; i < array.Count; i++)
+                {
+                    if (array[i] is JsonValue element && element.TryGetValue<string>(out var elementRaw))
+                    {
+                        array[i] = TransformScalar(elementRaw, strategy, configJson);
+                    }
+                }
+
+                return;
+            }
+        }
+
         if (strategy == DeIdentificationStrategy.Redact)
         {
-            parent[property] = TransformScalar(string.Empty, strategy, configJson);
+            // A replacement token is a STRING, so it can only stand in for a string. Writing "[REDACTED]" over
+            // a boolean or a number produces a value the rest of the pipeline cannot carry: the destination
+            // column it maps to is typed (Patient.active -> a bit column), so every row of that resource fails
+            // to insert — and because the writer isolates per-record failures rather than throwing, the whole
+            // resource silently lands nothing. It is invalid FHIR too: a FHIR-native destination rejects
+            // "active": "[REDACTED]" outright.
+            //
+            // Removing the property instead keeps the intent (the value is gone) and is type-safe everywhere:
+            // the mapped column simply comes through null. Strings are unaffected and still get the token.
+            if (current is JsonValue redactValue && redactValue.TryGetValue<string>(out _))
+            {
+                parent[property] = TransformScalar(string.Empty, strategy, configJson);
+            }
+            else
+            {
+                parent.Remove(property);
+            }
+
             return;
         }
 
-        // Every remaining strategy rewrites a string in place; a non-string (number, bool, object, array) has
-        // no meaningful masked/hashed form, so it is left exactly as it was.
+        // Every remaining strategy rewrites a string in place. A number, bool, object or array-of-objects has no
+        // meaningful masked/hashed form, so it is left exactly as it was — an array of strings was handled above.
         if (current is JsonValue value && value.TryGetValue<string>(out var raw))
         {
             parent[property] = TransformScalar(raw, strategy, configJson);
@@ -463,7 +520,15 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
     };
 
     private static string Hash(string value)
-        => "anon-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..16].ToLowerInvariant();
+        => PseudonymPrefix + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..16].ToLowerInvariant();
+
+    /// <summary>
+    /// Marks a value as a pseudonym rather than a real identifier. Constant, so anything that shortens one of
+    /// these for display has to keep it whole and spend its budget on the hash that follows — see
+    /// <c>MappedSqlServerDestinationWriter.Abbreviate</c>, where counting this against the limit left three
+    /// varying characters and made every de-identified id look alike.
+    /// </summary>
+    internal const string PseudonymPrefix = "anon-";
 
     private static string Mask(string value, int keepLength)
         => value.Length <= keepLength ? value : new string('*', value.Length - keepLength) + value[^keepLength..];

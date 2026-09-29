@@ -52,6 +52,7 @@
           [externalQuery]="searchQuery()"
           (addFreeColumn)="onAddFreeColumn(card.resource, card.tableName, $event)"
           (openAddColumn)="openAddColumnModal(card.resource, card.tableName)"
+          (loadDestinationPayload)="openLoadDestinationPayloadModal(card.resource, card.tableName)"
           (columnActivate)="onColumnActivate(card.resource, card.tableName, $event)"
           (columnClick)="onTargetFieldClick(card.resource, card.tableName, $event)"
           (positionChange)="onCardPositionChange(card.tableName, $event)"
@@ -86,6 +87,8 @@
         [workflowId]="workflowId()"
         [dataTypeForTable]="dataTypeForTable()"
         [totalSourceCount]="(popoverRow()?.sources ?? []).length"
+        [isDocumentDestination]="destType() === 'mongo'"
+        [childArrayLabel]="popoverChildArrayLabel()"
         (save)="onPopoverSave($event)"
         (remove)="onPopoverRemove()"
         (closed)="closePopover()"
@@ -184,9 +187,9 @@
                   </button>
                 }
                 <!-- Mongo has no schema to author (no columns to define), so a typed name that isn't an
-                     already-listed collection is offered straight from the search box — no modal needed,
-                     matching MappedMongoDestinationWriter's own "customer owns the destination" contract
-                     (existing unless "Create collection if not exists" is checked on the destination). -->
+                     already-listed collection is offered straight from the search box — no modal needed.
+                     A name typed here need not exist yet: MappedMongoDestinationWriter creates a missing
+                     collection on its first write. -->
                 @if (destType() === 'mongo' && addTableSearchQuery().trim() && !filteredTablesToAdd(primaryResource).includes(addTableSearchQuery().trim())) {
                   <button type="button" class="fm-add-table-option" (click)="onAddTableSelectChange(primaryResource, addTableSearchQuery().trim())">
                     ＋ Use "{{ addTableSearchQuery().trim() }}" as a new collection
@@ -298,6 +301,7 @@
 
   @if (creatingNewTable()) {
     <app-field-mapping-create-table-modal
+      [destType]="destType()"
       [existingTables]="sqlTableOptions()"
       [columnsForTable]="columnsForTable()"
       [submitting]="creatingTableSubmitting()"
@@ -309,6 +313,7 @@
 
   @if (addColumnTarget(); as t) {
     <app-field-mapping-add-column-modal
+      [destType]="destType()"
       [tableName]="t.tableName"
       [submitting]="addColumnSubmitting()"
       [error]="addColumnError()"
@@ -330,6 +335,7 @@
 
   @if (editColumnTarget(); as t) {
     <app-field-mapping-edit-column-modal
+      [destType]="destType()"
       [tableName]="t.tableName"
       [currentColumnName]="t.columnName"
       [currentDataType]="dataTypeForTable()(t.tableName, t.columnName)"
@@ -349,6 +355,16 @@
       (submitted)="submitLoadPayload($event)"
       (resetToOriginal)="onResetToOriginalPayload()"
       (cancelled)="closeLoadPayloadModal()"
+    />
+  }
+
+  @if (loadDestinationPayloadTarget(); as target) {
+    <app-field-mapping-load-destination-payload-modal
+      [tableLabel]="target.tableName || target.resource"
+      [submitting]="loadDestinationPayloadSubmitting()"
+      [error]="loadDestinationPayloadError()"
+      (submitted)="submitLoadDestinationPayload($event)"
+      (cancelled)="closeLoadDestinationPayloadModal()"
     />
   }
 

@@ -1,4 +1,4 @@
-namespace FHIRBridge.Application.Abstractions.Destinations;
+﻿namespace FHIRBridge.Application.Abstractions.Destinations;
 
 /// <summary>
 /// Per-run information threaded into every <see cref="IConfiguredDestinationWriter.WriteAsync"/> call. Serves two
@@ -26,10 +26,31 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// part in reference resolution/auto-fetch instead of being skipped as external. Null when the source is ambiguous
 /// or unknown, in which case every absolute reference keeps being treated as external, exactly as before.
 /// </param>
+/// <param name="PipelineRunId">
+/// This run's own id. Exists specifically for <c>MappedApiEndpointDestinationWriter</c>'s multi-resource
+/// accumulator, which needs to identify the run even when <c>records</c> is empty (a resource type this run
+/// genuinely produced zero records for still has to register that fact with the accumulator, or that resource
+/// type's slot never completes — see that writer's own remarks) — every other writer instead reads it off
+/// <c>MappedDestinationRecord.PipelineRunId</c>, which only exists when there's at least one record. Defaults to
+/// <see cref="Guid.Empty"/> for every caller that hasn't been updated to pass the real one; only
+/// <c>ConfiguredPipelineService</c> and the Runtime plane's destination executors currently do.
+/// </param>
+/// <param name="UserIdentity">
+/// The stable identifier of the end user whose interactive sign-in authorized this run — a third-party app's own
+/// account id for the person, supplied as <c>userIdentity</c> when the launch URL was minted and permanently bound
+/// to one FHIR patient in <c>UserFhirContextBindings</c>. Carried here so a push destination can emit a
+/// self-identifying payload: a consumer receiving pushed records otherwise knows only the EHR's own patient id and
+/// has to maintain its own mapping back to whoever it called the person. Distinct from the Runtime plane's
+/// <c>WorkflowExecutionContext.CallerId</c>, which is an opaque per-browser session key used for token-cache
+/// lookup and deliberately differs between two sign-ins by the same person. Null for every non-interactive trigger
+/// (scheduled and webhook runs have no signed-in user), in which case a consumer sees no such field at all.
+/// </param>
 public sealed record PipelineWriteContext(
     bool AllowInlineDelivery,
     string RouteName,
     DateTimeOffset RunStartedAtUtc,
     string? CorrelationId = null,
     Func<string, string, CancellationToken, Task<string?>>? FetchMissingReferenceAsync = null,
-    string? SourceBaseUrl = null);
+    string? SourceBaseUrl = null,
+    Guid PipelineRunId = default,
+    string? UserIdentity = null);

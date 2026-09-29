@@ -1,4 +1,4 @@
-using FHIRBridge.Domain.Entities.Governance;
+﻿using FHIRBridge.Domain.Entities.Governance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -13,15 +13,17 @@ public sealed class ErrorLogConfiguration : IEntityTypeConfiguration<ErrorLog>
 
         builder.Property(x => x.Severity).HasMaxLength(20).IsRequired();
         builder.Property(x => x.ExceptionType).HasMaxLength(200).IsRequired();
-        builder.Property(x => x.Message).HasMaxLength(2000).IsRequired();
-        builder.Property(x => x.StackTrace).HasMaxLength(4000);
+        // Unbounded: the Errors screen's "What happened" text and its technical details must show the whole
+        // message/stack trace, so these are stored in full rather than clipped to a fixed width.
+        builder.Property(x => x.Message).IsRequired();
+        builder.Property(x => x.StackTrace);
         builder.Property(x => x.Module).HasMaxLength(100);
         builder.Property(x => x.CorrelationId).HasMaxLength(100);
 
         // ── Phase 6A – Enterprise Global Exception Management ────────────────────
         builder.Property(x => x.ErrorReferenceId).HasMaxLength(40);
         builder.Property(x => x.Category).HasMaxLength(40);
-        builder.Property(x => x.UserFriendlyMessage).HasMaxLength(1000);
+        builder.Property(x => x.UserFriendlyMessage);
         builder.Property(x => x.ExecutionId).HasMaxLength(100);
         builder.Property(x => x.WorkflowId).HasMaxLength(100);
         builder.Property(x => x.EndpointId).HasMaxLength(200);

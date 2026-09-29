@@ -49,6 +49,16 @@ public sealed class ForgotPasswordResetPasswordTests
         // Safe default — no test here cares about tenant display name specifically.
         _tenantRepository.Setup(x => x.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Tenant?)null);
+
+        // Both real ICurrentUserService implementations (HttpContextCurrentUserService,
+        // SystemCurrentUserService) always return a non-null CurrentUserInfo, so an unconfigured mock
+        // returning null is a test artifact rather than a state production can reach. It matters here
+        // because ForgotPasswordAsync builds the reset link from CurrentUser.RequestOrigin: a null would
+        // throw inside the try/catch that guards email delivery, silently skipping the send the tests
+        // assert on. RequestOrigin is left null — no test here exercises a trusted-origin link, and that
+        // is the value the Worker's own non-HTTP implementation reports.
+        _currentUser.Setup(x => x.CurrentUser).Returns(
+            new CurrentUserInfo(null, Email, null, Roles: [], IsAuthenticated: false));
     }
 
     private LocalAuthService Service() => new(

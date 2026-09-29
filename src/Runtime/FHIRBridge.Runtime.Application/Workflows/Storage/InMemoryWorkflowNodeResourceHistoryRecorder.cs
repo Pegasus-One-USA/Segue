@@ -19,8 +19,38 @@ public sealed class InMemoryWorkflowNodeResourceHistoryRecorder : IWorkflowNodeR
         object? payload,
         CancellationToken cancellationToken)
     {
-        var payloadJson = JsonSerializer.Serialize(payload);
-        var itemCount = payload is System.Collections.ICollection collection ? collection.Count : (int?)null;
+        // Mirrors the SQL-backed recorder: counts only, never the payload itself (see
+        // EfWorkflowNodeResourceHistoryRecorder.SummarizePayload for why the old ICollection test never matched).
+        var items = (payload as System.Collections.IEnumerable)
+            ?? payload?.GetType().GetProperties()
+                .FirstOrDefault(property =>
+                    typeof(System.Collections.IEnumerable).IsAssignableFrom(property.PropertyType)
+                    && property.PropertyType != typeof(string))
+                ?.GetValue(payload) as System.Collections.IEnumerable;
+
+        int? itemCount = null;
+        SortedDictionary<string, int>? byType = null;
+        if (items is not null)
+        {
+            var count = 0;
+            foreach (var item in items)
+            {
+                count++;
+                if (item?.GetType().GetProperty("ResourceType")?.GetValue(item) is string resourceType
+                    && !string.IsNullOrWhiteSpace(resourceType))
+                {
+                    byType ??= new SortedDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                    byType[resourceType] = byType.TryGetValue(resourceType, out var current) ? current + 1 : 1;
+                }
+            }
+
+            itemCount = count;
+        }
+
+        var resourceTypeCountsJson = byType is null ? null : JsonSerializer.Serialize(byType);
+        var deliveryDetailJson = string.Equals(contract, "DestinationWriteResult", StringComparison.Ordinal)
+            ? JsonSerializer.Serialize(payload)
+            : null;
 
         lock (_gate)
         {
@@ -29,8 +59,9 @@ public sealed class InMemoryWorkflowNodeResourceHistoryRecorder : IWorkflowNodeR
                 workflowNodeRunId,
                 nodeType,
                 contract,
-                payloadJson,
                 itemCount,
+                resourceTypeCountsJson,
+                deliveryDetailJson,
                 DateTimeOffset.UtcNow)));
         }
 
@@ -80,16 +111,31 @@ public sealed class InMemoryWorkflowNodeResourceHistoryRecorder : IWorkflowNodeR
             var take = Math.Clamp(pageSize, 1, 200);
             var skip = Math.Max(0, (page - 1) * take);
 
+            // Named arguments: the two trailing JSON strings were previously passed positionally and in the
+            // wrong order, putting delivery detail into ResourceTypeCountsJson and vice versa. Naming them
+            // makes that class of mistake impossible to repeat as the record grows.
+            // WorkflowNodeId has no meaning here — this recorder stores payloads keyed by node RUN and never
+            // sees the definition node — so it is left empty rather than invented.
             var items = matching.Skip(skip).Take(take).Select(dto => new WorkflowNodeRunHistoryDto(
-                dto.WorkflowNodeRunId, dto.NodeType, 0, 0, "Succeeded", null,
-                dto.RecordedAtUtc, dto.RecordedAtUtc, dto.Contract, dto.PayloadJson, dto.ItemCount)).ToList();
+                WorkflowNodeRunId: dto.WorkflowNodeRunId,
+                WorkflowNodeId: Guid.Empty,
+                NodeType: dto.NodeType,
+                Rank: 0,
+                SubRank: 0,
+                Status: "Succeeded",
+                ErrorMessage: null,
+                StartedAt: dto.RecordedAtUtc,
+                CompletedAt: dto.RecordedAtUtc,
+                Contract: dto.Contract,
+                ItemCount: dto.ItemCount,
+                ResourceTypeCountsJson: dto.ResourceTypeCountsJson,
+                DeliveryDetailJson: dto.DeliveryDetailJson)).ToList();
 
             return Task.FromResult(new WorkflowPagedResult<WorkflowNodeRunHistoryDto>(items, matching.Count, page, take));
         }
     }
 
-    /// <summary>Not durable/encrypted here (this recorder never encrypts), so this is just a lookup of the same
-    /// in-memory payload the SQL-backed store would otherwise decrypt on demand.</summary>
+    /// <summary>Counts only, matching the SQL-backed store — no node output is retained by either.</summary>
     public Task<WorkflowNodeRunPayloadDetailDto?> GetNodeRunPayloadAsync(
         Guid workflowRunId, Guid workflowNodeRunId, CancellationToken cancellationToken)
     {
@@ -103,7 +149,8 @@ public sealed class InMemoryWorkflowNodeResourceHistoryRecorder : IWorkflowNodeR
 
             return Task.FromResult(match is null
                 ? null
-                : new WorkflowNodeRunPayloadDetailDto(match.WorkflowNodeRunId, match.Contract, match.PayloadJson, match.ItemCount));
+                : new WorkflowNodeRunPayloadDetailDto(
+                    match.WorkflowNodeRunId, match.Contract, match.ItemCount, match.ResourceTypeCountsJson, match.DeliveryDetailJson));
         }
     }
 
@@ -124,5 +171,27 @@ public sealed class InMemoryWorkflowNodeResourceHistoryRecorder : IWorkflowNodeR
     public Task<IReadOnlyList<ResourceTypeSummaryDto>> GetLineageResourceTreeAsync(Guid workflowRunId, CancellationToken cancellationToken)
     {
         return Task.FromResult<IReadOnlyList<ResourceTypeSummaryDto>>([]);
+    }
+
+    // Empty, like the other lineage reads above: this recorder keeps node payloads only and never held field
+    // lineage, so there is nothing to break down.
+    // Empty: this recorder holds node payloads only and has no access to workflow configuration.
+    public Task<IReadOnlyList<ConfiguredResourceTypeRulesDto>> GetConfiguredResourceTypeRulesAsync(
+        Guid workflowRunId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<ConfiguredResourceTypeRulesDto>>([]);
+    }
+
+    public Task<IReadOnlyList<ConfiguredResourceTypeRulesDto>> GetConfiguredDeIdentificationRulesAsync(
+        Guid workflowRunId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<ConfiguredResourceTypeRulesDto>>([]);
+    }
+
+    public Task<IReadOnlyDictionary<Guid, NodeLineageBreakdownDto>> GetNodeLineageBreakdownAsync(
+        Guid workflowRunId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyDictionary<Guid, NodeLineageBreakdownDto>>(
+            new Dictionary<Guid, NodeLineageBreakdownDto>());
     }
 }

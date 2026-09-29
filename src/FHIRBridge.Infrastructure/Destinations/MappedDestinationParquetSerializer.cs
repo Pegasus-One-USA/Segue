@@ -17,10 +17,21 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// </summary>
 internal static class MappedDestinationParquetSerializer
 {
-    public static async Task<byte[]> SerializeAsync(
+    public static Task<byte[]> SerializeAsync(
         IReadOnlyCollection<MappedDestinationRecord> records, CancellationToken cancellationToken)
+        => SerializeAsync(records, MappedDestinationSerialization.GetColumns(records), cancellationToken);
+
+    /// <summary>
+    /// Writes exactly the columns given, in order. The Warehouse load needs this: its COPY INTO names the target
+    /// table's columns, so the staged file must carry those and only those — the lineage columns
+    /// <see cref="MappedDestinationSerialization.GetColumns"/> prepends do not exist in a customer-owned table,
+    /// and COPY INTO rejects the file rather than ignoring them.
+    /// </summary>
+    public static async Task<byte[]> SerializeAsync(
+        IReadOnlyCollection<MappedDestinationRecord> records,
+        IReadOnlyList<string> columns,
+        CancellationToken cancellationToken)
     {
-        var columns = MappedDestinationSerialization.GetColumns(records);
         var dataFields = columns.Select(column => new DataField<string>(column)).ToArray();
         var schema = new ParquetSchema(dataFields.Cast<Field>().ToArray());
 

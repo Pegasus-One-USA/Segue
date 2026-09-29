@@ -35,7 +35,8 @@ public sealed class PatientApplicationStrategy : SourceApplicationStrategyBase
         RequiresRedirectUri: true,
         RequiresLaunchToken: false,
         RequiresTrustedIssuerAllowList: false,
-        SupportsRefreshToken: true);
+        SupportsRefreshToken: true,
+        PortalAudienceSlug: "patient");
 
     public override Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
         _interactive.GetAccessTokenAsync(source, cancellationToken);

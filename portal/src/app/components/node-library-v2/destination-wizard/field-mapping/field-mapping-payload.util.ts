@@ -68,6 +68,162 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object' && !Array.isArray(v);
 }
 
+// ── Destination-side "Load JSON payload" (file-shaped destinations: CSV/Blob/Data Lake/Fabric/API
+// Endpoint) — paste the target system's OWN expected body shape and get back BOTH a flat column list
+// AND a ready-to-use Request Body Template (for the ApiEndpoint destination specifically — every other
+// file-shaped type has no template concept and just ignores templateJson).
+//
+// The whole point of loading a payload here is that the user should never have to hand-write
+// {{ColumnName}} placeholders themselves — MappedApiEndpointDestinationWriter.SubstituteInPlace only
+// ever replaces text that already IS a {{placeholder}}, so a template built from the pasted example's
+// OWN literal values (as-is) would send that same literal example back on every real call, which is
+// exactly the confusing "it always sends the sample data" failure mode this exists to prevent. Instead
+// buildTemplateNode below reconstructs the SAME nested shape the user pasted, but with every leaf value
+// replaced by the exact {{ColumnName}} placeholder for that leaf — using the identical path→PascalCase
+// naming pushLeaf uses for the source side, so a template placeholder always matches a real column name.
+// Deliberately NOT resource/FHIR-aware like parseSourcePayloadJson above: this is an arbitrary partner
+// JSON shape, not a FHIR resource, so there is no resourceType/Bundle special-casing and no per-field
+// ResourceFieldDef — just names and a template, for a destination that only ever asked for those.
+export type ParseDestinationPayloadResult =
+  | { ok: true; columns: string[]; templateJson: string; note?: string }
+  | { ok: false; error: string };
+
+export function parseDestinationPayloadJson(raw: string): ParseDestinationPayloadResult {
+  const text = raw.trim();
+  if (!text) return { ok: false, error: 'Paste a sample JSON body first.' };
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return { ok: false, error: 'That is not valid JSON — check for a missing brace, quote, or comma.' };
+  }
+
+  if (!isPlainObject(payload)) {
+    return { ok: false, error: 'Paste a single JSON object — the shape of one record your destination expects.' };
+  }
+
+  // A Request Body Template normally describes exactly ONE record — MappedApiEndpointDestinationWriter
+  // applies it once per record, and it's the destination's own "Payload shape" setting (Envelope/JSON
+  // array) that wraps N of those into a batch. Pasting an already-batched example (an envelope like
+  // { meta: {...}, records: [...] }) as-is would build a template that puts an array — and that array's
+  // own envelope fields — INSIDE the per-record loop, nesting a whole second envelope inside every record
+  // instead of producing one.
+  //
+  // MappedApiEndpointDestinationWriter now understands exactly this shape, though: a template whose top
+  // level is precisely { "meta": {...}, "records": [ <one record> ] } — with the destination's Payload
+  // shape set to Envelope — has its "meta" substituted ONCE for the whole batch, against the batch's first
+  // record's mapped values (every record in a batch shares one mapping profile/resource type, so the first
+  // record's values are representative), and its "records[0]" substituted once per record. So when the
+  // pasted payload has that literal shape, this PRESERVES it (rather than discarding "meta" the way an
+  // unrecognized shape still has to) — every meta FIELD becomes a regular mappable column too (prefixed
+  // "Meta" so it's visually distinct from the record columns on the same card, but dragged onto exactly
+  // the same way), with the one exception of recordCount, which has no per-record source to drag from at
+  // all (it's a fact about the whole batch) and is always filled in automatically instead.
+  const metaEntry = isPlainObject(payload['meta']) ? (payload['meta'] as Record<string, unknown>) : null;
+  const recordsEntry = Array.isArray(payload['records']) ? (payload['records'] as unknown[]) : null;
+  const isRecognizedEnvelope = !!metaEntry && !!recordsEntry && recordsEntry.some(isPlainObject)
+    && Object.keys(payload).length === 2;
+
+  // Any OTHER shape with exactly one array-of-objects property (a different key than "records", or extra
+  // sibling keys FHIRBridge's envelope substitution doesn't know how to place) still can't be sent as-is —
+  // fall back to the older behavior: build the template from the array item's shape alone, and tell the
+  // caller to pick Payload shape manually, same as before this envelope shape was supported.
+  const arrayOfObjectsEntries = Object.entries(payload).filter(
+    ([, v]) => Array.isArray(v) && v.some(isPlainObject));
+  const isUnrecognizedBatchEnvelope = !isRecognizedEnvelope
+    && arrayOfObjectsEntries.length === 1 && Object.keys(payload).length > 1;
+
+  const columns: string[] = [];
+  let note: string | undefined;
+  let templateJson: string;
+
+  if (isRecognizedEnvelope) {
+    const recordShape = mergeShapes(recordsEntry!);
+    const recordTemplate = buildTemplateNode(recordShape, '', columns);
+    const metaTemplate = buildMetaTemplateNode(metaEntry!, columns);
+    templateJson = JSON.stringify({ meta: metaTemplate, records: [recordTemplate] }, null, 2);
+    note = `Detected a batch envelope ("meta"/"records") — meta fields became mappable "Meta…" columns `
+      + `alongside your record columns (drag a source field onto them the same way); recordCount is filled `
+      + `in automatically and isn't mappable. Set this destination's Payload shape (Configure step) to `
+      + `"Envelope" to match.`;
+  } else if (isUnrecognizedBatchEnvelope) {
+    const [key, items] = arrayOfObjectsEntries[0];
+    const recordShape = mergeShapes(items as unknown[]);
+    const recordTemplate = buildTemplateNode(recordShape, '', columns);
+    templateJson = JSON.stringify(recordTemplate, null, 2);
+    note = `Detected a batch envelope ("${key}": [...]) — built the template from one record inside it, `
+      + `not the envelope itself. Set this destination's Payload shape (Configure step) to "Envelope" or `
+      + `"JSON array" to get that wrapping automatically; don't include it in the template yourself.`;
+  } else {
+    templateJson = JSON.stringify(buildTemplateNode(payload, '', columns), null, 2);
+  }
+
+  if (!columns.length) {
+    return { ok: false, error: 'That JSON object has no fields.' };
+  }
+
+  return { ok: true, columns, templateJson, note };
+}
+
+/** Builds the "meta" half of an envelope template — every top-level field becomes a regular mappable
+ *  column via buildTemplateNode, namespaced under "meta." (so e.g. "resourceType" becomes column
+ *  "MetaResourceType", never colliding with a same-named record column) and dragged onto exactly like any
+ *  other column. recordCount is the one exception: MappedApiEndpointDestinationWriter.BuildEnvelope fills
+ *  it in from the real batch size, since there is no per-record field a user could ever drag onto it —
+ *  offering it as a column would just be a column that can never resolve to anything. */
+function buildMetaTemplateNode(metaEntry: Record<string, unknown>, columns: string[]): Record<string, unknown> {
+  const obj: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metaEntry)) {
+    obj[key] = key.toLowerCase() === 'recordcount'
+      ? '{{recordCount}}'
+      : buildTemplateNode(value, `meta.${key}`, columns);
+  }
+  return obj;
+}
+
+/** Same recursion shape as walk() above (object → recurse, array of objects → merge shapes and recurse,
+ *  array of primitives/leaf → one column) minus every FHIR-specific concern (no resourceType exclusion,
+ *  no per-field label/valueType/arrays bookkeeping) — collects the flat column-name list into `columns`
+ *  as a side effect while building the parallel template tree (every leaf's example value replaced by
+ *  its own {{ColumnName}} placeholder, matching what ApiEndpointSender.SubstituteInPlace can actually
+ *  substitute — see MappedApiEndpointDestinationWriter's exact-placeholder vs. embedded-placeholder
+ *  handling). An array of objects keeps exactly one representative element (its merged shape) since the
+ *  mapping model is flat columns → one scalar value per record, not per-array-item substitution. */
+function buildTemplateNode(value: unknown, cum: string, columns: string[]): unknown {
+  if (Array.isArray(value)) {
+    if (!value.length) return [];
+    const first = value.find(v => v !== null && v !== undefined);
+    if (first === undefined) return [];
+    if (isPlainObject(first)) {
+      return [buildTemplateNode(mergeShapes(value), cum, columns)];
+    }
+    if (Array.isArray(first)) return []; // arrays of arrays have no meaningful shape to mirror — skipped.
+    const column = pathToColumn(cum);
+    columns.push(column);
+    return [`{{${column}}}`];
+  }
+
+  if (isPlainObject(value)) {
+    const obj: Record<string, unknown> = {};
+    for (const [key, v] of Object.entries(value)) {
+      obj[key] = buildTemplateNode(v, cum ? `${cum}.${key}` : key, columns);
+    }
+    return obj;
+  }
+
+  const column = pathToColumn(cum);
+  columns.push(column);
+  return `{{${column}}}`;
+}
+
+/** Matches pushLeaf's own column-naming convention exactly (path.split('.').map(capitalize).join('')),
+ *  so a column loaded this way is indistinguishable from one the source-payload/catalog side would
+ *  have produced for the same field name. */
+function pathToColumn(path: string): string {
+  return path.split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+}
+
 /**
  * A single (non-Bundle) object is accepted as-is regardless of its own `resourceType` — the "resource"
  * here is just this canvas's data-group name (Step 2's selection), not necessarily a literal FHIR

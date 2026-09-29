@@ -94,6 +94,16 @@ internal static partial class MySqlDdlTypeValidator
         {
             ["datetime2"] = ("datetime", null),
             ["uniqueidentifier"] = ("char(36)", 36),
+            // The Edit-column modal feeds a column's own live-probed type straight back as a candidate value
+            // — MySQL's information_schema.columns.DATA_TYPE for an existing sized VARCHAR/CHAR column is the
+            // bare word "varchar"/"char", with the actual length in a SEPARATE column
+            // (CHARACTER_MAXIMUM_LENGTH) this validator is never handed. Unlike PostgreSQL, MySQL's own DDL
+            // syntax has no length-less VARCHAR/CHAR at all (bare "VARCHAR" is a syntax error), so this can't
+            // just pass the bare word through — "text" is the safe choice instead: it can hold anything the
+            // original bounded column could, so an untouched re-save only ever WIDENS the column, never
+            // truncates existing data.
+            ["varchar"] = ("text", null),
+            ["char"] = ("text", null),
         };
 
     private static readonly HashSet<string> FixedDataTypes = new(StringComparer.OrdinalIgnoreCase)

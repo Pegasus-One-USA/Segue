@@ -93,6 +93,27 @@ public sealed class TransformationRuleService : ITransformationRuleService
             return ToDto(rule);
         }
 
+        // An edit must not move a rule onto an address another rule already occupies. Two rules sharing a
+        // natural key defeat FindByNaturalKeyAsync's `matches.Count == 1` guard: it then returns null for that
+        // key forever, so every later id-less save inserts ANOTHER clone instead of updating — the duplicate
+        // quietly multiplies, and deleting the row on screen leaves the others in effect. Rejected rather than
+        // merged, because silently folding two rules into one would discard whichever config lost.
+        // Only when the edit actually MOVES the rule. A config-only edit — the common case — cannot collide
+        // with anything, so it neither needs this lookup nor should pay for a full list query on every save.
+        if (IsRetargeted(existing, request)
+            && await AnyOtherRuleOccupiesAddressAsync(request, existing.Id, cancellationToken))
+        {
+            throw new InvalidOperationException(
+                "Another rule already applies to that resource type and source field for this node type. "
+                + "Edit that rule instead, or delete it first.");
+        }
+
+        // Re-point the rule before rewriting what it does: Update covers only the latter, so without this an
+        // edit that moved a rule to a different resource type or source field was accepted, returned 200, and
+        // persisted nothing but the config — the authoring screens showed the row snapping back unchanged.
+        existing.Retarget(
+            request.Scope, request.DestinationType, request.ResourceType,
+            request.DestinationField, request.SourceSystem, request.SourceField);
         existing.Update(
             configJson, request.Order, request.OnNull, request.ErrorPolicy,
             request.OnNullDefaultValue, request.ArrayMode, request.FhirWriteBackJsonPath,
@@ -101,6 +122,52 @@ public sealed class TransformationRuleService : ITransformationRuleService
         await _repository.UpdateAsync(existing, cancellationToken);
         return ToDto(existing);
     }
+
+    /// <summary>
+    /// Whether any rule OTHER than <paramref name="movingRuleId"/> already sits at the address this request
+    /// describes.
+    ///
+    /// Deliberately not <see cref="FindByNaturalKeyAsync"/>: that returns null when MORE than one rule matches
+    /// (it refuses to pick between pre-existing duplicates), which as a collision test reads "the address is
+    /// free" precisely when it is the most crowded — letting a move add a third copy to an address that is
+    /// already broken. Counting answers the question actually being asked.
+    /// </summary>
+    private async Task<bool> AnyOtherRuleOccupiesAddressAsync(
+        SaveTransformationRuleRequest request, Guid movingRuleId, CancellationToken cancellationToken)
+    {
+        var candidates = await _repository.ListAsync(
+            request.Scope, request.DestinationType, request.ResourceType, request.DestinationField,
+            request.ResourcePipelineRouteId, request.SourceSystem, request.SourceField,
+            request.ExecutionPhase, cancellationToken);
+
+        // ListAsync treats a null argument as "do not filter on this", and a de-identification rule has null
+        // DestinationField, DestinationType, SourceSystem and ResourcePipelineRouteId — so what comes back is a
+        // SUPERSET of the address. FindByNaturalKeyAsync tolerated that because it demanded exactly one match;
+        // an "any match" test would reject legitimate edits on the strength of a row that merely shares the
+        // filtered-on fields. Re-check the whole address here rather than trusting the query to have narrowed it.
+        return candidates.Any(rule =>
+            rule.Id != movingRuleId
+            && rule.NodeType == request.NodeType
+            && rule.DeIdentificationProfileId == request.DeIdentificationProfileId
+            && rule.Scope == request.Scope
+            && rule.DestinationType == request.DestinationType
+            && rule.ResourcePipelineRouteId == request.ResourcePipelineRouteId
+            && string.Equals(rule.ResourceType, request.ResourceType, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(rule.DestinationField, request.DestinationField, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(rule.SourceSystem, request.SourceSystem, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(rule.SourceField, request.SourceField, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Whether this save moves the rule to a different address — the fields <see
+    /// cref="TransformationRule.Retarget"/> rewrites. False for a config-only edit, which cannot collide with
+    /// another rule and so skips the natural-key lookup entirely.</summary>
+    private static bool IsRetargeted(TransformationRule existing, SaveTransformationRuleRequest request)
+        => existing.Scope != request.Scope
+            || existing.DestinationType != request.DestinationType
+            || !string.Equals(existing.ResourceType, request.ResourceType, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(existing.DestinationField, request.DestinationField, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(existing.SourceSystem, request.SourceSystem, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(existing.SourceField, request.SourceField, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The single rule already stored for this request's identity — scope plus everything that
     /// addresses it (destination type, resource type, destination field, route, source system, source field,

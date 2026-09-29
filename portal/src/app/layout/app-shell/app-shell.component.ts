@@ -1,4 +1,4 @@
-import { Component, signal, inject, OnInit, HostListener } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, HostListener } from '@angular/core';
 import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { SidebarComponent } from '../../dashboard/layout/sidebar/sidebar.component';
@@ -9,6 +9,7 @@ import { DialogOutletComponent } from '../../core/components/dialog-outlet/dialo
 import { AppInitService } from '../../onboarding/services/app-init.service';
 import { AuthService } from '../../auth/services/auth.service';
 import { SettingsPageDialogService } from '../../settings/services/settings-page-dialog.service';
+import { LayoutService } from '../../services/layout.service';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':                    'Dashboard',
@@ -44,19 +45,19 @@ export class AppShellComponent implements OnInit {
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
   private readonly appInit = inject(AppInitService);
   private readonly auth = inject(AuthService);
+  private readonly layoutSvc = inject(LayoutService);
 
   protected readonly sidebarCollapsed = signal(false);
   protected readonly pageTitle        = signal('Dashboard');
+  // Focused (Medplum-inspired): no topbar, no footer, account menu moves to the foot of the sidebar
+  // instead — see LayoutService, SidebarComponent and UserMenuComponent's anchor='sidebar' mode.
+  protected readonly layoutFocused     = computed(() => this.layoutSvc.mode() === 'focused');
 
   // Server-enforced license gate's UI mirror (see AppInitService.refreshLicenseGate / Program.cs's
   // license-gate middleware) — every non-exempt API action already 403s while this is false; this just
   // makes the reason visible instead of leaving the admin to guess from a wall of failed requests.
   protected readonly licenseActive = this.appInit.licenseActive;
   protected readonly licenseState  = this.appInit.licenseState;
-
-  // Suppresses the working-area overlay on the License Settings page itself — otherwise an inactive
-  // license would make the one screen that lets an admin fix it unreachable too.
-  protected readonly onLicenseSettingsPage = signal(false);
 
   protected isAdminUser(): boolean {
     return this.auth.isAdmin();
@@ -83,10 +84,6 @@ export class AppShellComponent implements OnInit {
 
   private updateTitle(url: string): void {
     const cleanUrl = url.split('?')[0];
-    // Still the dev-mint page specifically: License itself is now a dialog (see openLicenseDialog), which
-    // renders above the lock overlay anyway, but /settings/license/mint-dev is a real route that must stay
-    // reachable while the app is locked — that page is how a license gets applied in a dev environment.
-    this.onLicenseSettingsPage.set(cleanUrl.startsWith('/settings/license/mint-dev'));
 
     if (PAGE_TITLES[cleanUrl]) {
       this.pageTitle.set(PAGE_TITLES[cleanUrl]);

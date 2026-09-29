@@ -28,6 +28,22 @@ if (!builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(Environmen
 // output run as a systemd service on Linux or a Windows Service, with `dotnet run` unaffected.
 builder.Host.UseWindowsService().UseSystemd();
 
+// Lets /api/apitest/auth/client-certificate see a TLS-presented client certificate at all — without this,
+// HttpContext.Connection.ClientCertificate is always null on every request, even a perfectly valid one, because
+// Kestrel never asks the client for one. AllowCertificate (not RequireCertificate) so every other route — which
+// never presents a client cert — is unaffected. Only takes effect when this app is reached directly over HTTPS by
+// its own Kestrel listener; a reverse proxy in front of it would need to forward the client cert itself.
+// ClientCertificateValidation is overridden to accept any certificate Kestrel is handed: the self-signed test
+// certificate ApiTestClientCertificateStore mints has no trusted root, so the default chain-building validation
+// would reject it outright. Actual verification happens where it matters — the endpoint pins the presented
+// certificate's thumbprint against ApiTestClientCertificateStore.Thumbprint — so skipping chain validation here
+// doesn't weaken anything; this app never uses the client certificate for anything beyond that thumbprint check.
+builder.WebHost.ConfigureKestrel(options => options.ConfigureHttpsDefaults(https =>
+{
+    https.ClientCertificateMode = Microsoft.AspNetCore.Server.Kestrel.Https.ClientCertificateMode.AllowCertificate;
+    https.ClientCertificateValidation = (_, _, _) => true;
+}));
+
 var allowedFrontendOrigin = builder.Configuration["AllowedFrontendOrigin"] ?? "http://localhost:5501";
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? "Server=localhost,1433;Database=HealthAppDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True";
@@ -48,6 +64,11 @@ builder.Services.AddSingleton<ProviderStandaloneCallerIdStore>();
 // Access tokens issued by this app's own client-credentials endpoint (see DataLakeWebhookEndpoints).
 // Singleton so the token endpoint and the webhook receiver see the same set.
 builder.Services.AddSingleton<DataLakeTokenStore>();
+// Same pattern, for ApiAuthTestEndpoints' own OAuth2ClientCredentials mode and its self-signed mTLS test
+// certificate — see ApiTestOAuth2TokenStore/ApiTestClientCertificateStore for why these are separate from the
+// Data Lake Webhook's own token store.
+builder.Services.AddSingleton<ApiTestOAuth2TokenStore>();
+builder.Services.AddSingleton<ApiTestClientCertificateStore>();
 builder.Services.AddHttpClient("Workflow");
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy => policy
     .WithOrigins(allowedFrontendOrigin)
@@ -424,26 +445,36 @@ app.MapGet("/api/provider-in-app-launch-context", async (
     //
     // Best-effort: this app cannot usefully block a real EHR launch on its own pre-flight failing, and a refusal
     // is already recorded server-side as a ValidationFailed row.
+    //
+    // Only the INBOUND launch leg is pre-flighted. The frontend calls this same endpoint again on the post-OAuth
+    // return leg (to re-resolve standaloneBaseUrl) and deliberately omits iss there — that leg launches nothing, so
+    // validating it minted a correlation id and a Validated run row for an attempt that could never execute,
+    // stranding one orphaned Execution History entry per launch. iss is the launch leg's own marker (see
+    // launch-provider-in-app.ts's ngOnInit, which passes it only when the EHR supplied iss+launch), so gating on it
+    // pre-flights exactly the calls that go on to hand the browser off to the EHR.
     string? attemptCorrelationId = null;
-    try
+    if (!string.IsNullOrWhiteSpace(iss))
     {
-        var validateResponse = await client.PostAsync(
-            $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/validate-run",
-            new StringContent(
-                JsonSerializer.Serialize(new { patientId = (string?)null, patientSearchCriteria = (string?)null, callerId = (string?)null }),
-                Encoding.UTF8,
-                "application/json"));
-
-        if (validateResponse.IsSuccessStatusCode)
+        try
         {
-            var validation = JsonSerializer.Deserialize<ValidateRunResult>(
-                await validateResponse.Content.ReadAsStringAsync(), jsonOptions);
-            attemptCorrelationId = validation?.CorrelationId;
+            var validateResponse = await client.PostAsync(
+                $"{baseUrl.TrimEnd('/')}/api/v1/workflows/{workflowId}/validate-run",
+                new StringContent(
+                    JsonSerializer.Serialize(new { patientId = (string?)null, patientSearchCriteria = (string?)null, callerId = (string?)null }),
+                    Encoding.UTF8,
+                    "application/json"));
+
+            if (validateResponse.IsSuccessStatusCode)
+            {
+                var validation = JsonSerializer.Deserialize<ValidateRunResult>(
+                    await validateResponse.Content.ReadAsStringAsync(), jsonOptions);
+                attemptCorrelationId = validation?.CorrelationId;
+            }
         }
-    }
-    catch (Exception ex)
-    {
-        logger.LogWarning(ex, "validate-run pre-flight could not be completed for ProviderInAppWorkflowId={WorkflowId}.", workflowId);
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "validate-run pre-flight could not be completed for ProviderInAppWorkflowId={WorkflowId}.", workflowId);
+        }
     }
 
 
@@ -806,6 +837,10 @@ app.MapDelete("/api/epic-session", (HttpContext http, SessionStore sessions, Epi
 
 app.MapBackendSystemEndpoints();
 
+// Pipeline-run lineage lookup — GET /api/pipeline-runs/{runId}/patients returns the Patient_NewMapped rows
+// stamped with that FHIRBridge PipelineRunId, so a workflow run can be inspected by run id after the fact.
+app.MapPipelineRunPatientEndpoints();
+
 // "New 11" menu data — read-only GETs over the curated _11 tables, available to any authenticated role.
 app.MapResource11Endpoints();
 
@@ -814,6 +849,15 @@ app.MapResource11Endpoints();
 // (server-to-server, no session cookie); see DataLakeWebhookEndpoints for the optional
 // DataLakeWebhook:AuthMode credential check.
 app.MapDataLakeWebhookEndpoints();
+
+// Four sample third-party APIs (single object / array / envelope / arbitrary partner-shaped event) so
+// FHIRBridge's ApiEndpoint destination can be pointed at each one end to end — see ApiEndpointTestEndpoints.
+app.MapApiEndpointTestEndpoints();
+
+// One receive endpoint per auth mode the ApiEndpoint destination supports (None/Bearer/ApiKeyHeader/ApiKeyQuery/
+// Basic/HmacSha256/OAuth2ClientCredentials/ClientCertificate), always live simultaneously with fixed, documented
+// test credentials — see ApiAuthTestEndpoints.
+app.MapApiAuthTestEndpoints();
 
 // SPA fallback: any GET that doesn't match a mapped route or an existing static file resolves to
 // index.html instead of 404ing, so Angular's client-side routes work on refresh/deep link. Fallback

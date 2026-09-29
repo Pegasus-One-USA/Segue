@@ -5,23 +5,25 @@ namespace FHIRBridge.Infrastructure.Licensing;
 /// license token, as an SubjectPublicKeyInfo blob base64-encoded (i.e. exactly what
 /// <c>ECDsa.ExportSubjectPublicKeyInfo()</c> produces).
 ///
-/// DEV-ONLY KEYPAIR — checked in only so `dotnet test`, local dev, and
-/// <c>tools/FHIRBridge.LicenseMinter</c> (via its <c>--dev-key</c> flag) work out of the box with no
-/// external setup. The matching private key lives only in the minting tool's dev-fallback config,
-/// clearly commented there as throwaway/never-for-real-customers. It was generated once, ad hoc, via:
-/// <code>
-/// using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-/// var publicKeyBase64 = Convert.ToBase64String(ecdsa.ExportSubjectPublicKeyInfo());
-/// var privateKeyBase64 = Convert.ToBase64String(ecdsa.ExportPkcs8PrivateKey());
-/// </code>
+/// PRODUCTION KEY — matches the private key in the real PegasusOne FHIRBridge Licensing PFX (10-year
+/// self-signed cert, CN=PegasusOne FHIRBridge Licensing, generated 2026-09-21). The private key is held
+/// ONLY in that PFX, configured as FHIRBridge-LicenseServer's <c>LicenseSigning:PfxPath</c>/
+/// <c>PfxPassword</c> — never in source control, never in this repo. Deliberately NOT read from any
+/// config file here either (see this class's own history/PR discussion): the trusted public key must be
+/// compiled into the shipped binary, not attacker-editable via a config file an install's own
+/// filesystem access could reach — that would let anyone who can edit config mint themselves a
+/// "valid" license against their own keypair. <c>tools/FHIRBridge.LicenseMinter</c>'s <c>--dev-key</c>
+/// flag still uses its own separate, clearly-marked throwaway dev keypair for local testing, and
+/// <c>tests/FHIRBridge.UnitTests/Licensing/SignedLicenseValidatorTests</c> validates against its own
+/// throwaway keypair via <c>SignedLicenseValidator.ValidateWithPublicKey</c> — neither has ever matched
+/// this constant, and neither needs to.
 ///
-/// Before shipping to the first real customer, PegasusOne MUST generate a production keypair, store the
-/// private key ONLY in Key Vault (never in source control, never in this tool's config), and replace
-/// <see cref="PublicKeyBase64"/> below with the new public key. Every license token signed with the dev
-/// private key above will stop validating the moment that swap happens — which is the point.
+/// Rotating this requires re-issuing every license already minted against the old key: every deployed
+/// FHIRBridge install stops trusting that old key the instant it upgrades to a build with this constant
+/// changed.
 /// </summary>
 public static class LicensePublicKey
 {
     public const string PublicKeyBase64 =
-        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJzDmVl5Hl9OkqGclWNjRQkIwDw/XVwpsqGQoXN5+ffgh28DCw4PJc3Lof+tDWzkM3xywf3xsblKUzPp+ZdrCaw==";
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5hSsY3VXxFDV03RxN4P4aFkCrgTeMB5op1N+MaUrd0KtUww8vcEFUqezfhJ5DFh9wmACnTYoCqiQDbdIDRHIAg==";
 }

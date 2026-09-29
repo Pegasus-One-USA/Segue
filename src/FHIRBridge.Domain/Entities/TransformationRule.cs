@@ -174,6 +174,49 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         ExpectedValueType = expectedValueType;
     }
 
+    /// <summary>
+    /// Re-points an existing rule at a different address — which resource type, field or source it applies to.
+    ///
+    /// <see cref="Update"/> deliberately rewrites only what a rule DOES (its config and failure handling), so
+    /// for a long time saving an edited rule silently kept its original address: the authoring screens let you
+    /// change the resource and source field, the save returned HTTP 200, and the row came back unchanged. The
+    /// de-identification editor is the clearest case — resource and source field are the only things it lets
+    /// you edit besides the mode, so "edit" appeared to do nothing at all.
+    ///
+    /// What a rule IS stays fixed: node type, execution phase and de-identification profile are not re-pointed
+    /// here. Those decide which engine runs the rule and under whose policy, so changing them makes it a
+    /// different rule that should be authored as one, rather than something an in-place edit mutates.
+    /// </summary>
+    public void Retarget(
+        TransformScope scope,
+        DestinationType? destinationType,
+        string? resourceType,
+        string? destinationField,
+        string? sourceSystem,
+        string? sourceField)
+    {
+        // The same two invariants the constructor enforces — an edit must not be a way around them.
+        if (ExecutionPhase == TransformExecutionPhase.PreMapping
+            && scope is not (TransformScope.Global or TransformScope.ResourceType))
+        {
+            throw new ArgumentException(
+                "Pre-mapping rules are only valid at Global or ResourceType scope.", nameof(scope));
+        }
+
+        if (ExecutionPhase == TransformExecutionPhase.FhirResource && string.IsNullOrWhiteSpace(sourceField))
+        {
+            throw new ArgumentException(
+                "FHIR-resource rules must declare a SourceField — the FHIR path the rule reads.", nameof(sourceField));
+        }
+
+        Scope = scope;
+        DestinationType = destinationType;
+        ResourceType = resourceType;
+        DestinationField = destinationField;
+        SourceSystem = sourceSystem;
+        SourceField = sourceField;
+    }
+
     /// <summary>Binds a rule authored before its workflow existed to that workflow, once it does.
     ///
     /// A builder session can author rules before the workflow has ever been saved and so has no id — the rule

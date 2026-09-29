@@ -124,22 +124,8 @@ export const SETTINGS_ROUTES: Routes = [
       // so License is SuperAdmin-only now; it was previously roleGuard ['SuperAdmin','Admin'], matching
       // LicenseController's UnifiedAdmin policy, which still accepts Admin. An Admin who is not a SuperAdmin
       // therefore no longer has any UI path to License, even though the API would still serve them.
-      // The dev-mint route below deliberately keeps its own roleGuard and is still reachable directly.
-      {
-        // ⚠ TEMPORARY / DEV-ONLY — backs the "Dev: Mint a test license" page, linked from the License
-        // settings screen's "Dev: Mint a test license →" button. Same roleGuard/roles as the 'license'
-        // route above (already verified to match the backend's UnifiedAdmin policy) — the actual
-        // security boundary is server-side (DevLicenseMintingController 404s outside Development), not
-        // this route guard. Delete this route alongside license-dev-mint.component.* once minting moves
-        // to its own separate internal tool.
-        path: 'license/mint-dev',
-        canActivate: [roleGuard],
-        data: { roles: ['SuperAdmin', 'Admin'] },
-        loadComponent: () =>
-          import('./pages/license-dev-mint/license-dev-mint.component').then(
-            m => m.LicenseDevMintComponent
-          ),
-      },
+      // NOTE: the 'license/mint-dev' route (the temporary "Dev: Mint a test license" page) was removed —
+      // license minting now happens exclusively via the standalone FHIRBridge-LicenseServer tool.
       {
         // Merges the formerly-standalone Email Settings, System Settings, and System Security tabs into
         // one screen with a section per former tab. General/Security remain SuperAdmin-role-only (they

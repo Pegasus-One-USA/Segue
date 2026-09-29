@@ -41,6 +41,7 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-pdf',         rank: 7, category: 'File',         destinationType: 'Pdf',            name: 'PDF Report',         sub: 'Render a PDF report.',              permissionPrefix: 'sourceconnections' },
   { id: 'dest-sftp',        rank: 7, category: 'Delivery',     destinationType: 'Sftp',           name: 'SFTP',               sub: 'Deliver files over SFTP.',          permissionPrefix: 'sftp' },
   { id: 'dest-restapi',     rank: 7, category: 'Delivery',     destinationType: 'RestApi',        name: 'REST API',           sub: 'POST to an outbound REST endpoint.', permissionPrefix: 'sourceconnections' },
+  { id: 'dest-apiendpoint', rank: 7, category: 'Delivery',     destinationType: 'ApiEndpoint',     name: 'API Endpoint',       sub: 'Fully configurable outbound API — auth, batching, retry.', permissionPrefix: 'sourceconnections' },
   { id: 'dest-inmemory',    rank: 7, category: 'Delivery',     destinationType: 'InMemory',       name: 'In-memory (test)',   sub: 'Sink for testing — discards output.', permissionPrefix: 'sourceconnections' },
   { id: 'audit-lineage',    rank: 8, category: 'Audit & Lineage', name: 'Audit & Lineage', sub: 'Hash-chained audit + record-level lineage.' },
   { id: 'hedis',            rank: 9, category: 'Analytics',    name: 'HEDIS Measure Report', sub: 'Compute HEDIS quality measures.' },

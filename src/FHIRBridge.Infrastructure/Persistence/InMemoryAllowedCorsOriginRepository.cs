@@ -13,6 +13,25 @@ public sealed class InMemoryAllowedCorsOriginRepository : IAllowedCorsOriginRepo
         Task.FromResult<IReadOnlyList<AllowedCorsOrigin>>(
             _store.Values.OrderBy(x => x.OriginUrl).ToArray());
 
+    public Task<PagedResult<AllowedCorsOrigin>> GetPagedAsync(
+        string? search, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        IEnumerable<AllowedCorsOrigin> query = _store.Values;
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(x =>
+                x.OriginUrl.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || (x.Label is not null && x.Label.Contains(term, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        var ordered = query.OrderBy(x => x.OriginUrl).ToArray();
+        var items = ordered.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
+
+        return Task.FromResult(new PagedResult<AllowedCorsOrigin>(items, ordered.Length, page, pageSize));
+    }
+
     public Task<AllowedCorsOrigin?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
         _store.TryGetValue(id, out var origin);

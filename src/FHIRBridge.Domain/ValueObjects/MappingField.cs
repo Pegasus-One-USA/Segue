@@ -25,6 +25,12 @@ public sealed record MappingField(
     // take (e.g. "8480-6" for BP systolic). Ignored for every other ArrayPolicy.
     string? CorrelationCodeJsonPath = null,
     string? CorrelationCodeValue = null,
+    // How CorrelationCodeValue is compared against each array item's sibling code element — "Equals" (the
+    // default, including null: every CorrelateByCode field saved before this existed relied on exact
+    // match), "Contains" (case-insensitive substring), or "NotEquals". Mirrors MappingFieldDto's own member
+    // of the same name exactly (see JsonMappingEngine.MatchesCorrelationOperator); ignored for every other
+    // ArrayPolicy, same as the two members above.
+    string? CorrelationCodeOperator = null,
     string? ParentTable = null,
     string? ParentKeyColumn = null,
     string? ForeignKeyColumn = null,

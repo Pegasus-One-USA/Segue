@@ -9,7 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 import { MappingRow } from '../../../components/node-library/destination-wizard/mapping-profile-form.component';
-import { checkColumnTypeCompatibility } from '../../../components/node-library/destination-wizard/field-mapping/field-mapping-model';
+import { checkColumnTypeCompatibility, isSqlFamilyDestType } from '../../../components/node-library/destination-wizard/field-mapping/field-mapping-model';
 import { MappingProfileCanvasComponent } from '../mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component';
 import { MappingProfileService } from '../../services/mapping-profile.service';
 import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
@@ -342,7 +342,7 @@ export class MappingProfileDialogV2Component {
     const rows = this.mappingForm()?.rowsRich() ?? [];
     if (rows.length === 0) return errors;
 
-    const isSqlFamily = this.destType() === 'sql' || this.destType() === 'mysql' || this.destType() === 'postgres';
+    const isSqlFamily = isSqlFamilyDestType(this.destType());
     const tables = this.sqlTables();
     const knownTables = isSqlFamily && tables.length > 0 ? new Set(tables.map(t => t.fullName)) : null;
     const targetCounts = new Map<string, number>();

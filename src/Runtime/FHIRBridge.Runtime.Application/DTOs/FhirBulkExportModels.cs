@@ -47,6 +47,34 @@ public sealed record BulkExportPollResult(
     string? ErrorMessage = null,
     IReadOnlyList<BulkExportFile>? ErrorFiles = null);
 
+/// <summary>One operator-facing read of a <c>$export</c> status URL (see
+/// <see cref="Abstractions.Connectors.IFhirBulkExportClient.GetStatusAsync"/>). Preserves what
+/// <see cref="BulkExportPollResult"/> deliberately drops — the <c>X-Progress</c> header and the manifest's
+/// <c>transactionTime</c>/<c>request</c> — none of which the poller needs to decide what to do next, but all of
+/// which an operator watching a long-running export does. Kept separate from <see cref="BulkExportPollResult"/> so
+/// the poller's decision path is untouched by a presentation concern.
+///
+/// <para>Two genuinely different shapes, because the server returns two: while the job runs, Bulk Data servers
+/// answer 202 with NO body at all (Epic included), so <see cref="Files"/> is empty and <see cref="Progress"/> —
+/// the free-text <c>X-Progress</c> header, e.g. "Searched 0 of 2 patients" — is the only detail available. The
+/// manifest, and with it every per-type entry, exists only once the job completes.</para></summary>
+public sealed record BulkExportStatusSnapshot(
+    BulkExportPollStatus Status,
+    /// <summary>The <c>X-Progress</c> header verbatim. Null on a completed job and on any server that doesn't
+    /// send it — it's an optional header in the Bulk Data spec, and only some vendors (Epic reliably) populate it.</summary>
+    string? Progress = null,
+    IReadOnlyList<BulkExportFile>? Files = null,
+    IReadOnlyList<BulkExportFile>? ErrorFiles = null,
+    /// <summary>The manifest's <c>transactionTime</c> — the instant the server's data is current as of. Completed
+    /// jobs only.</summary>
+    DateTimeOffset? TransactionTime = null,
+    /// <summary>The manifest's <c>request</c> — the original <c>$export</c> kick-off URL, echoed back by the
+    /// server. Completed jobs only.</summary>
+    string? Request = null,
+    bool? RequiresAccessToken = null,
+    TimeSpan? RetryAfter = null,
+    string? ErrorMessage = null);
+
 /// <summary>Status of a single bulk-export poll attempt.</summary>
 public enum BulkExportPollStatus
 {
@@ -105,6 +133,44 @@ public static class BulkExportScopes
         return resourceTypes is { Count: 1 } && resourceTypes.Any(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase))
             ? null
             : resourceTypes;
+    }
+}
+
+/// <summary>Extraction of the source vendor's own export-job id from a Bulk Data status URL, so the portal can show
+/// it and an operator can look the job up on the vendor's side.</summary>
+public static class BulkRequestIds
+{
+    /// <summary>
+    /// The last non-empty path segment of a <c>$export</c> status URL — for Epic,
+    /// <c>https://host/instance/api/FHIR/BulkRequest/0000000000176E6DC7DB51C0082DA988</c> yields
+    /// <c>0000000000176E6DC7DB51C0082DA988</c>. Query string and any trailing slash are ignored.
+    ///
+    /// <para>Deliberately vendor-neutral last-segment parsing rather than an Epic-shaped pattern: every Bulk Data
+    /// server puts the job's own identifier at the end of the status URL it hands back, so this yields a usable id
+    /// for athenahealth and eCW too, and branching per vendor here would be the wrong shape (see the no-switch rule
+    /// the architecture tests enforce).</para>
+    ///
+    /// <para>Returns null for anything unparseable, which is not an error condition: the id is a convenience for
+    /// operators, and <c>BulkExportJob.StatusUrl</c> remains the job's actual identity for polling and resume.</para>
+    /// </summary>
+    public static string? FromStatusUrl(string? statusUrl)
+    {
+        if (string.IsNullOrWhiteSpace(statusUrl))
+        {
+            return null;
+        }
+
+        // Absolute is what a conformant server returns in Content-Location; the relative fallback keeps a
+        // non-conformant (or test/stub) server from silently yielding nothing.
+        var path = Uri.TryCreate(statusUrl, UriKind.Absolute, out var absolute)
+            ? absolute.AbsolutePath
+            : statusUrl.Split('?', '#')[0];
+
+        var lastSegment = path
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .LastOrDefault();
+
+        return string.IsNullOrWhiteSpace(lastSegment) ? null : lastSegment;
     }
 }
 

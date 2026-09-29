@@ -22,6 +22,15 @@ export interface Transform {
    *  dedicated permission group; every other Transform (non-destination steps, and destination types
    *  with no dedicated group) is ungated here. */
   permissionPrefix?: string;
+  /** Groups this entry under another catalog entry in the Node Library picker, which renders it as an
+   *  expandable parent with its surfaces nested beneath (e.g. Microsoft Fabric → OneLake Files / Warehouse).
+   *
+   *  Set on the CHILD, naming the parent's id. A parent is any entry that at least one other entry points at;
+   *  it is a heading, never itself selectable, so it needs no flag of its own and no wizard route. Vendors
+   *  whose surfaces differ enough to be separate destination types — different protocol, different
+   *  capabilities — use this so the picker shows one vendor row instead of several sibling rows that read as
+   *  unrelated products. A vendor with a single surface sets nothing and stays a plain flat row. */
+  parentId?: string;
 }
 
 /** V2's simplified straight-chain sequence: Source → Destination → [Mapping →] Transformation →

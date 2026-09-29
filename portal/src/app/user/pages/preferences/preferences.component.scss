@@ -1,3 +1,4 @@
+@use '../../../_page-content' as *;
 :host {
   display: block;
   min-height: 100%;
@@ -16,7 +17,7 @@
 .breadcrumb-root { color: var(--color-muted); cursor: pointer; &:hover { color: var(--color-primary); } }
 .breadcrumb-sep  { color: #CBD5E1; }
 .breadcrumb-page { color: #1E293B; font-weight: 600; }
-.dash-content { flex: 1; overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+.dash-content { flex: 1; overflow-y: auto; }
 
 .page-header {
   display: flex; align-items: center; justify-content: space-between;

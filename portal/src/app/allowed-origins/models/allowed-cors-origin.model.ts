@@ -7,6 +7,20 @@ export interface AllowedCorsOrigin {
   createdBy: string | null;
 }
 
+/** One server-side page of origins. Mirrors the API's PagedResult<AllowedCorsOriginDto>. */
+export interface AllowedCorsOriginPage {
+  items: AllowedCorsOrigin[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AllowedCorsOriginFilter {
+  search?: string;
+  page: number;
+  pageSize: number;
+}
+
 export interface CreateAllowedCorsOriginRequest {
   originUrl: string;
   label: string | null;

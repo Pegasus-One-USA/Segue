@@ -221,6 +221,10 @@ export interface MappingFieldRequest {
   // items by position. Ignored for every other arrayPolicy.
   correlationCodeJsonPath?: string | null;
   correlationCodeValue?: string | null;
+  // How correlationCodeValue is compared against the sibling element — "Equals" (the default, including
+  // null/omitted: every CorrelateByCode field saved before this operator existed relied on exact match),
+  // "Contains" (case-insensitive substring), or "NotEquals". Ignored for every other arrayPolicy.
+  correlationCodeOperator?: string | null;
   // Mirrors the remaining MappingFieldDto members (docs/backend/14-mapping-profile-master-screen-plan.md §3.2) —
   // MaxLength/Precision/Scale are deliberately excluded, since the backend documents them as never persisted on
   // the profile itself, only filled in at pipeline run time from the destination's live schema.
@@ -334,6 +338,10 @@ export interface WorkflowSummary {
    *  for its life. Null for workflows created before numbering existed, or while numbering is switched off.
    *  Unlike `name`, this is unique — it is what the UI quotes when identifying one workflow among duplicates. */
   workflowNumber?: string | null;
+  /** Every distinct destination type this workflow writes to — a list, since a workflow can fan out. */
+  destinationTypes?: string[] | null;
+  /** Every FHIR resource type this workflow's source nodes name in their stored configuration. */
+  resourceTypes?: string[] | null;
 }
 
 /** Server-side page of /workflows/summary — items is just this page's rows, totalCount is the full matching-row
@@ -346,6 +354,13 @@ export interface WorkflowSummaryPage {
   availableStatuses: string[];
   availableApplicationTypes: string[];
   availableSourceSystemTypes: string[];
+  /** Destination types configured in this tenant (from the destination catalog the builder offers), not merely
+   *  the ones some workflow already writes to — a just-configured destination is filterable immediately. */
+  availableDestinationTypes: string[];
+  /** Every WorkflowRunStatus value, not only those observed, so the option list never shifts under the user. */
+  availableLastRunStatuses: string[];
+  /** Every FHIR resource type named by any source node's stored configuration. */
+  availableResourceTypes: string[];
 }
 
 export interface WorkflowSummaryQuery {
@@ -357,6 +372,9 @@ export interface WorkflowSummaryQuery {
   statuses?: string[];
   applicationTypes?: string[];
   sourceSystemTypes?: string[];
+  destinationTypes?: string[];
+  lastRunStatuses?: string[];
+  resourceTypes?: string[];
 }
 
 export interface WorkflowLaunchUrl {
@@ -431,6 +449,9 @@ export class WorkflowApiService {
     for (const value of query.statuses ?? []) params = params.append('statuses', value);
     for (const value of query.applicationTypes ?? []) params = params.append('applicationTypes', value);
     for (const value of query.sourceSystemTypes ?? []) params = params.append('sourceSystemTypes', value);
+    for (const value of query.destinationTypes ?? []) params = params.append('destinationTypes', value);
+    for (const value of query.lastRunStatuses ?? []) params = params.append('lastRunStatuses', value);
+    for (const value of query.resourceTypes ?? []) params = params.append('resourceTypes', value);
     const context = silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
     return this.http.get<WorkflowSummaryPage>(WORKFLOW_ENDPOINTS.summary, { params, context });
   }

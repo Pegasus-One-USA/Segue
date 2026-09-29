@@ -1,9 +1,11 @@
-import { Component, input, inject, computed } from '@angular/core';
+import { Component, input, output, inject, computed } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthStore } from '../../../auth/store/auth.store';
 import { BrandingService } from '../../../services/branding.service';
 import { PermissionService } from '../../../auth/services/permission.service';
 import { TERMINOLOGY_FEATURE_ENABLED, TERMINOLOGY_PERMISSION_CODES } from '../../../data/terminology-feature.config';
+import { LayoutService } from '../../../services/layout.service';
+import { UserMenuComponent } from '../../../user/components/user-menu/user-menu.component';
 
 interface NavItem {
   type: 'item';
@@ -85,16 +87,22 @@ const NAV_ENTRIES: NavEntry[] = [
 @Component({
   selector: 'app-sidebar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, UserMenuComponent],
   templateUrl: './sidebar.component.html',
   styleUrl: './sidebar.component.scss',
 })
 export class SidebarComponent {
   readonly collapsed = input(false);
+  /** Emits when the user clicks the sidebar's own collapse toggle — only rendered in the 'focused'
+   *  layout, which has no topbar hamburger to drive AppShellComponent's sidebarCollapsed signal
+   *  instead. Named sidebarToggle, not toggle: `toggle` collides with the native DOM `<details>`
+   *  toggle event (@angular-eslint/no-output-native). */
+  readonly sidebarToggle = output<void>();
 
   private readonly store = inject(AuthStore);
   private readonly permissions = inject(PermissionService);
   protected readonly branding = inject(BrandingService);
+  protected readonly layout   = inject(LayoutService).mode;
 
   // Same visibility rule as permissionGuard: admins always pass; otherwise the item needs at
   // least one of its required permissions (no `permissions` = visible to everyone logged in).

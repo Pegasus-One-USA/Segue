@@ -8,8 +8,4 @@ public sealed class InMemoryDataLineageService : IDataLineageService
 {
     public Task<DataLineageDto?> GetLineageAsync(Guid resourceRecordId, CancellationToken cancellationToken)
         => Task.FromResult<DataLineageDto?>(null);
-
-    public Task<LineageFieldValueDto> RevealFieldValueAsync(
-        Guid resourceRecordId, string targetField, CancellationToken cancellationToken)
-        => Task.FromResult(new LineageFieldValueDto(targetField, null));
 }

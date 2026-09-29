@@ -4,6 +4,8 @@
    utility classes, and base styles.
    ============================================================ */
 
+@import 'sweetalert2/dist/sweetalert2.min.css';
+
 /* ─── Angular Material M3 Token Overrides ─────────────────────────────────── */
 html {
   /* Colors reference the semantic tier (:root) so Material follows the theme. */
@@ -271,6 +273,23 @@ html {
   --space-11: 28px;
   --space-12: 32px;
 
+  /* ── Page gutter ─────────────────────────────────────────────────────
+     The ONE place the routed-page edge inset is defined. Every page in the
+     right-hand content area gets its padding from these tokens via the
+     `.shell-content > *` rule further down — pages must NOT declare their own
+     page-level padding, or changing the app's gutter stops being a one-line edit.
+     Deliberately hairline: 8px is the floor that still clears the cards' 12px
+     border-radius, so a card reads as a card floating on the background rather
+     than as a clipped rendering artifact. No responsive override — already at
+     the floor, there is nothing left to shrink on a small screen. */
+  --page-gutter-x: var(--space-8);
+  --page-gutter-y: var(--space-4);
+
+  /* Routed pages are uncapped (edge-to-edge) by design; only text-heavy FORM pages
+     keep a reading measure, since a form spanning a 1900px monitor is hard to scan.
+     Tables do not use this — they degrade to .table-wrapper's overflow-x instead. */
+  --page-max-width-form: 1280px;
+
   /* ── Shadows ── */
   --shadow-xs: 0 1px 4px rgba(0, 0, 0, 0.04);
   --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -309,6 +328,66 @@ html {
      separate layer Angular CDK defaults to z-index: 1000 regardless of this app's own scale, so a toast at
      300 still lost to any open MatDialog. 1100 clears that CDK default with headroom to spare. */
   --z-toast:    1100;
+  /* The session-expired dialog is the one overlay that must outrank literally everything else —
+     including the loading overlay and toasts above — since once the session is gone, nothing else
+     the user was looking at should stay reachable or visible above the "please log in" prompt. */
+  --z-session-expired: 1200;
+}
+
+/* ─── Session-expired prompt (SweetAlert2) ────────────────────────────────────
+   SweetAlert2 renders its own self-contained overlay (a single fixed backdrop +
+   popup, default z-index 1060) rather than going through Angular CDK's own
+   overlay stack — that stack was fighting GlobalLoaderComponent's busy-spinner
+   overlay for stacking order. Overridden here to sit above every custom z-index
+   this app defines (see --z-session-expired) and to pick up this app's design
+   tokens (radius/shadow/typography/brand color) instead of SweetAlert2's defaults. */
+.swal2-container {
+  z-index: var(--z-session-expired);
+}
+.se-swal-popup {
+  border-radius: var(--radius-modal);
+  padding: 2rem 1.75rem 1.75rem;
+  font-family: var(--font-family);
+  box-shadow: var(--shadow-xl);
+}
+/* SweetAlert2's own icon-color rule (div:where(.swal2-icon).swal2-warning) uses :where() so it
+   contributes zero specificity — chaining onto its swal2-warning class (rendered alongside
+   se-swal-icon, not replacing it) is enough to win on specificity alone. */
+.se-swal-icon.swal2-warning {
+  border-color: var(--color-warning);
+  color: var(--color-warning-strong);
+}
+.se-swal-title {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1.1875rem;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.se-swal-text {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+.se-swal-confirm {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0 1.75rem;
+  margin-top: 1rem;
+  border: none;
+  box-sizing: border-box;
+  border-radius: var(--radius-base);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-family: inherit;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover { background: var(--color-primary-dark); }
+  &:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1368,16 +1447,100 @@ input:-webkit-autofill:active {
   border-left-color: var(--color-primary);
 }
 
+/* ─── Routed page gutter ─────────────────────────────────────────────────────── */
+/* The single source of truth for the inset between a page's content and the edges of the
+   right-hand content area. Every routed page is a custom element child of .shell-content
+   (<app-workflow-list>, <app-audit-logs>, …), so one rule here reaches all ~87 of them —
+   individual page stylesheets deliberately no longer declare page-level padding. Retuning
+   the app's gutter is editing --page-gutter-x/y in :root, nothing else.
+
+   $page-bleed is every child of .shell-content that must stay edge-to-edge:
+     • app-modal-overlay / app-dialog-outlet — their backdrop is position:absolute; inset:0,
+       which resolves against .shell-content's PADDING box, so padding here would leave an
+       unfaded border all around every modal.
+     • app-workflow-builder-v2 — owns its own viewport (height:100% + overflow:hidden); a
+       padded parent shrinks its box and clips the canvas.
+     • the four feature shells that render a full-width .shell-tabs strip above their own
+       <router-outlet> — an inset strip would leave a gap either side of its border-bottom.
+       They stay full-bleed here and re-apply the gutter one level deeper, below.
+   app-system-settings-shell is NOT in this list: it has no tab strip (it renders its child
+   route directly), so it takes the gutter like any other page and its child inherits it. */
+$page-bleed: 'app-modal-overlay, app-dialog-outlet, app-workflow-builder-v2, app-governance-shell, app-operations-shell, app-settings-shell, app-terminology-configurations-shell, app-workflow-configurations-shell';
+
+.shell-content > *:not(#{$page-bleed}) {
+  display: block;
+  padding: var(--page-gutter-y) var(--page-gutter-x);
+}
+
+/* A tab-strip shell is full-bleed so its strip can span edge to edge, so the gutter is applied
+   one level deeper instead — to whichever page its <router-outlet> renders. The outlet element
+   itself renders nothing and its component is inserted as its NEXT sibling, hence
+   `router-outlet + *`. app-workflow-builder-v2 is excluded again: it is routed INSIDE
+   app-workflow-configurations-shell and must stay full-bleed at this level too. */
+.shell-content > * > router-outlet + *:not(#{$page-bleed}) {
+  display: block;
+  padding: var(--page-gutter-y) var(--page-gutter-x);
+}
+
+/* Settings nests a second tab-strip shell INSIDE the first — app-workflow-configurations-shell and
+   app-terminology-configurations-shell are themselves routed under app-settings-shell, and (being in
+   $page-bleed) carry no padding of their own, so their own pages — Source Connections, Mapping
+   Profiles, ... — sit a level deeper still with NO gutter at all reaching them: shell-content >
+   settings-shell > router-outlet+workflow-configurations-shell > router-outlet+source-connection-list.
+   Named explicitly, not "any non-bled grandchild": app-system-settings-shell is also a grandchild of
+   shell-content here (settings-shell > system-settings-shell > general), but it is NOT in $page-bleed
+   — the rule above already padded IT directly, so a blanket third-level rule would pad its child
+   AGAIN, on top of a parent box that's already inset. */
+.shell-content > * > router-outlet + app-workflow-configurations-shell > router-outlet + *:not(#{$page-bleed}),
+.shell-content > * > router-outlet + app-terminology-configurations-shell > router-outlet + *:not(#{$page-bleed}) {
+  display: block;
+  padding: var(--page-gutter-y) var(--page-gutter-x);
+}
+
+// Shared page title for the five full-bleed .shell-tabs feature shells (Settings, Governance,
+// Operations, Terminology Configurations, Workflow Configurations) — same $page-bleed list as
+// .shell-tabs below and for the same reason: those shells opt out of the ordinary per-page gutter
+// so their tab strip can span edge to edge, so anything else they render (this header) has to
+// re-apply --page-gutter-x itself rather than inherit it. In layout v1 the topbar's page title
+// covered this; v2 drops the topbar entirely, so a shell with no title of its own would otherwise
+// open straight onto an unlabeled tab strip.
+.shell-tabs-header {
+  // Same top/side gutter every ordinary page gets from .shell-content > * (var(--page-gutter-y/x)),
+  // not a value of its own — this shell opted out of that rule only to let .shell-tabs go edge to
+  // edge below, not to sit any closer to or further from the top of the content area than any other
+  // page does. No background: it sits on the page's own --color-bg like every other page's title,
+  // not on --color-surface like the tab strip below it — a white band under the title but not under
+  // the rest of the page read as a stray leftover bar, not a deliberate one.
+  padding: var(--page-gutter-y) var(--page-gutter-x) 0;
+}
+
+// Named distinctly from app-shell.component.scss's own (view-encapsulated, so non-colliding, but
+// still confusing to eyeball) .shell-page-title — that one is the v1 topbar breadcrumb; this is the
+// heading a full-bleed tab-strip shell prints above its own .shell-tabs.
+.shell-tabs-title {
+  margin:      0 0 2px;
+  font-size:   20px;
+  font-weight: 700;
+  color:       var(--color-ink);
+  letter-spacing: -0.3px;
+}
+
+.shell-tabs-sub {
+  margin:    0;
+  font-size: 14px;
+  color:     var(--color-muted);
+}
+
 // Shared icon-chip tab grid for feature shells with many child screens (Operations, Governance,
 // Settings). Each screen is a small rounded chip (icon + label) rather than a plain text link —
 // reads as a cohesive grid and wraps cleanly onto additional rows instead of a ragged text list.
+// Horizontal padding is --page-gutter-x, not its own value, so the chips share a left edge with
+// the cards on the page below them.
 .shell-tabs {
-  display:       flex;
-  flex-wrap:     wrap;
-  gap:           var(--space-2);
-  padding:       var(--space-8) var(--space-10);
-  border-bottom: 1px solid var(--color-border);
-  background:    var(--color-surface);
+  display:   flex;
+  flex-wrap: wrap;
+  gap:       var(--space-2);
+  padding:   var(--space-4) var(--page-gutter-x);
 }
 
 .shell-tab {
@@ -1781,5 +1944,117 @@ input:-webkit-autofill:active {
     border-top:   1px dashed var(--color-border);
     color:        var(--color-muted);
     font-size:    12px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPACT DENSITY (opt-in, via the user menu's "Density" toggle — see
+   DensityService/[data-density] on <html>)
+   ═══════════════════════════════════════════════════════════════════════════
+   Everything below is scoped under [data-density="compact"], so it can only ever ADD rules for
+   users who turned it on — normal density (no attribute, the default) is completely untouched by
+   this block. Shrinks the highest-traffic, highest-repetition surfaces app-wide from one place:
+   Material and BEM tables (rows, headers, cell padding, text size), the shared .list-page chrome
+   (page titles, filter bars, cards, buttons), and the sidebar nav — the things a user looking at a
+   480-row EHR Endpoints table actually wants tighter, not the workflow canvas, modals, or forms,
+   which keep their normal (touch/click-target-sized) dimensions regardless of density. */
+/* The attribute selector is repeated 3x on purpose — plain CSS, not a hack: each repetition matches
+   the exact same condition, but stacks specificity (0,1,0 each) so this beats any plausible
+   competing single-or-double-class rule on the cascade alone, no forced-priority declaration needed.
+   Needed in practice: a single attribute-selector prefix (:root[data-density="compact"] .mat-mdc-row,
+   etc.) should have been specific enough on paper, but empirically still lost to some rule elsewhere
+   in the app. This removes any doubt. */
+:root[data-density="compact"][data-density="compact"][data-density="compact"] {
+
+  /* ── Angular Material tables (mat-table). The app loads Material's legacy PREBUILT theme CSS
+     (@angular/material/prebuilt-themes/azure-blue.css, see angular.json), not the newer mat.theme()
+     Sass pipeline — so the M3 system tokens (--mat-table-row-item-container-height and friends) are
+     never read by anything and setting them here is a silent no-op; row height, cell padding and
+     font-size are baked into that prebuilt CSS as plain values instead.
+     Two DIFFERENT class families carry these, not one: row HEIGHT and cell FONT-SIZE live on
+     Angular Material's own .mat-mdc-* wrapper classes, but cell PADDING lives on the underlying MDC
+     .mdc-data-table__cell / __header-cell classes instead (both are present on the same <td>/<th> —
+     Material layers its wrapper over MDC's base implementation) — overriding only .mat-mdc-cell's
+     padding silently no-ops, since that was never the rule actually setting it. Every selector here
+     also sets line-height explicitly: cell font-size alone shrinking while inherited line-height
+     stays at the old (larger) value would keep the row visually tall regardless of the height above. */
+  // Deliberately no explicit height on .mat-mdc-header-row/.mat-mdc-row (or .data-row below): a
+  // table `height` is only a FLOOR — a row with a fixed-size child taller than that floor (an
+  // avatar/icon chip several pages use in their first column, e.g. user-list's 38px .user-avatar)
+  // still renders at the child's real height, but forcing height down anyway skews the row's flex
+  // vertical-centering enough to overlap the avatar onto the text next to it. Padding and font-size
+  // shrinking are what actually delivers compactness; row height then follows on its own, correctly,
+  // from whichever child (text line-height or an avatar) is genuinely tallest in that row.
+  .mat-mdc-header-cell,
+  .mdc-data-table__header-cell {
+    padding:     0 10px;
+    font-size:   11.5px;
+    line-height: 1.2;
+  }
+  .mat-mdc-cell,
+  .mdc-data-table__cell {
+    padding:     0 10px;
+    font-size:   12.5px;
+    line-height: 1.3;
+  }
+
+  /* ── Non-Material tables. Most list pages (Workflows, Execution History, ...) render a plain HTML
+     <table class="data-table"> with <tr class="data-row"> and bare <th>/<td> — NOT the
+     .data-table__header/.data-table__row BEM classes styles.scss itself defines a bit further up
+     (those exist for something else and, empirically, no page's table actually carries them — an
+     earlier version of this block targeted them and silently matched nothing). Each page also
+     defines this padding/font-size LOCALLY, in its own component stylesheet (e.g.
+     workflow-list.component.scss's `.data-table { thead th {...} tbody td {...} }`), scoped by
+     Angular's view encapsulation — this still out-specifies that scoped rule on the strength of the
+     3x attribute-selector prefix above. */
+  .data-table {
+    font-size: 12.5px;
+
+    thead th {
+      padding:   6px 10px;
+      font-size: 10.5px;
+    }
+    tbody td {
+      padding:   6px 10px;
+      font-size: 12.5px;
+    }
+  }
+
+  /* ── Shared list-page chrome (_list-page.scss / _page-content.scss utility classes). */
+  .page-title,
+  .shell-tabs-title {
+    font-size: 16px;
+  }
+  .page-sub,
+  .shell-tabs-sub {
+    font-size: 12.5px;
+  }
+  .filter-card {
+    padding: 10px 14px;
+  }
+  .table-card {
+    border-radius: var(--radius-base);
+  }
+  .btn-reset,
+  .btn-search,
+  .select-box select {
+    height:    32px;
+    font-size: 12.5px;
+  }
+  .stat-tile {
+    padding: 12px 14px 10px;
+  }
+  .badge {
+    padding:   1px 8px;
+    font-size: 11px;
+  }
+
+  /* ── Sidebar nav — same information, tighter row height. */
+  .nav-item {
+    padding:   6px 12px;
+    font-size: 12.5px;
+  }
+  .nav-section {
+    padding: 10px 12px 4px;
   }
 }

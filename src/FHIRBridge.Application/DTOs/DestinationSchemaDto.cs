@@ -30,7 +30,24 @@ public sealed record DestinationConnectionProbeRequest(
     // some other field like RequireSsl edited) and Password was left blank — lets the service inherit that
     // destination's stored password the same way AddDestinationConfigurationAsync does at save time, so testing
     // a connection doesn't require retyping a password the user never meant to change.
-    Guid? ExistingDestinationId = null);
+    Guid? ExistingDestinationId = null,
+    // ── Fabric Warehouse only ────────────────────────────────────────────────────────────────────────────
+    // A Fabric Warehouse is relational and supports the same table/column picker and DDL authoring as the SQL
+    // engines, but it has no server/database/username/password to describe: it authenticates with an Entra
+    // token against a TDS endpoint (see IFabricWarehouseConnectionFactory). These carry what the connection
+    // actually needs, so one ad-hoc probe/DDL request type still covers every relational destination — and so
+    // a not-yet-saved Warehouse node can create tables and add columns exactly as a SQL one already does,
+    // rather than being forced through a save first.
+    string? FabricWorkspace = null,
+    string? FabricItemName = null,
+    string? FabricWarehouseSqlEndpoint = null,
+    string? FabricAuthMode = null,
+    string? FabricTenantId = null,
+    string? FabricClientId = null,
+    string? FabricManagedIdentityClientId = null,
+    string? FabricSecret = null,
+    string? FabricEndpointSuffix = null,
+    string? FabricAuthorityHost = null);
 
 /// <summary>Result of a connection probe: whether it connected, any error, and the introspected tables.</summary>
 public sealed record DestinationSchemaProbeDto(

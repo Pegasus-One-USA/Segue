@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Segue Azure Hosting — Pricing Options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FFFFFF;
+    --surface:#FFFFFF;
+    --surface-2:#EFF5FC;
+    --text:#132338;
+    --muted:#5A7290;
+    --border:#D6E3F2;
+    --accent:#1D6FE0;
+    --accent-deep:#134FA8;
+    --accent-soft:#E5EFFC;
+    --shadow: 0 1px 2px rgba(19,35,56,0.04), 0 8px 24px rgba(19,35,56,0.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0B1220;
+      --surface:#111B2E;
+      --surface-2:#152238;
+      --text:#E7EEFA;
+      --muted:#7E97BE;
+      --border:#223350;
+      --accent:#5B9DFF;
+      --accent-deep:#8FBDFF;
+      --accent-soft:#16273F;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B1220;
+    --surface:#111B2E;
+    --surface-2:#152238;
+    --text:#E7EEFA;
+    --muted:#7E97BE;
+    --border:#223350;
+    --accent:#5B9DFF;
+    --accent-deep:#8FBDFF;
+    --accent-soft:#16273F;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  }
+  .masthead{
+    background: linear-gradient(135deg, var(--accent-deep) 0%, var(--accent) 100%);
+    padding: 44px 20px 40px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) .masthead{
+      background: linear-gradient(135deg, #0A2A5C 0%, #14539E 100%);
+    }
+  }
+  :root[data-theme="dark"] .masthead{
+    background: linear-gradient(135deg, #0A2A5C 0%, #14539E 100%);
+  }
+  .masthead-inner{
+    max-width: 980px;
+    margin: 0 auto;
+  }
+  .page{
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+  h1,h2,h3{
+    font-family:"Archivo", ui-sans-serif, system-ui, sans-serif;
+    text-wrap: balance;
+    margin:0;
+  }
+  .mono{
+    font-family:"IBM Plex Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .eyebrow{
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+    font-weight: 600;
+  }
+  h1{
+    font-size: clamp(28px, 4vw, 38px);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    color: #FFFFFF;
+  }
+  .subtitle{
+    color: rgba(255,255,255,0.82);
+    font-size: 15.5px;
+    max-width: 62ch;
+    line-height: 1.55;
+  }
+  .meta-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap: 24px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.75);
+  }
+  .meta-row b{ color: #FFFFFF; font-weight: 600; }
+  .estimate-banner{
+    margin-top: 16px;
+    font-size: 13px;
+    color: #FFFFFF;
+    background: rgba(255,255,255,0.14);
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 8px;
+    padding: 10px 14px;
+    line-height: 1.5;
+    max-width: 68ch;
+  }
+  .estimate-banner b{ font-weight: 700; }
+
+  /* ---------- Summary table ---------- */
+  .summary-wrap{
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 56px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  table.summary{
+    width:100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 640px;
+  }
+  table.summary th{
+    text-align:left;
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 14px 18px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+  table.summary td{
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.summary tr:last-child td{ border-bottom:none; }
+  table.summary td.name{ font-weight:600; }
+  table.summary td.price{ font-family:"IBM Plex Mono", monospace; font-weight:600; color: var(--accent-deep); white-space:nowrap; }
+  table.summary td.note{ color: var(--muted); font-size: 13.5px; line-height:1.5; }
+
+  /* ---------- Resource inventory ---------- */
+  .section-head{
+    margin-bottom: 18px;
+  }
+  .section-head h2{
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .section-head p{
+    color: var(--muted);
+    font-size: 14px;
+    max-width: 68ch;
+    line-height: 1.55;
+    margin-top: 6px;
+  }
+  .resources-wrap{
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 24px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  table.resources{
+    width:100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    min-width: 860px;
+  }
+  table.resources th{
+    text-align:left;
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.resources td{
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: var(--muted);
+  }
+  table.resources tr:last-child td{ border-bottom:none; }
+  table.resources td.resource{ font-weight:600; color: var(--text); white-space:nowrap; }
+  table.resources td.purpose{ max-width: 26ch; }
+  table.resources tr.group-row td{
+    background: var(--surface-2);
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--accent-deep);
+  }
+  .addons{
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.7;
+    background: var(--surface-2);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 56px;
+  }
+  .addons b{ color: var(--text); }
+  .addons ul{ margin: 8px 0 0; padding-left: 20px; }
+  .addons li{ margin-bottom: 4px; }
+
+  /* ---------- Tier cards ---------- */
+  .tiers{
+    display:flex;
+    flex-direction:column;
+    gap: 28px;
+  }
+  .tier{
+    position:relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 28px 26px 84px;
+    box-shadow: var(--shadow);
+  }
+  .tier-index{
+    position:absolute;
+    left: 26px;
+    top: 28px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    font-family:"IBM Plex Mono", monospace;
+    font-weight: 700;
+    font-size: 15px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .tier-head{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+  .tier-head h2{
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .tier-tag{
+    font-size: 13px;
+    color: var(--muted);
+    max-width: 46ch;
+  }
+  .tier-price{
+    text-align:right;
+    flex-shrink:0;
+  }
+  .tier-price .amount{
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--accent-deep);
+    line-height:1;
+  }
+  .tier-price .per{
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .tier-price .annual{
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 4px;
+    font-family:"IBM Plex Mono", monospace;
+  }
+
+  .breakdown{
+    width:100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    margin-bottom: 16px;
+  }
+  .breakdown th{
+    text-align:left;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight:600;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .breakdown td{
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .breakdown tr:last-child td{ border-bottom:none; }
+  .breakdown td.component{ font-weight:600; }
+  .breakdown td.spec{ color: var(--muted); }
+  .breakdown td.cost{ font-family:"IBM Plex Mono", monospace; text-align:right; white-space:nowrap; }
+
+  .note{
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.6;
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .note b{ color: var(--text); }
+  .flag{
+    display:inline-block;
+    font-family:"IBM Plex Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 5px;
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    font-weight:700;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .flag.warn{
+    background: #FCE9DC;
+    color: #9A4B12;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) .flag.warn{ background:#3A2415; color:#F0A768; }
+  }
+  :root[data-theme="dark"] .flag.warn{ background:#3A2415; color:#F0A768; }
+
+  footer{
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  footer p{ margin: 0 0 8px; }
+
+  @media (max-width: 620px){
+    .tier{ padding: 24px 20px 22px 20px; }
+    .tier-index{ position:static; margin-bottom:12px; }
+    .tier-price{ text-align:left; }
+    .tier-head{ flex-direction:column; }
+  }
+</style>
+</head>
+<body>
+<div class="masthead">
+  <div class="masthead-inner">
+    <header>
+      <span class="eyebrow">Infrastructure Cost Planning</span>
+      <h1>Azure Hosting — Pricing Options</h1>
+      <p class="subtitle">Five deployment configurations for the Segue platform, from a fully managed
+        minimum footprint through a large managed tier, plus single-VM alternatives on Linux and Windows.
+        Each option is priced independently so it can be compared on its own terms.</p>
+      <div class="meta-row">
+        <span>Prepared for: <b>Segue Client Deployment</b></span>
+        <span>Region basis: <b>Azure Pay-As-You-Go, East US</b></span>
+        <span>Prepared: <b>September 2026</b></span>
+      </div>
+      <div class="estimate-banner">All prices on this page are <b>estimates</b> for budgeting purposes — confirm exact rates in the Azure Pricing Calculator before committing spend.</div>
+    </header>
+  </div>
+</div>
+<div class="page">
+
+  <div class="summary-wrap">
+    <table class="summary">
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>Monthly</th>
+          <th>Annual</th>
+          <th>Best fit</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="name">1 — All Managed, Small</td>
+          <td class="price">$73 / mo</td>
+          <td>$876 / yr</td>
+          <td class="note">Pilots, low-volume tenants, proof-of-concept environments</td>
+        </tr>
+        <tr>
+          <td class="name">2 — All Managed, Medium</td>
+          <td class="price">$154 / mo</td>
+          <td>$1,848 / yr</td>
+          <td class="note">Steady production use, ~1,000 workflow runs/day</td>
+        </tr>
+        <tr>
+          <td class="name">3 — All Managed, Large</td>
+          <td class="price">$397 / mo</td>
+          <td>$4,764 / yr</td>
+          <td class="note">Higher-volume, multi-tenant workloads needing scale-out headroom</td>
+        </tr>
+        <tr>
+          <td class="name">4 — Single VM, Linux</td>
+          <td class="price">$164 / mo</td>
+          <td>$1,968 / yr</td>
+          <td class="note">Lowest cost for the full stack; single point of failure, manual patching</td>
+        </tr>
+        <tr>
+          <td class="name">5 — Single VM, Windows</td>
+          <td class="price">$231 / mo</td>
+          <td>$2,772 / yr</td>
+          <td class="note">Same footprint as Option 4, priced on a Windows Server guest</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-head">
+    <h2>Resources Provisioned</h2>
+    <p>Every Azure resource this deployment creates, and how its size changes across the three managed-service
+      options and the two single-VM options. All figures are estimates — see the note below each table.</p>
+  </div>
+
+  <div class="resources-wrap">
+    <table class="resources">
+      <thead>
+        <tr>
+          <th>Resource</th>
+          <th>Purpose</th>
+          <th>1 — Small</th>
+          <th>2 — Medium</th>
+          <th>3 — Large</th>
+          <th>4/5 — Single VM</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="group-row"><td colspan="6">Compute</td></tr>
+        <tr>
+          <td class="resource">Segue App</td>
+          <td class="purpose">API + Gateway process</td>
+          <td>Container App — Small<br>0.25 vCPU / 0.5 GiB</td>
+          <td>Container App — Medium<br>0.5 vCPU / 1 GiB</td>
+          <td>Container App — Large<br>1.0 vCPU / 2 GiB</td>
+          <td>Docker container on VM<br>(shares host resources)</td>
+        </tr>
+        <tr>
+          <td class="resource">Worker</td>
+          <td class="purpose">Background workflow processing</td>
+          <td>Container App — Small<br>0.25 vCPU / 0.5 GiB</td>
+          <td>Container App — Medium<br>0.5 vCPU / 1 GiB</td>
+          <td>Container App — Large<br>1.0 vCPU / 2 GiB</td>
+          <td>Docker container on VM<br>(shares host resources)</td>
+        </tr>
+        <tr>
+          <td class="resource">Container Apps Environment</td>
+          <td class="purpose">Hosting environment for App + Worker</td>
+          <td>1 per deployment, Consumption plan</td>
+          <td>1 per deployment, Consumption plan</td>
+          <td>1 per deployment, Consumption plan</td>
+          <td>Not used</td>
+        </tr>
+        <tr>
+          <td class="resource">Virtual Machine</td>
+          <td class="purpose">Hosts all 4 containers on one host</td>
+          <td>Not used</td>
+          <td>Not used</td>
+          <td>Not used</td>
+          <td>Standard_D4s_v3<br>4 vCPU / 16 GiB</td>
+        </tr>
+
+        <tr class="group-row"><td colspan="6">Data</td></tr>
+        <tr>
+          <td class="resource">PostgreSQL</td>
+          <td class="purpose">Segue's relational database</td>
+          <td>Flexible Server<br>Burstable B1ms, 1 vCore / 2 GiB<br>32 GB storage</td>
+          <td>Flexible Server<br>Burstable B2s, 2 vCore / 4 GiB<br>64 GB storage</td>
+          <td>Flexible Server<br>General Purpose D2s_v3, 2 vCore / 8 GiB<br>128 GB storage</td>
+          <td>Docker container<br><span class="mono">postgres:16-alpine</span>, on attached disk</td>
+        </tr>
+        <tr>
+          <td class="resource">Redis</td>
+          <td class="purpose">Token cache + distributed cache</td>
+          <td>Azure Cache, Balanced B0<br>~250 MB</td>
+          <td>Azure Cache, Balanced B1<br>~1 GB</td>
+          <td>Azure Cache, Balanced B3<br>~4 GB</td>
+          <td>Docker container<br><span class="mono">redis:7-alpine</span> + TLS, on VM</td>
+        </tr>
+        <tr>
+          <td class="resource">Managed Disk</td>
+          <td class="purpose">VM boot volume + container data</td>
+          <td>Not used</td>
+          <td>Not used</td>
+          <td>Not used</td>
+          <td>Premium SSD, 128 GB</td>
+        </tr>
+
+        <tr class="group-row"><td colspan="6">Platform &amp; networking</td></tr>
+        <tr>
+          <td class="resource">Log Analytics Workspace</td>
+          <td class="purpose">Centralized logs and metrics</td>
+          <td>Pay-per-GB ingested</td>
+          <td>Pay-per-GB ingested</td>
+          <td>Pay-per-GB ingested</td>
+          <td>Not provisioned</td>
+        </tr>
+        <tr>
+          <td class="resource">Virtual Network</td>
+          <td class="purpose">Network isolation for the environment</td>
+          <td>1 VNet + subnets</td>
+          <td>1 VNet + subnets</td>
+          <td>1 VNet + subnets</td>
+          <td>1 VNet + subnet</td>
+        </tr>
+        <tr>
+          <td class="resource">Public IP</td>
+          <td class="purpose">Inbound endpoint</td>
+          <td>Included in Container Apps ingress</td>
+          <td>Included in Container Apps ingress</td>
+          <td>Included in Container Apps ingress</td>
+          <td>Static IP, Standard SKU</td>
+        </tr>
+        <tr>
+          <td class="resource">Managed Identity</td>
+          <td class="purpose">Secure registry pull / Key Vault access</td>
+          <td>1 per deployment, no direct cost</td>
+          <td>1 per deployment, no direct cost</td>
+          <td>1 per deployment, no direct cost</td>
+          <td>1 per deployment, no direct cost</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="addons">
+    <b>Optional add-ons</b> — disabled by default, not included in any price above. Enable only if the engagement needs them:
+    <ul>
+      <li><b>Azure Key Vault</b> — per-tenant secrets storage, in place of app-config secrets</li>
+      <li><b>Azure Front Door + WAF</b> — custom domain, TLS termination, and managed firewall in front of the App</li>
+      <li><b>Seq</b> — structured log viewer, run as an extra container alongside the App/Worker</li>
+    </ul>
+  </div>
+
+  <div class="tiers">
+
+    <!-- TIER 1 -->
+    <section class="tier">
+      <div class="tier-index">1</div>
+      <div class="tier-head">
+        <div>
+          <h2>All Managed Services — Small</h2>
+          <p class="tier-tag">Every stateful component on Azure PaaS, sized to the smallest instance available at each layer.</p>
+        </div>
+        <div class="tier-price">
+          <div class="amount">$73<span style="font-size:14px;">/mo</span></div>
+          <div class="annual">$876 / year</div>
+        </div>
+      </div>
+      <table class="breakdown">
+        <thead><tr><th>Component</th><th>Size</th><th style="text-align:right;">Monthly</th></tr></thead>
+        <tbody>
+          <tr><td class="component">Segue App</td><td class="spec">Container App — Small (0.25 vCPU / 0.5 GiB)</td><td class="cost">$19.71</td></tr>
+          <tr><td class="component">Worker</td><td class="spec">Container App — Small (0.25 vCPU / 0.5 GiB)</td><td class="cost">$19.71</td></tr>
+          <tr><td class="component">Azure Database for PostgreSQL</td><td class="spec">Flexible Server, Burstable B1ms (1 vCore / 2 GiB) + 32 GB storage</td><td class="cost">$17.20</td></tr>
+          <tr><td class="component">Azure Cache for Redis</td><td class="spec">Balanced B0 (~250 MB)</td><td class="cost">$16.00</td></tr>
+        </tbody>
+      </table>
+      <div class="note">Scales to zero when idle on the app/worker containers, so actual spend is often below this figure outside business hours. Best suited to development, demos, and early pilot tenants rather than sustained production load.</div>
+    </section>
+
+    <!-- TIER 2 -->
+    <section class="tier">
+      <div class="tier-index">2</div>
+      <div class="tier-head">
+        <div>
+          <h2>All Managed Services — Medium</h2>
+          <p class="tier-tag">Every stateful component on Azure PaaS, stepped up to the medium instance at each layer.</p>
+        </div>
+        <div class="tier-price">
+          <div class="amount">$154<span style="font-size:14px;">/mo</span></div>
+          <div class="annual">$1,848 / year</div>
+        </div>
+      </div>
+      <table class="breakdown">
+        <thead><tr><th>Component</th><th>Size</th><th style="text-align:right;">Monthly</th></tr></thead>
+        <tbody>
+          <tr><td class="component">Segue App</td><td class="spec">Container App — Medium (0.5 vCPU / 1 GiB)</td><td class="cost">$39.42</td></tr>
+          <tr><td class="component">Worker</td><td class="spec">Container App — Medium (0.5 vCPU / 1 GiB)</td><td class="cost">$39.42</td></tr>
+          <tr><td class="component">Azure Database for PostgreSQL</td><td class="spec">Flexible Server, Burstable B2s (2 vCore / 4 GiB) + 64 GB storage</td><td class="cost">$34.40</td></tr>
+          <tr><td class="component">Azure Cache for Redis</td><td class="spec">Balanced B1 (~1 GB)</td><td class="cost">$41.00</td></tr>
+        </tbody>
+      </table>
+      <div class="note">Matches the sizing this project currently targets as its production default. Comfortably covers roughly <b>1,000 workflow executions/day</b> with room before the next tier is needed.</div>
+    </section>
+
+    <!-- TIER 3 -->
+    <section class="tier">
+      <div class="tier-index">3</div>
+      <div class="tier-head">
+        <div>
+          <h2>All Managed Services — Large</h2>
+          <p class="tier-tag">Every stateful component on Azure PaaS, stepped up to the large instance at each layer.</p>
+        </div>
+        <div class="tier-price">
+          <div class="amount">$397<span style="font-size:14px;">/mo</span></div>
+          <div class="annual">$4,764 / year</div>
+        </div>
+      </div>
+      <table class="breakdown">
+        <thead><tr><th>Component</th><th>Size</th><th style="text-align:right;">Monthly</th></tr></thead>
+        <tbody>
+          <tr><td class="component">Segue App</td><td class="spec">Container App — Large (1.0 vCPU / 2 GiB)</td><td class="cost">$78.84</td></tr>
+          <tr><td class="component">Worker</td><td class="spec">Container App — Large (1.0 vCPU / 2 GiB)</td><td class="cost">$78.84</td></tr>
+          <tr><td class="component">Azure Database for PostgreSQL</td><td class="spec">Flexible Server, General Purpose D2s_v3 (2 vCore / 8 GiB) + 128 GB storage</td><td class="cost">$144.80</td></tr>
+          <tr><td class="component">Azure Cache for Redis</td><td class="spec">Balanced B3 (~4 GB)</td><td class="cost">$95.00</td></tr>
+        </tbody>
+      </table>
+      <div class="note">Headroom for multi-tenant volume well beyond 1,000 runs/day, and for read-heavy caching patterns. General Purpose Postgres also removes the Burstable tier's CPU-credit throttling under sustained load.</div>
+    </section>
+
+    <!-- TIER 4 -->
+    <section class="tier">
+      <div class="tier-index">4</div>
+      <div class="tier-head">
+        <div>
+          <h2>Single VM — Linux <span class="flag">Lowest Cost</span></h2>
+          <p class="tier-tag">All four components — app, worker, Postgres, Redis — run as Docker containers on one Linux VM, using the project's existing local Terraform topology instead of separate PaaS services.</p>
+        </div>
+        <div class="tier-price">
+          <div class="amount">$164<span style="font-size:14px;">/mo</span></div>
+          <div class="annual">$1,968 / year</div>
+        </div>
+      </div>
+      <table class="breakdown">
+        <thead><tr><th>Component</th><th>Size</th><th style="text-align:right;">Monthly</th></tr></thead>
+        <tbody>
+          <tr><td class="component">Virtual Machine</td><td class="spec">Standard_D4s_v3 — 4 vCPU / 16 GiB, Ubuntu Linux</td><td class="cost">$140.16</td></tr>
+          <tr><td class="component">Managed disk</td><td class="spec">Premium SSD, 128 GB</td><td class="cost">$19.71</td></tr>
+          <tr><td class="component">Networking</td><td class="spec">Static public IP + light bandwidth</td><td class="cost">$3.65</td></tr>
+        </tbody>
+      </table>
+      <div class="note">The cheapest way to run the full stack, because one VM's compute is shared across all four containers instead of billed per-service. Trade-off: no independent scaling per component, one host to patch and reboot, and no managed-service SLA — a restart or VM-level failure takes everything down at once.</div>
+    </section>
+
+    <!-- TIER 5 -->
+    <section class="tier">
+      <div class="tier-index">5</div>
+      <div class="tier-head">
+        <div>
+          <h2>Single VM — Windows</h2>
+          <p class="tier-tag">The same all-in-one layout as Option 4, on a Windows Server guest instead of Linux.</p>
+        </div>
+        <div class="tier-price">
+          <div class="amount">$231<span style="font-size:14px;">/mo</span></div>
+          <div class="annual">$2,772 / year</div>
+        </div>
+      </div>
+      <table class="breakdown">
+        <thead><tr><th>Component</th><th>Size</th><th style="text-align:right;">Monthly</th></tr></thead>
+        <tbody>
+          <tr><td class="component">Virtual Machine</td><td class="spec">Standard_D4s_v3 — 4 vCPU / 16 GiB, base compute</td><td class="cost">$140.16</td></tr>
+          <tr><td class="component">Windows Server license</td><td class="spec">Included guest OS licensing surcharge</td><td class="cost">$67.16</td></tr>
+          <tr><td class="component">Managed disk</td><td class="spec">Premium SSD, 128 GB</td><td class="cost">$19.71</td></tr>
+          <tr><td class="component">Networking</td><td class="spec">Static public IP + light bandwidth</td><td class="cost">$3.65</td></tr>
+        </tbody>
+      </table>
+      <div class="note"><b>Same hardware, ~40% more expensive</b> than Option 4 purely for the Windows license. It also does not run the stack natively: Postgres and Redis ship no official Windows container images, so both would need to run inside WSL2 on the VM rather than as native Windows containers — losing parity with every other environment in this project. Included here only because it was directly evaluated against the Linux option, not as a recommendation.</div>
+    </section>
+
+  </div>
+
+  <footer>
+    <p><b>Basis for these figures:</b> Azure Pay-As-You-Go list pricing, East US region, September 2026. Container Apps priced on the Consumption plan at $0.0864/vCPU-hour and $0.0108/GiB-hour, running continuously (730 hours/month). All figures are planning estimates rounded to the nearest dollar — they exclude egress bandwidth beyond the light allowance noted, Azure Support plans, reserved-instance or savings-plan discounts, and sales tax.</p>
+    <p>Before committing budget to any option, confirm current rates in the Azure Pricing Calculator for the exact SKUs and region the deployment will use — Azure pricing changes periodically and regional rates vary.</p>
+  </footer>
+
+</div>
+</body>
+</html>

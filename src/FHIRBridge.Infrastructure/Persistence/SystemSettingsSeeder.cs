@@ -169,6 +169,20 @@ public sealed class SystemSettingsSeeder : ISystemSettingsSeeder
             ("Workflow:GraphExecution:Enabled", Bool("Workflow:GraphExecution:Enabled", false), "Master switch for running the persisted workflow graph instead of the flat route path."),
             (TransformationRulesFeatureFlag.SettingKey, Bool(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden), "When true, hides the destination wizard's Rules button and the Settings > Transformation Rules screen. Does NOT stop already-configured rules from running during workflow execution. Ships hidden by default; set to false to reveal it."),
             ("Compliance:RequireTde", Bool("Compliance:RequireTde", false), "When true, the TDE health check reports Unhealthy (not just Degraded) if the database is unencrypted."),
+
+            (
+                "OAuth:PublicBaseUrl",
+                _configuration.GetValue("OAuth:PublicBaseUrl", string.Empty),
+                "The public HTTPS origin (e.g. https://your-domain.example.com) OAuth redirect/callback/launch URLs "
+                + "are built from — must exactly match what's registered with each EHR. Leave blank to derive it "
+                + "from the incoming request instead, which is only reliable with no WAF/reverse proxy in front."),
+
+            (
+                "License:LicensorApplicationUrl",
+                _configuration.GetValue("License:LicensorApplicationUrl", string.Empty),
+                "Base URL of the licensor's application — this install's License Request screen posts to "
+                + "{this}/api/license-requests. Change it only if the licensor's server moves to a different "
+                + "domain."),
         };
 
         foreach (var (key, value, description) in defaults)

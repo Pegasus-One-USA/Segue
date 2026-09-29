@@ -1,10 +1,7 @@
+// Edge inset and width now come from the app-wide page gutter in styles.scss (--page-gutter-x/y);
+// this page runs full width like every sibling tab under Workflow Configurations.
 .page {
-  padding: 24px;
-  // Matches the shared list-page convention's own container width (see _list-page.scss, used by every
-  // sibling tab under Workflow Configurations) — this used to cap at 960px, which read as a big empty
-  // gutter next to the other tabs on anything wider than a laptop screen.
-  max-width: 1400px;
-  margin: 0 auto;
+  display: block;
 }
 
 .page-header {
