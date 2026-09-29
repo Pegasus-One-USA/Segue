@@ -32,14 +32,21 @@ internal static class SharedInMemoryDatabase
     /// <summary>A fresh database name, isolated from every other test's rows.</summary>
     public static string NewDatabaseName() => Guid.NewGuid().ToString();
 
-    /// <summary>Options for an isolated in-memory database that costs the suite no extra service provider.</summary>
-    public static DbContextOptions<TContext> Options<TContext>(string databaseName)
+    /// <summary>
+    /// The builder behind <see cref="Options{TContext}"/>, exposed for a caller that needs to chain further
+    /// configuration (e.g. <c>AddInterceptors</c>) before calling <c>.Options</c> itself.
+    /// </summary>
+    public static DbContextOptionsBuilder<TContext> OptionsBuilder<TContext>(string databaseName)
         where TContext : DbContext =>
         new DbContextOptionsBuilder<TContext>()
             .UseInMemoryDatabase(databaseName, Root)
             .UseInternalServiceProvider(_internalServiceProvider)
             // The shared provider makes this warning unreachable for these contexts, but a test that opts in
             // here should never be the one that trips it for someone else either.
-            .ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-            .Options;
+            .ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning));
+
+    /// <summary>Options for an isolated in-memory database that costs the suite no extra service provider.</summary>
+    public static DbContextOptions<TContext> Options<TContext>(string databaseName)
+        where TContext : DbContext =>
+        OptionsBuilder<TContext>(databaseName).Options;
 }

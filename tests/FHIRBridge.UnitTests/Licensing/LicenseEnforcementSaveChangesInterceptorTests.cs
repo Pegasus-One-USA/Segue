@@ -7,9 +7,8 @@ using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FHIRBridge.SharedKernel.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
+using FHIRBridge.UnitTests.Infrastructure;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
@@ -26,10 +25,6 @@ namespace FHIRBridge.UnitTests.Licensing;
 /// </summary>
 public sealed class LicenseEnforcementSaveChangesInterceptorTests
 {
-    // Shared InMemoryDatabaseRoot: see DestinationConfigurationSoftDeleteTests' identical remark — avoids
-    // EF's ManyServiceProvidersCreatedWarning once many per-test unique databases accumulate.
-    private static readonly InMemoryDatabaseRoot _root = new();
-
     private FHIRBridgeDbContext CreateContext(string databaseName, ILicenseQuotaGuard guard)
     {
         // AuditingSaveChangesInterceptor is required alongside the interceptor under test: it's what
@@ -46,8 +41,7 @@ public sealed class LicenseEnforcementSaveChangesInterceptorTests
         // registered is enough to exercise that lazily-resolved path.
         var guardProvider = new ServiceCollection().AddSingleton(guard).BuildServiceProvider();
 
-        var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(databaseName, _root)
+        var options = SharedInMemoryDatabase.OptionsBuilder<FHIRBridgeDbContext>(databaseName)
             .AddInterceptors(
                 new AuditingSaveChangesInterceptor(currentUser.Object),
                 new LicenseEnforcementSaveChangesInterceptor(

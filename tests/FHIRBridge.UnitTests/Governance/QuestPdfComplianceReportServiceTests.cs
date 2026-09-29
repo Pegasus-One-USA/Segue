@@ -1,30 +1,22 @@
 using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Infrastructure.Governance;
 using FHIRBridge.Infrastructure.Persistence;
+using FHIRBridge.UnitTests.Infrastructure;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FHIRBridge.UnitTests.Governance;
 
 public sealed class QuestPdfComplianceReportServiceTests
 {
-    // static: xUnit builds a new instance of this class for EVERY test, and each distinct
-    // InMemoryDatabaseRoot makes EF build another internal service provider — past twenty, EF raises
-    // ManyServiceProvidersCreatedWarning as an error in whichever test happens to cross the line, which
-    // reads as an unrelated failure elsewhere in the suite. Sharing one root costs no isolation: each test
-    // still gets its own database via the unique _databaseName below. (Same pattern as WorkflowSqlStoreTests.)
-    private static readonly InMemoryDatabaseRoot _root = new();
-    private readonly string _databaseName = Guid.NewGuid().ToString();
+    // Routed through SharedInMemoryDatabase (one process-wide internal service provider) rather than a
+    // per-class root: EF builds a distinct internal IServiceProvider per distinct options configuration and
+    // raises ManyServiceProvidersCreatedWarning as an error past twenty in one process, in whichever test
+    // happens to cross the line — which reads as an unrelated failure elsewhere in the suite. Isolation still
+    // comes from this class's own unique _databaseName.
+    private readonly string _databaseName = SharedInMemoryDatabase.NewDatabaseName();
 
-    private FHIRBridgeDbContext CreateContext()
-    {
-        var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(_databaseName, _root)
-            .Options;
-
-        return new FHIRBridgeDbContext(options);
-    }
+    private FHIRBridgeDbContext CreateContext() =>
+        new(SharedInMemoryDatabase.Options<FHIRBridgeDbContext>(_databaseName));
 
     [Fact]
     public async Task Generates_a_pdf_and_reports_a_valid_hash_chain()

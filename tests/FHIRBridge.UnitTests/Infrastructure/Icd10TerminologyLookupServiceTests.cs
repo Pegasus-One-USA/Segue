@@ -2,8 +2,6 @@ using FHIRBridge.Domain.Entities.Terminology;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Terminology;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FHIRBridge.UnitTests.Infrastructure;
 
@@ -15,13 +13,9 @@ namespace FHIRBridge.UnitTests.Infrastructure;
 /// </summary>
 public sealed class Icd10TerminologyLookupServiceTests
 {
-    private static FHIRBridgeDbContext CreateContext()
-    {
-        var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString(), new InMemoryDatabaseRoot())
-            .Options;
-        return new FHIRBridgeDbContext(options);
-    }
+    // See SharedInMemoryDatabase for why this is routed through the process-wide shared provider.
+    private static FHIRBridgeDbContext CreateContext() =>
+        new(SharedInMemoryDatabase.Options<FHIRBridgeDbContext>(SharedInMemoryDatabase.NewDatabaseName()));
 
     [Fact]
     public async Task Matches_a_dotted_clinical_code_against_a_dot_free_stored_CMS_code()

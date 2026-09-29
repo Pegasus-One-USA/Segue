@@ -4,7 +4,6 @@ using FHIRBridge.Runtime.Application.Workflows.Payloads;
 using FHIRBridge.Runtime.Domain.Workflows;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FHIRBridge.UnitTests.Infrastructure;
@@ -17,21 +16,11 @@ namespace FHIRBridge.UnitTests.Infrastructure;
 /// </summary>
 public sealed class EfWorkflowNodeResourceHistoryRecorderTests
 {
-    // static: xUnit builds a new instance of this class for EVERY test, and each distinct
-    // InMemoryDatabaseRoot makes EF build another internal service provider â€” past twenty, EF raises
-    // ManyServiceProvidersCreatedWarning as an error in whichever test happens to cross the line, which
-    // reads as an unrelated failure elsewhere in the suite. Sharing one root costs no isolation: each test
-    // still gets its own database via the unique _databaseName below. (Same pattern as WorkflowSqlStoreTests.)
-    private static readonly InMemoryDatabaseRoot _root = new();
-    private readonly string _databaseName = Guid.NewGuid().ToString();
+    // See SharedInMemoryDatabase for why this is routed through the process-wide shared provider.
+    private readonly string _databaseName = SharedInMemoryDatabase.NewDatabaseName();
 
-    private FHIRBridgeDbContext CreateContext()
-    {
-        var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(_databaseName, _root)
-            .Options;
-        return new FHIRBridgeDbContext(options);
-    }
+    private FHIRBridgeDbContext CreateContext() =>
+        new(SharedInMemoryDatabase.Options<FHIRBridgeDbContext>(_databaseName));
 
     [Fact]
     public async Task A_failed_node_appears_with_its_error_message_even_though_it_never_wrote_a_payload()

@@ -3,10 +3,9 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Security;
+using FHIRBridge.UnitTests.Infrastructure;
 using FluentAssertions;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -21,16 +20,13 @@ namespace FHIRBridge.UnitTests.Security;
 /// </summary>
 public sealed class CompositeSecretMetadataProviderTests
 {
-    // static, shared root - see EfGovernanceQueryServiceSearchErrorLogsTests for why.
-    private static readonly InMemoryDatabaseRoot _root = new();
-    private readonly string _databaseName = Guid.NewGuid().ToString();
+    // See SharedInMemoryDatabase for why this is routed through the process-wide shared provider.
+    private readonly string _databaseName = SharedInMemoryDatabase.NewDatabaseName();
 
     private static readonly SecretReference LoincUsername = new("app", "loinc-basic-username");
 
     private FHIRBridgeDbContext CreateContext() =>
-        new(new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(_databaseName, _root)
-            .Options);
+        new(SharedInMemoryDatabase.Options<FHIRBridgeDbContext>(_databaseName));
 
     private static IConfiguration Config(bool useKeyVault, bool allowFallback = true, string? prefix = null) =>
         new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>

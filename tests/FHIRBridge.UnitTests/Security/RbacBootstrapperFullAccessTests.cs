@@ -3,9 +3,9 @@ using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Security;
+using FHIRBridge.UnitTests.Infrastructure;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -25,10 +25,8 @@ namespace FHIRBridge.UnitTests.Security;
 /// </summary>
 public sealed class RbacBootstrapperFullAccessTests
 {
-    // Shared root, per-test unique database name -- same reasoning as DestinationConfigurationSoftDeleteTests:
-    // avoids EF's ManyServiceProvidersCreatedWarning while still giving each test full isolation.
-    private static readonly InMemoryDatabaseRoot _root = new();
-    private readonly string _databaseName = Guid.NewGuid().ToString();
+    // See SharedInMemoryDatabase for why this is routed through the process-wide shared provider.
+    private readonly string _databaseName = SharedInMemoryDatabase.NewDatabaseName();
 
     private FHIRBridgeDbContext CreateContext()
     {
@@ -39,8 +37,7 @@ public sealed class RbacBootstrapperFullAccessTests
         currentUser.SetupGet(x => x.CurrentUser)
             .Returns(new CurrentUserInfo("system", "system@test.local", "System", ["SuperAdmin"], true));
 
-        var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(_databaseName, _root)
+        var options = SharedInMemoryDatabase.OptionsBuilder<FHIRBridgeDbContext>(_databaseName)
             .AddInterceptors(new AuditingSaveChangesInterceptor(currentUser.Object))
             .Options;
 

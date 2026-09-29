@@ -7,8 +7,6 @@ using FHIRBridge.Infrastructure.Terminology;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -24,20 +22,14 @@ namespace FHIRBridge.UnitTests.Infrastructure;
 /// </summary>
 public sealed class HapiLocalTerminologyTests
 {
-    private static FHIRBridgeDbContext CreateContext(string databaseName, InMemoryDatabaseRoot root)
-    {
-        var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(databaseName, root)
-            // Every distinct InMemoryDatabaseRoot makes EF build another internal service provider, and it
-            // throws once twenty exist in a process. That is a cumulative, ASSEMBLY-wide count, so these tests
-            // passed alone and failed in the full run purely according to how many other tests had already
-            // built one — and adding tests anywhere in this project moved which ones fell over. The isolation
-            // is deliberate here (a fresh database per test), so the provider count is expected rather than
-            // the leak the warning is meant to catch.
-            .ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-            .Options;
-        return new FHIRBridgeDbContext(options);
-    }
+    // Routed through SharedInMemoryDatabase's one process-wide provider (isolation still comes from each
+    // test's own unique database name) rather than a distinct InMemoryDatabaseRoot per test: every distinct
+    // root used to make EF build another internal service provider, and past twenty in one process EF raises
+    // ManyServiceProvidersCreatedWarning as an error — a cumulative, assembly-wide count, so these tests
+    // passed alone and failed in the full run purely according to how many other tests had already built one,
+    // and adding tests anywhere in this project moved which ones fell over.
+    private static FHIRBridgeDbContext CreateContext(string databaseName) =>
+        new(SharedInMemoryDatabase.Options<FHIRBridgeDbContext>(databaseName));
 
     private static HapiLocalTerminologyWriter CreateWriter(FHIRBridgeDbContext context) =>
         new(context, NullLogger<HapiLocalTerminologyWriter>.Instance);
@@ -46,9 +38,8 @@ public sealed class HapiLocalTerminologyTests
     public async Task Lookup_resolves_a_concept_written_by_the_writer()
     {
         var databaseName = Guid.NewGuid().ToString();
-        var root = new InMemoryDatabaseRoot();
 
-        await using (var writeContext = CreateContext(databaseName, root))
+        await using (var writeContext = CreateContext(databaseName))
         {
             await CreateWriter(writeContext).WriteConceptsAsync(
                 "http://loinc.org",
@@ -58,7 +49,7 @@ public sealed class HapiLocalTerminologyTests
                 CancellationToken.None);
         }
 
-        await using var readContext = CreateContext(databaseName, root);
+        await using var readContext = CreateContext(databaseName);
         var result = await new HapiLocalTerminologyLookupService(readContext)
             .LookupAsync("http://loinc.org", "3141-9", CancellationToken.None);
 
@@ -71,7 +62,7 @@ public sealed class HapiLocalTerminologyTests
     [Fact]
     public async Task Lookup_returns_null_for_an_unsynced_code()
     {
-        await using var context = CreateContext(Guid.NewGuid().ToString(), new InMemoryDatabaseRoot());
+        await using var context = CreateContext(Guid.NewGuid().ToString());
 
         var result = await new HapiLocalTerminologyLookupService(context)
             .LookupAsync("http://loinc.org", "unknown-code", CancellationToken.None);
@@ -83,18 +74,17 @@ public sealed class HapiLocalTerminologyTests
     public async Task Re_syncing_the_same_version_replaces_its_concepts_rather_than_accumulating_duplicates()
     {
         var databaseName = Guid.NewGuid().ToString();
-        var root = new InMemoryDatabaseRoot();
-        var writer1 = CreateWriter(CreateContext(databaseName, root));
+        var writer1 = CreateWriter(CreateContext(databaseName));
         await writer1.WriteConceptsAsync(
             "http://hl7.org/fhir/sid/cvx", "CVX", version: null, [("140", "Influenza, seasonal, injectable")], CancellationToken.None);
 
         // A second "Run Now" for the same (versionless) CodeSystem should supersede the prior concepts,
         // not duplicate them — this is what makes repeated manual syncs idempotent.
-        var writer2 = CreateWriter(CreateContext(databaseName, root));
+        var writer2 = CreateWriter(CreateContext(databaseName));
         await writer2.WriteConceptsAsync(
             "http://hl7.org/fhir/sid/cvx", "CVX", version: null, [("140", "Influenza, seasonal, injectable, preservative free")], CancellationToken.None);
 
-        await using var readContext = CreateContext(databaseName, root);
+        await using var readContext = CreateContext(databaseName);
         readContext.TrmConcepts.Count().Should().Be(1);
         var result = await new HapiLocalTerminologyLookupService(readContext)
             .LookupAsync("http://hl7.org/fhir/sid/cvx", "140", CancellationToken.None);
@@ -111,7 +101,7 @@ public sealed class HapiLocalTerminologyTests
         // including that history row, so its later history.Complete(...) + SaveChangesAsync silently
         // wrote nothing and the row stayed stuck at Status="Running" forever even though the concepts
         // themselves synced successfully. The fix detaches only the writer's own batch entities.
-        await using var context = CreateContext(Guid.NewGuid().ToString(), new InMemoryDatabaseRoot());
+        await using var context = CreateContext(Guid.NewGuid().ToString());
 
         var history = new HapiTerminologyImportHistory("Snomed");
         context.HapiTerminologyImportHistory.Add(history);
@@ -141,7 +131,7 @@ public sealed class HapiLocalTerminologyTests
         // never reaches the database: the finally block's own SaveChangesAsync tries to re-save the
         // same still-broken batch, hits the identical error a second time, and THAT exception
         // propagates out uncaught, silently discarding the history.Fail(...) write along with it.
-        await using var db = CreateContext(Guid.NewGuid().ToString(), new InMemoryDatabaseRoot());
+        await using var db = CreateContext(Guid.NewGuid().ToString());
 
         var services = new ServiceCollection();
         services.AddSingleton<IHapiCvxTerminologySyncService>(new ThrowingCvxSyncService(db));
