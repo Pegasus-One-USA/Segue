@@ -6,7 +6,11 @@ namespace FHIRBridge.Application.DTOs;
 /// not accept: there is no account key or SAS here, because OneLake takes Entra tokens only.
 /// </summary>
 public sealed record FabricConnectionTestRequest(
-    /// <summary>"oneLakeFiles" or "warehouseTable". Decides which endpoints the test actually probes.</summary>
+    /// <summary>
+    /// "oneLakeFiles", "lakehouseTable" or "warehouseTable". Decides which endpoints the test probes AND
+    /// whether it has tables to list: OneLake Files has none, Delta lists the Tables/ folders carrying a
+    /// _delta_log, and a Warehouse reads its TDS catalog.
+    /// </summary>
     string Mode,
     string AuthMode,
     string Workspace,
@@ -23,6 +27,12 @@ public sealed record FabricConnectionTestRequest(
     string? WarehouseSqlEndpoint = null,
     /// <summary>Warehouse mode only — the Lakehouse a COPY INTO stages through.</summary>
     string? WarehouseStagingLakehouse = null,
+    /// <summary>
+    /// Delta mode only — the schema level of a schema-enabled lakehouse, whose tables sit at
+    /// <c>Tables/{schema}/{table}</c>. Blank means a classic lakehouse. The two are different places, so a
+    /// probe has to look where a write would actually land.
+    /// </summary>
+    string? LakehouseSchema = null,
     // When re-testing an already-saved destination without retyping its secret, Secret is blank and this carries
     // the destination's id so the test service can resolve its stored secret via ISecretProvider instead.
     Guid? DestinationId = null);

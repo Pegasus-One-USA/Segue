@@ -438,6 +438,9 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
         managedIdentityClientId: v.authMode === 'managedIdentity'
           ? (v.managedIdentityClientId ?? undefined) : undefined,
         endpointSuffix: v.endpointSuffix || undefined,
+        // Delta lists the Tables/ folders carrying a _delta_log, and a schema-enabled lakehouse nests them
+        // one level deeper — so the probe has to be told where a write would actually land.
+        lakehouseSchema: this.isLakehouseTable() ? (v.lakehouseSchema || undefined) : undefined,
         authorityHost: v.authorityHost || undefined,
         accountUrl: v.accountUrl || undefined,
         warehouseSqlEndpoint: this.isWarehouse() ? (v.warehouseSqlEndpoint ?? undefined) : undefined,

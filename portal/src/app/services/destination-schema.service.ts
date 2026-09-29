@@ -225,7 +225,8 @@ export interface BlobConnectionTestRequest {
 }
 
 export interface FabricConnectionTestRequest {
-  /** "oneLakeFiles" or "warehouseTable" — decides which endpoints the backend probes. */
+  /** "oneLakeFiles", "lakehouseTable" or "warehouseTable" — decides which endpoints the backend probes and
+   *  whether it has tables to list. */
   mode: string;
   authMode: string;
   workspace: string;
@@ -240,6 +241,8 @@ export interface FabricConnectionTestRequest {
   accountUrl?: string;
   warehouseSqlEndpoint?: string;
   warehouseStagingLakehouse?: string;
+  /** Delta mode only — schema level of a schema-enabled lakehouse (Tables/{schema}/{table}). */
+  lakehouseSchema?: string;
   /** When re-testing an already-saved destination without retyping its secret, carries the destination's id so
    *  the backend can resolve the stored one instead. */
   destinationId?: string;

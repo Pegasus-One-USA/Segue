@@ -2684,7 +2684,12 @@ export class DestinationWizardComponent implements OnInit {
       // so it has no getProbeRequest()/server/database/password to offer). Its own Test Connection already
       // returns the Warehouse's tables, so take them the same way the SQL branch above does — otherwise the
       // mapping canvas gets an empty table picker on a connection that tested fine.
-      if (this.isFabricWarehouse() && isFabricForm(form) && form.probeState() === 'ok') {
+      // Lakehouse Delta is listed alongside Warehouse here for the same reason and with one difference:
+      // its tables come from a OneLake listing rather than a TDS catalog, but they arrive on the same
+      // probe result, so the handoff is identical. Without this the canvas got an empty table picker on a
+      // Delta connection that tested fine — the exact failure the Warehouse line above was added to fix.
+      if ((this.isFabricWarehouse() || this.isLakehouseTable())
+        && isFabricForm(form) && form.probeState() === 'ok') {
         this.sqlTables.set(form.sqlTables());
         this.probeState.set('ok');
         this.schemaLoadState.set('loaded');
