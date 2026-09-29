@@ -367,8 +367,15 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
    */
   getFabricProbeRequest(): DestinationProbeRequest {
     const v = this.fabricForm.value;
+    // One builder for both probeable Fabric surfaces. A Warehouse probes its TDS catalog; a Lakehouse Delta
+    // probe lists the Tables/ folders that carry a _delta_log. They need the same identity and the same
+    // workspace/item addressing, so only the destination type and the mode differ — and the mode has to be
+    // sent, because DataFabricAzure alone cannot say which surface this is.
+    const isLakehouseTable = v.mode === 'lakehouseTable';
     return {
-      destinationType: 'DataFabricWarehouse',
+      destinationType: isLakehouseTable ? 'DataFabricAzure' : 'DataFabricWarehouse',
+      fabricLandingMode: isLakehouseTable ? 'lakehouseTable' : undefined,
+      fabricLakehouseSchema: isLakehouseTable ? (v.lakehouseSchema || undefined) : undefined,
       fabricWorkspace: v.workspace ?? '',
       fabricItemName: v.itemName ?? '',
       fabricWarehouseSqlEndpoint: v.warehouseSqlEndpoint ?? '',

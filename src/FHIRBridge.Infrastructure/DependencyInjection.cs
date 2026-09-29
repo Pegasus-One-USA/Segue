@@ -553,7 +553,15 @@ public static class DependencyInjection
         services.AddScoped<IArtifactDeliveryStrategyFactory, ArtifactDeliveryStrategyFactory>();
         services.Configure<GeneratedFileDownloadOptions>(configuration.GetSection("GeneratedFileDownload"));
         services.AddSingleton<IGeneratedFileDownloadLinkService, GeneratedFileDownloadLinkService>();
-        services.AddScoped<IDestinationSchemaService, SqlDestinationSchemaService>();
+        // Lakehouse Delta decorates the SQL schema service rather than replacing it: a Delta "table" is a folder
+        // with a transaction log, so it shares this contract and nothing else. Every other destination type
+        // passes straight through, so the relational path is exactly what it was.
+        services.AddScoped<SqlDestinationSchemaService>();
+        services.AddScoped<IDestinationSchemaService>(provider => new Destinations.Fabric.LakehouseDeltaSchemaService(
+            provider.GetRequiredService<SqlDestinationSchemaService>(),
+            provider.GetRequiredService<Destinations.Fabric.IOneLakeClientFactory>(),
+            provider.GetRequiredService<Application.Abstractions.Persistence.IConfigurationRepository>(),
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Destinations.Fabric.LakehouseDeltaSchemaService>>()));
         services.AddSingleton<ISqlConnectionSecretMerger, Destinations.SqlConnectionSecretMerger>();
         services.AddScoped<ICsvDestinationConnectionTestService, SftpDestinationConnectionTestService>();
         services.AddHttpClient(nameof(Destinations.FhirDestinationConnectionTestService));

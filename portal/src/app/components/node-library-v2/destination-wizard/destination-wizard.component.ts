@@ -2008,6 +2008,25 @@ export class DestinationWizardComponent implements OnInit {
    */
   readonly hasLiveRelationalSchema = computed(() => this.isSql() || this.isFabricWarehouse());
 
+  /** Lakehouse Delta — the Fabric FILE type with the Delta landing mode chosen. Shares destType() 'fabric'
+   *  with OneLake Files, so only the mode distinguishes them. */
+  readonly isLakehouseTable = computed(
+    () => this.destType() === 'fabric' && this.fabricLandingMode() === 'lakehouseTable');
+
+  /**
+   * Whether this destination can LIST the tables it already has, so the canvas offers a picker instead of a
+   * free-text name.
+   *
+   * Deliberately wider than hasLiveRelationalSchema() and deliberately not merged into it. A Lakehouse Delta
+   * table can be discovered — a folder under Tables/ carrying a _delta_log is one, which is what the backend's
+   * LakehouseDeltaSchemaReader lists — but it is NOT relational: it has no schema qualification, no
+   * ALTER TABLE, no CREATE TABLE. Folding it into hasLiveRelationalSchema() would have turned on
+   * "dbo."-style qualification and the DDL authoring buttons for a surface that supports neither, which is
+   * the mirror image of the bug that method's own comment describes for Fabric Warehouse.
+   */
+  readonly hasProbeableTableList = computed(
+    () => this.hasLiveRelationalSchema() || this.isLakehouseTable());
+
   readonly isMySql = computed(() => this.destType() === 'mysql');
   readonly isPostgres = computed(() => this.destType() === 'postgres');
   readonly isMongo = computed(() => this.destType() === 'mongo');
@@ -4370,7 +4389,7 @@ export class DestinationWizardComponent implements OnInit {
     // "only show a card for a table that really exists" check, which then short-circuited to true and
     // displayed a guessed table that had never been created.
     return (
-      this.hasLiveRelationalSchema() && this.probeState() === 'ok' && this.sqlTables().length > 0
+      this.hasProbeableTableList() && this.probeState() === 'ok' && this.sqlTables().length > 0
     );
   }
 
@@ -5004,7 +5023,10 @@ export class DestinationWizardComponent implements OnInit {
     // supports all three (SqlDestinationSchemaService.IsSupported), so this used to silently skip the
     // live-schema refresh for MySQL/PostgreSQL destinations, leaving their mapping canvas showing whatever
     // stale table/column list the last saved mapping summary happened to restore.
-    if (!this.hasLiveRelationalSchema()) return;
+    // hasProbeableTableList(), not hasLiveRelationalSchema(): a Lakehouse Delta destination has tables that
+    // can be listed (folders under Tables/ carrying a _delta_log) without being relational in any other way,
+    // and gating on the relational predicate left its canvas with no existing-table list at all.
+    if (!this.hasProbeableTableList()) return;
 
     // selectedExistingId() (set by selectExisting() — picking an already-saved connection from the "Existing
     // connection" dropdown) and resolvedDestinationId() (set by _populateFromNode()/provisionDestinationConnection()
@@ -5046,6 +5068,22 @@ export class DestinationWizardComponent implements OnInit {
     // and skipping just leaves the mapping-summary-restored (partial) table list in place, same fallback as
     // every other failure path here.
     const form = this.activeForm();
+
+    // A Fabric surface describes its connection with a workspace + item + Entra identity rather than
+    // server/database/password, so it builds its own request and skips the SQL-shaped completeness check
+    // below — which would reject every Fabric request for having no server.
+    if ((this.isFabricWarehouse() || this.isLakehouseTable()) && isFabricForm(form)) {
+      this.schemaLoadState.set('loading');
+      this.schemaSvc.probe(form.getFabricProbeRequest()).subscribe({
+        next: (res) => {
+          if (res.connected) applyTables(res.tables);
+          else this.schemaLoadState.set('failed');
+        },
+        error: () => this.schemaLoadState.set('failed'),
+      });
+      return;
+    }
+
     if (!isSqlFamilyForm(form)) {
       this.schemaLoadState.set('unavailable');
       return;

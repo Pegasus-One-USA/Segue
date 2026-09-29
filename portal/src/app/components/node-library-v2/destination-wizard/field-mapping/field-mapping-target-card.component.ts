@@ -67,6 +67,20 @@ export class FieldMappingTargetCardComponent implements AfterViewInit, OnDestroy
   // Routed through the shared predicate rather than re-listing the engines inline: the list now includes
   // Fabric Warehouse, and an inline copy is exactly how this gate drifted out of step before.
   readonly isSqlFamily = computed(() => isSqlFamilyDestType(this.destType()));
+
+  /** See FieldMappingCanvasComponent.fabricLandingMode — 'fabric' serves two surfaces and only this says
+   *  which. */
+  readonly fabricLandingMode = input<string | null>(null);
+
+  /** What this card actually produces, for the header badge. Lakehouse Delta shares destType() 'fabric'
+   *  with OneLake Files but writes a registered Delta table, so calling it a "file" understates what a save
+   *  does here: the first write CREATES that table and fixes its schema to the mapped columns. */
+  readonly targetKindLabel = computed(() =>
+    this.isSqlFamily() ? 'table'
+      : this.destType() === 'mongo' ? 'collection'
+      : this.destType() === 'blob' ? 'blob'
+      : this.fabricLandingMode() === 'lakehouseTable' ? 'delta table'
+      : 'file');
   readonly targetValue = input.required<string>();
   readonly hasSqlTables = input.required<boolean>();
   readonly sqlTableOptions = input.required<string[]>();

@@ -70,6 +70,11 @@ export interface DestinationProbeRequest {
   fabricSecret?: string;
   fabricEndpointSuffix?: string;
   fabricAuthorityHost?: string;
+  // ── Fabric Lakehouse (Delta) only ────────────────────────────────────────────────────────────────────
+  // DataFabricAzure serves two surfaces and only Delta has tables to list, so the type alone cannot say
+  // whether this probe should read a schema. Mirrors DestinationConnectionProbeRequest's own fields.
+  fabricLandingMode?: string;
+  fabricLakehouseSchema?: string;
 }
 
 export interface SchemaMutationResult {

@@ -112,6 +112,12 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  other than whichever one is presently being edited. */
   readonly allResources = input<string[]>([]);
   readonly destType = input.required<MappingDestType>();
+
+  /** Which Fabric surface, when destType() alone cannot say. 'fabric' covers both OneLake Files and
+   *  Lakehouse Delta — they share a destination type because they share a client, a credential and an
+   *  addressing scheme. What they do NOT share is what they produce: Files drops a file, Delta registers a
+   *  real table. The cards below say which, so this has to reach them. Null for every other destination. */
+  readonly fabricLandingMode = input<string | null>(null);
   /** The real backend DestinationType (e.g. 'SqlServer', 'Mongo') for this destination — distinct from
    *  destType above (which is the coarser 'sql'/'csv'/'mongo' family used to drive UI branching). Threaded
    *  down to the join popover so it can load/save a transformation rule scoped to the right destination.
