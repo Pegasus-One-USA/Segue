@@ -1,0 +1,45 @@
+tests/FHIRBridge.UnitTests/Transforms/TransformationRuleServiceTests.cs
+  s_6fe240044cc58e::t_166b72ab16a160 39,363
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_6fe240044cc58e::t_3c37b72e6e9845 82-85
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.unsaved-rule.spec.ts
+  s_6fe240044cc58e::t_3af2f4ebc793af 34,50,104-120
+portal/src/app/components/node-library/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_6fe240044cc58e::t_3c37b72e6e9845 77-80
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_6fe240044cc58e::t_87d925e7206e59 385
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_6fe240044cc58e::t_17af2cac2e20ae 181-184
+  s_6fe240044cc58e::t_d7433362601384 220-223
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowScopedRuleDestinationTests.cs
+  s_6fe240044cc58e::t_17fcaa1893ab08 63,67,77,89,102,114,120,122-126,128,130
+src/FHIRBridge.Application/Abstractions/Persistence/ITransformationRuleRepository.cs
+  s_6fe240044cc58e::t_bde5836ea72e1b 29-30
+src/FHIRBridge.Application/Services/Transforms/IEffectiveRuleResolver.cs
+  s_6fe240044cc58e::t_87d925e7206e59 88
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_6fe240044cc58e::t_bde5836ea72e1b 25-26,36-39
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_6fe240044cc58e::t_d7433362601384 339-342
+  s_6fe240044cc58e::t_17af2cac2e20ae 232-235
+tests/FHIRBridge.UnitTests/Configuration/WorkflowConfigurationCleanupServiceTests.cs
+  s_6fe240044cc58e::t_166b72ab16a160 204-205
+tests/FHIRBridge.UnitTests/Transforms/EffectiveRuleResolverTests.cs
+  s_6fe240044cc58e::t_166b72ab16a160 22,101,177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "71f20fe0e7e8a3dee0984fee32dedea02c024d05",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
