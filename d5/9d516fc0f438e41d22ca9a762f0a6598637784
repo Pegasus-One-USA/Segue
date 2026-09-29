@@ -1,0 +1,63 @@
+portal/src/app/core/api-endpoints.ts
+  s_6fe240044cc58e::t_3daaf3d5475fe1 226
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_6fe240044cc58e::t_5a8ea03c338e1d 182,188-190
+  s_6fe240044cc58e::t_89837cd1a020a3 145,152-153,161-176
+  s_6fe240044cc58e::t_772e41304f4591 1,154-158,191
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_6fe240044cc58e::t_2d249671636384 547,619,624,696,701,763,819,886,940,1002,1381
+src/FHIRBridge.Application/Services/Transforms/IEffectiveRuleResolver.cs
+  s_6fe240044cc58e::t_0fd7a8b66a325a 1,48-51,72-73,102-103
+tests/FHIRBridge.UnitTests/Transforms/EffectiveRuleResolverTests.cs
+  s_6fe240044cc58e::t_bd7bea9507315b 1,37,57,75
+portal/src/app/services/node-delete-plan-v2.util.ts
+  s_6fe240044cc58e::t_8a9769d422de69 261-269,271-274
+src/FHIRBridge.Application/Services/Transforms/TransformationRuleService.cs
+  s_6fe240044cc58e::t_294aaacc472a02 1,18-23,29-30,37,40-43,211,326
+  s_6fe240044cc58e::t_be1b0ae3f81726 317,321-325
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service.ts
+  s_6fe240044cc58e::t_bc08b6c991c817 259-271
+tests/FHIRBridge.UnitTests/Configuration/WorkflowConfigurationCleanupServiceTests.cs
+  s_6fe240044cc58e::t_5b36f63710b1e1 1,232-236,241
+tests/FHIRBridge.UnitTests/Infrastructure/PendingTransformationRuleClaimingTests.cs
+  s_6fe240044cc58e::t_2381905d70c8d5 1,108,110-113,116,118-119
+  s_6fe240044cc58e::t_31d8fbb80359c3 2-107,109,114-115,117,120-270
+tests/FHIRBridge.UnitTests/Validation/CreateMappingProfileRequestValidatorTests.cs
+  s_6fe240044cc58e::t_738a25b959ed58 1,45,287,479
+  s_6fe240044cc58e::t_c5559d041e02a0 327
+tests/FHIRBridge.UnitTests/Validation/NoOpEffectiveRuleResolver.cs
+  s_6fe240044cc58e::t_5b36f63710b1e1 1,23-24
+portal/src/app/components/canvas-v2/canvas.component.ts
+  s_6fe240044cc58e::t_d3c7a8bd1b715f 284-286,288-294,301-305
+  s_6fe240044cc58e::t_fac78de28583f3 242-244
+  s_6fe240044cc58e::t_f88defa93e576f 245
+  s_6fe240044cc58e::t_2e8e8a70bca2d2 257-273
+  s_6fe240044cc58e::t_86f46b531f14e5 19-20,41
+  s_6fe240044cc58e::t_fa2850eec6ec9a 287,295-300
+src/FHIRBridge.Application/Services/Transforms/ITransformationRuleService.cs
+  s_6fe240044cc58e::t_6b60acaf6a2063 1,37-44
+src/FHIRBridge.Application/Abstractions/Persistence/ITransformationRuleRepository.cs
+  s_6fe240044cc58e::t_772e41304f4591 1,68-71
+  s_6fe240044cc58e::t_1383e397047610 63-67,72-73,75-87
+  s_6fe240044cc58e::t_36ffab8dea1b2f 97-101,104
+src/Api/FHIRBridge.Api/Controllers/V1/TransformationRulesController.cs
+  s_6fe240044cc58e::t_42af8a13320c04 110-133
+portal/src/app/services/node-delete-plan-v2.util.spec.ts
+  s_6fe240044cc58e::t_98ef83d9c08530 110-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d59d516fc0f438e41d22ca9a762f0a6598637784",
+  "prompts": {},
+  "sessions": {
+    "s_6fe240044cc58e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89c69e87-050c-4bb2-a0ed-2b399c323e9f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
