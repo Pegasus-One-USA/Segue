@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -909,7 +909,10 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             CorrelationId: context.CorrelationId,
             FetchMissingReferenceAsync: fetchMissingReferenceAsync,
             SourceBaseUrl: sourceBaseUrl,
-            PipelineRunId: context.WorkflowRunId);
+            PipelineRunId: context.WorkflowRunId,
+            // Carried so a push destination (see MappedDataLakeWebhookDestinationWriter) can emit a
+            // self-identifying payload. Null for scheduled/webhook runs, which have no signed-in user.
+            UserIdentity: context.UserIdentity);
 
         int written;
         string? downloadUrl;

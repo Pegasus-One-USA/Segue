@@ -1,5 +1,7 @@
 import { Component, ElementRef, HostBinding, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
-import { MappingRow, MappingInstanceSelection, isReferenceCandidate, DEFAULT_VALUE_PRESETS } from './field-mapping-model';
+import {
+  MappingRow, MappingInstanceSelection, isReferenceCandidate, DEFAULT_VALUE_PRESETS, resolveJsonWriteMode,
+} from './field-mapping-model';
 import { FmTreeNode, flattenLeaves } from './field-mapping-tree.util';
 import { nearestArrayGroupId } from './field-mapping-summary.model';
 import { FieldMappingAnchorService } from './field-mapping-anchor.service';
@@ -280,7 +282,7 @@ export class FieldMappingListComponent {
     const entries = Object.entries(rule.config)
       .filter(([key]) => {
         const field = schema?.fields.find(f => f.key === key);
-        return !field || isConfigFieldVisible(field, rule.config);
+        return !field || isConfigFieldVisible(field, rule.config, schema);
       });
     return entries.length ? entries.map(([k, v]) => `${k} = ${v}`).join(', ') : '—';
   }
@@ -622,7 +624,11 @@ export class FieldMappingListComponent {
 
   modeLabel(row: MappingRow): string {
     if (row.mode === 'default') return 'Default value';
-    if (row.mode === 'childJson') return 'Whole node → JSON';
+    // "→ JSON doc" only when the row actually opted into it — a Mongo-only choice made in the mapping
+    // popover (see MappingRow.jsonWriteMode); every other row keeps the label it has always had.
+    if (row.mode === 'childJson') {
+      return resolveJsonWriteMode(row) === 'document' ? 'Whole node → JSON doc' : 'Whole node → JSON';
+    }
     return row.sources.length > 1 ? `Joined ×${row.sources.length}` : 'Direct';
   }
 

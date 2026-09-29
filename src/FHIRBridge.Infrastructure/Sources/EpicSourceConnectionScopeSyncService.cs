@@ -6,6 +6,7 @@ using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
+using FHIRBridge.SharedKernel.Enums;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Infrastructure.Sources;
@@ -73,7 +74,7 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         }
 
         var workflows = await _workflowStore.ListAsync(cancellationToken);
-        var usedResourceTypes = GetUsedResourceTypes(workflows, sourceConnectionId);
+        var usedResourceTypes = GetUsedResourceTypes(workflows, sourceConnectionId, sourceConnection.ApplicationType);
 
         // eClinicalWorks (Healow) has the same hard v1-only requirement as athenahealth (confirmed against a live
         // authorize attempt, which eCW rejected with invalid_scope for a v2/.rs resource scope) — without this,
@@ -169,7 +170,7 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
     // Every source node across every workflow that references this connection contributes its sibling
     // destination nodes' selected resource types — the union across ALL such workflows, not just one.
     private static IReadOnlyList<string> GetUsedResourceTypes(
-        IReadOnlyCollection<WorkflowDefinition> workflows, Guid sourceConnectionId)
+        IReadOnlyCollection<WorkflowDefinition> workflows, Guid sourceConnectionId, ApplicationType? applicationType)
     {
         var resourceTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -186,7 +187,7 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
 
             foreach (var node in workflow.Nodes)
             {
-                foreach (var resourceType in GetDestinationResourceTypes(node))
+                foreach (var resourceType in GetDestinationResourceTypes(node, applicationType))
                 {
                     resourceTypes.Add(resourceType);
                 }
@@ -216,12 +217,28 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
     // sourced from FHIR R4's own StructureDefinitions (which resource types each reference-typed element on a given
     // resource can point to) rather than hand-maintained per vendor surprise — it only needs revisiting on a FHIR
     // version change, not every time a new vendor-specific reference pattern turns up.
-    private static IEnumerable<string> GetDestinationResourceTypes(WorkflowNode node)
+    private static IEnumerable<string> GetDestinationResourceTypes(WorkflowNode node, ApplicationType? applicationType)
     {
         var raw = TryGetConfigValue(node, DestinationResourcesConfigKey);
         var selected = string.IsNullOrWhiteSpace(raw)
             ? []
             : raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        // A patient-facing app never gets the widened set, however the destination is configured. The widening
+        // below was verified against athenahealth's BACKEND registration, whose system/ scopes cover the referenced
+        // types; a Patient registration is granted patient/ scopes for the patient's own record only, so the same
+        // widening asks for patient/Organization.read + patient/Practitioner.read + patient/RelatedPerson.read
+        // (FhirReferenceTargets["Patient"]) and athenahealth's all-or-nothing policy evaluation then rejects the
+        // WHOLE authorize request — access_denied "Policy evaluation failed", the exact failure the PractitionerRole
+        // exclusion in FhirReferenceTargets already documents, one axis over. Nothing is lost by skipping it:
+        // Organization/Practitioner aren't in the patient compartment, so auto-fetching them on a patient-scoped
+        // token would 403 at write time even if the scope had been granted — the destination writer surfaces that
+        // as its own distinct auto-fetch scope error. Checked with an is-pattern, not a switch on ApplicationType,
+        // so the engine's dispatch stays in the strategy registry per the architecture rule.
+        if (applicationType is ApplicationType.Patient)
+        {
+            return selected;
+        }
 
         if (!string.Equals(TryGetConfigValue(node, AutoFetchMissingReferencesConfigKey), "true", StringComparison.OrdinalIgnoreCase))
         {

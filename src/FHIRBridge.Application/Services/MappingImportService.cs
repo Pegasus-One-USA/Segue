@@ -386,7 +386,7 @@ public sealed class MappingImportService : IMappingImportService
 
             "joinedFields" => (
                 string.Join('|', (column.Sources ?? []).Select(source => BuildResolvableJsonPath(source, resourceType, arrayContext))),
-                $"joinedFields;delimiter={column.Delimiter}{aggregateSuffix}"),
+                $"joinedFields;delimiter={SanitizeDelimiter(column.Delimiter)}{aggregateSuffix}"),
 
             "wholeNodeAsJson" => (
                 BuildResolvableJsonPath(
@@ -403,6 +403,22 @@ public sealed class MappingImportService : IMappingImportService
             _ => throw new InvalidOperationException($"Unknown column mode '{column.Mode}' for column '{column.Column}'.")
         };
     }
+
+    /// <summary>
+    /// Strips the two characters that would collide with the Format marker's own syntax. Format is a
+    /// ";"-separated list of "key=value" pairs, so a delimiter containing ";" splits the marker into pieces
+    /// JsonMappingEngine.ParseDelimiter then reads as separate keys — a delimiter of ";" produced
+    /// "joinedFields;delimiter=;" and came back out as the EMPTY string, silently running every joined field
+    /// together with no separator at all. Mirrors field-mapping-model.ts's joinedFieldsFormat, which strips
+    /// the same two characters: the V2 portal path and this V1 import path write the same marker and must
+    /// sanitize it identically, or the same delimiter behaves differently depending on how it was saved.
+    /// </summary>
+    /// <remarks>A null delimiter keeps its long-standing "" rendering rather than gaining a default here —
+    /// ParseDelimiter reads "delimiter=" as a deliberate empty separator, and defaulting it at this layer
+    /// would change what every V1 mapping saved without one already writes.</remarks>
+    private static string SanitizeDelimiter(string? delimiter) =>
+        (delimiter ?? string.Empty).Replace(";", string.Empty, StringComparison.Ordinal)
+                                   .Replace("=", string.Empty, StringComparison.Ordinal);
 
     private string BuildResolvableJsonPath(string rawPath, string resourceType, string? arrayContext)
     {

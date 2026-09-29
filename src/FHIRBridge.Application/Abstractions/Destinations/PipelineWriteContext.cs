@@ -1,4 +1,4 @@
-namespace FHIRBridge.Application.Abstractions.Destinations;
+﻿namespace FHIRBridge.Application.Abstractions.Destinations;
 
 /// <summary>
 /// Per-run information threaded into every <see cref="IConfiguredDestinationWriter.WriteAsync"/> call. Serves two
@@ -35,6 +35,16 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// <see cref="Guid.Empty"/> for every caller that hasn't been updated to pass the real one; only
 /// <c>ConfiguredPipelineService</c> and the Runtime plane's destination executors currently do.
 /// </param>
+/// <param name="UserIdentity">
+/// The stable identifier of the end user whose interactive sign-in authorized this run — a third-party app's own
+/// account id for the person, supplied as <c>userIdentity</c> when the launch URL was minted and permanently bound
+/// to one FHIR patient in <c>UserFhirContextBindings</c>. Carried here so a push destination can emit a
+/// self-identifying payload: a consumer receiving pushed records otherwise knows only the EHR's own patient id and
+/// has to maintain its own mapping back to whoever it called the person. Distinct from the Runtime plane's
+/// <c>WorkflowExecutionContext.CallerId</c>, which is an opaque per-browser session key used for token-cache
+/// lookup and deliberately differs between two sign-ins by the same person. Null for every non-interactive trigger
+/// (scheduled and webhook runs have no signed-in user), in which case a consumer sees no such field at all.
+/// </param>
 /// <param name="ReportStageAsync">
 /// Optional hook a writer calls to report a stage of its own write — currently only opening/authenticating the
 /// connection, which the caller cannot observe because <see cref="IConfiguredDestinationWriter.WriteAsync"/> is a
@@ -55,6 +65,7 @@ public sealed record PipelineWriteContext(
     Func<string, string, CancellationToken, Task<string?>>? FetchMissingReferenceAsync = null,
     string? SourceBaseUrl = null,
     Guid PipelineRunId = default,
+    string? UserIdentity = null,
     Func<DestinationStageReport, CancellationToken, Task>? ReportStageAsync = null);
 
 /// <summary>

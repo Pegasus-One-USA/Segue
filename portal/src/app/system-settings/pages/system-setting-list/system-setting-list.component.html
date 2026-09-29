@@ -1,5 +1,13 @@
 <div class="list-page">
 
+  <!-- Page Header — System Settings has no tab strip of its own (single section) and this is its
+       only page, so unlike Branding/Audit Logs/LOINC Terminology (each titled by their OWN page,
+       under a shell that deliberately isn't), nothing above this in the tree carries a title at all. -->
+  <div class="page-header">
+    <h1 class="page-title">System Settings</h1>
+    <p class="page-sub">General configuration, secrets, and the terminology server</p>
+  </div>
+
   <!-- Decrypt Provisioned Secret tool.
        Elevated-only: it recovers secret plaintext (private key PEMs), which is the most sensitive thing on
        this page. It used to be protected by the page's own superAdminGuard; now that General is reachable

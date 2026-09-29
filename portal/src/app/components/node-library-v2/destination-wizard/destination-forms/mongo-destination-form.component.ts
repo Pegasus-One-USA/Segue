@@ -22,8 +22,10 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
 
   readonly probeState = signal<'idle' | 'testing' | 'ok' | 'error'>('idle');
   readonly probeError = signal<string | null>(null);
-  /** Real collection names from the last successful Test Connection — feeds the Collection field's
-   *  datalist so an existing collection can be picked instead of typed blind. */
+  /** Real collection names from the last successful Test Connection. This form no longer picks a
+   *  collection itself — the mapping canvas does, per resource — so these exist purely to seed the wizard's
+   *  mongoCollections() signal (see DestinationWizardComponent.next()), which backs the canvas's
+   *  "+ Add a collection…" picker. */
   readonly collections = signal<string[]>([]);
 
   /** Discriminates this form from CSV/SFTP's own unrelated testConnection()/probeState pair — see
@@ -37,11 +39,14 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     // validate a split server/database/credentials form against, so one opaque field is simplest and avoids a
     // redundant connection-string-assembly step this form would otherwise need.
     connectionString: ['', [Validators.required]],
-    collection: ['', [Validators.required]],
     writeMode: ['upsert', []],
-    // Off by default: the collection must already exist unless explicitly opted out of (matches the writer's
-    // "customer owns the destination" default — see MappedMongoDestinationWriter.WriteAsync).
-    createIfNotExists: [false, []],
+    // No `collection` control: which collection each resource writes to is chosen per resource on the mapping
+    // canvas ("+ Add a collection…"), and the build already sends `target: null` for Mongo precisely so those
+    // per-resource choices win (see workflow-build-assembler-v2.service.ts's Mongo branch) — a single
+    // destination-level collection here had no say in where anything was actually written. No
+    // `createIfNotExists` control either: a missing collection is now always created (see
+    // MappedMongoDestinationWriter.EnsureCollectionExistsAsync), which is also MongoDB's own native behaviour
+    // on first write.
   });
 
   /** True while the host is reusing a previously-saved connection unchanged — connectionString is a secret that
@@ -67,18 +72,20 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     return this.mongoForm.valid;
   }
 
-  /** The probe only needs the connection string (which embeds host/db/credentials); the other required fields
-   *  (name, collection) aren't part of the connectivity check. Reusing an already-saved connection can test via
-   *  its stored connection string instead, once a destinationId is known. */
+  /** The probe only needs the connection string (which embeds host/db/credentials); `name` isn't part of the
+   *  connectivity check. Reusing an already-saved connection can test via its stored connection string
+   *  instead, once a destinationId is known. */
   canTest(): boolean {
     return !!this.mongoForm.value.connectionString || (this.reusingExisting() && !!this.existingDestinationId());
   }
 
-  /** Live connectivity + collection-existence check before saving: opens a Mongo client on the entered
-   *  connection string, pings the database, and (unless "Create collection if not exists" is checked) verifies
-   *  the target collection actually exists — server-side, see MongoDestinationConnectionTestService. Never
-   *  blocks Save. `onSettled` lets a caller (the wizard's "Next") advance immediately on success instead of
-   *  needing a separate reactive watch, mirroring SqlFamilyFormApi.testConnection. */
+  /** Live connectivity check before saving: opens a Mongo client on the entered connection string and pings
+   *  the database server-side (see MongoDestinationConnectionTestService), returning the database's real
+   *  collection names on success. No `collection` is sent, so the service's optional collection-existence
+   *  check never runs — this form no longer names one, and a collection that doesn't exist yet is created at
+   *  write time rather than being an error. Never blocks Save. `onSettled` lets a caller (the wizard's "Next")
+   *  advance immediately on success instead of needing a separate reactive watch, mirroring
+   *  SqlFamilyFormApi.testConnection. */
   testConnection(onSettled?: (result: { connected: boolean }) => void): void {
     if (!this.canTest()) return;
     this.probeState.set('testing');
@@ -87,8 +94,6 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     this.schemaSvc
       .testMongo({
         connectionString: v.connectionString ?? '',
-        collection: v.collection || undefined,
-        createIfNotExists: v.createIfNotExists ?? false,
         destinationId: this.existingDestinationId() ?? undefined,
       })
       .subscribe({
@@ -119,9 +124,7 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     return {
       dest_name: v.name ?? '',
       dest_connectionString: v.connectionString ?? '',
-      dest_collection: v.collection ?? '',
       dest_writeMode: v.writeMode ?? 'upsert',
-      dest_createCollectionIfNotExists: String(v.createIfNotExists ?? false),
     };
   }
 
@@ -134,15 +137,16 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     };
   }
 
-  patchFrom(fields: Record<string, string>, target?: string | null): void {
+  /** `target` (the DestinationConfigurationDto's own target column) is deliberately not accepted: Mongo's
+   *  target used to be the destination-level collection, and there is no longer a control to patch it
+   *  onto. Omitting the optional parameter still satisfies WizardDestinationFormApi.patchFrom. */
+  patchFrom(fields: Record<string, string>): void {
     this.mongoForm.patchValue({
       name: fields['dest_name'] || this.mongoForm.value.name || 'MongoDB Production',
       // Never repopulated — a secret, and never returned by the API (matches selectExisting()/
       // _populateFromNode()'s original mongo branches, both of which always left this blank too).
       connectionString: '',
-      collection: fields['dest_collection'] || target || '',
       writeMode: fields['dest_writeMode'] || 'upsert',
-      createIfNotExists: fields['dest_createCollectionIfNotExists'] === 'true',
     });
   }
 
@@ -150,9 +154,7 @@ export class MongoDestinationFormComponent implements WizardDestinationFormApi {
     this.mongoForm.reset({
       name: 'MongoDB Production',
       connectionString: '',
-      collection: '',
       writeMode: 'upsert',
-      createIfNotExists: false,
     });
     this.collections.set([]);
     this.probeState.set('idle');

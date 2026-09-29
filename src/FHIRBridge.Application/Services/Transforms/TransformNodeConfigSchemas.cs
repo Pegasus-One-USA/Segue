@@ -28,8 +28,8 @@ public static class TransformNodeConfigSchemas
 {
     private static TransformConfigFieldSchema Text(
         string key, string label, string? defaultValue = null, string? placeholder = null, bool advanced = false,
-        TransformConfigFieldVisibility? visibleWhen = null) =>
-        new(key, label, "text", null, defaultValue, placeholder, advanced, visibleWhen);
+        TransformConfigFieldVisibility? visibleWhen = null, IReadOnlyList<string>? resetOn = null) =>
+        new(key, label, "text", null, defaultValue, placeholder, advanced, visibleWhen, resetOn);
 
     // A number input (rejects non-numeric keystrokes at the UI layer) for the many config keys that are
     // parsed as int/decimal by the node itself (config.GetInt / decimal.TryParse) but used to be a plain
@@ -184,7 +184,7 @@ public static class TransformNodeConfigSchemas
             ]),
             [TransformNodeType.QuantityRangeAssembly] = new(TransformNodeType.QuantityRangeAssembly, "Quantity/Range Assembly",
             [
-                Text("unit", "Unit", placeholder: "e.g. mg/L"),
+                Text("unit", "Unit (blank keeps the source's own unit)", placeholder: "e.g. mg/L"),
             ]),
             [TransformNodeType.RoundingScaling] = new(TransformNodeType.RoundingScaling, "Rounding/Scaling",
             [
@@ -253,12 +253,12 @@ public static class TransformNodeConfigSchemas
             ]),
             [TransformNodeType.HumanNameParsing] = new(TransformNodeType.HumanNameParsing, "HumanName Parsing & Formatting",
             [
-                Select("pattern", "Mode / input pattern", ["FirstLast", "FirstLastMiddle", "LastFirstMiddle", "RoundTrip"], "FirstLast"),
-                Select("roundTripPattern", "Round trip — pattern to parse the incoming string with",
-                    ["FirstLast", "FirstLastMiddle", "LastFirstMiddle"], "FirstLast",
-                    visibleWhen: OnlyWhen("pattern", "RoundTrip")),
-                Text("format", "Output format (HumanName → string)", "First Middle Last Suffix",
-                    visibleWhen: OnlyWhen("pattern", "RoundTrip")),
+                Select("pattern", "Mode / input pattern",
+                    ["FirstLast", "FirstMiddleLast", "FirstLastMiddle", "LastFirstMiddle", "RoundTrip"], "FirstLast"),
+                // No roundTripPattern / format field: every mode above now names its own output order over
+                // the element's parts (see HumanNameParsingNode.PatternFormats), RoundTrip included, so there
+                // is nothing left for either to decide. Both keys are still honoured by the node if a saved
+                // rule carries one, so an older rule keeps behaving as authored.
                 Checkbox("setText", "Set HumanName.text", true, advanced: true),
                 Select("use", "Use (optional)", ["", "official", "usual", "nickname", "maiden"], "", advanced: true),
                 Text("prefixTokens", "Recognized prefixes (comma-separated)", "Dr,Mr,Mrs,Ms,Miss", advanced: true),
@@ -293,18 +293,47 @@ public static class TransformNodeConfigSchemas
             [TransformNodeType.ConcatenationTemplating] = new(TransformNodeType.ConcatenationTemplating, "Concatenation/Templating",
             [
                 Select("mode", "Mode", ["concat", "split"], "concat"),
-                Text("separator", "Join separator (concat mode, ignored when a template is set)", " "),
-                Text("template", "Template with {0} {1}... placeholders (concat mode, optional)", placeholder: "e.g. {0} {1}, MD", advanced: true),
-                Text("splitDelimiter", "Split delimiter or regex (split mode)", ","),
-                Checkbox("splitIsRegex", "Treat split delimiter as a regex", false, advanced: true),
+                // Each mode shows only the fields it actually uses. Rendering both a join separator and a
+                // split delimiter side by side invited exactly the misreading it looks like: a split rule
+                // configured with a join separator, or a concat rule with a split delimiter, where the unused
+                // one is silently ignored and nothing says so. The mode qualifiers are dropped from the labels
+                // too — a field that only appears in one mode does not need to name it.
+                Text("separator", "Join separator (ignored when a template is set)", " ",
+                    visibleWhen: OnlyWhen("mode", "concat")),
+                Text("splitDelimiter", "Split delimiter or regex", ",",
+                    visibleWhen: OnlyWhen("mode", "split")),
+                Checkbox("splitIsRegex", "Treat split delimiter as a regex", false, advanced: true,
+                    visibleWhen: OnlyWhen("mode", "split")),
+                // A template is meaningful in BOTH modes but means something different in each — it binds the
+                // column's source fields under concat, and the split's own pieces under split — so each mode
+                // gets its OWN key rather than sharing one. That is not only tidiness: every rule saved before
+                // this node honoured a template carries a `template` key regardless of mode, because the old
+                // defaulting seeded every field, so reading that key in split mode would change what existing
+                // rules write (see ConcatenationTemplatingNode). A split-only key cannot be stale, because no
+                // saved rule has one.
+                //
+                // Both still reset on a mode switch, which is what stops a "{0} {1}" written for two joined
+                // source fields from being carried over and half-applied to whatever the other mode produces.
+                Text("template", "Template with {0} {1}... placeholders (optional)", placeholder: "e.g. {0} {1}, MD", advanced: true,
+                    visibleWhen: OnlyWhen("mode", "concat"), resetOn: ["mode"]),
+                Text("splitTemplate", "Template for the split parts — {0} {1}... (optional)", placeholder: "e.g. Hi {0}", advanced: true,
+                    visibleWhen: OnlyWhen("mode", "split"), resetOn: ["mode"]),
             ]),
             [TransformNodeType.ArrayListOperations] = new(TransformNodeType.ArrayListOperations, "Array/List Operations",
             [
                 Select("operation", "Operation", ["first", "last", "nth", "dedupe", "join", "count", "filter", "flatten"], "first"),
-                Number("index", "Index (nth operation)", "0"),
-                Text("separator", "Join separator (join operation)", ","),
-                Text("predicateField", "Predicate field (filter operation, optional — omit to compare items directly)", placeholder: "e.g. system", advanced: true),
-                Text("predicateValue", "Predicate value to match (filter operation)", placeholder: "e.g. http://hl7.org/fhir/sid/us-npi", advanced: true),
+                // Each operation shows only the fields it uses, the same way the two Concatenation/Templating
+                // modes do. Eight operations sharing one flat form meant "nth" sat under an Advanced Options
+                // panel offering a predicate it will never read, and an index box stayed on screen for
+                // "count" — a field that is visibly there and silently ignored reads as broken behaviour
+                // rather than as an inapplicable setting. The operation qualifiers come off the labels too: a
+                // field that only appears for one operation does not need to name it.
+                Number("index", "Index (0-based)", "0", visibleWhen: OnlyWhen("operation", "nth")),
+                Text("separator", "Join separator", ",", visibleWhen: OnlyWhen("operation", "join", "filter")),
+                Text("predicateField", "Predicate field (optional — omit to compare items directly)", placeholder: "e.g. system", advanced: true,
+                    visibleWhen: OnlyWhen("operation", "filter")),
+                Text("predicateValue", "Predicate value to match", placeholder: "e.g. http://hl7.org/fhir/sid/us-npi", advanced: true,
+                    visibleWhen: OnlyWhen("operation", "filter")),
             ]),
             [TransformNodeType.DefaultNullHandling] = new(TransformNodeType.DefaultNullHandling, "Default/Null Handling",
             [

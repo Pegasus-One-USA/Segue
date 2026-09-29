@@ -48,6 +48,14 @@ interface DestMappingRow {
   // (e.g. "use"), not yet an absolute JsonPath: that layer frequently has no catalog jsonPath to build one
   // from (see MappingSourceRef.jsonPath), so buildMappingForResource derives the real
   // MappingFieldRequest.correlationCodeJsonPath itself, off this row's OWN already-resolved `jsonPath`.
+  // Every source of a MULTI-SOURCE (joined) row, in the order the user arranged them — the join
+  // JsonMappingEngine.ResolveJoinedFields executes from a "|"-delimited JsonPath. Carried as individual
+  // paths rather than a pre-joined string because a source's catalog `jsonPath` is only populated "when
+  // present" (see MappingSourceRef.jsonPath): field-mapping-model.ts cannot build the absolute path for a
+  // source that lacks one, and silently falling back to the primary source alone is exactly what made a
+  // two-field join write only its first field. This layer HAS toJsonPath, so it derives the missing ones —
+  // the same division of labour correlationSiblingField above already uses.
+  joinSources?: { path: string; jsonPath?: string; arrays?: string[] }[];
   correlationSiblingField?: string;
   correlationCodeValue?: string;
   // "Equals" | "Contains" | "NotEquals" — how correlationCodeValue is compared against the sibling field's
@@ -1153,7 +1161,10 @@ export class WorkflowBuildAssemblerServiceV2 {
             'dest_requireSsl',
           ]
         : kind === 'mongo'
-          ? ['dest_name', 'dest_collection', 'dest_writeMode', 'dest_createCollectionIfNotExists']
+          // No dest_collection / dest_createCollectionIfNotExists: the Mongo form no longer offers either.
+          // Which collection a resource writes to is a per-resource mapping-canvas choice (this branch
+          // already sends target: null so those win), and a missing collection is always created.
+          ? ['dest_name', 'dest_writeMode']
           : kind === 'medplum'
             ? [
                 'dest_name',
@@ -1422,7 +1433,11 @@ export class WorkflowBuildAssemblerServiceV2 {
       // Prefer the catalog-derived JSONPath/metadata the wizard stamped on the row; fall back to the
       // naive conversion only when the catalog was unavailable.
       const arrays = row.arrays ?? [];
-      const jsonPath = row.jsonPath ?? this.toJsonPath(row.path, resource, arrays);
+      const jsonPath = row.joinSources?.length
+        ? row.joinSources
+            .map(source => source.jsonPath ?? this.toJsonPath(source.path, resource, source.arrays ?? arrays))
+            .join('|')
+        : (row.jsonPath ?? this.toJsonPath(row.path, resource, arrays));
       this.assertArrayWildcardsIntact(resource, row.column, jsonPath, arrays);
       const isArrayPath = jsonPath.includes('[*]') || arrays.length > 0;
       // field-mapping-model.ts only ever hands this row a bare sibling field NAME ("use"), not an absolute
@@ -1625,7 +1640,10 @@ export class WorkflowBuildAssemblerServiceV2 {
     const missing = arrays
       .map(a => (a.startsWith(`${resource}.`) ? a.slice(resource.length + 1) : a))
       .map(a => a.replace(/\[\*\]/g, '').trim())
-      .filter(a => a.length > 0 && !jsonPath.includes(`${a}[*]`));
+      // "[?field=value]" addresses that ancestor just as deliberately as "[*]" does — it selects the repeats
+      // matching the mapping's own criteria rather than all of them — so a filtered ancestor is intact, not
+      // missing. Without this every "Match criteria" mapping warns that it resolves to nothing.
+      .filter(a => a.length > 0 && !jsonPath.includes(`${a}[*]`) && !jsonPath.includes(`${a}[?`));
     if (missing.length > 0) {
       console.warn(
         `[mapping] ${resource}.${column}: jsonPath "${jsonPath}" does not wildcard its array ancestor(s) ` +

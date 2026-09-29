@@ -3,6 +3,8 @@ import {
   MappingRow, LegacyMappingRow,
   qualifyTableName, defaultSchemaFor, splitTableName, reconcileTargetsForDestTypeSwitch,
   effectiveMappingValueType, checkColumnTypeCompatibility,
+  supportsJsonWriteMode, resolveJsonWriteMode, formatWithJsonWriteMode, jsonWriteModeFromFormat,
+  defaultInstanceType, wholeNodeInstanceIndex, wholeNodeJsonPath,
 } from './field-mapping-model';
 import { DestinationTable } from '../../../../services/destination-schema.service';
 
@@ -154,7 +156,7 @@ describe('migrateLegacyRow', () => {
 });
 
 describe('serializeRowsFlat', () => {
-  it('emits one legacy-shaped entry per row using the primary (first) source', () => {
+  it('emits a joinedFields entry carrying EVERY source for a multi-source row', () => {
     const rows: MappingRow[] = [{
       resource: 'Patient',
       sources: [
@@ -173,7 +175,47 @@ describe('serializeRowsFlat', () => {
     expect(flat[0].path).toBe('Patient.name.given');
     expect(flat[0].column).toBe('FullName');
     expect(flat[0].target).toBe('dbo.Patient');
-    expect(flat[0].approximated).toBeTrue(); // join has no backend representation
+    // EVERY source is carried, with the mode+delimiter marker JsonMappingEngine.ResolveJoinedFields reads.
+    // Sending only sources[0] is what silently dropped the family name. The "|"-joined JsonPath itself is
+    // assembled downstream (workflow-build-assembler-v2), which can derive a path for a source the catalog
+    // never gave a jsonPath — so the join survives a source that has only a fhirPath.
+    expect(flat[0].joinSources).toEqual([
+      { path: 'Patient.name.given', jsonPath: '$.name[*].given[*]', arrays: ['name'] },
+      { path: 'Patient.name.family', jsonPath: '$.name[*].family', arrays: ['name'] },
+    ]);
+    expect(flat[0].format).toBe('joinedFields;delimiter= ');
+    expect(flat[0].approximated).toBeFalse();
+  });
+
+  it('carries a joined source that has no catalog jsonPath, rather than degrading to the primary', () => {
+    // The real shape of a canvas-dragged row: fhirPath + label + arrays, no jsonPath. Requiring one on every
+    // source made this row fall back to sources[0] alone while still stamping joinedFields, so the engine
+    // joined a single sub-path and the column got just the first field.
+    const rows: MappingRow[] = [{
+      resource: 'Patient',
+      sources: [
+        { fhirPath: 'Patient.name.family', label: 'family', arrays: ['name'] },
+        { fhirPath: 'Patient.name.given', label: 'given', arrays: ['name'] },
+      ],
+      mode: 'value', delimiter: ', ', instance: { type: 'first' },
+      targetName: 'FULLNAME', tableName: 'dbo.Patient',
+    }];
+    const flat = serializeRowsFlat(rows, { Patient: 'dbo.Patient' });
+    expect(flat[0].joinSources).toEqual([
+      { path: 'Patient.name.family', arrays: ['name'] },
+      { path: 'Patient.name.given', arrays: ['name'] },
+    ]);
+    expect(flat[0].format).toBe('joinedFields;delimiter=, ');
+  });
+
+  it('emits no joinSources for a single-source row', () => {
+    const rows: MappingRow[] = [{
+      resource: 'Patient',
+      sources: [{ fhirPath: 'Patient.gender', label: 'Gender', jsonPath: '$.gender' }],
+      mode: 'value', instance: { type: 'first' },
+      targetName: 'Gender', tableName: 'dbo.Patient',
+    }];
+    expect(serializeRowsFlat(rows, { Patient: 'dbo.Patient' })[0].joinSources).toBeUndefined();
   });
 
   it('sets valueType to Json and arrayPolicy to StoreJson for childJson rows', () => {
@@ -185,6 +227,266 @@ describe('serializeRowsFlat', () => {
     expect(flat[0].arrayPolicy).toBe('StoreJson');
     expect(flat[0].valueType).toBe('Json');
     expect(flat[0].approximated).toBeFalse();
+  });
+
+  // MongoDB "store this JSON as a real sub-document" — carried to the backend on `format` (read there by
+  // MappingFieldFormat.ReadJsonWriteMode), which serializeRowsFlat emits ONLY for this, so every other row
+  // keeps producing exactly the payload it always has.
+  describe('jsonWriteMode', () => {
+    function jsonRow(overrides: Partial<MappingRow> = {}): MappingRow {
+      return {
+        resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient',
+        targetName: 'Patient', tableName: 'patients_local',
+        ...overrides,
+      };
+    }
+
+    it('omits format entirely when the row never made the choice (every pre-existing mapping)', () => {
+      expect(serializeRowsFlat([jsonRow()], {})[0].format).toBeUndefined();
+    });
+
+    it("omits format for an explicit 'string' choice too — that IS the default behaviour", () => {
+      expect(serializeRowsFlat([jsonRow({ jsonWriteMode: 'string' })], {})[0].format).toBeUndefined();
+    });
+
+    it("emits the json=document marker for a 'document' choice", () => {
+      expect(serializeRowsFlat([jsonRow({ jsonWriteMode: 'document' })], {})[0].format)
+        .toBe('json=document');
+    });
+
+    it('preserves any other markers already on the row format', () => {
+      const flat = serializeRowsFlat(
+        [jsonRow({ jsonWriteMode: 'document', format: 'wholeNodeAsJson' })], {});
+      expect(flat[0].format).toBe('wholeNodeAsJson;json=document');
+    });
+
+    it('never emits the marker for an ordinary non-Json row', () => {
+      const valueRow: MappingRow = {
+        resource: 'Patient',
+        sources: [{ fhirPath: 'Patient.gender', label: 'Gender', valueType: 'String' }],
+        mode: 'value', instance: { type: 'first' },
+        targetName: 'Gender', tableName: 'patients_local',
+      };
+      expect(serializeRowsFlat([valueRow], {})[0].format).toBeUndefined();
+    });
+
+    it('supportsJsonWriteMode follows the row\'s effective ValueType', () => {
+      expect(supportsJsonWriteMode(jsonRow())).toBeTrue();
+      expect(supportsJsonWriteMode({
+        resource: 'Patient', sources: [{ fhirPath: 'Patient.gender', label: 'Gender', valueType: 'String' }],
+        mode: 'value', targetName: 'Gender', tableName: 'patients_local',
+      })).toBeFalse();
+    });
+
+    // A row rebuilt from the Mapping JSON summary comes back with no source valueType (sourceRefFromPath
+    // doesn't round-trip it), so the choice it explicitly carries has to be enough on its own — otherwise
+    // reopening and re-saving silently drops it.
+    it('honours an explicitly-carried mode even when the source type is unknown', () => {
+      const restored: MappingRow = {
+        resource: 'Patient',
+        sources: [{ fhirPath: 'Patient.extension', label: 'extension' }],
+        mode: 'value', instance: { type: 'first' },
+        targetName: 'Extension', tableName: 'patients_local',
+        jsonWriteMode: 'document',
+      };
+      expect(supportsJsonWriteMode(restored)).toBeTrue();
+      expect(serializeRowsFlat([restored], {})[0].format).toBe('json=document');
+    });
+
+    it('resolveJsonWriteMode defaults to "string"', () => {
+      expect(resolveJsonWriteMode(jsonRow())).toBe('string');
+      expect(resolveJsonWriteMode(jsonRow({ jsonWriteMode: 'document' }))).toBe('document');
+    });
+
+    // Read back out of a saved MappingField's `format` by the "Select Existing Profile" load path
+    // (destination-wizard.component.ts's _applyExistingProfile) — the third route into MappingRow[], after
+    // dest_mappings_v2 and the Mapping JSON summary. `format` is a ';'-separated marker BAG, so this is a
+    // substring test, matching the backend's MappingFieldFormat.ReadJsonWriteMode: an equality check against
+    // 'json=document' would miss every compound value, which is the shape formatWithJsonWriteMode actually
+    // produces whenever the field already carried a column-mode marker.
+    describe('jsonWriteModeFromFormat', () => {
+      it('reads the marker on its own and inside a marker bag, case-insensitively', () => {
+        expect(jsonWriteModeFromFormat('json=document')).toBe('document');
+        expect(jsonWriteModeFromFormat('wholeNodeAsJson;json=document')).toBe('document');
+        expect(jsonWriteModeFromFormat('WholeNodeAsJson;JSON=DOCUMENT')).toBe('document');
+      });
+
+      it("is 'string' for every format that doesn't carry it", () => {
+        expect(jsonWriteModeFromFormat(null)).toBe('string');
+        expect(jsonWriteModeFromFormat(undefined)).toBe('string');
+        expect(jsonWriteModeFromFormat('')).toBe('string');
+        expect(jsonWriteModeFromFormat('wholeNodeAsJson')).toBe('string');
+        expect(jsonWriteModeFromFormat('wholeNodeAsJson;json=string')).toBe('string');
+        expect(jsonWriteModeFromFormat('directField;aggregate=csv')).toBe('string');
+      });
+
+      // The regression: reapplying a saved profile used to copy `format` but not derive jsonWriteMode, so a
+      // field saved as a document came back 'string' — the popover showed "JSON string" and the next save
+      // dropped the marker outright. Rebuilding the row the way _applyExistingProfile does must survive it.
+      it('lets a reapplied profile row keep writing a document on the next save', () => {
+        const fromProfile = (format: string | null): MappingRow => {
+          const jsonWriteMode = jsonWriteModeFromFormat(format);
+          return {
+            resource: 'Patient',
+            sources: [{ fhirPath: 'Patient', label: 'Patient', jsonPath: '$', valueType: 'Json' }],
+            mode: 'value', instance: { type: 'first' },
+            targetName: 'Patient', tableName: 'patients_local',
+            format,
+            ...(jsonWriteMode === 'document' ? { jsonWriteMode } : {}),
+          };
+        };
+
+        const row = fromProfile('json=document');
+        expect(resolveJsonWriteMode(row)).toBe('document');
+        expect(serializeRowsFlat([row], { Patient: 'patients_local' })[0].format).toBe('json=document');
+      });
+
+      // Why 'document' is spread in rather than the mode always being assigned: supportsJsonWriteMode() is
+      // true for any row carrying an explicit mode, so stamping 'string' on every reapplied field would
+      // surface the Mongo-only dropdown on plain String columns that have no such choice to make.
+      it('leaves a non-Json column with no mode at all, keeping the option hidden for it', () => {
+        expect(jsonWriteModeFromFormat(null)).toBe('string');
+        const plain: MappingRow = {
+          resource: 'Patient',
+          sources: [{ fhirPath: 'Patient.gender', label: 'Gender', valueType: 'String' }],
+          mode: 'value', instance: { type: 'first' },
+          targetName: 'Gender', tableName: 'patients_local', format: null,
+        };
+        expect(plain.jsonWriteMode).toBeUndefined();
+        expect(supportsJsonWriteMode(plain)).toBeFalse();
+      });
+    });
+
+    // `format` segments carry arbitrary text — JsonMappingEngine.ParseDelimiter takes everything after the
+    // first '=' as a joined field's delimiter — so the marker is matched as a whole ';'-separated segment,
+    // never as a substring of the joined value (mirrors the backend's MappingFieldFormat.ReadJsonWriteMode).
+    it('does not mistake the marker embedded in another segment for the real thing', () => {
+      expect(jsonWriteModeFromFormat('joinedFields;delimiter=json=document')).toBe('string');
+      expect(jsonWriteModeFromFormat('json=documentary')).toBe('string');
+      expect(jsonWriteModeFromFormat('notjson=document')).toBe('string');
+      // ...while a real segment still reads, whitespace and casing included.
+      expect(jsonWriteModeFromFormat('directField; json=document ')).toBe('document');
+    });
+
+    // A join's value is string.Join(delimiter, pieces) on the backend (JsonMappingEngine.ResolveJoinedFields):
+    // a delimited string by construction, never a JSON document, whatever its first source's type claims. So
+    // the choice is never offered for one — which is also why toSummaryColumn's joinedFields branch has no
+    // jsonWriteMode to persist.
+    it('offers nothing for a join, even one whose primary source is Json-typed', () => {
+      const join: MappingRow = {
+        resource: 'Patient',
+        sources: [
+          { fhirPath: 'Patient.name.given', label: 'Given', valueType: 'Json' },
+          { fhirPath: 'Patient.name.family', label: 'Family', valueType: 'String' },
+        ],
+        mode: 'value', instance: { type: 'first' }, delimiter: ', ',
+        targetName: 'Name', tableName: 'patients_local', jsonWriteMode: 'document',
+      };
+      expect(supportsJsonWriteMode(join)).toBeFalse();
+      // A join DOES emit a format — the "joinedFields" mode prefix, without which JsonMappingEngine resolves
+      // the "|"-delimited jsonPath as one literal path and the column goes silently NULL. So the assertion
+      // is that no json= marker rides along with it, not that there is no format at all; "format is
+      // undefined" was only ever a proxy for that, accurate while a join emitted none.
+      expect(serializeRowsFlat([join], {})[0].format).toBe('joinedFields;delimiter=, ');
+      expect(serializeRowsFlat([join], {})[0].format).not.toContain('json=');
+    });
+
+    // The marker and the declared ValueType have to agree: the backend honours the marker only on a
+    // ValueType=Json field (MappedMongoDestinationWriter.ResolveDocumentJsonColumns), and JsonMappingEngine
+    // only hands the value through as raw JSON text for that type. A row rebuilt from the Mapping JSON
+    // summary has lost its source valueType, so without this the assembler's path-guessed 'String' would win
+    // and the write would silently downgrade to escaped text while the UI still showed "JSON document".
+    it('declares Json whenever it emits the marker, even with no source valueType', () => {
+      const lostType: MappingRow = {
+        resource: 'Patient',
+        sources: [{ fhirPath: 'Patient.extension', label: 'extension' }],
+        mode: 'value', instance: { type: 'first' },
+        targetName: 'Extension', tableName: 'patients_local', jsonWriteMode: 'document',
+      };
+      const flat = serializeRowsFlat([lostType], {})[0];
+      expect(flat.format).toBe('json=document');
+      expect(flat.valueType).toBe('Json');
+    });
+
+    it("leaves an unmarked row's own valueType alone", () => {
+      const plain: MappingRow = {
+        resource: 'Patient',
+        sources: [{ fhirPath: 'Patient.gender', label: 'Gender', valueType: 'String' }],
+        mode: 'value', instance: { type: 'first' },
+        targetName: 'Gender', tableName: 'patients_local',
+      };
+      const flat = serializeRowsFlat([plain], {})[0];
+      expect(flat.valueType).toBe('String');
+      expect(flat.format).toBeUndefined();
+    });
+
+    it('formatWithJsonWriteMode replaces a previously-stored json= marker rather than stacking one', () => {
+      expect(formatWithJsonWriteMode('wholeNodeAsJson;json=document', 'string')).toBe('wholeNodeAsJson');
+      expect(formatWithJsonWriteMode('json=document', 'string')).toBeUndefined();
+      expect(formatWithJsonWriteMode('json=document', 'document')).toBe('json=document');
+    });
+  });
+
+  // Which instance a whole-node mapping reads travels as an index in the JsonPath, not in the ArrayPolicy
+  // enum (which has no "the nth one, as JSON" member) -- see wholeNodeJsonPath.
+  describe('childJson instance selection', () => {
+    function wholeNodeRow(instance?: MappingRow['instance']): MappingRow {
+      return {
+        resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient.name',
+        instance, targetName: 'NameJson', tableName: 'dbo.Patient',
+      };
+    }
+
+    it('emits no explicit jsonPath when unset, so the whole node is still read as before', () => {
+      const flat = serializeRowsFlat([wholeNodeRow()], {});
+      expect(flat[0].jsonPath).toBeUndefined();
+      expect(flat[0].path).toBe('Patient.name');
+    });
+
+    it('"all records" also reads the whole node - no index', () => {
+      expect(serializeRowsFlat([wholeNodeRow({ type: 'all' })], {})[0].jsonPath).toBeUndefined();
+    });
+
+    it('"first instance" indexes the node, keeping StoreJson and Json', () => {
+      const flat = serializeRowsFlat([wholeNodeRow({ type: 'first' })], {});
+      expect(flat[0].jsonPath).toBe('$.name[0]');
+      expect(flat[0].arrayPolicy).toBe('StoreJson');
+      expect(flat[0].valueType).toBe('Json');
+      expect(flat[0].approximated).toBeFalse();
+    });
+
+    it('"nth instance" is exact - the 1-based UI number becomes a 0-based index', () => {
+      const flat = serializeRowsFlat([wholeNodeRow({ type: 'nth', n: 3 })], {});
+      expect(flat[0].jsonPath).toBe('$.name[2]');
+      expect(flat[0].approximated).toBeFalse();
+    });
+
+    it('"match criteria" becomes a filter on the node, not a position', () => {
+      const flat = serializeRowsFlat([wholeNodeRow({ type: 'criteria', field: 'use', op: '=', value: 'official' })], {});
+      expect(flat[0].jsonPath).toBe('$.name[?use=official]');
+      expect(flat[0].approximated).toBeFalse();
+    });
+
+    it('maps each criteria operator to its wire form', () => {
+      const of = (op: 'contains' | '!=' | '=') =>
+        serializeRowsFlat([wholeNodeRow({ type: 'criteria', field: 'use', op, value: 'official' })], {})[0].jsonPath;
+      expect(of('=')).toBe('$.name[?use=official]');
+      expect(of('!=')).toBe('$.name[?use!=official]');
+      expect(of('contains')).toBe('$.name[?use~official]');
+    });
+
+    it('selects nothing rather than everything while the criteria names no field yet', () => {
+      const flat = serializeRowsFlat([wholeNodeRow({ type: 'criteria', field: '', op: '=', value: 'official' })], {});
+      expect(flat[0].jsonPath).toBeUndefined();
+    });
+
+    it('never indexes the resource root - a resource object is not a repeating element', () => {
+      const wholePayload: MappingRow = {
+        resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient',
+        instance: { type: 'first' }, targetName: 'content', tableName: 'dbo.Patient',
+      };
+      expect(serializeRowsFlat([wholePayload], {})[0].jsonPath).toBeUndefined();
+    });
   });
 
   describe('isUpsertKey', () => {
@@ -454,6 +756,19 @@ describe('resolveArrayPolicy', () => {
       .toEqual({ arrayPolicy: 'StoreJson', approximated: false });
   });
 
+  it('childJson mode stays StoreJson for every exact instance selection', () => {
+    const exact: MappingRow['instance'][] = [{ type: 'all' }, { type: 'first' }, { type: 'nth', n: 2 }];
+    for (const instance of exact) {
+      expect(resolveArrayPolicy(row({ mode: 'childJson', sources: [], childNodeId: 'name', instance })))
+        .toEqual({ arrayPolicy: 'StoreJson', approximated: false });
+    }
+  });
+
+  it('childJson mode with "match criteria" -> StoreJson, exact (the filter rides in the JsonPath)', () => {
+    expect(resolveArrayPolicy(row({ mode: 'childJson', sources: [], childNodeId: 'name', instance: { type: 'criteria' } })))
+      .toEqual({ arrayPolicy: 'StoreJson', approximated: false });
+  });
+
   it('single source, instance "first" -> FirstItem, not approximated', () => {
     expect(resolveArrayPolicy(row({ instance: { type: 'first' } })))
       .toEqual({ arrayPolicy: 'FirstItem', approximated: false });
@@ -544,12 +859,64 @@ describe('resolveArrayPolicy', () => {
     });
   });
 
-  it('joined sources (>1) -> rules applied to sources[0], always approximated', () => {
+  it('joined sources (>1) -> joinedFields format, not approximated', () => {
     const joined = row({
       sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
       instance: { type: 'first' },
+      delimiter: ', ',
     });
-    expect(resolveArrayPolicy(joined)).toEqual({ arrayPolicy: 'FirstItem', approximated: true });
+    expect(resolveArrayPolicy(joined))
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: false, format: 'joinedFields;delimiter=, ' });
+  });
+
+  it('a joined row with an INCOMPLETE criteria still reports itself as approximated', () => {
+    // The join is exact, but the instance selection layered on it is not — hard-coding approximated:false
+    // for every joined row swallowed that, hiding the "Preview only" banner which is the only signal that
+    // the criteria the user half-typed is not actually running.
+    const joined = row({
+      sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
+      instance: { type: 'criteria', field: 'use', op: '=', value: '' },
+      delimiter: ', ',
+    });
+    expect(resolveArrayPolicy(joined))
+      .toEqual({ arrayPolicy: 'FirstItem', approximated: true, format: 'joinedFields;delimiter=, ' });
+  });
+
+  it('a joined row with a COMPLETE criteria keeps CorrelateByCode and is exact', () => {
+    const joined = row({
+      sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
+      instance: { type: 'criteria', field: 'use', op: '=', value: 'official' },
+      delimiter: ', ',
+    });
+    expect(resolveArrayPolicy(joined)).toEqual({
+      arrayPolicy: 'CorrelateByCode',
+      approximated: false,
+      correlationSiblingField: 'use',
+      correlationCodeValue: 'official',
+      correlationOperator: 'Equals',
+      format: 'joinedFields;delimiter=, ',
+    });
+  });
+
+  it('joined sources keep the instance marker alongside the joinedFields prefix', () => {
+    const joined = row({
+      sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
+      instance: { type: 'all', aggregate: 'csv' },
+      delimiter: ', ',
+    });
+    expect(resolveArrayPolicy(joined)).toEqual({
+      arrayPolicy: 'FirstItem', approximated: false,
+      format: 'joinedFields;delimiter=, ;aggregate=csv',
+    });
+  });
+
+  it('strips delimiter characters that would collide with the Format marker syntax', () => {
+    const joined = row({
+      sources: [arraySource, { ...baseSource, fhirPath: 'Patient.name.family', label: 'Last Name' }],
+      instance: { type: 'first' },
+      delimiter: '; =',
+    });
+    expect(resolveArrayPolicy(joined).format).toBe('joinedFields;delimiter= ');
   });
 
   it('absent instance defaults to "first" semantics', () => {
@@ -704,6 +1071,47 @@ describe('checkColumnTypeCompatibility', () => {
       expect(checkColumnTypeCompatibility(childJsonRow, column, 'Json')).toBeNull();
     });
 
+    describe('the remedy it names', () => {
+      // Quantity/Range Assembly's output type is fixed by the node (TransformNodeTypeDefaults) — the rule
+      // popover renders no control for it, so telling its author to "fix the rule's Expected output type"
+      // sends them hunting for something that isn't there. Only NumberCast/DateTimeFormat have that control.
+      const bounded = { dataType: 'character varying', mappingValueType: 'String', maxLength: 255 };
+
+      it('points a fixed-output node at the column, not at a control it does not have', () => {
+        const error = checkColumnTypeCompatibility(childJsonRow, bounded, 'Json', 'QuantityRangeAssembly');
+        expect(error).toContain('QuantityRangeAssembly always does');
+        expect(error).toContain('text column');
+        expect(error).not.toContain("fix the rule's Expected output type");
+      });
+
+      it('still offers the output-type fix for a node that really exposes one', () => {
+        const error = checkColumnTypeCompatibility(childJsonRow, bounded, 'Json', 'NumberCast');
+        expect(error).toContain("fix the rule's Expected output type");
+      });
+
+      it('keeps the generic wording when the node type is unknown', () => {
+        const error = checkColumnTypeCompatibility(childJsonRow, bounded, 'Json');
+        expect(error).toContain("fix the rule's Expected output type");
+      });
+
+      it('only mentions text columns for a Json mismatch', () => {
+        const intColumn = { dataType: 'integer', mappingValueType: 'Integer', maxLength: null };
+        const error = checkColumnTypeCompatibility(childJsonRow, intColumn, 'Date', 'CodeableConceptBuilder');
+        expect(error).toContain('CodeableConceptBuilder always does');
+        expect(error).not.toContain('text column');
+      });
+
+      it('treats DateMathAge as overridable — its operation select decides Date vs Integer', () => {
+        // resolveExpectedValueType derives DateMathAge's output from `operation` ("add"/"shift" -> Date,
+        // "age" -> Integer), so "it always outputs Date" is false and sends the author to ALTER TABLE when
+        // a dropdown on the rule already open is the real fix.
+        const intColumn = { dataType: 'integer', mappingValueType: 'Integer', maxLength: null };
+        const error = checkColumnTypeCompatibility(childJsonRow, intColumn, 'Date', 'DateMathAge');
+        expect(error).toContain("fix the rule's Expected output type");
+        expect(error).not.toContain('always does');
+      });
+    });
+
     // MySQL's information_schema NEVER reports a null character_maximum_length for TEXT/MEDIUMTEXT/
     // LONGTEXT — always a real (if huge) number, since capacity is fixed by the type keyword itself, not
     // an independently configurable length the way varchar(n) is. maxLength === null alone would miss
@@ -756,5 +1164,52 @@ describe('checkColumnTypeCompatibility', () => {
     };
     const column = { dataType: 'character varying', mappingValueType: 'STRING' };
     expect(checkColumnTypeCompatibility(row, column)).toBeNull();
+  });
+});
+
+describe('whole-node instance helpers', () => {
+  function wholeNodeRow(instance?: MappingRow['instance']): MappingRow {
+    return {
+      resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient.name',
+      instance, targetName: 'NameJson', tableName: 'dbo.Patient',
+    };
+  }
+
+  const valueRow: MappingRow = {
+    resource: 'Patient', sources: [{ fhirPath: 'Patient.name.family', label: 'Family' }],
+    mode: 'value', targetName: 'Family', tableName: 'dbo.Patient',
+  };
+
+  it('an unset instance means "the whole node" for a childJson row, "first" for a value row', () => {
+    expect(defaultInstanceType(wholeNodeRow())).toBe('all');
+    expect(defaultInstanceType(valueRow)).toBe('first');
+  });
+
+  it('maps each POSITIONAL instance type to the index it reads, or null', () => {
+    expect(wholeNodeInstanceIndex(undefined)).toBeNull();
+    expect(wholeNodeInstanceIndex({ type: 'all' })).toBeNull();
+    expect(wholeNodeInstanceIndex({ type: 'first' })).toBe(0);
+    expect(wholeNodeInstanceIndex({ type: 'nth', n: 4 })).toBe(3);
+    // Criteria is not positional — it resolves to a filter instead (instanceCriteriaPredicate).
+    expect(wholeNodeInstanceIndex({ type: 'criteria' })).toBeNull();
+  });
+
+  it('clamps a nonsensical instance number rather than emitting a negative index', () => {
+    expect(wholeNodeInstanceIndex({ type: 'nth', n: 0 })).toBe(0);
+    expect(wholeNodeInstanceIndex({ type: 'nth', n: -5 })).toBe(0);
+    expect(wholeNodeJsonPath(wholeNodeRow({ type: 'nth', n: 0 }))).toBe('$.name[0]');
+  });
+
+  it('strips the resource prefix the node id carries, and leaves a value row alone', () => {
+    expect(wholeNodeJsonPath(wholeNodeRow({ type: 'first' }))).toBe('$.name[0]');
+    expect(wholeNodeJsonPath(valueRow)).toBeUndefined();
+  });
+
+  it('handles a nested node under a repeating parent', () => {
+    const nested: MappingRow = {
+      resource: 'Patient', sources: [], mode: 'childJson', childNodeId: 'Patient.contact.name',
+      instance: { type: 'nth', n: 2 }, targetName: 'ContactNameJson', tableName: 'dbo.Patient',
+    };
+    expect(wholeNodeJsonPath(nested)).toBe('$.contact.name[1]');
   });
 });

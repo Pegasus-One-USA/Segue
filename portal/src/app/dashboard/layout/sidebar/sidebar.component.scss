@@ -13,6 +13,8 @@
   &.collapsed {
     width: 64px;
     padding: 0 8px 24px;
+
+    .sidebar-footer { padding: 10px 4px; }
   }
 }
 
@@ -48,6 +50,47 @@
     color: var(--color-ink);
     white-space: nowrap;
     letter-spacing: -0.3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  // v2, collapsed: the 64px rail has no room for the logo and the toggle side by side, so they stack
+  // instead — logo on top, toggle underneath, both still visible rather than one disappearing.
+  // .sidebar-toggle's margin-left:auto (meant for sitting beside the logo in the normal row layout)
+  // would otherwise pin it to one side of the column; centered here like every other child.
+  &.sidebar-logo--stacked {
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 4px 20px;
+    .sidebar-toggle { margin-left: 0; }
+  }
+}
+
+// v2's own collapse toggle, next to the logo — mirrors .shell-hamburger (app-shell.component.scss),
+// which this replaces when there is no topbar to hold it.
+.sidebar-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px;
+  margin-left: auto;
+  background: none;
+  border: none;
+  border-radius: var(--radius-base);
+  cursor: pointer;
+  color: var(--color-muted);
+  flex-shrink: 0;
+  transition: background var(--transition-base), color var(--transition-base);
+
+  &:hover { background: var(--color-side); color: var(--color-ink); }
+
+  .h-line {
+    display: block;
+    width: 15px;
+    height: 1.5px;
+    background: currentColor;
+    border-radius: var(--radius-pill);
   }
 }
 
@@ -55,6 +98,18 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  // v2: pushes .sidebar-footer to the bottom of the flex-column .sidebar; a no-op in v1, which
+  // never renders that footer at all.
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+// v2 only — the account-menu foot-block, pinned below the (now flex:1, scrollable) nav list.
+.sidebar-footer {
+  border-top: 1px solid var(--color-side);
+  padding: 10px 12px;
+  flex-shrink: 0;
 }
 
 .nav-item {
