@@ -64,39 +64,6 @@
             </svg>
           </button>
 
-          @if (parentTableMenuOpen() && parentTableMenuStyle(); as pos) {
-            <div
-              class="fm-createtable-parent-panel"
-              [style.top.px]="pos.top"
-              [style.bottom.px]="pos.bottom"
-              [style.left.px]="pos.left"
-              [style.width.px]="pos.width"
-              [style.max-height.px]="pos.maxHeight"
-            >
-              <div class="fm-createtable-parent-search-wrap">
-                <input
-                  #parentTableSearchInput
-                  type="search"
-                  class="fm-createtable-parent-search"
-                  placeholder="Search tables…"
-                  aria-label="Search tables"
-                  [value]="parentTableSearchQuery()"
-                  (input)="onParentTableSearchInput($any($event.target).value)"
-                />
-                @if (parentTableSearchQuery()) {
-                  <button type="button" class="fm-createtable-parent-search-clear" aria-label="Clear search" (click)="clearParentTableSearch()">✕</button>
-                }
-              </div>
-              <div class="fm-createtable-parent-options">
-                @if (filteredExistingTables().length === 0) {
-                  <div class="fm-createtable-parent-no-match">No tables match "{{ parentTableSearchQuery() }}".</div>
-                }
-                @for (t of filteredExistingTables(); track t) {
-                  <button type="button" class="fm-createtable-parent-option" (click)="selectParentTable(t)">{{ t }}</button>
-                }
-              </div>
-            </div>
-          }
         </div>
         <label class="fm-createtable-field">
           <span class="text-label">Relation column (parent)</span>
@@ -179,3 +146,50 @@
     </div>
   </div>
 </div>
+
+<!-- Rendered OUTSIDE .fm-createtable-backdrop on purpose. The panel is position: fixed at coordinates
+     taken from the trigger's getBoundingClientRect(), i.e. viewport coordinates — but the backdrop
+     carries backdrop-filter: blur(2px), and a non-none filter/backdrop-filter makes an element the
+     containing block for its fixed-position descendants. While the panel lived inside the backdrop its
+     top/left resolved against that backdrop (itself position: absolute over the field-mapping canvas),
+     so the list opened shifted right by the sidebar and down by the header. As a sibling it has no
+     filtered ancestor, so "fixed" means the viewport again and the coordinates land where they say.
+     Two consequences are handled in the component: the outside-click matcher must accept clicks in the
+     panel (it is no longer inside .fm-createtable-parent-slot), and Escape is bound here directly since
+     it can no longer bubble to the backdrop. -->
+@if (parentTableMenuOpen() && parentTableMenuStyle(); as pos) {
+  <div
+    class="fm-createtable-parent-panel"
+    role="dialog"
+    tabindex="-1"
+    (keydown.escape)="closeParentTableMenu()"
+    [style.top.px]="pos.top"
+    [style.bottom.px]="pos.bottom"
+    [style.left.px]="pos.left"
+    [style.width.px]="pos.width"
+    [style.max-height.px]="pos.maxHeight"
+  >
+    <div class="fm-createtable-parent-search-wrap">
+      <input
+        #parentTableSearchInput
+        type="search"
+        class="fm-createtable-parent-search"
+        placeholder="Search tables…"
+        aria-label="Search tables"
+        [value]="parentTableSearchQuery()"
+        (input)="onParentTableSearchInput($any($event.target).value)"
+      />
+      @if (parentTableSearchQuery()) {
+        <button type="button" class="fm-createtable-parent-search-clear" aria-label="Clear search" (click)="clearParentTableSearch()">✕</button>
+      }
+    </div>
+    <div class="fm-createtable-parent-options">
+      @if (filteredExistingTables().length === 0) {
+        <div class="fm-createtable-parent-no-match">No tables match "{{ parentTableSearchQuery() }}".</div>
+      }
+      @for (t of filteredExistingTables(); track t) {
+        <button type="button" class="fm-createtable-parent-option" (click)="selectParentTable(t)">{{ t }}</button>
+      }
+    </div>
+  </div>
+}

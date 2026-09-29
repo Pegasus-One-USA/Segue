@@ -119,7 +119,13 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
 
   @HostListener('document:click', ['$event'])
   onDocumentClickForParentTableMenu(event: MouseEvent): void {
-    if (this.parentTableMenuOpen() && !(event.target as HTMLElement).closest('.fm-createtable-parent-slot')) {
+    // BOTH selectors, because the panel is rendered outside the backdrop (see the template's own note)
+    // and so is no longer a descendant of the trigger's slot. Matching only the slot would close the
+    // menu on the very first click inside it — typing in its search box, or picking an option.
+    const target = event.target as HTMLElement;
+    if (this.parentTableMenuOpen()
+        && !target.closest('.fm-createtable-parent-slot')
+        && !target.closest('.fm-createtable-parent-panel')) {
       this.closeParentTableMenu();
     }
   }
@@ -177,10 +183,11 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
   }
 
   onEscape(): void {
-    // The parent-table panel is a DOM descendant of this modal (needed so position: fixed still
-    // measures against the real viewport, not some transformed ancestor) — an Escape typed into its
-    // search box would otherwise bubble up to this same handler and cancel the WHOLE modal instead of
-    // just closing the panel the user actually meant to dismiss.
+    // Kept even though the panel now binds its own Escape: the panel is rendered OUTSIDE the backdrop
+    // (its blur made it a containing block and shifted the fixed-position list — see the template), so
+    // an Escape from the panel no longer bubbles here at all. This still covers Escape pressed while
+    // the panel is open but focus sits back in the dialog, which must close the panel rather than
+    // cancel the WHOLE modal.
     if (this.parentTableMenuOpen()) {
       this.closeParentTableMenu();
       return;
