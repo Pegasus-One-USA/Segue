@@ -52,6 +52,11 @@ export class UnsavedChangesPromptService {
       .open(ConfirmDialogComponent, {
         width: '440px',
         restoreFocus: false,
+        // Lifts the CDK overlay container above GlobalLoaderComponent (see styles.scss). This prompt
+        // opens while the loader is already up — NavigationStart raised it, and answering this is what
+        // lets navigation resolve and stop it — so under the loader its own buttons are unclickable and
+        // the page deadlocks on the spinner.
+        panelClass: 'leave-confirm-dialog',
         data: {
           title: 'Leave this page?',
           message: 'You have unsaved changes that will be lost if you leave. Continue?',
