@@ -1,6 +1,6 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { Subject, of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { ExecutionHistoryListComponent } from './execution-history-list.component';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
 import { RunStatusChangedEvent, RunStatusHubService } from '../../../services/run-status-hub.service';
@@ -90,6 +90,55 @@ describe('ExecutionHistoryListComponent live run status', () => {
     expect(api.list).toHaveBeenCalledTimes(2);
     expect(api.list.calls.mostRecent().args[1]).toEqual({ silent: true });
     expect(fixture.componentInstance.searching()).toBeFalse();
+    fixture.destroy();
+  }));
+
+  it('a slow background refresh cannot overwrite a newer page change (newer request cancels the older)', fakeAsync(() => {
+    const fixture = TestBed.createComponent(ExecutionHistoryListComponent);
+    fixture.detectChanges();
+    const slow = new Subject<unknown>();
+    const fast = new Subject<unknown>();
+    api.list.and.returnValues(slow as never, fast as never);
+
+    events$.next(eventFor(workflowId));
+    tick(1000);                                            // background refresh for page 1, still in flight
+    fixture.componentInstance.pageIndex.set(1);
+    fixture.componentInstance.load();                      // user moves to page 2
+
+    fast.next({ ...page('Succeeded'), page: 2 });          // page 2 arrives first
+    slow.next({ ...page('Running'), page: 1 });            // the stale page 1 arrives last
+
+    expect(slow.observed).toBeFalse();                     // the older request was unsubscribed (aborted)
+    expect(fixture.componentInstance.result().page).toBe(2);
+    fixture.destroy();
+  }));
+
+  it('clears the search spinner and loading flag when a search request is cancelled by a newer load', fakeAsync(() => {
+    const fixture = TestBed.createComponent(ExecutionHistoryListComponent);
+    fixture.detectChanges();
+    const search = new Subject<unknown>();
+    api.list.and.returnValues(search as never, of(page('Succeeded')) as never);
+
+    fixture.componentInstance.load(true);                  // search-box load: spinner on, stays in flight
+    expect(fixture.componentInstance.searching()).toBeTrue();
+    events$.next(eventFor(workflowId));
+    tick(1000);                                            // background refresh replaces it and completes
+
+    expect(fixture.componentInstance.searching()).toBeFalse();
+    expect(fixture.componentInstance.loading()).toBeFalse();
+    fixture.destroy();
+  }));
+
+  it('keeps loading after a request fails', fakeAsync(() => {
+    const fixture = TestBed.createComponent(ExecutionHistoryListComponent);
+    fixture.detectChanges();
+    api.list.and.returnValue(throwError(() => new Error('boom')) as never);
+    fixture.componentInstance.load();
+    expect(fixture.componentInstance.loading()).toBeFalse();
+
+    api.list.and.returnValue(of(page('Succeeded')) as never);
+    fixture.componentInstance.load();
+    expect(fixture.componentInstance.result().items[0].status).toBe('Succeeded');
     fixture.destroy();
   }));
 
