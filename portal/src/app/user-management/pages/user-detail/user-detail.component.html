@@ -78,23 +78,23 @@
               Status
               <mat-icon>arrow_drop_down</mat-icon>
             </button>
-            <mat-menu #statusMenu="matMenu">
+            <mat-menu #statusMenu="matMenu" class="app-kebab-menu">
               <ng-container *appHideWithoutPermission="permissionCode(PermissionGroup.User, PermissionAction.Deactivate)">
                 @if (user()!.status !== 'active') {
                   <button mat-menu-item (click)="toggleStatus('enable')">
-                    <mat-icon class="icon-enable">check_circle</mat-icon>
+                    <mat-icon>check_circle</mat-icon>
                     Enable User
                   </button>
                 }
                 @if (user()!.status === 'active' && !isSelf()) {
                   <button mat-menu-item (click)="toggleStatus('disable')">
-                    <mat-icon class="icon-disable">remove_circle</mat-icon>
+                    <mat-icon>remove_circle</mat-icon>
                     Disable User
                   </button>
                 }
                 @if (user()!.status !== 'suspended' && !isSelf()) {
-                  <button mat-menu-item (click)="toggleStatus('suspend')">
-                    <mat-icon class="icon-suspend">block</mat-icon>
+                  <button mat-menu-item class="menu-item-danger" (click)="toggleStatus('suspend')">
+                    <mat-icon>block</mat-icon>
                     Suspend User
                   </button>
                 }
