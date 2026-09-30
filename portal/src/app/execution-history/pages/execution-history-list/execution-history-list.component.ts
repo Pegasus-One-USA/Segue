@@ -1,10 +1,11 @@
-﻿import { Component, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+﻿import { Component, DestroyRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
+import { Subject, debounceTime, distinctUntilChanged, filter } from 'rxjs';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
 import { BulkExportStatus, PagedResult, RouteExecution } from '../../models/execution-history.model';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
@@ -18,6 +19,11 @@ import {
 } from '../../../data/connection-type-labels.util';
 import { PhaseConfigService } from '../../../services/phase-config.service';
 import { PermissionService } from '../../../auth/services/permission.service';
+import { RunStatusHubService } from '../../../services/run-status-hub.service';
+
+/** Several runs settling within the same moment collapse into one refetch instead of one per event — same value
+ *  the Dashboard uses. */
+const RUN_STATUS_REFRESH_DEBOUNCE_MS = 300;
 
 type SortColumn = 'pipeline' | 'source' | 'status' | 'duration' | 'lastRun' | 'triggeredBy';
 type SortDirection = 'asc' | 'desc';
@@ -54,6 +60,28 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   private readonly phaseCfg = inject(PhaseConfigService);
   private readonly permissions = inject(PermissionService);
   private readonly hasPermission = (code: string) => this.permissions.hasPermission(code);
+  private readonly runStatusHub = inject(RunStatusHubService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  constructor() {
+    // Without this the page showed whatever it fetched on open: a run that finished while you watched stayed
+    // "Running" until a manual refresh, while the Workflows list (which listens here) already said Succeeded.
+    // A refetch rather than a row patch, because a run that just STARTED is a row this page doesn't have yet,
+    // and the status/lastRun sort can move rows. Background — no global loader, no search-box spinner.
+    this.runStatusHub.ensureConnected();
+    this.runStatusHub.runStatusChanged$
+      .pipe(
+        filter(event => !this.workflowIdFilter() || event.workflowDefinitionId === this.workflowIdFilter()),
+        debounceTime(RUN_STATUS_REFRESH_DEBOUNCE_MS),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => this.refreshInBackground());
+
+    // Reconciles whatever was missed while the hub was disconnected (the first connect included).
+    this.runStatusHub.reconnected$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.refreshInBackground());
+  }
 
   // ── Multi-select facets ───────────────────────────────────────────────────
   // Option lists come from the server's facets, which apply the same rule the Workflows list does: Status and
@@ -175,10 +203,11 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.search$.complete();
   }
 
-  /** `silent` comes only from the debounced search box — see ExecutionHistoryApiService.list. */
-  load(silent = false): void {
+  /** `silent` skips the global loader — see ExecutionHistoryApiService.list. The debounced search box passes it
+   *  and wants the in-field spinner; a run-status refresh passes it and doesn't (nobody is typing). */
+  load(silent = false, showSearchSpinner = silent): void {
     this.loading.set(true);
-    if (silent) this.searching.set(true);
+    if (showSearchSpinner) this.searching.set(true);
     this.api.list({
       workflowId: this.workflowIdFilter() || undefined,
       sources: this.selectedSources().size ? [...this.selectedSources()] : undefined,
@@ -206,6 +235,9 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
       },
     });
   }
+
+  /** Same filters, page and sort as on screen — just current data. */
+  private refreshInBackground(): void { this.load(true, false); }
 
   onSearch(val: string): void { this.search$.next(val); }
 
