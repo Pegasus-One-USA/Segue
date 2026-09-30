@@ -1,0 +1,19 @@
+portal/src/app/core/components/dialog-shell/dialog-shell.component.scss
+  s_3ed121661efe12::t_9acb04b2284af0 31,74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "532039688b0b9361a9842ece307a1f3ba1af5d72",
+  "prompts": {},
+  "sessions": {
+    "s_3ed121661efe12": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b59933f-9a05-4a37-838a-9f358a20502f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
