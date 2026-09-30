@@ -4616,6 +4616,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("DestinationConfigurationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("DestinationField")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");

@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 
@@ -41,11 +41,18 @@ public interface IEffectiveRuleResolver
         string resourceType,
         string destinationField,
         Guid? resourcePipelineRouteId,
+        // Which destination configuration the column belongs to. Two destinations of the SAME type are
+        // indistinguishable without it, which is how a replaced PostgreSQL destination inherited the old
+        // one's rules. Null means "not known", and matches permissively.
+        Guid? destinationConfigurationId,
         string? sourceSystem,
         string? sourceField,
         CancellationToken cancellationToken,
         bool workflowScopedOnly = false,
-        bool includePendingWorkflowRules = false);
+        bool includePendingWorkflowRules = false,
+        // Whose pending rules may be seen. Only consulted when includePendingWorkflowRules is set, so
+        // the executors are unaffected. See ITransformationRuleRepository.GetPendingWorkflowScopedAsync.
+        string? pendingOwner = null);
 }
 
 public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
@@ -62,18 +69,24 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
         string resourceType,
         string destinationField,
         Guid? resourcePipelineRouteId,
+        // Which destination configuration the column belongs to. Two destinations of the SAME type are
+        // indistinguishable without it, which is how a replaced PostgreSQL destination inherited the old
+        // one's rules. Null means "not known", and matches permissively.
+        Guid? destinationConfigurationId,
         string? sourceSystem,
         string? sourceField,
         CancellationToken cancellationToken,
         bool workflowScopedOnly = false,
-        bool includePendingWorkflowRules = false)
+        bool includePendingWorkflowRules = false,
+        string? pendingOwner = null)
     {
         if (resourcePipelineRouteId is not null)
         {
             var workflowRules = PreferSourceFieldSpecific(
                 PreferSourceSpecific(
                     Enabled(await _repository.GetWorkflowScopedAsync(
-                        resourcePipelineRouteId.Value, resourceType, destinationField, sourceSystem, sourceField, cancellationToken)),
+                        resourcePipelineRouteId.Value, destinationConfigurationId,
+                        resourceType, destinationField, sourceSystem, sourceField, cancellationToken)),
                     sourceSystem),
                 sourceField);
             if (workflowRules.Count > 0)
@@ -95,7 +108,8 @@ public sealed class EffectiveRuleResolver : IEffectiveRuleResolver
             var pendingRules = PreferSourceFieldSpecific(
                 PreferSourceSpecific(
                     Enabled(await _repository.GetPendingWorkflowScopedAsync(
-                        destinationType, resourceType, destinationField, sourceSystem, sourceField, cancellationToken)),
+                        destinationType, resourceType, destinationField, sourceSystem, sourceField,
+                        pendingOwner, cancellationToken)),
                     sourceSystem),
                 sourceField);
             if (pendingRules.Count > 0)

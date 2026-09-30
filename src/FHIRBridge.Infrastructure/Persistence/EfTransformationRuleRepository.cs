@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -22,13 +22,23 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
     // wildcard" fallback below would otherwise match EVERY destination field for that resource type/scope,
     // masking fields the rule was never meant to touch.
     public async Task<IReadOnlyList<TransformationRule>> GetWorkflowScopedAsync(
-        Guid resourcePipelineRouteId, string resourceType, string destinationField, string? sourceSystem,
-        string? sourceField, CancellationToken cancellationToken) =>
+        Guid resourcePipelineRouteId, Guid? destinationConfigurationId, string resourceType,
+        string destinationField, string? sourceSystem, string? sourceField,
+        CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
                 x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
                 x.Scope == TransformScope.Workflow &&
                 x.ResourcePipelineRouteId == resourcePipelineRouteId &&
+                // Belonging to a workflow was assumed to pin the destination too. It does not: a
+                // workflow can have its destination replaced, or hold two of different types, and then
+                // one column name matched a rule written for the other destination entirely.
+                // The destination itself. Deliberately NOT the destination TYPE as well: the wizard reports
+                // "Csv" for every type it does not list explicitly (resolveDestinationTypeForRules), so a
+                // rule saved against e.g. a Fabric Cosmos destination carries a type that never matches the
+                // real one at run time — filtering on it silently stopped those workflows transforming.
+                (destinationConfigurationId == null || x.DestinationConfigurationId == null
+                    || x.DestinationConfigurationId == destinationConfigurationId) &&
                 x.ResourceType == resourceType &&
                 x.DestinationField == destinationField &&
                 (x.SourceSystem == null || x.SourceSystem == sourceSystem) &&
@@ -142,33 +152,83 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowRulesAsync(
-        IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken) =>
+        IReadOnlyCollection<DestinationType> destinationTypes, string? owner, CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
                 x.Scope == TransformScope.Workflow &&
                 x.ResourcePipelineRouteId == null &&
                 // Narrowed to the destination types the saving workflow actually writes to, so a second
                 // unsaved builder session's pending rules for an unrelated destination are left alone.
-                (destinationTypes.Count == 0 || destinationTypes.Contains(x.DestinationType!.Value)))
+                (destinationTypes.Count == 0 || destinationTypes.Contains(x.DestinationType!.Value)) &&
+                // ...and to who authored them, which the destination type alone never established: every
+                // unattached row for a matching type used to come back, so an abandoned session's rules
+                // were claimed by whoever next saved a workflow writing to that type. CreatedBy is a
+                // REQUIRED column (a rule cannot be persisted without provenance), so this leaves no row
+                // unowned and needs no null-tolerant branch.
+                (owner == null || x.CreatedBy == owner))
             .ToListAsync(cancellationToken);
+
+    public async Task<int> DeletePendingWorkflowRulesAsync(
+        IReadOnlyCollection<DestinationType> destinationTypes, string? owner, CancellationToken cancellationToken)
+    {
+        // Same predicate as the read above — deliberately, so "what a node delete removes" can never drift
+        // from "what a workflow save would have claimed".
+        var doomed = await GetPendingWorkflowRulesAsync(destinationTypes, owner, cancellationToken);
+        if (doomed.Count == 0)
+        {
+            return 0;
+        }
+
+        _db.TransformationRules.RemoveRange(doomed);
+        await _db.SaveChangesAsync(cancellationToken);
+        return doomed.Count;
+    }
 
     // Same shape as GetWorkflowScopedAsync above, minus the route-id equality (there is no route yet) plus a
     // DestinationType equality the attached tier gets for free by belonging to a workflow. Save-time only —
     // see the interface's own comment for why these rows stay invisible to the executors.
     public async Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowScopedAsync(
         DestinationType destinationType, string resourceType, string destinationField, string? sourceSystem,
-        string? sourceField, CancellationToken cancellationToken) =>
+        string? sourceField, string? owner, CancellationToken cancellationToken) =>
         await _db.TransformationRules
             .Where(x =>
                 x.ExecutionPhase == TransformExecutionPhase.PostMapping &&
                 x.Scope == TransformScope.Workflow &&
                 x.ResourcePipelineRouteId == null &&
+                // See GetPendingWorkflowRulesAsync: without this, a rule authored against a node that was
+                // since deleted still matches the column a NEW node now maps, and appears as a transformation
+                // the user never chose.
+                (owner == null || x.CreatedBy == owner) &&
                 x.DestinationType == destinationType &&
                 x.ResourceType == resourceType &&
                 x.DestinationField == destinationField &&
                 (x.SourceSystem == null || x.SourceSystem == sourceSystem) &&
                 (x.SourceField == null || x.SourceField == sourceField))
             .ToListAsync(cancellationToken);
+
+    public async Task<int> DeleteWorkflowRulesForDestinationAsync(
+        Guid resourcePipelineRouteId, Guid destinationConfigurationId, DestinationType destinationType,
+        bool includeUnattributed, CancellationToken cancellationToken)
+    {
+        var doomed = await _db.TransformationRules
+            .Where(x =>
+                x.Scope == TransformScope.Workflow &&
+                x.ResourcePipelineRouteId == resourcePipelineRouteId &&
+                (x.DestinationConfigurationId == destinationConfigurationId
+                    || (includeUnattributed
+                        && x.DestinationConfigurationId == null
+                        && x.DestinationType == destinationType)))
+            .ToListAsync(cancellationToken);
+
+        if (doomed.Count == 0)
+        {
+            return 0;
+        }
+
+        _db.TransformationRules.RemoveRange(doomed);
+        await _db.SaveChangesAsync(cancellationToken);
+        return doomed.Count;
+    }
 
     public Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         _db.TransformationRules.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);

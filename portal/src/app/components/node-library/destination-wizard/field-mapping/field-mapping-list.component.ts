@@ -113,6 +113,9 @@ export class FieldMappingListComponent {
    *  FieldMappingCanvasComponent's own doc comment. Null hides the "Transformations" tab entirely (nothing
    *  to look rules up against). */
   readonly rulesDestinationType = input<DestinationType | null>(null);
+  /** Must match what the join popover sends, for the same reason the other lookup fields do: this tab
+   *  and that popover answer the same question about the same field. */
+  readonly rulesDestinationConfigurationId = input<string | null>(null);
   /** Bumped by FieldMappingCanvasComponent every time the join popover closes — see its own doc comment.
    *  Not read directly, just a dependency the ruleByRowKey effect below needs to re-run on, since a
    *  transformation rule can change without any MappingRow (this component's real state) changing at all. */

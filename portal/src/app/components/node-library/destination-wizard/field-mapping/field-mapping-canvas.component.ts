@@ -112,6 +112,9 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  Optional (not every host of this canvas — e.g. the Mapping Profiles dialog — has a resolved
    *  destination type on hand); the popover simply hides its transformation-rule section when absent. */
   readonly rulesDestinationType = input<DestinationType | null>(null);
+  /** The DestinationConfiguration these columns belong to, passed straight through to the rule popover
+   *  and the mapping list — see the popover for why the destination TYPE cannot identify a destination. */
+  readonly rulesDestinationConfigurationId = input<string | null>(null);
   // ── pass-through to the "De-identification" tab (field-mapping-list) — same shared state
   // DestinationWizardComponent's Step 1 picker owns; this canvas has no logic of its own here. ──────────
   readonly deIdentificationProfiles = input<DeIdentificationProfileDto[]>([]);

@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Destinations;
+﻿using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
@@ -213,6 +213,9 @@ public sealed class CreateMappingProfileRequestValidator : AbstractValidator<Cre
                     request.ResourceType,
                     field.TargetField,
                     request.ResourcePipelineRouteId,
+                    // null matches permissively — this check asks "will any rule transform this column",
+                    // and narrowing it to one destination could let a real type mismatch through.
+                    destinationConfigurationId: null,
                     sourceSystem: null,
                     // Must be normalized the same way the UI persists it, or the SourceField equality below the
                     // resolver matches nothing and every rule keyed to a source path goes unseen here.

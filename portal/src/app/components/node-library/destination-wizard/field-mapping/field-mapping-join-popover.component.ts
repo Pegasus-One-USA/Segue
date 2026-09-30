@@ -1,4 +1,4 @@
-import { Component, HostBinding, computed, inject, input, output, signal, effect } from '@angular/core';
+import { Component, HostBinding, computed, inject, input, output, signal, effect, untracked } from '@angular/core';
 import { A11yModule } from '@angular/cdk/a11y';
 import { FormsModule } from '@angular/forms';
 import { MappingRow, MappingInstanceSelection, resolveArrayPolicy, isReferenceCandidate } from './field-mapping-model';
@@ -33,6 +33,9 @@ export class FieldMappingJoinPopoverComponent {
   /** See FieldMappingCanvasComponent's own doc comment — null hides the transformation-rule section
    *  entirely (this popover has no destination type to scope a rule against). */
   readonly rulesDestinationType = input<DestinationType | null>(null);
+  /** The DestinationConfiguration these columns belong to — see the v2 popover for why the type alone
+   *  cannot identify a destination. Null when unknown, which matches permissively. */
+  readonly rulesDestinationConfigurationId = input<string | null>(null);
   /** Same resolver FieldMappingCanvasComponent already threads through its own cards (display-only,
    *  same role as its own dataTypeForTable) — used to show the target column's real type next to its
    *  name, rather than inventing one. Undefined (no live schema, e.g. a CSV/Mongo destination) just
@@ -65,6 +68,41 @@ export class FieldMappingJoinPopoverComponent {
   readonly ruleSectionOpen = signal(false);
   readonly ruleNodeType = signal<TransformNodeType>('StringNormalization');
   readonly ruleConfig = signal<Record<string, string>>({});
+
+  /** The rule as it stands on the SERVER — captured when one is loaded, when the section is opened
+   *  for a row that has none, and after a successful save. Everything typed in the section lives in
+   *  ruleConfig alone until "Add rule"/"Update rule" is pressed, so this is the only way to tell an
+   *  edit that would be persisted from one that would be thrown away. Null until the first capture,
+   *  which means "nothing to compare against" rather than "everything is unsaved". */
+  private readonly ruleBaseline = signal<string | null>(null);
+
+  private ruleSnapshot(): string {
+    return JSON.stringify({ nodeType: this.ruleNodeType(), config: this.ruleConfig() });
+  }
+
+  private captureRuleBaseline(): void {
+    // untracked because this runs inside the subscribe of loadRuleFor, which is itself called from an
+    // effect(). Reading ruleNodeType/ruleConfig in that context registers them as dependencies OF THE
+    // EFFECT, so every edit to the config re-ran the rule lookup — which then reset the node type and
+    // silently undid what the author had just chosen. It only bites when the lookup resolves
+    // synchronously (a test double, or any future cache), which is exactly why it is worth removing
+    // rather than relying on the HTTP call always being slow enough to hide it.
+    this.ruleBaseline.set(untracked(() => this.ruleSnapshot()));
+  }
+
+  /** Whether the rule section holds changes that have never reached the server. Closing the popover
+   *  discards those with nothing left to recover — unlike a SAVED rule, which survives on the server
+   *  even when the workflow itself is never saved. */
+  readonly hasUnsavedRule = computed(() => {
+    const baseline = this.ruleBaseline();
+    return baseline !== null && this.ruleSnapshot() !== baseline;
+  });
+
+  /** Which exit is waiting on the "not saved" confirm, or null when none is. Both routes leave the
+   *  popover and so discard the rule config: the ✕/Escape/Cancel route closes, and Save emits the
+   *  mapping save — whose handler calls closePopover() itself, which is why guarding onClose() alone
+   *  left the likeliest button of the two unguarded. */
+  readonly pendingUnsavedRuleAction = signal<'close' | 'save' | null>(null);
   readonly ruleSaving = signal(false);
   readonly ruleDeleting = signal(false);
 
@@ -90,6 +128,7 @@ export class FieldMappingJoinPopoverComponent {
         resourceType: row.resource,
         destinationField: row.targetName,
         sourceField: row.sources[0]?.fhirPath ?? null,
+        destinationConfigurationId: this.rulesDestinationConfigurationId(),
       })
       .subscribe({
         next: rules => {
@@ -105,6 +144,7 @@ export class FieldMappingJoinPopoverComponent {
             this.ruleConfig.set({ ...rule.config });
             this.ruleSectionOpen.set(true);
           }
+          this.captureRuleBaseline();
         },
         error: () => this.existingRule.set(null),
       });
@@ -115,6 +155,8 @@ export class FieldMappingJoinPopoverComponent {
     this.ruleSectionOpen.set(opening);
     if (opening && !this.existingRule()) {
       this.ruleConfig.set(applyNodeDefaults(this.ruleSchema(), {}));
+      // Defaults are not an edit — only what the author changes after this point counts.
+      this.captureRuleBaseline();
     }
   }
 
@@ -136,6 +178,10 @@ export class FieldMappingJoinPopoverComponent {
         nodeType: this.ruleNodeType(),
         config: this.ruleConfig(),
         destinationType,
+        // Which destination this rule belongs to. Omitting it stores a null, which matches ANY
+        // destination of the same type — so a replacement destination inherits the rule and
+        // delete-by-destination cannot identify it. Covered by a test on the POSTed body.
+        destinationConfigurationId: this.rulesDestinationConfigurationId(),
         resourceType: row.resource,
         destinationField: row.targetName,
         sourceField: row.sources[0]?.fhirPath ?? null,
@@ -150,6 +196,8 @@ export class FieldMappingJoinPopoverComponent {
         next: saved => {
           this.existingRule.set(saved);
           this.ruleSaving.set(false);
+          // The screen now matches the server, so nothing is pending discard.
+          this.captureRuleBaseline();
           this.toast.success('Transformation rule saved', `${saved.nodeType} will now run on ${row.targetName}.`);
         },
         error: err => {
@@ -169,6 +217,10 @@ export class FieldMappingJoinPopoverComponent {
         this.ruleDeleting.set(false);
         this.existingRule.set(null);
         this.ruleConfig.set(applyNodeDefaults(this.ruleSchema(), {}));
+        // The rule is gone and the config is back to defaults, so there is nothing pending — without
+        // this the baseline still describes the DELETED rule and closing or saving warns about
+        // unsaved changes that do not exist.
+        this.captureRuleBaseline();
         this.toast.success('Transformation rule removed', '');
       },
       error: err => {
@@ -301,15 +353,49 @@ export class FieldMappingJoinPopoverComponent {
   }
 
   onSave(): void {
+    // Saving the MAPPING does not save the rule — the canvas handler closes the popover straight
+    // after, taking any unsaved rule config with it.
+    if (this.hasUnsavedRule()) {
+      this.pendingUnsavedRuleAction.set('save');
+      return;
+    }
+    this.emitSave();
+  }
+
+  private emitSave(): void {
     const d = this.draft();
     if (d) this.save.emit(d);
   }
 
   onRemove(): void { this.remove.emit(); }
 
-  onClose(): void { this.closed.emit(); }
+  onClose(): void {
+    // A configured-but-unsaved rule exists ONLY in this component. Closing used to drop it with no
+    // warning and nothing on the server to recover — "I set concat and a | separator, forgot to press
+    // Add rule, and it was gone".
+    if (this.hasUnsavedRule()) {
+      this.pendingUnsavedRuleAction.set('close');
+      return;
+    }
+    this.closed.emit();
+  }
+
+  /** "Discard" on the confirm — the author has been told, so carry out whichever exit they asked for. */
+  discardAndContinue(): void {
+    const action = this.pendingUnsavedRuleAction();
+    this.pendingUnsavedRuleAction.set(null);
+    if (action === 'save') {
+      this.emitSave();
+      return;
+    }
+    this.closed.emit();
+  }
+
+  keepEditing(): void {
+    this.pendingUnsavedRuleAction.set(null);
+  }
 
   onKeydown(ev: KeyboardEvent): void {
-    if (ev.key === 'Escape') { ev.preventDefault(); this.closed.emit(); }
+    if (ev.key === 'Escape') { ev.preventDefault(); this.onClose(); }
   }
 }
