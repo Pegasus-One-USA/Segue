@@ -189,11 +189,6 @@
   &:hover { background: var(--color-error-soft) !important; }
 }
 
-// ─── Icons ───────────────────────────────────────────────────────────────────
-.icon-enable  { color: var(--color-success) !important; }
-.icon-disable { color: var(--color-muted) !important; }
-.icon-suspend { color: var(--color-error) !important; }
-
 // ─── Role / status chips ──────────────────────────────────────────────────────
 .role-chip, .role-badge {
   display: inline-flex;
