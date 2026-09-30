@@ -1,0 +1,78 @@
+<div class="dialog-container">
+
+  <div class="dialog-header">
+    <div class="dialog-header__icon">
+      <mat-icon>link</mat-icon>
+    </div>
+    <div class="dialog-header__text">
+      <h2>{{ isEditing ? 'Edit Allowed Caller URL' : 'Add Allowed Caller URL' }}</h2>
+      <p>Required for the browser-redirect external-trigger flow (<code>/api/v1/workflows/external/run</code>).</p>
+    </div>
+  </div>
+
+  <mat-dialog-content>
+
+    @if (errorMessage()) {
+      <div class="notice error-notice">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    <mat-radio-group class="mode-group" [ngModel]="mode()" (ngModelChange)="mode.set($event)">
+      <mat-radio-button value="Exact">Specific URL</mat-radio-button>
+      <mat-radio-button value="Domain">Whole domain</mat-radio-button>
+    </mat-radio-group>
+
+    <div class="form-field" [class.form-field--error]="urlInvalid()">
+      <label for="rud-url">{{ mode() === 'Domain' ? 'Domain' : 'Allowed Caller URL' }} <span class="req">*</span></label>
+      <input
+        id="rud-url"
+        [placeholder]="urlPlaceholder()"
+        [ngModel]="url()"
+        (ngModelChange)="url.set($event)"
+        autocomplete="off"
+      />
+      @if (urlInvalid()) {
+        <p class="field-error">
+          @if (mode() === 'Domain') {
+            Enter just the domain, with no page path — e.g. https://app.example.com
+          } @else {
+            Enter a full absolute URL — e.g. https://app.example.com/connect/callback
+          }
+        </p>
+      }
+    </div>
+
+    <div class="form-field">
+      <label for="rud-label">Label (optional)</label>
+      <input
+        id="rud-label"
+        [ngModel]="label()"
+        (ngModelChange)="label.set($event)"
+        autocomplete="off"
+      />
+    </div>
+
+    @if (mode() === 'Domain') {
+      <p class="hint">Any URL under this domain (any path, any query string) will be accepted as the return
+        target — only the scheme, host and port are checked.</p>
+    } @else {
+      <p class="hint">Must match the caller URL exactly — no prefix or wildcard matching.</p>
+    }
+
+  </mat-dialog-content>
+
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <button mat-stroked-button type="button" [disabled]="saving()" (click)="dialogRef.close()">Cancel</button>
+      <button mat-flat-button class="btn-save" [disabled]="saving()" (click)="save()">
+        @if (saving()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        }
+        {{ isEditing ? 'Save' : 'Add' }}
+      </button>
+    </div>
+  </mat-dialog-actions>
+
+</div>

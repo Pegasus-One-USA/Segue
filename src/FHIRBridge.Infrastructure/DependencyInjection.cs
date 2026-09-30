@@ -229,6 +229,7 @@ public static class DependencyInjection
             services.AddSingleton<ISourceCapabilityRepository, InMemorySourceCapabilityRepository>();
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
+            services.AddSingleton<IApiClientRepository, InMemoryApiClientRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<ILicenseRequestRepository, InMemoryLicenseRequestRepository>();
             services.AddSingleton<ILicenseHistoryRepository, InMemoryLicenseHistoryRepository>();
@@ -315,6 +316,7 @@ public static class DependencyInjection
             services.AddScoped<IEhrEndpointDirectorySeeder, EpicEndpointDirectorySeeder>();
             services.AddScoped<IEhrEndpointRepository, EfEhrEndpointRepository>();
             services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
+            services.AddScoped<IApiClientRepository, EfApiClientRepository>();
             services.AddScoped<IUserFhirContextBindingRepository, EfUserFhirContextBindingRepository>();
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
             services.AddScoped<ILicenseRequestRepository, EfLicenseRequestRepository>();

@@ -6,6 +6,7 @@ export type SettingsPageDialogKey =
   | 'license'
   | 'ehr-endpoints'
   | 'allowed-origins'
+  | 'api-clients'
   | 'email'
   | 'security'
   | 'sso-configurations';
@@ -56,6 +57,9 @@ export class SettingsPageDialogService {
       case 'allowed-origins':
         return import('../../allowed-origins/pages/allowed-cors-origin-list/allowed-cors-origin-list.component')
           .then(m => m.AllowedCorsOriginListComponent as Type<unknown>);
+      case 'api-clients':
+        return import('../../api-clients/pages/api-client-list/api-client-list.component')
+          .then(m => m.ApiClientListComponent as Type<unknown>);
       case 'email':
         return import('../pages/email-settings/email-settings.component')
           .then(m => m.EmailSettingsComponent as Type<unknown>);

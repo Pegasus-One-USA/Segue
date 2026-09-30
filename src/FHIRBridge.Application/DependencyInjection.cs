@@ -85,6 +85,9 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowGraphVersionMigrationService, WorkflowGraphVersionMigrationService>();
         services.AddScoped<IEhrEndpointService, EhrEndpointService>();
         services.AddScoped<IAllowedCorsOriginsService, AllowedCorsOriginsService>();
+        services.AddScoped<IApiClientService, ApiClientService>();
+        services.AddScoped<IClientCredentialsTokenService, ClientCredentialsTokenService>();
+        services.AddScoped<IExternalWorkflowTriggerService, ExternalWorkflowTriggerService>();
         services.AddSingleton<IScopeGeneratorService, ScopeGeneratorService>();
         services.AddScoped<IUserAccessService, UserAccessService>();
         services.AddScoped<ILocalAuthService, LocalAuthService>();

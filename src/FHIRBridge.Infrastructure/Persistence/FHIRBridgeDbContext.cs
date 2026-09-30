@@ -55,6 +55,8 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<ProvisionedSecret> ProvisionedSecrets => Set<ProvisionedSecret>();
     public DbSet<EhrEndpoint> EhrEndpoints => Set<EhrEndpoint>();
     public DbSet<AllowedCorsOrigin> AllowedCorsOrigins => Set<AllowedCorsOrigin>();
+    public DbSet<ApiClient> ApiClients => Set<ApiClient>();
+    public DbSet<ApiClientReturnUrl> ApiClientReturnUrls => Set<ApiClientReturnUrl>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<BrandConfiguration> BrandConfigurations => Set<BrandConfiguration>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
@@ -262,6 +264,8 @@ public sealed class FHIRBridgeDbContext : DbContext
                 .HasIndex(x => new { x.Vendor, x.VendorEndpointId }).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<SystemSetting>()
                 .HasIndex(x => x.Key).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<ApiClient>()
+                .HasIndex(x => x.ClientId).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<ResourceTypeCriteria>()
                 .HasIndex(x => new { x.WorkflowId, x.SourceNodeId, x.ResourceType })
                 .IsUnique().HasFilter("\"IsDeleted\" = false");

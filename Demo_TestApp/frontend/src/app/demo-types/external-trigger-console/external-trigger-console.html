@@ -1,0 +1,129 @@
+<div class="console">
+  <header class="console__header">
+    <a class="home-link" href="/">&larr; Return to home</a>
+    <div class="console__brand">FHIRBridge External Trigger — Test Console</div>
+    <p class="console__subtitle">
+      Exercises the browser-redirect trigger flow: a real form submit navigates to FHIRBridge's
+      <code>/api/v1/workflows/external/run</code>, which validates the Client ID/Secret, the Return URL (must be
+      pre-registered under Settings &rarr; API Clients &rarr; Edit &rarr; Return URLs), and the Referer, then
+      redirects back here with the outcome.
+    </p>
+  </header>
+
+  @if (returnedStatus()) {
+    <section class="panel result-panel" [class.result-panel--triggered]="returnedStatus() === 'Triggered' || returnedStatus() === 'Succeeded'"
+      [class.result-panel--failed]="returnedStatus() === 'Failed'">
+      <h3 class="step-title">Returned from FHIRBridge: {{ returnedStatus() }}</h3>
+      @if (returnedWorkflowRunId()) {
+        <p class="step-meta">workflowRunId: {{ returnedWorkflowRunId() }}</p>
+      }
+      @if (returnedError()) {
+        <p class="step-meta">error: {{ returnedError() }}</p>
+      }
+    </section>
+  }
+
+  <section class="panel">
+    <h3 class="step-title">1. Credentials &amp; workflow</h3>
+    <div class="field-grid">
+      <label class="field">
+        FHIRBridge Base URL
+        <input type="text" [ngModel]="fhirBridgeBaseUrl()" (ngModelChange)="fhirBridgeBaseUrl.set($event)" placeholder="http://localhost:5000" />
+      </label>
+      <label class="field">
+        Client ID
+        <input type="text" [ngModel]="clientId()" (ngModelChange)="clientId.set($event)" placeholder="cid_..." />
+      </label>
+      <label class="field">
+        Client Secret
+        <input type="password" [ngModel]="clientSecret()" (ngModelChange)="clientSecret.set($event)" placeholder="paste the one-time secret" />
+      </label>
+    </div>
+
+    <label class="remember-row">
+      <input type="checkbox" [ngModel]="rememberCredentials()" (ngModelChange)="onRememberChange($event)" />
+      Remember these credentials in this browser
+    </label>
+
+    @if (listError()) {
+      <p class="error-banner">{{ listError() }}</p>
+    }
+
+    <button type="button" class="btn btn--secondary" [disabled]="listing()" (click)="listWorkflows()">
+      {{ listing() ? 'Listing…' : 'List Workflows' }}
+    </button>
+
+    @if (workflows().length > 0) {
+      <label class="field field--full">
+        Workflow
+        <select [ngModel]="selectedWorkflowId()" (ngModelChange)="selectedWorkflowId.set($event)">
+          @for (w of workflows(); track w.id) {
+            <option [value]="w.id">{{ w.name }}</option>
+          }
+        </select>
+      </label>
+    }
+  </section>
+
+  <section class="panel">
+    <h3 class="step-title">2. Trigger</h3>
+    <div class="field-grid">
+      <label class="field">
+        Return URL
+        <input type="text" [ngModel]="returnUrl()" (ngModelChange)="returnUrl.set($event)" />
+      </label>
+      <label class="field">
+        EHR Endpoint Code (optional)
+        @if (ehrEndpoints().length > 0) {
+          <select [ngModel]="ehrEndpointCode()" (ngModelChange)="ehrEndpointCode.set($event)">
+            <option value="">— none —</option>
+            @for (e of filteredEhrEndpoints(); track e.code) {
+              <option [value]="e.code">{{ e.name }} ({{ e.vendor }})</option>
+            }
+          </select>
+        } @else {
+          <input type="text" [ngModel]="ehrEndpointCode()" (ngModelChange)="ehrEndpointCode.set($event)"
+            placeholder="Click List Workflows first to load the dropdown" />
+        }
+      </label>
+      <label class="field">
+        Mode
+        <select [ngModel]="mode()" (ngModelChange)="mode.set($event)">
+          <option value="async">async — trigger and return immediately</option>
+          <option value="sync">sync — wait for the run to finish</option>
+        </select>
+      </label>
+      <label class="field">
+        Run in
+        <select [ngModel]="windowMode()" (ngModelChange)="windowMode.set($event)">
+          <option value="new">New window (this console stays open)</option>
+          <option value="same">Same window</option>
+        </select>
+      </label>
+      @if (windowMode() === 'new') {
+        <label class="field">
+          When finished
+          <select [ngModel]="closeOnComplete()" (ngModelChange)="closeOnComplete.set($event)">
+            <option [ngValue]="false">Keep window open and go to the Return URL</option>
+            <option [ngValue]="true">Close the window automatically</option>
+          </select>
+        </label>
+      }
+    </div>
+
+    <p class="hint">
+      Secure flow: the button asks the demo <em>backend</em> to exchange the Client ID/Secret for a single-use launch
+      ticket (valid ~90 seconds), and the browser is sent to FHIRBridge's run page carrying only that ticket &mdash;
+      the secret never appears in a form field or URL. FHIRBridge checks the Return URL against this client's Allowed
+      Caller URLs when the ticket is issued. Once the run finishes that window is either closed (new window +
+      auto-close) or sent to the Return URL.
+    </p>
+
+    <button type="button" class="btn btn--primary" (click)="launch()" [disabled]="!selectedWorkflowId() || launching()">
+      {{ launching() ? 'Starting…' : 'Trigger Workflow' }}
+    </button>
+    @if (launchError()) {
+      <p class="error-banner">{{ launchError() }}</p>
+    }
+  </section>
+</div>

@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using FHIRBridge.Api.Workflows;
 using FHIRBridge.Api.Cors;
@@ -169,6 +169,7 @@ builder.Services.AddScoped<ICurrentUserService, HttpContextCurrentUserService>()
 // workflow + session only become known once the encrypted OAuth state is decrypted (see IRequestCorrelationStamper).
 builder.Services.AddScoped<IRequestCorrelationStamper, HttpContextRequestCorrelationStamper>();
 builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
+builder.Services.AddScoped<IClientCredentialsAccessTokenIssuer, ClientCredentialsAccessTokenIssuer>();
 builder.Services.AddScoped<IAuthorizationHandler, UnifiedAdminAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, SuperAdminOnlyAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
@@ -265,6 +266,7 @@ if (!string.IsNullOrWhiteSpace(signalRRedisConnectionString))
     });
 }
 builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
+builder.Services.AddSingleton<FHIRBridge.Api.Workflows.ExternalRunTicketService>();
 // Backs TerminologyStatusHub — same arrangement, for the Terminology Server table's per-row sync status.
 // Also API-host-only: HapiTerminologyConfigurationService takes this as an optional dependency, so the
 // Worker (where the scheduled syncs run) resolves null and simply records history without a live push.

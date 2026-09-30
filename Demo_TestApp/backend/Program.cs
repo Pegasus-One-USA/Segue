@@ -859,6 +859,16 @@ app.MapApiEndpointTestEndpoints();
 // test credentials — see ApiAuthTestEndpoints.
 app.MapApiAuthTestEndpoints();
 
+// Exercises FHIRBridge's own OAuth 2.0 Client Credentials Grant (Settings > API Clients) end to end: obtains a
+// Bearer token from FHIRBridge's /api/v1/oauth/token, then uses it to trigger /api/v1/workflows/{id}/run — see
+// ClientCredentialsDemoEndpoints.
+app.MapClientCredentialsDemoEndpoints();
+
+// Read-only proxy for the browser-redirect external-trigger console's workflow picker — see
+// ExternalTriggerDemoEndpoints. The actual trigger action is a real form POST straight to FHIRBridge, not
+// proxied through here.
+app.MapExternalTriggerDemoEndpoints();
+
 // SPA fallback: any GET that doesn't match a mapped route or an existing static file resolves to
 // index.html instead of 404ing, so Angular's client-side routes work on refresh/deep link. Fallback
 // endpoints are always lowest-priority, so this can't shadow the /api/* routes above regardless of

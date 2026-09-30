@@ -1,0 +1,157 @@
+<div class="list-page">
+
+  <div class="page-header">
+    <h1 class="page-title">API Clients</h1>
+    <p class="page-sub">Client ID / Secret credentials for the OAuth 2.0 Client Credentials Grant — used by
+      third-party applications to trigger workflow execution server-to-server.</p>
+  </div>
+
+  <div class="filter-card">
+    <div class="filter-row">
+      <div class="search-wrap">
+        <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+          <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Search by name or Client ID..."
+          [value]="searchQuery()"
+          (input)="onSearchChange($any($event.target).value)"
+        />
+        @if (searching()) {
+          <span class="search-spinner" aria-hidden="true"></span>
+        }
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn-reset" type="button" (click)="reset()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+          Reset
+        </button>
+        <button class="btn-add" type="button" (click)="openCreate()">
+          New Client
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <p class="filter-note">
+    A client is tenant-wide: any workflow can be triggered with a valid token, independent of that
+    workflow's own public-launch setting. Disabling a client blocks new tokens immediately; tokens already
+    issued still expire naturally within their short lifetime.
+  </p>
+
+  <div class="table-card">
+
+    @if (loading()) {
+      <!-- The global loader already shows this page is busy — no local spinner here. -->
+    } @else {
+
+      <div class="table-wrapper">
+        <table mat-table [dataSource]="clients()" class="data-table">
+
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let c">
+              <div class="cell-name">
+                <span class="cell-primary">{{ c.name }}</span>
+              </div>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="clientId">
+            <th mat-header-cell *matHeaderCellDef>Client ID</th>
+            <td mat-cell *matCellDef="let c"><code class="mono">{{ c.clientId }}</code></td>
+          </ng-container>
+
+          <ng-container matColumnDef="isEnabled">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let c">
+              <span class="status-chip" [class.status-chip--off]="!c.isEnabled">
+                {{ c.isEnabled ? 'Enabled' : 'Disabled' }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="lastUsedOnUtc">
+            <th mat-header-cell *matHeaderCellDef>Last Used</th>
+            <td mat-cell *matCellDef="let c">{{ c.lastUsedOnUtc ? (c.lastUsedOnUtc | date: 'short') : 'Never' }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="createdOnUtc">
+            <th mat-header-cell *matHeaderCellDef>Created</th>
+            <td mat-cell *matCellDef="let c">{{ c.createdOnUtc | date: 'short' }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
+            <td mat-cell *matCellDef="let c" class="col-actions">
+              <div class="actions-cell">
+                <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
+                  <mat-icon>more_vert</mat-icon>
+                </button>
+                <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                  <button mat-menu-item (click)="openEdit(c)">
+                    <mat-icon>edit</mat-icon>
+                    Edit
+                  </button>
+                  <button mat-menu-item (click)="openReturnUrls(c)">
+                    <mat-icon>link</mat-icon>
+                    Allowed Caller URLs
+                  </button>
+                  <button mat-menu-item (click)="confirmRegenerateSecret(c)">
+                    <mat-icon>autorenew</mat-icon>
+                    Regenerate Secret
+                  </button>
+                  <button mat-menu-item class="menu-item-danger" (click)="confirmDelete(c)">
+                    <mat-icon>delete_outline</mat-icon>
+                    Delete
+                  </button>
+                </mat-menu>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+
+        </table>
+      </div>
+
+      @if (clients().length === 0) {
+        <div class="empty-state">
+          <div class="empty-state__icon-wrap">
+            <mat-icon>vpn_key</mat-icon>
+          </div>
+          @if (searchQuery().trim()) {
+            <h3 class="empty-state__title">No clients matched that search</h3>
+            <p class="empty-state__sub">Try a shorter term, or Reset to see every client.</p>
+          } @else {
+            <h3 class="empty-state__title">No API clients yet</h3>
+            <p class="empty-state__sub">Create one to let a third-party application trigger workflows.</p>
+          }
+        </div>
+      }
+
+      @if (totalCount() > pageSize()) {
+        <mat-paginator
+          [length]="totalCount()"
+          [pageSize]="pageSize()"
+          [pageIndex]="pageIndex()"
+          [pageSizeOptions]="[5, 10, 25, 50]"
+          showFirstLastButtons
+          (page)="onPageChange($event)"
+          class="table-paginator"
+        ></mat-paginator>
+      }
+
+    }
+
+  </div>
+
+</div>

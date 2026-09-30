@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace FHIRBridge.Api.IntegrationTests;
@@ -52,6 +53,23 @@ public sealed class ApiFixture : IAsyncLifetime
         var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
         return client;
+    }
+
+    /// <summary>Seeds a workflow directly into the singleton in-memory <c>IWorkflowDefinitionStore</c> (no real
+    /// workflow-builder round trip needed). <paramref name="isPubliclyLaunchable"/> defaults to false since most
+    /// callers of this helper are exercising a caller type (client-credentials, portal RBAC) whose whole point
+    /// is not depending on that flag; pass true only for a test that specifically needs the SMART Standalone
+    /// public-launch opt-in.</summary>
+    public async Task<Guid> CreateWorkflowAsync(bool isPubliclyLaunchable = false)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore>();
+
+        var workflow = new FHIRBridge.Runtime.Domain.Workflows.WorkflowDefinition(
+            Guid.NewGuid(), $"Test workflow {Guid.NewGuid():N}", 1, isPubliclyLaunchable: isPubliclyLaunchable);
+        await store.SaveAsync(workflow, CancellationToken.None);
+
+        return workflow.Id;
     }
 
     // ── Shared helpers for permission-enforcement tests ──────────────────────────

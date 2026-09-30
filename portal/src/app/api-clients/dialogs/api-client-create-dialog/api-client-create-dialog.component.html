@@ -1,0 +1,46 @@
+<div class="dialog-container">
+
+  <div class="dialog-header">
+    <div class="dialog-header__icon">
+      <mat-icon>vpn_key</mat-icon>
+    </div>
+    <div class="dialog-header__text">
+      <h2>New API Client</h2>
+      <p>Generates a Client ID + Secret for the OAuth 2.0 Client Credentials Grant</p>
+    </div>
+  </div>
+
+  <mat-dialog-content>
+
+    @if (errorMessage()) {
+      <div class="notice error-notice">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    <form [formGroup]="form" novalidate class="dialog-form">
+      <div class="form-field" [class.form-field--error]="hasError('name', 'required') || hasError('name', 'maxlength')">
+        <label for="ac-name">Name <span class="req">*</span></label>
+        <input id="ac-name" formControlName="name" placeholder="e.g. HealthApp integration" autocomplete="off" />
+      </div>
+    </form>
+
+    <p class="hint">
+      The client can trigger any workflow's execution in this tenant. The Secret is shown exactly once
+      after saving — copy it immediately.
+    </p>
+  </mat-dialog-content>
+
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <button mat-flat-button class="btn-save" [disabled]="saving()" (click)="save()">
+        @if (saving()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        }
+        Create
+      </button>
+    </div>
+  </mat-dialog-actions>
+
+</div>

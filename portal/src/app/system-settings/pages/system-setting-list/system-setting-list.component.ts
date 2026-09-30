@@ -136,6 +136,18 @@ const LAUNCHER_ROWS: readonly LauncherRow[] = [
   },
   {
     isLauncher: true,
+    code: 'api-clients',
+    label: 'API Clients',
+    summary: 'Client ID/Secret credentials for third-party workflow triggers',
+    // ApiClientsController is gated AuthorizationPolicies.UnifiedAdmin (SuperAdmin or Admin) server-side.
+    // canSee() has no dedicated "admin-role" case for a launcher row (only superAdminOnly / a permission
+    // list), and no permission code exists for this capability yet — superAdminOnly is the safer default
+    // here (same treatment Security and Allowed Origins get), even though it's a notch stricter than the
+    // backend, which also accepts a plain Admin.
+    superAdminOnly: true,
+  },
+  {
+    isLauncher: true,
     code: 'email',
     label: 'Email',
     summary: 'SMTP delivery and notification sender',

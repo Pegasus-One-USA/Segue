@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>athenahealth Patient Standalone Integration — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test-bg: #E0E7FF;
+    --test: #4338CA;
+    --hidden: #64748B;
+    --hidden-bg: #F1F5F9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    padding: 48px 24px;
+    text-align: left;
+  }
+  header.doc-header .wrap { padding: 0; max-width: 1100px; margin: 0 auto; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p.subtitle { margin: 0; font-size: 15px; opacity: 0.92; max-width: 74ch; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: 0.85; }
+  header.doc-header .meta strong { display: block; font-weight: 700; opacity: 1; }
+  header.doc-header .meta code { background: rgba(255,255,255,.15); color: #fff; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 56px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 { font-size: 16px; font-weight: 700; color: var(--ink); margin: 32px 0 12px; }
+  h3 .pill { font-size: 11px; vertical-align: middle; margin-left: 8px; }
+  h4 { font-size: 14.5px; font-weight: 700; margin: 24px 0 8px; }
+  p { margin: 0 0 14px; color: #334155; max-width: 74ch; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #F1F5F9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #0F172A;
+  }
+  pre {
+    background: #0F172A;
+    color: #E2E8F0;
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 12px 0 20px;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  pre .c { color: #94A3B8; }
+  pre .s { color: #FCD34D; }
+  pre .k { color: #7DD3FC; }
+  pre .f { color: #F9A8D4; }
+  .code-label { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); margin: 0 0 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .copy-btn { font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--surface); border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+  .copy-btn:hover { color: var(--ink); border-color: var(--muted); }
+  .copy-btn.copied { color: var(--new); border-color: var(--new); }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-top: -28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  }
+  nav.toc h2 { margin: 0 0 12px; border: none; padding: 0; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin-bottom: 6px; font-size: 13.5px; }
+  nav.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  nav.toc a:hover { color: var(--primary); text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill-backend  { color: var(--backend);  background: var(--backend-bg); }
+  .pill-frontend { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-test     { color: var(--test);     background: var(--test-bg); }
+  .pill-new      { color: var(--new);      background: var(--new-bg); }
+  .pill-modified { color: var(--modified); background: var(--modified-bg); }
+  .pill-deleted  { color: var(--deleted);  background: var(--deleted-bg); }
+  .pill-hidden   { color: var(--hidden);   background: var(--hidden-bg); }
+  .pill-get      { color: var(--frontend); background: var(--frontend-bg); }
+  .pill-post     { color: var(--modified); background: var(--modified-bg); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14.5px; font-weight: 700; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 20px 0; }
+  .summary-grid .card { margin-bottom: 0; }
+  .summary-grid .num { font-size: 26px; font-weight: 800; color: var(--primary); }
+  .summary-grid .label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  .section-intro { font-size: 14.5px; color: #475569; margin-bottom: 20px; max-width: 74ch; }
+
+  .callout {
+    border-left: 4px solid var(--primary);
+    background: #EBFAF8;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--modified); background: var(--modified-bg); }
+  .callout.danger { border-left-color: var(--deleted); background: var(--deleted-bg); }
+  .callout strong { display: block; margin-bottom: 4px; font-size: 13px; }
+  .callout ul { margin: 6px 0 0; padding-left: 18px; }
+  .callout li { margin-bottom: 10px; }
+  .callout li:last-child { margin-bottom: 0; }
+
+  .setup-steps {
+    display: flex; flex-direction: column; gap: 8px;
+    margin: 14px 0 18px;
+    background: #F8FAFC; border: 1px dashed var(--border); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .setup-steps .setup-steps-title { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 2px; }
+  .setup-step { display: flex; gap: 10px; align-items: flex-start; }
+  .setup-step .step-num {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--primary); color: #fff; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
+  }
+  .setup-step p { margin: 0; font-size: 13.5px; }
+
+  table.config-table {
+    width: 100%; border-collapse: collapse; margin: 14px 0 20px; font-size: 12.8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  }
+  table.config-table th {
+    background: #F1F5F9; text-align: left; padding: 9px 12px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); border-bottom: 1px solid var(--border);
+  }
+  table.config-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.config-table tr:last-child td { border-bottom: none; }
+  table.config-table tr:hover td { background: #FAFBFC; }
+  table.config-table td.key { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; color: #0F172A; }
+  .table-scroll { overflow-x: auto; }
+
+  /* Sequence diagram: three actor lanes, one row per beat */
+  .sequence { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; overflow-x: auto; margin: 16px 0 20px; }
+  .lanes { display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap: 0 16px; min-width: 660px; }
+  .lane-head {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);
+    padding-bottom: 10px; border-bottom: 2px solid var(--border); margin-bottom: 14px;
+  }
+  .lane-head.fhirbridge { color: var(--primary); border-bottom-color: var(--primary); }
+  .beat { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; margin-bottom: 12px; align-items: start; }
+  .beat-note { grid-column: 1 / -1; font-size: 12px; color: var(--muted); font-style: italic; margin: -2px 0 12px 2px; }
+  .msg { border-radius: 8px; padding: 8px 10px; font-size: 12.5px; border: 1px solid transparent; }
+  .msg.empty { visibility: hidden; }
+  .msg.call { background: #EBFAF8; border-color: #BFEAE5; }
+  .msg.human { background: var(--modified-bg); border-color: #F3D496; }
+  .msg .verb { font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--primary); display: block; margin-bottom: 2px; }
+  .msg code { background: none; padding: 0; font-size: 0.95em; }
+
+  .vendor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 16px 0 20px; }
+  .vendor-card { border: 1px solid var(--border); background: var(--surface); border-radius: 12px; padding: 18px 20px; }
+  .vendor-card h4 { margin: 0 0 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; color: var(--ink); }
+  .vendor-card dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  .vendor-card dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  .vendor-card dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.8px; color: #0F172A; }
+
+  footer.page-footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12.5px; }
+
+  @media print {
+    header.doc-header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    nav.toc { break-after: page; }
+    h2 { break-before: page; }
+  }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>athenahealth Patient Standalone Integration</h1>
+    <p class="subtitle">How to integrate your application with FHIRBridge to drive a real patient-facing SMART on FHIR Standalone launch against athenahealth, and pull that patient's data into your own system. The same pattern also covers Epic/MyChart and eCW.</p>
+    <div class="meta">
+      <div><strong>Flow type</strong>Patient Standalone (authorization-code + PKCE)</div>
+      <div><strong>You implement</strong>a backend config endpoint + a browser-side connect flow</div>
+      <div><strong>FHIRBridge provides</strong>Workflow Id, Base URL, EhrEndpoint Id</div>
+      <div><strong>FHIRBridge surface</strong><code>PatientStandaloneLaunchController</code> / <code>WorkflowEndpoints</code></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#prereqs">1. What FHIRBridge provides you</a></li>
+      <li><a href="#flow">2. Request flow end-to-end</a></li>
+      <li><a href="#gotchas">&nbsp;&nbsp;Two things easy to get wrong</a></li>
+      <li><a href="#api">3. API reference</a></li>
+      <li><a href="#code">4. Code samples</a></li>
+      <li><a href="#code-backend">&nbsp;&nbsp;4.1 Backend (ASP.NET Core)</a></li>
+      <li><a href="#code-frontend">&nbsp;&nbsp;4.2 Frontend (TypeScript)</a></li>
+      <li><a href="#code-vanilla">&nbsp;&nbsp;4.3 Minimal HTML/JS</a></li>
+      <li><a href="#generalize">5. Other vendors (Epic, eCW)</a></li>
+      <li><a href="#outbound-example">6. Related workflow: outbound push example</a></li>
+    </ol>
+  </nav>
+
+  <section id="prereqs">
+    <h2><span class="num">01</span>What FHIRBridge provides you</h2>
+    <p class="section-intro">Integrating this flow requires no setup inside FHIRBridge on your part — we provision everything on our side and hand you a small set of fixed values to plug into your own app's configuration.</p>
+
+    <div class="setup-steps">
+      <div class="setup-steps-title">What we set up on our side</div>
+      <div class="setup-step">
+        <div class="step-num">1</div>
+        <p>An <strong>athenahealth source connection</strong> configured for patient-facing authorization (authorization-code + PKCE) against your athenahealth environment.</p>
+      </div>
+      <div class="setup-step">
+        <div class="step-num">2</div>
+        <p>A <strong>workflow</strong> wired to that connection and opted into public launch, so it can be triggered anonymously from your application without a FHIRBridge login.</p>
+      </div>
+      <div class="setup-step">
+        <div class="step-num">3</div>
+        <p>An <strong>EhrEndpoint</strong> entry pointing at athenahealth's FHIR base URL for your environment. athenahealth's Patient audience has one fixed FHIR base URL — no per-hospital directory the way Epic/MyChart has — so there is nothing for your users to pick from.</p>
+      </div>
+    </div>
+
+    <h3>What you receive</h3>
+    <p class="section-intro">
+      We hand you three values. Store them as fixed configuration in your own application (an <code>appsettings.json</code> section, environment variables, a constants file) — there is nothing for your end users or your own admins to configure; these values do not change unless we tell you they've been rotated.
+    </p>
+    <table class="config-table">
+      <tr><th>Value</th><th>Meaning</th></tr>
+      <tr><td class="key">Workflow Id</td><td>The FHIRBridge workflow id that drives this integration</td></tr>
+      <tr><td class="key">Base URL</td><td>FHIRBridge's own base URL for your environment, e.g. <code>https://your-fhirbridge-host</code></td></tr>
+      <tr><td class="key">EhrEndpoint Id</td><td>The id FHIRBridge's launch endpoint needs to mint an athenahealth authorize URL</td></tr>
+    </table>
+
+    <div class="callout">
+      <strong>One more thing we need from you</strong>
+      Because the browser calls FHIRBridge directly and cross-origin, the origin your application is served from must be added to FHIRBridge's allowed-origins list on our side before these calls will succeed — otherwise the browser blocks them as a CORS violation before your code ever sees a response. Send us the origin (scheme + host + port, e.g. <code>https://app.yourcompany.com</code>) alongside your integration request.
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2><span class="num">02</span>Request flow end-to-end</h2>
+    <p class="section-intro">Three actors: the patient's browser, your application's frontend, and FHIRBridge — which itself redirects out to athenahealth's real login mid-flow.</p>
+
+    <div class="sequence" role="img" aria-label="Sequence diagram of the athenahealth Patient Standalone launch, described in the steps below.">
+      <div class="lanes">
+        <div class="lane-head">Browser</div>
+        <div class="lane-head">Your application</div>
+        <div class="lane-head fhirbridge">FHIRBridge</div>
+
+        <div class="beat">
+          <div class="msg call"><span class="verb">1 · click</span>Patient taps your app's "Connect" / "Get My Records" action</div>
+          <div class="msg empty"></div>
+          <div class="msg empty"></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg empty"></div>
+          <div class="msg call"><span class="verb pill pill-get">GET</span><code>/{workflowId}/validate-run</code></div>
+          <div class="msg call">&larr; <code>{ isValid, correlationId }</code></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg empty"></div>
+          <div class="msg call"><span class="verb pill pill-get">GET</span><code>/{workflowId}/token-status</code></div>
+          <div class="msg call">&larr; <code>{ hasValidToken: false }</code></div>
+        </div>
+        <div class="beat-note">First visit — no cached token yet, so FHIRBridge must mint a real login.</div>
+
+        <div class="beat">
+          <div class="msg empty"></div>
+          <div class="msg call"><span class="verb pill pill-get">GET</span><code>/{workflowId}/public-patient-standalone-url</code></div>
+          <div class="msg call">&larr; <code>{ launchUrl, sessionId }</code></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg human"><span class="verb">navigate</span><code>window.location.href = launchUrl</code></div>
+          <div class="msg empty"></div>
+          <div class="msg empty"></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg human"><span class="verb">3 · redirect</span>Browser lands on athenahealth's real patient login page</div>
+          <div class="msg empty"></div>
+          <div class="msg empty"></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg human"><span class="verb">authorize</span>Patient logs in to athenahealth and grants access</div>
+          <div class="msg empty"></div>
+          <div class="msg empty"></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg human"><span class="verb">callback</span>athenahealth redirects to FHIRBridge <code>/oauth/callback?code&amp;state</code></div>
+          <div class="msg empty"></div>
+          <div class="msg call">Exchanges code &rarr; token, caches by <code>sessionId</code></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg human"><span class="verb">4 · redirect</span>Back to <code>callerId?workflowRunId=&hellip;</code> or <code>?signedIn=1</code></div>
+          <div class="msg empty"></div>
+          <div class="msg empty"></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg empty"></div>
+          <div class="msg call"><span class="verb pill pill-get">GET</span><code>/runs/{workflowRunId}/launch-result</code></div>
+          <div class="msg call">&larr; <code>{ patientId }</code></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg empty"></div>
+          <div class="msg call"><span class="verb pill pill-post">POST</span><code>5 · /{workflowId}/run</code></div>
+          <div class="msg call">&larr; <code>{ status: "Succeeded", outputsByNodeId }</code></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg empty"></div>
+          <div class="msg call"><span class="verb">6 · render</span>Extract Patient resources from the Source node's output</div>
+          <div class="msg empty"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout warn" id="gotchas">
+      <strong>Two things easy to get wrong</strong>
+      <ul>
+        <li>
+          <strong><code>callerId</code> has two unrelated meanings</strong> depending on the call. On <code>public-patient-standalone-url</code> it's the browser URL FHIRBridge's <code>/oauth/callback</code> redirects back to once the token exchange completes. On <code>token-status</code> / <code>validate-run</code> / <code>run</code> / <code>discard-token</code> it's the <em>interactive token cache key</em> (<code>SmartAuthorizationCodeTokenProvider</code> keys on this, not the source connection id) — send the <strong>same</strong> value on every call in one browser session, or a token that really is cached will look missing.
+        </li>
+        <li>
+          <strong><code>sessionId</code></strong> (only on <code>public-patient-standalone-url</code>) is what actually becomes that cache key server-side. Persist whatever FHIRBridge returns (<code>localStorage</code>, since a full-page navigation would wipe an in-memory value) and echo it back as <code>callerId</code> on every later call. Same value, two field names — FHIRBridge's existing wire shape.
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="api">
+    <h2><span class="num">03</span>API reference</h2>
+    <p class="section-intro">All calls target <code>{baseUrl}</code> (the FHIRBridge Base URL we gave you), anonymous — gated instead on the workflow's public-launch opt-in, which we've already enabled for the Workflow Id we gave you.</p>
+    <div class="table-scroll">
+      <table class="config-table">
+        <tr><th>Call</th><th>Purpose</th><th>Key request fields</th><th>Key response fields</th></tr>
+        <tr>
+          <td><span class="pill pill-post">POST</span><br><code>/workflows/{id}/validate-run</code></td>
+          <td>Pre-flight; records the attempt in Execution History even if never run</td>
+          <td><code>patientId</code>, <code>patientSearchCriteria</code>, <code>callerId</code>, <code>ehrEndpointId</code></td>
+          <td><code>isValid</code>, <code>correlationId</code>, <code>errors[]</code></td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-get">GET</span><br><code>/workflows/{id}/token-status</code></td>
+          <td>Cheap check: is there already a usable cached token?</td>
+          <td>query <code>callerId</code>, <code>patientId</code></td>
+          <td><code>hasValidToken</code></td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-get">GET</span><br><code>/workflows/{id}/public-patient-standalone-url</code></td>
+          <td>Mints the athenahealth authorize URL to redirect the browser to</td>
+          <td>query <code>ehrEndpointId</code>, <code>callerId</code>, <code>sessionId</code>, <code>userIdentity</code></td>
+          <td><code>launchUrl</code>, <code>sessionId</code>, <code>mode</code>, <code>applicationType</code></td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-get">GET</span><br><code>/workflows/runs/{runId}/launch-result</code></td>
+          <td>Resolves which patient FHIRBridge's own post-login convenience run found, if any</td>
+          <td>—</td>
+          <td><code>patientId</code>, <code>patient</code></td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-post">POST</span><br><code>/workflows/{id}/run</code></td>
+          <td>Executes the workflow and returns the fetched resources</td>
+          <td><code>patientId</code>, <code>patientSearchCriteria</code>, <code>callerId</code></td>
+          <td><code>workflowRun.status</code>, <code>workflowRun.errorMessage</code>, <code>outputsByNodeId</code></td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-post">POST</span><br><code>/workflows/{id}/discard-token</code></td>
+          <td>Discards the cached token for this session, forcing a fresh login next time</td>
+          <td>query <code>callerId</code>, <code>patientId</code></td>
+          <td><code>discarded</code></td>
+        </tr>
+      </table>
+    </div>
+    <div class="callout">
+      <strong>No CSRF token needed for this flow</strong>
+      FHIRBridge's double-submit CSRF check only fires for callers that already hold FHIRBridge's own session cookie (its own logged-in portal users). Your application authenticates none of that way — <code>validate-run</code> and <code>discard-token</code> are anonymous, and <code>run</code> is explicitly exempted — so none of these calls need an <code>X-CSRF-Token</code> header.
+    </div>
+  </section>
+
+  <section id="code">
+    <h2><span class="num">04</span>Code samples</h2>
+    <p class="section-intro">Two sides to implement: a small <strong>backend</strong> endpoint that hands your frontend the three values we gave you, and the <strong>frontend</strong> logic that drives the browser flow against FHIRBridge using them.</p>
+
+    <h3 id="code-backend">4.1 Backend — expose the provided configuration <span class="pill pill-backend">ASP.NET Core</span></h3>
+    <p class="section-intro">Store the three values we gave you as configuration, and expose them to your own frontend with a simple read-only endpoint. No database table and no settings-management UI are needed — these values don't change unless we tell you they've rotated.</p>
+    <div class="code-label"><span>appsettings.json</span><button class="copy-btn" data-copy-target="code-backend-config" type="button">Copy</button></div>
+    <pre id="code-backend-config">{
+  <span class="s">"Athena"</span>: {
+    <span class="s">"WorkflowId"</span>: <span class="s">"00000000-0000-0000-0000-000000000000"</span>,
+    <span class="s">"BaseUrl"</span>: <span class="s">"https://your-fhirbridge-host"</span>,
+    <span class="s">"EhrEndpointId"</span>: <span class="s">"00000000-0000-0000-0000-000000000000"</span>
+  }
+}</pre>
+    <div class="code-label"><span>Program.cs</span><button class="copy-btn" data-copy-target="code-backend" type="button">Copy</button></div>
+    <pre id="code-backend"><span class="c">// Strongly-typed options bound straight from configuration — the three values FHIRBridge gave you</span>
+<span class="k">public class</span> <span class="f">AthenaOptions</span>
+{
+    <span class="k">public string</span> WorkflowId { <span class="k">get; set;</span> } = <span class="s">""</span>;
+    <span class="k">public string</span> BaseUrl { <span class="k">get; set;</span> } = <span class="s">""</span>;
+    <span class="k">public string</span> EhrEndpointId { <span class="k">get; set;</span> } = <span class="s">""</span>;
+}
+
+builder.Services.Configure&lt;AthenaOptions&gt;(builder.Configuration.GetSection(<span class="s">"Athena"</span>));
+
+<span class="c">// Gated by your own app's login (not FHIRBridge's) — hands the three fixed values to your</span>
+<span class="c">// frontend so it can drive the flow. No write endpoint: these values never change from inside your app.</span>
+app.MapGet(<span class="s">"/api/athena-config"</span>, (IOptions&lt;AthenaOptions&gt; options) =>
+{
+    <span class="k">var</span> athena = options.Value;
+    <span class="k">return</span> Results.Ok(<span class="k">new</span> {
+        workflowId = athena.WorkflowId,
+        baseUrl = athena.BaseUrl,
+        ehrEndpointId = athena.EhrEndpointId,
+    });
+});</pre>
+
+    <h3 id="code-frontend">4.2 Frontend — drive the launch against FHIRBridge <span class="pill pill-frontend">TypeScript</span></h3>
+    <p class="section-intro">Plain <code>fetch</code> calls — the shape is the same for any HTTP client or frontend framework.</p>
+    <div class="code-label"><span>connect-get-data.ts</span><button class="copy-btn" data-copy-target="code-frontend-block" type="button">Copy</button></div>
+    <pre id="code-frontend-block"><span class="c">// Fetched once from your own backend's /api/athena-config</span>
+<span class="k">const</span> config = <span class="k">await</span> fetch(<span class="s">'/api/athena-config'</span>).then(r => r.json());
+<span class="k">const</span> FHIRBRIDGE_BASE_URL = config.baseUrl;
+<span class="k">const</span> WORKFLOW_ID = config.workflowId;
+<span class="k">const</span> EHR_ENDPOINT_ID = config.ehrEndpointId;
+
+<span class="c">// Persisted across the full-page redirect to athenahealth and back</span>
+<span class="k">let</span> sessionId = localStorage.getItem(<span class="s">'athenaSessionId'</span>) ?? undefined;
+<span class="k">let</span> patientId: string | null = null;
+
+<span class="k">async function</span> <span class="f">connectGetData</span>() {
+  <span class="c">// 1. Pre-flight — surfaces config problems before bouncing through a login that would never work</span>
+  <span class="k">const</span> validation = <span class="k">await</span> fetch(
+    <span class="s">`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}/validate-run`</span>,
+    {
+      method: <span class="s">'POST'</span>,
+      headers: { <span class="s">'Content-Type'</span>: <span class="s">'application/json'</span> },
+      body: JSON.stringify({ patientId, patientSearchCriteria: null, callerId: sessionId ?? null }),
+    },
+  ).then(r => r.json());
+
+  <span class="k">if</span> (!validation.isValid) {
+    <span class="k">throw new</span> Error(validation.errors.map((e: any) => e.message).join(<span class="s">' '</span>));
+  }
+
+  <span class="c">// 2. Is there already a usable token for this session?</span>
+  <span class="k">const</span> params = <span class="k">new</span> URLSearchParams();
+  <span class="k">if</span> (sessionId) params.set(<span class="s">'callerId'</span>, sessionId);
+  <span class="k">if</span> (patientId) params.set(<span class="s">'patientId'</span>, patientId);
+  <span class="k">const</span> { hasValidToken } = <span class="k">await</span> fetch(
+    <span class="s">`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}/token-status?${params}`</span>,
+  ).then(r => r.json());
+
+  <span class="k">if</span> (!hasValidToken) {
+    <span class="c">// 3. No token — mint a launch URL and hand the browser off. This never returns; the browser</span>
+    <span class="c">//    navigates to athenahealth's login, back to /oauth/callback, then to callerId below.</span>
+    <span class="k">const</span> mintParams = <span class="k">new</span> URLSearchParams({ ehrEndpointId: EHR_ENDPOINT_ID });
+    mintParams.set(<span class="s">'callerId'</span>, window.location.origin + window.location.pathname);
+    <span class="k">if</span> (sessionId) mintParams.set(<span class="s">'sessionId'</span>, sessionId);
+
+    <span class="k">const</span> mint = <span class="k">await</span> fetch(
+      <span class="s">`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}/public-patient-standalone-url?${mintParams}`</span>,
+    ).then(r => r.json());
+
+    localStorage.setItem(<span class="s">'athenaSessionId'</span>, mint.sessionId); <span class="c">// persist BEFORE navigating away</span>
+    window.location.href = mint.launchUrl;
+    <span class="k">return</span>;
+  }
+
+  <span class="c">// 4. Token is valid — fetch the data</span>
+  <span class="k">const</span> result = <span class="k">await</span> fetch(
+    <span class="s">`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}/run`</span>,
+    {
+      method: <span class="s">'POST'</span>,
+      headers: { <span class="s">'Content-Type'</span>: <span class="s">'application/json'</span> },
+      body: JSON.stringify({ patientId, patientSearchCriteria: null, callerId: sessionId ?? null }),
+    },
+  ).then(r => r.json());
+
+  <span class="k">if</span> (result.workflowRun.status !== <span class="s">'Succeeded'</span>) {
+    <span class="k">throw new</span> Error(result.workflowRun.errorMessage ?? <span class="s">'Workflow run failed.'</span>);
+  }
+
+  <span class="c">// 5. Pull the Patient resource(s) out of the Source node's output</span>
+  <span class="k">const</span> sourceOutput = Object.values(result.outputsByNodeId ?? {})
+    .find((o: any) => o.nodeType.endsWith(<span class="s">'SourceNode'</span>));
+  <span class="k">const</span> patients = (sourceOutput?.payload?.resources ?? [])
+    .filter((r: any) => r.resourceType === <span class="s">'Patient'</span>);
+
+  <span class="k">return</span> patients;
+}
+
+<span class="c">// Called once, on page load, after the full-page redirect back from athenahealth</span>
+<span class="k">async function</span> <span class="f">handleOAuthReturn</span>() {
+  <span class="k">const</span> params = <span class="k">new</span> URLSearchParams(window.location.search);
+  <span class="k">const</span> workflowRunId = params.get(<span class="s">'workflowRunId'</span>);
+  window.history.replaceState(null, <span class="s">''</span>, window.location.pathname); <span class="c">// strip so a refresh doesn't replay this</span>
+
+  <span class="k">if</span> (workflowRunId) {
+    <span class="k">const</span> { patientId: resolved } = <span class="k">await</span> fetch(
+      <span class="s">`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/runs/${workflowRunId}/launch-result`</span>,
+    ).then(r => r.json());
+    patientId = resolved;
+  }
+
+  <span class="k">return</span> connectGetData(); <span class="c">// token is now cached — fetches immediately, no redirect</span>
+}
+
+<span class="c">// Wire your own button + the OAuth-return check on page load</span>
+document.getElementById(<span class="s">'connect-btn'</span>)?.addEventListener(<span class="s">'click'</span>, () => connectGetData());
+
+<span class="k">const</span> returnParams = <span class="k">new</span> URLSearchParams(window.location.search);
+<span class="k">if</span> (returnParams.get(<span class="s">'workflowRunId'</span>) || returnParams.get(<span class="s">'signedIn'</span>) || returnParams.get(<span class="s">'launchError'</span>)) {
+  handleOAuthReturn();
+}</pre>
+
+    <h3 id="code-vanilla">4.3 Minimal, framework-free HTML page <span class="pill pill-hidden">no build step</span></h3>
+    <p class="section-intro">The same flow with no build step — useful as a smoke test against your FHIRBridge instance before wiring it into your real application.</p>
+    <div class="code-label"><span>athena-connect.html</span><button class="copy-btn" data-copy-target="code-vanilla-block" type="button">Copy</button></div>
+    <pre id="code-vanilla-block">&lt;<span class="k">button</span> id=<span class="s">"connect-btn"</span>&gt;Connect&lt;/<span class="k">button</span>&gt;
+&lt;<span class="k">pre</span> id=<span class="s">"out"</span>&gt;&lt;/<span class="k">pre</span>&gt;
+&lt;<span class="k">script</span>&gt;
+  <span class="c">// Paste the three values FHIRBridge gave you</span>
+  <span class="k">const</span> FHIRBRIDGE_BASE_URL = <span class="s">'https://your-fhirbridge-host'</span>;
+  <span class="k">const</span> WORKFLOW_ID = <span class="s">'00000000-0000-0000-0000-000000000000'</span>;
+  <span class="k">const</span> EHR_ENDPOINT_ID = <span class="s">'00000000-0000-0000-0000-000000000000'</span>;
+
+  <span class="k">let</span> sessionId = localStorage.getItem(<span class="s">'athenaSessionId'</span>) || undefined;
+
+  <span class="k">async function</span> <span class="f">connect</span>() {
+    <span class="k">const</span> status = <span class="k">new</span> URLSearchParams();
+    <span class="k">if</span> (sessionId) status.set(<span class="s">'callerId'</span>, sessionId);
+    <span class="k">const</span> { hasValidToken } = <span class="k">await</span> fetch(
+      <span class="s">`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}/token-status?${status}`</span>,
+    ).then(r =&gt; r.json());
+
+    <span class="k">if</span> (!hasValidToken) {
+      <span class="k">const</span> mint = <span class="k">new</span> URLSearchParams({ ehrEndpointId: EHR_ENDPOINT_ID });
+      mint.set(<span class="s">'callerId'</span>, location.origin + location.pathname);
+      <span class="k">if</span> (sessionId) mint.set(<span class="s">'sessionId'</span>, sessionId);
+      <span class="k">const</span> { launchUrl, sessionId: newId } = <span class="k">await</span> fetch(
+        <span class="s">`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}/public-patient-standalone-url?${mint}`</span>,
+      ).then(r =&gt; r.json());
+      localStorage.setItem(<span class="s">'athenaSessionId'</span>, newId);
+      location.href = launchUrl; <span class="c">// full-page redirect to athenahealth's login</span>
+      <span class="k">return</span>;
+    }
+
+    <span class="k">const</span> run = <span class="k">await</span> fetch(
+      <span class="s">`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}/run`</span>,
+      {
+        method: <span class="s">'POST'</span>,
+        headers: { <span class="s">'Content-Type'</span>: <span class="s">'application/json'</span> },
+        body: JSON.stringify({ patientId: <span class="k">null</span>, patientSearchCriteria: <span class="k">null</span>, callerId: sessionId }),
+      },
+    ).then(r =&gt; r.json());
+
+    document.getElementById(<span class="s">'out'</span>).textContent = JSON.stringify(run, null, 2);
+  }
+
+  document.getElementById(<span class="s">'connect-btn'</span>).addEventListener(<span class="s">'click'</span>, connect);
+  <span class="c">// On return from athenahealth, the token is already cached — clicking Connect again fetches immediately.</span>
+  <span class="k">if</span> (<span class="k">new</span> URLSearchParams(location.search).get(<span class="s">'workflowRunId'</span>)) {
+    history.replaceState(<span class="k">null</span>, <span class="s">''</span>, location.pathname);
+    connect();
+  }
+&lt;/<span class="k">script</span>&gt;</pre>
+  </section>
+
+  <section id="generalize">
+    <h2><span class="num">05</span>How this generalizes to Epic and eCW</h2>
+    <p class="section-intro">
+      The same Workflow Id / Base URL / EhrEndpoint Id triple, and the same set of API calls, work for Epic/MyChart and eCW — only the values themselves differ. If your integration needs more than one vendor, we provision each one the same way and hand you a separate triple of values per vendor.
+    </p>
+
+    <div class="vendor-grid">
+      <div class="vendor-card">
+        <h4>Epic / MyChart</h4>
+        <dl>
+          <dt>EhrEndpoint</dt><dd>picked per hospital</dd>
+          <dt>Hospital picker</dt><dd>Yes — many hospitals in a directory</dd>
+        </dl>
+      </div>
+      <div class="vendor-card">
+        <h4>athenahealth</h4>
+        <dl>
+          <dt>EhrEndpoint</dt><dd>one fixed id we provide</dd>
+          <dt>Hospital picker</dt><dd>No — one sandbox/production endpoint</dd>
+        </dl>
+      </div>
+      <div class="vendor-card">
+        <h4>eCW (Healow)</h4>
+        <dl>
+          <dt>EhrEndpoint</dt><dd>one fixed id we provide</dd>
+          <dt>Hospital picker</dt><dd>No — one practice endpoint</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <footer class="page-footer">FHIRBridge — third-party integration reference</footer>
+
+</div>
+
+<script>
+(function () {
+  try {
+    document.querySelectorAll('.copy-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var target = document.getElementById(btn.getAttribute('data-copy-target'));
+        if (!target) return;
+        var text = target.textContent || '';
+        var done = function () {
+          var original = btn.textContent;
+          btn.textContent = 'Copied';
+          btn.classList.add('copied');
+          setTimeout(function () { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () {
+            var range = document.createRange();
+            range.selectNodeContents(target);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          });
+        }
+      });
+    });
+  } catch (e) { /* clipboard unavailable — button is inert, no crash */ }
+})();
+</script>
+</body>
+</html>

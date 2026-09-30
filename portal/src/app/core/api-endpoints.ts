@@ -241,6 +241,19 @@ export const CORS_ORIGINS_ENDPOINTS = {
   reload: `${API_V1_BASE}/system/allowed-origins/reload`,
 };
 
+// ─── API Clients (ApiClientsController — api/v1/api-clients) ───────────────────
+// OAuth 2.0 Client Credentials Grant admin: Client ID/Secret pairs a third-party app exchanges at
+// oauth.token for a Bearer token that can trigger any workflow's /run — see ClientCredentialsTokenController.
+export const API_CLIENTS_ENDPOINTS = {
+  paged: `${API_V1_BASE}/api-clients`,
+  byId: (id: string) => `${API_V1_BASE}/api-clients/${id}`,
+  regenerateSecret: (id: string) => `${API_V1_BASE}/api-clients/${id}/regenerate-secret`,
+  returnUrls: (id: string) => `${API_V1_BASE}/api-clients/${id}/return-urls`,
+  returnUrlById: (id: string, returnUrlId: string) => `${API_V1_BASE}/api-clients/${id}/return-urls/${returnUrlId}`,
+};
+
+export const OAUTH_TOKEN_ENDPOINT = `${API_V1_BASE}/oauth/token`;
+
 // ─── System Settings (SystemSettingsController — api/v1/system/settings) ───────
 // SuperAdmin-only: runtime-editable config values that override their appsettings.json default
 // (e.g. worker cadence, rate limits, MFA issuer) without a redeploy. Keyed by the same dotted
