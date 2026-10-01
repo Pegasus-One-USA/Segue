@@ -205,6 +205,15 @@ export class EhrEndpointListComponent implements OnInit {
       });
   }
 
+  /** Copies the endpoint's id — the "code" an integrating app passes as ehr_endpoint_code (see the Integration
+   *  Details panel and the third-party integration guide). */
+  copyCode(endpoint: EhrEndpoint): void {
+    navigator.clipboard?.writeText(endpoint.id).then(
+      () => this.toast.success('Copied', `Code for "${endpoint.name}" copied to clipboard.`),
+      () => this.toast.error('Could not copy to the clipboard.'),
+    );
+  }
+
   openEdit(endpoint: EhrEndpoint): void {
     if (!this.actionGuard.ensure('ehrendpoints.edit', 'You do not have permission to edit EHR endpoints.')) return;
     this.dialog

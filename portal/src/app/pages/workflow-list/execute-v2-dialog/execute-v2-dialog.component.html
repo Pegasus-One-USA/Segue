@@ -1,0 +1,98 @@
+<div class="dialog-container">
+  <div class="dialog-header">
+    <div class="dialog-header__icon"><mat-icon>local_hospital</mat-icon></div>
+    <div class="dialog-header__text">
+      <h2>Execute V2</h2>
+      <p>{{ data.workflowName }}</p>
+    </div>
+  </div>
+
+  <div class="dialog-body">
+    @if (loading()) {
+      <div class="center"><mat-spinner diameter="28"></mat-spinner></div>
+    } @else if (loadError()) {
+      <div class="notice error-notice"><mat-icon>error_outline</mat-icon><span>{{ loadError() }}</span></div>
+    } @else {
+    @if (options(); as o) {
+      @if (!o.supportsHospitalSwitch && o.hospitalSwitchReason) {
+        <div class="notice warn-notice"><mat-icon>info</mat-icon><span>{{ o.hospitalSwitchReason }}</span></div>
+      }
+
+      <div class="field">
+        <label for="ev2-endpoint">Hospital (EHR Endpoint)</label>
+        <select id="ev2-endpoint" [ngModel]="selectedId()" (ngModelChange)="selectedId.set($event)" [disabled]="!o.supportsHospitalSwitch || executing()">
+          <option value="">
+            Default{{ defaultEndpoint() ? ' — ' + defaultEndpoint()!.name : ' — as configured on the workflow' }}
+          </option>
+          @for (e of o.endpoints; track e.id) {
+            @if (e.id !== o.matchedEhrEndpointId) {
+              <option [value]="e.id">{{ e.name }}</option>
+            }
+          }
+        </select>
+        <span class="hint">{{ o.sourceName }} · {{ o.vendor }}</span>
+      </div>
+
+      @if (o.defaults) {
+        <table class="settings">
+          <thead>
+            <tr><th>Setting</th><th>Default</th>@if (selected()) {<th>This run</th>}</tr>
+          </thead>
+          <tbody>
+            @for (r of rows(); track r.label) {
+              <tr [class.changed]="r.changed">
+                <td>{{ r.label }}</td>
+                <td class="mono">{{ r.current || '—' }}</td>
+                @if (selected()) {
+                  <td class="mono">{{ r.next || '—' }}@if (r.changed) { <mat-icon class="chg" title="Changed">swap_horiz</mat-icon> }</td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        @if (selected()) {
+          <p class="summary">
+            {{ changedCount() }} setting{{ changedCount() === 1 ? '' : 's' }} will be replaced for this run only. The workflow and its
+            source connection are not modified; credentials and secrets stay those of the source connection.
+          </p>
+        } @else {
+          <p class="summary">Running with the workflow's saved configuration.</p>
+        }
+      }
+
+        @if (o.supportsRunCriteria) {
+          <div class="criteria">
+            <h3>Source criteria for this run</h3>
+            @if (isBulkExport()) {
+              <div class="field">
+                <label for="ev2-group">Group ID</label>
+                <input id="ev2-group" type="text" [ngModel]="groupId()" (ngModelChange)="groupId.set($event)" [disabled]="executing()" autocomplete="off" />
+                <span class="hint">
+                  Pre-filled from the source connection. @if (groupIdChanged()) { <a href="javascript:void(0)" (click)="resetGroupId()">Reset to saved</a> }
+                </span>
+              </div>
+            } @else {
+              <div class="field">
+                <label for="ev2-criteria">Search criteria</label>
+                <textarea id="ev2-criteria" rows="3" [ngModel]="searchCriteria()" (ngModelChange)="searchCriteria.set($event)" [disabled]="executing()" placeholder="e.g. identifier=203713,203711"></textarea>
+                <span class="hint">
+                  Pre-filled from the source connection. @if (searchCriteriaChanged()) { <a href="javascript:void(0)" (click)="resetSearchCriteria()">Reset to saved</a> }
+                </span>
+              </div>
+            }
+            <p class="summary">Used for this run only and recorded in the execution log; the saved source connection is not changed.</p>
+          </div>
+        }
+    }
+    }
+  </div>
+
+  <div class="dialog-actions">
+    <button mat-button type="button" (click)="dialogRef.close(false)" [disabled]="executing()">Cancel</button>
+    <button mat-flat-button color="primary" type="button" (click)="execute()" [disabled]="loading() || !!loadError() || executing()">
+      @if (executing()) { <mat-spinner diameter="16"></mat-spinner> }
+      {{ selected() ? 'Execute for ' + selected()!.name : 'Execute' }}
+    </button>
+  </div>
+</div>

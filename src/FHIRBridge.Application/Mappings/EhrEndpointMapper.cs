@@ -18,5 +18,10 @@ public static class EhrEndpointMapper
             endpoint.CreatedBy,
             endpoint.ModifiedOnUtc,
             endpoint.ModifiedBy,
-            endpoint.EndpointType);
+            endpoint.EndpointType,
+            endpoint.TokenEndpoint,
+            endpoint.ClientId,
+            endpoint.KeyId,
+            endpoint.JwksUrl,
+            endpoint.PracticeId);
 }

@@ -72,13 +72,33 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         return Math.Min(pagesToReachCap, PageCountBackstop);
     }
 
-    public async Task<FhirSourceConfiguration?> ResolveAsync(
+    public Task<FhirSourceConfiguration?> ResolveAsync(
         Guid sourceConnectionId,
         string? searchParameters,
         string? targetPatientId,
         CancellationToken cancellationToken,
         string? patientSearchCriteria = null,
         string? callerId = null)
+        => ResolveCoreAsync(sourceConnectionId, searchParameters, targetPatientId, cancellationToken, patientSearchCriteria, callerId, runOverrides: null);
+
+    public Task<FhirSourceConfiguration?> ResolveWithRunOverridesAsync(
+        Guid sourceConnectionId,
+        string? searchParameters,
+        string? targetPatientId,
+        CancellationToken cancellationToken,
+        string? patientSearchCriteria,
+        string? callerId,
+        RunSourceOverrides runOverrides)
+        => ResolveCoreAsync(sourceConnectionId, searchParameters, targetPatientId, cancellationToken, patientSearchCriteria, callerId, runOverrides);
+
+    private async Task<FhirSourceConfiguration?> ResolveCoreAsync(
+        Guid sourceConnectionId,
+        string? searchParameters,
+        string? targetPatientId,
+        CancellationToken cancellationToken,
+        string? patientSearchCriteria,
+        string? callerId,
+        RunSourceOverrides? runOverrides)
     {
         var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
         if (sourceConnection is null)
@@ -131,6 +151,26 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         var retrieval = sourceConnection.Retrieval;
+
+        // "Execute V2" only: this run's Group ID / Search Criteria replace the saved ones. The node-level search string
+        // is dropped when criteria are supplied, otherwise the wizard snapshot of the OLD criteria would still win
+        // (ComposeSearchParameters gives the node-level parameters priority over the connection's).
+        if (runOverrides is not null)
+        {
+            if (retrieval is not null)
+            {
+                retrieval = retrieval.WithRunOverrides(runOverrides.GroupId, runOverrides.SearchCriteria);
+                if (runOverrides.SearchCriteria is not null)
+                {
+                    searchParameters = null;
+                }
+            }
+            else if (runOverrides.SearchCriteria is not null)
+            {
+                searchParameters = string.IsNullOrWhiteSpace(runOverrides.SearchCriteria) ? null : runOverrides.SearchCriteria.Trim();
+            }
+        }
+
         var composedSearchParameters = ComposeSearchParameters(searchParameters, retrieval);
 
         // athenahealth's Backend System app registrations verified against the live preview sandbox are
@@ -243,6 +283,11 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             CallerId: callerId,
             PracticeId: sourceConnection.Authentication.PracticeId,
             AuthPlacement: sourceConnection.Authentication.AuthPlacement);
+
+        if (runOverrides is not null)
+        {
+            config = config with { LastUpdatedWatermarks = null, Since = null, RunOverridesActive = true };
+        }
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
         // connection's own configured base URL), a later, separately triggered run must keep hitting that SAME

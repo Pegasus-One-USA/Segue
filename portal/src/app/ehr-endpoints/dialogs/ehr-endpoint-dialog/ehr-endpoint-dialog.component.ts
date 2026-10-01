@@ -98,7 +98,24 @@ export class EhrEndpointDialogComponent {
       this.data?.endpoint?.endpointType ?? ('MyChart' as EhrEndpointType),
       [Validators.required],
     ],
+    // Run-time overrides — used only when a workflow run is explicitly started against this endpoint.
+    tokenEndpoint: [this.data?.endpoint?.tokenEndpoint ?? '', [Validators.maxLength(500)]],
+    clientId: [this.data?.endpoint?.clientId ?? '', [Validators.maxLength(200)]],
+    keyId: [this.data?.endpoint?.keyId ?? '', [Validators.maxLength(200)]],
+    jwksUrl: [this.data?.endpoint?.jwksUrl ?? '', [Validators.maxLength(500)]],
+    practiceId: [this.data?.endpoint?.practiceId ?? '', [Validators.maxLength(100)]],
   });
+
+  /** Which run-time override fields apply to the selected vendor (see EhrEndpointSourceOverride). */
+  get showTokenEndpoint(): boolean {
+    return ['Epic', 'Cerner', 'MeditechGreenfield', 'Healow', 'GenericFhir'].includes(this.form.controls.vendor.value as string);
+  }
+  get showEpicRegistration(): boolean {
+    return this.form.controls.vendor.value === 'Epic';
+  }
+  get showPracticeId(): boolean {
+    return this.form.controls.vendor.value === 'Athenahealth';
+  }
 
   hasError(ctrl: string, err: string): boolean {
     const c = this.form.get(ctrl)!;

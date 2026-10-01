@@ -27,6 +27,8 @@ import {
   resourceTypeOptions,
 } from '../../data/connection-type-labels.util';
 import { PhaseConfigService } from '../../services/phase-config.service';
+import { DialogService } from '../../core/services/dialog.service';
+import { ExecuteV2DialogComponent, ExecuteV2DialogData } from './execute-v2-dialog/execute-v2-dialog.component';
 import {
   IntegrationDetails,
   buildIntegrationDetails,
@@ -65,6 +67,7 @@ type FilterCategory = 'status' | 'audience' | 'source' | 'destination' | 'lastRu
 })
 export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly api = inject(WorkflowApiService);
+  private readonly customDialog = inject(DialogService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly runStatusHub = inject(RunStatusHubService);
@@ -628,6 +631,31 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         this.toast.error('Workflow run', this.messageOf(err, 'The background run could not be started.'));
       },
     });
+  }
+
+  /** "Execute V2": pick the hospital (EHR Endpoint) for this one run, review what changes, then execute. */
+  onExecuteV2(row: WorkflowSummary): void {
+    if (this.busyId() || !this.canRun()) return;
+    if (row.status !== 'Ready') {
+      this.toast.error(this.statusHint(row.status));
+      return;
+    }
+
+    this.customDialog
+      .open<ExecuteV2DialogComponent, ExecuteV2DialogData, boolean>(ExecuteV2DialogComponent, {
+        width: '640px',
+        disableClose: true,
+        data: { workflowId: row.workflowId, workflowName: row.name },
+      })
+      .afterClosed()
+      .subscribe(started => {
+        if (!started) return;
+        this.summaries.update(rows =>
+          rows.map(w =>
+            w.workflowId === row.workflowId ? { ...w, lastRun: 'Running', lastRunAt: new Date().toISOString() } : w,
+          ),
+        );
+      });
   }
 
   onViewData(row: WorkflowSummary): void {

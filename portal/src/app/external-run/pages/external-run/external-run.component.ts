@@ -62,6 +62,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   workflow_not_found: 'The requested workflow does not exist.',
   invalid_ticket: 'This launch link has expired or was already used. Please start the workflow again from the application.',
   ticket_required: 'This FHIRBridge deployment only accepts launch tickets. The application must obtain one from its backend first.',
+  ehr_endpoint_invalid: 'The selected EHR Endpoint cannot be used with this workflow (not found, a different vendor, or a bulk export).',
   license_restricted: 'This workflow cannot be run right now: the license run quota is exhausted or the license does not allow one of its sources or destinations.',
 };
 
@@ -264,7 +265,7 @@ export class ExternalRunComponent implements OnInit, OnDestroy {
     try {
       const result = await firstValueFrom(this.http.post<WorkflowRunResponse>(
         `${this.api}/workflows/${state.workflowId}/run`,
-        { patientId: null, patientSearchCriteria: null, callerId: state.sessionId, async: this.asyncMode },
+        { patientId: null, patientSearchCriteria: null, callerId: state.sessionId, async: this.asyncMode, triggerType: 'ExternalTrigger' },
       ));
       const startedRunId = result.workflowRun?.id ?? result.workflowRunId ?? null;
       this.runId.set(startedRunId);

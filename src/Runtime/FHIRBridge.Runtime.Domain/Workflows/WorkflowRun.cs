@@ -12,7 +12,11 @@ public sealed class WorkflowRun
         string? triggerType = null,
         Guid? targetNodeId = null,
         int workflowDefinitionVersion = 1,
-        string? correlationId = null)
+        string? correlationId = null,
+        Guid? ehrEndpointId = null,
+        string? ehrEndpointName = null,
+        string? runGroupId = null,
+        string? runSearchCriteria = null)
     {
         if (workflowDefinitionId == Guid.Empty)
         {
@@ -28,6 +32,10 @@ public sealed class WorkflowRun
         TriggerType = triggerType;
         TargetNodeId = targetNodeId;
         CorrelationId = correlationId;
+        EhrEndpointId = ehrEndpointId;
+        EhrEndpointName = ehrEndpointName;
+        RunGroupId = runGroupId;
+        RunSearchCriteria = runSearchCriteria;
     }
 
     public Guid Id { get; }
@@ -75,6 +83,19 @@ public sealed class WorkflowRun
     /// <summary>Shared execution-tracking id for this run — the same value flows into audit records, captured
     /// errors, and correlation search so every artifact of this run can be found from one id.</summary>
     public string? CorrelationId { get; }
+
+    /// <summary>The EHR Endpoint this run was explicitly started against (its hospital-specific connection values
+    /// replaced the source connection's). Null = the default: the configuration saved with the workflow.</summary>
+    public Guid? EhrEndpointId { get; }
+
+    /// <summary>Snapshot of that endpoint's name at run time, so history stays readable if it is renamed or deleted.</summary>
+    public string? EhrEndpointName { get; }
+
+    /// <summary>Group ID supplied for this run via "Execute V2" (null = the source connection's saved one was used).</summary>
+    public string? RunGroupId { get; }
+
+    /// <summary>Search criteria supplied for this run via "Execute V2" (null = the saved ones were used).</summary>
+    public string? RunSearchCriteria { get; }
 
     public IReadOnlyCollection<WorkflowNodeRun> NodeRuns => _nodeRuns;
 

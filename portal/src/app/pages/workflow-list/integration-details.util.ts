@@ -3,22 +3,22 @@ import { WorkflowSummary } from '../../services/workflow-api.service';
 /**
  * Builds the "Integration details" panel's contents for one workflow.
  *
- * This is read by a third-party developer who has no access to this portal and nobody to ask, so it has to be
- * both complete and honest about what will not work. Two things drive its shape:
+ * Read by a third-party developer who has no access to this portal and nobody to ask, so it has to be complete and
+ * honest about what will not work. The panel is organised around API clients (Settings > API Clients): the app
+ * keeps a Client ID and Client Secret on ITS SERVER and uses them to trigger the workflow, in one of two ways -
  *
- * 1. The four audiences are executed in genuinely different ways. Backend is a server-to-server call; the three
- *    interactive audiences CANNOT be started from a server at all — the run happens as a side effect of a real
- *    person completing an EHR or patient sign-in. So for those the deliverable is a URL to send a user to, not
- *    an endpoint to call, and saying otherwise would send a partner down a dead end.
+ *  1. Server to server: exchange the credentials for a short-lived token (client credentials grant) and call the
+ *     run endpoint with it. Backend workflows only - there is no person to sign in.
+ *  2. Browser redirect (launch ticket): the app's backend exchanges the credentials for a single-use, 90-second
+ *     ticket and sends the user's browser to Segue's run page. Segue's page handles the EHR sign-in / consent when the
+ *     workflow needs one, shows progress, and returns the browser to the app. The secret never reaches the browser.
  *
- * 2. Every refusal on the anonymous endpoints is a bare 404 — not opted into public launch, wrong audience,
- *    unrecognised hospital id and "no such workflow" are indistinguishable to the caller (deliberately: telling
- *    them apart would leak whether a given workflow exists). The reason is recorded server-side instead, in
- *    Governance > SMART Launch Logs, searchable by this workflow's id. The readiness checks exist to surface
- *    those conditions BEFORE the partner hits the dead end.
+ * EHR launch workflows are the exception: they start INSIDE the hospital's EHR, so no credential can start them and
+ * they keep their own launch sequence.
  *
- * Kept as a plain function rather than a component method so the per-audience decisions are directly testable
- * without standing up the component (whose constructor opens a SignalR connection).
+ * Every refusal on the anonymous endpoints is a bare 404 or a generic error on purpose, so readiness checks surface
+ * the conditions BEFORE the partner hits a dead end. Kept as plain functions so the per-audience decisions are
+ * directly testable without standing up the component.
  */
 
 /** One copyable line in the panel. */
@@ -58,11 +58,11 @@ export function buildIntegrationDetails(
   audienceLabel: string,
 ): IntegrationDetails {
   const id = row.workflowId;
-  const checks = buildChecks(row);
+  const checks = buildChecks(row, origin);
 
   const values: IntegrationValue[] = [
     { label: 'Workflow ID', value: id, hint: 'Identifies this workflow on every call below.', code: true },
-    { label: 'Base address', value: origin, hint: 'The Segue instance your app talks to.', code: true },
+    { label: 'Base address', value: origin, hint: 'The Segue instance your app’s server talks to.', code: true },
   ];
 
   if (row.workflowNumber) {
@@ -85,11 +85,31 @@ export function buildIntegrationDetails(
   return standaloneDetails(row, origin, audienceLabel, values, checks);
 }
 
+/** What every API-client based integration needs set up once, before any call below can succeed. */
+function apiClientChecks(origin: string): IntegrationCheck[] {
+  return [
+    {
+      label: 'API client created',
+      state: 'note',
+      detail: 'An administrator creates one in Settings > API Clients and hands over the Client ID and Client Secret. '
+        + 'The secret is shown once, so store it in your server’s secret store. One API client works for every '
+        + 'workflow on this instance.',
+    },
+    {
+      label: 'Your app’s pages registered as Allowed Caller URLs',
+      state: 'note',
+      detail: 'In the same screen, add the page address(es) your app triggers from and returns to - an exact page, or '
+        + 'a whole domain. Browser-redirect calls are refused with “caller URL is not whitelisted” for any address '
+        + `that is not on the list. (This instance: ${origin}.)`,
+    },
+  ];
+}
+
 /**
- * The conditions that otherwise produce a bare 404 with no explanation. Ordered so the two that apply to every
- * audience come first, then the launch-only ones.
+ * The conditions that otherwise produce a refusal with no explanation. Ordered so the two that apply to every
+ * audience come first, then the audience-specific ones.
  */
-function buildChecks(row: WorkflowSummary): IntegrationCheck[] {
+function buildChecks(row: WorkflowSummary, origin: string): IntegrationCheck[] {
   const checks: IntegrationCheck[] = [
     row.status === 'Disabled'
       ? {
@@ -109,52 +129,63 @@ function buildChecks(row: WorkflowSummary): IntegrationCheck[] {
         },
   ];
 
-  // POST /run is AllowAnonymous at the route level and authorizes the two callers differently INSIDE the handler
-  // (see WorkflowEndpoints): a cookie-authenticated portal run must satisfy workflow.run plus per-vendor Execute,
-  // while a third-party run presents no cookie at all and is gated on the workflow's IsPubliclyLaunchable opt-in
-  // plus its unguessable callerId. Telling a launch partner they need a Segue sign-in — as this note once did for
-  // every audience — sends them asking for a credential they neither need nor can be given.
-  if (row.action !== 'Launch') {
+  // EHR launch starts inside the EHR and has no credential-based path, so it keeps its original public-launch rules.
+  if (row.action === 'Launch' && row.applicationType === 'EhrLaunch') {
     checks.push({
-      label: 'Sign-in required to run',
+      label: 'No Segue sign-in needed',
       state: 'note',
-      detail: 'Starting a run on this audience needs a Segue sign-in with the “workflow.run” permission, sent as '
-        + 'cookies — there is no app-to-app credential today, so talk to whoever administers this instance before '
-        + 'you build against it.',
+      detail: 'Your app does not sign in to Segue on this audience. The run is allowed by this workflow’s “Allow '
+        + 'public launch” setting plus the callerId your app holds for that person - so treat callerId as a secret. '
+        + 'Signing the clinician in to their EHR is a separate thing and the only sign-in your app is involved in.',
     });
+    checks.push(
+      row.isPubliclyLaunchable
+        ? {
+            label: 'Public launch allowed',
+            state: 'ok',
+            detail: 'A third-party app may mint a launch link for this workflow without a Segue sign-in.',
+          }
+        : {
+            label: 'Public launch allowed',
+            state: 'blocked',
+            detail: 'Anonymous launch is switched off for this workflow, so the URLs below return “not found”. '
+              + 'Turn on “Allow public launch” from this row’s menu.',
+          },
+      {
+        label: 'Your app’s address registered',
+        state: 'note',
+        detail: 'The anonymous endpoints only accept a callerId whose origin an administrator has added to the '
+          + 'allowed list. Send your app’s address (e.g. https://app.example.com) to whoever administers this instance.',
+      },
+    );
     return checks;
   }
 
-  checks.push({
-    label: 'No Segue sign-in needed',
-    state: 'note',
-    detail: 'Your app does not sign in to Segue at all on this audience. The run is allowed by this workflow’s '
-      + '“Allow public launch” setting plus the callerId your app holds for that person — so treat callerId as a '
-      + 'secret, not just an identifier. Signing the person in to their EHR is a separate thing entirely, and it '
-      + 'is the only sign-in your app is involved in.',
-  });
+  checks.push(...apiClientChecks(origin));
 
-  checks.push(
-    row.isPubliclyLaunchable
-      ? {
-          label: 'Public launch allowed',
-          state: 'ok',
-          detail: 'A third-party app may mint a launch link for this workflow without a Segue sign-in.',
-        }
-      : {
-          label: 'Public launch allowed',
-          state: 'blocked',
-          detail: 'Anonymous launch is switched off for this workflow, so the URLs below return “not found”. '
-            + 'Turn on “Allow public launch” from this row’s menu.',
-        },
-    // Not derivable from the summary row — it depends on the partner's own origin, which only they know.
-    {
-      label: 'Your app’s address registered',
-      state: 'note',
-      detail: 'The anonymous endpoints only accept a callerId whose origin an administrator has added to the '
-        + 'allowed list. Send your app’s address (e.g. https://app.example.com) to whoever administers this instance.',
-    },
-  );
+  if (row.action === 'Launch') {
+    // Standalone / Patient: the run page signs the person in, so the workflow must allow public launch.
+    checks.push(
+      row.isPubliclyLaunchable
+        ? {
+            label: 'Public launch allowed',
+            state: 'ok',
+            detail: 'Segue’s run page can take a person through the sign-in for this workflow.',
+          }
+        : {
+            label: 'Public launch allowed',
+            state: 'blocked',
+            detail: 'The run page needs “Allow public launch” switched on for this workflow, otherwise the sign-in '
+              + 'step fails. Turn it on from this row’s menu.',
+          },
+      {
+        label: 'EHR redirect address registered',
+        state: 'note',
+        detail: 'The hospital’s app registration must list Segue’s callback address, '
+          + `${origin}/api/v1/oauth/callback, as a redirect URI, otherwise the EHR refuses the sign-in.`,
+      },
+    );
+  }
 
   return checks;
 }
@@ -250,48 +281,139 @@ function identityAndHeaderValues(interactive: boolean): IntegrationValue[] {
   return values;
 }
 
+/** The credentials, shown once for every API-client based audience. */
+function credentialValues(): IntegrationValue[] {
+  return [
+    {
+      label: 'Your credentials - Client ID and Client Secret',
+      value: 'clientId  ·  clientSecret   (from Settings > API Clients)',
+      hint: 'These identify YOUR APP, not a person, and are the only thing that authorizes a trigger. Keep both on your '
+        + 'server: never put the secret in browser code, a page, a URL or a log. If it leaks, an administrator '
+        + 'regenerates it in API Clients and the old one stops working immediately. Because the secret stays on your '
+        + 'server, the browser only ever carries a short-lived ticket (below), never the secret.',
+      code: true,
+    },
+  ];
+}
+
+/** Optional per-run values the launch-ticket call accepts - the same for every audience that can use them. */
+function ticketOptionValues(origin: string, includeCriteria: boolean): IntegrationValue[] {
+  const values: IntegrationValue[] = [
+    {
+      label: 'Options you can send with the ticket request',
+      value: 'return_url · mode · window_mode · close_on_complete · ehr_endpoint_code'
+        + (includeCriteria ? ' · group_id · search_criteria' : ''),
+      hint: 'return_url - where the browser is sent when the run finishes; it must be one of your Allowed Caller URLs. '
+        + 'mode - “async” (default) shows “Workflow execution started” straight away and returns status=Triggered; '
+        + '“sync” waits and returns status=Succeeded or Failed. window_mode - “new” opens Segue’s page in a new window, '
+        + '“same” replaces your page. close_on_complete - with a new window, true closes it when done, otherwise it '
+        + 'goes to return_url. ehr_endpoint_code - the id of an EHR Endpoint (hospital); see “Hospitals” below.'
+        + (includeCriteria
+          ? ' group_id / search_criteria - replace the workflow’s saved Group ID / search criteria for this run only '
+            + '(e.g. identifier=203713,203711); leave them out to use the saved ones.'
+          : ''),
+      code: true,
+    },
+    {
+      label: 'Hospitals - list the EHR Endpoint ids you can pass',
+      value: `POST ${origin}/api/v1/workflows/external/ehr-endpoints   body: { client_id, client_secret, return_url }`,
+      hint: 'You can also copy a single code from Settings > EHR Endpoints (row menu > Copy Code). Or call this from your server (it needs the secret). It returns [{ code, name, vendor }]; send the chosen '
+        + 'code as ehr_endpoint_code. return_url must be an Allowed Caller URL, and an unlisted one is refused with '
+        + '“caller URL is not whitelisted”. Passing a hospital runs the workflow once against that hospital’s '
+        + 'connection values instead of the saved ones; it must be the same EHR vendor as the workflow.',
+      code: true,
+    },
+  ];
+  return values;
+}
+
 function backendDetails(
   row: WorkflowSummary, origin: string, audience: string,
   values: IntegrationValue[], checks: IntegrationCheck[],
 ): IntegrationDetails {
   values.push(
+    ...credentialValues(),
     {
-      label: 'Run the workflow',
-      value: `POST ${origin}/api/v1/workflows/${row.workflowId}/run`,
-      hint: 'Send {"async": true} to start it in the background and get a run id straight back, or omit it to '
-        + 'wait for the run to finish.',
+      label: 'Option A (server to server) - Step 1: get a token',
+      value: `POST ${origin}/api/v1/oauth/token   body: { "grant_type": "client_credentials", `
+        + '"client_id": "…", "client_secret": "…" }',
+      hint: 'Returns { access_token, token_type: "Bearer", expires_in }. The token lasts about 15 minutes and works for '
+        + 'any workflow, so cache it and request a new one a little before expires_in. A wrong client or secret '
+        + 'returns a generic 401 invalid_client - the same answer for “no such client” and “wrong secret”.',
       code: true,
     },
     {
-      label: 'Check a run',
-      value: `GET ${origin}/api/v1/workflow-runs/{runId}/status`,
-      hint: 'Poll with the run id returned above until the status is no longer Running.',
+      label: 'Option A - Step 2: run the workflow',
+      value: `POST ${origin}/api/v1/workflows/${row.workflowId}/run   Authorization: Bearer {access_token}`,
+      hint: 'Send {"async": true} to start it in the background and get back 202 with { workflowRunId, status: '
+        + '"Running", correlationId }, or send {} to wait for the run to finish and receive the full result. '
+        + 'Every run gets its own correlation id. A 401 means the token expired or is invalid - get a new one. '
+        + 'Per-run hospital / Group ID / search-criteria changes are not accepted here; use Option B for those.',
       code: true,
     },
+    {
+      label: 'Option A - Step 3: follow an async run',
+      value: `GET ${origin}/api/v1/workflows/external/run-status/{workflowRunId}   (no credential needed)`,
+      hint: 'Poll every few seconds until status is no longer Running. status is Running, Succeeded, PartialSuccess, '
+        + 'Failed or Cancelled. A failed run returns a general errorMessage with a Reference ID you can give to '
+        + 'whoever administers this instance; details are not exposed on this unauthenticated call.',
+      code: true,
+    },
+    {
+      label: 'Launch-ticket URL (the whole address to POST to)',
+      value: `${origin}/api/v1/workflows/external/launch-ticket`,
+      hint: 'Used by Option B. POST JSON to this exact address from your server; the body fields are listed below.',
+      code: true,
+    },
+    {
+      label: 'Option B (browser redirect) - Step 1: your server asks for a launch ticket',
+      value: `POST ${origin}/api/v1/workflows/external/launch-ticket   body: { client_id, client_secret, `
+        + `workflow_id: "${row.workflowId}", return_url, … }`,
+      hint: 'Call this from your server, never from browser code. Segue checks the credentials, the workflow and that '
+        + 'return_url is an Allowed Caller URL, then returns { ticket, run_url, expires_in: 90 }. A refusal is '
+        + '401 invalid_client (bad credentials) or 403 caller_url_not_allowed (the return_url is not whitelisted). '
+        + 'Use this option when you want the user to watch progress on Segue’s page and be sent back to you, or to '
+        + 'run against a specific hospital or with different search criteria.',
+      code: true,
+    },
+    {
+      label: 'Option B - Step 2: send the browser to run_url',
+      value: 'window.location = run_url   (or window.open for a new window)',
+      hint: 'The link works once and for about 90 seconds - use it straight away; a reused or expired link shows “This '
+        + 'launch link has expired or was already used”. Segue’s page then starts the workflow and shows '
+        + '“Executing workflow…” (or, for async, “Workflow execution started”).',
+      code: true,
+    },
+    {
+      label: 'Option B - Step 3: the browser comes back to your return_url',
+      value: '?status=Triggered|Succeeded|Failed&workflowRunId={id}',
+      hint: 'Triggered means an async run was started; Succeeded / Failed is the outcome of a sync run. Use '
+        + 'workflowRunId with the status call from Option A, Step 3, if you need to follow it up.',
+      code: true,
+    },
+    ...ticketOptionValues(origin, true),
     {
       label: 'No sign-in link, and no per-person identity',
       value: 'Do not send callerId, sessionId or userIdentity',
-      hint: 'This audience authenticates system-to-system against the EHR, with no person involved — so there is '
-        + 'nothing to sign in and none of the identity values the interactive audiences use apply here. If you '
-        + 'find yourself wanting to borrow a sign-in from one of those, this is the wrong audience for the job: '
-        + 'a sign-in belongs to the person who made it, and reusing it across accounts leaks one person’s access '
-        + 'to another.',
+      hint: 'This audience authenticates system-to-system against the EHR, with no person involved, so none of the '
+        + 'identity values the interactive audiences use apply here.',
       code: true,
     },
   );
-
-  values.push(...identityAndHeaderValues(false));
 
   return {
     workflowId: row.workflowId,
     name: row.name,
     audience,
     kind: 'backend',
-    summary: 'This workflow runs unattended — your system calls it directly, with no person involved.',
+    summary: 'This workflow runs unattended. Your server triggers it with an API client’s Client ID and Secret - '
+      + 'either by calling the run endpoint with a short-lived token (Option A), or by getting a one-time launch '
+      + 'ticket and sending the user’s browser to Segue’s run page (Option B).',
     steps: [
-      'Sign in to obtain a session.',
-      'POST to the run endpoint below with the workflow ID.',
-      'Poll the status endpoint with the run id you get back.',
+      'An administrator creates an API client and adds your page addresses as Allowed Caller URLs.',
+      'Store the Client ID and Secret on your server.',
+      'Option A: get a token, call the run endpoint with it, and poll the status.',
+      'Option B: ask for a launch ticket from your server, redirect the browser to run_url, and handle the return.',
     ],
     values,
     checks,
@@ -438,173 +560,92 @@ function standaloneDetails(
   row: WorkflowSummary, origin: string, audience: string,
   values: IntegrationValue[], checks: IntegrationCheck[],
 ): IntegrationDetails {
-  // Provider Standalone and Patient Standalone differ only in which hospital directory they use and which mint
-  // endpoint serves them. Passing the wrong endpointType is rejected as a bare 404, so the correct value is
-  // shown pre-filled rather than left to guesswork.
   const isPatient = row.applicationType === 'Patient';
   const person = isPatient ? 'patient' : 'clinician';
-  const endpointType = isPatient ? 'MyChart' : 'Epic';
-  const mintPath = isPatient
-    ? `${origin}/api/v1/workflows/${row.workflowId}/public-patient-standalone-url`
-    : `${origin}/api/v1/workflows/${row.workflowId}/public-standalone-url`;
 
   values.push(
+    ...credentialValues(),
     {
-      label: 'Step 1 — Check the values, and start the attempt',
-      value: `POST ${origin}/api/v1/workflows/${row.workflowId}/validate-run`,
-      hint: 'Do this FIRST, before the sign-in check below — a parameter problem is worth reporting without '
-        + `first sending the ${person} through a sign-in for a run that was never going to be accepted. Send the `
-        + 'same body as the run. It also records the attempt even when refused, so a rejected attempt leaves '
-        + 'something to look at afterwards. Keep the correlationId it returns and send it as X-Correlation-Id on '
-        + 'every later call in this attempt. If this call itself fails to answer (network blip, older Segue), '
-        + 'carry on to the run anyway — a pre-flight must never be the reason a fetch that would have worked '
-        + 'does not happen.',
+      label: 'Why a browser redirect',
+      value: 'A person has to sign in at the hospital - the credentials cannot do that for them',
+      hint: `This workflow needs the ${person} to sign in and approve access at the EHR, which only they can do. So `
+        + 'your server cannot run it with a token alone: it asks Segue for a one-time launch ticket, and Segue’s run '
+        + 'page takes the person through the EHR sign-in and consent, then runs the workflow. You build no '
+        + 'sign-in screens and handle no EHR tokens.',
       code: true,
     },
     {
-      label: 'What Step 1 sends back',
-      value: '{ "isValid": true, "correlationId": "wf-…", "workflowRunId": "…", "errors": [], "parameters": {…} }',
-      hint: 'A refusal is a 200 with isValid:false, NOT a 4xx — the request was well-formed and produced a real '
-        + 'outcome you can look up, so do not treat it as a transport error. When isValid is false, errors is a '
-        + 'list of { parameter, message } — message is plain text written for your end user and carries no '
-        + 'patient data, so you can show it as-is. correlationId comes back either way; keep it (see the header '
-        + 'below). Show every error at once, not one at a time: each correction the person misses costs them '
-        + 'another trip through the sign-in.',
+      label: 'Launch-ticket URL (the whole address to POST to)',
+      value: `${origin}/api/v1/workflows/external/launch-ticket`,
+      hint: 'POST JSON to this exact address from your server; the body fields are listed in Step 1.',
       code: true,
     },
     {
-      label: 'Step 2 — Show the list of sites to sign in to',
-      value: `GET ${origin}/api/v1/ehr-public-endpoints?endpointType=${endpointType}`,
-      hint: isPatient
-        ? 'Lists the sites this audience can use — patients sign in to a named hospital’s own portal, so '
-          + 'endpointType=MyChart is the only accepted value and any other comes back as “not found”. Add '
-          + '&search=name to filter as the patient types. Let them pick one, and keep the id of their choice.'
-        : 'Lists the sites this audience can use. Call it once per vendor you support: endpointType=Epic and '
-          + 'endpointType=Ecw are both valid here (endpointType=MyChart is not — that is the patient audience). '
-          + 'Add &search=name to filter as the clinician types. Let them pick one, and keep the id of their '
-          + 'choice.',
-      code: true,
-    },
-    {
-      label: 'Step 3 — Check whether a sign-in is even needed',
-      value: `GET ${origin}/api/v1/workflows/${row.workflowId}/token-status?callerId={sessionId}`,
-      hint: 'Answers hasValidToken: true or false. True means this browser already signed in recently and you '
-        + 'can skip straight to Step 6 — do not send them through sign-in again. False means continue to Step 4. '
-        + 'Skipping this check still works; it just sends people through a sign-in they did not need. It is a '
-        + 'point-in-time answer, not a guarantee: a sign-in can still run out between this check and a later '
-        + 'run, which is what Step 8 is for.',
-      code: true,
-    },
-    {
-      label: 'Step 4 — Get the sign-in link',
-      value: `GET ${mintPath}?ehrEndpointId={id}&callerId={yourPageUrl}&sessionId={sessionId}&userIdentity={accountId}`,
-      hint: 'Returns a launchUrl to send the person to. Note the three different values: callerId is your page’s '
-        + 'web address (where they come back to, and it must be on the allowed list); sessionId is an opaque '
-        + 'identifier for this browser — leave it out the first time and save the one that comes back; '
-        + 'userIdentity is your own account identifier for this person, which is what the access is permanently '
-        + 'tied to. Mixing these up is the most common mistake here.',
-      code: true,
-    },
-    {
-      label: 'Step 5 — Send them to the link to sign in',
-      value: '{launchUrl from Step 4}',
-      hint: `Redirect the whole page — not a background request. The ${person} signs in at the site they picked `
-        + 'and is then returned to your page from Step 4 with one of four markers on the address. '
-        + '?workflowRunId=… means a run happened — read it with Step 7, then carry on. ?signedIn=1 means they '
-        + 'signed in with nothing to run yet — go straight to Step 6. ?launchError=workflow_failed means the '
-        + 'sign-in worked but the run Segue started for you did not — harmless, carry on to Step 6'
+      label: 'Step 1 - Your server asks for a launch ticket',
+      value: `POST ${origin}/api/v1/workflows/external/launch-ticket   body: { client_id, client_secret, `
+        + `workflow_id: "${row.workflowId}", return_url, ehr_endpoint_code, mode, window_mode, close_on_complete }`,
+      hint: 'Call this from your server, never from browser code. Segue checks the credentials, the workflow and that '
+        + 'return_url is an Allowed Caller URL, then returns { ticket, run_url, expires_in: 90 }. A refusal is '
+        + '401 invalid_client (bad credentials) or 403 caller_url_not_allowed (the return_url is not whitelisted).'
         + (isPatient
-          ? '. '
-          : ', and expect to see it nearly every time on this audience: that run is started before your page '
-            + 'reloads, so it has none of the search terms the clinician typed and fails the same “tell me which '
-            + 'patients” rule described below. It is not a sign anything is wrong. ')
-        + '?launchError=context_mismatch is the one to handle separately: the sign-in itself was rejected '
-        + 'because this account is already tied to a different person, so no access was saved and there is '
-        + 'nothing to fetch — show the rejection instead of running.',
+          ? ' ehr_endpoint_code is required here: a patient always signs in to a specific hospital’s portal.'
+          : ' ehr_endpoint_code is optional: leave it out to use the address configured on the workflow.'),
       code: true,
     },
     {
-      label: 'Step 6 — Run the workflow, as often as you like',
-      value: `POST ${origin}/api/v1/workflows/${row.workflowId}/run`,
-      hint: 'Send {"patientId": …, "patientSearchCriteria": …, "callerId": {sessionId}}'
-        + (isPatient ? '. ' : ' — see the note below on which of those two you have to supply. ')
-        + 'This is the part worth '
-        + 'knowing: once someone has signed in, your app runs the workflow directly and repeatedly — searching, '
-        + 'refining, opening a record — without sending them back through sign-in each time, for as long as that '
-        + 'sign-in lasts (see Step 8 for when it stops). Your app presents no Segue credential here: the callerId '
-        + 'in the body is what identifies the stored EHR sign-in to run against.',
+      label: 'Step 2 - Send the browser to run_url',
+      value: 'window.location = run_url   (or window.open for a new window)',
+      hint: 'The link works once and for about 90 seconds - use it straight away. Segue’s page checks whether the '
+        + `${person} is already signed in; if not, it sends them to the hospital’s sign-in and consent screen and `
+        + 'brings them back, then runs the workflow. A reused or expired link shows “This launch link has expired or '
+        + 'was already used”.',
       code: true,
     },
     {
-      label: 'What Step 6 sends back',
-      value: '{ "workflowRun": { "status": "Succeeded", "errorMessage": null }, "outputsByNodeId": { "{nodeId}": '
-        + '{ "nodeType": "…SourceNode", "payload": { "resources": [ { "resourceType": "Patient", '
-        + '"resourceId": "…", "payload": "{…}" } ] } } } }',
-      hint: 'Check workflowRun.status first — “Succeeded” or not; errorMessage carries the reason when it is not '
-        + '(and Step 8 is how you tell one kind of failure from the other). The data sits under outputsByNodeId, '
-        + 'keyed by node id: find the source node’s entry (its nodeType ends in SourceNode) and read '
-        + 'payload.resources. Two things surprise people here — the node ids differ per workflow, so match on '
-        + 'nodeType rather than hard-coding an id; and each resource’s own payload is a STRING of FHIR JSON, so '
-        + 'it needs parsing again before you can read fields off it.',
+      label: 'Step 3 - The browser comes back to your return_url',
+      value: '?status=Triggered|Succeeded|Failed&workflowRunId={id}',
+      hint: 'mode “async” (default) returns status=Triggered as soon as the run starts; mode “sync” waits and returns '
+        + 'Succeeded or Failed. If the person cancels the sign-in or it is rejected, Segue’s page shows the reason '
+        + 'instead of running. With window_mode “new” and close_on_complete true, the window closes itself instead of '
+        + 'returning.',
       code: true,
     },
     {
-      label: 'Step 7 — Read what a run retrieved',
-      value: `GET ${origin}/api/v1/workflows/runs/{workflowRunId}/launch-result?callerId={yourPageUrl}`,
-      hint: 'Use this for the run id handed back on the return in Step 5. Runs you started yourself in Step 6 '
-        + 'return their results directly, so this is only needed for that first returning leg.',
+      label: 'Step 4 (optional) - Follow the run',
+      value: `GET ${origin}/api/v1/workflows/external/run-status/{workflowRunId}   (no credential needed)`,
+      hint: 'status is Running, Succeeded, PartialSuccess, Failed or Cancelled. A failed run returns a general '
+        + 'errorMessage with a Reference ID for whoever administers this instance.',
+      code: true,
+    },
+    ...ticketOptionValues(origin, false).slice(0, 1),
+    {
+      label: isPatient ? 'Hospitals - list the ids to offer the patient' : 'Hospitals - list the ids you can pass',
+      value: `POST ${origin}/api/v1/workflows/external/ehr-endpoints   body: { client_id, client_secret, return_url }`,
+      hint: 'Call this from your server. It returns [{ code, name, vendor }] - show the names to your user and send the '
+        + 'chosen code as ehr_endpoint_code. return_url must be an Allowed Caller URL. Pick the entries whose '
+        + 'vendor matches this workflow.',
       code: true,
     },
     {
-      label: 'Step 8 — Handle the sign-in running out',
-      value: 'errorMessage contains “has no authorized token” or “Re-authorize the source”',
-      hint: `A sign-in does not last forever, and it can also be withdrawn at the EHR — so a run that worked `
-        + 'earlier can start failing at any point. Check the failed run’s errorMessage for either of those two '
-        + `phrases: both mean there is no usable access left and the ${person} has to sign in again. Send them `
-        + 'back through Steps 2–5 (start a new attempt with Step 1, so the retry gets its own correlation id), '
-        + 'then run again. Any OTHER error message is a normal failure — show it and let them retry, and do not '
-        + 'send them through a sign-in they do not need. The same check applies to an error thrown by the run '
-        + 'call itself, not just a failed run in the response.',
-      code: true,
-    },
-    ...(isPatient ? [] : [{
-      label: 'Note — this audience must be told which patients to fetch',
-      value: 'patientSearchCriteria: "family=Smith"   ·   or   ·   patientId: "…"',
-      hint: 'A clinician signs in as themselves, so unlike the patient audience the sign-in carries no patient of '
-        + 'its own — nothing narrows the fetch unless you narrow it. Send either patientSearchCriteria (FHIR '
-        + 'search terms, e.g. family=Smith or identifier=MRN12345) or a patientId on both Step 1 and Step 6. '
-        + 'Send neither and Step 1 refuses the attempt, which is the point of calling it first: Epic would '
-        + 'otherwise reject the run with business rule 59108 (“A patient is required”), or hand back an empty '
-        + 'bundle, only after the clinician had already been through a full sign-in.',
-      code: true,
-    }]),
-    {
-      label: isPatient
-        ? 'Note — every patient sign-in needs a site id'
-        : 'Note — some sites have no list to choose from',
-      value: isPatient
-        ? 'ehrEndpointId is required'
-        : 'ehrEndpointId is optional — omit it to use the workflow’s own configured address',
+      label: 'Note - what this path cannot do',
+      value: 'No patient search terms, patient id or Group ID on this path',
       hint: isPatient
-        ? 'A patient always signs in to a specific hospital’s portal, so Step 2 is never skippable and the id '
-          + 'from it must be sent in Step 4.'
-        : 'Step 2 only applies when a clinician has a choice to make. A workflow pointed at a single practice '
-          + '(one fixed address, nothing to pick) skips Step 2 entirely and omits ehrEndpointId in Step 4 — '
-          + 'Segue then uses the address configured on the workflow itself. Build the picker only for the '
-          + 'vendors that actually have a directory.',
+        ? 'The patient’s own sign-in decides whose record is read, so there is nothing to narrow.'
+        : 'A clinician’s sign-in carries no patient of its own, and the run page does not send search terms. If your '
+          + 'workflow needs a patient search term or patient id, build your own screen and use the direct sign-in '
+          + 'calls instead (see the next entry).',
       code: true,
     },
     {
-      label: 'Optional — Sign out',
-      value: `POST ${origin}/api/v1/workflows/${row.workflowId}/discard-token?callerId={sessionId}`,
-      hint: 'Forgets the stored sign-in so the next run asks for a fresh one — use it for a “sign out” button. '
-        + 'It does not sign the person out of the EHR itself, so if they still have a session there, the next '
-        + 'sign-in may not visibly prompt them again.',
+      label: 'Alternative - build your own sign-in screens',
+      value: `GET ${origin}/api/v1/workflows/${row.workflowId}/token-status · ${isPatient ? 'public-patient-standalone-url' : 'public-standalone-url'} · POST …/run · POST …/discard-token`,
+      hint: 'Only for an app that needs full control (for example to pass patient search terms). These calls send the '
+        + 'person’s browser session id as callerId and do not use the API client. Ask whoever administers this '
+        + 'instance for the detailed sequence before building against it; the ticket flow above is the recommended '
+        + 'path.',
       code: true,
     },
   );
-
-  values.push(...identityAndHeaderValues(true));
 
   return {
     workflowId: row.workflowId,
@@ -612,19 +653,20 @@ function standaloneDetails(
     audience,
     kind: isPatient ? 'patient' : 'standalone',
     summary: isPatient
-      ? 'This workflow needs a patient to sign in once with their own portal account. After that your app can '
-        + 'run it on demand for as long as that sign-in lasts — the sign-in is the one thing you cannot do for '
-        + 'them.'
-      : 'This workflow needs a clinician to sign in once with their own EHR account. After that your app can run '
-        + 'it on demand for as long as that sign-in lasts — the sign-in is the one thing you cannot do for them.',
+      ? 'This workflow needs a patient to sign in once with their own portal account. Your server uses an API client '
+        + 'to get a one-time launch ticket and sends the patient’s browser to Segue’s run page, which handles the '
+        + 'hospital sign-in and consent, runs the workflow and returns the patient to your app.'
+      : 'This workflow needs a clinician to sign in once with their own EHR account. Your server uses an API client '
+        + 'to get a one-time launch ticket and sends the clinician’s browser to Segue’s run page, which handles the '
+        + 'EHR sign-in and consent, runs the workflow and returns them to your app.',
     steps: [
-      'Check the values first, and keep the correlation id it gives you.',
-      'Show the list of sites and let your user pick one.',
-      'Check whether they are already signed in — if so, skip ahead and just run it.',
-      'Otherwise get a sign-in link and send them to it.',
-      'They sign in and come back to your page.',
-      'Run the workflow as often as you need, and read the results.',
-      'When the sign-in eventually runs out, send them back through it and carry on.',
+      'An administrator creates an API client, adds your page addresses as Allowed Caller URLs, and registers '
+        + 'Segue’s callback address with the hospital’s app.',
+      'Store the Client ID and Secret on your server.',
+      `Your server asks Segue for a launch ticket (choosing the hospital for the ${person}).`,
+      'Redirect the browser to the run_url you get back.',
+      `The ${person} signs in at the hospital on Segue’s page; Segue runs the workflow.`,
+      'The browser returns to your page with the outcome.',
     ],
     values,
     checks,

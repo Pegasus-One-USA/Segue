@@ -142,6 +142,22 @@ public sealed class SourceRetrievalConfiguration
     /// makes EF try to track the same instance under two different owners at once, which throws
     /// "...is part of a key and so cannot be modified" during SaveChanges. Always clone at the boundary instead.
     /// </summary>
+    /// <summary>A copy with this run's Group ID / Search Criteria in place of the saved ones (null = keep, empty = clear).
+    /// The saved configuration is not changed.</summary>
+    public SourceRetrievalConfiguration WithRunOverrides(string? groupId, string? searchCriteria)
+    {
+        static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        return new(
+            RetrievalMethod, ResourceTypes,
+            searchCriteria is null ? SearchCriteria : Normalize(searchCriteria),
+            IncrementalSyncEnabled, PageSize, SortOrder,
+            IncludeParameters, RevIncludeParameters, RetryPolicy, TimeoutSeconds, MaxRecordsPerRun,
+            LastSuccessfulSyncUtcByResourceType, ExportScope,
+            groupId is null ? GroupId : Normalize(groupId),
+            PatientIds, OutputFormat);
+    }
+
     public SourceRetrievalConfiguration Clone() => new(
         RetrievalMethod, ResourceTypes, SearchCriteria, IncrementalSyncEnabled, PageSize, SortOrder,
         IncludeParameters, RevIncludeParameters, RetryPolicy, TimeoutSeconds, MaxRecordsPerRun,

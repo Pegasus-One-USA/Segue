@@ -7,7 +7,8 @@ public sealed record ListWorkflowsDemoRequest(string FhirBridgeBaseUrl, string C
 
 public sealed record LaunchDemoRequest(
     string FhirBridgeBaseUrl, string ClientId, string ClientSecret, string WorkflowId, string? ReturnUrl,
-    string? EhrEndpointCode, string? Mode, string? WindowMode, string? CloseOnComplete);
+    string? EhrEndpointCode, string? Mode, string? WindowMode, string? CloseOnComplete,
+    string? GroupId = null, string? SearchCriteria = null);
 
 /// <summary>
 /// Server-side proxy for the one read-only call the external-trigger console needs before it can render its
@@ -101,6 +102,8 @@ public static class ExternalTriggerDemoEndpoints
                 mode = request.Mode,
                 window_mode = request.WindowMode,
                 close_on_complete = request.CloseOnComplete,
+                group_id = request.GroupId,
+                search_criteria = request.SearchCriteria,
             });
 
             HttpResponseMessage response;

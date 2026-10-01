@@ -98,7 +98,12 @@ public sealed class EhrEndpointService : IEhrEndpointService
             request.FhirBaseUrl,
             request.FormatType,
             request.Status,
-            request.EndpointType);
+            request.EndpointType,
+            Blank(request.TokenEndpoint),
+            Blank(request.ClientId),
+            Blank(request.KeyId),
+            Blank(request.JwksUrl),
+            Blank(request.PracticeId));
 
         await _repository.AddAsync(endpoint, cancellationToken);
 
@@ -117,7 +122,12 @@ public sealed class EhrEndpointService : IEhrEndpointService
             request.FhirBaseUrl,
             request.FormatType,
             request.Status,
-            request.EndpointType);
+            request.EndpointType,
+            Blank(request.TokenEndpoint),
+            Blank(request.ClientId),
+            Blank(request.KeyId),
+            Blank(request.JwksUrl),
+            Blank(request.PracticeId));
 
         await _repository.UpdateAsync(endpoint, cancellationToken);
 
@@ -135,6 +145,8 @@ public sealed class EhrEndpointService : IEhrEndpointService
         await _repository.GetByIdAsync(id, cancellationToken)
         ?? throw new NotFoundException("EhrEndpoint", id);
 
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     private static void ValidateRequest(CreateEhrEndpointRequest request)
     {
         var requiredFields = new (string Value, string Message)[]
@@ -151,6 +163,14 @@ public sealed class EhrEndpointService : IEhrEndpointService
             if (string.IsNullOrWhiteSpace(value))
             {
                 throw new InvalidOperationException(message);
+            }
+        }
+
+        foreach (var (value, label) in new[] { (request.TokenEndpoint, "Token endpoint"), (request.JwksUrl, "JWKS URL") })
+        {
+            if (!string.IsNullOrWhiteSpace(value) && !Uri.TryCreate(value.Trim(), UriKind.Absolute, out _))
+            {
+                throw new InvalidOperationException($"{label} must be a valid absolute URL.");
             }
         }
     }

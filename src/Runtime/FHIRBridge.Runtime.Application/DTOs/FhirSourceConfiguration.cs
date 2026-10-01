@@ -79,4 +79,11 @@ public sealed record FhirSourceConfiguration(
     // that scopes Patient is meaningless on Condition). Criteria here were explicitly authored for the one type
     // they are keyed by, so they are applied AFTER those scrubs rather than being removed by them. Null/absent
     // for a type leaves it on the pre-existing connection-wide fallback, unchanged.
-    IReadOnlyDictionary<string, string>? SearchCriteriaByResourceType = null);
+    IReadOnlyDictionary<string, string>? SearchCriteriaByResourceType = null,
+    // Set ONLY when the run was explicitly started against an EHR Endpoint (EhrEndpointSourceOverride). Keeps that
+    // hospital's cached access tokens apart from the default configuration's; null for every ordinary run.
+    Guid? EhrEndpointId = null,
+    // True for an "Execute V2" run (other hospital and/or other Group ID / Search Criteria). Such a run reads a different
+    // slice of data than the saved configuration, so it neither uses nor advances the connection's incremental-sync
+    // watermarks (which belong to the saved hospital/criteria). False for every ordinary run.
+    bool RunOverridesActive = false);

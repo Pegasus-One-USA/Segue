@@ -182,6 +182,17 @@
                     >
                       <mat-icon>play_arrow</mat-icon> Run
                     </button>
+
+                    <!-- Same Ready/permission rules as Run; this one lets the user pick another hospital first. -->
+                    <button
+                      mat-menu-item
+                      type="button"
+                      [disabled]="busyId() === w.workflowId || w.status !== 'Ready'"
+                      [title]="runDisabledHint(w)"
+                      (click)="onExecuteV2(w)"
+                    >
+                      <mat-icon>local_hospital</mat-icon> Execute V2
+                    </button>
                   }
 
                   <!-- Always visible with workflow.view alone (the route guard already required it) —

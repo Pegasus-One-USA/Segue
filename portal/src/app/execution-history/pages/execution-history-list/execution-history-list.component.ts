@@ -129,7 +129,7 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.workflowIdFilter() ? (this.result().items[0]?.pipelineName ?? 'this workflow') : null,
   );
 
-  readonly displayedCols = ['name', 'source', 'status', 'bulkRequestId', 'duration', 'lastRun', 'triggeredBy', 'correlationId'];
+  readonly displayedCols = ['name', 'source', 'ehrEndpoint', 'status', 'bulkRequestId', 'duration', 'lastRun', 'triggeredBy', 'correlationId'];
 
   // ── Bulk Data Status Request popup ────────────────────────────────────────────────────────────────
   // Opened from the info icon beside a still-running bulk export's Status badge. Each open is a fresh

@@ -18,6 +18,11 @@ public sealed class EhrEndpointConfiguration : IEntityTypeConfiguration<EhrEndpo
         builder.Property(x => x.FormatType).HasMaxLength(20).IsRequired();
         builder.Property(x => x.Status).HasMaxLength(50).IsRequired();
         builder.Property(x => x.EndpointType).IsRequired();
+        builder.Property(x => x.TokenEndpoint).HasMaxLength(500);
+        builder.Property(x => x.ClientId).HasMaxLength(200);
+        builder.Property(x => x.KeyId).HasMaxLength(200);
+        builder.Property(x => x.JwksUrl).HasMaxLength(500);
+        builder.Property(x => x.PracticeId).HasMaxLength(100);
 
         // Unique per vendor, not globally — different vendors could coincidentally reuse an id scheme. Filtered to
         // non-deleted rows so a re-added endpoint can reuse the same (Vendor, VendorEndpointId) as one a user

@@ -53,6 +53,29 @@
           </div>
         </div>
         <div class="stat">
+          <span class="stat-icon"><mat-icon>local_hospital</mat-icon></span>
+          <div class="stat-text">
+            <span class="stat-label">EHR Endpoint</span>
+            <span class="stat-value">{{ ex.ehrEndpoint || 'Default' }}</span>
+          </div>
+        </div>
+        <div class="stat stat--wide">
+          <span class="stat-icon"><mat-icon>medical_services</mat-icon></span>
+          <div class="stat-text">
+            <span class="stat-label">Source EHR</span>
+            <span class="stat-value">{{ ex.sourceName ?? ex.sourceSystemType ?? 'Unknown source' }} — {{ ex.ehrEndpoint || 'Default' }}</span>
+            @if (ex.runGroupId != null) {
+              <span class="stat-sub">Group ID: <code>{{ ex.runGroupId || '(cleared)' }}</code></span>
+            }
+            @if (ex.runSearchCriteria != null) {
+              <span class="stat-sub">Search criteria: <code>{{ ex.runSearchCriteria || '(cleared)' }}</code></span>
+            }
+            @if (ex.runGroupId == null && ex.runSearchCriteria == null) {
+              <span class="stat-sub">Group ID / search criteria: saved configuration</span>
+            }
+          </div>
+        </div>
+        <div class="stat">
           <span class="stat-icon"><mat-icon>hub</mat-icon></span>
           <div class="stat-text">
             <span class="stat-label">Node Runs</span>

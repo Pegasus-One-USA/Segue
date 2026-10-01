@@ -68,7 +68,19 @@ public sealed record WorkflowRunRequest(
     // run id immediately instead of blocking until the whole DAG finishes — see IWorkflowRunTracker. Poll
     // GET /workflow-runs/{runId}/status (or the existing /workflow-runs/{runId} once terminal) for progress.
     // Omit/false keeps the pre-existing blocking behavior.
-    bool Async = false);
+    bool Async = false,
+    // Run THIS execution against a specific EHR Endpoint: its base URL / token endpoint / client id / key id / practice id
+    // replace the source connection's for this run only (EhrEndpointSourceOverride). Deliberately separate from
+    // EhrEndpointId above (the Standalone consent picker). Omit for the default run, which is unchanged.
+    Guid? TargetEhrEndpointId = null,
+    // "Execute V2": Group ID / Search Criteria for THIS run in place of the source connection's saved ones. Null keeps the
+    // saved value; an empty string clears it for this run. Not stored on the connection.
+    string? GroupIdOverride = null,
+    string? SearchCriteriaOverride = null,
+    // Set to "ExternalTrigger" by the hosted /external-run page, which runs an interactive (patient / provider) workflow on
+    // behalf of an external caller. Only that one value is honoured (anything else stays "Manual"); it labels the run in
+    // Execution History and grants no extra access.
+    string? TriggerType = null);
 
 public sealed record WorkflowRunStatusResponse(Guid WorkflowRunId, string Status, string? CorrelationId = null);
 

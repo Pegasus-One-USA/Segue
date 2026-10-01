@@ -288,13 +288,30 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var sourceConnectionId = ReadStringConfiguration(node, "sourceConnectionId");
         if (_sourceResolver is not null && Guid.TryParse(sourceConnectionId, out var connectionId))
         {
-            source = await _sourceResolver.ResolveAsync(
-                connectionId,
-                searchParameters,
-                context.TargetPatientId,
-                cancellationToken,
-                context.PatientSearchCriteria,
-                context.CallerId);
+            // "Execute V2" runs carry their own Group ID / Search Criteria; every other run takes the original call.
+            source = context.SourceOverrides is { } runSourceOverrides
+                ? await _sourceResolver.ResolveWithRunOverridesAsync(
+                    connectionId,
+                    searchParameters,
+                    context.TargetPatientId,
+                    cancellationToken,
+                    context.PatientSearchCriteria,
+                    context.CallerId,
+                    runSourceOverrides)
+                : await _sourceResolver.ResolveAsync(
+                    connectionId,
+                    searchParameters,
+                    context.TargetPatientId,
+                    cancellationToken,
+                    context.PatientSearchCriteria,
+                    context.CallerId);
+
+            // Opt-in hospital switch: only a run that explicitly named an EHR Endpoint carries an override. Without
+            // one this is a no-op and the source is exactly what the resolver returned.
+            if (source is not null && context.EhrEndpointOverride is { } ehrEndpointOverride)
+            {
+                source = EhrEndpointSourceOverride.Apply(source, ehrEndpointOverride);
+            }
         }
 
         // Fallback: an inline source configuration embedded in node config (used by the route→graph projection).
@@ -830,7 +847,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             resources.RemoveRange(maxRecords, resources.Count - maxRecords);
         }
 
-        if (source.SourceConnectionId is { } resolvedSourceConnectionId && _syncCursorStore is not null && syncedResourceTypes.Count > 0)
+        if (source.SourceConnectionId is { } resolvedSourceConnectionId && _syncCursorStore is not null && syncedResourceTypes.Count > 0
+            && !source.RunOverridesActive)
         {
             var syncedAtUtc = DateTime.UtcNow;
             await _syncCursorStore.RecordSuccessfulSyncAsync(resolvedSourceConnectionId, syncedResourceTypes, syncedAtUtc, cancellationToken);

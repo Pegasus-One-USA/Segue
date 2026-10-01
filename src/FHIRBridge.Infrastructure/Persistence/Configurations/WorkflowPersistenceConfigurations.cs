@@ -148,6 +148,10 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.TriggerType).HasMaxLength(50);
         builder.Property(x => x.TargetNodeId);
         builder.Property(x => x.CorrelationId).HasMaxLength(100);
+        builder.Property(x => x.EhrEndpointId);
+        builder.Property(x => x.EhrEndpointName).HasMaxLength(300);
+        builder.Property(x => x.RunGroupId).HasMaxLength(200);
+        builder.Property(x => x.RunSearchCriteria).HasMaxLength(4000);
 
         builder.HasMany(x => x.NodeRuns)
             .WithOne()

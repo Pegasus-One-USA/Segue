@@ -43,6 +43,10 @@ public sealed class MeditechGreenfieldTokenProvider : IFhirAccessTokenProvider
 
         var scopes = source.Scopes.Count == 0 ? DefaultScope : string.Join(' ', source.Scopes);
         var cacheKey = $"fhir-token:meditech|{source.TokenEndpoint}|{source.ClientId}|{scopes}";
+        if (source.EhrEndpointId is { } ehrEndpointId)
+        {
+            cacheKey += $"|ehr:{ehrEndpointId:N}";
+        }
         var cached = await _tokenCache.GetAsync(cacheKey, cancellationToken);
         if (cached is not null)
         {

@@ -12,7 +12,8 @@ public sealed class WorkflowExecutionContext
         string? patientSearchCriteria = null,
         string? callerId = null,
         string? userIdentity = null,
-        string? ehrEndpointCode = null)
+        string? ehrEndpointCode = null,
+        FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides? sourceOverrides = null)
     {
         WorkflowRunId = workflowRunId == Guid.Empty ? Guid.NewGuid() : workflowRunId;
         CorrelationId = string.IsNullOrWhiteSpace(correlationId) ? WorkflowRunId.ToString("N") : correlationId;
@@ -24,6 +25,7 @@ public sealed class WorkflowExecutionContext
         CallerId = callerId;
         UserIdentity = userIdentity;
         EhrEndpointCode = ehrEndpointCode;
+        SourceOverrides = sourceOverrides;
     }
 
     public Guid WorkflowRunId { get; }
@@ -88,4 +90,15 @@ public sealed class WorkflowExecutionContext
     /// change. Null (the default for every existing trigger path) preserves prior behavior.
     /// </summary>
     public string? EhrEndpointCode { get; }
+
+    /// <summary>This run's Group ID / Search Criteria replacing the source connection's saved ones. Null for every
+    /// ordinary run.</summary>
+    public FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides? SourceOverrides { get; }
+
+    /// <summary>Resolved by the orchestrator from <see cref="EhrEndpointCode"/> when the run explicitly names an EHR
+    /// Endpoint. Null for every ordinary run — the source nodes then behave exactly as before.</summary>
+    public FHIRBridge.Runtime.Application.Abstractions.Sources.EhrEndpointOverride? EhrEndpointOverride { get; private set; }
+
+    public void SetEhrEndpointOverride(FHIRBridge.Runtime.Application.Abstractions.Sources.EhrEndpointOverride? value) =>
+        EhrEndpointOverride = value;
 }

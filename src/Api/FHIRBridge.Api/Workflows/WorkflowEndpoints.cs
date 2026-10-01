@@ -1596,15 +1596,23 @@ public static class WorkflowEndpoints
             IConfigurationRepository configurationRepository,
             IAuthorizationService authorizationService,
             ILicenseQuotaGuard licenseQuotaGuard,
+            IEhrEndpointOverrideProvider ehrEndpointOverrideProvider,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
-            // callerId is the interactive token-cache session key, and it arrives in the BODY here rather than on
-            // the query string — too late for the pipeline-level resolver to have seen it. Stamp it now, before
-            // the run (and everything it logs) is created, so this run shares the correlation id of the
-            // validate-run/token-status/sign-in legs that preceded it. No-op when the caller supplied an explicit
-            // X-Correlation-Id, or sent no callerId (a portal/scheduler run, which has no interactive session).
-            WorkflowCorrelationResolver.ApplyDerived(httpContext, workflowId, request?.CallerId);
+            // Every run gets its OWN correlation id. callerId is the interactive token-cache session key and is reused
+            // for every run in that session, so an id derived from it (WorkflowCorrelationResolver.ApplyDerived) came out
+            // identical for each execution of the same workflow — impossible to tell runs apart in Execution History or
+            // Correlation Search. A caller that wants several legs under one id still can: it passes CorrelationId in the
+            // body (the validate-run -> run flow does) or sends X-Correlation-Id, and that explicit value is honoured.
+            var requestedCorrelationId = request?.CorrelationId;
+            if (string.IsNullOrWhiteSpace(requestedCorrelationId)
+                && !string.IsNullOrWhiteSpace(request?.CallerId)
+                && string.IsNullOrWhiteSpace(httpContext.Request.Headers["X-Correlation-Id"].FirstOrDefault()))
+            {
+                requestedCorrelationId = $"{WorkflowCorrelationId.Prefix}{Guid.NewGuid():N}";
+                WorkflowCorrelationResolver.ApplyExplicit(httpContext, requestedCorrelationId);
+            }
 
             var workflow = await store.GetAsync(workflowId, cancellationToken);
             if (workflow is null)
@@ -1649,6 +1657,34 @@ public static class WorkflowEndpoints
                 // A client-credentials caller skips this check entirely: its authorization is the tenant-wide
                 // token itself, independent of any single workflow's public-launch opt-in.
                 return Results.NotFound();
+            }
+
+            // "Execute V2" per-run overrides (another EHR Endpoint, Group ID, Search Criteria) are an operator action:
+            // honored only for a signed-in portal user who already passed workflow.run above. A public-launch caller
+            // or a machine client must not be able to repoint a workflow at a different hospital or widen its criteria.
+            if (request is { } overrideRequest
+                && ((overrideRequest.TargetEhrEndpointId is { } requestedTarget && requestedTarget != Guid.Empty)
+                    || overrideRequest.GroupIdOverride is not null
+                    || overrideRequest.SearchCriteriaOverride is not null))
+            {
+                if (!isPortalUserCaller)
+                {
+                    return Results.Json(new { error = "Per-run overrides are only available to signed-in portal users." },
+                        statusCode: StatusCodes.Status403Forbidden);
+                }
+
+                if (RunOverridesTooLong(overrideRequest.GroupIdOverride, overrideRequest.SearchCriteriaOverride))
+                {
+                    return Results.BadRequest(new { error = "Group ID must be at most 200 characters and search criteria at most 4000." });
+                }
+
+                var targetError = await ValidateEhrEndpointForRunAsync(
+                    workflow, overrideRequest.TargetEhrEndpointId?.ToString(), ehrEndpointOverrideProvider,
+                    configurationRepository, cancellationToken);
+                if (targetError is not null)
+                {
+                    return Results.BadRequest(new { error = targetError });
+                }
             }
 
             // This is the Runtime plane's real run-trigger point (IRankedWorkflowOrchestrator.ExecuteAsync below,
@@ -1732,7 +1768,7 @@ public static class WorkflowEndpoints
             // ErrorLogs use) so this run's ErrorLogs, audit trail, and outbound API Requests can all be found via
             // the same id — see the checkpoint endpoint below for the matching pattern.
             var runCorrelationId =
-                request?.CorrelationId ?? currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N");
+                requestedCorrelationId ?? currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N");
 
             // Continue the row validate-run already created for this attempt, rather than opening a second one, so
             // one user action is one Execution History entry spanning validation → sign-in → execution. Returns
@@ -1748,10 +1784,19 @@ public static class WorkflowEndpoints
                 workflowRunId,
                 runCorrelationId,
                 triggeredBy: currentUserService.CurrentUser.AuditName,
-                triggerType: "Manual",
+                triggerType: string.Equals(request?.TriggerType, "ExternalTrigger", StringComparison.OrdinalIgnoreCase)
+                    ? "ExternalTrigger"
+                    : "Manual",
                 targetPatientId: request?.PatientId,
                 patientSearchCriteria: request?.PatientSearchCriteria,
-                callerId: request?.CallerId);
+                callerId: request?.CallerId,
+                ehrEndpointCode: request?.TargetEhrEndpointId is { } targetEhrEndpointId && targetEhrEndpointId != Guid.Empty
+                    ? targetEhrEndpointId.ToString()
+                    : null,
+                sourceOverrides: request is { } runRequest && (runRequest.GroupIdOverride is not null || runRequest.SearchCriteriaOverride is not null)
+                    ? new FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides(
+                        runRequest.GroupIdOverride?.Trim(), runRequest.SearchCriteriaOverride?.Trim())
+                    : null);
 
             if (request?.Async == true)
             {
@@ -1827,6 +1872,111 @@ public static class WorkflowEndpoints
         // [CsrfExempt] because the surviving credential is never the session cookie: see CsrfExemptAttribute.
         }).AllowAnonymous().WithMetadata(new CsrfExemptAttribute());
 
+        // Backs the portal's "Execute V2" dialog: what this workflow runs against by default (its source connection's
+        // saved values) and the EHR Endpoints it could be run against instead, so the dialog can show exactly which
+        // settings would change. Read-only; the run itself is POST /workflows/{id}/run with targetEhrEndpointId.
+        group.MapGet("/workflows/{workflowId:guid}/run-options", async (
+            Guid workflowId,
+            IWorkflowDefinitionStore store,
+            IConfigurationRepository configurationRepository,
+            IEhrEndpointRepository ehrEndpointRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            FHIRBridge.Domain.Entities.SourceConnection? source = null;
+            foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
+            {
+                if (TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceConnectionId))
+                {
+                    source = await configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+                    if (source is not null)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (source is null)
+            {
+                return Results.Ok(new
+                {
+                    supportsHospitalSwitch = false,
+                    hospitalSwitchReason = "This workflow has no source connection.",
+                    supportsRunCriteria = false,
+                    vendor = (string?)null,
+                    sourceName = (string?)null,
+                    defaults = (object?)null,
+                    retrieval = (object?)null,
+                    matchedEhrEndpointId = (Guid?)null,
+                    endpoints = Array.Empty<object>(),
+                });
+            }
+
+            string? reason = null;
+            var interactive = source.ApplicationType is { } applicationType && applicationType != ApplicationType.Backend;
+            var isBulkExport = string.Equals(source.Retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase);
+            if (interactive)
+            {
+                reason = "Only Backend System workflows can be switched to another hospital; this one signs in interactively.";
+            }
+            else if (isBulkExport)
+            {
+                reason = "Bulk export workflows cannot be run against another EHR Endpoint yet.";
+            }
+
+            static string TrimUrl(string? url) => (url ?? string.Empty).Trim().TrimEnd('/');
+
+            var vendor = source.SourceSystemType;
+            var endpoints = (await ehrEndpointRepository.GetAllAsync(cancellationToken))
+                .Where(e => e.Vendor == vendor)
+                .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var matched = endpoints.FirstOrDefault(e =>
+                string.Equals(TrimUrl(e.FhirBaseUrl), TrimUrl(source.BaseUrl), StringComparison.OrdinalIgnoreCase));
+
+            return Results.Ok(new
+            {
+                supportsHospitalSwitch = reason is null,
+                hospitalSwitchReason = reason,
+                supportsRunCriteria = !interactive,
+                retrieval = new
+                {
+                    method = source.Retrieval?.RetrievalMethod,
+                    exportScope = source.Retrieval?.ExportScope,
+                    groupId = source.Retrieval?.GroupId,
+                    searchCriteria = source.Retrieval?.SearchCriteria,
+                },
+                vendor = vendor.ToString(),
+                sourceName = source.Name,
+                defaults = new
+                {
+                    baseUrl = source.BaseUrl,
+                    tokenEndpoint = source.Authentication.TokenEndpoint,
+                    clientId = source.Authentication.ClientId,
+                    keyId = source.Authentication.KeyId,
+                    practiceId = source.Authentication.PracticeId,
+                },
+                matchedEhrEndpointId = matched?.Id,
+                endpoints = endpoints.Select(e => new
+                {
+                    id = e.Id,
+                    name = e.Name,
+                    status = e.Status,
+                    baseUrl = e.FhirBaseUrl,
+                    tokenEndpoint = e.TokenEndpoint,
+                    clientId = e.ClientId,
+                    keyId = e.KeyId,
+                    jwksUrl = e.JwksUrl,
+                    practiceId = e.PracticeId,
+                }),
+            });
+        }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
+
         // ── External (browser-redirect) trigger: Client ID/Secret + Return URL, no Bearer token round trip ──────
         // A third-party page POSTs straight here (a real top-level navigation, e.g. an HTML <form method="post">)
         // and is redirected back to its own Return URL once the workflow is triggered (async) or finishes (sync).
@@ -1844,6 +1994,7 @@ public static class WorkflowEndpoints
             IWorkflowRunTracker runTracker,
             ILicenseQuotaGuard licenseQuotaGuard,
             IConfigurationRepository configurationRepository,
+            IEhrEndpointOverrideProvider ehrEndpointOverrideProvider,
             IServiceScopeFactory scopeFactory,
             ILoggerFactory loggerFactory,
             CancellationToken cancellationToken) =>
@@ -1883,13 +2034,25 @@ public static class WorkflowEndpoints
                 return Results.Redirect(AppendExternalTriggerQuery(validation.ValidatedReturnUrl, "status=Failed&error=license_restricted"));
             }
 
+            if (await ValidateEhrEndpointForRunAsync(
+                    workflow, fields.EhrEndpointCode, ehrEndpointOverrideProvider, configurationRepository, cancellationToken) is not null)
+            {
+                return Results.Redirect(AppendExternalTriggerQuery(validation.ValidatedReturnUrl, "status=Failed&error=ehr_endpoint_invalid"));
+            }
+
+            if (RunOverridesTooLong(fields.GroupId, fields.SearchCriteria))
+            {
+                return Results.Redirect(AppendExternalTriggerQuery(validation.ValidatedReturnUrl, "status=Failed&error=invalid_request"));
+            }
+
             var workflowRunId = Guid.NewGuid();
             var context = new WorkflowExecutionContext(
                 workflowRunId,
                 workflowRunId.ToString("N"),
                 triggeredBy: $"ApiClient:{fields.ClientId}",
                 triggerType: "ExternalTrigger",
-                ehrEndpointCode: string.IsNullOrWhiteSpace(fields.EhrEndpointCode) ? null : fields.EhrEndpointCode.Trim());
+                ehrEndpointCode: string.IsNullOrWhiteSpace(fields.EhrEndpointCode) ? null : fields.EhrEndpointCode.Trim(),
+                sourceOverrides: BuildExternalSourceOverrides(fields));
 
             if (string.Equals(fields.Mode, "sync", StringComparison.OrdinalIgnoreCase))
             {
@@ -1970,6 +2133,12 @@ public static class WorkflowEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
+            if (RunOverridesTooLong(fields.GroupId, fields.SearchCriteria))
+            {
+                return Results.Json(new { error = "invalid_request", error_description = "group_id must be at most 200 characters and search_criteria at most 4000." },
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
             Guid? apiClientId;
             string? validatedReturnUrl = null;
             if (!string.IsNullOrWhiteSpace(fields.ReturnUrl))
@@ -2005,7 +2174,8 @@ public static class WorkflowEndpoints
             var ticket = ticketService.Issue(new ExternalRunTicket(
                 apiClientId.Value, fields.ClientId, workflowId, validatedReturnUrl,
                 string.IsNullOrWhiteSpace(fields.EhrEndpointCode) ? null : fields.EhrEndpointCode.Trim(),
-                fields.Mode, fields.WindowMode, fields.CloseOnComplete, string.Empty));
+                fields.Mode, fields.WindowMode, fields.CloseOnComplete, string.Empty,
+                NullIfBlank(fields.GroupId), NullIfBlank(fields.SearchCriteria)));
 
             var runUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}/api/v1/workflows/external/run-page?ticket={Uri.EscapeDataString(ticket)}";
             return Results.Ok(new { ticket, run_url = runUrl, expires_in = (int)ExternalRunTicketService.Lifetime.TotalSeconds });
@@ -2033,6 +2203,7 @@ public static class WorkflowEndpoints
             IWorkflowRunTracker runTracker,
             ILicenseQuotaGuard licenseQuotaGuard,
             IConfigurationRepository configurationRepository,
+            IEhrEndpointOverrideProvider ehrEndpointOverrideProvider,
             IServiceScopeFactory scopeFactory,
             ILoggerFactory loggerFactory,
             IConfiguration configuration,
@@ -2058,7 +2229,8 @@ public static class WorkflowEndpoints
 
                 fields = new ExternalTriggerFields(
                     ticket.ClientId, null, ticket.WorkflowId.ToString(), ticket.ReturnUrl, ticket.EhrEndpointCode,
-                    ticket.Mode, ticket.WindowMode, ticket.CloseOnComplete);
+                    ticket.Mode, ticket.WindowMode, ticket.CloseOnComplete,
+                    GroupId: ticket.GroupId, SearchCriteria: ticket.SearchCriteria);
             }
             else if (!configuration.GetValue("ExternalTrigger:AllowBrowserCredentials", true))
             {
@@ -2140,6 +2312,17 @@ public static class WorkflowEndpoints
                 return Results.Redirect($"{portalBaseUrl}/external-run?error=license_restricted");
             }
 
+            if (await ValidateEhrEndpointForRunAsync(
+                    workflow, fields.EhrEndpointCode, ehrEndpointOverrideProvider, configurationRepository, cancellationToken) is not null)
+            {
+                return Results.Redirect($"{portalBaseUrl}/external-run?error=ehr_endpoint_invalid");
+            }
+
+            if (RunOverridesTooLong(fields.GroupId, fields.SearchCriteria))
+            {
+                return Results.Redirect($"{portalBaseUrl}/external-run?error=invalid_request");
+            }
+
             // A Standalone / Patient source can only obtain its token through an interactive sign-in and consent
             // screen (the patient/provider authorizing at the EHR) — a background run would just fail with
             // "no authorized token". That flow is browser-driven and keyed on a per-browser sessionId the page must
@@ -2164,7 +2347,8 @@ public static class WorkflowEndpoints
                 workflowRunId.ToString("N"),
                 triggeredBy: $"ApiClient:{fields.ClientId}",
                 triggerType: "ExternalTrigger",
-                ehrEndpointCode: string.IsNullOrWhiteSpace(fields.EhrEndpointCode) ? null : fields.EhrEndpointCode.Trim());
+                ehrEndpointCode: string.IsNullOrWhiteSpace(fields.EhrEndpointCode) ? null : fields.EhrEndpointCode.Trim(),
+                sourceOverrides: BuildExternalSourceOverrides(fields));
 
             var runCancellationSource = new CancellationTokenSource();
             runTracker.MarkRunning(workflowRunId, runCancellationSource);
@@ -2770,7 +2954,10 @@ public static class WorkflowEndpoints
                     run.BulkRequestId,
                     facetsByDefinitionId[run.WorkflowDefinitionId].DestinationTypes,
                     facetsByDefinitionId[run.WorkflowDefinitionId].ResourceTypes,
-                    facetsByDefinitionId[run.WorkflowDefinitionId].ApplicationType));
+                    facetsByDefinitionId[run.WorkflowDefinitionId].ApplicationType,
+                    run.EhrEndpointName ?? "Default",
+                    run.RunGroupId,
+                    run.RunSearchCriteria));
             }
 
             if (workflowId is { } wfId)
@@ -2962,7 +3149,10 @@ public static class WorkflowEndpoints
                 run.WorkflowDefinitionVersion,
                 run.CorrelationId,
                 run.ErrorReferenceId,
-                run.BulkRequestId));
+                run.BulkRequestId,
+                EhrEndpoint: run.EhrEndpointName ?? "Default",
+                RunGroupId: run.RunGroupId,
+                RunSearchCriteria: run.RunSearchCriteria));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Live read of this run's FHIR Bulk Data $export job, proxied from the source server — backs the Execution
@@ -3777,6 +3967,54 @@ public static class WorkflowEndpoints
 
     // First Source-category node whose referenced connection resolves — good enough for Execution History display
     // (unlike /workflows/summary, this doesn't need the launch-vs-run precedence rule, just a name to show).
+    /// <summary>Checks, before a run is started, that the EHR Endpoint a caller named can actually be used with this
+    /// workflow, so a bad choice is reported to the caller instead of failing silently in a background task. Returns an
+    /// error message, or null when fine (also null for a code that is not an endpoint id, which is ignored as before).</summary>
+    private static async Task<string?> ValidateEhrEndpointForRunAsync(
+        WorkflowDefinition workflow,
+        string? ehrEndpointCode,
+        IEhrEndpointOverrideProvider ehrEndpointOverrideProvider,
+        IConfigurationRepository configurationRepository,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(ehrEndpointCode, out var endpointId) || endpointId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var endpoint = await ehrEndpointOverrideProvider.ResolveAsync(endpointId.ToString(), cancellationToken);
+        if (endpoint is null)
+        {
+            return "The selected EHR Endpoint was not found.";
+        }
+
+        foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
+        {
+            if (!TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceConnectionId))
+            {
+                continue;
+            }
+
+            var source = await configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+            if (source is null || (source.ApplicationType is { } applicationType && applicationType != ApplicationType.Backend))
+            {
+                continue;
+            }
+
+            if (!string.Equals(source.SourceSystemType.ToString(), endpoint.Vendor, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"EHR Endpoint '{endpoint.Name}' is a {endpoint.Vendor} endpoint, but this workflow's source is {source.SourceSystemType}.";
+            }
+
+            if (string.Equals(source.Retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Bulk export workflows cannot be run against another EHR Endpoint yet.";
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>The same up-front license/quota gate /workflows/{id}/run applies (run quota, then each source's and
     /// destination's license allow-list); the external routes have no user principal, so only the deployment-level
     /// checks apply. Throws the license exceptions the global handler maps to 403.</summary>
@@ -4144,9 +4382,27 @@ public static class WorkflowEndpoints
             && Guid.TryParse(raw, out value);
     }
 
+    /// <summary>The run record stores these in bounded columns (Group ID 200, Search Criteria 4000); reject longer values
+    /// up front instead of failing when the run row is saved.</summary>
+    private static bool RunOverridesTooLong(string? groupId, string? searchCriteria) =>
+        (groupId?.Trim().Length ?? 0) > 200 || (searchCriteria?.Trim().Length ?? 0) > 4000;
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Group ID / Search Criteria the external caller supplied for this run only (blank = keep the saved ones).</summary>
+    private static FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides? BuildExternalSourceOverrides(ExternalTriggerFields fields)
+    {
+        var groupId = NullIfBlank(fields.GroupId);
+        var searchCriteria = NullIfBlank(fields.SearchCriteria);
+        return groupId is null && searchCriteria is null
+            ? null
+            : new FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides(groupId, searchCriteria);
+    }
+
     private sealed record ExternalTriggerFields(
         string? ClientId, string? ClientSecret, string? WorkflowId, string? ReturnUrl, string? EhrEndpointCode, string? Mode,
-        string? WindowMode = null, string? CloseOnComplete = null, string? Ticket = null);
+        string? WindowMode = null, string? CloseOnComplete = null, string? Ticket = null,
+        string? GroupId = null, string? SearchCriteria = null);
 
     /// <summary>Reads the external-trigger fields from either a real HTML form POST (the primary, intended shape
     /// — a plain &lt;form method="post"&gt; needs no JS) or a JSON body (for a programmatic/test caller).
@@ -4167,7 +4423,8 @@ public static class WorkflowEndpoints
                 var form = await request.ReadFormAsync();
                 return new ExternalTriggerFields(
                     form["client_id"], form["client_secret"], form["workflow_id"], form["return_url"],
-                    form["ehr_endpoint_code"], form["mode"], form["window_mode"], form["close_on_complete"], form["ticket"]);
+                    form["ehr_endpoint_code"], form["mode"], form["window_mode"], form["close_on_complete"], form["ticket"],
+                    form["group_id"], form["search_criteria"]);
             }
 
             var json = await request.ReadFromJsonAsync<Dictionary<string, string?>>();
@@ -4177,7 +4434,7 @@ public static class WorkflowEndpoints
                 json.GetValueOrDefault("workflow_id"), json.GetValueOrDefault("return_url"),
                 json.GetValueOrDefault("ehr_endpoint_code"), json.GetValueOrDefault("mode"),
                 json.GetValueOrDefault("window_mode"), json.GetValueOrDefault("close_on_complete"),
-                json.GetValueOrDefault("ticket"));
+                json.GetValueOrDefault("ticket"), json.GetValueOrDefault("group_id"), json.GetValueOrDefault("search_criteria"));
         }
         catch (Exception exception) when (exception is JsonException
                                           or InvalidOperationException // no/unknown Content-Type: not readable as JSON

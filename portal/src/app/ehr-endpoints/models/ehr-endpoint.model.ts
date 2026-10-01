@@ -31,6 +31,11 @@ export interface EhrEndpoint {
   modifiedOnUtc: string | null;
   modifiedBy: string | null;
   endpointType: EhrEndpointType;
+  tokenEndpoint?: string | null;
+  clientId?: string | null;
+  keyId?: string | null;
+  jwksUrl?: string | null;
+  practiceId?: string | null;
 }
 
 export interface PagedResult<T> {
@@ -74,4 +79,9 @@ export interface EhrEndpointRequest {
   formatType: string;
   status: string;
   endpointType: EhrEndpointType;
+  tokenEndpoint?: string | null;
+  clientId?: string | null;
+  keyId?: string | null;
+  jwksUrl?: string | null;
+  practiceId?: string | null;
 }

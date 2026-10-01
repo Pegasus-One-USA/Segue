@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>athenahealth Patient Standalone Integration — FHIRBridge</title>
+<title>Patient Standalone Integration (athenahealth, Epic, eCW) — FHIRBridge</title>
 <style>
   :root {
     --primary: #00A89D;
@@ -222,12 +222,12 @@
 
 <header class="doc-header">
   <div class="wrap">
-    <h1>athenahealth Patient Standalone Integration</h1>
-    <p class="subtitle">How to integrate your application with FHIRBridge to drive a real patient-facing SMART on FHIR Standalone launch against athenahealth, and pull that patient's data into your own system. The same pattern also covers Epic/MyChart and eCW.</p>
+    <h1>Patient Standalone Integration</h1>
+    <p class="subtitle">How to trigger a patient-facing SMART on FHIR Standalone workflow against your EHR vendor (athenahealth, Epic/MyChart or eCW/Healow — your choice) from your own application, using an API client (Client ID + Client Secret). Your server asks FHIRBridge for a one-time launch ticket and sends the patient's browser to FHIRBridge's run page, which handles the EHR sign-in and consent, runs the workflow and sends the patient back to you. A second, lower-level way (build your own sign-in screens) is kept in sections 3&ndash;5. Every step is the same for each vendor; section 6 lists the few differences.</p>
     <div class="meta">
-      <div><strong>Flow type</strong>Patient Standalone (authorization-code + PKCE)</div>
-      <div><strong>You implement</strong>a backend config endpoint + a browser-side connect flow</div>
-      <div><strong>FHIRBridge provides</strong>Workflow Id, Base URL, EhrEndpoint Id</div>
+      <div><strong>Flow type</strong>Patient Standalone (authorization-code + PKCE), any supported EHR</div>
+      <div><strong>You implement</strong>one server call for a launch ticket + a browser redirect and return page</div>
+      <div><strong>You set up in the portal</strong>Source, EHR Endpoint, Workflow, API client</div>
       <div><strong>FHIRBridge surface</strong><code>PatientStandaloneLaunchController</code> / <code>WorkflowEndpoints</code></div>
     </div>
   </div>
@@ -238,61 +238,518 @@
   <nav class="toc">
     <h2>Contents</h2>
     <ol>
-      <li><a href="#prereqs">1. What FHIRBridge provides you</a></li>
-      <li><a href="#flow">2. Request flow end-to-end</a></li>
+      <li><a href="#prereqs">1. Set up the workflow and collect your values</a></li>
+      <li><a href="#where">&nbsp;&nbsp;1.1 Where to find each value</a></li>
+      <li><a href="#ehr-endpoints">&nbsp;&nbsp;1.2 Adding EHR Endpoints and getting their codes</a></li>
+      <li><a href="#ticket">2. Recommended: trigger with an API client</a></li>
+      <li><a href="#ticket-flow">&nbsp;&nbsp;2.1 Request flow</a></li>
+      <li><a href="#ticket-api">&nbsp;&nbsp;2.2 The launch-ticket call</a></li>
+      <li><a href="#ticket-code">&nbsp;&nbsp;2.3 Code samples (curl, C#, Node, TypeScript)</a></li>
+      <li><a href="#ticket-errors">&nbsp;&nbsp;2.4 Errors and troubleshooting</a></li>
+      <li><a href="#ticket-verify">&nbsp;&nbsp;2.5 Checking that the workflow ran and succeeded</a></li>
+      <li><a href="#flow">3. Alternative: your own sign-in screens</a></li>
       <li><a href="#gotchas">&nbsp;&nbsp;Two things easy to get wrong</a></li>
-      <li><a href="#api">3. API reference</a></li>
-      <li><a href="#code">4. Code samples</a></li>
-      <li><a href="#code-backend">&nbsp;&nbsp;4.1 Backend (ASP.NET Core)</a></li>
-      <li><a href="#code-frontend">&nbsp;&nbsp;4.2 Frontend (TypeScript)</a></li>
-      <li><a href="#code-vanilla">&nbsp;&nbsp;4.3 Minimal HTML/JS</a></li>
-      <li><a href="#generalize">5. Other vendors (Epic, eCW)</a></li>
-      <li><a href="#outbound-example">6. Related workflow: outbound push example</a></li>
+      <li><a href="#api">4. API reference (direct calls)</a></li>
+      <li><a href="#code">5. Code samples (direct calls)</a></li>
+      <li><a href="#code-backend">&nbsp;&nbsp;5.1 Backend (ASP.NET Core)</a></li>
+      <li><a href="#code-frontend">&nbsp;&nbsp;5.2 Frontend (TypeScript)</a></li>
+      <li><a href="#code-vanilla">&nbsp;&nbsp;5.3 Minimal HTML/JS</a></li>
+      <li><a href="#generalize">6. Differences by vendor (athenahealth, Epic, eCW)</a></li>
     </ol>
   </nav>
 
   <section id="prereqs">
-    <h2><span class="num">01</span>What FHIRBridge provides you</h2>
-    <p class="section-intro">Integrating this flow requires no setup inside FHIRBridge on your part — we provision everything on our side and hand you a small set of fixed values to plug into your own app's configuration.</p>
+    <h2><span class="num">01</span>Set up the workflow and collect your values</h2>
+    <p class="section-intro">You set everything up yourself, in the FHIRBridge portal, with the credentials for your own organisation. Do these once, in this order. After that, every value your application needs is one click away (section 1.1).</p>
 
     <div class="setup-steps">
-      <div class="setup-steps-title">What we set up on our side</div>
+      <div class="setup-steps-title">Set-up checklist (in the portal)</div>
       <div class="setup-step">
         <div class="step-num">1</div>
-        <p>An <strong>athenahealth source connection</strong> configured for patient-facing authorization (authorization-code + PKCE) against your athenahealth environment.</p>
+        <p><strong>Source connection.</strong> <em>Settings &rarr; Source Connections &rarr; New</em>: choose <strong>your EHR vendor</strong> (athenahealth, Epic or eCW/Healow) with the <strong>Patient</strong> application type, and enter the client id, FHIR base URL and scopes of the app you registered with that vendor. Its redirect URI must be <code>{baseUrl}/api/v1/oauth/callback</code>, and the same address must be registered in your app with the vendor (section 1.1).</p>
       </div>
       <div class="setup-step">
         <div class="step-num">2</div>
-        <p>A <strong>workflow</strong> wired to that connection and opted into public launch, so it can be triggered anonymously from your application without a FHIRBridge login.</p>
+        <p><strong>EHR Endpoint.</strong> <em>Settings &rarr; General &rarr; EHR Endpoints &rarr; Add</em>: the endpoint(s) your patients sign in to — one per hospital or practice (section 1.2). Then use the row's <em>Copy Code</em> menu to copy its code.</p>
       </div>
       <div class="setup-step">
         <div class="step-num">3</div>
-        <p>An <strong>EhrEndpoint</strong> entry pointing at athenahealth's FHIR base URL for your environment. athenahealth's Patient audience has one fixed FHIR base URL — no per-hospital directory the way Epic/MyChart has — so there is nothing for your users to pick from.</p>
+        <p><strong>Workflow.</strong> <em>Workflows &rarr; New</em>: pick the source connection above, add a destination (where the data is written) and save until the status reads <strong>Ready</strong>. Then open the row's &#8942; menu and choose <strong>Allow public launch</strong> — the patient sign-in needs it on.</p>
+      </div>
+      <div class="setup-step">
+        <div class="step-num">4</div>
+        <p><strong>API client.</strong> <em>Settings &rarr; General &rarr; API Clients &rarr; New Client</em> (super administrators only). Copy the <strong>Client Secret</strong> when it is shown — it is shown once. Then open the client's &#8942; menu &rarr; <strong>Allowed Caller URLs</strong> and add the page address(es) your application triggers from and returns to (an exact page, or a whole domain).</p>
+      </div>
+      <div class="setup-step">
+        <div class="step-num">5</div>
+        <p><strong>Collect the values</strong> (section 1.1): Client ID, Client Secret, Workflow Id, the launch-ticket URL and the EHR Endpoint code. Put them in your server's configuration, then wire up the calls in section 2.</p>
       </div>
     </div>
 
-    <h3>What you receive</h3>
+    <h3>The values you collect</h3>
     <p class="section-intro">
-      We hand you three values. Store them as fixed configuration in your own application (an <code>appsettings.json</code> section, environment variables, a constants file) — there is nothing for your end users or your own admins to configure; these values do not change unless we tell you they've been rotated.
+      You collect the values below from the portal (section 1.1). Store them as fixed configuration in your own application — the Client Secret in your <strong>server-side secret store</strong> (environment variable, user-secrets, a vault), never in browser code. There is nothing for your end users to configure; these values do not change unless you regenerate the secret or change the set-up.
     </p>
     <table class="config-table">
       <tr><th>Value</th><th>Meaning</th></tr>
       <tr><td class="key">Workflow Id</td><td>The FHIRBridge workflow id that drives this integration</td></tr>
       <tr><td class="key">Base URL</td><td>FHIRBridge's own base URL for your environment, e.g. <code>https://your-fhirbridge-host</code></td></tr>
-      <tr><td class="key">EhrEndpoint Id</td><td>The id FHIRBridge's launch endpoint needs to mint an athenahealth authorize URL</td></tr>
+      <tr><td class="key">Launch-ticket URL</td><td>The whole address your server POSTs to: <code>{baseUrl}/api/v1/workflows/external/launch-ticket</code></td></tr>
+      <tr><td class="key">EhrEndpoint Id</td><td>The id FHIRBridge's launch endpoint needs to mint the EHR's authorize URL for the hospital or practice the patient signs in to. In the new flow you send it as <code>ehr_endpoint_code</code></td></tr>
+      <tr><td class="key">Client ID</td><td>Identifies your application (the API client). Not secret on its own</td></tr>
+      <tr><td class="key">Client Secret</td><td>Proves it is your application. Shown once when the client is created; keep it on your server only. You can regenerate it at any time from API Clients, which immediately stops the old one working</td></tr>
     </table>
 
+    <h3 id="where">1.1 Where to find each value</h3>
+    <p class="section-intro">Someone with administrator access to FHIRBridge (not your end users) can read every value below from the portal. If you do not have that access, ask whoever administers your FHIRBridge instance — this table tells them exactly where to look.</p>
+    <div class="table-scroll">
+      <table class="config-table">
+        <tr><th>Value</th><th>Where to find it</th><th>Notes</th></tr>
+        <tr>
+          <td class="key">Client ID</td>
+          <td>Portal &rarr; <strong>Settings</strong> &rarr; <strong>General</strong> &rarr; <strong>API Clients</strong>. Each client is a row and its Client ID is shown in the list. The screen is available to super administrators only.</td>
+          <td>One API client works for every workflow. Create one with <strong>New Client</strong>.</td>
+        </tr>
+        <tr>
+          <td class="key">Client Secret</td>
+          <td>Shown <strong>once</strong>, in the dialog that opens when the client is created. Store it straight away in your server's secret store.</td>
+          <td>It cannot be read again. If it is lost or may have leaked, open the row's &#8942; menu in <strong>API Clients</strong> and choose <strong>Regenerate Secret</strong>; the old secret stops working immediately.</td>
+        </tr>
+        <tr>
+          <td class="key">Allowed Caller URLs</td>
+          <td><strong>Settings</strong> &rarr; <strong>General</strong> &rarr; <strong>API Clients</strong> &rarr; the row's &#8942; menu &rarr; <strong>Allowed Caller URLs</strong>. Add each page address your app triggers from and returns to.</td>
+          <td>Choose <em>exact URL</em> (one page, no query string) or <em>whole domain</em> (scheme + host only, any page on it). The <code>return_url</code> you send must match an entry.</td>
+        </tr>
+        <tr>
+          <td class="key">Workflow Id</td>
+          <td>Portal &rarr; <strong>Workflows</strong> &rarr; the workflow's &#8942; menu &rarr; <strong>Integration Details</strong>. The panel lists <em>Workflow ID</em> with a copy button.</td>
+          <td>The same panel shows the workflow number, the base address and the exact calls for that workflow, and is the quickest check that you have the right workflow.</td>
+        </tr>
+        <tr>
+          <td class="key">Launch-ticket URL (the whole URL to POST to)</td>
+          <td>The same <strong>Integration Details</strong> panel has a <em>Launch-ticket URL</em> entry with a Copy button. It is <code>{baseUrl}/api/v1/workflows/external/launch-ticket</code>.</td>
+          <td>The panel also lists every body field for that workflow, and has a <em>Copy</em> button on each, plus one that copies the whole panel as text to email to a developer.</td>
+        </tr>
+        <tr>
+          <td class="key">Base URL</td>
+          <td>The <em>Base address</em> line of the same <strong>Integration Details</strong> panel. It is the address of FHIRBridge's API, for example <code>https://your-fhirbridge-host</code>.</td>
+          <td>Use the API's address (no trailing slash, no <code>/api/v1</code>). Your server calls it; the patient's browser is sent to the <code>run_url</code> it returns.</td>
+        </tr>
+        <tr>
+          <td class="key">EhrEndpoint Id (the EHR code)</td>
+          <td><strong>Settings</strong> &rarr; <strong>General</strong> &rarr; <strong>EHR Endpoints</strong> &rarr; the endpoint's &#8942; menu &rarr; <strong>Copy Code</strong>. The copied value is the id you send as <code>ehr_endpoint_code</code>. To get the complete list of codes in one go, call <code>POST {baseUrl}/api/v1/workflows/external/ehr-endpoints</code> from your server (section 1.2).</td>
+          <td>Pick the endpoint whose vendor matches your workflow's source (<code>Athenahealth</code>, <code>Epic</code> or <code>Healow</code>). Each hospital or practice you support has its own endpoint and code.</td>
+        </tr>
+        <tr>
+          <td class="key">The EHR's FHIR base URL</td>
+          <td>The <strong>FHIR Base URL</strong> column of the endpoint's row in <strong>EHR Endpoints</strong>.</td>
+          <td>You do not send this anywhere; it confirms the endpoint points at the environment you expect (vendor sandbox vs production).</td>
+        </tr>
+        <tr>
+          <td class="key">Public launch on</td>
+          <td><strong>Workflows</strong> &rarr; the workflow's &#8942; menu. The item reads <em>Revoke public launch</em> when it is on and <em>Allow public launch</em> when it is off.</td>
+          <td>It must be on for the patient sign-in to work. The <em>Integration Details</em> readiness list also shows it.</td>
+        </tr>
+        <tr>
+          <td class="key">Callback / redirect URI</td>
+          <td><code>{baseUrl}/api/v1/oauth/callback</code>. It is also printed in the workflow's <strong>Integration Details</strong> for interactive audiences. Register it with your vendor: the <strong>athenahealth developer portal</strong>, <strong>Epic on FHIR</strong> (fhir.epic.com) or the <strong>eClinicalWorks developer portal</strong> &rarr; your app &rarr; redirect URIs.</td>
+          <td>The EHR refuses the sign-in with a message such as "redirect uri is not an approved redirect location" if it is missing. The source connection under <strong>Settings</strong> &rarr; <strong>Source Connections</strong> lists the redirect URI FHIRBridge sends, and the two must be identical.</td>
+        </tr>
+        <tr>
+          <td class="key">Run reference</td>
+          <td><strong>Execution History</strong> &rarr; the run's row. Its <em>Correlation ID</em> and run id match the <code>workflowRunId</code> returned to your <code>return_url</code>.</td>
+          <td>The <em>Triggered By</em> column shows <code>ExternalTrigger</code> for runs started this way; the <em>Source EHR</em> section shows the hospital used.</td>
+        </tr>
+      </table>
+    </div>
+
+<h3 id="ehr-endpoints">1.2 Adding EHR Endpoints and getting their codes</h3>
+    <p class="section-intro">An <strong>EHR Endpoint</strong> is one hospital or practice that a workflow can connect to. Enter each one once; the patient (or your application) then chooses between them by code.</p>
+
+    <h4>Where to enter one</h4>
+    <p class="section-intro">Portal &rarr; <strong>Settings</strong> &rarr; <strong>General</strong> &rarr; <strong>EHR Endpoints</strong> &rarr; <strong>Add</strong>. Fields:</p>
+    <div class="table-scroll">
+      <table class="config-table">
+        <tr><th>Field</th><th>What to enter</th></tr>
+        <tr><td class="key">Vendor</td><td>The EHR vendor: Epic, Athenahealth, Healow (eCW), Cerner, MEDITECH Greenfield, Generic FHIR. A workflow can only be run against endpoints of its own source's vendor.</td></tr>
+        <tr><td class="key">Endpoint Type</td><td><code>MyChart</code> for a customer's production instance (the patient audience); <code>Epic</code> or <code>Ecw</code> for a vendor sandbox (the provider audience).</td></tr>
+        <tr><td class="key">Vendor Endpoint Id</td><td>The vendor's own identifier for this organisation — for example Epic's organisation id from its endpoint directory, athenahealth's practice id, or eCW's practice id. It is not the code you send.</td></tr>
+        <tr><td class="key">Name</td><td>What your people and patients see in lists, e.g. "Acme Health System".</td></tr>
+        <tr><td class="key">FHIR Base URL</td><td>That organisation's FHIR R4 base URL.</td></tr>
+        <tr><td class="key">Format Type / Status</td><td><code>R4</code> and <code>active</code> for a normal endpoint.</td></tr>
+        <tr><td class="key">Run-time overrides (optional)</td><td>Only used when a backend workflow is run against this endpoint: Token Endpoint, Client Id, Key Id, JWKS URL (Epic), Practice Id (athenahealth). A blank field keeps the workflow's saved value.</td></tr>
+      </table>
+    </div>
+
+    <h4>How to get the code</h4>
+    <ul>
+      <li><strong>One endpoint:</strong> open the endpoint's &#8942; menu and choose <strong>Copy Code</strong>. A "Copied" message confirms it is on your clipboard.</li>
+      <li><strong>The complete list:</strong> call the endpoint below from your server. It returns every endpoint's <code>code</code>, <code>name</code> and <code>vendor</code>, so your application can show a hospital picker or look a code up by name.</li>
+    </ul>
+    <div class="code-label"><span>list-ehr-endpoints.sh</span><button class="copy-btn" data-copy-target="e-curl" type="button">Copy</button></div>
+    <pre id="e-curl">curl -X POST "https://your-fhirbridge-host/api/v1/workflows/external/ehr-endpoints" \
+  -H "Content-Type: application/json" \
+  -d '{ "client_id": "YOUR_CLIENT_ID", "client_secret": "YOUR_CLIENT_SECRET", "return_url": "https://app.yourcompany.com/records" }'
+
+# [ { "code": "6f1b...", "name": "Acme Health System", "vendor": "Athenahealth" },
+#   { "code": "9c20...", "name": "Riverside Hospital", "vendor": "Epic" } ]</pre>
+    <div class="code-label"><span>ehr-endpoints.ts  (your server)</span><button class="copy-btn" data-copy-target="e-ts" type="button">Copy</button></div>
+    <pre id="e-ts">// Run this on your server — it needs the Client Secret. Cache the result; the list changes rarely.
+export async function listEhrEndpoints(vendor: 'Athenahealth' | 'Epic' | 'Healow') {
+  const response = await fetch(`${process.env.FHIRBRIDGE_BASE_URL}/api/v1/workflows/external/ehr-endpoints`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: process.env.CLIENT_ID,
+      client_secret: process.env.CLIENT_SECRET,
+      return_url: process.env.APP_RETURN_URL,        // must be one of the API client's Allowed Caller URLs
+    }),
+  });
+  if (!response.ok) throw new Error(`FHIRBridge refused the request (${response.status})`);
+
+  const all: { code: string; name: string; vendor: string }[] = await response.json();
+  return all.filter(endpoint =&gt; endpoint.vendor === vendor);   // e.g. offer these to the patient
+}</pre>
+    <p class="section-intro">A request whose <code>return_url</code> is not on the client's Allowed Caller URLs is refused with <code>403 caller_url_not_allowed</code>; wrong credentials give <code>401 invalid_client</code>.</p>
+
     <div class="callout">
-      <strong>One more thing we need from you</strong>
-      Because the browser calls FHIRBridge directly and cross-origin, the origin your application is served from must be added to FHIRBridge's allowed-origins list on our side before these calls will succeed — otherwise the browser blocks them as a CORS violation before your code ever sees a response. Send us the origin (scheme + host + port, e.g. <code>https://app.yourcompany.com</code>) alongside your integration request.
+      <strong>Two registrations that must match</strong>
+      <ul>
+        <li><strong>Allowed Caller URLs</strong> (API Clients): every <code>return_url</code> you send — and every page that calls the list endpoints — must be on the client's list, otherwise the request is refused with "caller URL is not whitelisted".</li>
+        <li><strong>Redirect URI</strong> (athenahealth developer portal): <code>{baseUrl}/api/v1/oauth/callback</code> must be registered there and identical to the redirect URI on the source connection.</li>
+        <li><em>Only if you use the direct calls in sections 3&ndash;5:</em> your page's origin (scheme + host + port) must be added in <strong>Settings &rarr; General &rarr; Allowed Origins</strong>, because the browser then calls FHIRBridge directly and cross-origin.</li>
+      </ul>
     </div>
   </section>
 
+  <section id="ticket">
+    <h2><span class="num">02</span>Recommended: trigger with an API client</h2>
+    <p class="section-intro">Your server proves who it is with the Client ID and Secret and asks FHIRBridge for a <strong>launch ticket</strong>. Only that short-lived ticket — never the secret — goes through the patient's browser. FHIRBridge's own run page then takes the patient through the EHR's sign-in and consent, runs the workflow, and sends the browser back to your page. You build no sign-in screens and handle no athenahealth tokens.</p>
+
+    <div class="callout warn">
+      <strong>Where the data goes</strong>
+      In this flow the workflow writes what it fetched to the <strong>destination configured on the workflow</strong> (a database, file, FHIR server, and so on). Your page learns only the outcome (<code>Triggered</code>, <code>Succeeded</code> or <code>Failed</code>) and the run id. If your application needs the FHIR resources returned to the browser itself, use the direct calls in sections 3&ndash;5 instead. Patient search terms and a patient id are also not part of this flow: a patient's own sign-in decides whose record is read.
+    </div>
+
+    <h3 id="ticket-flow">2.1 Request flow</h3>
+    <div class="sequence" role="img" aria-label="Sequence diagram of the launch-ticket flow, described in the steps below.">
+      <div class="lanes">
+        <div class="lane-head">Patient's browser</div>
+        <div class="lane-head">Your server</div>
+        <div class="lane-head fhirbridge">FHIRBridge</div>
+
+        <div class="beat">
+          <div class="msg call"><span class="verb">1 &middot; click</span>Patient taps "Get My Records" in your app</div>
+          <div class="msg call"><span class="verb pill pill-post">POST</span>your own <code>/api/ehr/launch</code></div>
+          <div class="msg empty"></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg empty"></div>
+          <div class="msg call"><span class="verb pill pill-post">POST</span><code>/workflows/external/launch-ticket</code> with Client ID + Secret</div>
+          <div class="msg call">Checks credentials, workflow and Allowed Caller URL &larr; <code>{ ticket, run_url }</code></div>
+        </div>
+        <div class="beat-note">The ticket works once and for about 90 seconds.</div>
+
+        <div class="beat">
+          <div class="msg human"><span class="verb">2 &middot; navigate</span>Browser goes to <code>run_url</code></div>
+          <div class="msg empty"></div>
+          <div class="msg call">FHIRBridge's run page checks for a saved sign-in</div>
+        </div>
+
+        <div class="beat">
+          <div class="msg human"><span class="verb">3 &middot; redirect</span>The EHR's patient login and consent screen</div>
+          <div class="msg empty"></div>
+          <div class="msg empty"></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg human"><span class="verb">callback</span>The EHR redirects to <code>/oauth/callback</code></div>
+          <div class="msg empty"></div>
+          <div class="msg call">Exchanges the code for a token, then runs the workflow</div>
+        </div>
+
+        <div class="beat">
+          <div class="msg human"><span class="verb">4 &middot; return</span>Back to your <code>return_url</code> with <code>?status=&hellip;&amp;workflowRunId=&hellip;</code></div>
+          <div class="msg empty"></div>
+          <div class="msg empty"></div>
+        </div>
+
+        <div class="beat">
+          <div class="msg empty"></div>
+          <div class="msg call"><span class="verb pill pill-get">GET</span><code>/workflows/external/run-status/{id}</code> (optional)</div>
+          <div class="msg call">&larr; <code>{ status, errorMessage }</code></div>
+        </div>
+      </div>
+    </div>
+
+    <h3 id="ticket-api">2.2 The launch-ticket call</h3>
+    <p class="section-intro">Made from your <strong>server</strong>, anonymous apart from the Client ID and Secret in the body. Send JSON (or a form post) to <code>{baseUrl}/api/v1/workflows/external/launch-ticket</code>.</p>
+    <div class="table-scroll">
+      <table class="config-table">
+        <tr><th>Field</th><th>Required</th><th>Accepted values</th><th>What it does</th></tr>
+        <tr><td class="key">client_id</td><td>Yes</td><td>Text</td><td>Your API client's Client ID. Identifies which application is asking.</td></tr>
+        <tr><td class="key">client_secret</td><td>Yes</td><td>Text</td><td>Your API client's Client Secret. Proves it is you. Server-side only; wrong or missing gives <code>401 invalid_client</code>.</td></tr>
+        <tr><td class="key">workflow_id</td><td>Yes</td><td>Workflow Id (GUID)</td><td>Which workflow to run. Must exist; otherwise <code>404 workflow_not_found</code>.</td></tr>
+        <tr><td class="key">ehr_endpoint_code</td><td>Patient: yes<br>Others: optional</td><td>An EHR Endpoint code (GUID) from section 1.2. Anything that is not a GUID is ignored.</td><td>For a patient workflow: which hospital's portal the patient signs in to. For a backend workflow: runs this one execution against that hospital's connection values (FHIR base URL, token endpoint, client id, key id, practice id) instead of the workflow's saved ones; the endpoint must be the same vendor as the workflow, and bulk-export workflows cannot use it. An unknown code, or a vendor mismatch, stops the run with a clear error.</td></tr>
+        <tr><td class="key">return_url</td><td>Recommended</td><td>An absolute <code>https://</code> address (<code>http://</code> only for localhost) that is on the API client's Allowed Caller URLs. No query string if the entry is an exact page.</td><td>Where the browser is sent when the run finishes, with <code>status</code> and <code>workflowRunId</code> added. If omitted, FHIRBridge's page shows the outcome and stays there. Not on the list: <code>403 caller_url_not_allowed</code>.</td></tr>
+        <tr><td class="key">mode</td><td>No</td><td><code>async</code> (default) &middot; <code>sync</code>. Any other value behaves as <code>async</code>.</td><td><code>async</code>: FHIRBridge's page says "Workflow execution started" at once and the browser returns with <code>status=Triggered</code>; the run continues in the background. <code>sync</code>: the page waits until the run finishes and the browser returns with <code>status=Succeeded</code> or <code>Failed</code>.</td></tr>
+        <tr><td class="key">window_mode</td><td>No</td><td><code>new</code> &middot; <code>same</code> (default). Any other value behaves as <code>same</code>.</td><td>Tells FHIRBridge's page whether it was opened in a separate window (<code>new</code>) or replaces your page (<code>same</code>). You choose which by how you navigate to <code>run_url</code>: <code>window.open</code> for a new window, <code>window.location</code> for the same one.</td></tr>
+        <tr><td class="key">close_on_complete</td><td>No</td><td><code>true</code> or <code>1</code> to close; anything else (default) does not.</td><td>Only with <code>window_mode=new</code>. <code>true</code>: the window closes itself when the run is done (if the browser refuses, it falls back to <code>return_url</code>). Otherwise it stays open and goes to <code>return_url</code>.</td></tr>
+        <tr><td class="key">group_id</td><td>No</td><td>Text, up to 200 characters. Not used by patient workflows.</td><td>Backend bulk-export workflows only: replaces the workflow's saved FHIR Group ID for this run. Ignored for patient and standalone workflows.</td></tr>
+        <tr><td class="key">search_criteria</td><td>No</td><td>FHIR search parameters, up to 4000 characters, e.g. <code>identifier=203713,203711</code>. Not used by patient workflows.</td><td>Backend search workflows only: replaces the workflow's saved search criteria for this run. Ignored for patient and standalone workflows, where the patient's own sign-in decides whose record is read.</td></tr>
+      </table>
+    </div>
+    <p class="section-intro">The response is <code>{ "ticket": "&hellip;", "run_url": "https://&hellip;/run-page?ticket=&hellip;", "expires_in": 90 }</code>. Send the browser to <code>run_url</code> straight away.</p>
+
+    <div class="callout">
+      <strong>When the browser comes back</strong>
+      Your <code>return_url</code> receives <code>?status=Triggered|Succeeded|Failed</code> and, when known, <code>&amp;workflowRunId=&hellip;</code>. Strip those parameters from the address bar once you have read them (<code>history.replaceState</code>), so a refresh does not replay them. To follow a run after the fact, call <code>GET {baseUrl}/api/v1/workflows/external/run-status/{workflowRunId}</code> — it needs no credential and returns <code>status</code> (<code>Running</code>, <code>Succeeded</code>, <code>PartialSuccess</code>, <code>Failed</code>, <code>Cancelled</code>) plus a general <code>errorMessage</code> with a Reference ID you can quote to us.
+    </div>
+
+    <h3 id="ticket-code">2.3 Code samples</h3>
+
+    <h4>curl — try the ticket call from a terminal <span class="pill pill-hidden">server-side</span></h4>
+    <div class="code-label"><span>request.sh</span><button class="copy-btn" data-copy-target="t-curl" type="button">Copy</button></div>
+    <pre id="t-curl">curl -X POST "https://your-fhirbridge-host/api/v1/workflows/external/launch-ticket" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET",
+    "workflow_id": "00000000-0000-0000-0000-000000000000",
+    "ehr_endpoint_code": "00000000-0000-0000-0000-000000000000",
+    "return_url": "https://app.yourcompany.com/records",
+    "mode": "async",
+    "window_mode": "new",
+    "close_on_complete": "false"
+  }'
+
+# 200 OK
+# { "ticket": "CfDJ8...", "run_url": "https://your-fhirbridge-host/api/v1/workflows/external/run-page?ticket=CfDJ8...", "expires_in": 90 }
+# 401 { "error": "invalid_client" }               wrong Client ID/Secret, or the client is disabled
+# 403 { "error": "caller_url_not_allowed", ... }  return_url is not one of the client's Allowed Caller URLs</pre>
+
+    <h4>Your server — ASP.NET Core <span class="pill pill-backend">C#</span></h4>
+    <p class="section-intro">Keep the Client Secret in configuration that is not checked in (user-secrets, environment variables, a vault). The browser calls your endpoint, never FHIRBridge's ticket endpoint.</p>
+    <div class="code-label"><span>appsettings.json  (+ user-secrets for the secret)</span><button class="copy-btn" data-copy-target="t-cs-config" type="button">Copy</button></div>
+    <pre id="t-cs-config">{
+  "Ehr": {
+    "BaseUrl": "https://your-fhirbridge-host",
+    "WorkflowId": "00000000-0000-0000-0000-000000000000",
+    "EhrEndpointId": "00000000-0000-0000-0000-000000000000",
+    "ClientId": "YOUR_CLIENT_ID"
+    // ClientSecret: dotnet user-secrets set "Ehr:ClientSecret" "..."   (or an environment variable)
+  }
+}</pre>
+    <div class="code-label"><span>Program.cs</span><button class="copy-btn" data-copy-target="t-cs" type="button">Copy</button></div>
+    <pre id="t-cs">public sealed class EhrOptions
+{
+    public string BaseUrl { get; set; } = "";
+    public string WorkflowId { get; set; } = "";
+    public string EhrEndpointId { get; set; } = "";
+    public string ClientId { get; set; } = "";
+    public string ClientSecret { get; set; } = "";
+}
+
+builder.Services.Configure&lt;EhrOptions&gt;(builder.Configuration.GetSection("Ehr"));
+builder.Services.AddHttpClient("fhirbridge");
+
+// Called by your own page. Returns only the one-time run URL; the secret never leaves this server.
+app.MapPost("/api/ehr/launch", async (
+    LaunchRequest request,
+    IOptions&lt;EhrOptions&gt; options,
+    IHttpClientFactory httpClientFactory,
+    CancellationToken ct) =&gt;
+{
+    var athena = options.Value;
+
+    var response = await httpClientFactory.CreateClient("fhirbridge").PostAsJsonAsync(
+        $"{athena.BaseUrl.TrimEnd('/')}/api/v1/workflows/external/launch-ticket",
+        new
+        {
+            client_id = athena.ClientId,
+            client_secret = athena.ClientSecret,
+            workflow_id = athena.WorkflowId,
+            ehr_endpoint_code = athena.EhrEndpointId,
+            return_url = request.ReturnUrl,           // must be one of your Allowed Caller URLs
+            mode = request.Mode ?? "async",
+            window_mode = request.WindowMode ?? "new",
+            close_on_complete = request.CloseOnComplete ? "true" : "false",
+        },
+        ct);
+
+    if (!response.IsSuccessStatusCode)
+    {
+        // 401 = bad credentials, 403 = return_url not whitelisted. Log it; show the patient something generic.
+        var detail = await response.Content.ReadAsStringAsync(ct);
+        app.Logger.LogWarning("FHIRBridge launch-ticket refused: {Status} {Detail}", (int)response.StatusCode, detail);
+        return Results.Problem("Could not start the connection. Please try again later.", statusCode: 502);
+    }
+
+    var ticket = await response.Content.ReadFromJsonAsync&lt;JsonElement&gt;(cancellationToken: ct);
+    return Results.Ok(new { runUrl = ticket.GetProperty("run_url").GetString() });
+})
+.RequireAuthorization(); // your own login, not FHIRBridge's
+
+public sealed record LaunchRequest(string ReturnUrl, string? Mode, string? WindowMode, bool CloseOnComplete);</pre>
+
+    <h4>Your server — Node.js / Express <span class="pill pill-backend">JavaScript</span></h4>
+    <div class="code-label"><span>server.js</span><button class="copy-btn" data-copy-target="t-node" type="button">Copy</button></div>
+    <pre id="t-node">import express from 'express';
+
+const app = express();
+app.use(express.json());
+
+const { FHIRBRIDGE_BASE_URL, WORKFLOW_ID, EHR_ENDPOINT_ID, CLIENT_ID, CLIENT_SECRET } = process.env;
+
+app.post('/api/ehr/launch', requireLogin, async (req, res) =&gt; {
+  const response = await fetch(`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/external/launch-ticket`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,          // stays on this server
+      workflow_id: WORKFLOW_ID,
+      ehr_endpoint_code: EHR_ENDPOINT_ID,
+      return_url: req.body.returnUrl,        // must be one of your Allowed Caller URLs
+      mode: req.body.mode ?? 'async',
+      window_mode: req.body.windowMode ?? 'new',
+      close_on_complete: req.body.closeOnComplete ? 'true' : 'false',
+    }),
+  });
+
+  if (!response.ok) {
+    console.warn('FHIRBridge launch-ticket refused', response.status, await response.text());
+    return res.status(502).json({ error: 'Could not start the connection.' });
+  }
+
+  const { run_url } = await response.json();
+  res.json({ runUrl: run_url });
+});
+
+app.listen(3000);</pre>
+
+    <h4>Your page — TypeScript <span class="pill pill-frontend">browser</span></h4>
+    <p class="section-intro">Open the new window <em>inside the click handler</em> (browsers block pop-ups opened later), then point it at the run URL once your server answers. Use the same-window variant if you prefer a full-page redirect.</p>
+    <div class="code-label"><span>get-my-records.ts</span><button class="copy-btn" data-copy-target="t-ts" type="button">Copy</button></div>
+    <pre id="t-ts">const RETURN_URL = window.location.origin + window.location.pathname;
+
+export async function getMyRecords(options: { newWindow?: boolean; closeOnComplete?: boolean } = {}) {
+  const useNewWindow = options.newWindow ?? true;
+
+  // Must happen synchronously in the click handler, or the browser treats it as an unwanted pop-up.
+  const popup = useNewWindow ? window.open('', '_blank') : null;
+
+  try {
+    const response = await fetch('/api/ehr/launch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        returnUrl: RETURN_URL,
+        mode: 'async',                                   // or 'sync' to wait for the run to finish
+        windowMode: useNewWindow ? 'new' : 'same',
+        closeOnComplete: options.closeOnComplete ?? false,
+      }),
+    });
+    if (!response.ok) throw new Error('Could not start the connection.');
+
+    const { runUrl } = await response.json();
+    if (popup) popup.location.href = runUrl;   // FHIRBridge's page: sign-in, consent, run
+    else window.location.href = runUrl;        // same window
+  } catch (error) {
+    popup?.close();
+    throw error;
+  }
+}
+
+// On page load: handle the browser coming back from FHIRBridge
+export function handleReturn(): { status: string; workflowRunId: string | null } | null {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get('status');
+  if (!status) return null;
+
+  const result = { status, workflowRunId: params.get('workflowRunId') };
+  window.history.replaceState(null, '', window.location.pathname);   // a refresh must not replay this
+  return result;
+}
+
+document.getElementById('connect-btn')?.addEventListener('click', () =&gt; getMyRecords());
+
+const back = handleReturn();
+if (back?.status === 'Failed') showMessage('The connection could not be completed. Please try again.');
+else if (back) showMessage(back.status === 'Triggered' ? 'Your records are being retrieved.' : 'Done.');</pre>
+
+    <h4>Optional — follow a run <span class="pill pill-frontend">TypeScript</span></h4>
+    <div class="code-label"><span>run-status.ts</span><button class="copy-btn" data-copy-target="t-status" type="button">Copy</button></div>
+    <pre id="t-status">// run-status needs no credential, so it can be called from the browser or your server
+export async function waitForRun(baseUrl: string, workflowRunId: string, timeoutMs = 120_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() &lt; deadline) {
+    const r = await fetch(`${baseUrl}/api/v1/workflows/external/run-status/${workflowRunId}`);
+    const { status, errorMessage } = await r.json();
+    if (status !== 'Running') return { status, errorMessage };   // Succeeded | PartialSuccess | Failed | Cancelled
+    await new Promise(resolve =&gt; setTimeout(resolve, 2000));
+  }
+  return { status: 'Running', errorMessage: null };
+}</pre>
+
+    <h3 id="ticket-errors">2.4 Errors and troubleshooting</h3>
+    <div class="table-scroll">
+      <table class="config-table">
+        <tr><th>What you see</th><th>Meaning</th><th>Fix</th></tr>
+        <tr><td><code>401 invalid_client</code></td><td>Wrong Client ID or Secret, or the client is disabled. The answer is deliberately the same for both</td><td>Check the values; ask us to regenerate the secret if unsure</td></tr>
+        <tr><td><code>403 caller_url_not_allowed</code></td><td>The <code>return_url</code> is not on the client's Allowed Caller URLs</td><td>Send us the exact page or domain to add</td></tr>
+        <tr><td>"This launch link has expired or was already used"</td><td>The ticket works once and for about 90 seconds</td><td>Request a new ticket and navigate to it straight away; do not reload or re-share <code>run_url</code></td></tr>
+        <tr><td>Page says the sign-in could not be started</td><td>Public launch is off for the workflow, or <code>ehr_endpoint_code</code> is not a valid endpoint for this workflow's vendor</td><td>Open the workflow and confirm it is Ready with <em>Allow public launch</em> on, and that the code is the right endpoint's (Copy Code)</td></tr>
+        <tr><td>athenahealth says the redirect URI is not approved</td><td>Segue's callback address is not registered in your app with the EHR vendor</td><td>Add <code>{baseUrl}/api/v1/oauth/callback</code> as a redirect URI in your vendor's developer portal (or ask your app owner to)</td></tr>
+        <tr><td>Return page shows <code>status=Failed</code></td><td>The sign-in was cancelled or rejected, or the run failed</td><td>Use <code>run-status</code> for the Reference ID and quote it to us</td></tr>
+      </table>
+    </div>
+    <div class="callout danger">
+      <strong>Never put the Client Secret in the browser</strong>
+      Not in JavaScript, HTML, a mobile app bundle, a URL or a log line. Anyone who has it can start this workflow as your application. If it may have leaked, regenerate it under API Clients &rarr; <strong>Regenerate Secret</strong> — the old secret stops working immediately.
+    </div>
+    <h3 id="ticket-verify">2.5 Checking that the workflow ran and succeeded</h3>
+    <p class="section-intro"><code>status=Triggered</code> on your return page only means the run <em>started</em>. To confirm it finished and worked, use the portal or the status call.</p>
+
+    <h4>In the portal — Execution History</h4>
+    <ol>
+      <li>Open <strong>Workflows</strong>, find the workflow, open its &#8942; menu and choose <strong>Execution History</strong>. (You can also open <strong>Execution History</strong> from the main menu and filter by workflow.)</li>
+      <li>Find your run. The newest are at the top. The <code>workflowRunId</code> returned to your <code>return_url</code>, or the run's <strong>Correlation ID</strong>, identifies it. Every run has its own Correlation ID.</li>
+      <li>Read the row: <strong>Status</strong>, <strong>Duration</strong>, <strong>EHR Endpoint</strong> (<em>Default</em>, or the hospital's name when a code was passed) and <strong>Triggered By</strong> (<code>ExternalTrigger</code> for runs started with an API client).</li>
+      <li>Click the row for the detail page. Its <strong>Source EHR</strong> section shows the source, the hospital used, and any Group ID or search criteria passed for that run. A failed run shows its error message and a <strong>Reference ID</strong> you can open under <em>Operations &rarr; Errors</em>.</li>
+    </ol>
+    <div class="table-scroll">
+      <table class="config-table">
+        <tr><th>Status</th><th>Meaning</th><th>What to do</th></tr>
+        <tr><td class="key">Running</td><td>Still in progress (including a bulk export being waited on).</td><td>Check again shortly. Async runs are Running until they finish.</td></tr>
+        <tr><td class="key">Succeeded</td><td>Every step completed and the data reached the destination.</td><td>Nothing. Check the destination if you want to see the data.</td></tr>
+        <tr><td class="key">Partial Success</td><td>The run finished but some resource types or records were skipped; the message lists them.</td><td>Read the message; usually a scope or permission the EHR did not grant for that resource.</td></tr>
+        <tr><td class="key">Failed</td><td>The run stopped with an error.</td><td>Open the run, read the message, quote the Reference ID if you contact support.</td></tr>
+        <tr><td class="key">Cancelled</td><td>Someone cancelled it from the detail page.</td><td>Trigger again if it was not intended.</td></tr>
+      </table>
+    </div>
+
+    <h4>From your application — the status call</h4>
+    <p class="section-intro">Use the <code>workflowRunId</code> from the return page. No credential is needed, which is why the response never contains record details: only <code>status</code> and, for a failed run, a general <code>errorMessage</code> with a Reference ID.</p>
+    <div class="code-label"><span>check-run.sh</span><button class="copy-btn" data-copy-target="v-curl" type="button">Copy</button></div>
+    <pre id="v-curl">curl "https://your-fhirbridge-host/api/v1/workflows/external/run-status/WORKFLOW_RUN_ID"
+
+# { "status": "Succeeded", "errorMessage": null }
+# { "status": "Failed", "errorMessage": "The workflow did not complete successfully. Reference ID: ERR-20261001-000123" }</pre>
+    <p class="section-intro">The <code>waitForRun</code> helper in section 2.3 polls this until the status is no longer <code>Running</code>.</p>
+
+  </section>
+
   <section id="flow">
-    <h2><span class="num">02</span>Request flow end-to-end</h2>
+    <h2><span class="num">03</span>Alternative: build your own sign-in screens</h2>
+    <div class="callout warn">
+      <strong>Use this only if you need it</strong>
+      The direct calls below let your own page drive the sign-in and receive the FHIR resources in the browser. They use no API client — the run is authorised by the workflow's public-launch setting plus the per-browser <code>callerId</code> — and they need your origin on FHIRBridge's CORS list. If you only need the workflow to run and write to its destination, section 2 is simpler and keeps the secret off the browser.
+    </div>
     <p class="section-intro">Three actors: the patient's browser, your application's frontend, and FHIRBridge — which itself redirects out to athenahealth's real login mid-flow.</p>
 
-    <div class="sequence" role="img" aria-label="Sequence diagram of the athenahealth Patient Standalone launch, described in the steps below.">
+    <div class="sequence" role="img" aria-label="Sequence diagram of the Patient Standalone launch, described in the steps below.">
       <div class="lanes">
         <div class="lane-head">Browser</div>
         <div class="lane-head">Your application</div>
@@ -330,7 +787,7 @@
         </div>
 
         <div class="beat">
-          <div class="msg human"><span class="verb">3 · redirect</span>Browser lands on athenahealth's real patient login page</div>
+          <div class="msg human"><span class="verb">3 · redirect</span>Browser lands on the EHR's real patient login page</div>
           <div class="msg empty"></div>
           <div class="msg empty"></div>
         </div>
@@ -342,7 +799,7 @@
         </div>
 
         <div class="beat">
-          <div class="msg human"><span class="verb">callback</span>athenahealth redirects to FHIRBridge <code>/oauth/callback?code&amp;state</code></div>
+          <div class="msg human"><span class="verb">callback</span>The EHR redirects to FHIRBridge <code>/oauth/callback?code&amp;state</code></div>
           <div class="msg empty"></div>
           <div class="msg call">Exchanges code &rarr; token, caches by <code>sessionId</code></div>
         </div>
@@ -387,8 +844,8 @@
   </section>
 
   <section id="api">
-    <h2><span class="num">03</span>API reference</h2>
-    <p class="section-intro">All calls target <code>{baseUrl}</code> (the FHIRBridge Base URL we gave you), anonymous — gated instead on the workflow's public-launch opt-in, which we've already enabled for the Workflow Id we gave you.</p>
+    <h2><span class="num">04</span>API reference (direct calls)</h2>
+    <p class="section-intro">All calls target <code>{baseUrl}</code> (the FHIRBridge Base URL from section 1.1), anonymous — gated instead on the workflow's public-launch opt-in, which we've already enabled for the Workflow Id we gave you.</p>
     <div class="table-scroll">
       <table class="config-table">
         <tr><th>Call</th><th>Purpose</th><th>Key request fields</th><th>Key response fields</th></tr>
@@ -437,10 +894,10 @@
   </section>
 
   <section id="code">
-    <h2><span class="num">04</span>Code samples</h2>
-    <p class="section-intro">Two sides to implement: a small <strong>backend</strong> endpoint that hands your frontend the three values we gave you, and the <strong>frontend</strong> logic that drives the browser flow against FHIRBridge using them.</p>
+    <h2><span class="num">05</span>Code samples (direct calls)</h2>
+    <p class="section-intro">Two sides to implement: a small <strong>backend</strong> endpoint that hands your frontend the three values from section 1.1, and the <strong>frontend</strong> logic that drives the browser flow against FHIRBridge using them.</p>
 
-    <h3 id="code-backend">4.1 Backend — expose the provided configuration <span class="pill pill-backend">ASP.NET Core</span></h3>
+    <h3 id="code-backend">5.1 Backend — expose the provided configuration <span class="pill pill-backend">ASP.NET Core</span></h3>
     <p class="section-intro">Store the three values we gave you as configuration, and expose them to your own frontend with a simple read-only endpoint. No database table and no settings-management UI are needed — these values don't change unless we tell you they've rotated.</p>
     <div class="code-label"><span>appsettings.json</span><button class="copy-btn" data-copy-target="code-backend-config" type="button">Copy</button></div>
     <pre id="code-backend-config">{
@@ -452,18 +909,18 @@
 }</pre>
     <div class="code-label"><span>Program.cs</span><button class="copy-btn" data-copy-target="code-backend" type="button">Copy</button></div>
     <pre id="code-backend"><span class="c">// Strongly-typed options bound straight from configuration — the three values FHIRBridge gave you</span>
-<span class="k">public class</span> <span class="f">AthenaOptions</span>
+<span class="k">public class</span> <span class="f">EhrOptions</span>
 {
     <span class="k">public string</span> WorkflowId { <span class="k">get; set;</span> } = <span class="s">""</span>;
     <span class="k">public string</span> BaseUrl { <span class="k">get; set;</span> } = <span class="s">""</span>;
     <span class="k">public string</span> EhrEndpointId { <span class="k">get; set;</span> } = <span class="s">""</span>;
 }
 
-builder.Services.Configure&lt;AthenaOptions&gt;(builder.Configuration.GetSection(<span class="s">"Athena"</span>));
+builder.Services.Configure&lt;EhrOptions&gt;(builder.Configuration.GetSection(<span class="s">"Athena"</span>));
 
 <span class="c">// Gated by your own app's login (not FHIRBridge's) — hands the three fixed values to your</span>
 <span class="c">// frontend so it can drive the flow. No write endpoint: these values never change from inside your app.</span>
-app.MapGet(<span class="s">"/api/athena-config"</span>, (IOptions&lt;AthenaOptions&gt; options) =>
+app.MapGet(<span class="s">"/api/ehr-config"</span>, (IOptions&lt;EhrOptions&gt; options) =>
 {
     <span class="k">var</span> athena = options.Value;
     <span class="k">return</span> Results.Ok(<span class="k">new</span> {
@@ -473,17 +930,17 @@ app.MapGet(<span class="s">"/api/athena-config"</span>, (IOptions&lt;AthenaOptio
     });
 });</pre>
 
-    <h3 id="code-frontend">4.2 Frontend — drive the launch against FHIRBridge <span class="pill pill-frontend">TypeScript</span></h3>
+    <h3 id="code-frontend">5.2 Frontend — drive the launch against FHIRBridge <span class="pill pill-frontend">TypeScript</span></h3>
     <p class="section-intro">Plain <code>fetch</code> calls — the shape is the same for any HTTP client or frontend framework.</p>
     <div class="code-label"><span>connect-get-data.ts</span><button class="copy-btn" data-copy-target="code-frontend-block" type="button">Copy</button></div>
-    <pre id="code-frontend-block"><span class="c">// Fetched once from your own backend's /api/athena-config</span>
-<span class="k">const</span> config = <span class="k">await</span> fetch(<span class="s">'/api/athena-config'</span>).then(r => r.json());
+    <pre id="code-frontend-block"><span class="c">// Fetched once from your own backend's /api/ehr-config</span>
+<span class="k">const</span> config = <span class="k">await</span> fetch(<span class="s">'/api/ehr-config'</span>).then(r => r.json());
 <span class="k">const</span> FHIRBRIDGE_BASE_URL = config.baseUrl;
 <span class="k">const</span> WORKFLOW_ID = config.workflowId;
 <span class="k">const</span> EHR_ENDPOINT_ID = config.ehrEndpointId;
 
 <span class="c">// Persisted across the full-page redirect to athenahealth and back</span>
-<span class="k">let</span> sessionId = localStorage.getItem(<span class="s">'athenaSessionId'</span>) ?? undefined;
+<span class="k">let</span> sessionId = localStorage.getItem(<span class="s">'ehrSessionId'</span>) ?? undefined;
 <span class="k">let</span> patientId: string | null = null;
 
 <span class="k">async function</span> <span class="f">connectGetData</span>() {
@@ -520,7 +977,7 @@ app.MapGet(<span class="s">"/api/athena-config"</span>, (IOptions&lt;AthenaOptio
       <span class="s">`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}/public-patient-standalone-url?${mintParams}`</span>,
     ).then(r => r.json());
 
-    localStorage.setItem(<span class="s">'athenaSessionId'</span>, mint.sessionId); <span class="c">// persist BEFORE navigating away</span>
+    localStorage.setItem(<span class="s">'ehrSessionId'</span>, mint.sessionId); <span class="c">// persist BEFORE navigating away</span>
     window.location.href = mint.launchUrl;
     <span class="k">return</span>;
   }
@@ -572,9 +1029,9 @@ document.getElementById(<span class="s">'connect-btn'</span>)?.addEventListener(
   handleOAuthReturn();
 }</pre>
 
-    <h3 id="code-vanilla">4.3 Minimal, framework-free HTML page <span class="pill pill-hidden">no build step</span></h3>
+    <h3 id="code-vanilla">5.3 Minimal, framework-free HTML page <span class="pill pill-hidden">no build step</span></h3>
     <p class="section-intro">The same flow with no build step — useful as a smoke test against your FHIRBridge instance before wiring it into your real application.</p>
-    <div class="code-label"><span>athena-connect.html</span><button class="copy-btn" data-copy-target="code-vanilla-block" type="button">Copy</button></div>
+    <div class="code-label"><span>ehr-connect.html</span><button class="copy-btn" data-copy-target="code-vanilla-block" type="button">Copy</button></div>
     <pre id="code-vanilla-block">&lt;<span class="k">button</span> id=<span class="s">"connect-btn"</span>&gt;Connect&lt;/<span class="k">button</span>&gt;
 &lt;<span class="k">pre</span> id=<span class="s">"out"</span>&gt;&lt;/<span class="k">pre</span>&gt;
 &lt;<span class="k">script</span>&gt;
@@ -583,7 +1040,7 @@ document.getElementById(<span class="s">'connect-btn'</span>)?.addEventListener(
   <span class="k">const</span> WORKFLOW_ID = <span class="s">'00000000-0000-0000-0000-000000000000'</span>;
   <span class="k">const</span> EHR_ENDPOINT_ID = <span class="s">'00000000-0000-0000-0000-000000000000'</span>;
 
-  <span class="k">let</span> sessionId = localStorage.getItem(<span class="s">'athenaSessionId'</span>) || undefined;
+  <span class="k">let</span> sessionId = localStorage.getItem(<span class="s">'ehrSessionId'</span>) || undefined;
 
   <span class="k">async function</span> <span class="f">connect</span>() {
     <span class="k">const</span> status = <span class="k">new</span> URLSearchParams();
@@ -599,7 +1056,7 @@ document.getElementById(<span class="s">'connect-btn'</span>)?.addEventListener(
       <span class="k">const</span> { launchUrl, sessionId: newId } = <span class="k">await</span> fetch(
         <span class="s">`${FHIRBRIDGE_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}/public-patient-standalone-url?${mint}`</span>,
       ).then(r =&gt; r.json());
-      localStorage.setItem(<span class="s">'athenaSessionId'</span>, newId);
+      localStorage.setItem(<span class="s">'ehrSessionId'</span>, newId);
       location.href = launchUrl; <span class="c">// full-page redirect to athenahealth's login</span>
       <span class="k">return</span>;
     }
@@ -626,31 +1083,37 @@ document.getElementById(<span class="s">'connect-btn'</span>)?.addEventListener(
   </section>
 
   <section id="generalize">
-    <h2><span class="num">05</span>How this generalizes to Epic and eCW</h2>
+    <h2><span class="num">06</span>Differences by vendor</h2>
     <p class="section-intro">
-      The same Workflow Id / Base URL / EhrEndpoint Id triple, and the same set of API calls, work for Epic/MyChart and eCW — only the values themselves differ. If your integration needs more than one vendor, we provision each one the same way and hand you a separate triple of values per vendor.
+      The same API client, launch-ticket call and return handling work for athenahealth, Epic/MyChart and eCW alike — only the source connection, the Workflow Id and the EhrEndpoint Id differ (one API client serves every workflow). If your integration needs more than one vendor, you set up each one the same way and keep a separate Workflow Id / EhrEndpoint Id pair per vendor. For Epic/MyChart, list the hospitals your patient can choose from with <code>POST {baseUrl}/api/v1/workflows/external/ehr-endpoints</code> (body: <code>client_id</code>, <code>client_secret</code>, <code>return_url</code>) from your server, show the names, and send the chosen <code>code</code> as <code>ehr_endpoint_code</code>.
     </p>
 
     <div class="vendor-grid">
       <div class="vendor-card">
         <h4>Epic / MyChart</h4>
         <dl>
-          <dt>EhrEndpoint</dt><dd>picked per hospital</dd>
+          <dt>EhrEndpoint</dt><dd>one per hospital you add; the patient picks</dd>
           <dt>Hospital picker</dt><dd>Yes — many hospitals in a directory</dd>
+          <dt>Register the callback in</dt><dd>Epic on FHIR (fhir.epic.com)</dd>
+          <dt>Run-time overrides</dt><dd>token endpoint, client id, key id, JWKS URL</dd>
         </dl>
       </div>
       <div class="vendor-card">
         <h4>athenahealth</h4>
         <dl>
-          <dt>EhrEndpoint</dt><dd>one fixed id we provide</dd>
+          <dt>EhrEndpoint</dt><dd>one endpoint you add</dd>
           <dt>Hospital picker</dt><dd>No — one sandbox/production endpoint</dd>
+          <dt>Register the callback in</dt><dd>athenahealth developer portal</dd>
+          <dt>Run-time overrides</dt><dd>practice id</dd>
         </dl>
       </div>
       <div class="vendor-card">
         <h4>eCW (Healow)</h4>
         <dl>
-          <dt>EhrEndpoint</dt><dd>one fixed id we provide</dd>
+          <dt>EhrEndpoint</dt><dd>one endpoint you add</dd>
           <dt>Hospital picker</dt><dd>No — one practice endpoint</dd>
+          <dt>Register the callback in</dt><dd>eClinicalWorks developer portal</dd>
+          <dt>Run-time overrides</dt><dd>token endpoint</dd>
         </dl>
       </div>
     </div>

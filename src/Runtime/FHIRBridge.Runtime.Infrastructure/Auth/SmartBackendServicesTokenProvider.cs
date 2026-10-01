@@ -125,7 +125,8 @@ public sealed class SmartBackendServicesTokenProvider : IFhirAccessTokenProvider
 
     private static string BuildCacheKey(FhirSourceConfiguration source)
     {
-        return $"fhir-token:epic|{source.TokenEndpoint}|{source.ClientId}|{ResolveScopeString(source)}";
+        var baseKey = $"fhir-token:epic|{source.TokenEndpoint}|{source.ClientId}|{ResolveScopeString(source)}";
+        return source.EhrEndpointId is { } ehrEndpointId ? $"{baseKey}|ehr:{ehrEndpointId:N}" : baseKey;
     }
 
     /// <summary>

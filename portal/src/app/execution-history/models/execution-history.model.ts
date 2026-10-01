@@ -26,6 +26,11 @@ export interface RouteExecution {
   durationMs: number | null;
   triggeredBy: string | null;
   triggerType: string | null;
+  /** "Default" (the configuration saved with the workflow) or the name of the EHR Endpoint the run was started against. */
+  ehrEndpoint?: string | null;
+  /** Group ID / search criteria supplied for this run via Execute V2; null = the saved ones were used. */
+  runGroupId?: string | null;
+  runSearchCriteria?: string | null;
   nodeRunCount: number;
   errorMessage: string | null;
   workflowDefinitionVersion: number;

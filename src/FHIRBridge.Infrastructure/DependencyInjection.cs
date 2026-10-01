@@ -344,6 +344,7 @@ public static class DependencyInjection
             // RankedWorkflowOrchestrator.ResumeAfterBulkExportAsync (bulk export, in the Worker).
             services.AddSingleton<FHIRBridge.Runtime.Application.Workflows.EhrDataDumpWriter>();
             services.AddScoped<FHIRBridge.Runtime.Application.Workflows.Storage.IBulkExportPauseRecorder, FHIRBridge.Infrastructure.Workflows.BulkExportPauseRecorder>();
+            services.AddScoped<FHIRBridge.Runtime.Application.Abstractions.Sources.IEhrEndpointOverrideProvider, FHIRBridge.Infrastructure.Sources.EhrEndpointOverrideProvider>();
             services.AddScoped<IPipelineRunRouteExecutionRepository, EfPipelineRunRouteExecutionRepository>();
             services.AddScoped<EfExecutionResourceHistoryRecorder>();
             services.AddScoped<IExecutionResourceHistoryRecorder>(sp => sp.GetRequiredService<EfExecutionResourceHistoryRecorder>());

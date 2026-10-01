@@ -97,6 +97,44 @@
         </div>
       </div>
 
+      @if (showTokenEndpoint || showPracticeId) {
+        <p class="section-hint">
+          <strong>Run-time overrides</strong> — used only when a workflow run is started against this endpoint. They replace the
+          workflow's saved source connection for that run; leave a field blank to keep the source connection's value.
+        </p>
+
+        @if (showTokenEndpoint) {
+          <div class="form-field form-field--full">
+            <label for="ehr-tokenEndpoint">Token Endpoint</label>
+            <input id="ehr-tokenEndpoint" formControlName="tokenEndpoint" placeholder="https://…/oauth2/token" autocomplete="off" />
+          </div>
+        }
+
+        @if (showEpicRegistration) {
+          <div class="form-row">
+            <div class="form-field">
+              <label for="ehr-clientId">Client Id</label>
+              <input id="ehr-clientId" formControlName="clientId" autocomplete="off" />
+            </div>
+            <div class="form-field">
+              <label for="ehr-keyId">Key Id</label>
+              <input id="ehr-keyId" formControlName="keyId" autocomplete="off" />
+            </div>
+          </div>
+          <div class="form-field form-field--full">
+            <label for="ehr-jwksUrl">JWKS URL</label>
+            <input id="ehr-jwksUrl" formControlName="jwksUrl" placeholder="https://…/.well-known/jwks.json" autocomplete="off" />
+          </div>
+        }
+
+        @if (showPracticeId) {
+          <div class="form-field form-field--full">
+            <label for="ehr-practiceId">Practice Id</label>
+            <input id="ehr-practiceId" formControlName="practiceId" placeholder="e.g. 195900" autocomplete="off" />
+          </div>
+        }
+      }
+
     </form>
   </mat-dialog-content>
 

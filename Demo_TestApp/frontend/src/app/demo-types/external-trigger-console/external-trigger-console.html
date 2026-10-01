@@ -42,7 +42,7 @@
 
     <label class="remember-row">
       <input type="checkbox" [ngModel]="rememberCredentials()" (ngModelChange)="onRememberChange($event)" />
-      Remember these credentials in this browser
+      Remember the URL and Client ID in this browser (the secret is never stored)
     </label>
 
     @if (listError()) {
@@ -56,11 +56,12 @@
     @if (workflows().length > 0) {
       <label class="field field--full">
         Workflow
-        <select [ngModel]="selectedWorkflowId()" (ngModelChange)="selectedWorkflowId.set($event)">
-          @for (w of workflows(); track w.id) {
-            <option [value]="w.id">{{ w.name }}</option>
-          }
-        </select>
+        <app-searchable-select
+          [options]="workflowOptions()"
+          [value]="selectedWorkflowId()"
+          (valueChange)="selectedWorkflowId.set($event)"
+          placeholder="Select a workflow"
+        />
       </label>
     }
   </section>
@@ -75,16 +76,27 @@
       <label class="field">
         EHR Endpoint Code (optional)
         @if (ehrEndpoints().length > 0) {
-          <select [ngModel]="ehrEndpointCode()" (ngModelChange)="ehrEndpointCode.set($event)">
-            <option value="">— none —</option>
-            @for (e of filteredEhrEndpoints(); track e.code) {
-              <option [value]="e.code">{{ e.name }} ({{ e.vendor }})</option>
-            }
-          </select>
+          <app-searchable-select
+            [options]="ehrEndpointOptions()"
+            [value]="ehrEndpointCode()"
+            (valueChange)="ehrEndpointCode.set($event)"
+            emptyLabel="— none (workflow default) —"
+            placeholder="— none (workflow default) —"
+          />
         } @else {
           <input type="text" [ngModel]="ehrEndpointCode()" (ngModelChange)="ehrEndpointCode.set($event)"
             placeholder="Click List Workflows first to load the dropdown" />
         }
+      </label>
+      <label class="field">
+        Group ID (optional — bulk export)
+        <input type="text" [ngModel]="groupId()" (ngModelChange)="groupId.set($event)"
+          placeholder="Blank = the workflow's saved Group ID" />
+      </label>
+      <label class="field">
+        Search criteria (optional)
+        <input type="text" [ngModel]="searchCriteria()" (ngModelChange)="searchCriteria.set($event)"
+          placeholder="e.g. identifier=203713,203711 — blank = the workflow's saved criteria" />
       </label>
       <label class="field">
         Mode

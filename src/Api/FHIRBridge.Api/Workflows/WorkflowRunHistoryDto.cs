@@ -30,7 +30,14 @@ public sealed record WorkflowRunHistoryDto(
     IReadOnlyList<string>? ResourceTypes = null,
     /// <summary>The audience (<see cref="FHIRBridge.SharedKernel.Enums.ApplicationType"/>) of the workflow's
     /// source connection, so this screen's Audience filter matches the Workflows list's.</summary>
-    string? ApplicationType = null)
+    string? ApplicationType = null,
+    /// <summary>"Default" when the run used the configuration saved with the workflow; otherwise the name of the EHR
+    /// Endpoint the run was explicitly started against.</summary>
+    string? EhrEndpoint = null,
+    /// <summary>Group ID supplied for this run via Execute V2; null = the saved one.</summary>
+    string? RunGroupId = null,
+    /// <summary>Search criteria supplied for this run via Execute V2; null = the saved ones.</summary>
+    string? RunSearchCriteria = null)
 {
     public long? DurationMs => CompletedAt.HasValue
         ? (long)(CompletedAt.Value - StartedAt).TotalMilliseconds

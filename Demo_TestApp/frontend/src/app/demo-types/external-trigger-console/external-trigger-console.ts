@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { SearchableOption, SearchableSelectComponent } from '../../core/searchable-select/searchable-select.component';
 
 const BACKEND_BASE_URL = environment.healthAppBase;
 
@@ -68,7 +69,7 @@ function loadStoredCredentials(): StoredCredentials | null {
 @Component({
   selector: 'app-external-trigger-console',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SearchableSelectComponent],
   templateUrl: './external-trigger-console.html',
   styleUrl: './external-trigger-console.scss',
 })
@@ -78,6 +79,9 @@ export class ExternalTriggerConsoleComponent implements OnInit {
   protected readonly clientSecret = signal('');
   protected readonly rememberCredentials = signal(false);
   protected readonly ehrEndpointCode = signal('');
+  /** Per-run Group ID / search criteria; blank keeps the workflow's saved values. */
+  protected readonly groupId = signal('');
+  protected readonly searchCriteria = signal('');
   protected readonly mode = signal<'async' | 'sync'>('async');
   /** Where the run happens: a new window (this console stays put) or this same window (replaced by the run page). */
   protected readonly windowMode = signal<'new' | 'same'>('new');
@@ -105,6 +109,12 @@ export class ExternalTriggerConsoleComponent implements OnInit {
     const matching = all.filter(e => e.vendor.toLowerCase() === vendor.toLowerCase());
     return matching.length > 0 ? matching : all;
   });
+
+  protected readonly workflowOptions = computed<SearchableOption[]>(() =>
+    this.workflows().map(w => ({ value: w.id, label: w.name, hint: w.sourceSystemType ?? undefined })));
+
+  protected readonly ehrEndpointOptions = computed<SearchableOption[]>(() =>
+    this.filteredEhrEndpoints().map(e => ({ value: e.code, label: e.name, hint: e.vendor })));
 
   // Populated from ?status=&workflowRunId=&error= on the return leg of the redirect round trip.
   protected readonly returnedStatus = signal<string | null>(null);
@@ -183,6 +193,8 @@ export class ExternalTriggerConsoleComponent implements OnInit {
           workflowId: this.selectedWorkflowId(),
           returnUrl: this.returnUrl().trim(),
           ehrEndpointCode: this.ehrEndpointCode(),
+          groupId: this.groupId().trim(),
+          searchCriteria: this.searchCriteria().trim(),
           mode: this.mode(),
           windowMode: this.windowMode(),
           closeOnComplete: this.closeOnComplete() ? 'true' : 'false',

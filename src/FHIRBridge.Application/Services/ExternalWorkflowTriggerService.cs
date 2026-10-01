@@ -99,6 +99,7 @@ public sealed class ExternalWorkflowTriggerService : IExternalWorkflowTriggerSer
         }
 
         await LogAttemptAsync(clientId, success: true, null, cancellationToken);
+        await StampLastUsedAsync(client, cancellationToken);
         return (new ExternalTriggerValidationResult(client.Id, returnUrl), null, null);
     }
 
@@ -119,7 +120,23 @@ public sealed class ExternalWorkflowTriggerService : IExternalWorkflowTriggerSer
         }
 
         await LogAttemptAsync(clientId, success: true, null, cancellationToken);
+        await StampLastUsedAsync(client, cancellationToken);
         return client.Id;
+    }
+
+    /// <summary>API Clients shows "Last used"; a launch-ticket or external-trigger call counts as use just like a
+    /// token request does. Best effort - a failure to record it must never fail the caller's request.</summary>
+    private async Task StampLastUsedAsync(ApiClient client, CancellationToken cancellationToken)
+    {
+        try
+        {
+            client.RecordUsed(DateTime.UtcNow);
+            await _repository.UpdateAsync(client, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Intentionally swallowed: bookkeeping only.
+        }
     }
 
     /// <summary>Soft check: a MISSING Referer is not itself a failure (real browsers often omit it for privacy

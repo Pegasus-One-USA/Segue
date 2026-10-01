@@ -507,6 +507,7 @@ export const WORKFLOW_ENDPOINTS = {
   create:          `${API_V1_BASE}/workflows`,
   byId:            (id: string) => `${API_V1_BASE}/workflows/${id}`,
   run:             (id: string) => `${API_V1_BASE}/workflows/${id}/run`,
+  runOptions:      (id: string) => `${API_V1_BASE}/workflows/${id}/run-options`,
   runs:            (id: string) => `${API_V1_BASE}/workflows/${id}/runs`,
   activate:        (id: string) => `${API_V1_BASE}/workflows/${id}/activate`,
   deactivate:      (id: string) => `${API_V1_BASE}/workflows/${id}/deactivate`,

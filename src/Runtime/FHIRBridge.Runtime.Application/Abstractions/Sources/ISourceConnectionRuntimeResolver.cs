@@ -17,6 +17,17 @@ public interface ISourceConnectionRuntimeResolver
         string? patientSearchCriteria = null,
         string? callerId = null);
 
+    /// <summary>Same as <see cref="ResolveAsync"/>, but with this run's Group ID / Search Criteria replacing the
+    /// connection's saved ones ("Execute V2"). Kept as a separate method so the ordinary resolve call is untouched.</summary>
+    Task<FhirSourceConfiguration?> ResolveWithRunOverridesAsync(
+        Guid sourceConnectionId,
+        string? searchParameters,
+        string? targetPatientId,
+        CancellationToken cancellationToken,
+        string? patientSearchCriteria,
+        string? callerId,
+        RunSourceOverrides runOverrides);
+
     /// <summary>Discards any cached interactive token for this source connection (both the given patient's slot, if
     /// any, and the unscoped "default" slot) — a no-op for non-interactive (Backend Services) sources, since those
     /// mint tokens on demand rather than caching one. Returns without effect if the connection doesn't exist.</summary>
