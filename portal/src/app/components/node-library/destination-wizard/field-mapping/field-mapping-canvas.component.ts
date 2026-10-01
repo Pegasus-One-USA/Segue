@@ -948,7 +948,13 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   /** The mapping list's empty message while no table has been added yet — names whichever add-table control
    *  the slot above actually shows (same branches as the template's .fm-add-table-slot), so it never points
    *  at a button that isn't there. */
+  /** A host's own wording for that message, when its way to add a table isn't one of this canvas's controls
+   *  (the Settings mapping-profile screen's Table / File name box). Null uses the wording below. */
+  readonly noTableHintOverride = input<string | null>(null);
+
   readonly noTableHint = computed(() => {
+    const override = this.noTableHintOverride();
+    if (override) return override;
     const then = ' Then you can add mappings here.';
     if (this.destType() === 'mongo') {
       return 'No collection yet — use "+ Add a collection…" above to select an existing collection or create a new one.' + then;

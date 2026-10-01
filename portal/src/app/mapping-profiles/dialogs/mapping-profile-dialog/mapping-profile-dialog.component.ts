@@ -12,7 +12,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { DIALOG_DATA, DialogRef } from '../../../core/services/dialog.service';
 import { MappingRow } from '../../../components/node-library/destination-wizard/mapping-profile-form.component';
-import { checkColumnTypeCompatibility, isSqlFamilyDestType } from '../../../components/node-library/destination-wizard/field-mapping/field-mapping-model';
+import { SchemaLoadState, checkColumnTypeCompatibility, isSqlFamilyDestType } from '../../../components/node-library/destination-wizard/field-mapping/field-mapping-model';
 import { MappingProfileCanvasComponent } from './mapping-profile-canvas/mapping-profile-canvas.component';
 import { MappingProfileService } from '../../services/mapping-profile.service';
 import { DestinationSchemaService, DestinationTable } from '../../../services/destination-schema.service';
@@ -158,7 +158,9 @@ export class MappingProfileDialogComponent {
     resourceType: [this.data.mappingProfile?.resourceType ?? '', [Validators.required]],
     sourceConnectionId: [this.data.mappingProfile?.sourceConnectionId ?? '', [Validators.required]],
     destinationId: [this.data.mappingProfile?.destinationId ?? '', [Validators.required]],
-    destinationObject: [this.data.mappingProfile?.destinationObject ?? '', [Validators.required]],
+    // Not shown and not required any more: the canvas names the target (its table/collection picker, or its own
+    // Table / File name box when it has no picker). Still seeded on edit, as the fallback save() uses.
+    destinationObject: [this.data.mappingProfile?.destinationObject ?? ''],
     isEnabled: [this.data.mappingProfile?.isEnabled ?? true],
   });
 
@@ -210,6 +212,9 @@ export class MappingProfileDialogComponent {
   // even though B is the current selection — an intermittent, network-timing-dependent race, not a logic bug
   // tied to any one destination, which is exactly why it only ever showed up "sometimes".
   private _schemaRequestSeq = 0;
+  /** Whether the table list above is still loading, loaded, or failed — lets the canvas tell "no tables" apart
+   *  from "not loaded yet", so it doesn't offer a type-the-table box that a moment later disappears. */
+  readonly schemaLoadState = signal<SchemaLoadState>('idle');
 
   readonly initialRows = computed<MappingRow[]>(() => {
     const profile = this.data.mappingProfile;
@@ -265,15 +270,31 @@ export class MappingProfileDialogComponent {
     const seq = ++this._schemaRequestSeq;
     if (!destinationId) {
       this.sqlTables.set([]);
+      this.schemaLoadState.set('idle');
       return;
     }
+    this.sqlTables.set([]);
+    this.schemaLoadState.set('loading');
     this.schemaSvc.getSchema(destinationId).subscribe({
       // A newer call (a later destination pick) started while this one was still in flight — that call owns
       // sqlTables() now, whether or not it has resolved yet; applying this stale response would silently
       // revert it to the wrong destination's tables.
-      next: res => { if (seq === this._schemaRequestSeq) this.sqlTables.set(res.tables); },
-      error: () => { if (seq === this._schemaRequestSeq) this.sqlTables.set([]); },
+      next: res => {
+        if (seq !== this._schemaRequestSeq) return;
+        this.sqlTables.set(res.tables);
+        this.schemaLoadState.set('loaded');
+      },
+      error: () => {
+        if (seq !== this._schemaRequestSeq) return;
+        this.sqlTables.set([]);
+        this.schemaLoadState.set('failed');
+      },
     });
+  }
+
+  /** The canvas's Retry, shown when the table list failed to load. */
+  retrySchemaLoad(): void {
+    this._loadSchemaFor(this.metaForm.controls.destinationId.value);
   }
 
   // The mapping canvas's own rows aren't individually dirty-tracked (each row's fields can change
@@ -321,12 +342,18 @@ export class MappingProfileDialogComponent {
     // sqlTables()) is the authoritative pick — it can differ from whatever is still typed in the Destination
     // Object field above if the user picked a table there instead of editing that field directly.
     const pickedTarget = this.mappingForm()?.targetByResource()[v.resourceType!];
+    const destinationObject = (pickedTarget || v.destinationObject || '').trim();
+    if (!destinationObject) {
+      // The backend rejects an empty one; say so here, where the user can still fix it.
+      this.errorMessage.set('Choose where this mapping writes to first — a table, collection or file name.');
+      return;
+    }
     const request: CreateMappingProfileRequest = {
       name: v.name!,
       resourceType: v.resourceType!,
       sourceConnectionId: v.sourceConnectionId!,
       destinationId: v.destinationId!,
-      destinationObject: pickedTarget || v.destinationObject!,
+      destinationObject,
       fields: rows.map(toMappingFieldDto),
     };
 
