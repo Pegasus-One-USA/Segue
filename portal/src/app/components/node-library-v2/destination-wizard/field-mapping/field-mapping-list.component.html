@@ -337,7 +337,11 @@
             <tr><td colspan="7" class="fm-list-empty">No mappings match "{{ searchQuery() }}".</td></tr>
           }
           @if (!visibleRows().length && !draft()) {
-            <tr><td colspan="7" class="fm-list-empty">No mappings yet — drag a field onto a column, or use "+ Add mapping" below.</td></tr>
+            @if (hasTargetTable()) {
+              <tr><td colspan="7" class="fm-list-empty">No mappings yet — drag a field onto a column, or use "+ Add mapping" below.</td></tr>
+            } @else {
+              <tr><td colspan="7" class="fm-list-empty">{{ noTableHint() }}</td></tr>
+            }
           }
         </tbody>
       </table>
@@ -417,7 +421,7 @@
             <button type="button" class="fm-draft-submit" [disabled]="!canSubmitDraft()" (click)="submitDraft()">Add mapping</button>
           </div>
         </div>
-      } @else {
+      } @else if (hasTargetTable()) {
         <button type="button" class="fm-list-add" (click)="startDraft()">+ Add mapping</button>
       }
     </div>

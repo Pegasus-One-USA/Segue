@@ -961,6 +961,31 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     return state === 'loading' || state === 'failed' || state === 'unavailable';
   }
 
+  /** The mapping list's empty message while no table has been added yet — names whichever add-table control
+   *  the slot above actually shows (same branches as the template's .fm-add-table-slot), so it never points
+   *  at a button that isn't there. */
+  readonly noTableHint = computed(() => {
+    const then = ' Then you can add mappings here.';
+    if (this.destType() === 'mongo') {
+      return 'No collection yet — use "+ Add a collection…" above to select an existing collection or create a new one.' + then;
+    }
+    if (this.destType() !== 'csv' && this.showAddTablePicker()) {
+      return this.schemaAuthoringEnabled()
+        ? 'No table yet — use "+ Add a table from your database…" above to select an existing table or create a new one.' + then
+        : 'No table yet — use "+ Add a table from your database…" above to select an existing table.' + then;
+    }
+    if (this.destType() !== 'csv' && this.showSchemaLoadNotice()) {
+      return this.schemaLoadState() === 'loading'
+        ? "No table yet — once your database's tables have loaded, add one from the panel above." + then
+        : "No table yet — your database's tables couldn't be loaded. Use Retry above"
+          + (this.schemaAuthoringEnabled() ? ', or "+ Create a new table…".' : '.') + then;
+    }
+    if (this.destType() !== 'csv' && this.schemaAuthoringEnabled()) {
+      return 'No table yet — use "+ Create a new table…" above to create one.' + then;
+    }
+    return 'No table yet — this destination has no table to map to.';
+  });
+
   /** availableTablesToAdd() is a plain function input, not itself a signal, so this can't be a
    *  computed() — it just re-filters on every call, same as tablesForResourceFn/columnsForResourceTableFn
    *  above; the table lists involved are small enough that this is cheap per change-detection pass. */
