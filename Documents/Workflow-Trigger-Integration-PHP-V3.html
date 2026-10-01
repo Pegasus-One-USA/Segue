@@ -50,13 +50,13 @@
 <body>
 <header><div class="in">
   <h1>Trigger a FHIRBridge workflow and receive the data at your API</h1>
-  <p>You add one small piece of code to your system. When it runs, FHIRBridge fetches the data from the EHR (Epic, athenahealth or eCW) and sends it to <strong>your API</strong>. This page says what we give you, what we need from you, and the code to copy. Section 2 shows how it matches the Seque integration document you already wrote (ChartChat). &nbsp;<strong>Version 3.1</strong></p>
+  <p>You add one small piece of code to your system. When it runs, FHIRBridge fetches the data from the EHR (Epic, athenahealth or eCW) and sends it to <strong>your API</strong>. This page says what we give you, what we need from you, and the code to copy. Section 2 shows exactly what we send to your <code>seque-ingest</code> endpoint and how it compares with your Seque integration document (ChartChat). &nbsp;<strong>Version 3.2</strong></p>
 </div></header>
 
 <div class="wrap">
 <nav class="toc"><ol>
   <li><a href="#summary">The idea in one minute</a></li>
-  <li><a href="#mapping">How this matches your Seque document</a></li>
+  <li><a href="#mapping">What we send to your API (and your Seque document)</a></li>
   <li><a href="#give">What we give you</a></li>
   <li><a href="#need">What we need from you</a></li>
   <li><a href="#build">What you build (PHP)</a></li>
@@ -74,31 +74,69 @@
 </ol>
 <div class="callout"><strong>You do not receive the data in the trigger call.</strong>The trigger only starts the work. The data arrives afterwards, at your API, from FHIRBridge.</div>
 
-<h2 id="mapping"><span class="n">2</span>How this matches your Seque integration document</h2>
-<p>Your document (<em>Third-Party EHR Seque Integration</em>) describes a push model: the patient signs in to Epic MyChart on the Seque's side, the Seque fetches the data and pushes it to your <code>seque-ingest</code> endpoint. <strong>FHIRBridge is that Seque.</strong> Nothing changes on your ingest side; the table shows what each of your terms becomes.</p>
-<p><span class="tag us">&#10003;</span> works today &nbsp; <span class="tag warn">&#9670;</span> being finished on our side before go-live &mdash; we will confirm each one in writing.</p>
+<h2 id="mapping"><span class="n">2</span>What we send to your API (compared with your Seque document)</h2>
+<p>Your document describes a push model: the patient signs in to the EHR on the Seque's side, the Seque fetches the data and pushes it to your <code>seque-ingest</code> endpoint. <strong>FHIRBridge is that Seque.</strong> The workflow we set up for you pushes to the endpoint you gave us:</p>
+<pre><code>POST https://ccdemo-api.pegasusone.com/fhir/ehr-import/seque-ingest
+x-Seque-secret: &lt;the secret you give us&gt;
+Content-Type: application/json</code></pre>
+
+<h3>Exactly what we send</h3>
+<p>One request for each patient. The body has the same shape as the example in your document:</p>
+<div class="lbl"><span>request body</span><button class="copy" data-t="c00">Copy</button></div>
+<pre id="c00"><code>{
+  "token": "8ca4e8cf-2dc8-474d-96e8-8b902c7ad61e",
+  "ehrProvider": "epic",
+  "externalPatientId": "egqBHVfQlt4Bw3XGXoxVxHg3",
+  "bundle": {
+    "resourceType": "Bundle",
+    "type": "searchset",
+    "entry": [
+      {
+        "resource": {
+          "resourceType": "Patient",
+          "id": "egqBHVfQlt4Bw3XGXoxVxHg3",
+          "name": [{ "family": "Smith", "given": ["John"] }],
+          "birthDate": "1980-01-01"
+        }
+      }
+    ]
+  }
+}</code></pre>
 <div class="scroll"><table>
-  <tr><th>In your document</th><th>In FHIRBridge</th><th></th></tr>
-  <tr><td><strong>Seque connect URL</strong> (you add <code>?state=&lt;token&gt;</code>)</td><td>A one-time link, <code>run_url</code>, that your server gets from FHIRBridge for each patient (section 5, Case A). Your <code>Seque-start</code> endpoint asks for it and returns it as <code>authorizeUrl</code>. The link lasts about 90 seconds and works once.</td><td>&#10003;</td></tr>
-  <tr><td><strong><code>state</code> token</strong> you mint and keep in Redis</td><td>You send it as <code>state</code> when you ask for the link. FHIRBridge keeps it with the run and sends it back as <code>token</code> on <em>every</em> push.</td><td><span class="tag warn">&#9670;</span></td></tr>
-  <tr><td><code>POST /fhir/ehr-import/seque-ingest</code></td><td>The <strong>API destination URL</strong> of the workflow. We use exactly the URL you gave: <code>https://ccdemo-api.pegasusone.com/fhir/ehr-import/seque-ingest</code>.</td><td>&#10003;</td></tr>
-  <tr><td>Header <code>x-Seque-secret: &lt;secret&gt;</code></td><td>The destination uses &ldquo;API key in a header&rdquo; with header name <code>x-Seque-secret</code>. You send us the secret value over a secure channel (never by email in plain text); we store it securely.</td><td>&#10003;</td></tr>
-  <tr><td>Body <code>{ token, ehrProvider, externalPatientId, bundle }</code></td><td>FHIRBridge sends exactly this shape: <code>token</code> = your state, <code>ehrProvider</code> = <code>"epic"</code> (fixed per destination), <code>externalPatientId</code> = the Epic patient id, <code>bundle</code> = a FHIR R4 <code>Bundle</code> of type <code>searchset</code> with the raw Epic resources as <code>entry[].resource</code>.</td><td><span class="tag warn">&#9670;</span></td></tr>
-  <tr><td>Resources split across calls &ldquo;by type&rdquo;</td><td>We send one resource type per request (Condition, then Observation, &hellip;), each with the <code>token</code> and the Epic patient id, up to 500 resources or about 4 MB per request.</td><td>&#10003;</td></tr>
-  <tr><td>Supported types: Condition, AllergyIntolerance, MedicationRequest, Observation, Encounter, Immunization, DiagnosticReport, DocumentReference, Procedure, Patient</td><td>These are the resource types we configure the workflow to read. Related <code>Medication</code> resources are fetched and sent with the MedicationRequests.</td><td><span class="tag warn">&#9670;</span></td></tr>
-  <tr><td>DocumentReference attachments inline (<code>attachment.data</code> base64)</td><td>FHIRBridge downloads each attachment with its own Epic access and puts it inline, because you hold no Epic token.</td><td><span class="tag warn">&#9670;</span></td></tr>
-  <tr><td>Answers: <code>200</code> + <code>{ "stored": { ... } }</code>; <code>401</code>, <code>400</code>, <code>409</code>, <code>500</code></td><td>Any <code>2xx</code> counts as success. <code>408</code>, <code>429</code> and <code>5xx</code> are retried up to 3 times; other <code>4xx</code> (your 401 / 400 / 409) are <strong>not</strong> retried and the run is shown as failed in FHIRBridge with a Reference ID. Each request carries an <code>X-Idempotency-Key</code> so you can ignore a repeat.</td><td>&#10003;</td></tr>
-  <tr><td>Redirect / return URL <code>https://ccdemo.pegasusone.com</code> (Member Portal)</td><td>The <code>return_url</code> you send with the link request. We add this address to the allow-list. After the patient has signed in and the run has started, the patient is sent back there with <code>?status=Triggered</code>.</td><td>&#10003;</td></tr>
-  <tr><td>Epic app credentials (client id, redirect URI)</td><td>Registered by us in Epic. We give you the client id and the redirect address <code>&lt;Portal Base URL&gt;/api/v1/oauth/callback</code> for your Epic review process.</td><td>&#10003;</td></tr>
-  <tr><td>Sandbox for an end-to-end test</td><td>We run one full test with you against the Epic sandbox before go-live (section 9).</td><td>&#10003;</td></tr>
+  <tr><th>Field</th><th>What we put in it</th></tr>
+  <tr><td class="k">token</td><td><strong>A new unique ID (GUID) that FHIRBridge generates for each request.</strong> It is <em>not</em> the <code>state</code> value from your start endpoint; see the open point below.</td></tr>
+  <tr><td class="k">ehrProvider</td><td>A fixed text we set in the workflow. Tell us which value you want (for example <code>epic</code>); we can set it per workflow.</td></tr>
+  <tr><td class="k">externalPatientId</td><td>The patient's id in the EHR (the FHIR <code>Patient.id</code>).</td></tr>
+  <tr><td class="k">bundle</td><td>A FHIR R4 <code>Bundle</code> of type <code>searchset</code> with one entry.</td></tr>
+  <tr><td class="k">bundle.entry[0].resource</td><td>The <code>Patient</code> from the EHR, with <code>id</code>, <code>name[0].family</code>, <code>name[0].given[0]</code> and <code>birthDate</code>.</td></tr>
+</table></div>
+
+<div class="callout bad"><strong>Open point &ndash; the <code>token</code></strong>
+Your document says <code>token</code> must be the exact <code>state</code> value you sent, and that a missing or unknown token is rejected with <code>400</code>. <strong>FHIRBridge cannot pass your <code>state</code> back.</strong> It sends its own generated ID, which your endpoint has never issued, so a strict check would reject every push. Before go-live, please decide how your endpoint should link a push to a patient (for example: accept FHIRBridge pushes without checking <code>token</code> against your own store, and match on <code>externalPatientId</code>, or on name and date of birth). Tell us what you choose and we will test it with you.</div>
+
+<h3>Your document, point by point</h3>
+<p><span class="tag us">&#10003;</span> matches &nbsp; <span class="tag warn">!</span> differs from your document &mdash; please review</p>
+<div class="scroll"><table>
+  <tr><th>In your document</th><th>What FHIRBridge does</th><th></th></tr>
+  <tr><td>Endpoint <code>POST /fhir/ehr-import/seque-ingest</code></td><td>We push to exactly that URL.</td><td>&#10003;</td></tr>
+  <tr><td>Header <code>x-Seque-secret</code></td><td>Sent on every request (the workflow uses &ldquo;API key in a header&rdquo; with that header name). You send us the secret value over a secure channel; we store it securely.</td><td>&#10003;</td></tr>
+  <tr><td>Body <code>{ token, ehrProvider, externalPatientId, bundle }</code></td><td>Same four fields, same nesting (see above).</td><td>&#10003;</td></tr>
+  <tr><td><code>token</code> = your <code>state</code>, echoed on every push</td><td>We send our own generated ID instead. Your <code>state</code> cannot be passed through.</td><td><span class="tag warn">!</span></td></tr>
+  <tr><td><code>ehrProvider</code>, default <code>epic</code></td><td>A fixed value we configure. Tell us the value to use.</td><td>&#10003;</td></tr>
+  <tr><td><code>externalPatientId</code></td><td>The EHR patient id, taken from the Patient.</td><td>&#10003;</td></tr>
+  <tr><td>Bundle <code>searchset</code> with raw Epic resources</td><td>A <code>searchset</code> Bundle. <strong>Today it contains only the <code>Patient</code></strong> (id, name, birth date), not the complete raw resource.</td><td><span class="tag warn">!</span></td></tr>
+  <tr><td>Other resource types: Condition, AllergyIntolerance, MedicationRequest, Observation, Encounter, Immunization, DiagnosticReport, DocumentReference, Procedure</td><td>Not sent today. Each type would be added to the workflow separately and arrive as its own requests, with the same four fields. Tell us which types you need.</td><td><span class="tag warn">!</span></td></tr>
+  <tr><td>DocumentReference attachments inline (base64)</td><td>Not applicable until DocumentReference is added; we would have to confirm this separately.</td><td><span class="tag warn">!</span></td></tr>
+  <tr><td>Answers: <code>200</code> + <code>{ "stored": { ... } }</code>; <code>401</code>, <code>400</code>, <code>409</code>, <code>500</code></td><td>Any <code>2xx</code> counts as success. <code>408</code>, <code>429</code> and <code>5xx</code> are retried up to 3 times; other <code>4xx</code> (your 401, 400, 409) are <strong>not</strong> retried and the run shows as failed in FHIRBridge with a Reference ID. Each request carries <code>X-Idempotency-Key</code>, so you can ignore a repeat.</td><td>&#10003;</td></tr>
+  <tr><td>Connect URL, to which you add <code>?state=&lt;token&gt;</code></td><td>A one-time link per patient (about 90 seconds, works once) that your server asks FHIRBridge for (section 5). Your <code>Seque-start</code> returns it as <code>authorizeUrl</code>. It carries no <code>state</code>.</td><td><span class="tag warn">!</span></td></tr>
+  <tr><td>Return URL <code>https://ccdemo.pegasusone.com</code></td><td>We add this address to the allow-list. After sign-in the patient is sent back there with <code>?status=Triggered</code>.</td><td>&#10003;</td></tr>
+  <tr><td>Epic app credentials and redirect URI</td><td>Registered by us in the EHR. We give you the client id and the redirect address <code>&lt;Portal Base URL&gt;/api/v1/oauth/callback</code> for your review process.</td><td>&#10003;</td></tr>
 </table></div>
 
 <h3>Your <code>Seque-start</code> endpoint becomes this</h3>
-<p>Today it returns <code>Seque-connect-url?state=token</code>. Now it asks FHIRBridge for the one-time link instead. Everything else in your flow (the patient is logged in, the token is stored for two hours, the browser is redirected to <code>authorizeUrl</code>) stays the same. Your stack is TypeScript, so here is that endpoint in TypeScript; the PHP version is in section 5.</p>
+<p>It asks FHIRBridge for the one-time link instead of building <code>connect-url?state=token</code>. The rest of your flow (the patient is logged in, the browser is redirected to <code>authorizeUrl</code>) stays the same. Your stack is TypeScript, so here is that endpoint in TypeScript; the PHP version is in section 5.</p>
 <div class="lbl"><span>routes.ts  (Seque-start)</span><button class="copy" data-t="c0">Copy</button></div>
 <pre id="c0"><code>// POST /fhir/ehr-import/Seque-start   (patient is logged in)
-const state = await createBrokerToken({ internalPatientId });      // your existing 2-hour token
-
 const response = await fetch(`${process.env.FHIRBRIDGE_BASE_URL}/api/v1/workflows/external/launch-ticket`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -108,7 +146,6 @@ const response = await fetch(`${process.env.FHIRBRIDGE_BASE_URL}/api/v1/workflow
     workflow_id: process.env.FHIRBRIDGE_WORKFLOW_ID,
     ehr_endpoint_code: process.env.FHIRBRIDGE_EHR_CODE,
     return_url: 'https://ccdemo.pegasusone.com',              // the Member Portal address you gave us
-    state,                                                     // comes back to you as "token" on every push
     mode: 'async',
     window_mode: 'same',
   }),
@@ -117,7 +154,6 @@ if (!response.ok) throw new Error(`FHIRBridge refused: ${response.status}`);
 
 const { run_url } = await response.json();
 return { authorizeUrl: run_url };                              // the browser is redirected here</code></pre>
-<div class="callout warn"><strong>Items marked &#9670;</strong>The <code>state</code> hand-over, the Bundle body and the inline attachments are the parts that go beyond what FHIRBridge sends today. They are scheduled before go-live; the rest of this page already works. Do not build against the Bundle format until we confirm it is ready.</div>
 
 <h2 id="give"><span class="n">3</span>What we give you <span class="tag us">from us</span></h2>
 <p>You get these five values from us. Put them in your server configuration. They never go into a web page, JavaScript or a URL.</p>
@@ -138,7 +174,8 @@ return { authorizeUrl: run_url };                              // the browser is
   <tr><td><strong>Your website address(es)</strong> that start the connection and receive the patient back, for example <code>https://ccdemo.pegasusone.com</code> (whole site) or one exact page.</td><td>We allow-list these addresses; FHIRBridge refuses any other address. <em>We allow-list website addresses (domains), not IP addresses.</em> Use <code>https</code>.</td><td>&#10003; In your document: <code>https://ccdemo.pegasusone.com</code> (Member Portal). Tell us if you also test on other addresses.</td></tr>
   <tr><td><strong>The URL of your API</strong> that receives the data.</td><td>FHIRBridge sends the data there (HTTP POST, JSON).</td><td>&#10003; <code>https://ccdemo-api.pegasusone.com/fhir/ehr-import/seque-ingest</code></td></tr>
   <tr><td><strong>How your API is protected</strong>, and the secret.</td><td>FHIRBridge adds it to every request. We store it securely.</td><td>&#10003; Header <code>x-Seque-secret</code>. <strong>Open:</strong> send us the secret value over a secure channel.</td></tr>
-  <tr><td><strong>The data you expect</strong>: body shape and the resource types.</td><td>We configure the workflow to deliver exactly that.</td><td>&#10003; Body, types and rules are in your document. <strong>Open:</strong> confirm the list in section 2 is complete and that attachments must be inline.</td></tr>
+  <tr><td><strong>The data you expect</strong>: body shape and the resource types.</td><td>We configure the workflow to deliver exactly that.</td><td>&#10003; Body shape is in your document. <strong>Open:</strong> which resource types you need beyond <code>Patient</code>, and the <code>ehrProvider</code> value to use.</td></tr>
+  <tr><td><strong>How your endpoint links a push to a patient</strong> without our <code>state</code> (see the open point in section 2).</td><td>FHIRBridge sends its own generated <code>token</code>.</td><td><strong>Open</strong></td></tr>
   <tr><td><strong>Your own environment for a test</strong> (an ingest endpoint we may call during the go-live test) and a test patient account.</td><td>To run one end-to-end check before go-live.</td><td><strong>Open</strong> (<code>ccdemo</code> looks like a demo environment; tell us if it is the one to use).</td></tr>
   <tr><td>If your API is behind a firewall: say so.</td><td>We then give you the server address FHIRBridge sends from, so you can allow it.</td><td><strong>Open:</strong> is <code>ccdemo-api.pegasusone.com</code> reachable from the internet?</td></tr>
 </table></div>
@@ -316,23 +353,24 @@ echo $res['body'];</code></pre>
 <div class="scroll"><table>
   <tr><th>You will see</th><th>Details</th></tr>
   <tr><td>Method and address</td><td><code>POST</code> to the API URL you gave us.</td></tr>
-  <tr><td>Body</td><td>JSON, by default an array of records: <code>[ {...}, {...} ]</code>. Up to 500 records or about 4 MB per request; bigger runs arrive as several requests. The field names are the ones we agreed.</td></tr>
+  <tr><td>Body</td><td>A JSON object with <code>token</code>, <code>ehrProvider</code>, <code>externalPatientId</code> and <code>bundle</code>, exactly as shown in section 2. One request per patient.</td></tr>
   <tr><td>Headers</td><td><code>Content-Type: application/json</code>, your authentication header, and <code>X-Idempotency-Key</code> (a unique id per request).</td></tr>
   <tr><td>What we expect back</td><td>An HTTP <code>200</code>&ndash;<code>299</code> answer within 30 seconds.</td></tr>
   <tr><td>If your API fails</td><td>We retry up to 3 times with a short pause. Because of retries, the same request can arrive twice. Use <code>X-Idempotency-Key</code> to ignore a request you already processed.</td></tr>
 </table></div>
-<p>A minimal receiving endpoint, as a starting point (adjust the authentication to what we agreed):</p>
+<p>A minimal receiving endpoint, as a starting point (the header and the answer follow your Seque document):</p>
 <div class="lbl"><span>receive.php  (your API)</span><button class="copy" data-t="c7">Copy</button></div>
 <pre id="c7"><code>&lt;?php
 // receive.php  -  the endpoint FHIRBridge pushes the data to
-$expected = 'Bearer ' . getenv('FHIRBRIDGE_PUSH_TOKEN');           // the token we agreed
-if (!hash_equals($expected, $_SERVER['HTTP_AUTHORIZATION'] ?? '')) {
+$expected = getenv('SEQUE_INGEST_SECRET');                          // the shared secret we agreed
+if (!hash_equals((string) $expected, $_SERVER['HTTP_X_SEQUE_SECRET'] ?? '')) {
     http_response_code(401);
     exit;
 }
 
-$records = json_decode(file_get_contents('php://input'), true);
-if (!is_array($records)) {
+$body = json_decode(file_get_contents('php://input'), true);
+$entries = $body['bundle']['entry'] ?? null;
+if (!is_array($entries) || empty($body['externalPatientId'])) {
     http_response_code(400);
     exit;
 }
@@ -340,12 +378,16 @@ if (!is_array($records)) {
 $key = $_SERVER['HTTP_X_IDEMPOTENCY_KEY'] ?? '';
 // if you already stored this $key, answer 200 and do nothing (it was a retry)
 
-foreach ($records as $record) {
-    // save $record to your database
+$stored = [];
+foreach ($entries as $entry) {
+    $resource = $entry['resource'] ?? [];
+    $type = $resource['resourceType'] ?? 'Unknown';
+    // save $resource, linked to the patient $body['externalPatientId']
+    $stored[$type] = ($stored[$type] ?? 0) + 1;
 }
 
 header('Content-Type: application/json');
-echo json_encode(['received' =&gt; count($records)]);               // HTTP 200</code></pre>
+echo json_encode(['stored' =&gt; $stored]);                           // HTTP 200</code></pre>
 <div class="callout warn"><strong>Allow large requests</strong>Make sure your server accepts bodies of at least 8 MB (<code>post_max_size</code> in php.ini, and the limit of your web server or gateway), otherwise large batches are refused.</div>
 
 <h3>3. Optional &ndash; ask FHIRBridge</h3>
@@ -377,14 +419,14 @@ echo json_encode(['received' =&gt; count($records)]);               // HTTP 200<
     <li>Send us your website address(es), your API URL, its authentication and the expected data (section 4).</li>
     <li>Allow requests from FHIRBridge to reach your API.</li>
     <li>Add the PHP files above and put the five values in <code>config.php</code>.</li>
-    <li>Make your API answer <code>200</code> and handle repeated requests.</li>
-    <li>Run one test together with a test patient: start from your <code>Seque-start</code>, sign in to MyChart, see <em>Triggered</em>, then see the requests arrive at your <code>seque-ingest</code> with your <code>token</code> in each one.</li>
+    <li>Decide how your endpoint links a push to a patient (the open point in section 2), answer <code>200</code> and handle repeated requests.</li>
+    <li>Run one test together with a test patient: start from your <code>Seque-start</code>, sign in to MyChart, see <em>Triggered</em>, then see the push arrive at your <code>seque-ingest</code> with the body from section 2.</li>
   </ul></div>
 </div>
 
 <div class="callout bad"><strong>Keep the Client Secret on your server</strong>Never put it in a web page, JavaScript, a mobile app, a URL or a log. If it may have leaked, tell us and we will issue a new one; the old one stops working at once.</div>
 
-<footer>FHIRBridge &mdash; integration guide, version 3.1</footer>
+<footer>FHIRBridge &mdash; integration guide, version 3.2</footer>
 </div>
 <script>
 document.querySelectorAll('.copy').forEach(function (b) {

@@ -64,13 +64,13 @@
           <div class="stat-text">
             <span class="stat-label">Source EHR</span>
             <span class="stat-value">{{ ex.sourceName ?? ex.sourceSystemType ?? 'Unknown source' }} — {{ ex.ehrEndpoint || 'Default' }}</span>
-            @if (ex.runGroupId != null) {
+            @if ((ex.runGroupId ?? null) !== null) {
               <span class="stat-sub">Group ID: <code>{{ ex.runGroupId || '(cleared)' }}</code></span>
             }
-            @if (ex.runSearchCriteria != null) {
+            @if ((ex.runSearchCriteria ?? null) !== null) {
               <span class="stat-sub">Search criteria: <code>{{ ex.runSearchCriteria || '(cleared)' }}</code></span>
             }
-            @if (ex.runGroupId == null && ex.runSearchCriteria == null) {
+            @if ((ex.runGroupId ?? null) === null && (ex.runSearchCriteria ?? null) === null) {
               <span class="stat-sub">Group ID / search criteria: saved configuration</span>
             }
           </div>

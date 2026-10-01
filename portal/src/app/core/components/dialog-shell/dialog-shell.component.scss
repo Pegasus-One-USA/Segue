@@ -28,7 +28,6 @@
   // same default treatment NodeLibraryDialogComponent's `.nld` always gives the Source Connection
   // screen. `position: absolute` (not fixed) is deliberate here: the backdrop is already scoped to
   // .shell-content, so this just fills that box rather than escaping it — sidebar/topbar stay put.
-  //
   // background overridden to --color-bg (not the base rule's --color-surface white, a couple lines
   // up): --fill/--maximized host what is really a full ROUTED PAGE (EHR Endpoints, License, ...),
   // which expects to sit on the page background the way it would outside a dialog, with its own cards

@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -114,7 +114,8 @@ export class ExternalRunComponent implements OnInit, OnDestroy {
   private options: CompletionOptions = { windowMode: 'same', closeOnComplete: false, returnToken: null };
   private pollHandle: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private readonly route: ActivatedRoute, private readonly http: HttpClient) {}
+  private readonly route = inject(ActivatedRoute);
+  private readonly http = inject(HttpClient);
 
   ngOnInit(): void {
     const params = this.route.snapshot.queryParamMap;

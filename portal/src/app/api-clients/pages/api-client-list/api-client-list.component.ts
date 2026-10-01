@@ -115,7 +115,7 @@ export class ApiClientListComponent implements OnInit {
 
   openCreate(): void {
     this.customDialog
-      .open<ApiClientCreateDialogComponent, {}, ApiClientCredential>(ApiClientCreateDialogComponent, {
+      .open<ApiClientCreateDialogComponent, Record<string, never>, ApiClientCredential>(ApiClientCreateDialogComponent, {
         width: '480px',
         disableClose: true,
       })
