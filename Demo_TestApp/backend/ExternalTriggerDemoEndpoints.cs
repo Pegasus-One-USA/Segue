@@ -124,8 +124,54 @@ public static class ExternalTriggerDemoEndpoints
 
             using var doc = JsonDocument.Parse(body);
             var runUrl = doc.RootElement.TryGetProperty("run_url", out var r) ? r.GetString() : null;
+            if (runUrl is not null)
+            {
+                runUrl = await ResolvePortalRedirectAsync(runUrl, request.FhirBridgeBaseUrl);
+            }
+
             return Results.Ok(new { success = runUrl is not null, error = runUrl is null ? "FHIRBridge returned no run_url." : null, runUrl });
         });
+    }
+
+    // The run URL makes FHIRBridge redirect the browser to its portal's /external-run page. A server that has no
+    // Portal:BaseUrl configured redirects to http://localhost:4200, which is unreachable from the user's browser.
+    // So the demo follows that first hop itself (the ticket is single-use, and everything the page needs is in the
+    // redirect's query string) and, when the target is a localhost address while the configured FHIRBridge Base URL
+    // is not, points the browser at the same path on the FHIRBridge Base URL instead.
+    private static async Task<string> ResolvePortalRedirectAsync(string runUrl, string fhirBridgeBaseUrl)
+    {
+        if (!Uri.TryCreate(fhirBridgeBaseUrl.TrimEnd('/'), UriKind.Absolute, out var baseUri) || baseUri.IsLoopback)
+        {
+            return runUrl;
+        }
+
+        try
+        {
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+            using var response = await client.GetAsync(runUrl);
+            var location = response.Headers.Location;
+            if (location is null)
+            {
+                return runUrl;
+            }
+
+            if (!location.IsAbsoluteUri)
+            {
+                location = new Uri(new Uri(runUrl), location);
+            }
+
+            if (!location.IsLoopback)
+            {
+                return location.ToString();
+            }
+
+            return $"{baseUri.GetLeftPart(UriPartial.Authority)}{location.PathAndQuery}";
+        }
+        catch (Exception)
+        {
+            return runUrl;
+        }
     }
 
     private static string DescribeFailure(System.Net.HttpStatusCode status, string body)
