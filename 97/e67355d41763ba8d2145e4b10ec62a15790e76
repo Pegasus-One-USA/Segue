@@ -1,0 +1,29 @@
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_7d26b4fb03ec26 113-114,118-122
+  s_d1b985c75f92bc::t_f0587af36673a0 24
+  s_d1b985c75f92bc::t_9e23bf2e7fc086 49-55
+  s_d1b985c75f92bc::t_b01bb01a369cac 127-132
+  s_d1b985c75f92bc::t_8c5d8e19506842 69-85
+  s_d1b985c75f92bc::t_018f05bdccb51a 1-3,6-23,25-48,59-68,86-91,99-105,110-112,115-117,123-126,133-161,188-196
+  s_d1b985c75f92bc::t_71735f139aa902 4-5
+  s_d1b985c75f92bc::t_5d53596da7146c 106-109
+  s_d1b985c75f92bc::t_eaa8f536335616 92-98
+  s_d1b985c75f92bc::t_215dc65ee43450 162-187
+  s_d1b985c75f92bc::t_ce44bf7f3edbbe 56-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "97e67355d41763ba8d2145e4b10ec62a15790e76",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
