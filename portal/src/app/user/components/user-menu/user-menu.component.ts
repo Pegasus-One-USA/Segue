@@ -7,6 +7,8 @@ import { UserProfileService } from '../../services/user-profile.service';
 import { AppTheme }           from '../../models/user-profile.model';
 import { LayoutService, LayoutMode } from '../../../services/layout.service';
 import { DensityService, DensityMode } from '../../../services/density.service';
+import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
+import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
 
 @Component({
   selector:    'app-user-menu',
@@ -22,6 +24,8 @@ export class UserMenuComponent {
   protected readonly profSvc  = inject(UserProfileService);
   protected readonly layoutSvc = inject(LayoutService);
   protected readonly densitySvc = inject(DensityService);
+  private readonly unsavedChanges = inject(UnsavedChangesRegistryService);
+  private readonly unsavedPrompt  = inject(UnsavedChangesPromptService);
 
   // 'topbar' (layout 'standard', default) anchors the panel top-right off the topbar trigger;
   // 'sidebar' (layout 'focused') anchors it bottom-left off a trigger living at the foot of the
@@ -80,7 +84,19 @@ export class UserMenuComponent {
   }
 
   closeMenu(): void      { this.menuOpen.set(false); this.showLogout.set(false); }
-  confirmLogout(): void  { this.showLogout.set(true); }
+  /** Sign out ends the session BEFORE navigating, so the route's leave prompt never sees it (it waves through
+   *  anyone already signed out, so session timeouts are not blocked). With unsaved changes on the page, ask
+   *  here instead — the same "Leave this page?" modal, in place of the inline sign-out confirm, not after it. */
+  confirmLogout(): void {
+    if (!this.unsavedChanges.hasAnyUnsavedChanges()) {
+      this.showLogout.set(true);
+      return;
+    }
+    this.menuOpen.set(false);
+    this.unsavedPrompt.confirmDiscard().subscribe(leave => {
+      if (leave) this.auth.logout();
+    });
+  }
   cancelLogout(): void   { this.showLogout.set(false); }
 
   logout(): void {

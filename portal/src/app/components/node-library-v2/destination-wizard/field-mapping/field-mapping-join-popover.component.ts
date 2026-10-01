@@ -9,6 +9,7 @@ import {
 import { MappingValueType } from '../../../../mapping-profiles/models/mapping-profile.model';
 import { DestinationTypeV2 as DestinationType } from '../../../../models/destination-configuration-v2.model';
 import { ToastService } from '../../../../services/toast.service';
+import { UnsavedChangesRegistryService } from '../../../../core/services/unsaved-changes-registry.service';
 import {
   TransformationRulesService, TransformationRule, TransformNodeType, TransformNodeSchema, TransformArrayMode,
   TRANSFORM_NODE_DEFAULT_VALUE_TYPES,
@@ -118,6 +119,18 @@ export class FieldMappingJoinPopoverComponent {
   /** Whether the rule section holds changes that have never reached the server. Closing the popover
    *  discards those with nothing left to recover — unlike a SAVED rule, which survives on the server
    *  even when the workflow itself is never saved. */
+  /** The mapping draft as it was when this popover opened (or its row changed) — anything different is an
+   *  unsaved edit: join order/delimiter, instance selection, JSON write mode, reference resource. */
+  private readonly draftBaseline = signal<string | null>(null);
+
+  /** Any unsaved edit at all — the mapping fields or the transformation rule. Registered with the app-wide
+   *  unsaved-changes check, so leaving the PAGE (menu, back, sign out, refresh) asks first. Clicks inside the
+   *  mapping screen (✕, another column) deliberately don't use it. */
+  readonly hasUnsavedEdits = computed(() => {
+    const baseline = this.draftBaseline();
+    return this.hasUnsavedRule() || (baseline !== null && JSON.stringify(this.draft()) !== baseline);
+  });
+
   readonly hasUnsavedRule = computed(() => {
     const baseline = this.ruleBaseline();
     return baseline !== null && this.ruleSnapshot() !== baseline;
@@ -135,7 +148,13 @@ export class FieldMappingJoinPopoverComponent {
     this.nodeSchemas().find(s => s.nodeType === this.ruleNodeType()));
 
   constructor() {
-    effect(() => this.draft.set(this.withForcedAggregate(structuredClone(this.row()))));
+    effect(() => {
+      const draft = this.withForcedAggregate(structuredClone(this.row()));
+      this.draft.set(draft);
+      // From the value itself, not by reading draft() — that would make this effect depend on every edit.
+      this.draftBaseline.set(JSON.stringify(draft));
+    });
+    inject(UnsavedChangesRegistryService).register(() => this.hasUnsavedEdits());
     effect(() => this.loadRuleFor(this.row()));
 
     this.rulesService.getNodeSchemas().subscribe(schemas => this.nodeSchemas.set(schemas));

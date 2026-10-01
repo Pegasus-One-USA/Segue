@@ -5,6 +5,7 @@ import { ConfirmDialogComponent } from '../../user-management/dialogs/confirm-di
 import { HasUnsavedChanges } from '../guards/has-unsaved-changes';
 import { ToastService } from '../../services/toast.service';
 import { AuthStore } from '../../auth/store/auth.store';
+import { UnsavedChangesRegistryService } from './unsaved-changes-registry.service';
 
 /**
  * Shared "leave this page?" prompt used by unsaved-changes.guard.ts for every route that carries
@@ -16,6 +17,7 @@ export class UnsavedChangesPromptService {
   private readonly dialog = inject(MatDialog);
   private readonly toast = inject(ToastService);
   private readonly authStore = inject(AuthStore);
+  private readonly registry = inject(UnsavedChangesRegistryService);
 
   /** Resolves true if navigation should proceed. */
   confirmLeave(component: HasUnsavedChanges): Observable<boolean> {
@@ -35,7 +37,10 @@ export class UnsavedChangesPromptService {
       return of(false);
     }
 
-    if (!component.hasUnsavedChanges()) {
+    // The page itself, or anything open on it that registered its own check (e.g. the mapping popover's
+    // edits, which live only in that popover until its Save) — so a panel or popover is covered without its
+    // page having to know about it.
+    if (!component.hasUnsavedChanges() && !this.registry.hasAnyUnsavedChanges()) {
       return of(true);
     }
 
@@ -48,6 +53,12 @@ export class UnsavedChangesPromptService {
       return component.confirmLeaveDialog();
     }
 
+    return this.confirmDiscard();
+  }
+
+  /** The same "Leave this page?" modal, for leaving something smaller than a page — closing or switching a
+   *  popover/panel with unsaved edits. True = Leave (discard), false = Cancel (stay). */
+  confirmDiscard(): Observable<boolean> {
     return this.dialog
       .open(ConfirmDialogComponent, {
         width: '440px',
