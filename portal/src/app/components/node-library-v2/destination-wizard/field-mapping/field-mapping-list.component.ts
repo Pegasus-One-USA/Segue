@@ -116,6 +116,10 @@ export class FieldMappingListComponent {
   readonly hasTargetTable = computed(() => this.resources().some(r => this.tablesForResource()(r).length > 0));
   readonly targetByResource = input.required<Record<string, string>>();
   readonly isApproximated = input.required<(row: MappingRow) => boolean>();
+  /** Rows the host always keeps mapped (the Settings mapping-profile screen's id/upsert-key row) — they show
+   *  a lock in place of Remove, which would only be undone straight away. Off by default: the workflow
+   *  builder has no such row. */
+  readonly isRowLocked = input<(row: MappingRow) => boolean>(() => false);
 
   readonly addRow = output<MappingRow>();
   readonly removeRow = output<{ resource: string; tableName: string; targetName: string }>();
@@ -718,6 +722,7 @@ export class FieldMappingListComponent {
   }
 
   onRemove(row: MappingRow): void {
+    if (this.isRowLocked()(row)) return;
     this.removeRow.emit({ resource: row.resource, tableName: row.tableName, targetName: row.targetName });
   }
 

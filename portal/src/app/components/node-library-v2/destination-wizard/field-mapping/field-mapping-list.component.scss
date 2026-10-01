@@ -288,6 +288,13 @@
 
 .fm-list-dash { color: var(--color-muted-2); }
 
+/* Sits where Remove would, at the same padding, so the Actions column doesn't shift on the locked row. */
+.fm-list-lock {
+  display: inline-block;
+  padding: 4px 8px;
+  cursor: help;
+}
+
 .fm-inline-select, .fm-inline-input {
   font-family: var(--font-family);
   font-size: 12px;

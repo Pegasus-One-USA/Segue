@@ -46,6 +46,9 @@ export class FieldMappingJoinPopoverComponent {
    *  0 so a host that never passes it (there are none today) just never shows "Show all sources" rather
    *  than throwing on a missing required input. */
   readonly totalSourceCount = input<number>(0);
+  /** A row the host always keeps mapped (the Settings mapping-profile screen's id/upsert-key row) — the footer
+   *  shows a lock in place of "Delete mapping", which would only be undone straight away. Save still works. */
+  readonly locked = input(false);
 
   readonly save = output<MappingRow>();
   readonly remove = output<void>();
@@ -367,7 +370,7 @@ export class FieldMappingJoinPopoverComponent {
     if (d) this.save.emit(d);
   }
 
-  onRemove(): void { this.remove.emit(); }
+  onRemove(): void { if (!this.locked()) this.remove.emit(); }
 
   onClose(): void {
     // A configured-but-unsaved rule exists ONLY in this component. Closing used to drop it with no

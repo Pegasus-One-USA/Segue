@@ -200,6 +200,8 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  SQL table, so nothing offers an action that would silently no-op against a null connectionInfo.
    *  Defaults true so the Destination Wizard (which always has real connectionInfo) is unaffected. */
   readonly schemaAuthoringEnabled = input(true);
+  /** Passed straight to the mapping list — see FieldMappingListComponent.isRowLocked. */
+  readonly isRowLocked = input<(row: MappingRow) => boolean>(() => false);
   /** Outcome of the host's live schema read (see SchemaLoadState). Defaults to 'idle' so a host that never
    *  reads a schema at all is unaffected — only 'loading'/'failed'/'unavailable' surface the notice below. */
   readonly schemaLoadState = input<SchemaLoadState>('idle');
@@ -2509,7 +2511,15 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     this.closePopover();
   }
 
+  /** Whether the row open in the popover is one the host keeps locked (see isRowLocked). Read from the real
+   *  row, not popoverDisplayRow, which can be narrowed to one source of a join. */
+  readonly popoverRowLocked = computed(() => {
+    const row = this.popoverRow();
+    return !!row && this.isRowLocked()(row);
+  });
+
   onPopoverRemove(): void {
+    if (this.popoverRowLocked()) return;
     const key = this.popoverKey();
     if (key) this.removeRow(key.resource, key.tableName, key.targetName);
     this.closePopover();

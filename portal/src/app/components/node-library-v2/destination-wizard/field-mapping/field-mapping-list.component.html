@@ -329,7 +329,12 @@
               </td>
               <td>
                 <button type="button" class="fm-list-link" (click)="onEdit(row, $event)">Edit…</button>
-                <button type="button" class="fm-list-link fm-list-link--danger" (click)="onRemove(row)">Remove</button>
+                @if (isRowLocked()(row)) {
+                  <span class="fm-list-lock" role="img" aria-label="Upsert key — always mapped, so it can't be removed"
+                        title="Upsert key — always mapped, so it can't be removed">🔒</span>
+                } @else {
+                  <button type="button" class="fm-list-link fm-list-link--danger" (click)="onRemove(row)">Remove</button>
+                }
               </td>
             </tr>
           }
