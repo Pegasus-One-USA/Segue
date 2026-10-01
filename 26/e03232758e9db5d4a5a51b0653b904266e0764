@@ -1,0 +1,360 @@
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_d1b985c75f92bc::t_3f4eceb7537e30 46
+src/Runtime/FHIRBridge.Runtime.Infrastructure/DependencyInjection.cs
+  s_d1b985c75f92bc::t_706f411ab08a74 60-62,65,68,70
+  s_d1b985c75f92bc::t_28bef00db9af38 148-171
+  s_d1b985c75f92bc::t_df4fddbc8bbae2 15
+portal/src/app/services/phase-config-v2.service.ts
+  s_d1b985c75f92bc::t_d27fac7a58d6af 79-81
+src/FHIRBridge.Application/Services/EhrWriteBackSettings.cs
+  s_d1b985c75f92bc::t_2e7dadee12a03e 1-12
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_cab2b5dba6fedc 189-232
+  s_d1b985c75f92bc::t_7c296bb253660c 5,233-238
+tests/FHIRBridge.UnitTests/EhrWriteBack/EhrWriteLedgerModelTests.cs
+  s_d1b985c75f92bc::t_bb8c79776901d8 1-11,14-58
+  s_d1b985c75f92bc::t_7a06a04a8de1a5 12-13
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicPatientWriteProfile.cs
+  s_d1b985c75f92bc::t_112e7e2fba1a5d 1-179
+src/FHIRBridge.Application/DTOs/CreateSourceConnectionRequest.cs
+  s_d1b985c75f92bc::t_a4be855e9f1b15 6-8,16-17
+src/FHIRBridge.Application/DTOs/EhrWriteCapabilitiesDto.cs
+  s_d1b985c75f92bc::t_272bb2d98c7c84 1-21
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_8c8d483e5fe2d5 3004-3006
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Connectors/IFhirWriteClient.cs
+  s_d1b985c75f92bc::t_2e639b1035e54d 1-48
+src/FHIRBridge.Infrastructure/Workflows/WorkflowConfigurationExporter.cs
+  s_d1b985c75f92bc::t_127fc1fc9cadf9 53-54
+tests/FHIRBridge.Runtime.UnitTests/Workflows/EhrWriteBackGraphTests.cs
+  s_d1b985c75f92bc::t_67860b0788511a 1-117
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d1b985c75f92bc::t_5b4c5dee40e5b4 38
+  s_d1b985c75f92bc::t_fb4b4496b33d4b 58,144,543,830-831,1214-1217,1226-1230,2024,2102-2104,2146-2148,2200,2740-2746,2887,2912,4266-4268,4573-4575,4578,4989-4995,5417,5442-5444,5447-5461,5876-5878
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d1b985c75f92bc::t_1cf3b108d8bef2 333
+  s_d1b985c75f92bc::t_aac1be743c9f1e 233
+  s_d1b985c75f92bc::t_d9fc8c0a53f598 537-545
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_d1b985c75f92bc::t_17e320bd11efb2 82-86
+  s_d1b985c75f92bc::t_981b71ac526eb2 87-90
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicVitalSignWriteProfile.cs
+  s_d1b985c75f92bc::t_fcc63faf435212 1-185
+src/FHIRBridge.Application/Abstractions/Destinations/PipelineWriteContext.cs
+  s_d1b985c75f92bc::t_d33f7d1e9d3353 60-65,75-76
+portal/src/app/data/transforms-v2.data.ts
+  s_d1b985c75f92bc::t_00456813a7e562 45-47
+src/FHIRBridge.Infrastructure/Persistence/Workflows/EfWorkflowNodeResourceHistoryRecorder.cs
+  s_d1b985c75f92bc::t_69af80a6222fbe 167-173
+src/FHIRBridge.Application/Rbac/PermissionGroupCode.cs
+  s_d1b985c75f92bc::t_f9a004e4ea37d5 183-188
+src/FHIRBridge.Infrastructure/Persistence/EfEhrWriteLedgerRepository.cs
+  s_d1b985c75f92bc::t_5828877c09913e 1-66,82-95
+  s_d1b985c75f92bc::t_2422817b693f2c 67-81
+src/FHIRBridge.Infrastructure/Persistence/InMemoryEhrWriteLedgerRepository.cs
+  s_d1b985c75f92bc::t_a4eb3429cabddd 1-33,37-38
+  s_d1b985c75f92bc::t_bdeb42877b9e80 34-36
+portal/src/app/models/destination-configuration-v2.model.ts
+  s_d1b985c75f92bc::t_17188b45c964b2 41-44
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.ts
+  s_d1b985c75f92bc::t_4f6a18a3a2e2f7 1-219
+portal/src/app/services/workflow-build-assembler-v2.ehr-writeback.spec.ts
+  s_d1b985c75f92bc::t_a85716e82422ee 1-91
+src/LicenseServer/FHIRBridge.LicenseServer/Pages/Licenses/Create.cshtml.cs
+  s_d1b985c75f92bc::t_aaa7a9501b7de5 60
+src/FHIRBridge.Domain/Enums/EhrWriteOperation.cs
+  s_d1b985c75f92bc::t_1d480d01f75006 1-12
+tests/FHIRBridge.UnitTests/EhrWriteBack/EpicWriteProfileTests.cs
+  s_d1b985c75f92bc::t_8c180c1f8ca687 1-329
+portal/src/app/services/phase-config.service.ts
+  s_d1b985c75f92bc::t_63ed2674aa8d9d 76-77
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/EhrWrite/FhirClientEhrWriteChannel.cs
+  s_d1b985c75f92bc::t_3919e4423aac20 1-9,12-96
+  s_d1b985c75f92bc::t_7f786ff3d2f232 10-11
+  s_d1b985c75f92bc::t_9a8fcf8ff94315 97
+src/FHIRBridge.Application/Abstractions/Destinations/IEhrWriteChannel.cs
+  s_d1b985c75f92bc::t_e47451c87128cc 1-148
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicConditionWriteProfile.cs
+  s_d1b985c75f92bc::t_5feddc74657e7f 1-110
+tests/FHIRBridge.Runtime.UnitTests/Workflows/EhrWriteBackDestinationNodeExecutorTests.cs
+  s_d1b985c75f92bc::t_a4492f1be3ac34 1-20,23-28,31-77,83-175
+  s_d1b985c75f92bc::t_1a1c48a9e91238 21-22
+  s_d1b985c75f92bc::t_080f0a9a129607 29-30
+  s_d1b985c75f92bc::t_89e1c629c633e2 78-82
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_d1b985c75f92bc::t_0162aee3898768 94-99,102,104-109
+src/FHIRBridge.Application/Abstractions/Persistence/IEhrWriteLedgerRepository.cs
+  s_d1b985c75f92bc::t_29742007176c52 1-22,28-30
+  s_d1b985c75f92bc::t_047173f87a8b92 23-27
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicClinicalNoteWriteProfile.cs
+  s_d1b985c75f92bc::t_9717c4803612c5 1-116
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrWriteKeys.cs
+  s_d1b985c75f92bc::t_603c430d165d0d 1-43
+src/FHIRBridge.Application/Mappings/ConfigurationMapper.cs
+  s_d1b985c75f92bc::t_a181984c5ff3de 43-44
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartBackendServicesTokenProvider.cs
+  s_d1b985c75f92bc::t_f4845f92b2f102 142-146
+src/FHIRBridge.Domain/Enums/SourceConnectionAccess.cs
+  s_d1b985c75f92bc::t_5616fc435b73ca 1-25
+src/FHIRBridge.Domain/Enums/DestinationType.cs
+  s_d1b985c75f92bc::t_d6ea026994c821 99-117
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrWriteScopeMatcher.cs
+  s_d1b985c75f92bc::t_80a14c60adc5d9 1-11,13,17-50
+  s_d1b985c75f92bc::t_bf18d201ff6d05 12,14-16
+src/FHIRBridge.Domain/Entities/SourceConnection.cs
+  s_d1b985c75f92bc::t_9784ad8822eebc 21-22,32
+  s_d1b985c75f92bc::t_2aae98d8bf7211 57-64
+  s_d1b985c75f92bc::t_7fdf0dd112012d 88-97
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs
+  s_d1b985c75f92bc::t_4c178e0c80ba4a 87-91
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_d1b985c75f92bc::t_f6ceafc78fa165 102-139
+  s_d1b985c75f92bc::t_d45ba9f8e6e5ad 37-43
+  s_d1b985c75f92bc::t_f24e089bde2fdb 3
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_d1b985c75f92bc::t_da86b97537ee66 1056-1057
+  s_d1b985c75f92bc::t_230795135308db 829,1118
+  s_d1b985c75f92bc::t_c0328312e7e9be 1041-1042
+  s_d1b985c75f92bc::t_39217c1a14bd91 1087-1090,1094-1117
+  s_d1b985c75f92bc::t_fc03ebcbdbb43c 916
+tests/FHIRBridge.UnitTests/EhrWriteBack/MappedEhrWriteBackDestinationWriterTests.cs
+  s_d1b985c75f92bc::t_c683e1140c6aae 1-297
+  s_d1b985c75f92bc::t_20270373afcfca 298-300
+  s_d1b985c75f92bc::t_4effc28c020705 301-334
+tests/FHIRBridge.Runtime.UnitTests/Connectors/FhirWriteClientTests.cs
+  s_d1b985c75f92bc::t_94c15e9fd61bf9 1-240
+  s_d1b985c75f92bc::t_7b3014c99af776 241-243
+  s_d1b985c75f92bc::t_21110593e4ce12 244-262
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Payloads/DestinationWriteResult.cs
+  s_d1b985c75f92bc::t_6cd1fc37b966bf 9-10,16-37
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  s_d1b985c75f92bc::t_42f8fa7f39e719 2
+  s_d1b985c75f92bc::t_0869ce2849e535 173
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_d1b985c75f92bc::t_6189b728e4a11b 245-246
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_d1b985c75f92bc::t_55b8abcd09c6c7 48
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_d1b985c75f92bc::t_1799ed43fdcc92 20-22
+  s_d1b985c75f92bc::t_95da3cf96fb9c5 92-105
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_d1b985c75f92bc::t_c50341d049b78b 315-316
+  s_d1b985c75f92bc::t_eb745bcb9cd94f 312-314
+  s_d1b985c75f92bc::t_305959c581c47a 1,309-311
+tests/FHIRBridge.UnitTests/Validation/CreateDestinationConfigurationRequestValidatorTests.cs
+  s_d1b985c75f92bc::t_3eb152175ce3e8 76-141
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirWriteModels.cs
+  s_d1b985c75f92bc::t_3205d30bce79b6 1-56
+src/FHIRBridge.Infrastructure/Persistence/Configurations/SourceConnectionConfiguration.cs
+  s_d1b985c75f92bc::t_337af1fe22f688 44-51
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/EhrWriteBackDestinationNodeExecutor.cs
+  s_d1b985c75f92bc::t_281bdb73132736 1-104,113-171
+  s_d1b985c75f92bc::t_dc301c901f5dc9 105-112
+portal/src/app/source-connections/models/source-connection.model.ts
+  s_d1b985c75f92bc::t_d77757e36d10dc 92-93,111
+  s_d1b985c75f92bc::t_41130a6f1cc6d6 105-106,109-110
+src/FHIRBridge.Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs
+  s_d1b985c75f92bc::t_6984cf49acea74 91-92
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicAllergyIntoleranceWriteProfile.cs
+  s_d1b985c75f92bc::t_7911bddc8b88da 1-145
+src/FHIRBridge.Domain/Fhir/EhrWriteCapabilities.cs
+  s_d1b985c75f92bc::t_f1accf343b092d 35
+  s_d1b985c75f92bc::t_b7d5d3d98260f1 1-34,40-90
+  s_d1b985c75f92bc::t_2ef202e89aeeca 36-39
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/IEhrWriteProfile.cs
+  s_d1b985c75f92bc::t_dccceab229ba10 1-12,14-36,43-79
+  s_d1b985c75f92bc::t_f575a0e137e142 13
+  s_d1b985c75f92bc::t_5053e356071713 37-42
+  s_d1b985c75f92bc::t_ac432d68e58ec9 80
+portal/src/app/services/ehr-write-capabilities.service.ts
+  s_d1b985c75f92bc::t_b93519cb72eac9 1-55
+  s_d1b985c75f92bc::t_8914d0e236a41e 56-58
+  s_d1b985c75f92bc::t_61e5bd505eafc7 59
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrReferenceResolver.cs
+  s_d1b985c75f92bc::t_3539753ed24346 1-280,282-283,285,287-291
+  s_d1b985c75f92bc::t_9e5d8328f20c6d 281
+  s_d1b985c75f92bc::t_d8746294bbbce6 284
+  s_d1b985c75f92bc::t_48183368cca500 286
+src/FHIRBridge.Domain/Entities/EhrWriteLedgerEntry.cs
+  s_d1b985c75f92bc::t_2fc6c1c9643d94 1-32,39-41,47,49-50,52-76,79-84,89-91,98-104,109-115,120-147
+  s_d1b985c75f92bc::t_5700aa12a7114b 33-38
+  s_d1b985c75f92bc::t_c78c5b23a55fa4 42-46
+  s_d1b985c75f92bc::t_7c2284724add42 48
+  s_d1b985c75f92bc::t_8e4c561efacb7b 51
+  s_d1b985c75f92bc::t_b57ffc440b03f9 77-78
+  s_d1b985c75f92bc::t_7d2cbf909e9d06 85-88
+  s_d1b985c75f92bc::t_b577edcebb91cc 92-97
+  s_d1b985c75f92bc::t_ca8fedfb7391be 105-108
+  s_d1b985c75f92bc::t_c742f89ba14558 116-119
+tests/FHIRBridge.UnitTests/EhrWriteBack/EhrWriteCapabilitiesTests.cs
+  s_d1b985c75f92bc::t_748d71d41b006f 1-111
+tests/FHIRBridge.UnitTests/EhrWriteBack/EhrWriteScopeMatcherTests.cs
+  s_d1b985c75f92bc::t_906296271d6ec9 1-44
+src/FHIRBridge.Application/Abstractions/Destinations/DestinationWriteResult.cs
+  s_d1b985c75f92bc::t_2282bb50810c9e 27-28,35-36
+portal/src/app/destination-connections/models/destination-configuration.model.ts
+  s_d1b985c75f92bc::t_56f0a6804a5d1d 38-40
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrFhirJson.cs
+  s_d1b985c75f92bc::t_3a9e0e3f209534 1-160
+src/FHIRBridge.Application/DTOs/SourceConnectionDto.cs
+  s_d1b985c75f92bc::t_81b29a2a4c182b 19-20
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.Write.cs
+  s_d1b985c75f92bc::t_4fd80280d610c9 88-92
+  s_d1b985c75f92bc::t_70f9fc22fda932 1-87,93-569
+  s_d1b985c75f92bc::t_568d2e3e15496f 570-572
+  s_d1b985c75f92bc::t_b88d9af80b26cc 573-589
+src/FHIRBridge.Domain/Fhir/EhrWriteCapability.cs
+  s_d1b985c75f92bc::t_3596a723e99692 1-66,69-73,75,86-99
+  s_d1b985c75f92bc::t_8ada7bf83019d7 67-68,74,76,80
+  s_d1b985c75f92bc::t_3e86033a796a46 77-79,81-85
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_d1b985c75f92bc::t_31e68d3d3f534d 111,114
+  s_d1b985c75f92bc::t_49b6015b86f9cb 100-101
+  s_d1b985c75f92bc::t_922b978005fd94 484
+  s_d1b985c75f92bc::t_5219e702067996 138-145
+  s_d1b985c75f92bc::t_39e70f9b06c746 665-674
+  s_d1b985c75f92bc::t_45d1b0d160705d 177-179,181
+  s_d1b985c75f92bc::t_a5ad873a1ab9a5 1280-1382
+  s_d1b985c75f92bc::t_921c6b63693c52 593-596
+  s_d1b985c75f92bc::t_63794ededa3ddc 156-161
+  s_d1b985c75f92bc::t_b2b37624f0d5b9 12
+src/FHIRBridge.Infrastructure/Persistence/Configurations/EhrWriteLedgerEntryConfiguration.cs
+  s_d1b985c75f92bc::t_88cb65d2067bee 1-27,32-45
+  s_d1b985c75f92bc::t_5a5243a02853f0 28-31
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/MappedEhrWriteBackDestinationWriter.cs
+  s_d1b985c75f92bc::t_096a13b89d8f1e 1-16,31-63,74-75,79-103,113-119,122-123,126-133,136-139,142-146,150,152-156,159-165,168-188,192-193,202-205,208-210,213-216,219-222,225-228,231-236,239-252,255-282,285,296-298,301-303,306-332,334-335,347-365,368-391,393,396,398-407,409,411-417,420-443,448-467,471,475-476,480,482-483,486-491,494-502,506,510-513
+  s_d1b985c75f92bc::t_4b99ca947b0dc7 65-73,76-78
+  s_d1b985c75f92bc::t_b14f42e4186518 286
+  s_d1b985c75f92bc::t_75c4584c61077b 106-112
+  s_d1b985c75f92bc::t_08ac92b482a182 287-293
+  s_d1b985c75f92bc::t_cc2a4cea774b0d 337-345
+  s_d1b985c75f92bc::t_962ccf0c7c927e 125
+  s_d1b985c75f92bc::t_a8bf1dd44208ed 190-191,194-199
+  s_d1b985c75f92bc::t_76e4b05f2c93d9 17-19,28-30
+  s_d1b985c75f92bc::t_58c5fe8970be95 64
+  s_d1b985c75f92bc::t_bdd44b03c4a3ab 104-105
+  s_d1b985c75f92bc::t_f2580db1a85ed6 120-121
+  s_d1b985c75f92bc::t_12efd22c032c40 124
+  s_d1b985c75f92bc::t_8ad8511414ced1 134-135
+  s_d1b985c75f92bc::t_68ba3d1b983209 140-141
+  s_d1b985c75f92bc::t_f4ca19a46cc6c1 147-149
+  s_d1b985c75f92bc::t_07c960c7f42735 151
+  s_d1b985c75f92bc::t_bbacedb16533d9 157-158
+  s_d1b985c75f92bc::t_6d6a969b5a6795 166-167
+  s_d1b985c75f92bc::t_bc2060e891e778 189
+  s_d1b985c75f92bc::t_b2abc14e3dceb3 200-201
+  s_d1b985c75f92bc::t_4f4b5cda37c8f4 206-207
+  s_d1b985c75f92bc::t_68b182059e2958 211-212
+  s_d1b985c75f92bc::t_e60e8814071bf0 217-218
+  s_d1b985c75f92bc::t_e489108b78630f 223-224
+  s_d1b985c75f92bc::t_e2342b3aa8cf2c 229-230
+  s_d1b985c75f92bc::t_2928bcb687f776 237-238
+  s_d1b985c75f92bc::t_be1c38d8db114d 253-254
+  s_d1b985c75f92bc::t_aa980e9c2d7283 283-284
+  s_d1b985c75f92bc::t_36283cad89d34d 294-295
+  s_d1b985c75f92bc::t_3c8d186eaa3a4d 299-300
+  s_d1b985c75f92bc::t_17e39bd99ec545 304-305
+  s_d1b985c75f92bc::t_76880c5fbb0515 333
+  s_d1b985c75f92bc::t_71f922a2b87228 336
+  s_d1b985c75f92bc::t_fa812c5b0ea858 346
+  s_d1b985c75f92bc::t_68790636c272bf 366-367
+  s_d1b985c75f92bc::t_a7664e9f3c242c 392
+  s_d1b985c75f92bc::t_f65067d923cf2d 394-395
+  s_d1b985c75f92bc::t_6a89af4824e173 397
+  s_d1b985c75f92bc::t_521320022d282e 408
+  s_d1b985c75f92bc::t_c38ce82353b4ea 410
+  s_d1b985c75f92bc::t_df43041e9c25bf 418-419
+  s_d1b985c75f92bc::t_ac5b402d0bc507 444-447
+  s_d1b985c75f92bc::t_d1912d1870afe5 468-470
+  s_d1b985c75f92bc::t_df0d31e80a536e 472-474
+  s_d1b985c75f92bc::t_7ecd7913508e6f 477-479
+  s_d1b985c75f92bc::t_76efca788bfb47 481
+  s_d1b985c75f92bc::t_bdeab1e66c569b 484-485
+  s_d1b985c75f92bc::t_0d839077141506 492-493
+  s_d1b985c75f92bc::t_349f6a921b7812 503-505
+  s_d1b985c75f92bc::t_1f05eaae7f7497 507-509
+  s_d1b985c75f92bc::t_834a0608d698e2 514
+  s_d1b985c75f92bc::t_7e6902792ca958 20-27
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowGraphValidator.cs
+  s_d1b985c75f92bc::t_c0e9e8b79f627e 186-203
+  s_d1b985c75f92bc::t_64dd38e61e2643 108-117,127-135
+  s_d1b985c75f92bc::t_9467338c1075b1 118-126
+src/Api/FHIRBridge.Api/Controllers/V1/EhrWriteCapabilitiesController.cs
+  s_d1b985c75f92bc::t_562525b9bab33f 1-56
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_351d9383fb34c9::t_85e33aebc161ed 590-670,3024-3030
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_351d9383fb34c9::t_712bd37531e685 597-677,3049-3055
+portal/src/app/auth/models/permission.constants.ts
+  s_d1b985c75f92bc::t_a6ffbf7ab0c1bc 46-49,65
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/destination-form-api.ts
+  s_d1b985c75f92bc::t_72a964c5309e3e 128-143
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/destination-form.registry.ts
+  s_d1b985c75f92bc::t_978e0fe38ee5e6 31,74
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_d1b985c75f92bc::t_91ef69aa9adb2a 338-342,703-731,1130-1146,1178
+portal/src/app/components/node-library-v2/node-library-dialog.component.ts
+  s_d1b985c75f92bc::t_bd53d37596a79c 118,285,423,466,585,742-744,772,775,894,907-908,921,930,960-961
+portal/src/app/components/nodes-v2/transform-node/transform-node.component.ts
+  s_d1b985c75f92bc::t_9dd7404ae87aab 32
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_d1b985c75f92bc::t_ec0abe1504ea9b 148-163
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_d1b985c75f92bc::t_b0cbcb9cc91e4f 148-163
+portal/src/app/core/api-endpoints.ts
+  s_d1b985c75f92bc::t_bf57a5e0940cca 190-194
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_d1b985c75f92bc::t_d29e03c9f2b0da 31,810-812
+portal/src/app/services/applicability-v2.service.ts
+  s_d1b985c75f92bc::t_bb4620eecdd09c 55-60,154-155
+portal/src/app/services/wizard-v2.service.ts
+  s_d1b985c75f92bc::t_80f33e0ae12df5 452-453
+portal/src/app/services/wizard.service.ts
+  s_d1b985c75f92bc::t_08afa4ea5292fc 513-514
+portal/src/app/services/workflow-api.service.ts
+  s_d1b985c75f92bc::t_aa51b5849afcce 209-210
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_d1b985c75f92bc::t_b18b1decfcdecc 5,622-623,818-835,1104,1106-1109
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_d1b985c75f92bc::t_e7f2283f8b3851 25-26,80
+portal/src/app/user-management/pages/role-permissions/permission-matrix.config.ts
+  s_d1b985c75f92bc::t_63da54bb78a0c0 173
+src/Runtime/FHIRBridge.Runtime.Infrastructure/FHIRBridge.Runtime.Infrastructure.csproj
+  s_d1b985c75f92bc::t_4c931e1fb394d7 1,25
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_d1b985c75f92bc::t_cec51ea308bfcd 14-15,940-948,1076-1078,1307-1321,2259-2260,2413,3196,3361-3362,3748
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_d1b985c75f92bc::t_c3f3e7e738e59c 14-15,941-949,1077-1079,1308-1322,2298-2299,2452,3157,3322-3323,3709
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261001125300_AddEhrWriteBack.Designer.cs
+  s_d1b985c75f92bc::t_d8b9a82c1e97cf 1-6503
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261001125300_AddEhrWriteBack.cs
+  s_d1b985c75f92bc::t_57c6989c01582b 1-76
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261001125240_AddEhrWriteBack.Designer.cs
+  s_d1b985c75f92bc::t_63ebe2ab6fc381 1-6540
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261001125240_AddEhrWriteBack.cs
+  s_d1b985c75f92bc::t_e42d017f1bcc67 1-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "26e03232758e9db5d4a5a51b0653b904266e0764",
+  "prompts": {},
+  "sessions": {
+    "s_351d9383fb34c9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29e00a7e-8b4d-441e-aeac-eecf0708cd3d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
