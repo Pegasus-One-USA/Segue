@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trigger a FHIRBridge workflow and receive the data at your API — V3</title>
+<style>
+  :root { --primary:#00A89D; --primary-dark:#007A72; --ink:#1E293B; --muted:#64748B; --border:#E2E8F0; --bg:#F8FAFC; --surface:#fff; --warn:#D97706; --warn-bg:#FEF3C7; --ok:#059669; --ok-bg:#D1FAE5; --bad:#DC2626; --bad-bg:#FEE2E2; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--ink); background: var(--bg); margin: 0; line-height: 1.6; }
+  header { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color:#fff; padding: 40px 24px; }
+  header .in, .wrap { max-width: 980px; margin: 0 auto; }
+  header h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -.4px; }
+  header p { margin: 0; opacity: .93; max-width: 70ch; }
+  .wrap { padding: 28px 24px 80px; }
+  h2 { font-size: 21px; margin: 44px 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
+  h2 .n { color: var(--primary); margin-right: 8px; }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 0 0 12px; max-width: 74ch; color:#334155; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#F1F5F9; padding: 1px 6px; border-radius: 4px; font-size: .9em; }
+  pre { background:#0F172A; color:#E2E8F0; border-radius: 10px; padding: 14px 16px; overflow-x:auto; font-size: 12.8px; line-height:1.55; margin: 8px 0 18px; }
+  pre code { background:none; padding:0; color:inherit; }
+  .lbl { display:flex; justify-content:space-between; align-items:center; font: 11.5px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); margin-top: 14px; }
+  .copy { font: 11px ui-monospace, Menlo, Consolas, monospace; background: var(--surface); border:1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 3px 9px; cursor:pointer; }
+  .copy.done { color: var(--ok); border-color: var(--ok); }
+  table { width:100%; border-collapse: collapse; background: var(--surface); border:1px solid var(--border); border-radius: 10px; overflow:hidden; font-size: 13.5px; margin: 10px 0 18px; }
+  th { background:#F1F5F9; text-align:left; padding: 9px 12px; font-size: 11.5px; text-transform: uppercase; letter-spacing:.03em; color: var(--muted); }
+  td { padding: 9px 12px; border-top:1px solid var(--border); vertical-align: top; }
+  td.k { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; white-space: nowrap; }
+  .scroll { overflow-x:auto; }
+  .two { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+  .box { background: var(--surface); border:1px solid var(--border); border-radius: 12px; padding: 16px 20px; }
+  .box h3 { margin-top: 0; }
+  .box ul { margin: 6px 0 0; padding-left: 20px; }
+  .callout { border-left: 4px solid var(--primary); background:#EBFAF8; border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 16px 0; font-size: 13.8px; }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .callout.bad { border-left-color: var(--bad); background: var(--bad-bg); }
+  .callout strong { display:block; margin-bottom: 2px; }
+  ol.steps { list-style:none; padding:0; margin: 10px 0 16px; counter-reset: s; }
+  ol.steps li { counter-increment: s; display:flex; gap: 12px; align-items:flex-start; padding: 8px 0; }
+  ol.steps li::before { content: counter(s); flex: 0 0 26px; height: 26px; border-radius: 50%; background: var(--primary); color:#fff; font-weight:700; font-size: 13px; text-align:center; line-height:26px; }
+  .tag { display:inline-block; font-size: 11px; font-weight:700; padding: 1px 8px; border-radius: 999px; }
+  .tag.us { background:#DBEAFE; color:#1D4ED8; } .tag.warn { background: var(--warn-bg); color: var(--warn); } .tag.you { background: var(--ok-bg); color: var(--ok); }
+  nav.toc { background: var(--surface); border:1px solid var(--border); border-radius: 12px; padding: 14px 22px; margin-top: -22px; box-shadow: 0 4px 14px rgba(0,0,0,.05); }
+  nav.toc ol { margin: 0; padding-left: 20px; columns: 2; font-size: 14px; } nav.toc a { color: var(--ink); text-decoration:none; } nav.toc a:hover { color: var(--primary); }
+  footer { margin-top: 56px; padding-top: 16px; border-top:1px solid var(--border); color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<header><div class="in">
+  <h1>Trigger a FHIRBridge workflow and receive the data at your API</h1>
+  <p>You add one small piece of code to your system. When it runs, FHIRBridge fetches the data from the EHR (Epic, athenahealth or eCW) and sends it to <strong>your API</strong>. This page says what we give you, what we need from you, and the code to copy. Section 2 shows how it matches the Seque integration document you already wrote (ChartChat). &nbsp;<strong>Version 3.1</strong></p>
+</div></header>
+
+<div class="wrap">
+<nav class="toc"><ol>
+  <li><a href="#summary">The idea in one minute</a></li>
+  <li><a href="#mapping">How this matches your Seque document</a></li>
+  <li><a href="#give">What we give you</a></li>
+  <li><a href="#need">What we need from you</a></li>
+  <li><a href="#build">What you build (PHP)</a></li>
+  <li><a href="#options">Options you can send</a></li>
+  <li><a href="#proof">How you know it worked</a></li>
+  <li><a href="#errors">If something goes wrong</a></li>
+  <li><a href="#golive">Go-live checklist</a></li>
+</ol></nav>
+
+<h2 id="summary"><span class="n">1</span>The idea in one minute</h2>
+<ol class="steps">
+  <li><div><strong>Your PHP code asks FHIRBridge to start the workflow</strong> (one web request, with the details we gave you).</div></li>
+  <li><div><strong>FHIRBridge runs the workflow:</strong> it reads the data from the EHR and prepares it.</div></li>
+  <li><div><strong>FHIRBridge sends the data to your API</strong> as normal web requests (HTTP POST with JSON). This is what you will see on your side.</div></li>
+</ol>
+<div class="callout"><strong>You do not receive the data in the trigger call.</strong>The trigger only starts the work. The data arrives afterwards, at your API, from FHIRBridge.</div>
+
+<h2 id="mapping"><span class="n">2</span>How this matches your Seque integration document</h2>
+<p>Your document (<em>Third-Party EHR Seque Integration</em>) describes a push model: the patient signs in to Epic MyChart on the Seque's side, the Seque fetches the data and pushes it to your <code>seque-ingest</code> endpoint. <strong>FHIRBridge is that Seque.</strong> Nothing changes on your ingest side; the table shows what each of your terms becomes.</p>
+<p><span class="tag us">&#10003;</span> works today &nbsp; <span class="tag warn">&#9670;</span> being finished on our side before go-live &mdash; we will confirm each one in writing.</p>
+<div class="scroll"><table>
+  <tr><th>In your document</th><th>In FHIRBridge</th><th></th></tr>
+  <tr><td><strong>Seque connect URL</strong> (you add <code>?state=&lt;token&gt;</code>)</td><td>A one-time link, <code>run_url</code>, that your server gets from FHIRBridge for each patient (section 5, Case A). Your <code>Seque-start</code> endpoint asks for it and returns it as <code>authorizeUrl</code>. The link lasts about 90 seconds and works once.</td><td>&#10003;</td></tr>
+  <tr><td><strong><code>state</code> token</strong> you mint and keep in Redis</td><td>You send it as <code>state</code> when you ask for the link. FHIRBridge keeps it with the run and sends it back as <code>token</code> on <em>every</em> push.</td><td><span class="tag warn">&#9670;</span></td></tr>
+  <tr><td><code>POST /fhir/ehr-import/seque-ingest</code></td><td>The <strong>API destination URL</strong> of the workflow. We use exactly the URL you gave: <code>https://ccdemo-api.pegasusone.com/fhir/ehr-import/seque-ingest</code>.</td><td>&#10003;</td></tr>
+  <tr><td>Header <code>x-Seque-secret: &lt;secret&gt;</code></td><td>The destination uses &ldquo;API key in a header&rdquo; with header name <code>x-Seque-secret</code>. You send us the secret value over a secure channel (never by email in plain text); we store it securely.</td><td>&#10003;</td></tr>
+  <tr><td>Body <code>{ token, ehrProvider, externalPatientId, bundle }</code></td><td>FHIRBridge sends exactly this shape: <code>token</code> = your state, <code>ehrProvider</code> = <code>"epic"</code> (fixed per destination), <code>externalPatientId</code> = the Epic patient id, <code>bundle</code> = a FHIR R4 <code>Bundle</code> of type <code>searchset</code> with the raw Epic resources as <code>entry[].resource</code>.</td><td><span class="tag warn">&#9670;</span></td></tr>
+  <tr><td>Resources split across calls &ldquo;by type&rdquo;</td><td>We send one resource type per request (Condition, then Observation, &hellip;), each with the <code>token</code> and the Epic patient id, up to 500 resources or about 4 MB per request.</td><td>&#10003;</td></tr>
+  <tr><td>Supported types: Condition, AllergyIntolerance, MedicationRequest, Observation, Encounter, Immunization, DiagnosticReport, DocumentReference, Procedure, Patient</td><td>These are the resource types we configure the workflow to read. Related <code>Medication</code> resources are fetched and sent with the MedicationRequests.</td><td><span class="tag warn">&#9670;</span></td></tr>
+  <tr><td>DocumentReference attachments inline (<code>attachment.data</code> base64)</td><td>FHIRBridge downloads each attachment with its own Epic access and puts it inline, because you hold no Epic token.</td><td><span class="tag warn">&#9670;</span></td></tr>
+  <tr><td>Answers: <code>200</code> + <code>{ "stored": { ... } }</code>; <code>401</code>, <code>400</code>, <code>409</code>, <code>500</code></td><td>Any <code>2xx</code> counts as success. <code>408</code>, <code>429</code> and <code>5xx</code> are retried up to 3 times; other <code>4xx</code> (your 401 / 400 / 409) are <strong>not</strong> retried and the run is shown as failed in FHIRBridge with a Reference ID. Each request carries an <code>X-Idempotency-Key</code> so you can ignore a repeat.</td><td>&#10003;</td></tr>
+  <tr><td>Redirect / return URL <code>https://ccdemo.pegasusone.com</code> (Member Portal)</td><td>The <code>return_url</code> you send with the link request. We add this address to the allow-list. After the patient has signed in and the run has started, the patient is sent back there with <code>?status=Triggered</code>.</td><td>&#10003;</td></tr>
+  <tr><td>Epic app credentials (client id, redirect URI)</td><td>Registered by us in Epic. We give you the client id and the redirect address <code>&lt;Portal Base URL&gt;/api/v1/oauth/callback</code> for your Epic review process.</td><td>&#10003;</td></tr>
+  <tr><td>Sandbox for an end-to-end test</td><td>We run one full test with you against the Epic sandbox before go-live (section 9).</td><td>&#10003;</td></tr>
+</table></div>
+
+<h3>Your <code>Seque-start</code> endpoint becomes this</h3>
+<p>Today it returns <code>Seque-connect-url?state=token</code>. Now it asks FHIRBridge for the one-time link instead. Everything else in your flow (the patient is logged in, the token is stored for two hours, the browser is redirected to <code>authorizeUrl</code>) stays the same. Your stack is TypeScript, so here is that endpoint in TypeScript; the PHP version is in section 5.</p>
+<div class="lbl"><span>routes.ts  (Seque-start)</span><button class="copy" data-t="c0">Copy</button></div>
+<pre id="c0"><code>// POST /fhir/ehr-import/Seque-start   (patient is logged in)
+const state = await createBrokerToken({ internalPatientId });      // your existing 2-hour token
+
+const response = await fetch(`${process.env.FHIRBRIDGE_BASE_URL}/api/v1/workflows/external/launch-ticket`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    client_id: process.env.FHIRBRIDGE_CLIENT_ID,
+    client_secret: process.env.FHIRBRIDGE_CLIENT_SECRET,     // server only
+    workflow_id: process.env.FHIRBRIDGE_WORKFLOW_ID,
+    ehr_endpoint_code: process.env.FHIRBRIDGE_EHR_CODE,
+    return_url: 'https://ccdemo.pegasusone.com',              // the Member Portal address you gave us
+    state,                                                     // comes back to you as "token" on every push
+    mode: 'async',
+    window_mode: 'same',
+  }),
+});
+if (!response.ok) throw new Error(`FHIRBridge refused: ${response.status}`);
+
+const { run_url } = await response.json();
+return { authorizeUrl: run_url };                              // the browser is redirected here</code></pre>
+<div class="callout warn"><strong>Items marked &#9670;</strong>The <code>state</code> hand-over, the Bundle body and the inline attachments are the parts that go beyond what FHIRBridge sends today. They are scheduled before go-live; the rest of this page already works. Do not build against the Bundle format until we confirm it is ready.</div>
+
+<h2 id="give"><span class="n">3</span>What we give you <span class="tag us">from us</span></h2>
+<p>You get these five values from us. Put them in your server configuration. They never go into a web page, JavaScript or a URL.</p>
+<div class="scroll"><table>
+  <tr><th>Value</th><th>What it is</th><th>Example</th></tr>
+  <tr><td class="k">Portal Base URL</td><td>The address of FHIRBridge for your account.</td><td><code>https://fhirbridge.example.com</code></td></tr>
+  <tr><td class="k">Workflow ID</td><td>Identifies the workflow that gets the data and sends it to your API.</td><td><code>6cbbc867-cef5-485e-b27a-cc38ea429538</code></td></tr>
+  <tr><td class="k">EHR Code</td><td>Identifies the hospital / practice to read from. If you have several hospitals we give you one code each.</td><td><code>ff62cdd4-e1da-4da6-a580-49104cf5258e</code></td></tr>
+  <tr><td class="k">Client ID</td><td>Identifies your application.</td><td><code>cid_is7MlGU5P08NXrLevoIHwiRA</code></td></tr>
+  <tr><td class="k">Client Secret</td><td>Your password for FHIRBridge. <strong>Keep it secret.</strong> We show it only once, so store it as soon as you get it.</td><td>(a long random text)</td></tr>
+</table></div>
+<p>For your Epic review we also give you the Epic <strong>client id</strong> and the <strong>redirect address</strong> we registered. We tell you <strong>which case applies to your workflow</strong> (Case A or Case B in section 5). For a patient who logs in to MyChart it is Case A.</p>
+
+<h2 id="need"><span class="n">4</span>What we need from you <span class="tag you">from you</span></h2>
+<p>Several items are already in your Seque document. The last column shows what is still open.</p>
+<div class="scroll"><table>
+  <tr><th>We need</th><th>Why</th><th>Status for you</th></tr>
+  <tr><td><strong>Your website address(es)</strong> that start the connection and receive the patient back, for example <code>https://ccdemo.pegasusone.com</code> (whole site) or one exact page.</td><td>We allow-list these addresses; FHIRBridge refuses any other address. <em>We allow-list website addresses (domains), not IP addresses.</em> Use <code>https</code>.</td><td>&#10003; In your document: <code>https://ccdemo.pegasusone.com</code> (Member Portal). Tell us if you also test on other addresses.</td></tr>
+  <tr><td><strong>The URL of your API</strong> that receives the data.</td><td>FHIRBridge sends the data there (HTTP POST, JSON).</td><td>&#10003; <code>https://ccdemo-api.pegasusone.com/fhir/ehr-import/seque-ingest</code></td></tr>
+  <tr><td><strong>How your API is protected</strong>, and the secret.</td><td>FHIRBridge adds it to every request. We store it securely.</td><td>&#10003; Header <code>x-Seque-secret</code>. <strong>Open:</strong> send us the secret value over a secure channel.</td></tr>
+  <tr><td><strong>The data you expect</strong>: body shape and the resource types.</td><td>We configure the workflow to deliver exactly that.</td><td>&#10003; Body, types and rules are in your document. <strong>Open:</strong> confirm the list in section 2 is complete and that attachments must be inline.</td></tr>
+  <tr><td><strong>Your own environment for a test</strong> (an ingest endpoint we may call during the go-live test) and a test patient account.</td><td>To run one end-to-end check before go-live.</td><td><strong>Open</strong> (<code>ccdemo</code> looks like a demo environment; tell us if it is the one to use).</td></tr>
+  <tr><td>If your API is behind a firewall: say so.</td><td>We then give you the server address FHIRBridge sends from, so you can allow it.</td><td><strong>Open:</strong> is <code>ccdemo-api.pegasusone.com</code> reachable from the internet?</td></tr>
+</table></div>
+
+<h2 id="build"><span class="n">5</span>What you build (PHP)</h2>
+<p>You need PHP 7.4 or newer with the cURL extension. You write the small files below; there is nothing to install.</p>
+<div class="callout warn"><strong>Which case are you?</strong>
+<strong>Case A &ndash; a person is involved</strong> (a patient or clinician signs in to their EHR account on a screen): your page sends the person to FHIRBridge for the sign-in, then they come back.<br>
+<strong>Case B &ndash; no person</strong> (your server just triggers the data transfer, for example from a button, a cron job or a back-office page): one call from your server, nothing is shown to anyone.<br>
+We tell you which one applies to your workflow. The first two files are the same for both.</div>
+
+<h3>Step 1 &ndash; the configuration file</h3>
+<p>Store it <strong>outside</strong> your public web folder. Do not commit the secret to version control.</p>
+<div class="lbl"><span>config.php</span><button class="copy" data-t="c1">Copy</button></div>
+<pre id="c1"><code>&lt;?php
+// config.php  -  values we gave you
+return [
+    'base_url'      =&gt; 'https://YOUR-PORTAL-BASE-URL',            // Portal Base URL (no trailing slash)
+    'workflow_id'   =&gt; '00000000-0000-0000-0000-000000000000',    // Workflow ID
+    'ehr_code'      =&gt; '00000000-0000-0000-0000-000000000000',    // EHR Code
+    'client_id'     =&gt; 'YOUR_CLIENT_ID',                          // Client ID
+    'client_secret' =&gt; getenv('FHIRBRIDGE_CLIENT_SECRET'),         // Client Secret - keep it in the server environment
+    // a page on your site that we told FHIRBridge about (section 4)
+    'return_url'    =&gt; 'https://app.yourcompany.com/fhirbridge-return.php',
+];</code></pre>
+
+<h3>Step 2 &ndash; a small helper that calls FHIRBridge</h3>
+<div class="lbl"><span>fhirbridge.php</span><button class="copy" data-t="c2">Copy</button></div>
+<pre id="c2"><code>&lt;?php
+// fhirbridge.php  -  sends a JSON request and returns status, headers and body
+
+function fb_request(string $method, string $url, ?array $payload = null): array
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST  =&gt; $method,
+        CURLOPT_HTTPHEADER     =&gt; ['Content-Type: application/json', 'Accept: application/json'],
+        CURLOPT_RETURNTRANSFER =&gt; true,
+        CURLOPT_HEADER         =&gt; true,
+        CURLOPT_FOLLOWLOCATION =&gt; false,   // we want to read redirects ourselves
+        CURLOPT_TIMEOUT        =&gt; 30,
+    ]);
+    if ($payload !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    }
+
+    $raw = curl_exec($ch);
+    if ($raw === false) {
+        $error = curl_error($ch);
+        curl_close($ch);
+        throw new RuntimeException('Could not reach FHIRBridge: ' . $error);
+    }
+
+    $status     = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
+
+    $headers = substr($raw, 0, $headerSize);
+    $body    = substr($raw, $headerSize);
+
+    return ['status' =&gt; $status, 'headers' =&gt; $headers, 'body' =&gt; $body, 'json' =&gt; json_decode($body, true)];
+}</code></pre>
+
+<h3>Case A &ndash; a person signs in</h3>
+<p><strong>A1.</strong> A page of yours that starts it. Protect it with <em>your own</em> login. It asks FHIRBridge for a one-time link and sends the browser there.</p>
+<div class="lbl"><span>start.php</span><button class="copy" data-t="c3">Copy</button></div>
+<pre id="c3"><code>&lt;?php
+// start.php  -  call this from your "Get my records" button (after your own login check)
+$cfg = require __DIR__ . '/../config.php';          // adjust the path
+require __DIR__ . '/fhirbridge.php';
+
+$res = fb_request('POST', $cfg['base_url'] . '/api/v1/workflows/external/launch-ticket', [
+    'client_id'         =&gt; $cfg['client_id'],
+    'client_secret'     =&gt; $cfg['client_secret'],
+    'workflow_id'       =&gt; $cfg['workflow_id'],
+    'ehr_endpoint_code' =&gt; $cfg['ehr_code'],
+    'return_url'        =&gt; $cfg['return_url'],
+    'mode'              =&gt; 'async',      // "Workflow started" straight away
+    'window_mode'       =&gt; 'same',       // open in this window
+]);
+
+if ($res['status'] !== 200 || empty($res['json']['run_url'])) {
+    error_log('FHIRBridge refused: ' . $res['status'] . ' ' . $res['body']);   // see section 8
+    http_response_code(502);
+    exit('Sorry, we could not start the connection. Please try again later.');
+}
+
+// The link works once and for about 90 seconds, so send the browser there right away.
+header('Location: ' . $res['json']['run_url']);
+exit;</code></pre>
+<p><strong>A2.</strong> The page the person comes back to (the <code>return_url</code> you gave us).</p>
+<div class="lbl"><span>fhirbridge-return.php</span><button class="copy" data-t="c4">Copy</button></div>
+<pre id="c4"><code>&lt;?php
+// fhirbridge-return.php  -  FHIRBridge sends the browser back here when it is done
+$status = $_GET['status'] ?? '';
+$runId  = $_GET['workflowRunId'] ?? '';
+if (!preg_match('/^[0-9a-f-]{36}$/i', $runId)) { $runId = ''; }     // only accept a real id
+
+if ($status === 'Triggered' || $status === 'Succeeded') {
+    echo 'Thank you. Your records are being sent. Reference: ' . htmlspecialchars($runId);
+} else {
+    echo 'The connection could not be completed. Please try again.';
+}</code></pre>
+<p>Only the first page needs your login. The person sees FHIRBridge's page while they sign in to the hospital; you build no sign-in screens.</p>
+
+<h3>Case B &ndash; no person involved</h3>
+<p>One server-side call. Nothing is shown to anyone, so you can run it from a button, a back-office page or a scheduled job.</p>
+<div class="lbl"><span>trigger.php</span><button class="copy" data-t="c5">Copy</button></div>
+<pre id="c5"><code>&lt;?php
+// trigger.php  -  starts the workflow from your server, no browser involved
+$cfg = require __DIR__ . '/../config.php';
+require __DIR__ . '/fhirbridge.php';
+
+$res = fb_request('POST', $cfg['base_url'] . '/api/v1/workflows/external/run', [
+    'client_id'         =&gt; $cfg['client_id'],
+    'client_secret'     =&gt; $cfg['client_secret'],
+    'workflow_id'       =&gt; $cfg['workflow_id'],
+    'ehr_endpoint_code' =&gt; $cfg['ehr_code'],
+    'return_url'        =&gt; $cfg['return_url'],   // must be one of the addresses you gave us
+    'mode'              =&gt; 'async',              // start it and return at once
+]);
+
+// A good answer is a redirect (HTTP 302) whose address ends with ?status=Triggered&amp;workflowRunId=...
+if ($res['status'] === 302 &amp;&amp; preg_match('/^Location:\s*(\S+)/mi', $res['headers'], $m)) {
+    parse_str((string) parse_url($m[1], PHP_URL_QUERY), $q);
+    if (($q['status'] ?? '') === 'Triggered') {
+        echo 'Started. Run reference: ' . ($q['workflowRunId'] ?? '');
+        exit;
+    }
+    error_log('FHIRBridge run failed: ' . ($q['error'] ?? $q['status'] ?? 'unknown'));
+    exit('The workflow could not be started.');
+}
+
+error_log('FHIRBridge refused: ' . $res['status'] . ' ' . $res['body']);   // see section 8
+exit('The workflow could not be started.');</code></pre>
+
+<h3>Optional &ndash; ask whether a run has finished</h3>
+<p>Use the run reference. No password is needed.</p>
+<div class="lbl"><span>status.php</span><button class="copy" data-t="c6">Copy</button></div>
+<pre id="c6"><code>&lt;?php
+$cfg = require __DIR__ . '/../config.php';
+require __DIR__ . '/fhirbridge.php';
+
+$runId = $_GET['run'] ?? '';
+if (!preg_match('/^[0-9a-f-]{36}$/i', $runId)) { http_response_code(400); exit; }
+
+$res = fb_request('GET', $cfg['base_url'] . '/api/v1/workflows/external/run-status/' . $runId);
+// {"status":"Running"}  or  {"status":"Succeeded"}  or  {"status":"Failed","errorMessage":"... Reference ID: ERR-..."}
+header('Content-Type: application/json');
+echo $res['body'];</code></pre>
+<p>Status values: <code>Running</code>, <code>Succeeded</code>, <code>PartialSuccess</code>, <code>Failed</code>, <code>Cancelled</code>.</p>
+
+<h2 id="options"><span class="n">6</span>Options you can send</h2>
+<p>You only need the first group. The rest is optional.</p>
+<div class="scroll"><table>
+  <tr><th>Field</th><th>Needed?</th><th>Values</th><th>What it does</th></tr>
+  <tr><td class="k">client_id</td><td>Yes</td><td>text</td><td>Your Client ID.</td></tr>
+  <tr><td class="k">client_secret</td><td>Yes</td><td>text</td><td>Your Client Secret.</td></tr>
+  <tr><td class="k">workflow_id</td><td>Yes</td><td>Workflow ID</td><td>Which workflow to start.</td></tr>
+  <tr><td class="k">ehr_endpoint_code</td><td>Yes</td><td>EHR Code</td><td>Which hospital / practice to read from.</td></tr>
+  <tr><td class="k">return_url</td><td>Yes</td><td>a https address you gave us</td><td>Where the browser is sent at the end (Case A). In Case B it is only checked, nobody is sent there.</td></tr>
+  <tr><td class="k">mode</td><td>No</td><td><code>async</code> (default) or <code>sync</code></td><td><code>async</code>: reply immediately with <code>Triggered</code>, the work continues in the background. <code>sync</code>: wait until the work is finished, then reply <code>Succeeded</code> or <code>Failed</code> (can take a while).</td></tr>
+  <tr><td class="k">window_mode</td><td>No</td><td><code>same</code> (default) or <code>new</code></td><td>Case A only: whether FHIRBridge's page replaces your page or opens in a new window.</td></tr>
+  <tr><td class="k">close_on_complete</td><td>No</td><td><code>true</code> or <code>false</code> (default)</td><td>Case A, new window only: close the window when done instead of returning to <code>return_url</code>.</td></tr>
+  <tr><td class="k">search_criteria</td><td>No</td><td>e.g. <code>identifier=203713,203711</code></td><td>Case B (system) workflows: use these search terms for this run instead of the saved ones.</td></tr>
+  <tr><td class="k">group_id</td><td>No</td><td>text</td><td>Bulk-export workflows: use this group for this run instead of the saved one.</td></tr>
+</table></div>
+
+<h2 id="proof"><span class="n">7</span>How you know it worked</h2>
+<h3>1. Your trigger code says "Triggered"</h3>
+<p>Case A: your return page receives <code>?status=Triggered&amp;workflowRunId=...</code>. Case B: <code>trigger.php</code> prints "Started". <code>Triggered</code> means the work has started, not that it has finished.</p>
+
+<h3>2. Your API receives requests from FHIRBridge</h3>
+<p>After the workflow has read the data, FHIRBridge calls the API URL you gave us. A successful run shows up on your side as one or more normal web requests:</p>
+<div class="scroll"><table>
+  <tr><th>You will see</th><th>Details</th></tr>
+  <tr><td>Method and address</td><td><code>POST</code> to the API URL you gave us.</td></tr>
+  <tr><td>Body</td><td>JSON, by default an array of records: <code>[ {...}, {...} ]</code>. Up to 500 records or about 4 MB per request; bigger runs arrive as several requests. The field names are the ones we agreed.</td></tr>
+  <tr><td>Headers</td><td><code>Content-Type: application/json</code>, your authentication header, and <code>X-Idempotency-Key</code> (a unique id per request).</td></tr>
+  <tr><td>What we expect back</td><td>An HTTP <code>200</code>&ndash;<code>299</code> answer within 30 seconds.</td></tr>
+  <tr><td>If your API fails</td><td>We retry up to 3 times with a short pause. Because of retries, the same request can arrive twice. Use <code>X-Idempotency-Key</code> to ignore a request you already processed.</td></tr>
+</table></div>
+<p>A minimal receiving endpoint, as a starting point (adjust the authentication to what we agreed):</p>
+<div class="lbl"><span>receive.php  (your API)</span><button class="copy" data-t="c7">Copy</button></div>
+<pre id="c7"><code>&lt;?php
+// receive.php  -  the endpoint FHIRBridge pushes the data to
+$expected = 'Bearer ' . getenv('FHIRBRIDGE_PUSH_TOKEN');           // the token we agreed
+if (!hash_equals($expected, $_SERVER['HTTP_AUTHORIZATION'] ?? '')) {
+    http_response_code(401);
+    exit;
+}
+
+$records = json_decode(file_get_contents('php://input'), true);
+if (!is_array($records)) {
+    http_response_code(400);
+    exit;
+}
+
+$key = $_SERVER['HTTP_X_IDEMPOTENCY_KEY'] ?? '';
+// if you already stored this $key, answer 200 and do nothing (it was a retry)
+
+foreach ($records as $record) {
+    // save $record to your database
+}
+
+header('Content-Type: application/json');
+echo json_encode(['received' =&gt; count($records)]);               // HTTP 200</code></pre>
+<div class="callout warn"><strong>Allow large requests</strong>Make sure your server accepts bodies of at least 8 MB (<code>post_max_size</code> in php.ini, and the limit of your web server or gateway), otherwise large batches are refused.</div>
+
+<h3>3. Optional &ndash; ask FHIRBridge</h3>
+<p><code>status.php</code> (above) shows <code>Succeeded</code> when the whole run, including the delivery to your API, has finished. If it shows <code>Failed</code>, send us the <em>Reference ID</em> from the message.</p>
+
+<h2 id="errors"><span class="n">8</span>If something goes wrong</h2>
+<div class="scroll"><table>
+  <tr><th>You see</th><th>Meaning</th><th>What to do</th></tr>
+  <tr><td><code>401 invalid_client</code></td><td>Client ID or Secret is wrong, or your client was switched off.</td><td>Check the two values. Ask us to issue a new secret if unsure.</td></tr>
+  <tr><td><code>403 caller_url_not_allowed</code></td><td>The <code>return_url</code> is not on the list of addresses you gave us.</td><td>Use an address we allow-listed, or send us the new address.</td></tr>
+  <tr><td><code>404 workflow_not_found</code></td><td>Wrong Workflow ID.</td><td>Check the value we gave you.</td></tr>
+  <tr><td>Redirect with <code>status=Failed&amp;error=ehr_endpoint_invalid</code></td><td>The EHR Code is wrong or belongs to another EHR.</td><td>Check the EHR Code.</td></tr>
+  <tr><td>"This launch link has expired or was already used" (Case A)</td><td>The one-time link lasts about 90 seconds and works once.</td><td>Start again from <code>start.php</code>. Do not reload or share the link.</td></tr>
+  <tr><td>Status <code>Triggered</code> but nothing reaches your API</td><td>The run is still going, or it failed after starting, or your API refused the requests.</td><td>Check <code>status.php</code>. Check your API log for 401 / 4xx answers. Tell us the run reference.</td></tr>
+  <tr><td>cURL error "Could not reach FHIRBridge"</td><td>Your server cannot reach the Portal Base URL.</td><td>Check the address and your server's outgoing firewall.</td></tr>
+</table></div>
+
+<h2 id="golive"><span class="n">9</span>Go-live checklist</h2>
+<div class="two">
+  <div class="box"><h3>We do <span class="tag us">us</span></h3><ul>
+    <li>Set up the EHR connection (Epic / athenahealth / eCW).</li>
+    <li>Add the hospital / practice and give you its EHR Code.</li>
+    <li>Build the workflow and its API destination that points to your API, with your authentication.</li>
+    <li>Create your Client ID and Secret.</li>
+    <li>Allow-list your website address(es).</li>
+    <li>Send you the five values (section 3), the Epic client id and redirect address, and tell you Case A or B.</li>
+  </ul></div>
+  <div class="box"><h3>You do <span class="tag you">you</span></h3><ul>
+    <li>Send us your website address(es), your API URL, its authentication and the expected data (section 4).</li>
+    <li>Allow requests from FHIRBridge to reach your API.</li>
+    <li>Add the PHP files above and put the five values in <code>config.php</code>.</li>
+    <li>Make your API answer <code>200</code> and handle repeated requests.</li>
+    <li>Run one test together with a test patient: start from your <code>Seque-start</code>, sign in to MyChart, see <em>Triggered</em>, then see the requests arrive at your <code>seque-ingest</code> with your <code>token</code> in each one.</li>
+  </ul></div>
+</div>
+
+<div class="callout bad"><strong>Keep the Client Secret on your server</strong>Never put it in a web page, JavaScript, a mobile app, a URL or a log. If it may have leaked, tell us and we will issue a new one; the old one stops working at once.</div>
+
+<footer>FHIRBridge &mdash; integration guide, version 3.1</footer>
+</div>
+<script>
+document.querySelectorAll('.copy').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var t = document.getElementById(b.getAttribute('data-t'));
+    if (!t || !navigator.clipboard) return;
+    navigator.clipboard.writeText(t.textContent).then(function () {
+      var o = b.textContent; b.textContent = 'Copied'; b.classList.add('done');
+      setTimeout(function () { b.textContent = o; b.classList.remove('done'); }, 1300);
+    });
+  });
+});
+</script>
+</body>
+</html>
