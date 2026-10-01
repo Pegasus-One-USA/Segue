@@ -31,6 +31,7 @@ export interface FmCreateTableSubmit {
 export class FieldMappingCreateTableModalComponent implements AfterViewInit {
   @ViewChild('nameInput') private readonly nameInput?: ElementRef<HTMLInputElement>;
   @ViewChild('parentTableSearchInput') private readonly parentTableSearchInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('parentPanel') private readonly parentPanel?: ElementRef<HTMLElement>;
 
   /** Already-known table full names (e.g. "dbo.PatientContact") offered as a parent. */
   readonly existingTables = input<string[]>([]);
@@ -66,7 +67,9 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
    *  coordinates measured from the trigger button's own getBoundingClientRect() instead — same
    *  technique as FieldMappingCanvasComponent's "+ Add a table…" panel. */
   readonly parentTableMenuOpen = signal(false);
-  readonly parentTableMenuStyle = signal<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
+  /** `aligned` is false until alignParentTablePanel has checked where the panel really landed — it stays
+   *  hidden until then, so it never flashes at the wrong spot first. */
+  readonly parentTableMenuStyle = signal<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number; aligned?: boolean } | null>(null);
   readonly parentTableSearchQuery = signal('');
 
   readonly filteredExistingTables = computed(() => {
@@ -94,7 +97,34 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
     );
     this.parentTableSearchQuery.set('');
     this.parentTableMenuOpen.set(true);
-    setTimeout(() => this.parentTableSearchInput?.nativeElement.focus());
+    setTimeout(() => {
+      this.alignParentTablePanel();
+      this.parentTableSearchInput?.nativeElement.focus();
+    });
+  }
+
+  /**
+   * The panel is position: fixed at viewport coordinates, but any ancestor with a transform, filter or
+   * backdrop-filter becomes what "fixed" is measured from instead — and the Map fields screen sits inside
+   * blurred overlays, which shifted the list right by the sidebar and down by the header. Moving the panel
+   * out of this modal's own backdrop fixed one of those; this corrects for any of them: measure where the
+   * panel actually is, and move it by the difference.
+   */
+  private alignParentTablePanel(): void {
+    const style = this.parentTableMenuStyle();
+    const panel = this.parentPanel?.nativeElement;
+    if (!style || !panel) return;
+    const rect = panel.getBoundingClientRect();
+    const dx = rect.left - style.left;
+    const dy = style.top !== undefined
+      ? rect.top - style.top
+      : rect.bottom - (window.innerHeight - (style.bottom ?? 0));
+    this.parentTableMenuStyle.set({
+      ...style,
+      left: style.left - dx,
+      ...(style.top !== undefined ? { top: style.top - dy } : { bottom: (style.bottom ?? 0) + dy }),
+      aligned: true,
+    });
   }
 
   closeParentTableMenu(): void {
