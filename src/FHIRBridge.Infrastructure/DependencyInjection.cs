@@ -230,6 +230,7 @@ public static class DependencyInjection
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
+            services.AddSingleton<IEhrWriteLedgerRepository, InMemoryEhrWriteLedgerRepository>();
             services.AddSingleton<ILicenseRequestRepository, InMemoryLicenseRequestRepository>();
             services.AddSingleton<ILicenseHistoryRepository, InMemoryLicenseHistoryRepository>();
             services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
@@ -329,6 +330,7 @@ public static class DependencyInjection
             services.AddScoped<ITransformationRuleRepository, EfTransformationRuleRepository>();
             services.AddScoped<IDeIdentificationProfileRepository, EfDeIdentificationProfileRepository>();
             services.AddScoped<IResourceTypeCriteriaRepository, EfResourceTypeCriteriaRepository>();
+            services.AddScoped<IEhrWriteLedgerRepository, EfEhrWriteLedgerRepository>();
             services.AddScoped<IDeIdentificationProfileSeeder, DeIdentificationProfileSeeder>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
@@ -532,6 +534,15 @@ public static class DependencyInjection
         services.TryAddSingleton<IBackendServicesJwtFactory, FHIRBridge.Runtime.Infrastructure.Auth.BackendServicesJwtFactory>();
         services.AddSingleton<IMedplumTokenProvider, MedplumTokenProvider>();
         services.AddScoped<MappedMedplumDestinationWriter>();
+        // EHR write-back: one profile per (vendor, resource type), resolved through the registry, never a switch.
+        // A new vendor or API is a new profile registered here.
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicAllergyIntoleranceWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicConditionWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicClinicalNoteWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicVitalSignWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicPatientWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.EhrWriteProfileRegistry>();
+        services.AddScoped<Destinations.EhrWriteBack.MappedEhrWriteBackDestinationWriter>();
         foreach (var registration in ConfiguredDestinationWriterFactory.DefaultRegistrations)
         {
             services.AddSingleton(registration);

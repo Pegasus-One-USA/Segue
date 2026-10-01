@@ -17,6 +17,9 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.FhirRepositoryDestination,
             WorkflowNodeTypes.MedplumDestination,
             WorkflowNodeTypes.AzureFhirServiceDestination,
+            // In the set for the Mapping-node exemption only. Its catalog entry is built by hand below, NOT through
+            // Destination(), whose widening would also let mapped and de-identified records in.
+            WorkflowNodeTypes.EhrWriteBackDestination,
         };
 
     private static readonly WorkflowNodeCatalogItem[] Items =
@@ -86,6 +89,20 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.DataFabricWarehouseDestination),
         Destination(WorkflowNodeTypes.CosmosDbFabricDestination),
         Destination(WorkflowNodeTypes.ApiEndpointDestination),
+        // EHR write-back takes whole FHIR resources only: raw or normalized. A Mapping node in front would hand it
+        // flattened rows, and a De-identification node would hand it redacted data to file into a chart, so neither
+        // contract is accepted. The target EHR connection is required configuration.
+        new(
+            WorkflowNodeTypes.EhrWriteBackDestination,
+            WorkflowNodeCategory.Destination,
+            70,
+            ["dest_sourceConnectionId"],
+            [WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch],
+            WorkflowDataContract.DestinationWriteResult,
+            WorkflowNodeTypes.EhrWriteBackDestination,
+            "EHR Write-Back",
+            "dest-ehr-writeback",
+            "Write FHIR resources back into an EHR (Epic): allergies, problems, vital signs, clinical notes and, opt-in, patients."),
         // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FhirRepository +
         // AzureFhirService + Blob destinations are exposed in the palette. The writers below remain registered in
         // ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.

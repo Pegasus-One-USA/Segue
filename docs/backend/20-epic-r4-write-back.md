@@ -2,7 +2,7 @@
 
 > Part of the [Backend Architecture Guide](README.md).
 > **Status: Phase 0 (discovery) complete, 2026-09-30 — desk research plus the Phase 0b sandbox tests in section 6.
-> Phases 1–5 not started.**
+> Phase 1 (framework, dry run only) built 2026-10-01 — see section 7. Phases 2–5 not started.**
 > **Branch:** all phases are built on `feature/ehr-write-back`, one commit per phase, no per-phase pull requests.
 > **Living plan:** the Claude Doc "Epic FHIR R4 Write-Back — Implementation Plan"
 > (https://claude.ai/code/artifact/5cd4f8a3-f740-49b6-bd65-930953a45762) holds the full design, the workflow-builder
@@ -186,7 +186,56 @@ Still open, each needing another sandbox write or an app change:
 - Whether our own allergy and problem ids can be read before reconciliation — needs the AllergyIntolerance and
   Condition read APIs added to the app.
 
-## 7. Sources
+## 7. Phase 1 — what is built (dry run only)
+
+Every run is a dry run: `MappedEhrWriteBackDestinationWriter.LiveWritesReleased` is `false`, so the writer
+shapes, validates and resolves each record, reads from the EHR where resolution needs it, and reports what it
+would write. No request that changes an EHR can leave it. Phase 2 turns the send on after sandbox verification.
+
+**How a record flows.** Source node → (optional Transformation node) → EHR Write-Back node
+(`EhrWriteBackDestinationNode`, `dest-ehr-writeback` in the portal). Exactly one source node, no Mapping node, and
+no De-identification node anywhere upstream; the graph validator refuses anything else. Records read from the
+target EHR itself (same base URL) are reported as `already-in-ehr` and never sent back, because Epic would file
+second copies; QA clone mode (Phase 3) is the only way to write an EHR's own data back into it.
+
+| Step | Where |
+|---|---|
+| Resolve the target connection named by the node's `dest_sourceConnectionId`; refuse it unless it is enabled, its `Access` allows Write and its vendor is in `EhrWriteCapabilities` | `EhrWriteBackDestinationNodeExecutor` |
+| Build the channel over the vendor connector; for Epic, send no `scope` (`FhirSourceConfiguration.OmitScopeParameter`) | `FhirClientEhrWriteChannel`, `SmartBackendServicesTokenProvider` |
+| Skip unselected or unwritable types; shape each record to the API's accepted subset | `MappedEhrWriteBackDestinationWriter`, `Destinations/EhrWriteBack/Epic/*WriteProfile` |
+| Resolve the patient: same EHR environment (ids kept) → ledger → identifier search (exactly one hit) → `$match` (certain only); resolve an encounter for notes (open or finished) and vitals (open only) | `EhrReferenceResolver` |
+| Check the ledger, keyed on (EHR environment, resource type, source record) — not on connection or destination ids, which clones change | `EhrWriteLedgerEntry`, `IEhrWriteLedgerRepository` |
+| Report counts and reason codes per resource type, and whether the granted scope covers what would be written | `EhrWriteReport` on the result; `ehrWrite` in node metadata and run history |
+
+**Safety properties already in place for Phase 2.**
+- A create is sent once. The connector's write loop retries only 429, and 503 with Retry-After. The HttpClient's
+  resilience handler no longer retries unsafe methods on the vendor clients (`AddWriteSafeResilience`), so the
+  host-wide Polly retry cannot resend a POST underneath it.
+- A timeout, dropped connection, cancellation or 5xx on a create is `OutcomeUnknown` → ledger `Unknown`, never
+  retried automatically. 59141 and 59189 (with expression `code/instant`) are recorded as already at target.
+- Nothing PHI-bearing is logged or stored: outcome issues carry codes and element paths only (no diagnostics),
+  record errors are `Type #n: reason-code`, identifier-search URLs are logged redacted.
+- A connection set to Write only cannot be read as a workflow source (`FhirSourceConfiguration.AllowsRead`).
+- A resend of a rejected row is claimed with optimistic concurrency (`AttemptCount`), so two runs cannot both
+  send it. Rejections caused by configuration (no token, 401/403, 429, 503, Epic 59108) stay retryable.
+- `Patient/$match` is read as no-match only when Epic says 4101 with no error; a single candidate counts only with
+  score 1. An empty selection writes nothing, and a record without a source id is rejected.
+- The configured-pipeline (route) plane cannot use this destination: it has no EHR channel, and the writer refuses.
+
+**Configuration.** `SourceConnections.Access` (Read / Write / ReadWrite, default Read; Write only for a
+write-capable vendor over Backend System). Destination settings: `dest_sourceConnectionId`, `dest_dryRun`,
+`dest_createPatientIfMissing`, `dest_maxWritesPerRun` (default 500, max 10000, per write call),
+`dest_noteDocStatus` (preliminary by default), and the node's `dest_resources`. Permission group `EhrWriteBack`
+(`ehrwriteback.view/create/edit/delete/execute`). System setting `EhrWriteBack:CloneModeEnabled` (QA only,
+seeded false; clone mode itself is Phase 3). API: `GET api/v1/ehr-write-capabilities?vendor=`. Migration
+`AddEhrWriteBack` for both providers.
+
+**Known limits, picked up in later phases.** Notes must already be plain text (HTML/RTF conversion is Phase 3);
+vital units are passed through, not converted; a patient that would be created makes its other records skip as
+`patient-not-yet-created` until the live create exists; `dest_maxWritesPerRun` caps one write call, not a whole
+run; the ledger has no review screen yet.
+
+## 8. Sources
 
 - Sandbox CapabilityStatement: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/metadata
 - Sandbox SMART configuration: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/.well-known/smart-configuration

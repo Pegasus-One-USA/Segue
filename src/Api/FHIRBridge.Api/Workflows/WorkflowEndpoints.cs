@@ -3001,7 +3001,9 @@ public static class WorkflowEndpoints
             // Resets the incremental-sync cursor — the clone has never actually run, so LastSuccessfulSyncUtc
             // carried over from the original would make its first real run think resources up to that point
             // were already fetched by THIS connection, silently skipping them.
-            dto.Retrieval is { } retrieval ? retrieval with { LastSuccessfulSyncUtcByResourceType = null } : null);
+            dto.Retrieval is { } retrieval ? retrieval with { LastSuccessfulSyncUtcByResourceType = null } : null,
+            // Without this the copy would silently drop to Read and its write-back destinations stop working.
+            dto.Access);
 
         var cloned = await configurationService.AddSourceConnectionAsync(createRequest, cancellationToken);
         var result = (cloned.Id, cloned.ApplicationType);

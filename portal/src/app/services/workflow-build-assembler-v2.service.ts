@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { PipelineStoreV2 } from './pipeline-v2.store';
 import { WorkflowGraphMapperServiceV2 } from './workflow-graph-mapper-v2.service';
 import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
+import { EHR_WRITE_BACK_METADATA_KEYS } from '../destination-connections/utils/destination-connection-secret.util';
 import { vendorScopeProfile } from '../data/vendor-scope-catalog.data';
 import {
   CreateDestinationConfigurationRequest,
@@ -618,6 +619,8 @@ export class WorkflowBuildAssemblerServiceV2 {
         discoveredScopes: discoveredScopes.length ? discoveredScopes : null,
       }),
       applicationType: appType,
+      // Null keeps the saved Access; only a node saved with the Access field sends one.
+      access: (fields['Access'] as 'Read' | 'Write' | 'ReadWrite' | undefined) || null,
       interactive,
       // Provider Standalone gets a curated Search REST subset too (Resource Types/Search Criteria/Max Results/
       // Include Related Resources — no scheduler, since it's a user-initiated one-shot fetch, not automated).
@@ -811,6 +814,24 @@ export class WorkflowBuildAssemblerServiceV2 {
     const keyVaultName = fields['secretKeyVaultName'] || 'workflow-secrets';
     const secretName =
       fields['secretName'] || `dest-${this.slug(name)}-${this.shortId()}`;
+
+    // EHR Write-Back first: a whole-resource destination with no secret of its own (it writes over the target
+    // connection's credentials). 'EhrWriteBackDestinationNode' contains neither 'Fhir' nor any other family's
+    // marker, but testing it first keeps a later includes() check from ever claiming it.
+    const isEhrWriteBack =
+      node.nodeType.includes('EhrWriteBack') ||
+      (fields['__transformId'] ?? '') === 'dest-ehr-writeback';
+    if (isEhrWriteBack) {
+      return {
+        name: fields['dest_name'] || 'EHR Write-Back Destination',
+        destinationType: 'EhrWriteBack',
+        keyVaultName,
+        secretName,
+        target: null,
+        inlineSecret: '',
+        connectionMetadataJson: this.buildConnectionMetadata(fields, 'ehrwriteback'),
+      };
+    }
 
     // dest_password/dest_sftpPassword are redacted from persisted config (see WorkflowGraphMapperServiceV2's
     // SECRET_FIELD_KEYS) and never round-trip back into the wizard on reload — a blank password field on a
@@ -1080,10 +1101,12 @@ export class WorkflowBuildAssemblerServiceV2 {
    *  file's own header comment). */
   private buildConnectionMetadata(
     f: Record<string, string>,
-    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'cosmosFabric' | 'apiendpoint',
+    kind: 'sql' | 'mongo' | 'csv' | 'medplum' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'cosmosFabric' | 'apiendpoint' | 'ehrwriteback',
   ): string {
-    const keys =
-      kind === 'apiendpoint'
+    const keys: readonly string[] =
+      kind === 'ehrwriteback'
+        ? EHR_WRITE_BACK_METADATA_KEYS
+        : kind === 'apiendpoint'
         ? [
             'dest_name',
             'dest_apiEndpointUrl',

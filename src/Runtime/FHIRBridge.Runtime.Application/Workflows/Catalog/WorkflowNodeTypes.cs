@@ -84,6 +84,11 @@ public static class WorkflowNodeTypes
     /// <see cref="RestApiDestination"/> it supports batching, retry and every auth mode a real integration needs.</summary>
     public const string ApiEndpointDestination = "ApiEndpointDestinationNode";
 
+    /// <summary>FHIR R4 write-back INTO an EHR (Epic first) over the source connection named by
+    /// <c>dest_sourceConnectionId</c>. Takes whole FHIR resources straight from a source or transformation node, never
+    /// mapped records and never de-identified ones: see DestinationType.EhrWriteBack.</summary>
+    public const string EhrWriteBackDestination = "EhrWriteBackDestinationNode";
+
     /// <summary>Phase 2 example: a Destination-category node whose input is a previous destination's write result,
     /// not fresh mapped records — demonstrates chaining a destination into another node via a bespoke catalog rank
     /// tier (71, above Destination's 70) rather than relaxing the graph validator. See

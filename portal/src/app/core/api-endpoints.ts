@@ -187,6 +187,11 @@ export const MAPPING_PROFILE_ENDPOINTS = {
 // ─── FHIR mapping catalog (MappingController — api/v1/mapping) ─────────────────
 // Array-aware FHIR element metadata (correct JSONPaths, cardinality, array ancestors) generated from
 // the Firely R4 model. Drives the destination wizard's field picker so paths aren't hand-guessed.
+/** Which resource types an EHR vendor accepts writes for (EhrWriteCapabilitiesController). */
+export const EHR_WRITE_CAPABILITIES_ENDPOINTS = {
+  byVendor: (vendor: string) => `${API_V1_BASE}/ehr-write-capabilities?vendor=${encodeURIComponent(vendor)}`,
+} as const;
+
 export const MAPPING_ENDPOINTS = {
   // vendor narrows the response to VendorResourceTypeSupport's known-supported list for that source
   // system (Athenahealth, Healow today) — omitted (or a vendor with no known restriction, e.g. Epic)

@@ -35,6 +35,7 @@ import {
   MappingCatalogService,
   FhirElement,
 } from '../../../services/mapping-catalog.service';
+import { EhrWriteCapabilitiesService } from '../../../services/ehr-write-capabilities.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import {
   CreateDestinationConfigurationRequest,
@@ -54,6 +55,7 @@ import {
   isSqlFamilyForm,
   isFabricForm,
   isCosmosDbFabricForm,
+  isEhrWriteBackForm,
   isMongoForm,
 } from './destination-forms/destination-form-api';
 import { FieldMappingCanvasComponent } from './field-mapping/field-mapping-canvas.component';
@@ -139,7 +141,7 @@ const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 // both are FHIR-native, whole-resource passthrough destinations with no mapping canvas — so they're
 // widened here rather than in MappingDestType, and nonFhirDestType() narrows back down at every call
 // site that genuinely needs a mappable destination (guarded by isFhir()/isAzureFhir()).
-export type WizardDestType = MappingDestType | 'fhir' | 'azurefhir';
+export type WizardDestType = MappingDestType | 'fhir' | 'azurefhir' | 'ehrwriteback';
 
 /** Step 3's three configuration surfaces — one per V2 chain node after Destination. */
 export type ConfigTab = 'mapping' | 'transformation' | 'deidentification';
@@ -538,6 +540,7 @@ export class DestinationWizardComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly schemaSvc = inject(DestinationSchemaService);
   private readonly catalogSvc = inject(MappingCatalogService);
+  private readonly ehrWriteCapabilitiesSvc = inject(EhrWriteCapabilitiesService);
   private readonly toast = inject(ToastService);
   private readonly destinationConfigSvc = inject(
     DestinationConfigurationService,
@@ -824,6 +827,8 @@ export class DestinationWizardComponent implements OnInit {
         return 'Medplum';
       case 'azurefhir':
         return 'AzureFhirService';
+      case 'ehrwriteback':
+        return 'EhrWriteBack';
       // 'fhir' (Aidbox) deliberately has no case here — it's never registry-routed (see isFhir()'s doc
       // comment on the already-shipped, live-verified hand-rolled Aidbox form/wizard steps). Falling through
       // to the default is harmless because activeFormType()/activeForm() are never consulted for 'fhir' —
@@ -1206,6 +1211,10 @@ export class DestinationWizardComponent implements OnInit {
    *  it would otherwise show. Only used when a live Discover probe hasn't already produced a more
    *  authoritative, connection-specific result. */
   readonly vendorResourceTypes = signal<string[] | null>(null);
+  /** EHR Write-Back only: the resource types the TARGET EHR accepts writes for, copied from the Step 1 form on
+   *  Next (or, on reopen, fetched for the saved dest_ehrVendor). Takes precedence over the upstream source's
+   *  discovery/vendor lists in strictAvailableGroups: what matters is what can be written, not what can be read. */
+  readonly ehrWritableResourceTypes = signal<string[] | null>(null);
   /** Exposed for the Step 2 hint's "Showing N of {{ SUPPORTED_RESOURCE_TYPES.length }}" — the imported
    *  const itself isn't reachable from the template. */
   readonly SUPPORTED_RESOURCE_TYPES = SUPPORTED_RESOURCE_TYPES;
@@ -1214,6 +1223,11 @@ export class DestinationWizardComponent implements OnInit {
    *  template actually uses, and unsupportedSelectedResources diffs against this to find selections the
    *  filter would otherwise have hidden. */
   private readonly strictAvailableGroups = computed(() => {
+    if (this.isEhrWriteBack()) {
+      // Deny-by-default: no known capability list means nothing is offered.
+      const writable = new Set(this.ehrWritableResourceTypes() ?? []);
+      return SUPPORTED_RESOURCE_TYPES.filter((r) => writable.has(r));
+    }
     const discovered = this.discoveredResourceTypes();
     if (discovered) {
       const discoveredSet = new Set(discovered);
@@ -2007,6 +2021,7 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly FABRIC_TYPES: DestinationTypeV2[] = ['DataFabricAzure'];
   private static readonly FABRIC_WAREHOUSE_TYPES: DestinationTypeV2[] = ['DataFabricWarehouse'];
   private static readonly APIENDPOINT_TYPES: DestinationTypeV2[] = ['ApiEndpoint'];
+  private static readonly EHR_WRITEBACK_TYPES: DestinationTypeV2[] = ['EhrWriteBack'];
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -2084,6 +2099,9 @@ export class DestinationWizardComponent implements OnInit {
   /** General-purpose outbound REST API — same file-shaped mapping (typed target fields, no live schema) as
    *  isDataLake()/isBlob(). */
   readonly isApiEndpoint = computed(() => this.destType() === 'apiendpoint');
+  /** EHR Write-Back — whole FHIR resources written INTO an EHR, so like isAzureFhir() there is no field-mapping
+   *  canvas; Step 2 is filtered by what the target EHR accepts (ehrWritableResourceTypes). */
+  readonly isEhrWriteBack = computed(() => this.destType() === 'ehrwriteback');
   /** MySQL/PostgreSQL only — SQL Server always negotiates encryption regardless, so no SSL toggle for it. */
   readonly showSslToggle = computed(() => this.isMySql() || this.isPostgres());
 
@@ -2125,7 +2143,9 @@ export class DestinationWizardComponent implements OnInit {
                             ? 'Cosmos DB in Fabric'
                             : this.destType() === 'apiendpoint'
                               ? 'API Endpoint'
-                              : 'CSV',
+                              : this.destType() === 'ehrwriteback'
+                                ? 'EHR Write-Back'
+                                : 'CSV',
   );
   readonly resourceKeys = computed(() => this.selectedResources());
 
@@ -2177,7 +2197,7 @@ export class DestinationWizardComponent implements OnInit {
       // A FHIR repository (or Azure FHIR Service) has no per-resource table/file target and no mapping rows
       // at all — seeding either would only leave dead state behind on a destination that never renders the
       // mapping canvas.
-      if (this.isFhir() || this.isAzureFhir()) return;
+      if (this.isFhir() || this.isAzureFhir() || this.isEhrWriteBack()) return;
       untracked(() => this._rebuildRows(resources, type));
     });
 
@@ -2717,6 +2737,13 @@ export class DestinationWizardComponent implements OnInit {
       // above only fires on a stale/idle probe, so this is the other place collections needs copying.
       if (isMongoForm(form)) this.mongoCollections.set(form.collections());
       if (isCosmosDbFabricForm(form)) this.cosmosContainers.set(form.containers());
+      // EHR Write-Back: Step 2 offers only what the chosen target EHR accepts, and the form is unmounted after
+      // this step, so its answer is copied into the wizard now.
+      if (isEhrWriteBackForm(form)) {
+        this.ehrWritableResourceTypes.set(form.writableResourceTypes());
+        const writable = new Set(form.writableResourceTypes());
+        this.selectedResources.set(this.selectedResources().filter((r) => writable.has(r)));
+      }
       // SQL: same "already tested manually before Next" case, and the same fix shape — the branch above only
       // fires on a stale/idle probe, so a user who clicks the form's own Test Connection button (getting
       // form.probeState() to 'ok' there) and only then clicks Next falls straight through to here, and this
@@ -2857,6 +2884,7 @@ export class DestinationWizardComponent implements OnInit {
     if (this.isMedplum()) return 'Medplum';
     if (this.isFhir()) return 'FhirRepository';
     if (this.isAzureFhir()) return 'AzureFhirService';
+    if (this.isEhrWriteBack()) return 'EhrWriteBack';
     if (this.isBlob()) return 'BlobStorage';
     if (this.isDataLake()) return 'DataLakeWebhook';
     if (this.isFabricWarehouse()) return 'DataFabricWarehouse';
@@ -2881,7 +2909,7 @@ export class DestinationWizardComponent implements OnInit {
   /** True for the destinations that persist whole FHIR resources rather than mapped columns. Their rules are
    *  authored against FHIR paths, so they get their own panel — see openRulesForResource. */
   private isWholeResourceFhirDestination(): boolean {
-    return this.isFhir() || this.isMedplum() || this.isAzureFhir();
+    return this.isFhir() || this.isMedplum() || this.isAzureFhir() || this.isEhrWriteBack();
   }
 
   openRulesForResource(resource: string): void {
@@ -4235,7 +4263,9 @@ export class DestinationWizardComponent implements OnInit {
                           ? DestinationWizardComponent.FABRIC_TYPES
                           : this.isApiEndpoint()
                             ? DestinationWizardComponent.APIENDPOINT_TYPES
-                            : DestinationWizardComponent.CSV_TYPES;
+                            : this.isEhrWriteBack()
+                              ? DestinationWizardComponent.EHR_WRITEBACK_TYPES
+                              : DestinationWizardComponent.CSV_TYPES;
           return page.items.filter((item) =>
             wantedTypes.includes(item.destinationType),
           );
@@ -4540,9 +4570,12 @@ export class DestinationWizardComponent implements OnInit {
     const selected = new Set(this.selectedResources());
     const dismissed = this.dismissedRecommendations();
     const recommended = new Set<string>();
+    // Write-back can only recommend what the target accepts: a 'commonly used together' Encounter or
+    // Practitioner cannot be written, and Patient is created only through the opt-in.
+    const offered = this.isEhrWriteBack() ? new Set(this.strictAvailableGroups()) : null;
     for (const r of selected) {
       for (const rec of recommendedFor(r)) {
-        if (!selected.has(rec) && !dismissed.has(rec)) {
+        if (!selected.has(rec) && !dismissed.has(rec) && (!offered || offered.has(rec))) {
           recommended.add(rec);
         }
       }
@@ -4952,6 +4985,13 @@ export class DestinationWizardComponent implements OnInit {
       this.selectedResources.set(
         f['dest_resources'].split(',').filter(Boolean),
       );
+    }
+    // EHR Write-Back reopened (possibly straight on a later step, with Step 1's form never mounted): Step 2's
+    // filter needs the target's writable types, which only the saved vendor can tell us now.
+    if (this.isEhrWriteBack()) {
+      this.ehrWriteCapabilitiesSvc
+        .writableResourceTypes(f['dest_ehrVendor'] || null)
+        .subscribe((types) => this.ehrWritableResourceTypes.set(types));
     }
     // Seeded only once selectedResources() above is populated — the rules editor's resource tabs are driven
     // by it, so an earlier default would land on a resource that isn't in the restored selection.
@@ -5374,6 +5414,7 @@ export class DestinationWizardComponent implements OnInit {
     const isFabricWarehouse = this.isFabricWarehouse();
     const isCosmosFabric = this.isCosmosFabric();
     const isApiEndpoint = this.isApiEndpoint();
+    const isEhrWriteBack = this.isEhrWriteBack();
     const name =
       metadata.fields['dest_name'] ||
       (isSql
@@ -5398,10 +5439,26 @@ export class DestinationWizardComponent implements OnInit {
                           ? 'Cosmos DB in Fabric Destination'
                           : isApiEndpoint
                             ? 'API Endpoint Destination'
-                            : 'File Destination');
+                            : isEhrWriteBack
+                              ? 'EHR Write-Back Destination'
+                              : 'File Destination');
     const secretName = newSecretName(name);
     const deIdentificationProfileId = this.selectedDeIdentificationProfileId();
-    const request: CreateDestinationConfigurationRequest = isSql
+    // EHR Write-Back has no secret of its own (it writes over the target connection's credentials) and must never
+    // carry a de-identification profile — the backend refuses one. keyVaultName/secretName are still sent because
+    // every destination requires them; nothing is written to them.
+    const request: CreateDestinationConfigurationRequest = isEhrWriteBack
+      ? {
+          name,
+          destinationType: 'EhrWriteBack',
+          keyVaultName: 'workflow-secrets',
+          secretName,
+          target: null,
+          inlineSecret: '',
+          connectionMetadataJson: JSON.stringify(metadata.fields),
+          deIdentificationProfileId: null,
+        }
+      : isSql
       ? {
           name,
           destinationType: this.isMySql()
@@ -5816,7 +5873,9 @@ export class DestinationWizardComponent implements OnInit {
                                   ? 'dest-fabric'
                                   : type === 'apiendpoint'
                                     ? 'dest-apiendpoint'
-                                    : 'dest-csv',
+                                    : type === 'ehrwriteback'
+                                      ? 'dest-ehr-writeback'
+                                      : 'dest-csv',
         status: 'enabled',
         config,
       });

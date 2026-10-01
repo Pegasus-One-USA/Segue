@@ -73,6 +73,8 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // General-purpose, fully configurable outbound REST API — writer, sender, validator, Step 1 form and
     // wizard family are all in place (see MappedApiEndpointDestinationWriter).
     'dest-apiendpoint',
+    // EHR write-back — mirrors phase-config-v2 so the type shows in list and history filters too.
+    'dest-ehr-writeback',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
     // Phase 2+ destinations: 'dest-azuresql',

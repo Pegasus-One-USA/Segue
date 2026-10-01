@@ -170,6 +170,7 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
       vendor('fhirrepository', 'Aidbox', 'fhirrepository'),
       vendor('medplum', 'Medplum (FHIR)', 'medplum'),
       vendor('azurefhirservice', 'Azure FHIR Service', 'azurefhirservice'),
+      vendor('ehrwriteback', 'EHR Write-Back', 'ehrwriteback'),
     ],
   },
   {

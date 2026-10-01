@@ -91,11 +91,22 @@ export function buildFhirSecretBlob(f: Record<string, string>): string {
  * DestinationConfiguration.ConnectionMetadataJson so a later "select existing" can repopulate a form's
  * non-secret fields without ever reading the secret back.
  */
+/** The EHR Write-Back destination's dest_* settings, shared by every place that builds its connection metadata. */
+export const EHR_WRITE_BACK_METADATA_KEYS = [
+  'dest_name', 'dest_sourceConnectionId', 'dest_ehrVendor', 'dest_dryRun', 'dest_createPatientIfMissing',
+  'dest_maxWritesPerRun', 'dest_noteDocStatus',
+] as const;
+
 export function buildConnectionMetadata(
   f: Record<string, string>,
-  kind: 'sql' | 'csv' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'cosmosFabric' | 'apiendpoint',
+  kind: 'sql' | 'csv' | 'fhir' | 'blob' | 'datalake' | 'fabric' | 'cosmosFabric' | 'apiendpoint' | 'ehrwriteback',
 ): string {
-  const keys =
+  const keys: readonly string[] =
+    // EHR Write-Back — no secret of its own (it writes over the target connection's credentials), so every key is
+    // carried. dest_resources is a node field the wizard writes, not connection metadata.
+    kind === 'ehrwriteback'
+      ? EHR_WRITE_BACK_METADATA_KEYS
+    :
     // API Endpoint — the general-purpose REST destination. Every field here is non-secret transport/framing
     // configuration; the credential (bearer token / API key / "user:password" / HMAC shared secret / OAuth2
     // client secret / base64 PFX for client certificates) is dest_apiSecret and is deliberately absent from this

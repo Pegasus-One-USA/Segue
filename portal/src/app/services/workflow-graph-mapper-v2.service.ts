@@ -22,7 +22,8 @@ const CATEGORY_TRANSFORM: WorkflowNodeCategory = 10;
  *  upstream Mapping node (see isFhirDirectDestination). MappingNodeExecutor already treats all three
  *  identically via its `wholeResourceFhir` branch; listing only dest-fhir here left a Medplum/Azure FHIR
  *  workflow with an inert synthetic Mapping node injected on save. */
-const FHIR_DIRECT_DESTINATION_IDS = new Set(['dest-fhir', 'dest-medplum', 'dest-azurefhir']);
+// EHR write-back takes whole FHIR resources too, and the backend refuses a Mapping node in front of it.
+const FHIR_DIRECT_DESTINATION_IDS = new Set(['dest-fhir', 'dest-medplum', 'dest-azurefhir', 'dest-ehr-writeback']);
 
 /** Backend NodeTypes of V2's three chain steps — the nodes that sit between source and destination and each
  *  need the destinationId stamped onto them at save time (see the stamping loop in toRequest). */
@@ -76,6 +77,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'dest-medplum': 'MedplumDestinationNode',
   'dest-fhir': 'FhirRepositoryDestinationNode',
   'dest-azurefhir': 'AzureFhirServiceDestinationNode',
+  'dest-ehr-writeback': 'EhrWriteBackDestinationNode',
   'dest-blob': 'BlobDestinationNode',
   'dest-datalake-webhook': 'DataLakeWebhookDestinationNode',
   'dest-apiendpoint': 'ApiEndpointDestinationNode',
