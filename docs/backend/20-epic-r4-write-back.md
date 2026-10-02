@@ -381,7 +381,41 @@ Tabular source does not have.
 `TabularSourceTests.A_csv_of_allergies_reaches_the_ehr_write_back_writer_unchanged` (patient matched by
 `$match`, allergy would be written). The sandbox run is pending Epic's return.
 
-## 11. Sources
+## 11. Phase 5a — eClinicalWorks (Healow), dry run only
+
+**Discovery (2026-10-02, practice `JAFJCD`, `https://fhir4.healow.com/fhir/r4/JAFJCD`).** The certified FHIR server
+(eCW FHIR Facade 1.6) declares one write in its CapabilityStatement: QuestionnaireResponse create. Its SMART
+configuration nevertheless advertises `system/*.c` and `.u` for most clinical types — the same scope-versus-API gap
+Epic showed in Phase 0. eCW's clinical writes are **contracted** APIs (interop@eclinicalworks.com), activated per
+practice and dependent on the practice's build; their specifications are not public, and no eCW sandbox has been
+shown to accept them. What is known (from a third-party integration guide, unverified):
+
+| Resource | Operation | Build | Notes |
+|---|---|---|---|
+| AllergyIntolerance | create | 12.0.2+ | create only |
+| Condition | create | 12.0.2+ | problems / diagnoses / history, filed on an open telephone encounter eCW manages |
+| Observation (vitals) | create | 12.0.3.04009405+ | |
+| Patient | create, update | 12.0.2+ | refused with 202 `INVALID_PATIENT_ALREADY_EXIST` when account number and birth date match |
+| DocumentReference | create | 12.0.2+ | a transaction Bundle with an HL7 v2 MDM attachment, needs an encounter id — a different shape |
+
+**What is built.** Vendor data and profiles only; the framework is unchanged:
+
+- `EhrWriteCapabilities` lists Healow AllergyIntolerance, Condition (problem-list item), Observation (vital signs,
+  open encounter) and Patient (opt-in), all create-only, Backend only, and **all `liveWriteSupported: false`**:
+  every eCW run is a dry run until a practice sandbox passes the Phase 2 gate. Notes are left out.
+- eCW has no `Patient/$match`, so patients resolve by identifier search only (`supportsPatientMatch: false`); a
+  record whose patient no identifier finds is skipped as `patient-not-matched`, and patient creation cannot be
+  reached. eCW honours requested scopes, so its write connection sends them (`requestsScopeOnTokenRequest`).
+- `202` is recorded as already at target.
+- Profiles (`Healow/HealowWriteProfiles.cs`) shape the same US Core subset the verified Epic profiles build, through
+  `DelegatingEhrWriteProfile`; a profile is replaced on its own once eCW's contracted spec is in hand.
+- The Healow connector already had the write path and the write-safe HTTP resilience from Phase 1; the source form
+  offers Write access for an eCW Backend System connection from the capabilities API.
+
+**To go live with eCW:** contract the write APIs, get a practice (or sandbox) activated, run the Phase 2 checks
+there, then set the verified types `liveWriteSupported: true` and release them (`Healow:AllergyIntolerance`, …).
+
+## 12. Sources
 
 - Sandbox CapabilityStatement: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/metadata
 - Sandbox SMART configuration: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/.well-known/smart-configuration

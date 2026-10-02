@@ -7,18 +7,35 @@ namespace FHIRBridge.UnitTests.EhrWriteBack;
 
 /// <summary>
 /// The write-capability table is deny-by-default and holds exactly what Phase 0 verified for Epic: five create-only
-/// APIs, Backend tokens only. A vendor added by accident, or an Update slipping in, would let the portal offer writes
-/// the EHR refuses (or, worse, accepts in a way nobody verified).
+/// APIs, Backend tokens only, plus eClinicalWorks' contracted APIs, dry-run-only until a practice sandbox verifies
+/// them. A vendor added by accident, or an Update slipping in, would let the portal offer writes the EHR refuses
+/// (or, worse, accepts in a way nobody verified).
 /// </summary>
 public sealed class EhrWriteCapabilitiesTests
 {
     [Fact]
-    public void Only_epic_accepts_writes()
+    public void Only_epic_and_eclinicalworks_accept_writes()
     {
         foreach (var vendor in Enum.GetValues<SourceSystemType>())
         {
-            EhrWriteCapabilities.HasAnyWriteCapability(vendor).Should().Be(vendor == SourceSystemType.Epic, because: vendor.ToString());
+            EhrWriteCapabilities.HasAnyWriteCapability(vendor)
+                .Should().Be(vendor is SourceSystemType.Epic or SourceSystemType.Healow, because: vendor.ToString());
         }
+    }
+
+    [Fact]
+    public void Eclinicalworks_is_dry_run_only_identifier_matched_and_scope_requesting()
+    {
+        var healow = EhrWriteCapabilities.VendorProfile(SourceSystemType.Healow)!;
+
+        healow.Capabilities.Select(c => c.ResourceType)
+            .Should().BeEquivalentTo(["AllergyIntolerance", "Condition", "Observation", "Patient"]);
+        healow.Capabilities.Should().OnlyContain(c => !c.LiveWriteSupported, because: "no eCW sandbox has verified a write");
+        healow.Capabilities.Should().OnlyContain(c => c.Operations.SetEquals(new[] { EhrWriteOperation.Create }));
+        healow.SupportsPatientMatch.Should().BeFalse();
+        healow.RequestsScopeOnTokenRequest.Should().BeTrue();
+        healow.IsAlreadyAtTarget("202", null).Should().BeTrue();
+        EhrWriteCapabilities.Find(SourceSystemType.Healow, "DocumentReference").Should().BeNull();
     }
 
     [Fact]
@@ -39,7 +56,7 @@ public sealed class EhrWriteCapabilitiesTests
     [Fact]
     public void Every_capability_is_create_only_backend_only_and_a_canonical_resource_type()
     {
-        foreach (var capability in EhrWriteCapabilities.For(SourceSystemType.Epic))
+        foreach (var capability in EhrWriteCapabilities.For(SourceSystemType.Epic).Concat(EhrWriteCapabilities.For(SourceSystemType.Healow)))
         {
             capability.Operations.Should().BeEquivalentTo([EhrWriteOperation.Create], because: capability.ResourceType);
             capability.AllowedApplicationTypes.Should().BeEquivalentTo([ApplicationType.Backend], because: capability.ResourceType);
@@ -65,7 +82,7 @@ public sealed class EhrWriteCapabilitiesTests
     [InlineData("1")]
     [InlineData("99")]
     [InlineData("Epic,Healow")]
-    [InlineData("Healow")]
+    [InlineData("Athenahealth")]
     public void Anything_but_a_write_capable_vendor_name_gets_nothing(string? vendor)
     {
         EhrWriteCapabilities.For(vendor).Should().BeEmpty();

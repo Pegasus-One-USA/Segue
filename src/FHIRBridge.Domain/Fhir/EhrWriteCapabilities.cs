@@ -40,10 +40,31 @@ public static class EhrWriteCapabilities
         // already exists" (a repeated vital, seen live), so it is matched together with that expression.
         alreadyAtTargetOutcomeCodes: new HashSet<string>(StringComparer.Ordinal) { "59141", "59189|code/instant" });
 
+    // eClinicalWorks (Healow), 2026-10-02. Its certified FHIR server's CapabilityStatement (eCW FHIR Facade 1.6) lists
+    // only QuestionnaireResponse create, while its SMART configuration advertises system/*.c for most types: the
+    // clinical write APIs are contracted (interop@eclinicalworks.com), practice-activated and build-dependent, and no
+    // sandbox has been verified. So every eCW type is dry-run-only (liveWriteSupported false) until a practice
+    // sandbox passes the Phase 2 gate. eCW has no Patient/$match, so patients resolve by identifier only, and it
+    // honours requested scopes. Notes are left out: eCW files them as a Bundle with an HL7 v2 MDM attachment, a
+    // different API shape. See docs/backend/20-epic-r4-write-back.md section 11.
+    private static readonly EhrWriteVendorProfile Healow = new(
+        SourceSystemType.Healow,
+        [
+            new("AllergyIntolerance", CreateOnly, "ecw-allergyintolerance-create", variant: null, requiresEncounter: false, optInOnly: false, BackendOnly),
+            new("Condition", CreateOnly, "ecw-condition-create", EhrWriteVariants.ProblemListItem, requiresEncounter: false, optInOnly: false, BackendOnly),
+            new("Observation", CreateOnly, "ecw-observation-vitals-create", EhrWriteVariants.VitalSigns, requiresEncounter: true, optInOnly: false, BackendOnly),
+            new("Patient", CreateOnly, "ecw-patient-create", variant: null, requiresEncounter: false, optInOnly: true, BackendOnly),
+        ],
+        supportsPatientMatch: false,
+        requestsScopeOnTokenRequest: true,
+        // 202 INVALID_PATIENT_ALREADY_EXIST: the patient is there; never retried as a create.
+        alreadyAtTargetOutcomeCodes: new HashSet<string>(StringComparer.Ordinal) { "202" });
+
     private static readonly IReadOnlyDictionary<SourceSystemType, EhrWriteVendorProfile> ByVendor =
         new Dictionary<SourceSystemType, EhrWriteVendorProfile>
         {
             [SourceSystemType.Epic] = Epic,
+            [SourceSystemType.Healow] = Healow,
         };
 
     /// <summary>The vendor's write-back profile, or null when the vendor cannot be written to.</summary>

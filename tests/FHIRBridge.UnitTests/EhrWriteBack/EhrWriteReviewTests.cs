@@ -52,6 +52,13 @@ public sealed class EhrWriteReviewTests
             expected.Split(',', StringSplitOptions.RemoveEmptyEntries));
     }
 
+    [Fact]
+    public void Eclinicalworks_types_cannot_be_released_for_live_writes_yet()
+    {
+        EhrWriteBackSettings.ReleasedResourceTypes("Healow:AllergyIntolerance,Healow:Patient", SourceSystemType.Healow)
+            .Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData(EhrWriteLedgerState.Unknown, 0, true)]
     [InlineData(EhrWriteLedgerState.Rejected, 0, true)]
