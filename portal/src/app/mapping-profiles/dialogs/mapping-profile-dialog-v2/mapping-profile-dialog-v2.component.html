@@ -81,11 +81,6 @@
           </select>
         </div>
 
-        <div class="mpd-meta-field" [class.mpd-meta-field--error]="metaForm.controls.destinationObject.invalid && metaForm.controls.destinationObject.touched">
-          <label for="mpd-destinationObject">Destination Object <span class="mpd-req">*</span></label>
-          <input id="mpd-destinationObject" formControlName="destinationObject" placeholder="e.g. dbo.Patients, patients collection, patients.csv" autocomplete="off" />
-        </div>
-
         <div class="mpd-meta-field mpd-meta-field--checkbox">
           <label>
             <input type="checkbox" formControlName="isEnabled" />
@@ -105,7 +100,9 @@
         [sqlTables]="sqlTables()"
         [initialRows]="initialRows()"
         [initialTargets]="initialTargets()"
+        [schemaLoadState]="schemaLoadState()"
         [readOnly]="isView"
+        (retrySchemaLoad)="retrySchemaLoad()"
       />
     </div>
   } @else {
