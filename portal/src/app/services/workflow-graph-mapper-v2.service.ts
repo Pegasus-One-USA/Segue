@@ -43,13 +43,14 @@ const CATALOG_GUARDED_VENDOR_TRANSFORM_IDS = new Set(['athena', 'healow']);
 // Anything outside this set — Cerner, Allscripts, Meditech, HL7 v2 — must still save as 'epic':
 // WorkflowGraphValidator rejects at RUN time any NodeType missing from DefaultWorkflowNodeCatalog.Items, and
 // those vendors are gated out of it until each has a registered IFhirSourceClient. Keep in step with that file.
-const VENDOR_SOURCE_TRANSFORM_IDS = new Set(['epic', 'athena', 'healow', 'generic-fhir', 'sample']);
+const VENDOR_SOURCE_TRANSFORM_IDS = new Set(['epic', 'athena', 'healow', 'generic-fhir', 'sample', 'tabular']);
 
 const FALLBACK_NODE_TYPES: Record<string, string> = {
   epic: 'EpicSourceNode',
   athena: 'AthenahealthSourceNode',
   healow: 'EClinicalWorksSourceNode',
   sample: 'SampleSourceNode',
+  tabular: 'TabularSourceNode',
   'generic-fhir': 'GenericFhirSourceNode',
   'fhir-validation': 'UsCoreValidationNode',
   normalize: 'NormalizationNode',
@@ -412,6 +413,7 @@ export class WorkflowGraphMapperServiceV2 {
     // ids a name match can't produce ('generic-fhir' never appears hyphenated in a display name).
     const vendorId = node.vendorId ?? this.guessVendorId(connector);
     if (vendorId && VENDOR_SOURCE_TRANSFORM_IDS.has(vendorId)) return vendorId;
+    if (node.fields['tab_kind']) return 'tabular';
     if (/sample/i.test(connector)) return 'sample';
     if (/generic.?fhir/i.test(connector)) return 'generic-fhir';
     return 'epic';

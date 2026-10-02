@@ -45,6 +45,8 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'epic',
     'athena',
     'healow',
+    // CSV / SQL Table rows → FHIR (feeds FHIR destinations and EHR write-back).
+    'tabular',
     // Phase 2+: 'generic-fhir', 'cerner', 'allscripts', 'meditech', 'hl7v2', 'sample'
   ],
 

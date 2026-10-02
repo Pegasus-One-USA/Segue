@@ -47,6 +47,7 @@ export enum PermissionGroup {
   Medplum = 'medplum',
   AzureFhirService = 'azurefhirservice',
   EhrWriteBack = 'ehrwriteback',
+  TabularSources = 'tabularsources',
 }
 
 export enum PermissionAction {

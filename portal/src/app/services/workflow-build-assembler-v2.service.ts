@@ -289,6 +289,9 @@ export class WorkflowBuildAssemblerServiceV2 {
       // points at can't be mutated by this save, and the backend resolves sourceConnectionId straight off this
       // node's own config for the Mappings step regardless.
       if (fields['sourceConnectionResolved'] === 'true') continue;
+      // A CSV / SQL Table source has no source connection to create: its file id or secret reference is already
+      // on the node, and its identity is the dataset key.
+      if (fields['tab_kind']) continue;
       sources.push({
         nodeId: id,
         source: this.buildSource(fields, [...(destinationResourceTypesBySourceNodeId.get(id) ?? [])]),

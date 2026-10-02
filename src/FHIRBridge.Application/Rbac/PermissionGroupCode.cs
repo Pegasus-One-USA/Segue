@@ -186,4 +186,10 @@ public enum PermissionGroupCode
     // it is a separate decision from who may read from an EHR.
     [PermissionGroup("30000000-0000-0000-0000-000000000041", PermissionCategoryCode.Pipelines, "EHR Write-Back")]
     EhrWriteBack = 41,
+
+    // The CSV / SQL Table source (TabularSourceNode). It has no source connection, so the per-vendor source
+    // permissions never apply to it; this group gates uploading files, saving SQL connections, previewing rows and
+    // running a workflow that reads one. The rows are PHI, so it is not folded into a broader group.
+    [PermissionGroup("30000000-0000-0000-0000-000000000042", PermissionCategoryCode.Pipelines, "CSV / SQL Table Sources")]
+    TabularSources = 42,
 }

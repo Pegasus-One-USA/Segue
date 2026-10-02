@@ -11,6 +11,9 @@ public static class WorkflowNodeTypes
     public const string GenericFhirSource = "GenericFhirSourceNode";
     public const string Hl7v2MllpSource = "Hl7v2MllpSourceNode";
     public const string SampleSource = "SampleSourceNode";
+    /// <summary>Rows from an uploaded CSV or a SQL query, turned into FHIR resources by templates. Has no source
+    /// connection.</summary>
+    public const string TabularSource = "TabularSourceNode";
     public const string Normalization = "NormalizationNode";
     public const string DataQualityScoring = "DataQualityScoringNode";
     public const string FlattenExtensions = "FlattenExtensionsNode";

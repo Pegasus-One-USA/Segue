@@ -1657,6 +1657,20 @@ public static class WorkflowEndpoints
             // above.
             foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
             {
+                // A CSV / SQL Table source has no source connection, so the per-vendor check below never reaches it;
+                // it has its own Execute permission instead. No license allow-list applies: it names no EHR vendor.
+                if (string.Equals(node.NodeType, WorkflowNodeTypes.TabularSource, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (isAuthenticatedCaller
+                        && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                            authorizationService, httpContext.User, PermissionGroupCode.TabularSources, PermissionActionCode.Execute))
+                    {
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    }
+
+                    continue;
+                }
+
                 if (!TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceConnectionId))
                 {
                     continue;

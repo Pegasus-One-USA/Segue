@@ -192,6 +192,14 @@ export const EHR_WRITE_CAPABILITIES_ENDPOINTS = {
   byVendor: (vendor: string) => `${API_V1_BASE}/ehr-write-capabilities?vendor=${encodeURIComponent(vendor)}`,
 } as const;
 
+export const TABULAR_SOURCE_ENDPOINTS = {
+  files: `${API_V1_BASE}/tabular-sources/files`,
+  file: (id: string) => `${API_V1_BASE}/tabular-sources/files/${encodeURIComponent(id)}`,
+  sqlConnections: `${API_V1_BASE}/tabular-sources/sql-connections`,
+  templatePresets: `${API_V1_BASE}/tabular-sources/template-presets`,
+  preview: `${API_V1_BASE}/tabular-sources/preview`,
+} as const;
+
 export const EHR_WRITE_LEDGER_ENDPOINTS = {
   review: `${API_V1_BASE}/ehr-write-ledger/review`,
   markWritten: (id: string) => `${API_V1_BASE}/ehr-write-ledger/${encodeURIComponent(id)}/mark-written`,

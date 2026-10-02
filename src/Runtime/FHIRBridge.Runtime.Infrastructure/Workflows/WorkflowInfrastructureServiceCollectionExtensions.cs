@@ -18,6 +18,7 @@ public static class WorkflowInfrastructureServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, GenericFhirSourceNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, Hl7v2MllpSourceNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, SampleSourceNodeExecutor>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, TabularSourceNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, NormalizationNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, DataQualityScoringNodeExecutor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowNodeExecutor, FlattenExtensionsNodeExecutor>());

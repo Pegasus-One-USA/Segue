@@ -43,6 +43,20 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Source(WorkflowNodeTypes.GenericFhirSource),
         // Source(WorkflowNodeTypes.Hl7v2MllpSource),
         Source(WorkflowNodeTypes.SampleSource),
+        // Non-FHIR rows → FHIR through templates. Hand-built for its required keys (the same keys as
+        // FHIRBridge.Application's TabularSourceSettings, which this layer cannot reference). No source connection:
+        // its identity for EHR write-back is the dataset key.
+        new(
+            WorkflowNodeTypes.TabularSource,
+            WorkflowNodeCategory.Source,
+            0,
+            ["tab_kind", "tab_datasetKey", "tab_templates"],
+            [],
+            WorkflowDataContract.ResourceBatch,
+            WorkflowNodeTypes.TabularSource,
+            "CSV / SQL Table",
+            "tabular",
+            "Read rows from an uploaded CSV file or a SQL query and build FHIR resources from templates."),
         Compliance(WorkflowNodeTypes.Consent, "consent", "Consent", "Apply configured consent policy.", 10, [WorkflowDataContract.ResourceBatch], WorkflowDataContract.ResourceBatch),
         Compliance(WorkflowNodeTypes.UsCoreValidation, "fhir-validation", "FHIR Validation", "Validate resources against US Core / base R4 profiles.", 20, [WorkflowDataContract.ResourceBatch], WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.Normalization, "normalize", "Normalize Data", "Normalize FHIR resources for downstream transforms.", 30, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),

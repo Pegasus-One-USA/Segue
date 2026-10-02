@@ -787,6 +787,14 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             .Where(candidate => upstream.Contains(candidate.Id) && candidate.Category == WorkflowNodeCategory.Source)
             .ToList();
 
+        // A CSV / SQL Table source has no FHIR server to fetch from; its identity is its dataset key, which keys the
+        // EHR write-back ledger the way a FHIR base URL does. Its rows must carry everything the writer needs.
+        if (sourceNodes.Count == 1 && sourceNodes[0].NodeType == WorkflowNodeTypes.TabularSource)
+        {
+            return (null, FHIRBridge.Application.Services.Tabular.TabularSourceSettings.SourceBaseUrlFor(
+                ReadStringConfiguration(sourceNodes[0], FHIRBridge.Application.Services.Tabular.TabularSourceSettings.DatasetKeyKey)));
+        }
+
         if (sourceNodes.Count != 1 || !SourceNodeTypeByNodeType.TryGetValue(sourceNodes[0].NodeType, out var sourceType))
         {
             return (null, null);

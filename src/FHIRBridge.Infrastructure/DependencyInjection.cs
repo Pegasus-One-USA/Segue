@@ -231,6 +231,7 @@ public static class DependencyInjection
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<IEhrWriteLedgerRepository, InMemoryEhrWriteLedgerRepository>();
+            services.AddSingleton<ITabularSourceFileRepository, InMemoryTabularSourceFileRepository>();
             services.AddSingleton<ILicenseRequestRepository, InMemoryLicenseRequestRepository>();
             services.AddSingleton<ILicenseHistoryRepository, InMemoryLicenseHistoryRepository>();
             services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
@@ -331,6 +332,7 @@ public static class DependencyInjection
             services.AddScoped<IDeIdentificationProfileRepository, EfDeIdentificationProfileRepository>();
             services.AddScoped<IResourceTypeCriteriaRepository, EfResourceTypeCriteriaRepository>();
             services.AddScoped<IEhrWriteLedgerRepository, EfEhrWriteLedgerRepository>();
+            services.AddScoped<ITabularSourceFileRepository, EfTabularSourceFileRepository>();
             services.AddScoped<IDeIdentificationProfileSeeder, DeIdentificationProfileSeeder>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
@@ -543,6 +545,8 @@ public static class DependencyInjection
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicPatientWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.EhrWriteProfileRegistry>();
         services.AddSingleton<IEhrWriteReleasePolicy, Destinations.EhrWriteBack.SettingsEhrWriteReleasePolicy>();
+        // Tabular sources (CSV upload / SQL query → FHIR). Scoped: it reads the request's repository and secrets.
+        services.AddScoped<Application.Abstractions.Tabular.ITabularRowReader, Tabular.TabularRowReader>();
         services.AddScoped<Destinations.EhrWriteBack.MappedEhrWriteBackDestinationWriter>();
         foreach (var registration in ConfiguredDestinationWriterFactory.DefaultRegistrations)
         {

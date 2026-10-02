@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IRetentionPolicyService, DefaultRetentionPolicyService>();
         services.AddScoped<IConfigurationService, ConfigurationService>();
         services.AddScoped<IEhrWriteLedgerReviewService, EhrWriteLedgerReviewService>();
+        services.AddScoped<Services.Tabular.ITabularSourceService, Services.Tabular.TabularSourceService>();
         services.AddScoped<IMappingImportService, MappingImportService>();
         services.AddScoped<ISchemaMatchingService, SchemaMatchingService>();
 

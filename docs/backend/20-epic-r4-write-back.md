@@ -333,7 +333,55 @@ that is not base64 as `note-content-not-base64`, and a note with no text left as
 | 4 | Re-run #3 | no requests: the clone and the allergy are found in the ledger |
 | 5 | One HTML note and one RTF note on Desiree's open visit | filed as preliminary, readable text |
 
-## 10. Sources
+## 10. Phase 4 — non-FHIR sources (CSV / SQL Table)
+
+A new Runtime source node, **CSV / SQL Table** (`TabularSourceNode`, portal tile `tabular`), reads rows and builds
+FHIR resources from templates. Its output is an ordinary `ResourceBatch`, so the EHR write-back writer, FHIR
+destinations and FHIR transforms take it unchanged.
+
+**Where rows come from.**
+- **CSV upload** (`POST api/v1/tabular-sources/files`, at most 10 MB and 50,000 rows). Parsed at upload
+  (RFC 4180; comma, semicolon or tab detected from the header; quoted line breaks; BOM ignored), then stored
+  only encrypted (`TabularSourceFiles.EncryptedContent`, AES-GCM through `IPhiFieldEncryptor`). It is deleted for
+  real, not soft-deleted. The node keeps only the file id.
+- **SQL query** on SQL Server, PostgreSQL or MySQL. The connection string is stored as a secret
+  (`POST api/v1/tabular-sources/sql-connections`, vault `tabular-sources`); the node keeps only the reference.
+  Only one `SELECT` / `WITH … SELECT` is accepted, with comments stripped, no `;` between statements and no
+  data- or schema-changing keywords. It runs in a transaction that is always rolled back, declared `READ ONLY` on
+  PostgreSQL and MySQL. A read-only login is still the recommended setup.
+
+**Templates** (`tab_templates`, `TabularFhirTemplateEngine`): FHIR JSON with `{{column}}` placeholders and
+formats `number`, `integer`, `boolean`, `date`, `datetime`, `base64` (note text), `lower`, `upper`. An element
+whose column is empty is dropped, along with objects and arrays left empty, so one template serves rows that fill
+different columns. Presets for Patient, AllergyIntolerance, Condition (problem-list item), Observation (vital sign)
+and DocumentReference (clinical note) use conventional column names. A resource repeated on several rows with the
+same id (a patient on each of their allergy rows) is kept once. `POST api/v1/tabular-sources/preview` renders the
+first five rows and lists the columns the templates read that the table lacks.
+
+**Identity for write-back.** A required **dataset key** (`tab_datasetKey`) becomes the source's stand-in base URL,
+`urn:fhirbridge:tabular:<key>`, which the destination executor hands the writer for a Tabular upstream. The ledger
+keys every record on it, so uploading a corrected copy of the file, or cloning the workflow, does not file rows
+again. There is no source to fetch a missing patient from, so for write-back the rows must build the Patient too
+(the Patient preset fills what `$match` needs: name, gender, birth date, phone, address).
+
+**Errors and PHI.** Cell values never appear in a log or an error: a bad cell is reported as
+`Row 7: column 'onset' is not a valid date for the AllergyIntolerance template.` The node reports `rowsRead`,
+`rowsTruncated`, `rowErrorCount`, up to 20 `rowErrors` and `duplicatesDropped` in its metadata. A missing dataset
+key, file, query or template fails the node instead of looking like an empty table.
+
+**Permissions.** New group `tabularsources` (view, create, edit, delete, execute). Preview needs Edit, because it
+decrypts data. A Tabular source has no source connection, so the run endpoint checks `tabularsources.execute` for
+it in place of the per-vendor check; no license allow-list applies, since it names no EHR vendor.
+
+**Limits.** A Tabular source feeds whole-resource FHIR destinations (FHIR servers and EHR write-back). It does not
+feed a Mapping node into a SQL or file destination: mapping profiles are keyed on a source connection, which a
+Tabular source does not have.
+
+**Gate.** "A CSV of allergies lands in the Epic sandbox through the same writer, unchanged" is covered offline by
+`TabularSourceTests.A_csv_of_allergies_reaches_the_ehr_write_back_writer_unchanged` (patient matched by
+`$match`, allergy would be written). The sandbox run is pending Epic's return.
+
+## 11. Sources
 
 - Sandbox CapabilityStatement: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/metadata
 - Sandbox SMART configuration: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/.well-known/smart-configuration
