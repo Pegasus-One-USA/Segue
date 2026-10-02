@@ -11,6 +11,7 @@ import { ExecutionHistoryApiService } from '../../../execution-history/services/
 import { WorkflowRunStatusCounts } from '../../../execution-history/models/execution-history.model';
 import { RunStatusHubService } from '../../../services/run-status-hub.service';
 import { PermissionService } from '../../../auth/services/permission.service';
+import { NewWorkflowDialogComponent } from '../../../components/shared/new-workflow-dialog/new-workflow-dialog.component';
 
 const EMPTY_RUN_STATUS_COUNTS: WorkflowRunStatusCounts = {
   pending: 0,
@@ -38,6 +39,7 @@ const EVENT_REFRESH_DEBOUNCE_MS = 300;
     RouterLink,
     MatIconModule,
     PipelineTableComponent,
+    NewWorkflowDialogComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
@@ -56,6 +58,9 @@ export class DashboardComponent {
   canCreateWorkflow(): boolean {
     return this.permissions.hasPermission('workflow.create');
   }
+
+  /** The "New workflow" dialog (name + description) — see NewWorkflowDialogComponent. */
+  readonly showNewWorkflow = signal(false);
 
   protected readonly runs          = this.runSvc.runs;
   protected readonly lastRefreshed = this.dashSvc.lastRefreshed;

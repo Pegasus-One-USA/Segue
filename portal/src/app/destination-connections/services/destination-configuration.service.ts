@@ -71,8 +71,12 @@ export class DestinationConfigurationService {
       DESTINATION_ENDPOINTS.deIdentificationProfile(id), { deIdentificationProfileId });
   }
 
-  hasExecutionHistory(id: string): Observable<DestinationExecutionHistory> {
-    return this.http.get<DestinationExecutionHistory>(DESTINATION_ENDPOINTS.hasExecutionHistory(id));
+  /** Silent (SKIP_LOADER) when `silent` — the list's per-row background check after each page load. With the
+   *  app-wide loader it made the page inert after every search keystroke, which took focus out of the box.
+   *  Other callers (the destination wizard) keep the loader. */
+  hasExecutionHistory(id: string, silent = false): Observable<DestinationExecutionHistory> {
+    const context = silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<DestinationExecutionHistory>(DESTINATION_ENDPOINTS.hasExecutionHistory(id), { context });
   }
 
   /** Every destination id currently referenced by at least one workflow's Destination node, regardless of whether
