@@ -115,16 +115,32 @@ function suite(label: string, modalType: Type<unknown>): void {
         .toBeTrue();
     });
 
-    it('never leaves the list hidden when it is not rendered yet at alignment', async () => {
+    it('waits for the list to render before aligning, and marks it aligned only once corrected', async () => {
       const v = await mount(600);
-      const modal = v.modal as unknown as {
-        parentTableMenuStyle: { set(v: unknown): void; (): { aligned?: boolean } | null };
-        alignParentTablePanel(): void;
-      };
-      // Placed but not rendered: the menu isn't open, so there is no panel element.
-      modal.parentTableMenuStyle.set({ top: 10, left: 10, width: 200, maxHeight: 200 });
-      modal.alignParentTablePanel();
-      expect(modal.parentTableMenuStyle()?.aligned).toBeTrue();
+      v.modal.onRelationChange('child');
+      await v.settle();
+      v.el.querySelector<HTMLButtonElement>('.fm-createtable-parent-trigger')!.click();
+      const style = () => (v.modal as unknown as { parentTableMenuStyle(): { aligned?: boolean } | null }).parentTableMenuStyle();
+      expect(style()?.aligned).withContext('not before it has been measured').toBeFalsy();
+      await v.settle();
+      await new Promise(resolve => setTimeout(resolve, 50));
+      await v.settle();
+      const t = v.el.querySelector('.fm-createtable-parent-trigger')!.getBoundingClientRect();
+      const p = document.querySelector<HTMLElement>('.fm-createtable-parent-panel')!.getBoundingClientRect();
+      expect(style()?.aligned).toBeTrue();
+      expect(Math.abs(p.left - t.left)).toBeLessThanOrEqual(1);
+    });
+
+    it('closes the list when the dialog body scrolls, so it is never left stranded away from its field', async () => {
+      const v = await mount(330);
+      v.modal.onRelationChange('child');
+      await v.settle();
+      v.el.querySelector<HTMLButtonElement>('.fm-createtable-parent-trigger')!.click();
+      await v.settle();
+      expect(document.querySelector('.fm-createtable-parent-panel')).not.toBeNull();
+      v.el.querySelector<HTMLElement>('.fm-createtable-body')!.dispatchEvent(new Event('scroll'));
+      await v.settle();
+      expect(document.querySelector('.fm-createtable-parent-panel')).toBeNull();
     });
 
     it('has no sideways scrolling in Columns, with or without the FK row', async () => {

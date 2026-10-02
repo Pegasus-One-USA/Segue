@@ -119,6 +119,8 @@ export class FieldMappingJoinPopoverComponent {
   /** The mapping draft as it was when this popover opened (or its row changed) — anything different is an
    *  unsaved edit: join order/delimiter, instance selection, JSON write mode, reference resource. */
   private readonly draftBaseline = signal<string | null>(null);
+  /** The row the draft was last seeded from, serialized — see the draft effect in the constructor. */
+  private lastRowJson: string | null = null;
 
   /** Any unsaved edit at all — the mapping fields or the transformation rule. Registered with the app-wide
    *  unsaved-changes check, so leaving the PAGE (menu, back, sign out, refresh) asks first. Clicks inside the
@@ -149,7 +151,13 @@ export class FieldMappingJoinPopoverComponent {
 
   constructor() {
     effect(() => {
-      const draft = this.withForcedAggregate(structuredClone(this.row()));
+      // By value, not identity: a parent re-emitting an equal row (a fresh object after an unrelated commit)
+      // used to reset the draft — dropping a delimiter the user had just typed and clearing the unsaved flag.
+      const row = this.row();
+      const rowJson = JSON.stringify(row);
+      if (rowJson === this.lastRowJson) return;
+      this.lastRowJson = rowJson;
+      const draft = this.withForcedAggregate(structuredClone(row));
       this.draft.set(draft);
       // From the value itself, not by reading draft() — that would make this effect depend on every edit.
       this.draftBaseline.set(JSON.stringify(draft));

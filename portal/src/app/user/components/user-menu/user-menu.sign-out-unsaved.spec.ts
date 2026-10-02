@@ -19,6 +19,7 @@ import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 describe('User menu — Sign out with unsaved changes', () => {
   let auth: { logout: jasmine.Spy };
   let dirtyRegistered: boolean;
+  let savingRegistered: boolean;
   let page: HasUnsavedChanges;
 
   /** The router's outlet tree, reduced to one active page. */
@@ -29,6 +30,7 @@ describe('User menu — Sign out with unsaved changes', () => {
   function mount(prompt?: Partial<UnsavedChangesPromptService>) {
     auth = { logout: jasmine.createSpy('logout') };
     dirtyRegistered = false;
+    savingRegistered = false;
     page = { hasUnsavedChanges: () => false };
     TestBed.configureTestingModule({
       imports: [UserMenuComponent],
@@ -46,37 +48,38 @@ describe('User menu — Sign out with unsaved changes', () => {
         ...(prompt ? [{ provide: UnsavedChangesPromptService, useValue: prompt }] : []),
       ],
     });
-    TestBed.inject(UnsavedChangesRegistryService).register(() => dirtyRegistered, { onDestroy: () => () => undefined } as never);
+    TestBed.inject(UnsavedChangesRegistryService)
+      .register(() => dirtyRegistered, { onDestroy: () => () => undefined } as never, () => savingRegistered);
     const fixture = TestBed.createComponent(UserMenuComponent);
     fixture.detectChanges();
     return fixture.componentInstance as unknown as { confirmLogout(): void; showLogout(): boolean };
   }
 
   it('nothing unsaved: the usual inline "Sign out of Segue?" confirm, no prompt', () => {
-    const confirmLeave = jasmine.createSpy('confirmLeave');
-    const menu = mount({ confirmLeave });
+    const confirmLeavePage = jasmine.createSpy('confirmLeavePage');
+    const menu = mount({ confirmLeavePage });
     menu.confirmLogout();
     expect(menu.showLogout()).toBeTrue();
-    expect(confirmLeave).not.toHaveBeenCalled();
+    expect(confirmLeavePage).not.toHaveBeenCalled();
     expect(auth.logout).not.toHaveBeenCalled();
   });
 
   it('the page itself is dirty (a page that only uses the route guard): its leave check, Cancel stays signed in', () => {
-    const confirmLeave = jasmine.createSpy('confirmLeave').and.returnValue(of(false));
-    const menu = mount({ confirmLeave });
+    const confirmLeavePage = jasmine.createSpy('confirmLeavePage').and.returnValue(of(false));
+    const menu = mount({ confirmLeavePage });
     page = { hasUnsavedChanges: () => true };
     menu.confirmLogout();
-    expect(confirmLeave).toHaveBeenCalledOnceWith(page);
+    expect(confirmLeavePage).toHaveBeenCalledOnceWith(page);
     expect(menu.showLogout()).withContext('not the inline confirm as well').toBeFalse();
     expect(auth.logout).not.toHaveBeenCalled();
   });
 
   it('only something registered on the page is dirty (e.g. the mapping popover): Leave signs out', () => {
-    const confirmLeave = jasmine.createSpy('confirmLeave').and.returnValue(of(true));
-    const menu = mount({ confirmLeave });
+    const confirmLeavePage = jasmine.createSpy('confirmLeavePage').and.returnValue(of(true));
+    const menu = mount({ confirmLeavePage });
     dirtyRegistered = true;
     menu.confirmLogout();
-    expect(confirmLeave).toHaveBeenCalledTimes(1);
+    expect(confirmLeavePage).toHaveBeenCalledTimes(1);
     expect(auth.logout).toHaveBeenCalledTimes(1);
   });
 
@@ -85,6 +88,17 @@ describe('User menu — Sign out with unsaved changes', () => {
     const dialog = TestBed.inject(MatDialog);
     const open = spyOn(dialog, 'open');
     page = { hasUnsavedChanges: () => false, isSaveInProgress: () => true };
+    menu.confirmLogout();
+    expect(TestBed.inject(ToastService).warning)
+      .toHaveBeenCalledWith('Please wait for the current save to finish before leaving this page.');
+    expect(open).not.toHaveBeenCalled();
+    expect(auth.logout).not.toHaveBeenCalled();
+  });
+
+  it('a save in flight on something registered (not the page): blocked too, never "Leave" mid-save', () => {
+    const menu = mount();   // the real prompt service
+    const open = spyOn(TestBed.inject(MatDialog), 'open');
+    savingRegistered = true;
     menu.confirmLogout();
     expect(TestBed.inject(ToastService).warning)
       .toHaveBeenCalledWith('Please wait for the current save to finish before leaving this page.');

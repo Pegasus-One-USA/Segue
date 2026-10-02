@@ -9,5 +9,7 @@ import { HasUnsavedChanges } from './has-unsaved-changes';
 // back, programmatic router.navigate) uniformly across the app.
 export const unsavedChangesGuard: CanDeactivateFn<HasUnsavedChanges> = (component): Observable<boolean> => {
   if (!component) return of(true);
-  return inject(UnsavedChangesPromptService).confirmLeave(component);
+  // confirmLeavePage, not confirmLeave: a route change leaves everything on the page, including popovers and
+  // panels that track their own edits (see confirmLeavePage).
+  return inject(UnsavedChangesPromptService).confirmLeavePage(component);
 };

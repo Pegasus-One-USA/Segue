@@ -37,12 +37,7 @@ export class UnsavedChangesPromptService {
       return of(false);
     }
 
-    // The page itself, or anything open on it that registered its own check (e.g. the mapping popover's
-    // edits, which live only in that popover until its Save) — so a panel or popover is covered without its
-    // page having to know about it. Deliberately asked even when the page itself is clean: that is the
-    // popover's case exactly. Only mounted components are registered, and every registrant belongs to a
-    // page (or a popover/dialog open on it), so these are always about the page being left.
-    if (!component.hasUnsavedChanges() && !this.registry.hasAnyUnsavedChanges()) {
+    if (!component.hasUnsavedChanges()) {
       return of(true);
     }
 
@@ -58,8 +53,31 @@ export class UnsavedChangesPromptService {
     return this.confirmDiscard();
   }
 
-  /** The same "Leave this page?" modal, for leaving something smaller than a page — closing or switching a
-   *  popover/panel with unsaved edits. True = Leave (discard), false = Cancel (stay). */
+  /**
+   * Leaving the whole PAGE (route change, sign out): the page itself, AND anything open on it that registered
+   * its own check — e.g. the mapping popover, whose edits live only in it until its Save, so the page reads
+   * clean. confirmLeave above stays scoped to the one component it is given, because it also guards closing
+   * a dialog or a form (DialogService, the EHR source form's Cancel): asking the registry there prompted for
+   * some other component's edits. A save in flight anywhere blocks with "please wait", never "Leave".
+   */
+  confirmLeavePage(page: HasUnsavedChanges): Observable<boolean> {
+    if (!this.authStore.isAuthenticated()) {
+      return of(true);
+    }
+    if (page.isSaveInProgress?.() || this.registry.isAnySaveInProgress()) {
+      this.toast.warning('Please wait for the current save to finish before leaving this page.');
+      return of(false);
+    }
+    if (!page.hasUnsavedChanges() && !this.registry.hasAnyUnsavedEdits()) {
+      return of(true);
+    }
+    if (page.confirmLeaveDialog) {
+      return page.confirmLeaveDialog();
+    }
+    return this.confirmDiscard();
+  }
+
+  /** The "Leave this page?" modal itself. True = Leave (discard), false = Cancel (stay). */
   confirmDiscard(): Observable<boolean> {
     return this.dialog
       .open(ConfirmDialogComponent, {

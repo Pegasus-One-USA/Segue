@@ -1,4 +1,7 @@
-import { AfterViewInit, Component, ElementRef, HostListener, ViewChild, computed, input, output, signal } from '@angular/core';
+import {
+  AfterViewInit, ChangeDetectorRef, Component, ElementRef, HostListener, Injector, ViewChild, afterNextRender, computed,
+  inject, input, output, signal,
+} from '@angular/core';
 import { addColumnDataTypesFor } from './field-mapping-add-column-modal.component';
 
 export interface FmCreateTableColumnDraft {
@@ -32,6 +35,11 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
   @ViewChild('nameInput') private readonly nameInput?: ElementRef<HTMLInputElement>;
   @ViewChild('parentTableSearchInput') private readonly parentTableSearchInput?: ElementRef<HTMLInputElement>;
   @ViewChild('parentPanel') private readonly parentPanel?: ElementRef<HTMLElement>;
+  private readonly injector = inject(Injector);
+  private readonly cdr = inject(ChangeDetectorRef);
+  /** How many renders alignParentTablePanelWhenRendered waits for the panel before giving up (the menu then
+   *  stays as it is — there is no panel on screen to correct). */
+  private static readonly PANEL_ALIGN_ATTEMPTS = 10;
 
   /** Already-known table full names (e.g. "dbo.PatientContact") offered as a parent. */
   readonly existingTables = input<string[]>([]);
@@ -97,12 +105,21 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
     );
     this.parentTableSearchQuery.set('');
     this.parentTableMenuOpen.set(true);
-    setTimeout(() => {
-      this.alignParentTablePanel();
-      // Only now: the panel is visibility: hidden until aligned, and a hidden element can't take focus —
-      // the cursor stayed in Table name, so typing didn't search and Escape didn't close the list.
-      this.parentTableSearchInput?.nativeElement.focus();
-    });
+    this.alignParentTablePanelWhenRendered(0);
+  }
+
+  /** After the next render, so the panel exists; if it still doesn't, tries again on a later one (bounded). */
+  private alignParentTablePanelWhenRendered(attempt: number): void {
+    afterNextRender(() => {
+      if (!this.parentTableMenuOpen()) return;
+      if (this.parentPanel) {
+        this.alignParentTablePanel(this.parentPanel.nativeElement);
+        return;
+      }
+      if (attempt + 1 < FieldMappingCreateTableModalComponent.PANEL_ALIGN_ATTEMPTS) {
+        setTimeout(() => this.alignParentTablePanelWhenRendered(attempt + 1), 16);
+      }
+    }, { injector: this.injector });
   }
 
   /**
@@ -112,15 +129,9 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
    * out of this modal's own backdrop fixed one of those; this corrects for any of them: measure where the
    * panel actually is, and move it by the difference.
    */
-  private alignParentTablePanel(): void {
+  private alignParentTablePanel(panel: HTMLElement): void {
     const style = this.parentTableMenuStyle();
     if (!style) return;
-    const panel = this.parentPanel?.nativeElement;
-    if (!panel) {
-      // Not rendered yet: show it where it was placed rather than leave it hidden for good.
-      this.parentTableMenuStyle.set({ ...style, aligned: true });
-      return;
-    }
     const rect = panel.getBoundingClientRect();
     const dx = rect.left - style.left;
     const dy = style.top !== undefined
@@ -132,13 +143,23 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
       ...(style.top !== undefined ? { top: style.top - dy } : { bottom: (style.bottom ?? 0) + dy }),
       aligned: true,
     };
+    // Marked aligned only now, with the corrected coordinates, and written only through the bindings.
     this.parentTableMenuStyle.set(aligned);
-    // The bindings catch up on the next change detection; the search box needs focus now, and a hidden
-    // element can't take it — so apply the result to the element straight away as well.
-    panel.style.left = `${aligned.left}px`;
-    if (aligned.top !== undefined) panel.style.top = `${aligned.top}px`;
-    if (aligned.bottom !== undefined) panel.style.bottom = `${aligned.bottom}px`;
-    panel.style.visibility = '';
+    // Render that before focusing: the panel is visibility: hidden until aligned, and a hidden element can't
+    // take focus — the cursor stayed in Table name, so typing didn't search and Escape didn't close the list.
+    this.cdr.detectChanges();
+    this.parentTableSearchInput?.nativeElement.focus({ preventScroll: true });
+  }
+
+  /** The panel is fixed at coordinates taken when it opened; the dialog body now scrolls, which would leave it
+   *  stranded away from its trigger — so it closes instead, like a native dropdown does. */
+  onBodyScroll(): void {
+    if (this.parentTableMenuOpen()) this.closeParentTableMenu();
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    if (this.parentTableMenuOpen()) this.closeParentTableMenu();
   }
 
   closeParentTableMenu(): void {

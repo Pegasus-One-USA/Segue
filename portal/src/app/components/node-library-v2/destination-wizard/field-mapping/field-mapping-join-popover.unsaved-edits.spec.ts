@@ -89,6 +89,22 @@ function suite(label: string, component: Type<unknown>): void {
       expect(saved).toBe(1);
     });
 
+    it('an equal row re-emitted (a new object) keeps the edit and the unsaved flag', () => {
+      popover.onDelimiterInput(' | ');
+      fixture.componentRef.setInput('row', joinRow());   // same value, fresh object
+      fixture.detectChanges();
+      expect(popover.draft()?.delimiter).toBe(' | ');
+      expect(popover.hasUnsavedEdits()).toBeTrue();
+    });
+
+    it('a different row resets the draft', () => {
+      popover.onDelimiterInput(' | ');
+      fixture.componentRef.setInput('row', { ...joinRow(), targetName: 'OtherColumn' });
+      fixture.detectChanges();
+      expect(popover.draft()?.delimiter).toBe(', ');
+      expect(popover.hasUnsavedEdits()).toBeFalse();
+    });
+
     it('registers with the app-wide check while open, and leaves it when closed', () => {
       const registry = TestBed.inject(UnsavedChangesRegistryService);
       expect(registry.hasAnyUnsavedChanges()).toBeFalse();

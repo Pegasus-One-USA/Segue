@@ -88,18 +88,19 @@ export class UserMenuComponent {
   closeMenu(): void      { this.menuOpen.set(false); this.showLogout.set(false); }
   /** Sign out ends the session BEFORE navigating, so the route's leave check never sees it (it waves through
    *  anyone already signed out, so session timeouts are not blocked). So run that same check here, against the
-   *  page on screen: its own unsaved state (also for pages that only use the route guard), anything open on it
-   *  that registered a check, and "wait for the current save to finish" for a save still in flight. With nothing
-   *  to warn about, the usual inline "Sign out of Segue?" confirm; otherwise the leave prompt instead of it. */
+   *  page on screen (confirmLeavePage): a save still in flight anywhere blocks with "please wait"; unsaved edits
+   *  on the page, or registered on it, ask "Leave this page?". With nothing to warn about, the usual inline
+   *  "Sign out of Segue?" confirm. */
   confirmLogout(): void {
     const page = this.pageOnScreen();
-    const needsCheck = page.hasUnsavedChanges() || !!page.isSaveInProgress?.() || this.unsavedChanges.hasAnyUnsavedChanges();
+    const needsCheck = page.hasUnsavedChanges() || !!page.isSaveInProgress?.()
+      || this.unsavedChanges.hasAnyUnsavedEdits() || this.unsavedChanges.isAnySaveInProgress();
     if (!needsCheck) {
       this.showLogout.set(true);
       return;
     }
     this.menuOpen.set(false);
-    this.unsavedPrompt.confirmLeave(page).subscribe(leave => {
+    this.unsavedPrompt.confirmLeavePage(page).subscribe(leave => {
       if (leave) this.auth.logout();
     });
   }
