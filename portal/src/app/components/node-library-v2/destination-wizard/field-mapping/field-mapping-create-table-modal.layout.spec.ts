@@ -103,6 +103,30 @@ function suite(label: string, modalType: Type<unknown>): void {
       expect(Math.min(gapBelow, gapAbove)).withContext('was 58px — the header').toBeLessThanOrEqual(1);
     });
 
+    it('puts the cursor in the search box of the list once the list is visible', async () => {
+      const v = await mount(600);
+      v.modal.onRelationChange('child');
+      await v.settle();
+      v.el.querySelector<HTMLButtonElement>('.fm-createtable-parent-trigger')!.click();
+      await v.settle();
+      await new Promise(resolve => setTimeout(resolve));
+      expect(document.activeElement?.classList.contains('fm-createtable-parent-search'))
+        .withContext('focus stayed in Table name while the list was still hidden')
+        .toBeTrue();
+    });
+
+    it('never leaves the list hidden when it is not rendered yet at alignment', async () => {
+      const v = await mount(600);
+      const modal = v.modal as unknown as {
+        parentTableMenuStyle: { set(v: unknown): void; (): { aligned?: boolean } | null };
+        alignParentTablePanel(): void;
+      };
+      // Placed but not rendered: the menu isn't open, so there is no panel element.
+      modal.parentTableMenuStyle.set({ top: 10, left: 10, width: 200, maxHeight: 200 });
+      modal.alignParentTablePanel();
+      expect(modal.parentTableMenuStyle()?.aligned).toBeTrue();
+    });
+
     it('has no sideways scrolling in Columns, with or without the FK row', async () => {
       const v = await mount(600);
       const columns = () => v.el.querySelector<HTMLElement>('.fm-createtable-columns')!;

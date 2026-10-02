@@ -116,9 +116,6 @@ export class FieldMappingJoinPopoverComponent {
     this.ruleBaseline.set(untracked(() => this.ruleSnapshot()));
   }
 
-  /** Whether the rule section holds changes that have never reached the server. Closing the popover
-   *  discards those with nothing left to recover — unlike a SAVED rule, which survives on the server
-   *  even when the workflow itself is never saved. */
   /** The mapping draft as it was when this popover opened (or its row changed) — anything different is an
    *  unsaved edit: join order/delimiter, instance selection, JSON write mode, reference resource. */
   private readonly draftBaseline = signal<string | null>(null);
@@ -131,6 +128,9 @@ export class FieldMappingJoinPopoverComponent {
     return this.hasUnsavedRule() || (baseline !== null && JSON.stringify(this.draft()) !== baseline);
   });
 
+  /** Whether the rule section holds changes that have never reached the server. Closing the popover
+   *  discards those with nothing left to recover — unlike a SAVED rule, which survives on the server
+   *  even when the workflow itself is never saved. */
   readonly hasUnsavedRule = computed(() => {
     const baseline = this.ruleBaseline();
     return baseline !== null && this.ruleSnapshot() !== baseline;

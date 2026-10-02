@@ -39,7 +39,9 @@ export class UnsavedChangesPromptService {
 
     // The page itself, or anything open on it that registered its own check (e.g. the mapping popover's
     // edits, which live only in that popover until its Save) — so a panel or popover is covered without its
-    // page having to know about it.
+    // page having to know about it. Deliberately asked even when the page itself is clean: that is the
+    // popover's case exactly. Only mounted components are registered, and every registrant belongs to a
+    // page (or a popover/dialog open on it), so these are always about the page being left.
     if (!component.hasUnsavedChanges() && !this.registry.hasAnyUnsavedChanges()) {
       return of(true);
     }

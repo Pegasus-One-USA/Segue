@@ -99,6 +99,8 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
     this.parentTableMenuOpen.set(true);
     setTimeout(() => {
       this.alignParentTablePanel();
+      // Only now: the panel is visibility: hidden until aligned, and a hidden element can't take focus —
+      // the cursor stayed in Table name, so typing didn't search and Escape didn't close the list.
       this.parentTableSearchInput?.nativeElement.focus();
     });
   }
@@ -112,19 +114,31 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
    */
   private alignParentTablePanel(): void {
     const style = this.parentTableMenuStyle();
+    if (!style) return;
     const panel = this.parentPanel?.nativeElement;
-    if (!style || !panel) return;
+    if (!panel) {
+      // Not rendered yet: show it where it was placed rather than leave it hidden for good.
+      this.parentTableMenuStyle.set({ ...style, aligned: true });
+      return;
+    }
     const rect = panel.getBoundingClientRect();
     const dx = rect.left - style.left;
     const dy = style.top !== undefined
       ? rect.top - style.top
       : rect.bottom - (window.innerHeight - (style.bottom ?? 0));
-    this.parentTableMenuStyle.set({
+    const aligned = {
       ...style,
       left: style.left - dx,
       ...(style.top !== undefined ? { top: style.top - dy } : { bottom: (style.bottom ?? 0) + dy }),
       aligned: true,
-    });
+    };
+    this.parentTableMenuStyle.set(aligned);
+    // The bindings catch up on the next change detection; the search box needs focus now, and a hidden
+    // element can't take it — so apply the result to the element straight away as well.
+    panel.style.left = `${aligned.left}px`;
+    if (aligned.top !== undefined) panel.style.top = `${aligned.top}px`;
+    if (aligned.bottom !== undefined) panel.style.bottom = `${aligned.bottom}px`;
+    panel.style.visibility = '';
   }
 
   closeParentTableMenu(): void {
