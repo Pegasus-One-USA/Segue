@@ -16,6 +16,7 @@ import {
   DestinationData,
 } from '../../services/workflow-api.service';
 import { ToastService } from '../../services/toast.service';
+import { NewWorkflowDialogComponent } from '../../components/shared/new-workflow-dialog/new-workflow-dialog.component';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
 import { PermissionService } from '../../auth/services/permission.service';
 import { AuthStore } from '../../auth/store/auth.store';
@@ -59,7 +60,7 @@ type FilterCategory = 'status' | 'audience' | 'source' | 'destination' | 'lastRu
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule, RouterLink],
+  imports: [CommonModule, DatePipe, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule, RouterLink, NewWorkflowDialogComponent],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })
@@ -451,90 +452,13 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.searchDebounceHandle = setTimeout(() => this.reload(true), SEARCH_DEBOUNCE_MS);
   }
 
-  // ── New workflow (name + description first) ──────────────────────────────
-  //
-  // The workflow is created BEFORE the canvas opens, so it always has a real id. That is what removes the
-  // "authored before the workflow existed" class of bug at its root: node config, mapping and transform rules
-  // no longer have to be parked somewhere without an owner and reconciled on a later save.
+  // ── New workflow (name + description first) — NewWorkflowDialogComponent, shared with the Dashboard ──
   readonly showNewWorkflow = signal(false);
-  readonly newWorkflowName = signal('');
-  readonly newWorkflowDescription = signal('');
-  readonly creatingWorkflow = signal(false);
-  /** Shows the "discard your input?" confirm layered over the New-workflow modal. */
-  readonly confirmDiscardNewWorkflow = signal(false);
 
-  /** Opens the name/description modal. The canvas is only reached once the workflow is actually created. */
+  /** Opens the name/description dialog. The canvas is only reached once the workflow is actually created. */
   onNewWorkflow(): void {
     if (!this.canCreate()) return;
-    this.newWorkflowName.set('');
-    this.newWorkflowDescription.set('');
     this.showNewWorkflow.set(true);
-  }
-
-  /** True once anything has been typed into the New-workflow form. */
-  private hasNewWorkflowInput(): boolean {
-    return !!this.newWorkflowName().trim() || !!this.newWorkflowDescription().trim();
-  }
-
-  /** Close attempt from ×, Cancel or Escape. Anything typed is confirmed before it is thrown away;
-   *  an untouched form closes immediately, with nothing to lose. */
-  cancelNewWorkflow(): void {
-    // Mid-create, and while the discard confirm is already up, the base modal ignores close attempts —
-    // the confirm owns the interaction until it is answered.
-    if (this.creatingWorkflow() || this.confirmDiscardNewWorkflow()) return;
-
-    if (this.hasNewWorkflowInput()) {
-      this.confirmDiscardNewWorkflow.set(true);
-      return;
-    }
-
-    this.closeNewWorkflow();
-  }
-
-  /** Confirmed discard — drops the typed values and closes. */
-  discardNewWorkflow(): void {
-    this.confirmDiscardNewWorkflow.set(false);
-    this.closeNewWorkflow();
-  }
-
-  /** "Keep editing" — dismisses the confirm and leaves the New-workflow modal exactly as it was. */
-  keepEditingNewWorkflow(): void {
-    this.confirmDiscardNewWorkflow.set(false);
-  }
-
-  private closeNewWorkflow(): void {
-    this.showNewWorkflow.set(false);
-    this.confirmDiscardNewWorkflow.set(false);
-    this.newWorkflowName.set('');
-    this.newWorkflowDescription.set('');
-  }
-
-  /** Creates an empty workflow (no nodes, no edges) and opens the builder on it. It starts life as Draft —
-   *  it has no destination yet — and is created enabled, so adding a destination is all it takes to be Ready. */
-  confirmNewWorkflow(): void {
-    const name = this.newWorkflowName().trim();
-    if (!name || this.creatingWorkflow()) return;
-
-    const description = this.newWorkflowDescription().trim();
-    this.creatingWorkflow.set(true);
-    this.api
-      .save({ name, description: description || null, isEnabled: true, nodes: [], edges: [] })
-      .subscribe({
-        next: created => {
-          this.creatingWorkflow.set(false);
-          this.closeNewWorkflow();
-          // new=1 tells the builder this workflow has an id but an EMPTY graph, so it resets the canvas
-          // instead of taking the edit path — see its ngOnInit. Without it the builder treats the id as
-          // an existing workflow to load, and the stale canvas state breaks the `+` picker.
-          this.router.navigate(['/workflow-builder-v2'], {
-            queryParams: { id: created.id, new: '1' },
-          });
-        },
-        error: err => {
-          this.creatingWorkflow.set(false);
-          this.toast.error(this.messageOf(err, 'Could not create the workflow.'));
-        },
-      });
   }
 
   /** Launch rows are unaffected (still their own thing — see below). Every Run row now always dispatches in the
