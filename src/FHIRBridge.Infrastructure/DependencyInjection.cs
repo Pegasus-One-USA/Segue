@@ -216,6 +216,10 @@ public static class DependencyInjection
         // that's the in-memory or EF-backed implementation registered below.
         services.AddScoped<IUserDisplayNameResolver, UserDisplayNameResolver>();
 
+        // Registered unconditionally: the API's HttpContextCurrentUserService depends on it with or without a
+        // database (it was database-only, which left the no-database host unable to resolve the current user).
+        services.TryAddSingleton<IAmbientActorContext, AmbientActorContext>();
+
         var connectionString = configuration.GetConnectionString("FHIRBridgeDb");
         var persistenceProvider = configuration.GetValue("Database:Provider", PersistenceProvider.SqlServer);
 
@@ -232,6 +236,13 @@ public static class DependencyInjection
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<IEhrWriteLedgerRepository, InMemoryEhrWriteLedgerRepository>();
             services.AddSingleton<ITabularSourceFileRepository, InMemoryTabularSourceFileRepository>();
+            // These had no no-database registration, so every screen that used one failed in this profile.
+            services.AddSingleton<ITransformationRuleRepository, InMemoryTransformationRuleRepository>();
+            services.AddSingleton<IDeIdentificationProfileRepository, InMemoryDeIdentificationProfileRepository>();
+            services.AddSingleton<IResourceTypeCriteriaRepository, InMemoryResourceTypeCriteriaRepository>();
+            services.AddSingleton<ISchemaMappingRepository, InMemorySchemaMappingRepository>();
+            services.AddSingleton<IUserFhirContextBindingRepository, InMemoryUserFhirContextBindingRepository>();
+            services.AddSingleton<IBulkExportJobRepository, InMemoryBulkExportJobRepository>();
             services.AddSingleton<ILicenseRequestRepository, InMemoryLicenseRequestRepository>();
             services.AddSingleton<ILicenseHistoryRepository, InMemoryLicenseHistoryRepository>();
             services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
@@ -263,8 +274,8 @@ public static class DependencyInjection
         else
         {
             // Fallback actor source for audit stamping in hosts without an HTTP context (Worker, migrations).
-            // The API host registers an HTTP-aware ICurrentUserService that takes precedence over this.
-            services.TryAddSingleton<IAmbientActorContext, AmbientActorContext>();
+            // The API host registers an HTTP-aware ICurrentUserService that takes precedence over this. The
+            // ambient actor context itself is registered above, for both profiles.
             services.TryAddScoped<ICurrentUserService, SystemCurrentUserService>();
             services.AddScoped<AuditingSaveChangesInterceptor>();
             // Singleton, not Scoped: it now only holds IServiceScopeFactory + ILogger (both safe as

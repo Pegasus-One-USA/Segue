@@ -1160,7 +1160,10 @@ public static class WorkflowEndpoints
         // matches the portal's own canViewConfiguration gate on the menu item that calls it.
         group.MapGet("/workflows/{workflowId:guid}/configuration-export", async (
             Guid workflowId,
-            IWorkflowConfigurationExporter exporter,
+            // [FromServices]: the exporter is registered only with a database (AddWorkflowSqlPersistence). Without
+            // the attribute, a host with no database (the integration-test host) infers it as a request body and
+            // fails to build the endpoint table at startup; with it, only a call to this URL fails there.
+            [Microsoft.AspNetCore.Mvc.FromServices] IWorkflowConfigurationExporter exporter,
             CancellationToken cancellationToken) =>
         {
             var export = await exporter.ExportAsync(workflowId, cancellationToken);
@@ -2446,7 +2449,7 @@ public static class WorkflowEndpoints
         group.MapGet("/workflow-runs/{runId:guid}/bulk-export-status", async (
             Guid runId,
             IWorkflowRunStore runStore,
-            IBulkExportJobRepository bulkExportJobRepository,
+            [Microsoft.AspNetCore.Mvc.FromServices] IBulkExportJobRepository bulkExportJobRepository,
             IFhirBulkExportClient bulkExportClient,
             ISourceConnectionRuntimeResolver sourceResolver,
             CancellationToken cancellationToken) =>
