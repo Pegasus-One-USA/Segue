@@ -12,9 +12,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace FHIRBridge.UnitTests.EhrWriteBack;
 
 /// <summary>
-/// The write-back writer end to end over a fake EHR channel, in the only mode Phase 1 ships: dry run. The gate for
-/// the phase is "shaped resources that pass every profile, with zero network writes", so every test also asserts
-/// that no create was sent.
+/// The write-back writer end to end over a fake EHR channel. A dry run must send nothing; a live run sends only the
+/// types released for live writes, once, and records each outcome in the ledger.
 /// </summary>
 public sealed class MappedEhrWriteBackDestinationWriterTests
 {
@@ -43,7 +42,9 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
          "valueQuantity":{"value":36.2,"unit":"kg"}}
         """;
 
-    private static MappedEhrWriteBackDestinationWriter CreateWriter(InMemoryEhrWriteLedgerRepository? ledger = null) =>
+    private static MappedEhrWriteBackDestinationWriter CreateWriter(
+        InMemoryEhrWriteLedgerRepository? ledger = null,
+        params string[] released) =>
         new(
             new EhrWriteProfileRegistry(
             [
@@ -54,6 +55,7 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
                 new EpicPatientWriteProfile(),
             ]),
             ledger ?? new InMemoryEhrWriteLedgerRepository(),
+            new FixedReleasePolicy(released),
             NullLogger<MappedEhrWriteBackDestinationWriter>.Instance);
 
     private static DestinationConfiguration Destination() =>
@@ -102,15 +104,138 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
     }
 
     [Fact]
-    public async Task Live_option_is_still_a_dry_run_in_phase_1()
+    public async Task Live_option_without_a_released_type_is_still_a_dry_run()
     {
-        var channel = new FakeEhrWriteChannel(dryRun: false) { MatchResult = new EhrPatientMatchOutcome(EhrPatientMatchKind.Certain, "eTarget", 200, []) };
+        var channel = new FakeEhrWriteChannel(dryRun: false);
 
         var result = await CreateWriter().WriteAsync(
             Destination(), Profile(), [Record(SourcePatient), Record(Allergy)], Context(channel), CancellationToken.None);
 
         channel.Creates.Should().BeEmpty();
         result.EhrWrite!.DryRun.Should().BeTrue();
+        var allergy = result.EhrWrite.Resources.Single(r => r.ResourceType == "AllergyIntolerance");
+        allergy.WouldWrite.Should().Be(1);
+        allergy.Reasons.Should().ContainKey("live-write-not-released");
+    }
+
+    [Fact]
+    public async Task Dry_run_sends_nothing_even_when_the_type_is_released()
+    {
+        var channel = new FakeEhrWriteChannel(dryRun: true);
+
+        var result = await CreateWriter(null, "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        channel.Creates.Should().BeEmpty();
+        result.EhrWrite!.DryRun.Should().BeTrue();
+        result.EhrWrite.Resources.Single().Reasons.Should().NotContainKey("live-write-not-released");
+    }
+
+    [Fact]
+    public async Task Live_run_sends_a_released_type_once_and_records_it_as_written()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = new FakeEhrWriteChannel(dryRun: false);
+
+        var first = await CreateWriter(ledger, "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+        var second = await CreateWriter(ledger, "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        channel.Creates.Should().Equal(["AllergyIntolerance"], because: "the ledger stops the replay");
+        first.EhrWrite!.DryRun.Should().BeFalse();
+        first.Count.Should().Be(1);
+        first.WrittenResourceIds.Should().Equal(["a1"]);
+        first.EhrWrite.Resources.Single().Written.Should().Be(1);
+        second.EhrWrite!.Resources.Single().Reasons.Should().ContainKey("already-written");
+        var row = (await ledger.FindAsync(
+            EhrWriteKeys.TargetKey(TargetBaseUrl),
+            "AllergyIntolerance",
+            [EhrWriteKeys.SourceKey(SourceBaseUrl, "AllergyIntolerance", "a1")],
+            CancellationToken.None)).Values.Single();
+        row.State.Should().Be(EhrWriteLedgerState.Written);
+        row.TargetResourceId.Should().Be("new-id");
+    }
+
+    [Fact]
+    public async Task Only_released_types_are_sent_in_a_live_run()
+    {
+        var channel = new FakeEhrWriteChannel(dryRun: false)
+        {
+            Encounters = ["""{"resourceType":"Encounter","id":"eOpen","status":"in-progress"}"""],
+        };
+
+        var result = await CreateWriter(null, "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(Allergy), Record(Vital)], Context(channel), CancellationToken.None);
+
+        channel.Creates.Should().Equal(["AllergyIntolerance"]);
+        var vital = result.EhrWrite!.Resources.Single(r => r.ResourceType == "Observation");
+        vital.WouldWrite.Should().Be(1);
+        vital.Reasons.Should().ContainKey("live-write-not-released");
+    }
+
+    [Fact]
+    public async Task An_unknown_outcome_is_never_resent_until_a_reviewer_releases_it()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = new FakeEhrWriteChannel(dryRun: false) { CreateResult = new EhrCreateOutcome(EhrCreateKind.Unknown, 504, null, []) };
+
+        var first = await CreateWriter(ledger, "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+        var second = await CreateWriter(ledger, "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        first.EhrWrite!.Resources.Single().Unknown.Should().Be(1);
+        second.EhrWrite!.Resources.Single().Reasons.Should().ContainKey("awaiting-review");
+        channel.Creates.Should().HaveCount(1);
+
+        var row = (await ledger.ListNeedingReviewAsync(null, DateTime.UtcNow, 0, 10, CancellationToken.None)).Items.Single();
+        row.ReleaseForResend("reviewer@example.com", DateTime.UtcNow);
+        channel.CreateResult = new EhrCreateOutcome(EhrCreateKind.Created, 201, "eAllergy", []);
+
+        var third = await CreateWriter(ledger, "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        channel.Creates.Should().HaveCount(2);
+        third.EhrWrite!.Resources.Single().Written.Should().Be(1);
+        row.State.Should().Be(EhrWriteLedgerState.Written);
+        row.AttemptCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task A_refused_create_is_recorded_as_rejected_with_its_vendor_code_only()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = new FakeEhrWriteChannel(dryRun: false)
+        {
+            CreateResult = new EhrCreateOutcome(EhrCreateKind.Rejected, 422, null, [new EhrOutcomeIssue("error", "processing", "59012", null)]),
+        };
+
+        var result = await CreateWriter(ledger, "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        result.EhrWrite!.Resources.Single().Rejected.Should().Be(1);
+        result.RecordErrors.Should().ContainSingle().Which.Should().Be("AllergyIntolerance #1: rejected by the EHR (422, 59012)");
+        var row = (await ledger.ListNeedingReviewAsync(null, DateTime.UtcNow, 0, 10, CancellationToken.None)).Items.Single();
+        row.State.Should().Be(EhrWriteLedgerState.Rejected);
+        row.OutcomeCodes.Should().Be("59012");
+    }
+
+    [Fact]
+    public async Task A_duplicate_record_outcome_counts_as_already_in_the_ehr()
+    {
+        var channel = new FakeEhrWriteChannel(dryRun: false)
+        {
+            CreateResult = new EhrCreateOutcome(EhrCreateKind.Rejected, 400, null, [new EhrOutcomeIssue("error", "duplicate", "59141", null)]),
+        };
+
+        var result = await CreateWriter(null, "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        var allergy = result.EhrWrite!.Resources.Single();
+        allergy.AlreadyWritten.Should().Be(1);
+        allergy.Rejected.Should().Be(0);
+        result.RecordErrors.Should().BeNull();
     }
 
     [Fact]
@@ -325,10 +450,25 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
             return Task.FromResult(MatchResult);
         }
 
+        public EhrCreateOutcome CreateResult { get; set; } = new(EhrCreateKind.Created, 201, "new-id", []);
+
         public Task<EhrCreateOutcome> CreateAsync(string resourceType, string resourceJson, CancellationToken cancellationToken)
         {
             Creates.Add(resourceType);
-            return Task.FromResult(new EhrCreateOutcome(EhrCreateKind.Created, 201, "new-id", []));
+            return Task.FromResult(CreateResult);
         }
+    }
+
+    private sealed class FixedReleasePolicy : IEhrWriteReleasePolicy
+    {
+        private readonly IReadOnlySet<string> _released;
+
+        public FixedReleasePolicy(IEnumerable<string> released)
+        {
+            _released = new HashSet<string>(released, StringComparer.Ordinal);
+        }
+
+        public Task<IReadOnlySet<string>> GetReleasedResourceTypesAsync(SourceSystemType vendor, CancellationToken cancellationToken) =>
+            Task.FromResult(_released);
     }
 }

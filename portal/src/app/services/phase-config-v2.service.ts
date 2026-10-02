@@ -77,7 +77,7 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // wizard family are all in place (see MappedApiEndpointDestinationWriter).
     'dest-apiendpoint',
     // EHR write-back (Epic) — writer, node executor, validator, Step 1 form and wizard family are in place
-    // (see MappedEhrWriteBackDestinationWriter). Phase 1: every run is a dry run.
+    // (see MappedEhrWriteBackDestinationWriter). Dry run by default; live only for released types.
     'dest-ehr-writeback',
     // V2's chain steps — all three are the point of this builder, so none is phase-gated. (In V1 these
     // were 'field-mapping' plus the granular normalize/terminology/deid-* ids, all held back to a later

@@ -1,4 +1,5 @@
 using FHIRBridge.Application.Abstractions.Caching;
+using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Fhir;
@@ -18,10 +19,12 @@ namespace FHIRBridge.Api.Controllers.V1;
 public sealed class EhrWriteCapabilitiesController : ControllerBase
 {
     private readonly ISystemSettingsCache _settings;
+    private readonly IEhrWriteReleasePolicy _releasePolicy;
 
-    public EhrWriteCapabilitiesController(ISystemSettingsCache settings)
+    public EhrWriteCapabilitiesController(ISystemSettingsCache settings, IEhrWriteReleasePolicy releasePolicy)
     {
         _settings = settings;
+        _releasePolicy = releasePolicy;
     }
 
     /// <summary>The vendor's write capabilities; an unknown or missing vendor gets an empty list, never an error,
@@ -35,6 +38,9 @@ public sealed class EhrWriteCapabilitiesController : ControllerBase
             : null;
         var cloneModeEnabled = await _settings.GetBoolAsync(
             EhrWriteBackSettings.CloneModeEnabledKey, EhrWriteBackSettings.CloneModeEnabledDefault, cancellationToken);
+        var released = profile is null
+            ? new HashSet<string>()
+            : await _releasePolicy.GetReleasedResourceTypesAsync(profile.Vendor, cancellationToken);
 
         var capabilities = (profile?.Capabilities ?? [])
             .Select(capability => new EhrWriteCapabilityDto(
@@ -44,7 +50,9 @@ public sealed class EhrWriteCapabilitiesController : ControllerBase
                 capability.Variant,
                 capability.RequiresEncounter,
                 capability.OptInOnly,
-                capability.AllowedApplicationTypes.Order().Select(type => type.ToString()).ToList()))
+                capability.AllowedApplicationTypes.Order().Select(type => type.ToString()).ToList(),
+                capability.LiveWriteSupported,
+                released.Contains(capability.ResourceType)))
             .ToList();
 
         return Ok(new EhrWriteCapabilitiesDto(

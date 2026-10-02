@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<IDeIdentificationService, PassThroughDeIdentificationService>();
         services.AddScoped<IRetentionPolicyService, DefaultRetentionPolicyService>();
         services.AddScoped<IConfigurationService, ConfigurationService>();
+        services.AddScoped<IEhrWriteLedgerReviewService, EhrWriteLedgerReviewService>();
         services.AddScoped<IMappingImportService, MappingImportService>();
         services.AddScoped<ISchemaMatchingService, SchemaMatchingService>();
 

@@ -44,7 +44,7 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-azurefhir',   rank: 1, category: 'Cloud / FHIR', destinationType: 'AzureFhirService', name: 'Azure FHIR Service', sub: 'Write FHIR resources to Azure Health Data Services.', permissionPrefix: 'azurefhirservice' },
   // id must equal the backend catalog's TransformIdFor/hand-built entry ('dest-ehr-writeback'); permissionPrefix
   // matches PermissionGroupCode.EhrWriteBack.
-  { id: 'dest-ehr-writeback', rank: 1, category: 'Cloud / FHIR', destinationType: 'EhrWriteBack', name: 'EHR Write-Back', sub: 'Write allergies, problems, vitals and notes back into an EHR (dry run).', permissionPrefix: 'ehrwriteback' },
+  { id: 'dest-ehr-writeback', rank: 1, category: 'Cloud / FHIR', destinationType: 'EhrWriteBack', name: 'EHR Write-Back', sub: 'Write allergies, problems, vitals and notes back into an EHR.', permissionPrefix: 'ehrwriteback' },
   { id: 'dest-csv',         rank: 1, category: 'File',         destinationType: 'Csv',            name: 'CSV',                sub: 'Emit CSV files.',                   permissionPrefix: 'csv' },
   { id: 'dest-xlsx',        rank: 1, category: 'File',         destinationType: 'Excel',          name: 'Excel',              sub: 'Emit .xlsx workbooks.',             permissionPrefix: 'sourceconnections' },
   { id: 'dest-ndjson',      rank: 1, category: 'File',         destinationType: 'Ndjson',         name: 'NDJSON',             sub: 'Emit newline-delimited JSON.',      permissionPrefix: 'sourceconnections' },

@@ -5,7 +5,7 @@ import { forkJoin, map, of, switchMap } from 'rxjs';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { ISourceConnectionService } from '../../../../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel } from '../../../../source-connections/models/source-connection.model';
-import { EhrWriteCapabilitiesService } from '../../../../services/ehr-write-capabilities.service';
+import { EhrWriteCapabilitiesService, EhrWriteCapability } from '../../../../services/ehr-write-capabilities.service';
 import { EhrWriteBackFormApi } from './destination-form-api';
 
 interface WritableTarget {
@@ -13,6 +13,8 @@ interface WritableTarget {
   name: string;
   vendor: string;
   resourceTypes: string[];
+  /** Types a run that is not a dry run would actually send (released by an administrator). */
+  liveTypes: string[];
 }
 
 /**
@@ -20,7 +22,8 @@ interface WritableTarget {
  * includes Write and whose vendor accepts writes are offered — plus the write options. There is no secret: the
  * destination writes over the chosen connection's own credentials.
  *
- * Phase 1 runs every write as a dry run, whatever is chosen here, so the dry-run box is shown checked and locked.
+ * Dry run is the default. Clearing it sends only the types an administrator released for live writes (system
+ * setting EhrWriteBack:LiveWriteTypes); every other type is still only checked and counted, and the form says which.
  */
 @Component({
   selector: 'app-ehr-write-back-destination-form',
@@ -89,8 +92,18 @@ interface WritableTarget {
             <input type="checkbox" formControlName="dryRun" />
             Dry run — check and resolve every record, send nothing
           </label>
-          <span class="dw-hint">Write-back is in its first phase: every run is a dry run. The run reports what it would
-            have written.</span>
+          <span class="dw-hint">A dry run reports what it would have written. Turn it off only after a dry run of
+            this workflow looks right.</span>
+          @if (!form.value.dryRun && selected(); as target) {
+            @if (target.liveTypes.length > 0) {
+              <span class="dw-hint dw-hint--warn">Live: {{ target.liveTypes.join(', ') }} will be written into
+                {{ target.name }}. Other selected types stay a dry run.</span>
+            } @else {
+              <span class="dw-hint dw-hint--warn">No {{ target.vendor }} type is released for live writes yet, so this
+                still runs as a dry run. An administrator releases types in System Settings
+                (EhrWriteBack:LiveWriteTypes).</span>
+            }
+          }
         </div>
       </div>
     </form>
@@ -130,8 +143,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
     maxWritesPerRun: ['500', [Validators.pattern(/^(?:[1-9]\d{0,3}|10000)$/)]],
     noteDocStatus: ['preliminary'],
     createPatientIfMissing: [false],
-    // Locked on for Phase 1 — see the class remarks.
-    dryRun: [{ value: true, disabled: true }],
+    dryRun: [true],
   });
 
   constructor() {
@@ -139,8 +151,8 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       map(connections => connections.filter(c => c.isEnabled && (c.access === 'Write' || c.access === 'ReadWrite'))),
       switchMap(connections => connections.length === 0
         ? of([] as WritableTarget[])
-        : forkJoin(connections.map(c => this.capabilities.writableResourceTypes(c.sourceSystemType).pipe(
-            map(resourceTypes => this.toTarget(c, resourceTypes)))))),
+        : forkJoin(connections.map(c => this.capabilities.forVendor(c.sourceSystemType).pipe(
+            map(result => this.toTarget(c, result.capabilities)))))),
       map(targets => targets.filter(t => t.resourceTypes.length > 0)),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe({
@@ -174,8 +186,8 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       dest_name: v.name ?? '',
       dest_sourceConnectionId: v.sourceConnectionId ?? '',
       dest_ehrVendor: this.targetVendor() ?? '',
-      // Always "true" in Phase 1 (the control is locked); stored so the setting survives once it unlocks.
-      dest_dryRun: 'true',
+      // Anything but an explicit false is a dry run, here and in the executor.
+      dest_dryRun: v.dryRun === false ? 'false' : 'true',
       dest_createPatientIfMissing: v.createPatientIfMissing ? 'true' : 'false',
       dest_maxWritesPerRun: v.maxWritesPerRun || '500',
       dest_noteDocStatus: v.noteDocStatus === 'final' ? 'final' : 'preliminary',
@@ -197,6 +209,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       maxWritesPerRun: fields['dest_maxWritesPerRun'] || '500',
       noteDocStatus: fields['dest_noteDocStatus'] === 'final' ? 'final' : 'preliminary',
       createPatientIfMissing: fields['dest_createPatientIfMissing'] === 'true',
+      dryRun: fields['dest_dryRun'] !== 'false',
     });
     this.selectedId.set(fields['dest_sourceConnectionId'] || null);
   }
@@ -213,7 +226,13 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
     this.selectedId.set(null);
   }
 
-  private toTarget(connection: SourceConnectionModel, resourceTypes: string[]): WritableTarget {
-    return { id: connection.id, name: connection.name, vendor: connection.sourceSystemType, resourceTypes };
+  private toTarget(connection: SourceConnectionModel, capabilities: EhrWriteCapability[]): WritableTarget {
+    return {
+      id: connection.id,
+      name: connection.name,
+      vendor: connection.sourceSystemType,
+      resourceTypes: capabilities.map(c => c.resourceType),
+      liveTypes: capabilities.filter(c => c.liveReleased).map(c => c.resourceType),
+    };
   }
 }

@@ -21,30 +21,31 @@ namespace FHIRBridge.Infrastructure.Destinations.EhrWriteBack;
 /// <item>send it once, or in a dry run count it as what a live run would send.</item>
 /// </list>
 ///
-/// <para><b>Dry run only, for now.</b> Phase 1 of write-back ships the whole path except the send: every run is
-/// treated as a dry run whatever the destination says, so no request that changes an EHR can leave this writer until
-/// <see cref="LiveWritesReleased"/> is turned on in Phase 2. Reads (identifier search, <c>$match</c>, encounter
-/// search) do run, because resolving references is what a dry run is for.</para>
+/// <para><b>Live only where released.</b> A record is sent only when the destination is not a dry run AND its
+/// resource type is released for live writes (<see cref="IEhrWriteReleasePolicy"/>: supported in code and released by
+/// an administrator). Every other record is counted as what a live run would send, with the reason
+/// <c>live-write-not-released</c> when the destination asked for live writes. Reads (identifier search,
+/// <c>$match</c>, encounter search) always run, because resolving references is what a dry run is for.</para>
 ///
 /// <para><b>PHI.</b> The report and every record error hold resource types, positions and reason codes only. Nothing
 /// read from a resource, a search result or an OperationOutcome's diagnostics is logged.</para>
 /// </summary>
 public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestinationWriter
 {
-    /// <summary>Off until Phase 2 verifies the send path against the sandbox. See the class remarks.</summary>
-    internal static readonly bool LiveWritesReleased = false;
-
     private readonly EhrWriteProfileRegistry _profiles;
     private readonly IEhrWriteLedgerRepository _ledger;
+    private readonly IEhrWriteReleasePolicy _releasePolicy;
     private readonly ILogger<MappedEhrWriteBackDestinationWriter> _logger;
 
     public MappedEhrWriteBackDestinationWriter(
         EhrWriteProfileRegistry profiles,
         IEhrWriteLedgerRepository ledger,
+        IEhrWriteReleasePolicy releasePolicy,
         ILogger<MappedEhrWriteBackDestinationWriter> logger)
     {
         _profiles = profiles;
         _ledger = ledger;
+        _releasePolicy = releasePolicy;
         _logger = logger;
     }
 
@@ -71,13 +72,17 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
                 "can be traced to the server it came from.");
         }
 
-        var dryRun = channel.Options.DryRun || !LiveWritesReleased;
         var targetKey = EhrWriteKeys.TargetKey(channel.TargetBaseUrl);
         // Reading from and writing to the same EHR: every record is already there. Epic does not deduplicate
         // allergies, problems or notes, so sending them back would file second copies in the same chart.
         var sameEnvironment = EhrWriteKeys.SameEnvironment(context.SourceBaseUrl, channel.TargetBaseUrl);
         var parsed = Parse(records);
         var selected = new HashSet<string>(channel.Options.ResourceTypes, StringComparer.OrdinalIgnoreCase);
+        var released = channel.Options.DryRun
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : await _releasePolicy.GetReleasedResourceTypesAsync(vendor.Vendor, cancellationToken);
+        // The run as a whole is a dry run unless at least one selected type can actually be sent.
+        var dryRun = !released.Any(selected.Contains);
         var tallies = new Dictionary<string, Tally>(StringComparer.Ordinal);
         var recordErrors = new List<string>();
         var writtenIds = new List<string?>();
@@ -140,9 +145,14 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             }
 
             plannedWrites++;
-            if (dryRun)
+            if (!released.Contains(record.ResourceType))
             {
                 tally.WouldWrite++;
+                if (!channel.Options.DryRun)
+                {
+                    tally.Reason("live-write-not-released");
+                }
+
                 continue;
             }
 
@@ -277,8 +287,9 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
     /// <summary>Why the ledger stops this record being sent again, or null when it may be sent.</summary>
     private static string? LedgerBlocks(EhrWriteLedgerEntry? existing, string contentHash)
     {
-        if (existing is null)
+        if (existing is null || existing.State == EhrWriteLedgerState.Released)
         {
+            // Released: a reviewer confirmed the record is not in the EHR, so it is sent once more.
             return null;
         }
 

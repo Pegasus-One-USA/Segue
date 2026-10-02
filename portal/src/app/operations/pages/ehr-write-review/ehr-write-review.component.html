@@ -1,0 +1,123 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>EHR Write-Back Review</h1>
+    <p class="page-sub">Writes to an EHR that need a person: the outcome is unknown, the EHR refused them, or the send never finished.</p>
+  </div>
+
+  <details class="info-panel">
+    <summary>What am I looking at?</summary>
+    <div class="info-body">
+      <p class="info-lead">An EHR files a repeated create as a <strong>second copy</strong> in the chart, so a write whose outcome is not known is never retried on its own. Check the patient's chart in the EHR, then:</p>
+      <ul>
+        <li><strong>It is in the EHR</strong>: enter the id the EHR gave it. It is recorded as written and never sent again.</li>
+        <li><strong>Not in the EHR</strong>: release it. The next run of its workflow sends it once more.</li>
+      </ul>
+      <p class="info-note">A refusal caused by configuration (no API on the client id, a rate limit) is retried automatically once it is fixed, and a refused record that changes in the source is retried too. Release a refused record only when you know the same content will now be accepted.</p>
+      <p class="info-note">Only ids, statuses and the EHR's outcome codes are shown, never clinical content.</p>
+    </div>
+  </details>
+
+  <div class="filter-bar">
+    <select class="type-select" [value]="resourceType() ?? ''" (change)="onResourceTypeChange($any($event.target).value)">
+      <option value="">All resource types</option>
+      @for (type of resourceTypes; track type) {
+        <option [value]="type">{{ type }}</option>
+      }
+    </select>
+    <button class="btn btn-ghost" type="button" (click)="load()">Refresh</button>
+  </div>
+
+  @if (error(); as message) {
+    <div class="error-banner" role="alert">{{ message }}</div>
+  }
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="result().items" class="data-table">
+        <ng-container matColumnDef="updatedOnUtc">
+          <th mat-header-cell *matHeaderCellDef>Last attempt</th>
+          <td mat-cell *matCellDef="let r">{{ r.updatedOnUtc | date:'MMM d, h:mm:ss a' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="resourceType">
+          <th mat-header-cell *matHeaderCellDef>Resource</th>
+          <td mat-cell *matCellDef="let r">{{ r.resourceType }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="target">
+          <th mat-header-cell *matHeaderCellDef>EHR connection</th>
+          <td mat-cell *matCellDef="let r">{{ r.targetConnectionName || r.targetConnectionId }}@if (r.targetVendor) { <span class="muted">({{ r.targetVendor }})</span> }</td>
+        </ng-container>
+
+        <ng-container matColumnDef="state">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="status-badge" [class.status-fail]="r.state === 'Rejected'" [class.status-warn]="r.state !== 'Rejected'">{{ stateLabel(r.state) }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="response">
+          <th mat-header-cell *matHeaderCellDef>EHR response</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="mono">{{ r.httpStatus ?? '—' }}</span>
+            @if (r.outcomeCodes) { <span class="mono muted"> {{ r.outcomeCodes }}</span> }
+            <div class="muted small">{{ r.attemptCount }} attempt{{ r.attemptCount === 1 ? '' : 's' }}</div>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="run">
+          <th mat-header-cell *matHeaderCellDef>Workflow run</th>
+          <td mat-cell *matCellDef="let r"><code class="mono">{{ r.workflowRunId || '—' }}</code></td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let r" class="actions-cell">
+            @if (!canResolve()) {
+              <span class="muted small">View only</span>
+            } @else if (markingId() === r.id) {
+              <div class="inline-form">
+                <input class="id-input" placeholder="EHR id of the record" [value]="targetIdDraft()"
+                  (input)="targetIdDraft.set($any($event.target).value)" (keyup.enter)="confirmWritten(r)" />
+                <button class="btn" type="button" [disabled]="!targetIdDraft().trim() || busyId() === r.id" (click)="confirmWritten(r)">Save</button>
+                <button class="btn btn-ghost" type="button" (click)="cancel()">Cancel</button>
+              </div>
+            } @else if (releasingId() === r.id) {
+              <div class="inline-form">
+                <span class="small">Send it again on the next run?</span>
+                <button class="btn btn-danger" type="button" [disabled]="busyId() === r.id" (click)="confirmRelease(r)">Release</button>
+                <button class="btn btn-ghost" type="button" (click)="cancel()">Cancel</button>
+              </div>
+            } @else {
+              <div class="inline-form">
+                <button class="btn btn-ghost" type="button" (click)="startMarking(r)">It is in the EHR</button>
+                <button class="btn btn-ghost" type="button" (click)="askRelease(r)">Not in the EHR</button>
+              </div>
+            }
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+      </table>
+    </div>
+
+    @if (result().items.length === 0 && !loading()) {
+      <div class="empty-state">Nothing to review. Every write-back has a known outcome.</div>
+    }
+    @if (loading()) {
+      <div class="empty-state">Loading…</div>
+    }
+
+    @if (result().totalCount > pageSize()) {
+      <mat-paginator
+        [length]="result().totalCount"
+        [pageSize]="pageSize()"
+        [pageIndex]="pageIndex()"
+        [pageSizeOptions]="[10, 25, 50, 100]"
+        showFirstLastButtons
+        (page)="onPageChange($event)"
+      ></mat-paginator>
+    }
+  </div>
+</div>

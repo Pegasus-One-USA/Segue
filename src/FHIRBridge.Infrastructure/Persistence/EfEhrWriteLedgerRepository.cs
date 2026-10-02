@@ -81,6 +81,37 @@ public sealed class EfEhrWriteLedgerRepository : IEhrWriteLedgerRepository
 
     public Task SaveChangesAsync(CancellationToken cancellationToken) => _db.SaveChangesAsync(cancellationToken);
 
+    public async Task<(IReadOnlyList<EhrWriteLedgerEntry> Items, int TotalCount)> ListNeedingReviewAsync(
+        string? resourceType,
+        DateTime utcNow,
+        int skip,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        // The same rule as EhrWriteLedgerState.NeedsReview, spelled out so both providers translate it.
+        var staleBefore = utcNow - EhrWriteLedgerState.StalePendingAfter;
+        var query = _db.EhrWriteLedgerEntries.AsNoTracking().Where(x =>
+            x.State == EhrWriteLedgerState.Unknown
+            || x.State == EhrWriteLedgerState.Rejected
+            || (x.State == EhrWriteLedgerState.Pending && x.UpdatedOnUtc <= staleBefore));
+        if (!string.IsNullOrWhiteSpace(resourceType))
+        {
+            query = query.Where(x => x.ResourceType == resourceType);
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(x => x.UpdatedOnUtc)
+            .ThenBy(x => x.Id)
+            .Skip(Math.Max(skip, 0))
+            .Take(Math.Clamp(take, 1, 200))
+            .ToListAsync(cancellationToken);
+        return (items, total);
+    }
+
+    public Task<EhrWriteLedgerEntry?> GetAsync(Guid id, CancellationToken cancellationToken) =>
+        _db.EhrWriteLedgerEntries.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
     private static bool IsIdempotencyViolation(DbUpdateException exception) =>
         exception.InnerException switch
         {

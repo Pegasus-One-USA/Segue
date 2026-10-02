@@ -25,8 +25,20 @@ public static class EhrWriteLedgerState
     /// automatically, because the EHR files a replayed create a second time; it waits on the review list.</summary>
     public const string Unknown = "Unknown";
 
+    /// <summary>A reviewer checked the EHR, found the record is NOT there, and released it: the next run sends it
+    /// once more. Only a person sets this; nothing automatic does.</summary>
+    public const string Released = "Released";
+
+    /// <summary>How long a <see cref="Pending"/> row may sit before it is presumed abandoned (the process died
+    /// mid-send) and shown for review. Far longer than any single create takes.</summary>
+    public static readonly TimeSpan StalePendingAfter = TimeSpan.FromMinutes(15);
+
     public static bool BlocksResend(string state) =>
         state is Pending or Written or AlreadyAtTarget or Unknown;
+
+    /// <summary>States a person may resolve: the outcome is not known, or the EHR refused the record.</summary>
+    public static bool NeedsReview(string state, DateTime updatedOnUtc, DateTime utcNow) =>
+        state is Unknown or Rejected || (state == Pending && utcNow - updatedOnUtc >= StalePendingAfter);
 }
 
 /// <summary>
@@ -113,6 +125,49 @@ public sealed class EhrWriteLedgerEntry : Entity<Guid>
     public DateTime CreatedOnUtc { get; private set; }
 
     public DateTime UpdatedOnUtc { get; private set; }
+
+    /// <summary>Who last resolved the row from the review list (the signed-in user's email or id), never PHI.</summary>
+    public string? ReviewedBy { get; private set; }
+
+    public DateTime? ReviewedOnUtc { get; private set; }
+
+    /// <summary>A reviewer found the record in the EHR: it was written after all. Records the EHR's id so the row
+    /// guards against a second copy like any other written row.</summary>
+    public void ResolveAsWritten(string targetResourceId, string reviewer, DateTime utcNow)
+    {
+        if (string.IsNullOrWhiteSpace(targetResourceId))
+        {
+            throw new ArgumentException("The EHR's id for the record is required.", nameof(targetResourceId));
+        }
+
+        EnsureReviewable(utcNow);
+        Settle(EhrWriteLedgerState.Written, targetResourceId.Trim(), HttpStatus, OutcomeCodes, utcNow);
+        MarkReviewed(reviewer, utcNow);
+    }
+
+    /// <summary>A reviewer found the record is NOT in the EHR: the next run may send it once more.</summary>
+    public void ReleaseForResend(string reviewer, DateTime utcNow)
+    {
+        EnsureReviewable(utcNow);
+        Settle(EhrWriteLedgerState.Released, null, HttpStatus, OutcomeCodes, utcNow);
+        MarkReviewed(reviewer, utcNow);
+    }
+
+    private void EnsureReviewable(DateTime utcNow)
+    {
+        if (!EhrWriteLedgerState.NeedsReview(State, UpdatedOnUtc, utcNow))
+        {
+            throw new InvalidOperationException(
+                $"A {State} ledger row cannot be resolved: only unknown, rejected or abandoned writes are reviewed.");
+        }
+    }
+
+    private void MarkReviewed(string reviewer, DateTime utcNow)
+    {
+        var trimmed = string.IsNullOrWhiteSpace(reviewer) ? "unknown" : reviewer.Trim();
+        ReviewedBy = trimmed.Length > 256 ? trimmed[..256] : trimmed;
+        ReviewedOnUtc = utcNow;
+    }
 
     /// <summary>Claims the row for a send. <paramref name="contentHash"/> is what is about to be sent, which differs
     /// from the stored one when a rejected record is retried after it changed.</summary>

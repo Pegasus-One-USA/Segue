@@ -21,9 +21,12 @@ public sealed class EhrWriteLedgerEntryConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.ContentHash).HasMaxLength(64).IsRequired();
         builder.Property(x => x.ResourceType).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Operation).HasConversion<string>().HasMaxLength(20).IsRequired();
-        builder.Property(x => x.State).HasMaxLength(20).IsRequired();
+        // Also a concurrency token: a reviewer resolving a row and a run claiming it change State without both
+        // touching AttemptCount, so whichever saves second matches zero rows and fails instead of overwriting.
+        builder.Property(x => x.State).HasMaxLength(20).IsRequired().IsConcurrencyToken();
         builder.Property(x => x.TargetResourceId).HasMaxLength(200);
         builder.Property(x => x.OutcomeCodes).HasMaxLength(200);
+        builder.Property(x => x.ReviewedBy).HasMaxLength(256);
         builder.Property(x => x.TargetConnectionId).IsRequired();
         // Optimistic concurrency for claims: every send increments it, so a second run's claim on the same row
         // matches zero rows and fails instead of sending a duplicate. A plain column works the same on both

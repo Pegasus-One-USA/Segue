@@ -188,9 +188,9 @@ Still open, each needing another sandbox write or an app change:
 
 ## 7. Phase 1 — what is built (dry run only)
 
-Every run is a dry run: `MappedEhrWriteBackDestinationWriter.LiveWritesReleased` is `false`, so the writer
-shapes, validates and resolves each record, reads from the EHR where resolution needs it, and reports what it
-would write. No request that changes an EHR can leave it. Phase 2 turns the send on after sandbox verification.
+In Phase 1 every run was a dry run: the writer shapes, validates and resolves each record, reads from the EHR
+where resolution needs it, and reports what it would write. Phase 2 (section 8) replaced the hard-coded switch
+with a per-type release; a dry run still sends nothing.
 
 **How a record flows.** Source node → (optional Transformation node) → EHR Write-Back node
 (`EhrWriteBackDestinationNode`, `dest-ehr-writeback` in the portal). Exactly one source node, no Mapping node, and
@@ -233,9 +233,62 @@ seeded false; clone mode itself is Phase 3). API: `GET api/v1/ehr-write-capabili
 **Known limits, picked up in later phases.** Notes must already be plain text (HTML/RTF conversion is Phase 3);
 vital units are passed through, not converted; a patient that would be created makes its other records skip as
 `patient-not-yet-created` until the live create exists; `dest_maxWritesPerRun` caps one write call, not a whole
-run; the ledger has no review screen yet.
+run. (The ledger review screen came in Phase 2.)
 
-## 8. Sources
+**Phase 1 acceptance run (2026-10-02, not completed).** The Epic → Epic workflow
+("EHR Write-Back dry run (Epic to Epic sandbox)") and a Write-only target connection ("Epic Write-Back Sandbox",
+client `de35f913…`, kid `fb-6f886de66`) were created in `FHIRBridge_v2`, and the workflow passed graph validation.
+The run stopped at the source node: Epic answered `invalid_client` for the read app (`0184f963…`, kid
+`fb-e181ab9db`) because its JWKS host (`segue.pegasusone.com:4003`) returned 502, and Epic itself then went into
+downtime. To be re-run once both are back; with source and target on the same sandbox every record is expected to
+report `already-in-ehr`.
+
+## 8. Phase 2 — live writes for allergies, problems and notes
+
+**Release, in two keys.** A record is sent only when all of these hold:
+
+1. the destination is not a dry run (`dest_dryRun` is `false`; anything else is a dry run);
+2. the code supports live writes for the type (`EhrWriteCapability.LiveWriteSupported`): Epic AllergyIntolerance
+   (945), Condition problem-list item (949) and DocumentReference clinical note (1046). Vitals and patients stay
+   dry-run-only until Phase 3;
+3. an administrator released it in the system setting `EhrWriteBack:LiveWriteTypes`, a comma list of
+   `Vendor:ResourceType` (e.g. `Epic:AllergyIntolerance,Epic:Condition,Epic:DocumentReference`), seeded empty.
+   Entries for other vendors, unknown types and types the code does not support are ignored, so a bad value can
+   only release less (`EhrWriteBackSettings.ReleasedResourceTypes`, read through `IEhrWriteReleasePolicy`).
+
+Anything else is counted as `wouldWrite`; when the destination asked for live writes the reason
+`live-write-not-released` says why it was not sent. The run reports `dryRun: false` only when at least one selected
+type was live. `GET api/v1/ehr-write-capabilities` now returns `liveWriteSupported` and `liveReleased` per type, and
+the destination form shows which selected types a live run would send.
+
+**Review list.** A write whose outcome is unknown (timeout, reset, 5xx), that the EHR refused, or whose send never
+finished (Pending for 15 minutes) is never retried on its own. Operations → EHR Write-Back Review
+(`/operations/ehr-write-review`, permission `ehrwriteback.view`; resolving needs `ehrwriteback.edit`) lists them
+with the target connection, HTTP status, vendor codes, attempt count and run id — no PHI. A reviewer checks the
+chart and either:
+
+- **It is in the EHR**: enters the EHR's id; the row becomes `Written` and guards against a second copy;
+- **Not in the EHR**: releases it; the row becomes `Released` and the next run sends it once more.
+
+`ReviewedBy` / `ReviewedOnUtc` record who did it. `State` is now a concurrency token alongside `AttemptCount`, so a
+reviewer and a run touching the same row cannot both win. API: `GET api/v1/ehr-write-ledger/review`,
+`POST api/v1/ehr-write-ledger/{id}/mark-written`, `POST api/v1/ehr-write-ledger/{id}/release`. Migration
+`AddEhrWriteLedgerReview` for both providers.
+
+**Sandbox verification (pending: Epic was down on 2026-10-02).** To be run by the user, in order, against
+Desiree (`eAB3mDIBBcyUKviyzrxsnAw3`) with `EhrWriteBack:LiveWriteTypes = Epic:AllergyIntolerance`:
+
+| # | Check | Expected |
+|---|---|---|
+| 1 | Phase 1 acceptance dry run (section 7) | every record `already-in-ehr`, scope `verified` |
+| 2 | One allergy from a non-Epic source, live | 201, ledger `Written` with the Epic id |
+| 3 | The same run again | no request; `already-written` |
+| 4 | Release Condition, one problem live | 201 |
+| 5 | Release DocumentReference, one note on the open visit live | 201, filed as preliminary |
+| 6 | Force a timeout (very short client timeout) on one allergy | ledger `Unknown`, listed for review, not resent |
+| 7 | Review: mark #6 written with the id seen in the chart | row `Written`, next run sends nothing |
+
+## 9. Sources
 
 - Sandbox CapabilityStatement: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/metadata
 - Sandbox SMART configuration: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/.well-known/smart-configuration

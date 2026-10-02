@@ -27,4 +27,15 @@ public interface IEhrWriteLedgerRepository
 
     /// <summary>Persists state changes made to rows returned by this repository.</summary>
     Task SaveChangesAsync(CancellationToken cancellationToken);
+
+    /// <summary>Rows a person must resolve (<see cref="EhrWriteLedgerState.NeedsReview"/>), newest first, optionally
+    /// narrowed to one resource type.</summary>
+    Task<(IReadOnlyList<EhrWriteLedgerEntry> Items, int TotalCount)> ListNeedingReviewAsync(
+        string? resourceType,
+        DateTime utcNow,
+        int skip,
+        int take,
+        CancellationToken cancellationToken);
+
+    Task<EhrWriteLedgerEntry?> GetAsync(Guid id, CancellationToken cancellationToken);
 }

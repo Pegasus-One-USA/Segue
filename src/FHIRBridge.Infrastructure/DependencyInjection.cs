@@ -542,6 +542,7 @@ public static class DependencyInjection
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicVitalSignWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicPatientWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.EhrWriteProfileRegistry>();
+        services.AddSingleton<IEhrWriteReleasePolicy, Destinations.EhrWriteBack.SettingsEhrWriteReleasePolicy>();
         services.AddScoped<Destinations.EhrWriteBack.MappedEhrWriteBackDestinationWriter>();
         foreach (var registration in ConfiguredDestinationWriterFactory.DefaultRegistrations)
         {

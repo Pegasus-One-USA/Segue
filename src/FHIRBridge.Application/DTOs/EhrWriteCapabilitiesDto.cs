@@ -11,6 +11,9 @@ public sealed record EhrWriteCapabilitiesDto(
     bool CloneModeEnabled,
     IReadOnlyList<EhrWriteCapabilityDto> Capabilities);
 
+/// <param name="LiveWriteSupported">The product can send this type live (it is not dry-run-only in code).</param>
+/// <param name="LiveReleased">An administrator released it for live writes; a run that is not a dry run sends it.
+/// Always false when <paramref name="LiveWriteSupported"/> is.</param>
 public sealed record EhrWriteCapabilityDto(
     string ResourceType,
     IReadOnlyList<string> Operations,
@@ -18,4 +21,6 @@ public sealed record EhrWriteCapabilityDto(
     string? Variant,
     bool RequiresEncounter,
     bool OptInOnly,
-    IReadOnlyList<string> AllowedApplicationTypes);
+    IReadOnlyList<string> AllowedApplicationTypes,
+    bool LiveWriteSupported,
+    bool LiveReleased);

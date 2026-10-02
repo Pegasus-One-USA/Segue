@@ -16,7 +16,8 @@ public sealed class EhrWriteCapability
         string? variant,
         bool requiresEncounter,
         bool optInOnly,
-        IReadOnlySet<ApplicationType> allowedApplicationTypes)
+        IReadOnlySet<ApplicationType> allowedApplicationTypes,
+        bool liveWriteSupported = false)
     {
         ResourceType = SupportedFhirResourceTypes.Normalize(resourceType);
         Operations = operations;
@@ -25,6 +26,7 @@ public sealed class EhrWriteCapability
         RequiresEncounter = requiresEncounter;
         OptInOnly = optInOnly;
         AllowedApplicationTypes = allowedApplicationTypes;
+        LiveWriteSupported = liveWriteSupported;
     }
 
     /// <summary>Canonical FHIR resource type name, as in <see cref="SupportedFhirResourceTypes.All"/>.</summary>
@@ -50,6 +52,11 @@ public sealed class EhrWriteCapability
 
     /// <summary>SMART application types whose tokens the vendor accepts for this write.</summary>
     public IReadOnlySet<ApplicationType> AllowedApplicationTypes { get; }
+
+    /// <summary>The live send path for this API has been built and verified, so an administrator may release it for
+    /// live writes (system setting <c>EhrWriteBack:LiveWriteTypes</c>). False means every run of this type stays a
+    /// dry run whatever is configured: the code decides what CAN go live, the setting decides what DOES.</summary>
+    public bool LiveWriteSupported { get; }
 
     public bool Supports(EhrWriteOperation operation) => Operations.Contains(operation);
 }

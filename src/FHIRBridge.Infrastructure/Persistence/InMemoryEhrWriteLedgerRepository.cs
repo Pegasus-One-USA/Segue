@@ -35,4 +35,24 @@ public sealed class InMemoryEhrWriteLedgerRepository : IEhrWriteLedgerRepository
     public Task<bool> TryClaimAsync(EhrWriteLedgerEntry entry, CancellationToken cancellationToken) => Task.FromResult(true);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task<(IReadOnlyList<EhrWriteLedgerEntry> Items, int TotalCount)> ListNeedingReviewAsync(
+        string? resourceType,
+        DateTime utcNow,
+        int skip,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        var matching = _rows.Values
+            .Where(x => EhrWriteLedgerState.NeedsReview(x.State, x.UpdatedOnUtc, utcNow))
+            .Where(x => string.IsNullOrWhiteSpace(resourceType) || x.ResourceType == resourceType)
+            .OrderByDescending(x => x.UpdatedOnUtc)
+            .ThenBy(x => x.Id)
+            .ToList();
+        IReadOnlyList<EhrWriteLedgerEntry> page = matching.Skip(Math.Max(skip, 0)).Take(Math.Clamp(take, 1, 200)).ToList();
+        return Task.FromResult((page, matching.Count));
+    }
+
+    public Task<EhrWriteLedgerEntry?> GetAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(_rows.Values.FirstOrDefault(x => x.Id == id));
 }
