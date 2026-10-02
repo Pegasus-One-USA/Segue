@@ -22,16 +22,16 @@ public static class EhrWriteCapabilities
     // Epic: verified 2026-09-30 against each API's raw specification (fhir.epic.com/Specifications/Api?id=<id>),
     // the sandbox R4 CapabilityStatement (Epic August 2026) and live sandbox writes. None of these five APIs supports
     // update, delete, patch, batch or conditional create. See docs/backend/20-epic-r4-write-back.md sections 1 and 6.
-    // Live writes (Phase 2): the three APIs with the fewest context dependencies. Vitals and patients follow in
-    // Phase 3, once their open-encounter and required-identifier rules are verified.
+    // Live writes: allergies, problems and notes since Phase 2; vitals (open encounter only) and patients (only after
+    // $match found no one, and only when the destination opts in) since Phase 3.
     private static readonly EhrWriteVendorProfile Epic = new(
         SourceSystemType.Epic,
         [
             new("AllergyIntolerance", CreateOnly, "945", variant: null, requiresEncounter: false, optInOnly: false, BackendOnly, liveWriteSupported: true),
             new("Condition", CreateOnly, "949", EhrWriteVariants.ProblemListItem, requiresEncounter: false, optInOnly: false, BackendOnly, liveWriteSupported: true),
             new("DocumentReference", CreateOnly, "1046", EhrWriteVariants.ClinicalNote, requiresEncounter: true, optInOnly: false, BackendOnly, liveWriteSupported: true),
-            new("Observation", CreateOnly, "963", EhrWriteVariants.VitalSigns, requiresEncounter: true, optInOnly: false, BackendOnly),
-            new("Patient", CreateOnly, "930", variant: null, requiresEncounter: false, optInOnly: true, BackendOnly),
+            new("Observation", CreateOnly, "963", EhrWriteVariants.VitalSigns, requiresEncounter: true, optInOnly: false, BackendOnly, liveWriteSupported: true),
+            new("Patient", CreateOnly, "930", variant: null, requiresEncounter: false, optInOnly: true, BackendOnly, liveWriteSupported: true),
         ],
         supportsPatientMatch: true,
         requestsScopeOnTokenRequest: false,

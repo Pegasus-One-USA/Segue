@@ -1114,7 +1114,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 report.Resources
                     .Select(r => new FHIRBridge.Runtime.Application.Workflows.Payloads.EhrWriteResourceCounts(
                         r.ResourceType, r.Received, r.WouldWrite, r.Written, r.AlreadyWritten, r.Skipped, r.Rejected, r.Unknown, r.Reasons))
-                    .ToList());
+                    .ToList(),
+                report.CloneMode);
 
     // The resource types this destination node was configured to write — the destination wizard's own selection,
     // stored as "dest_resources" (comma-separated) with the "dest_targets" ({sourceType: destType} JSON map) keys as

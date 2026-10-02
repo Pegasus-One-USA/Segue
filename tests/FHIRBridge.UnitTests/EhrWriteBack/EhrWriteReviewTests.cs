@@ -42,7 +42,7 @@ public sealed class EhrWriteReviewTests
     [InlineData("", "")]
     [InlineData("Epic:AllergyIntolerance", "AllergyIntolerance")]
     [InlineData(" epic : condition , Epic:DocumentReference ", "Condition,DocumentReference")]
-    [InlineData("Epic:Observation,Epic:Patient", "")]
+    [InlineData("Epic:Observation,Epic:Patient", "Observation,Patient")]
     [InlineData("Healow:AllergyIntolerance,Epic:Immunization,AllergyIntolerance,:Condition", "")]
     public void Only_live_capable_types_of_the_vendor_can_be_released(string setting, string expected)
     {

@@ -94,7 +94,7 @@ export function buildFhirSecretBlob(f: Record<string, string>): string {
 /** The EHR Write-Back destination's dest_* settings, shared by every place that builds its connection metadata. */
 export const EHR_WRITE_BACK_METADATA_KEYS = [
   'dest_name', 'dest_sourceConnectionId', 'dest_ehrVendor', 'dest_dryRun', 'dest_createPatientIfMissing',
-  'dest_maxWritesPerRun', 'dest_noteDocStatus',
+  'dest_maxWritesPerRun', 'dest_noteDocStatus', 'dest_cloneMode',
 ] as const;
 
 export function buildConnectionMetadata(

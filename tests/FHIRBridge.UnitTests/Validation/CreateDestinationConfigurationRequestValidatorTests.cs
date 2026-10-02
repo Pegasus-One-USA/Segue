@@ -113,6 +113,7 @@ public sealed class CreateDestinationConfigurationRequestValidatorTests
     [InlineData("dest_maxWritesPerRun", "lots")]
     [InlineData("dest_dryRun", "yes")]
     [InlineData("dest_createPatientIfMissing", "1")]
+    [InlineData("dest_cloneMode", "on")]
     [InlineData("dest_noteDocStatus", "signed")]
     public void Ehr_write_back_with_an_invalid_option_fails(string key, string value)
     {

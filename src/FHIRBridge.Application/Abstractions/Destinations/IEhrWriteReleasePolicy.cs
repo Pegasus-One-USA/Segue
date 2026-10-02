@@ -11,4 +11,8 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 public interface IEhrWriteReleasePolicy
 {
     Task<IReadOnlySet<string>> GetReleasedResourceTypesAsync(SourceSystemType vendor, CancellationToken cancellationToken);
+
+    /// <summary>The QA-only <see cref="FHIRBridge.Application.Services.EhrWriteBackSettings.CloneModeEnabledKey"/>
+    /// system setting. A destination asking for clone mode while it is off is refused, not silently run normally.</summary>
+    Task<bool> IsCloneModeEnabledAsync(CancellationToken cancellationToken);
 }

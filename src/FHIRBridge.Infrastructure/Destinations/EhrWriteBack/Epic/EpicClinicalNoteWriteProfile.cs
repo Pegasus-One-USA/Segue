@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Domain.Enums;
@@ -8,7 +9,7 @@ namespace FHIRBridge.Infrastructure.Destinations.EhrWriteBack.Epic;
 /// <summary>
 /// Epic DocumentReference.Create (Clinical Notes), spec 1046. Files to the chart against an existing encounter of the
 /// same patient (the sandbox accepted a finished stay). Epic saves only the first attachment, which must be
-/// base64 plain text; <c>status</c> must be current. With no author Epic files the note under the background user.
+/// base64 plain text, so HTML and RTF notes are converted (<see cref="EhrNoteText"/>); <c>status</c> must be current. With no author Epic files the note under the background user.
 /// It does not deduplicate.
 /// </summary>
 public sealed class EpicClinicalNoteWriteProfile : IEhrWriteProfile
@@ -70,10 +71,31 @@ public sealed class EpicClinicalNoteWriteProfile : IEhrWriteProfile
             return EhrShapeResult.Reject("note-content-not-inline");
         }
 
+        // Epic takes base64 plain text only: plain text is sent as it came, HTML and RTF are converted first.
+        if (!EhrNoteText.CanConvert(contentType))
+        {
+            return EhrShapeResult.Reject("note-format-not-supported");
+        }
+
         if (contentType != "text/plain")
         {
-            // Epic takes plain text only. HTML and RTF need converting first, which is not built yet.
-            return EhrShapeResult.Reject("note-not-plain-text");
+            string decoded;
+            try
+            {
+                decoded = Encoding.UTF8.GetString(Convert.FromBase64String(data));
+            }
+            catch (FormatException)
+            {
+                return EhrShapeResult.Reject("note-content-not-base64");
+            }
+
+            var plain = EhrNoteText.ToPlainText(contentType!, decoded);
+            if (string.IsNullOrWhiteSpace(plain))
+            {
+                return EhrShapeResult.Reject("note-empty-after-conversion");
+            }
+
+            data = Convert.ToBase64String(Encoding.UTF8.GetBytes(plain));
         }
 
         var docStatus = options.NoteDocStatus == EhrWriteBackRunOptions.FinalDocStatus

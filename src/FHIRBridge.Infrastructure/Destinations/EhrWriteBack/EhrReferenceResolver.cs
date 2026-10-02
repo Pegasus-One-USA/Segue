@@ -21,7 +21,7 @@ public enum EhrPatientResolutionKind
     Unresolved = 3,
 }
 
-/// <param name="Method">How it was resolved: "same-environment", "ledger", "identifier", "match".</param>
+/// <param name="Method">How it was resolved: "ledger", "identifier", "match", "clone" or "created".</param>
 public sealed record EhrPatientResolution(
     EhrPatientResolutionKind Kind,
     string? TargetPatientId,
@@ -40,6 +40,10 @@ public sealed record EhrPatientResolution(
 ///
 /// <para>One resolver serves one write call and caches every answer, so a batch of 200 observations for one patient
 /// makes one set of calls.</para>
+///
+/// <para><b>Clone mode</b> never searches or matches: the real patient is exactly what must not be written to. A source
+/// patient resolves to its clone through the ledger (clone-keyed rows), or else to a new clone to create
+/// (<see cref="EhrClonePatient"/>).</para>
 /// </summary>
 public sealed class EhrReferenceResolver
 {
@@ -61,6 +65,7 @@ public sealed class EhrReferenceResolver
     private readonly string? _sourceBaseUrl;
     private readonly IReadOnlyDictionary<string, JsonObject> _batchPatients;
     private readonly Func<string, string, CancellationToken, Task<string?>>? _fetchFromSource;
+    private readonly bool _cloneMode;
     private readonly Dictionary<string, EhrPatientResolution> _patients = new(StringComparer.Ordinal);
     private readonly Dictionary<(string PatientId, bool OpenOnly), string?> _encounters = new();
 
@@ -72,7 +77,8 @@ public sealed class EhrReferenceResolver
         string targetKey,
         string? sourceBaseUrl,
         IReadOnlyDictionary<string, JsonObject> batchPatients,
-        Func<string, string, CancellationToken, Task<string?>>? fetchFromSource)
+        Func<string, string, CancellationToken, Task<string?>>? fetchFromSource,
+        bool cloneMode = false)
     {
         _channel = channel;
         _ledger = ledger;
@@ -82,6 +88,7 @@ public sealed class EhrReferenceResolver
         _sourceBaseUrl = sourceBaseUrl;
         _batchPatients = batchPatients;
         _fetchFromSource = fetchFromSource;
+        _cloneMode = cloneMode;
     }
 
     /// <summary>The source patient's id from a reference like <c>Patient/123</c>, or null when it is not one.</summary>
@@ -105,6 +112,16 @@ public sealed class EhrReferenceResolver
         _patients[sourceId] = resolution;
         return resolution;
     }
+
+    /// <summary>The writer created the patient in this run: every later record of theirs resolves to the new id
+    /// without another lookup.</summary>
+    public void RecordCreatedPatient(string sourcePatientId, string targetPatientId) =>
+        _patients[sourcePatientId] = new EhrPatientResolution(EhrPatientResolutionKind.Resolved, targetPatientId, null, "created");
+
+    /// <summary>The writer tried to create the patient and could not: stop every later record of theirs, with the
+    /// reason, instead of trying again for each.</summary>
+    public void RecordPatientNotCreated(string sourcePatientId, string reason) =>
+        _patients[sourcePatientId] = new EhrPatientResolution(EhrPatientResolutionKind.Unresolved, null, reason);
 
     /// <summary>
     /// An encounter of the target patient the record can be filed to. <paramref name="openOnly"/> (vital signs) needs an
@@ -137,7 +154,7 @@ public sealed class EhrReferenceResolver
 
     private async Task<EhrPatientResolution> ResolveUncachedAsync(string sourceId, CancellationToken cancellationToken)
     {
-        var sourceKey = EhrWriteKeys.SourceKey(_sourceBaseUrl, "Patient", sourceId);
+        var sourceKey = EhrWriteKeys.SourceKey(_sourceBaseUrl, "Patient", sourceId, _cloneMode);
         var ledgerRows = await _ledger.FindAsync(_targetKey, "Patient", [sourceKey], cancellationToken);
         if (ledgerRows.TryGetValue(sourceKey, out var row)
             && row.State is EhrWriteLedgerState.Written or EhrWriteLedgerState.AlreadyAtTarget
@@ -150,6 +167,11 @@ public sealed class EhrReferenceResolver
         if (sourcePatient is null)
         {
             return new EhrPatientResolution(EhrPatientResolutionKind.Unresolved, null, "source-patient-unavailable");
+        }
+
+        if (_cloneMode)
+        {
+            return ResolveClone(sourcePatient, sourceId);
         }
 
         var byIdentifier = await SearchByIdentifiersAsync(sourcePatient, cancellationToken);
@@ -182,6 +204,19 @@ public sealed class EhrReferenceResolver
                 new EhrPatientResolution(EhrPatientResolutionKind.Unresolved, null, "patient-match-needs-review"),
             _ => new EhrPatientResolution(EhrPatientResolutionKind.Unresolved, null, "patient-match-failed"),
         };
+    }
+
+    private EhrPatientResolution ResolveClone(JsonObject sourcePatient, string sourceId)
+    {
+        if (_patientProfile is null)
+        {
+            return new EhrPatientResolution(EhrPatientResolutionKind.Unresolved, null, "patient-not-writable");
+        }
+
+        var shaped = _patientProfile.Shape(EhrClonePatient.Build(sourcePatient, sourceId), _channel.Options);
+        return shaped.Outcome == EhrShapeOutcome.Shaped && shaped.Resource is not null
+            ? new EhrPatientResolution(EhrPatientResolutionKind.WouldCreate, null, null, "clone", shaped.Resource)
+            : new EhrPatientResolution(EhrPatientResolutionKind.Unresolved, null, "patient-" + shaped.Reason);
     }
 
     private async Task<EhrPatientResolution?> SearchByIdentifiersAsync(JsonObject sourcePatient, CancellationToken cancellationToken)

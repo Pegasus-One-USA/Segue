@@ -77,7 +77,8 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
         var (executor, contexts, _) = Build(Connection());
         var node = Node($$"""
             {"dest_sourceConnectionId":"{{TargetId}}","destinationId":"{{destinationId}}","dest_dryRun":"true",
-             "dest_createPatientIfMissing":"true","dest_maxWritesPerRun":"25","dest_resources":"AllergyIntolerance,Condition"}
+             "dest_createPatientIfMissing":"true","dest_maxWritesPerRun":"25","dest_resources":"AllergyIntolerance,Condition",
+             "dest_cloneMode":"true"}
             """);
 
         await executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
@@ -91,6 +92,7 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
         channel.Options.CreatePatientIfMissing.Should().BeTrue();
         channel.Options.MaxWritesPerRun.Should().Be(25);
         channel.Options.ResourceTypes.Should().Equal("AllergyIntolerance", "Condition");
+        channel.Options.CloneMode.Should().BeTrue();
     }
 
     [Fact]
@@ -106,6 +108,7 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
         options.CreatePatientIfMissing.Should().BeFalse();
         options.MaxWritesPerRun.Should().Be(EhrWriteBackRunOptions.DefaultMaxWritesPerRun);
         options.NoteDocStatus.Should().Be("preliminary");
+        options.CloneMode.Should().BeFalse();
     }
 
     [Fact]

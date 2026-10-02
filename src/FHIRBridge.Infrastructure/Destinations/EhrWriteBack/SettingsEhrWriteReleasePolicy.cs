@@ -22,4 +22,7 @@ public sealed class SettingsEhrWriteReleasePolicy : IEhrWriteReleasePolicy
             EhrWriteBackSettings.LiveWriteTypesKey, EhrWriteBackSettings.LiveWriteTypesDefault, cancellationToken);
         return EhrWriteBackSettings.ReleasedResourceTypes(value, vendor);
     }
+
+    public Task<bool> IsCloneModeEnabledAsync(CancellationToken cancellationToken) =>
+        _settings.GetBoolAsync(EhrWriteBackSettings.CloneModeEnabledKey, EhrWriteBackSettings.CloneModeEnabledDefault, cancellationToken);
 }

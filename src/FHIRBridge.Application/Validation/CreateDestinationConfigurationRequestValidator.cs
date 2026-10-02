@@ -129,6 +129,7 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
 
         RequireOneOf(context, metadata, "dest_dryRun", BooleanFlagValues, "dry-run flag");
         RequireOneOf(context, metadata, "dest_createPatientIfMissing", BooleanFlagValues, "create-patient flag");
+        RequireOneOf(context, metadata, "dest_cloneMode", BooleanFlagValues, "clone-mode flag");
         RequireOneOf(context, metadata, "dest_noteDocStatus", NoteDocStatusValues, "note status");
         RequireOptionalIntInRange(
             context,

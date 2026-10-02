@@ -15,6 +15,8 @@ interface WritableTarget {
   resourceTypes: string[];
   /** Types a run that is not a dry run would actually send (released by an administrator). */
   liveTypes: string[];
+  /** The QA-only clone-mode system setting is on, so clone mode may be offered. */
+  cloneModeEnabled: boolean;
 }
 
 /**
@@ -84,8 +86,20 @@ interface WritableTarget {
             Create the patient when the EHR has no match
           </label>
           <span class="dw-hint">Only used when Patient.$match finds no one. An uncertain match is never written; it is
-            left for review.</span>
+            left for review. A created patient's records are filed in the same run.</span>
         </div>
+
+        @if (selected()?.cloneModeEnabled) {
+          <div class="dw-field dw-field--full">
+            <label class="dw-label">
+              <input type="checkbox" formControlName="cloneMode" />
+              Clone mode (QA only) — write each patient as a new synthetic test patient
+            </label>
+            <span class="dw-hint">Every source patient is created as a clone: "Zztest" before the family name, a shifted
+              birth date, a synthetic SSN and no phone or email. Records are filed against the clone, never the
+              original. Select Patient as well; notes and vitals are skipped because a clone has no encounters.</span>
+          </div>
+        }
 
         <div class="dw-field dw-field--full">
           <label class="dw-label">
@@ -143,6 +157,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
     maxWritesPerRun: ['500', [Validators.pattern(/^(?:[1-9]\d{0,3}|10000)$/)]],
     noteDocStatus: ['preliminary'],
     createPatientIfMissing: [false],
+    cloneMode: [false],
     dryRun: [true],
   });
 
@@ -152,7 +167,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       switchMap(connections => connections.length === 0
         ? of([] as WritableTarget[])
         : forkJoin(connections.map(c => this.capabilities.forVendor(c.sourceSystemType).pipe(
-            map(result => this.toTarget(c, result.capabilities)))))),
+            map(result => this.toTarget(c, result.capabilities, result.cloneModeEnabled)))))),
       map(targets => targets.filter(t => t.resourceTypes.length > 0)),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe({
@@ -189,6 +204,8 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       // Anything but an explicit false is a dry run, here and in the executor.
       dest_dryRun: v.dryRun === false ? 'false' : 'true',
       dest_createPatientIfMissing: v.createPatientIfMissing ? 'true' : 'false',
+      // Only ever true while the QA setting is on; the writer refuses clone mode otherwise.
+      dest_cloneMode: v.cloneMode && this.selected()?.cloneModeEnabled ? 'true' : 'false',
       dest_maxWritesPerRun: v.maxWritesPerRun || '500',
       dest_noteDocStatus: v.noteDocStatus === 'final' ? 'final' : 'preliminary',
     };
@@ -209,6 +226,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       maxWritesPerRun: fields['dest_maxWritesPerRun'] || '500',
       noteDocStatus: fields['dest_noteDocStatus'] === 'final' ? 'final' : 'preliminary',
       createPatientIfMissing: fields['dest_createPatientIfMissing'] === 'true',
+      cloneMode: fields['dest_cloneMode'] === 'true',
       dryRun: fields['dest_dryRun'] !== 'false',
     });
     this.selectedId.set(fields['dest_sourceConnectionId'] || null);
@@ -221,18 +239,20 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       maxWritesPerRun: '500',
       noteDocStatus: 'preliminary',
       createPatientIfMissing: false,
+      cloneMode: false,
       dryRun: true,
     });
     this.selectedId.set(null);
   }
 
-  private toTarget(connection: SourceConnectionModel, capabilities: EhrWriteCapability[]): WritableTarget {
+  private toTarget(connection: SourceConnectionModel, capabilities: EhrWriteCapability[], cloneModeEnabled: boolean): WritableTarget {
     return {
       id: connection.id,
       name: connection.name,
       vendor: connection.sourceSystemType,
       resourceTypes: capabilities.map(c => c.resourceType),
       liveTypes: capabilities.filter(c => c.liveReleased).map(c => c.resourceType),
+      cloneModeEnabled,
     };
   }
 }

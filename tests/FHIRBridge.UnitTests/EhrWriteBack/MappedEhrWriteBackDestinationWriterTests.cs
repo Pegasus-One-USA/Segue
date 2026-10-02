@@ -45,6 +45,9 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
     private static MappedEhrWriteBackDestinationWriter CreateWriter(
         InMemoryEhrWriteLedgerRepository? ledger = null,
         params string[] released) =>
+        CreateWriter(ledger, new FixedReleasePolicy(released));
+
+    private static MappedEhrWriteBackDestinationWriter CreateWriter(InMemoryEhrWriteLedgerRepository? ledger, FixedReleasePolicy policy) =>
         new(
             new EhrWriteProfileRegistry(
             [
@@ -55,7 +58,7 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
                 new EpicPatientWriteProfile(),
             ]),
             ledger ?? new InMemoryEhrWriteLedgerRepository(),
-            new FixedReleasePolicy(released),
+            policy,
             NullLogger<MappedEhrWriteBackDestinationWriter>.Instance);
 
     private static DestinationConfiguration Destination() =>
@@ -411,13 +414,151 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
         result.EhrWrite!.ScopeStatus.Should().Be(expected);
     }
 
+    // ---- Phase 3: patients created in the run, and QA clone mode ----
+
+    private static readonly EhrPatientMatchOutcome NoMatch = new(EhrPatientMatchKind.None, null, 200, []);
+
+    private static string PatientReferenceOf(System.Text.Json.Nodes.JsonObject body) =>
+        body["patient"]!["reference"]!.GetValue<string>();
+
+    [Fact]
+    public async Task A_patient_created_in_the_run_has_its_records_filed_against_it()
+    {
+        var channel = new FakeEhrWriteChannel(dryRun: false, createPatient: true) { MatchResult = NoMatch };
+        channel.CreateResults["Patient"] = new EhrCreateOutcome(EhrCreateKind.Created, 201, "eNewPatient", []);
+
+        var result = await CreateWriter(null, "Patient", "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(Allergy), Record(SourcePatient)], Context(channel), CancellationToken.None);
+
+        channel.Creates.Should().Equal(["Patient", "AllergyIntolerance"], because: "patients go first");
+        PatientReferenceOf(channel.Sent[1].Body).Should().Be("Patient/eNewPatient");
+        result.EhrWrite!.Resources.Single(r => r.ResourceType == "Patient").Written.Should().Be(1);
+        result.EhrWrite.Resources.Single(r => r.ResourceType == "AllergyIntolerance").Written.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_patient_missing_from_the_batch_is_created_for_its_record()
+    {
+        var channel = new FakeEhrWriteChannel(dryRun: false, createPatient: true) { MatchResult = NoMatch };
+        channel.CreateResults["Patient"] = new EhrCreateOutcome(EhrCreateKind.Created, 201, "eNewPatient", []);
+
+        var result = await CreateWriter(null, "Patient", "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        channel.Creates.Should().Equal(["Patient", "AllergyIntolerance"]);
+        PatientReferenceOf(channel.Sent[1].Body).Should().Be("Patient/eNewPatient");
+        result.EhrWrite!.Resources.Single(r => r.ResourceType == "Patient").Written.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_refused_patient_create_stops_that_patients_records()
+    {
+        var channel = new FakeEhrWriteChannel(dryRun: false, createPatient: true) { MatchResult = NoMatch };
+        channel.CreateResults["Patient"] = new EhrCreateOutcome(EhrCreateKind.Rejected, 400, null, [new EhrOutcomeIssue("error", "required", "59108", "identifier (ssn)")]);
+        var second = Allergy.Replace("\"id\":\"a1\"", "\"id\":\"a2\"");
+
+        var result = await CreateWriter(null, "Patient", "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(Allergy), Record(second)], Context(channel), CancellationToken.None);
+
+        channel.Creates.Should().Equal(["Patient"], because: "the patient is tried once, not once per record");
+        result.EhrWrite!.Resources.Single(r => r.ResourceType == "AllergyIntolerance").Reasons
+            .Should().Contain(new KeyValuePair<string, int>("patient-not-created", 2));
+    }
+
+    [Fact]
+    public async Task Records_wait_for_their_patient_when_patient_creation_is_not_released()
+    {
+        var channel = new FakeEhrWriteChannel(dryRun: false, createPatient: true) { MatchResult = NoMatch };
+
+        var result = await CreateWriter(null, "AllergyIntolerance").WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(Allergy)], Context(channel), CancellationToken.None);
+
+        channel.Creates.Should().BeEmpty();
+        result.EhrWrite!.Resources.Single(r => r.ResourceType == "Patient").Reasons.Should().ContainKey("live-write-not-released");
+        result.EhrWrite.Resources.Single(r => r.ResourceType == "AllergyIntolerance").Reasons.Should().ContainKey("patient-not-yet-created");
+    }
+
+    [Fact]
+    public async Task Clone_mode_is_refused_while_its_system_setting_is_off()
+    {
+        var channel = new FakeEhrWriteChannel(dryRun: false, cloneMode: true);
+
+        var act = () => CreateWriter(null, new FixedReleasePolicy(["Patient"], cloneModeEnabled: false)).WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*EhrWriteBack:CloneModeEnabled*");
+        channel.Creates.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Clone_mode_writes_the_ehrs_own_records_against_a_synthetic_patient_and_never_matches()
+    {
+        var channel = new FakeEhrWriteChannel(dryRun: false, cloneMode: true);
+        channel.CreateResults["Patient"] = new EhrCreateOutcome(EhrCreateKind.Created, 201, "eClone", []);
+        var policy = new FixedReleasePolicy(["Patient", "AllergyIntolerance"], cloneModeEnabled: true);
+
+        var result = await CreateWriter(null, policy).WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(Allergy)], Context(channel, sourceBaseUrl: TargetBaseUrl), CancellationToken.None);
+
+        channel.MatchCalls.Should().Be(0, because: "the real patient is exactly what must not be found");
+        channel.IdentifierSearches.Should().Be(0);
+        channel.Creates.Should().Equal(["Patient", "AllergyIntolerance"]);
+        var clone = channel.Sent[0].Body;
+        clone["name"]![0]!["family"]!.GetValue<string>().Should().Be("ZztestPowell");
+        clone["birthDate"]!.GetValue<string>().Should().NotBe("2014-11-14");
+        clone.ContainsKey("telecom").Should().BeFalse();
+        var ssn = clone["identifier"]!.AsArray().Single()!;
+        ssn["system"]!.GetValue<string>().Should().Be(EhrClonePatient.SsnSystem);
+        ssn["value"]!.GetValue<string>().Should().MatchRegex(@"^9\d{2}-\d{2}-\d{4}$");
+        PatientReferenceOf(channel.Sent[1].Body).Should().Be("Patient/eClone");
+        result.EhrWrite!.CloneMode.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_clone_that_comes_back_as_the_original_patient_is_refused_and_nothing_is_filed()
+    {
+        var channel = new FakeEhrWriteChannel(dryRun: false, cloneMode: true);
+        channel.CreateResults["Patient"] = new EhrCreateOutcome(EhrCreateKind.Created, 201, "p1", []);
+        var policy = new FixedReleasePolicy(["Patient", "AllergyIntolerance"], cloneModeEnabled: true);
+
+        var result = await CreateWriter(null, policy).WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(Allergy)], Context(channel, sourceBaseUrl: TargetBaseUrl), CancellationToken.None);
+
+        channel.Creates.Should().Equal(["Patient"]);
+        result.RecordErrors.Should().Contain("Patient #1: clone-matched-original");
+        result.EhrWrite!.Resources.Single(r => r.ResourceType == "AllergyIntolerance").Reasons.Should().ContainKey("patient-not-created");
+    }
+
+    [Fact]
+    public void Clone_writes_are_keyed_apart_from_real_writes()
+    {
+        EhrWriteKeys.SourceKey(SourceBaseUrl, "AllergyIntolerance", "a1", clone: true)
+            .Should().NotBe(EhrWriteKeys.SourceKey(SourceBaseUrl, "AllergyIntolerance", "a1"));
+    }
+
+    [Fact]
+    public void A_clone_is_the_same_on_every_run()
+    {
+        var source = System.Text.Json.Nodes.JsonNode.Parse(SourcePatient)!.AsObject();
+
+        EhrClonePatient.Build(source, "p1").ToJsonString().Should().Be(EhrClonePatient.Build(source, "p1").ToJsonString());
+        EhrClonePatient.Build(source, "p1")["identifier"]!.ToJsonString()
+            .Should().NotBe(EhrClonePatient.Build(source, "p2")["identifier"]!.ToJsonString());
+    }
+
     private sealed class FakeEhrWriteChannel : IEhrWriteChannel
     {
-        public FakeEhrWriteChannel(bool dryRun = true, int maxWrites = 500, IReadOnlyList<string>? resourceTypes = null)
+        public FakeEhrWriteChannel(
+            bool dryRun = true,
+            int maxWrites = 500,
+            IReadOnlyList<string>? resourceTypes = null,
+            bool createPatient = false,
+            bool cloneMode = false)
         {
             Options = new EhrWriteBackRunOptions(
-                dryRun, false, maxWrites, "preliminary",
-                resourceTypes ?? ["AllergyIntolerance", "Condition", "DocumentReference", "Observation", "Patient"]);
+                dryRun, createPatient, maxWrites, "preliminary",
+                resourceTypes ?? ["AllergyIntolerance", "Condition", "DocumentReference", "Observation", "Patient"],
+                cloneMode);
         }
 
         public Guid TargetConnectionId { get; } = Guid.NewGuid();
@@ -452,10 +593,16 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
 
         public EhrCreateOutcome CreateResult { get; set; } = new(EhrCreateKind.Created, 201, "new-id", []);
 
+        /// <summary>Per-type outcomes that win over <see cref="CreateResult"/>.</summary>
+        public Dictionary<string, EhrCreateOutcome> CreateResults { get; } = new(StringComparer.Ordinal);
+
+        public List<(string ResourceType, System.Text.Json.Nodes.JsonObject Body)> Sent { get; } = [];
+
         public Task<EhrCreateOutcome> CreateAsync(string resourceType, string resourceJson, CancellationToken cancellationToken)
         {
             Creates.Add(resourceType);
-            return Task.FromResult(CreateResult);
+            Sent.Add((resourceType, System.Text.Json.Nodes.JsonNode.Parse(resourceJson)!.AsObject()));
+            return Task.FromResult(CreateResults.GetValueOrDefault(resourceType) ?? CreateResult);
         }
     }
 
@@ -463,12 +610,17 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
     {
         private readonly IReadOnlySet<string> _released;
 
-        public FixedReleasePolicy(IEnumerable<string> released)
+        public FixedReleasePolicy(IEnumerable<string> released, bool cloneModeEnabled = false)
         {
             _released = new HashSet<string>(released, StringComparer.Ordinal);
+            CloneModeEnabled = cloneModeEnabled;
         }
+
+        public bool CloneModeEnabled { get; }
 
         public Task<IReadOnlySet<string>> GetReleasedResourceTypesAsync(SourceSystemType vendor, CancellationToken cancellationToken) =>
             Task.FromResult(_released);
+
+        public Task<bool> IsCloneModeEnabledAsync(CancellationToken cancellationToken) => Task.FromResult(CloneModeEnabled);
     }
 }

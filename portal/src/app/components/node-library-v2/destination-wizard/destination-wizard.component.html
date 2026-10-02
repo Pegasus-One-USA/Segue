@@ -1142,7 +1142,7 @@
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Patients</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_createPatientIfMissing'] === 'true' ? 'Matched, or created when the EHR has none' : 'Matched only' }}</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_cloneMode'] === 'true' ? 'Clone mode: each patient written as a new synthetic test patient' : activeFormConfig()['dest_createPatientIfMissing'] === 'true' ? 'Matched, or created when the EHR has none' : 'Matched only' }}</span>
           </div>
         } @else if (isAzureFhir()) {
           <div class="dw-review-card">

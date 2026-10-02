@@ -58,12 +58,17 @@ public interface IEhrWriteChannel
 /// <param name="NoteDocStatus">The <c>docStatus</c> clinical notes are filed with: "preliminary" (a clinician
 /// reviews and signs them) unless the destination opts into "final".</param>
 /// <param name="ResourceTypes">Resource types the destination selected. Records of other types are skipped.</param>
+/// <param name="CloneMode">QA only, and only while the <c>EhrWriteBack:CloneModeEnabled</c> system setting is on:
+/// every source patient is written as a new, obviously-synthetic test patient (altered name, birth date and
+/// identifiers), and its records are filed against that clone. This is the only way to write an EHR's own data back
+/// into the same EHR.</param>
 public sealed record EhrWriteBackRunOptions(
     bool DryRun,
     bool CreatePatientIfMissing,
     int MaxWritesPerRun,
     string NoteDocStatus,
-    IReadOnlyList<string> ResourceTypes)
+    IReadOnlyList<string> ResourceTypes,
+    bool CloneMode = false)
 {
     public const int DefaultMaxWritesPerRun = 500;
     public const int MaxAllowedWritesPerRun = 10000;
@@ -131,7 +136,8 @@ public sealed record EhrWriteReport(
     string TargetVendor,
     int RecordsReceived,
     string ScopeStatus,
-    IReadOnlyList<EhrWriteResourceSummary> Resources);
+    IReadOnlyList<EhrWriteResourceSummary> Resources,
+    bool CloneMode = false);
 
 /// <param name="WouldWrite">Records that passed every check; in a dry run, what a live run would send.</param>
 /// <param name="AlreadyWritten">Records the ledger shows are already in the EHR (or awaiting review).</param>

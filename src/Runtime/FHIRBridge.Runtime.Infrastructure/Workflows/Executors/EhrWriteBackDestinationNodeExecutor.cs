@@ -150,7 +150,8 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
     }
 
     /// <summary>The node's write-back settings. The portal stores every value as a string. Anything missing or
-    /// unparseable falls to the safe side: a dry run, no patient creation, the default cap, preliminary notes.</summary>
+    /// unparseable falls to the safe side: a dry run, no patient creation, no clone mode, the default cap,
+    /// preliminary notes. Clone mode is checked against its system setting by the writer.</summary>
     private static EhrWriteBackRunOptions ReadOptions(WorkflowNode node)
     {
         var dryRun = !bool.TryParse(ReadStringConfiguration(node, "dest_dryRun"), out var parsedDryRun) || parsedDryRun;
@@ -166,6 +167,8 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        return new EhrWriteBackRunOptions(dryRun, createPatient, maxWrites, docStatus, resources);
+        var cloneMode = bool.TryParse(ReadStringConfiguration(node, "dest_cloneMode"), out var parsedClone) && parsedClone;
+
+        return new EhrWriteBackRunOptions(dryRun, createPatient, maxWrites, docStatus, resources, cloneMode);
     }
 }

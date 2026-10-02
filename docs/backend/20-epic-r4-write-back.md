@@ -249,8 +249,8 @@ report `already-in-ehr`.
 
 1. the destination is not a dry run (`dest_dryRun` is `false`; anything else is a dry run);
 2. the code supports live writes for the type (`EhrWriteCapability.LiveWriteSupported`): Epic AllergyIntolerance
-   (945), Condition problem-list item (949) and DocumentReference clinical note (1046). Vitals and patients stay
-   dry-run-only until Phase 3;
+   (945), Condition problem-list item (949) and DocumentReference clinical note (1046); vitals and patients were
+   added in Phase 3 (section 9);
 3. an administrator released it in the system setting `EhrWriteBack:LiveWriteTypes`, a comma list of
    `Vendor:ResourceType` (e.g. `Epic:AllergyIntolerance,Epic:Condition,Epic:DocumentReference`), seeded empty.
    Entries for other vendors, unknown types and types the code does not support are ignored, so a bad value can
@@ -288,7 +288,52 @@ Desiree (`eAB3mDIBBcyUKviyzrxsnAw3`) with `EhrWriteBack:LiveWriteTypes = Epic:Al
 | 6 | Force a timeout (very short client timeout) on one allergy | ledger `Unknown`, listed for review, not resent |
 | 7 | Review: mark #6 written with the id seen in the chart | row `Written`, next run sends nothing |
 
-## 9. Sources
+## 9. Phase 3 — vitals, patients, clone mode and note conversion
+
+**Vitals (963) and patients (930) are live-capable.** Both still need releasing (`Epic:Observation`,
+`Epic:Patient`). Vitals are filed only on an open encounter of the matched patient (in-progress, then
+arrived / triaged / on leave); a vital on a finished encounter was not sandbox-tested, so it stays skipped as
+`no-eligible-encounter`. Units are passed through as sent.
+
+**Patients created in the run.** A patient is created only when `$match` found no one, the destination opted
+in (`dest_createPatientIfMissing`) and Patient is selected and released. Patients are processed first; the new
+id is cached, so the patient's allergies, problems and notes are filed in the same run. A record whose patient is
+not in the batch gets the patient fetched from the source and created on demand, through the same ledger-guarded
+path. A patient create that is refused or of unknown outcome is tried once per run, and every record of that
+patient is skipped as `patient-not-created` (or `patient-awaiting-review` when its ledger row is under review).
+A dry run, or Patient not released, leaves those records as `patient-not-yet-created`.
+
+**QA clone mode** (`dest_cloneMode`, offered in the form only while `EhrWriteBack:CloneModeEnabled` is on; a run
+asking for it while the setting is off fails). Every source patient is written as a synthetic clone
+(`EhrClonePatient`): family name prefixed `Zztest`, birth date moved back 30–209 days, every identifier replaced
+by one synthetic SSN in the 900–999 area (never issued by the SSA), phone and email dropped. The clone is
+deterministic per source patient, so a re-run finds it through the ledger instead of creating another. Clone mode:
+
+- skips the same-environment rule (it is the way to write an EHR's own records back into it);
+- never searches or `$match`es, because the real patient is what must not be found;
+- keys its ledger rows apart from real writes (`SourceKey(..., clone: true)`);
+- refuses a clone whose create comes back with the original patient's id (Patient.Create is match-or-create):
+  the row is recorded as rejected with `clone-matched-original` and nothing is filed against it.
+
+A clone has no encounters, so its notes and vitals are skipped (`no-eligible-encounter`); Patient must be selected
+and released for anything to be written.
+
+**Notes in HTML or RTF** are converted to plain text (`EhrNoteText`): paragraphs, line breaks, list items and table
+cells are kept; scripts, styles, RTF header tables, pictures and other destinations are dropped; RTF hex
+(Windows-1252) and Unicode escapes are decoded. Other formats are rejected as `note-format-not-supported`, content
+that is not base64 as `note-content-not-base64`, and a note with no text left as `note-empty-after-conversion`.
+
+**Sandbox verification (pending: Epic down on 2026-10-02).**
+
+| # | Check | Expected |
+|---|---|---|
+| 1 | Patient.Create with the clone SSN format (`9xx-xx-xxxx`) | 201, or 59108 if the build validates SSN ranges (then pick another synthetic scheme) |
+| 2 | A vital on Linda's finished stay (`e2tX.zRRuP1elysuhOHkiqg3`) | tells whether finished encounters can be allowed for vitals |
+| 3 | Clone mode, Desiree, Patient + AllergyIntolerance released | clone created as `Zztest…`, the allergy filed on the clone, the real chart untouched |
+| 4 | Re-run #3 | no requests: the clone and the allergy are found in the ledger |
+| 5 | One HTML note and one RTF note on Desiree's open visit | filed as preliminary, readable text |
+
+## 10. Sources
 
 - Sandbox CapabilityStatement: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/metadata
 - Sandbox SMART configuration: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/.well-known/smart-configuration

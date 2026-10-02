@@ -14,9 +14,10 @@ internal static class EhrWriteKeys
     public static string TargetKey(string targetBaseUrl) => Hash("target|" + NormalizeBaseUrl(targetBaseUrl));
 
     /// <summary>The record's origin. <paramref name="sourceBaseUrl"/> is null when the run's source is not a single
-    /// known FHIR server; the key then relies on the source id alone.</summary>
-    public static string SourceKey(string? sourceBaseUrl, string resourceType, string sourceId) =>
-        Hash($"source|{NormalizeBaseUrl(sourceBaseUrl)}|{resourceType}|{sourceId}");
+    /// known FHIR server; the key then relies on the source id alone. <paramref name="clone"/> keys a clone-mode
+    /// write apart from a normal one, so writing a record to its clone never counts as writing it for real.</summary>
+    public static string SourceKey(string? sourceBaseUrl, string resourceType, string sourceId, bool clone = false) =>
+        Hash($"source|{(clone ? "clone|" : string.Empty)}{NormalizeBaseUrl(sourceBaseUrl)}|{resourceType}|{sourceId}");
 
     /// <summary>The shaped resource as it would be sent. JsonNode serialisation keeps property order, and every
     /// profile builds its output in a fixed order, so the same input always hashes the same.</summary>

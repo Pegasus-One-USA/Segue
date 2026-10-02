@@ -179,13 +179,34 @@ public sealed class EpicWriteProfileTests
     }
 
     [Theory]
-    [InlineData("text/html", "note-not-plain-text")]
-    [InlineData("application/rtf", "note-not-plain-text")]
-    public void Notes_epic_cannot_take_are_rejected(string contentType, string reason)
+    [InlineData("application/pdf", "aGVsbG8=", "note-format-not-supported")]
+    [InlineData("text/html", "not base64!", "note-content-not-base64")]
+    [InlineData("text/html", "PHA+PC9wPg==", "note-empty-after-conversion")]
+    public void Notes_epic_cannot_take_are_rejected(string contentType, string data, string reason)
     {
-        var json = PlainTextNote.Replace("text/plain; charset=utf-8", contentType);
+        var json = PlainTextNote.Replace("text/plain; charset=utf-8", contentType).Replace("aGVsbG8=", data);
 
         new EpicClinicalNoteWriteProfile().Shape(Json(json), Options).Reason.Should().Be(reason);
+    }
+
+    [Theory]
+    [InlineData("text/html", "<html><head><style>p{color:red}</style></head><body><p>Seen today.</p><p>Plan:<br/>rest &amp; fluids</p><ul><li>ibuprofen</li></ul></body></html>",
+        "Seen today.\n\nPlan:\nrest & fluids\n\n- ibuprofen")]
+    // The RTF \u escape is spelled with a regular "\\" so the compiler leaves it as text.
+    [InlineData("application/rtf", @"{\rtf1\ansi{\fonttbl{\f0 Arial;}}{\colortbl;\red0\green0\blue0;}\f0 Seen today.\par Plan: rest \'26 fluids\par caf\'e9 " + "\\u8212? done}",
+        "Seen today.\nPlan: rest & fluids\ncafé — done")]
+    public void Html_and_rtf_notes_are_sent_as_plain_text(string contentType, string body, string expected)
+    {
+        var data = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(body));
+        var json = PlainTextNote.Replace("text/plain; charset=utf-8", contentType).Replace("aGVsbG8=", data);
+
+        var result = new EpicClinicalNoteWriteProfile().Shape(Json(json), Options);
+
+        result.Outcome.Should().Be(EhrShapeOutcome.Shaped);
+        var attachment = result.Resource!["content"]![0]!["attachment"]!;
+        attachment["contentType"]!.GetValue<string>().Should().Be("text/plain");
+        System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(attachment["data"]!.GetValue<string>()))
+            .Should().Be(expected);
     }
 
     [Fact]
