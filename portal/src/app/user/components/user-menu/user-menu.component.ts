@@ -1,12 +1,15 @@
 import {
   Component, signal, inject, input, HostListener, ElementRef,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { ChildrenOutletContexts, Router } from '@angular/router';
 import { AuthService }        from '../../../auth/services/auth.service';
 import { UserProfileService } from '../../services/user-profile.service';
 import { AppTheme }           from '../../models/user-profile.model';
 import { LayoutService, LayoutMode } from '../../../services/layout.service';
 import { DensityService, DensityMode } from '../../../services/density.service';
+import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
+import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
+import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 
 @Component({
   selector:    'app-user-menu',
@@ -22,6 +25,9 @@ export class UserMenuComponent {
   protected readonly profSvc  = inject(UserProfileService);
   protected readonly layoutSvc = inject(LayoutService);
   protected readonly densitySvc = inject(DensityService);
+  private readonly unsavedChanges = inject(UnsavedChangesRegistryService);
+  private readonly unsavedPrompt  = inject(UnsavedChangesPromptService);
+  private readonly outletContexts = inject(ChildrenOutletContexts);
 
   // 'topbar' (layout 'standard', default) anchors the panel top-right off the topbar trigger;
   // 'sidebar' (layout 'focused') anchors it bottom-left off a trigger living at the foot of the
@@ -80,7 +86,38 @@ export class UserMenuComponent {
   }
 
   closeMenu(): void      { this.menuOpen.set(false); this.showLogout.set(false); }
-  confirmLogout(): void  { this.showLogout.set(true); }
+  /** Sign out ends the session BEFORE navigating, so the route's leave check never sees it (it waves through
+   *  anyone already signed out, so session timeouts are not blocked). So run that same check here, against the
+   *  page on screen (confirmLeavePage): a save still in flight anywhere blocks with "please wait"; unsaved edits
+   *  on the page, or registered on it, ask "Leave this page?". With nothing to warn about, the usual inline
+   *  "Sign out of Segue?" confirm. */
+  confirmLogout(): void {
+    const page = this.pageOnScreen();
+    const needsCheck = page.hasUnsavedChanges() || !!page.isSaveInProgress?.()
+      || this.unsavedChanges.hasAnyUnsavedEdits() || this.unsavedChanges.isAnySaveInProgress();
+    if (!needsCheck) {
+      this.showLogout.set(true);
+      return;
+    }
+    this.menuOpen.set(false);
+    this.unsavedPrompt.confirmLeavePage(page).subscribe(leave => {
+      if (leave) this.auth.logout();
+    });
+  }
+
+  /** The deepest active routed component — the page the route guard would ask on navigation. A page without
+   *  unsaved-changes support reads as clean. */
+  private pageOnScreen(): HasUnsavedChanges {
+    let context = this.outletContexts.getContext('primary');
+    let component: unknown = null;
+    while (context) {
+      if (context.outlet?.isActivated) component = context.outlet.component;
+      context = context.children.getContext('primary');
+    }
+    return typeof (component as HasUnsavedChanges | null)?.hasUnsavedChanges === 'function'
+      ? component as HasUnsavedChanges
+      : { hasUnsavedChanges: () => false };
+  }
   cancelLogout(): void   { this.showLogout.set(false); }
 
   logout(): void {

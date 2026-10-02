@@ -10,6 +10,9 @@
   <div class="fm-createtable-dialog">
     <h3 class="fm-createtable-title" id="fm-createtable-title">Create a new destination table</h3>
 
+    <!-- Only this middle part scrolls, so the title and Cancel / Create table stay in view however tall the
+         "child of another table" fields make it. -->
+    <div class="fm-createtable-body" (scroll)="onBodyScroll()">
     <label class="fm-createtable-field">
       <span class="text-label">Table name<span class="req">*</span></span>
       <input
@@ -101,7 +104,7 @@
       </div>
       @if (relation() === 'child') {
         <div class="fm-createtable-col-row fm-createtable-col-row--fixed">
-          <span class="fm-createtable-col-name">{{ fkColumnName() || '(FK column name)' }}</span>
+          <span class="fm-createtable-col-name" [title]="fkColumnName()">{{ fkColumnName() || '(FK column name)' }}</span>
           <span class="fm-createtable-col-type">bigint</span>
           <span class="fm-createtable-col-fk">FK</span>
         </div>
@@ -137,6 +140,7 @@
     @if (error()) {
       <p class="fm-createtable-error">{{ error() }}</p>
     }
+    </div>
 
     <div class="fm-createtable-actions">
       <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="cancelled.emit()">Cancel</button>
@@ -159,9 +163,11 @@
      it can no longer bubble to the backdrop. -->
 @if (parentTableMenuOpen() && parentTableMenuStyle(); as pos) {
   <div
+    #parentPanel
     class="fm-createtable-parent-panel"
     role="dialog"
     tabindex="-1"
+    [style.visibility]="pos.aligned ? null : 'hidden'"
     (keydown.escape)="closeParentTableMenu()"
     [style.top.px]="pos.top"
     [style.bottom.px]="pos.bottom"

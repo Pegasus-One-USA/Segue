@@ -44,8 +44,9 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
 
   constructor() {
     this.unsavedChangesRegistry.register(
-      () => this.hasUnsavedChanges() || this.isSaveInProgress(),
+      () => this.hasUnsavedChanges(),
       this.destroyRef,
+      () => this.isSaveInProgress(),
     );
 
     // BrandingService.current() only reflects the real, persisted branding once its own bootstrap-time
