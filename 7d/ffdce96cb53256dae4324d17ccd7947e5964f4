@@ -1,0 +1,32 @@
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d1b985c75f92bc::t_3eed4243ab969b 550-551
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/UsCore/UsCoreQuestionnaireResponseWriteProfile.cs
+  s_d1b985c75f92bc::t_97fd030e7db301 1-142
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.ts
+  s_d1b985c75f92bc::t_424e9d49e3e764 61
+tests/FHIRBridge.UnitTests/EhrWriteBack/QuestionnaireResponseWriteProfileTests.cs
+  s_d1b985c75f92bc::t_8fad7094c42359 1-43,45-80
+  s_d1b985c75f92bc::t_fdf8be558ee34b 44
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_d0b1c3977d8fe7 418-448
+tests/FHIRBridge.UnitTests/EhrWriteBack/EhrWriteCapabilitiesTests.cs
+  s_d1b985c75f92bc::t_022f5c477f1708 17,22,26-37,44,71,97
+src/FHIRBridge.Domain/Fhir/EhrWriteCapabilities.cs
+  s_d1b985c75f92bc::t_67c32062a3b00b 57-58,65-79,85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7dffdce96cb53256dae4324d17ccd7947e5964f4",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
