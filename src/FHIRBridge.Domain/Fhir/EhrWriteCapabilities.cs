@@ -54,17 +54,35 @@ public static class EhrWriteCapabilities
             new("Condition", CreateOnly, "ecw-condition-create", EhrWriteVariants.ProblemListItem, requiresEncounter: false, optInOnly: false, BackendOnly),
             new("Observation", CreateOnly, "ecw-observation-vitals-create", EhrWriteVariants.VitalSigns, requiresEncounter: true, optInOnly: false, BackendOnly),
             new("Patient", CreateOnly, "ecw-patient-create", variant: null, requiresEncounter: false, optInOnly: true, BackendOnly),
+            // The one certified (non-contracted) write in eCW's CapabilityStatement.
+            new("QuestionnaireResponse", CreateOnly, "ecw-questionnaireresponse-create", variant: null, requiresEncounter: false, optInOnly: false, BackendOnly),
         ],
         supportsPatientMatch: false,
         requestsScopeOnTokenRequest: true,
         // 202 INVALID_PATIENT_ALREADY_EXIST: the patient is there; never retried as a create.
         alreadyAtTargetOutcomeCodes: new HashSet<string>(StringComparer.Ordinal) { "202" });
 
+    // athenahealth, 2026-10-02 (preview, https://api.preview.platform.athenahealth.com/fhir/r4). The certified FHIR R4
+    // API is read and search plus one create, QuestionnaireResponse; FamilyMemberHistory $batch-write and MeasureReport
+    // $submit-care-gaps are operations, not creates, and are not wired. Allergies, problems, vitals, notes and patients
+    // are written through the proprietary athenaOne REST API, outside the FHIR-R4-only scope, so they are not listed.
+    // QuestionnaireResponse is dry-run-only until verified; athena has no Patient/$match, so patients resolve by
+    // identifier. See docs/backend/20-epic-r4-write-back.md section 12.
+    private static readonly EhrWriteVendorProfile Athenahealth = new(
+        SourceSystemType.Athenahealth,
+        [
+            new("QuestionnaireResponse", CreateOnly, "athena-questionnaireresponse-create", variant: null, requiresEncounter: false, optInOnly: false, BackendOnly),
+        ],
+        supportsPatientMatch: false,
+        requestsScopeOnTokenRequest: true,
+        alreadyAtTargetOutcomeCodes: new HashSet<string>(StringComparer.Ordinal));
+
     private static readonly IReadOnlyDictionary<SourceSystemType, EhrWriteVendorProfile> ByVendor =
         new Dictionary<SourceSystemType, EhrWriteVendorProfile>
         {
             [SourceSystemType.Epic] = Epic,
             [SourceSystemType.Healow] = Healow,
+            [SourceSystemType.Athenahealth] = Athenahealth,
         };
 
     /// <summary>The vendor's write-back profile, or null when the vendor cannot be written to.</summary>

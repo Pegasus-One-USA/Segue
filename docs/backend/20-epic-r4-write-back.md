@@ -415,7 +415,37 @@ shown to accept them. What is known (from a third-party integration guide, unver
 **To go live with eCW:** contract the write APIs, get a practice (or sandbox) activated, run the Phase 2 checks
 there, then set the verified types `liveWriteSupported: true` and release them (`Healow:AllergyIntolerance`, …).
 
-## 12. Sources
+## 12. Phase 5b — athenahealth: QuestionnaireResponse only, dry run
+
+**Discovery (2026-10-02, preview `https://api.preview.platform.athenahealth.com/fhir/r4`).** The certified FHIR R4
+API is read and search plus one create, **QuestionnaireResponse**. Two operations also write: FamilyMemberHistory
+`$batch-write` and MeasureReport `$submit-care-gaps`; their definitions are not readable anonymously (403). The SMART
+configuration lists no scopes. Allergies, problems, vitals, documents and patients are written through athenaOne's
+proprietary REST API (`/v1/{practiceid}/…`), which is outside this work's FHIR-R4-only scope, so athena is not a
+target for the five clinical types.
+
+**What is built.**
+- `EhrWriteCapabilities` lists athenahealth QuestionnaireResponse create (Backend only, dry-run-only, no
+  `$match`, scopes requested). eClinicalWorks gets the same entry: QuestionnaireResponse create is also the one
+  certified write in eCW's CapabilityStatement.
+- `UsCore/UsCoreQuestionnaireResponseWriteProfile` (athena and eCW subclasses): sends a `completed` or `amended`
+  response with its questionnaire canonical, patient, `authored` and answers (`linkId`, `text`, `value[x]`, nested
+  items). Author, source, encounter, basedOn, partOf and `valueReference` answers point at the source system and
+  are dropped. In-progress responses are skipped (`not-completed`); a missing questionnaire, patient or answer
+  set is rejected.
+- The questionnaire must be one the EHR defines; a response to a questionnaire known only to the source will be
+  refused and recorded as rejected.
+- The write-back form offers athena and eCW Backend connections as targets (only the types they accept).
+
+**Not built, on purpose.** FamilyMemberHistory `$batch-write` and MeasureReport `$submit-care-gaps` are operations,
+not creates: wiring them means a new channel call and a different idempotency story (a batch is one request for
+many records), which is a framework change Phase 5 was not meant to make. They are the next candidates if athena
+write-back is wanted, together with an athenaOne (non-FHIR) channel for the clinical types.
+
+**To go live with athena:** verify QuestionnaireResponse create against the preview environment with a
+questionnaire athena defines, then set `liveWriteSupported: true` and release `Athenahealth:QuestionnaireResponse`.
+
+## 13. Sources
 
 - Sandbox CapabilityStatement: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/metadata
 - Sandbox SMART configuration: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/.well-known/smart-configuration

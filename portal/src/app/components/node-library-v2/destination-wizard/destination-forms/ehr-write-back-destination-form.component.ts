@@ -58,7 +58,7 @@ interface WritableTarget {
           }
           @if (!loading() && targets().length === 0) {
             <span class="dw-hint">No connection can take writes yet. Set a connection's Access to Write or
-              Read &amp; Write (Epic or eClinicalWorks, Backend System only).</span>
+              Read &amp; Write (Epic, eClinicalWorks or athenahealth, Backend System only).</span>
           }
         </div>
 

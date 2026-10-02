@@ -14,13 +14,25 @@ namespace FHIRBridge.UnitTests.EhrWriteBack;
 public sealed class EhrWriteCapabilitiesTests
 {
     [Fact]
-    public void Only_epic_and_eclinicalworks_accept_writes()
+    public void Only_epic_eclinicalworks_and_athenahealth_accept_writes()
     {
         foreach (var vendor in Enum.GetValues<SourceSystemType>())
         {
             EhrWriteCapabilities.HasAnyWriteCapability(vendor)
-                .Should().Be(vendor is SourceSystemType.Epic or SourceSystemType.Healow, because: vendor.ToString());
+                .Should().Be(vendor is SourceSystemType.Epic or SourceSystemType.Healow or SourceSystemType.Athenahealth, because: vendor.ToString());
         }
+    }
+
+    [Fact]
+    public void Athenahealth_accepts_only_its_certified_questionnaire_response_create_as_a_dry_run()
+    {
+        var athena = EhrWriteCapabilities.VendorProfile(SourceSystemType.Athenahealth)!;
+
+        athena.Capabilities.Should().ContainSingle().Which.ResourceType.Should().Be("QuestionnaireResponse");
+        athena.Capabilities.Single().LiveWriteSupported.Should().BeFalse();
+        athena.SupportsPatientMatch.Should().BeFalse();
+        EhrWriteCapabilities.Find(SourceSystemType.Athenahealth, "AllergyIntolerance").Should().BeNull(
+            because: "athena writes allergies through athenaOne, not FHIR R4");
     }
 
     [Fact]
@@ -29,7 +41,7 @@ public sealed class EhrWriteCapabilitiesTests
         var healow = EhrWriteCapabilities.VendorProfile(SourceSystemType.Healow)!;
 
         healow.Capabilities.Select(c => c.ResourceType)
-            .Should().BeEquivalentTo(["AllergyIntolerance", "Condition", "Observation", "Patient"]);
+            .Should().BeEquivalentTo(["AllergyIntolerance", "Condition", "Observation", "Patient", "QuestionnaireResponse"]);
         healow.Capabilities.Should().OnlyContain(c => !c.LiveWriteSupported, because: "no eCW sandbox has verified a write");
         healow.Capabilities.Should().OnlyContain(c => c.Operations.SetEquals(new[] { EhrWriteOperation.Create }));
         healow.SupportsPatientMatch.Should().BeFalse();
@@ -56,7 +68,7 @@ public sealed class EhrWriteCapabilitiesTests
     [Fact]
     public void Every_capability_is_create_only_backend_only_and_a_canonical_resource_type()
     {
-        foreach (var capability in EhrWriteCapabilities.For(SourceSystemType.Epic).Concat(EhrWriteCapabilities.For(SourceSystemType.Healow)))
+        foreach (var capability in new[] { SourceSystemType.Epic, SourceSystemType.Healow, SourceSystemType.Athenahealth }.SelectMany(EhrWriteCapabilities.For))
         {
             capability.Operations.Should().BeEquivalentTo([EhrWriteOperation.Create], because: capability.ResourceType);
             capability.AllowedApplicationTypes.Should().BeEquivalentTo([ApplicationType.Backend], because: capability.ResourceType);
@@ -82,7 +94,7 @@ public sealed class EhrWriteCapabilitiesTests
     [InlineData("1")]
     [InlineData("99")]
     [InlineData("Epic,Healow")]
-    [InlineData("Athenahealth")]
+    [InlineData("Cerner")]
     public void Anything_but_a_write_capable_vendor_name_gets_nothing(string? vendor)
     {
         EhrWriteCapabilities.For(vendor).Should().BeEmpty();
