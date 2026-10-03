@@ -727,7 +727,8 @@
       </div>
       <div class="dw-callout dw-callout--warn">
         Dry run is on by default: every run checks and resolves each record and reports what it would write,
-        without sending anything to the EHR. Live writes go only to types an administrator has released.
+        without sending anything to the EHR. With Dry run off, every type selected in Data groups that the EHR supports
+        live is written (Epic today); eClinicalWorks and athenahealth stay dry runs.
       </div>
     } @else if (isStepActive(3) && (isMedplum() || isAzureFhir())) {
       <!-- ── Columnless FHIR server (Medplum / Azure FHIR Service): the whole normalized resource is written
@@ -1138,7 +1139,7 @@
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Mode</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_dryRun'] === 'false' ? 'Live (released types only)' : 'Dry run' }}, up to {{ activeFormConfig()['dest_maxWritesPerRun'] || '500' }} records per run</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_dryRun'] === 'false' ? 'Live (supported types only)' : 'Dry run' }}, up to {{ activeFormConfig()['dest_maxWritesPerRun'] || '500' }} records per run</span>
           </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Patients</span>

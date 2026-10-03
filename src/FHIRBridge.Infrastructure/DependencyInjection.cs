@@ -561,7 +561,7 @@ public static class DependencyInjection
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.UsCore.HealowQuestionnaireResponseWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.UsCore.AthenahealthQuestionnaireResponseWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.EhrWriteProfileRegistry>();
-        services.AddSingleton<IEhrWriteReleasePolicy, Destinations.EhrWriteBack.SettingsEhrWriteReleasePolicy>();
+        services.AddSingleton<IEhrCloneModePolicy, Destinations.EhrWriteBack.SettingsEhrCloneModePolicy>();
         // Tabular sources (CSV upload / SQL query → FHIR). Scoped: it reads the request's repository and secrets.
         services.AddScoped<Application.Abstractions.Tabular.ITabularRowReader, Tabular.TabularRowReader>();
         services.AddScoped<Destinations.EhrWriteBack.MappedEhrWriteBackDestinationWriter>();

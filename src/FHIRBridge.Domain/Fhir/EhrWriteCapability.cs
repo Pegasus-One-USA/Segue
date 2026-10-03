@@ -53,9 +53,10 @@ public sealed class EhrWriteCapability
     /// <summary>SMART application types whose tokens the vendor accepts for this write.</summary>
     public IReadOnlySet<ApplicationType> AllowedApplicationTypes { get; }
 
-    /// <summary>The live send path for this API has been built and verified, so an administrator may release it for
-    /// live writes (system setting <c>EhrWriteBack:LiveWriteTypes</c>). False means every run of this type stays a
-    /// dry run whatever is configured: the code decides what CAN go live, the setting decides what DOES.</summary>
+    /// <summary>The live send path for this API has been built and verified, so a destination that selects this type
+    /// and is not a dry run sends it. False means every run of this type stays a dry run whatever the destination
+    /// asks for. Who may take a destination off dry run, and run it, is decided by the EHR Write-Back
+    /// permissions.</summary>
     public bool LiveWriteSupported { get; }
 
     public bool Supports(EhrWriteOperation operation) => Operations.Contains(operation);

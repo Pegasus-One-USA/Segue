@@ -13,7 +13,7 @@ interface WritableTarget {
   name: string;
   vendor: string;
   resourceTypes: string[];
-  /** Types a run that is not a dry run would actually send (released by an administrator). */
+  /** Types a run that is not a dry run sends when selected: every type the code supports live for this vendor. */
   liveTypes: string[];
   /** The QA-only clone-mode system setting is on, so clone mode may be offered. */
   cloneModeEnabled: boolean;
@@ -24,8 +24,9 @@ interface WritableTarget {
  * includes Write and whose vendor accepts writes are offered — plus the write options. There is no secret: the
  * destination writes over the chosen connection's own credentials.
  *
- * Dry run is the default. Clearing it sends only the types an administrator released for live writes (system
- * setting EhrWriteBack:LiveWriteTypes); every other type is still only checked and counted, and the form says which.
+ * Dry run is the default. Clearing it sends every selected type the vendor supports live (Epic today); a vendor that
+ * is dry-run-only in code (eClinicalWorks, athenahealth) still only checks and counts. There is no installation-wide
+ * release: who may clear Dry run and run the workflow is decided by the EHR Write-Back permissions.
  */
 @Component({
   selector: 'app-ehr-write-back-destination-form',
@@ -110,12 +111,11 @@ interface WritableTarget {
             this workflow looks right.</span>
           @if (!form.value.dryRun && selected(); as target) {
             @if (target.liveTypes.length > 0) {
-              <span class="dw-hint dw-hint--warn">Live: {{ target.liveTypes.join(', ') }} will be written into
-                {{ target.name }}. Other selected types stay a dry run.</span>
+              <span class="dw-hint dw-hint--warn">Live: the types you select in Data groups will be written into
+                {{ target.name }}.</span>
             } @else {
-              <span class="dw-hint dw-hint--warn">No {{ target.vendor }} type is released for live writes yet, so this
-                still runs as a dry run. An administrator releases types in System Settings
-                (EhrWriteBack:LiveWriteTypes).</span>
+              <span class="dw-hint dw-hint--warn">{{ target.vendor }} accepts dry runs only for now, so this still
+                runs as a dry run.</span>
             }
           }
         </div>
@@ -251,7 +251,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       name: connection.name,
       vendor: connection.sourceSystemType,
       resourceTypes: capabilities.map(c => c.resourceType),
-      liveTypes: capabilities.filter(c => c.liveReleased).map(c => c.resourceType),
+      liveTypes: capabilities.filter(c => c.liveWriteSupported).map(c => c.resourceType),
       cloneModeEnabled,
     };
   }

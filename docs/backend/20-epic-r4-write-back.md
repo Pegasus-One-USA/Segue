@@ -245,21 +245,28 @@ report `already-in-ehr`.
 
 ## 8. Phase 2 — live writes for allergies, problems and notes
 
-**Release, in two keys.** A record is sent only when all of these hold:
+**When a record goes live.** A record is sent only when all of these hold:
 
 1. the destination is not a dry run (`dest_dryRun` is `false`; anything else is a dry run);
-2. the code supports live writes for the type (`EhrWriteCapability.LiveWriteSupported`): Epic AllergyIntolerance
+2. the destination selects the type in Data groups (`dest_resources`);
+3. the code supports live writes for the type (`EhrWriteCapability.LiveWriteSupported`): Epic AllergyIntolerance
    (945), Condition problem-list item (949) and DocumentReference clinical note (1046); vitals and patients were
-   added in Phase 3 (section 9);
-3. an administrator released it in the system setting `EhrWriteBack:LiveWriteTypes`, a comma list of
-   `Vendor:ResourceType` (e.g. `Epic:AllergyIntolerance,Epic:Condition,Epic:DocumentReference`), seeded empty.
-   Entries for other vendors, unknown types and types the code does not support are ignored, so a bad value can
-   only release less (`EhrWriteBackSettings.ReleasedResourceTypes`, read through `IEhrWriteReleasePolicy`).
+   added in Phase 3 (section 9). No eClinicalWorks or athenahealth type is live-capable yet.
 
-Anything else is counted as `wouldWrite`; when the destination asked for live writes the reason
-`live-write-not-released` says why it was not sent. The run reports `dryRun: false` only when at least one selected
-type was live. `GET api/v1/ehr-write-capabilities` now returns `liveWriteSupported` and `liveReleased` per type, and
-the destination form shows which selected types a live run would send.
+There is no installation-wide release list. Until 2026-10-03 a third key, the system setting
+`EhrWriteBack:LiveWriteTypes`, had to list each type before it could go live; it was removed at the product owner's
+request (migration `RemoveEhrWriteBackLiveWriteTypes` deletes its row for both providers). Who may take a
+destination off dry run is now decided by the EHR Write-Back permissions: `ehrwriteback.edit` to change the
+destination (including clearing Dry run) and `ehrwriteback.execute` to run a workflow that writes to an EHR. Only
+`EhrWriteBack:CloneModeEnabled` remains as a system setting. Note that an anonymous run of a publicly launchable
+workflow skips user permission checks, including `ehrwriteback.execute`; whether write-back workflows may be public
+is still an open decision.
+
+A selected type the code does not support live is counted as `wouldWrite`; when the destination asked for live
+writes the reason `live-write-not-supported` says why it was not sent (runs recorded before the change may show
+the retired `live-write-not-released`). The run reports `dryRun: false` only when at least one selected type was
+live. `GET api/v1/ehr-write-capabilities` returns `liveWriteSupported` per type, and the destination form shows
+which types a live run would send.
 
 **Review list.** A write whose outcome is unknown (timeout, reset, 5xx), that the EHR refused, or whose send never
 finished (Pending for 15 minutes) is never retried on its own. Operations → EHR Write-Back Review
@@ -276,7 +283,8 @@ reviewer and a run touching the same row cannot both win. API: `GET api/v1/ehr-w
 `AddEhrWriteLedgerReview` for both providers.
 
 **Sandbox verification (pending: Epic was down on 2026-10-02).** To be run by the user, in order, against
-Desiree (`eAB3mDIBBcyUKviyzrxsnAw3`) with `EhrWriteBack:LiveWriteTypes = Epic:AllergyIntolerance`:
+Desiree (`eAB3mDIBBcyUKviyzrxsnAw3`), selecting one type at a time in the destination's Data groups (written when this
+section used the since-removed `EhrWriteBack:LiveWriteTypes` release; "Release X" below now means "select X"):
 
 | # | Check | Expected |
 |---|---|---|
@@ -296,12 +304,12 @@ arrived / triaged / on leave); a vital on a finished encounter was not sandbox-t
 `no-eligible-encounter`. Units are passed through as sent.
 
 **Patients created in the run.** A patient is created only when `$match` found no one, the destination opted
-in (`dest_createPatientIfMissing`) and Patient is selected and released. Patients are processed first; the new
+in (`dest_createPatientIfMissing`) and Patient is selected. Patients are processed first; the new
 id is cached, so the patient's allergies, problems and notes are filed in the same run. A record whose patient is
 not in the batch gets the patient fetched from the source and created on demand, through the same ledger-guarded
 path. A patient create that is refused or of unknown outcome is tried once per run, and every record of that
 patient is skipped as `patient-not-created` (or `patient-awaiting-review` when its ledger row is under review).
-A dry run, or Patient not released, leaves those records as `patient-not-yet-created`.
+A dry run, or Patient not selected, leaves those records as `patient-not-yet-created`.
 
 **QA clone mode** (`dest_cloneMode`, offered in the form only while `EhrWriteBack:CloneModeEnabled` is on; a run
 asking for it while the setting is off fails). Every source patient is written as a synthetic clone
@@ -316,7 +324,7 @@ deterministic per source patient, so a re-run finds it through the ledger instea
   the row is recorded as rejected with `clone-matched-original` and nothing is filed against it.
 
 A clone has no encounters, so its notes and vitals are skipped (`no-eligible-encounter`); Patient must be selected
-and released for anything to be written.
+for anything to be written.
 
 **Notes in HTML or RTF** are converted to plain text (`EhrNoteText`): paragraphs, line breaks, list items and table
 cells are kept; scripts, styles, RTF header tables, pictures and other destinations are dropped; RTF hex
@@ -329,7 +337,7 @@ that is not base64 as `note-content-not-base64`, and a note with no text left as
 |---|---|---|
 | 1 | Patient.Create with the clone SSN format (`9xx-xx-xxxx`) | 201, or 59108 if the build validates SSN ranges (then pick another synthetic scheme) |
 | 2 | A vital on Linda's finished stay (`e2tX.zRRuP1elysuhOHkiqg3`) | tells whether finished encounters can be allowed for vitals |
-| 3 | Clone mode, Desiree, Patient + AllergyIntolerance released | clone created as `Zztest…`, the allergy filed on the clone, the real chart untouched |
+| 3 | Clone mode, Desiree, Patient + AllergyIntolerance selected | clone created as `Zztest…`, the allergy filed on the clone, the real chart untouched |
 | 4 | Re-run #3 | no requests: the clone and the allergy are found in the ledger |
 | 5 | One HTML note and one RTF note on Desiree's open visit | filed as preliminary, readable text |
 
@@ -413,7 +421,7 @@ shown to accept them. What is known (from a third-party integration guide, unver
   offers Write access for an eCW Backend System connection from the capabilities API.
 
 **To go live with eCW:** contract the write APIs, get a practice (or sandbox) activated, run the Phase 2 checks
-there, then set the verified types `liveWriteSupported: true` and release them (`Healow:AllergyIntolerance`, …).
+there, then set the verified types `liveWriteSupported: true`; destinations that select them then write live.
 
 ## 12. Phase 5b — athenahealth: QuestionnaireResponse only, dry run
 
@@ -443,7 +451,7 @@ many records), which is a framework change Phase 5 was not meant to make. They a
 write-back is wanted, together with an athenaOne (non-FHIR) channel for the clinical types.
 
 **To go live with athena:** verify QuestionnaireResponse create against the preview environment with a
-questionnaire athena defines, then set `liveWriteSupported: true` and release `Athenahealth:QuestionnaireResponse`.
+questionnaire athena defines, then set `liveWriteSupported: true` for QuestionnaireResponse.
 
 ## 13. Sources
 

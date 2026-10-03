@@ -21,11 +21,13 @@ namespace FHIRBridge.Infrastructure.Destinations.EhrWriteBack;
 /// <item>send it once, or in a dry run count it as what a live run would send.</item>
 /// </list>
 ///
-/// <para><b>Live only where released.</b> A record is sent only when the destination is not a dry run AND its
-/// resource type is released for live writes (<see cref="IEhrWriteReleasePolicy"/>: supported in code and released by
-/// an administrator). Every other record is counted as what a live run would send, with the reason
-/// <c>live-write-not-released</c> when the destination asked for live writes. Reads (identifier search,
-/// <c>$match</c>, encounter search) always run, because resolving references is what a dry run is for.</para>
+/// <para><b>Live only where supported.</b> A record is sent only when the destination is not a dry run AND the code
+/// supports live writes for its type (<see cref="FHIRBridge.Domain.Fhir.EhrWriteCapability.LiveWriteSupported"/>).
+/// Who may switch a destination off dry run and run it is decided by the EHR Write-Back permissions. Every other
+/// record is counted as what a live run would send, with the reason <c>live-write-not-supported</c> when the
+/// destination asked for live writes (a dry-run-only vendor such as eClinicalWorks or athenahealth). Reads
+/// (identifier search, <c>$match</c>, encounter search) always run, because resolving references is what a dry run
+/// is for.</para>
 ///
 /// <para><b>PHI.</b> The report and every record error hold resource types, positions and reason codes only. Nothing
 /// read from a resource, a search result or an OperationOutcome's diagnostics is logged.</para>
@@ -34,18 +36,18 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
 {
     private readonly EhrWriteProfileRegistry _profiles;
     private readonly IEhrWriteLedgerRepository _ledger;
-    private readonly IEhrWriteReleasePolicy _releasePolicy;
+    private readonly IEhrCloneModePolicy _cloneModePolicy;
     private readonly ILogger<MappedEhrWriteBackDestinationWriter> _logger;
 
     public MappedEhrWriteBackDestinationWriter(
         EhrWriteProfileRegistry profiles,
         IEhrWriteLedgerRepository ledger,
-        IEhrWriteReleasePolicy releasePolicy,
+        IEhrCloneModePolicy cloneModePolicy,
         ILogger<MappedEhrWriteBackDestinationWriter> logger)
     {
         _profiles = profiles;
         _ledger = ledger;
-        _releasePolicy = releasePolicy;
+        _cloneModePolicy = cloneModePolicy;
         _logger = logger;
     }
 
@@ -75,7 +77,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         // Clone mode writes synthetic copies of real patients. It is QA-only and gated by a system setting; a
         // destination asking for it while the setting is off is refused outright rather than run as a normal write.
         var cloneMode = channel.Options.CloneMode;
-        if (cloneMode && !await _releasePolicy.IsCloneModeEnabledAsync(cancellationToken))
+        if (cloneMode && !await _cloneModePolicy.IsCloneModeEnabledAsync(cancellationToken))
         {
             throw new InvalidOperationException(
                 $"Destination '{destination.Name}' is set to clone mode, which is turned off in system settings " +
@@ -84,12 +86,12 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
 
         var parsed = Parse(records);
         var selected = new HashSet<string>(channel.Options.ResourceTypes, StringComparer.OrdinalIgnoreCase);
-        var released = channel.Options.DryRun
+        var live = channel.Options.DryRun
             ? new HashSet<string>(StringComparer.Ordinal)
-            : await _releasePolicy.GetReleasedResourceTypesAsync(vendor.Vendor, cancellationToken);
+            : vendor.Capabilities.Where(c => c.LiveWriteSupported).Select(c => c.ResourceType).ToHashSet(StringComparer.Ordinal);
         var targetKey = EhrWriteKeys.TargetKey(channel.TargetBaseUrl);
 
-        var run = new RunState(channel, vendor, context, targetKey, cloneMode, selected, released)
+        var run = new RunState(channel, vendor, context, targetKey, cloneMode, selected, live)
         {
             // Reading from and writing to the same EHR: every record is already there. Epic does not deduplicate
             // allergies, problems or notes, so sending them back would file second copies in the same chart. Clone
@@ -143,7 +145,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             }
         }
 
-        var dryRun = !released.Any(selected.Contains);
+        var dryRun = !live.Any(selected.Contains);
         var report = new EhrWriteReport(
             dryRun,
             channel.TargetVendor.ToString(),
@@ -215,6 +217,13 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         var patient = await run.Resolver.ResolvePatientAsync(shaped.SourcePatientReference, cancellationToken);
         if (patient.Kind == EhrPatientResolutionKind.WouldCreate)
         {
+            // A live run can only create the patient when Patient is selected; without it no run ever will, so say
+            // so rather than "not yet created", which suggests a later run would file the record.
+            if (!run.Channel.Options.DryRun && !run.Selected.Contains("Patient"))
+            {
+                return Decision.Skip("patient-not-selected");
+            }
+
             patient = await CreatePatientForRecordAsync(run, shaped.SourcePatientReference, patient, cancellationToken);
         }
 
@@ -225,7 +234,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
 
         if (patient.Kind == EhrPatientResolutionKind.WouldCreate)
         {
-            // The patient does not exist yet (dry run, or patient creation not released), so neither does any
+            // The patient does not exist yet (dry run, or patient creation not live), so neither does any
             // encounter of theirs.
             return capability.RequiresEncounter
                 ? Decision.Skip("no-eligible-encounter")
@@ -274,7 +283,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
     /// <summary>
     /// A record's patient is not in the EHR and the batch did not carry the patient itself: create it now, through
     /// the same ledger-guarded path as a Patient record, so the record can be filed in this run. Only when Patient is
-    /// selected and released; otherwise the record waits, as <c>patient-not-yet-created</c>.
+    /// selected and live; otherwise the record waits, as <c>patient-not-yet-created</c>.
     /// </summary>
     private async Task<EhrPatientResolution> CreatePatientForRecordAsync(
         RunState run,
@@ -286,7 +295,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         if (sourcePatientId is null
             || resolution.ShapedPatient is null
             || !run.Selected.Contains("Patient")
-            || !run.Released.Contains("Patient"))
+            || !run.Live.Contains("Patient"))
         {
             return resolution;
         }
@@ -311,10 +320,10 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             run.Resolver.RecordPatientNotCreated(sourcePatientId, "patient-awaiting-review");
         }
 
-        // WouldWrite (dry run / not released) and Capped leave the patient as "would create".
+        // WouldWrite (dry run / type not live-capable) and Capped leave the patient as "would create".
     }
 
-    /// <summary>Ledger check, write cap and live release for one shaped record, then the send itself when all
+    /// <summary>Ledger check, write cap and live-capability check for one shaped record, then the send itself when all
     /// allow it. <paramref name="recordIndex"/> is null for a patient created on behalf of another record.</summary>
     private async Task<SendResult> PlanAndSendAsync(
         RunState run,
@@ -343,12 +352,12 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         }
 
         run.PlannedWrites++;
-        if (!run.Released.Contains(resourceType))
+        if (!run.Live.Contains(resourceType))
         {
             tally.WouldWrite++;
             if (!run.Channel.Options.DryRun)
             {
-                tally.Reason("live-write-not-released");
+                tally.Reason("live-write-not-supported");
             }
 
             return new SendResult(SendKind.WouldWrite, null);
@@ -567,7 +576,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         /// <summary>The ledger already holds the record (written, awaiting review, previously rejected).</summary>
         Blocked,
         Capped,
-        /// <summary>Counted, not sent: a dry run, or the type is not released for live writes.</summary>
+        /// <summary>Counted, not sent: a dry run, or the code does not support live writes for the type.</summary>
         WouldWrite,
         Written,
         /// <summary>Sent, and refused or of unknown outcome.</summary>
@@ -586,7 +595,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             string targetKey,
             bool cloneMode,
             IReadOnlySet<string> selected,
-            IReadOnlySet<string> released)
+            IReadOnlySet<string> live)
         {
             Channel = channel;
             Vendor = vendor;
@@ -594,7 +603,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             TargetKey = targetKey;
             CloneMode = cloneMode;
             Selected = selected;
-            Released = released;
+            Live = live;
         }
 
         public IEhrWriteChannel Channel { get; }
@@ -603,7 +612,8 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         public string TargetKey { get; }
         public bool CloneMode { get; }
         public IReadOnlySet<string> Selected { get; }
-        public IReadOnlySet<string> Released { get; }
+        /// <summary>Types sent for real: none in a dry run, else every type the vendor supports live.</summary>
+        public IReadOnlySet<string> Live { get; }
         public bool SameEnvironment { get; init; }
         public EhrReferenceResolver Resolver { get; set; } = default!;
         public Dictionary<string, Tally> Tallies { get; } = new(StringComparer.Ordinal);

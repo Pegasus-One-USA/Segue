@@ -31,12 +31,8 @@ public sealed class HealowWriteBackTests
          "patient":{"reference":"Patient/p1"}}
         """;
 
-    private static MappedEhrWriteBackDestinationWriter Writer(params string[] released)
+    private static MappedEhrWriteBackDestinationWriter Writer()
     {
-        var policy = new Mock<IEhrWriteReleasePolicy>();
-        policy.Setup(p => p.GetReleasedResourceTypesAsync(It.IsAny<SourceSystemType>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((SourceSystemType vendor, CancellationToken _) =>
-                EhrWriteBackSettings.ReleasedResourceTypes(string.Join(',', released.Select(r => $"{vendor}:{r}")), vendor));
         return new MappedEhrWriteBackDestinationWriter(
             new EhrWriteProfileRegistry(
             [
@@ -45,7 +41,7 @@ public sealed class HealowWriteBackTests
                 new HealowVitalSignWriteProfile(), new HealowPatientWriteProfile(),
             ]),
             new InMemoryEhrWriteLedgerRepository(),
-            policy.Object,
+            Mock.Of<IEhrCloneModePolicy>(),
             NullLogger<MappedEhrWriteBackDestinationWriter>.Instance);
     }
 
@@ -89,11 +85,11 @@ public sealed class HealowWriteBackTests
     {
         var channel = new HealowChannel(dryRun: false) { IdentifierHit = """{"resourceType":"Patient","id":"eCW-42","identifier":[{"system":"urn:oid:2.16.840.1.113883.19.5","value":"MRN-1"}]}""" };
 
-        var result = await RunAsync(Writer("AllergyIntolerance", "Patient"), channel);
+        var result = await RunAsync(Writer(), channel);
 
         channel.Creates.Should().Be(0);
         result.EhrWrite!.DryRun.Should().BeTrue();
-        result.EhrWrite.Resources.Single(r => r.ResourceType == "AllergyIntolerance").Reasons.Should().ContainKey("live-write-not-released");
+        result.EhrWrite.Resources.Single(r => r.ResourceType == "AllergyIntolerance").Reasons.Should().ContainKey("live-write-not-supported");
     }
 
     private sealed class HealowChannel : IEhrWriteChannel

@@ -317,7 +317,7 @@ public sealed class TabularSourceTests
         var writer = new MappedEhrWriteBackDestinationWriter(
             new EhrWriteProfileRegistry([new EpicAllergyIntoleranceWriteProfile(), new EpicPatientWriteProfile()]),
             new InMemoryEhrWriteLedgerRepository(),
-            Mock.Of<IEhrWriteReleasePolicy>(),
+            Mock.Of<IEhrCloneModePolicy>(),
             NullLogger<MappedEhrWriteBackDestinationWriter>.Instance);
 
         var result = await writer.WriteAsync(

@@ -12,10 +12,9 @@ export interface EhrWriteCapability {
   requiresEncounter: boolean;
   optInOnly: boolean;
   allowedApplicationTypes: string[];
-  /** The product can send this type live; false keeps it dry-run-only whatever is configured. */
+  /** The product can send this type live: a destination that selects it and is not a dry run sends it. False keeps
+   *  it dry-run-only. */
   liveWriteSupported: boolean;
-  /** An administrator released it (system setting EhrWriteBack:LiveWriteTypes): a non-dry run sends it. */
-  liveReleased: boolean;
 }
 
 /** EhrWriteCapabilitiesDto. */

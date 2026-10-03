@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.SharedKernel.Exceptions;
 using FHIRBridge.UnitTests.Infrastructure;
@@ -13,7 +14,7 @@ using Moq;
 namespace FHIRBridge.UnitTests.EhrWriteBack;
 
 /// <summary>
-/// Phase 2's controls around live writes: what an administrator can release, which ledger rows reach the review
+/// Phase 2's controls around live writes: which types can go live, which ledger rows reach the review
 /// list, and what a reviewer can do with them.
 /// </summary>
 public sealed class EhrWriteReviewTests
@@ -38,25 +39,21 @@ public sealed class EhrWriteReviewTests
         return entry;
     }
 
-    [Theory]
-    [InlineData("", "")]
-    [InlineData("Epic:AllergyIntolerance", "AllergyIntolerance")]
-    [InlineData(" epic : condition , Epic:DocumentReference ", "Condition,DocumentReference")]
-    [InlineData("Epic:Observation,Epic:Patient", "Observation,Patient")]
-    [InlineData("Healow:AllergyIntolerance,Epic:Immunization,AllergyIntolerance,:Condition", "")]
-    public void Only_live_capable_types_of_the_vendor_can_be_released(string setting, string expected)
+    // With no installation-wide release list, the code alone decides what can go live: every Epic write type, and no
+    // eClinicalWorks or athenahealth type yet. A destination sends a live-capable type when it selects it and is not
+    // a dry run.
+    [Fact]
+    public void Every_epic_write_type_can_go_live()
     {
-        var released = EhrWriteBackSettings.ReleasedResourceTypes(setting, SourceSystemType.Epic);
-
-        released.Order(StringComparer.Ordinal).Should().Equal(
-            expected.Split(',', StringSplitOptions.RemoveEmptyEntries));
+        EhrWriteCapabilities.For(SourceSystemType.Epic).Should().OnlyContain(c => c.LiveWriteSupported);
     }
 
-    [Fact]
-    public void Eclinicalworks_types_cannot_be_released_for_live_writes_yet()
+    [Theory]
+    [InlineData(SourceSystemType.Healow)]
+    [InlineData(SourceSystemType.Athenahealth)]
+    public void Eclinicalworks_and_athenahealth_types_stay_dry_run_only(SourceSystemType vendor)
     {
-        EhrWriteBackSettings.ReleasedResourceTypes("Healow:AllergyIntolerance,Healow:Patient", SourceSystemType.Healow)
-            .Should().BeEmpty();
+        EhrWriteCapabilities.For(vendor).Should().NotBeEmpty().And.OnlyContain(c => !c.LiveWriteSupported);
     }
 
     [Theory]
