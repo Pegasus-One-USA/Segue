@@ -1,4 +1,6 @@
-﻿import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+﻿import { Component, DestroyRef, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { finalize } from 'rxjs';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -17,6 +19,11 @@ import { DestinationWriteResultPayload, NodeRunHistoryEntry, NodeRunPayloadDetai
   ConfiguredResourceTypeRules,
 } from '../../models/execution-history.model';
 import { FieldLineagePanelComponent } from '../../components/field-lineage-panel/field-lineage-panel.component';
+import { EhrWriteReport, ehrWriteReportToText, parseEhrWriteReport } from '../../models/ehr-write-report';
+import {
+  EhrWriteReportDialogComponent,
+  EhrWriteReportDialogData,
+} from '../../components/ehr-write-report-dialog/ehr-write-report-dialog.component';
 
 @Component({
   selector: 'app-execution-history-detail',
@@ -31,6 +38,7 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly dialog = inject(DialogService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly execution   = signal<RouteExecution | null>(null);
   readonly cancelling  = signal(false);
@@ -150,15 +158,13 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
     }
 
     this.loadingPayloadIds.set(new Set(this.loadingPayloadIds()).add(entryId));
-    this.api.nodeRunPayload(this.runId, entryId).subscribe({
-      next: detail => this.payloadCache.set(new Map(this.payloadCache()).set(entryId, detail)),
-      error: () => this.payloadCache.set(new Map(this.payloadCache()).set(entryId, null)),
-      complete: () => {
-        const next = new Set(this.loadingPayloadIds());
-        next.delete(entryId);
-        this.loadingPayloadIds.set(next);
-      },
-    });
+    this.api.nodeRunPayload(this.runId, entryId)
+      // finalize, not complete: an erroring request never completes, which left the row spinning for good.
+      .pipe(finalize(() => this.clearLoadingPayload(entryId)), takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: detail => this.payloadCache.set(new Map(this.payloadCache()).set(entryId, detail)),
+        error: () => this.payloadCache.set(new Map(this.payloadCache()).set(entryId, null)),
+      });
   }
 
   isLoadingPayload(entryId: string): boolean {
@@ -201,6 +207,84 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
     } catch {
       return null;
     }
+  }
+
+  /** True for an EHR write-back destination node that has finished — the only node whose row can carry the
+   *  write-back report. Decided from the node type, so the link shows before the row's payload is fetched. */
+  isEhrWriteBackNode(entry: NodeRunHistoryEntry): boolean {
+    return entry.nodeType === 'EhrWriteBackDestinationNode' && entry.status !== 'Running';
+  }
+
+  /** The header link shows unless the node failed or was cancelled before reporting (a writer that throws records
+   *  no result), or its payload is already known to hold no report. */
+  showEhrWriteReportLink(entry: NodeRunHistoryEntry): boolean {
+    if (!this.isEhrWriteBackNode(entry) || entry.status === 'Failed' || entry.status === 'Cancelled') return false;
+    const cached = this.payloadCache().get(entry.workflowNodeRunId);
+    return cached === undefined || this.ehrWriteReportFor(entry) !== null;
+  }
+
+  /** "Dry-run" only once the report confirms it: before the payload is fetched a live run must not be labelled as
+   *  a dry run, so the unknown case gets the neutral wording. */
+  ehrWriteReportLinkLabel(entry: NodeRunHistoryEntry): string {
+    return this.ehrWriteReportFor(entry)?.DryRun === true ? 'View dry-run report' : 'View write-back report';
+  }
+
+  /** The EHR write-back report for a row, once its payload is cached; null otherwise. */
+  ehrWriteReportFor(entry: NodeRunHistoryEntry): EhrWriteReport | null {
+    if (!this.isEhrWriteBackNode(entry)) return null;
+    return parseEhrWriteReport(this.payloadCache().get(entry.workflowNodeRunId)?.deliveryDetailJson);
+  }
+
+  /** Opens the write-back report in a dialog. The report lives in the node's stored payload, which is normally
+   *  fetched on expand; the header link can be clicked before that, so it fetches the payload itself. A cached
+   *  entry is reused only when it actually holds a report: one fetched while the node was still running, or after
+   *  a failed load, is fetched again rather than trusted. */
+  openEhrWriteReport(entry: NodeRunHistoryEntry): void {
+    const id = entry.workflowNodeRunId;
+    if (this.isLoadingPayload(id)) return;
+    if (this.ehrWriteReportFor(entry)) {
+      this.showEhrWriteReport(entry);
+      return;
+    }
+
+    this.loadingPayloadIds.set(new Set(this.loadingPayloadIds()).add(id));
+    this.api.nodeRunPayload(this.runId, id)
+      .pipe(
+        // finalize, not complete: an erroring request never completes, which left the link stuck "loading".
+        finalize(() => this.clearLoadingPayload(id)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: detail => {
+          this.payloadCache.set(new Map(this.payloadCache()).set(id, detail));
+          this.showEhrWriteReport(entry);
+        },
+        error: (err: HttpErrorResponse) => {
+          // Not cached, so the next click really does try again.
+          this.toast.error(err.status === 403
+            ? 'You do not have access to this write-back report.'
+            : 'The write-back report could not be loaded. Please try again.');
+        },
+      });
+  }
+
+  private clearLoadingPayload(id: string): void {
+    const next = new Set(this.loadingPayloadIds());
+    next.delete(id);
+    this.loadingPayloadIds.set(next);
+  }
+
+  private showEhrWriteReport(entry: NodeRunHistoryEntry): void {
+    const report = this.ehrWriteReportFor(entry);
+    if (!report) {
+      this.toast.show('No report', 'This run recorded no write-back report for this node.');
+      return;
+    }
+
+    this.dialog.open<EhrWriteReportDialogComponent, EhrWriteReportDialogData, void>(EhrWriteReportDialogComponent, {
+      width: '860px',
+      data: { report, writtenAt: this.destinationWriteResultFor(entry)?.WrittenAt ?? entry.completedAt },
+    });
   }
 
   /** The destination write result as formatted JSON, for the destinations whose result is just the write
@@ -475,7 +559,15 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
    *  the button looking broken. Ordered to match what the row renders: counts, else write result, else error. */
   copyNodeDetail(entry: NodeRunHistoryEntry): void {
     const counts = this.resourceCountsFor(entry.workflowNodeRunId);
-    const text = counts.length
+    const ehrWriteReport = this.ehrWriteReportFor(entry);
+    // Everything the EHR row shows, in the order it shows it: error, write result, then the report.
+    const text = ehrWriteReport
+      ? [
+          entry.errorMessage,
+          this.destinationWriteLinesFor(entry).map(line => line.label + ': ' + line.value).join('\n'),
+          ehrWriteReportToText(ehrWriteReport),
+        ].filter(Boolean).join('\n\n')
+      : counts.length
       ? counts.map(([resourceType, count]) => `${resourceType}: ${count}`).join('\n')
       : (this.destinationWriteLinesFor(entry).map(line => line.label + ': ' + line.value).join('\n')
           || entry.errorMessage || '');
