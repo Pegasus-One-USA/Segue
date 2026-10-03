@@ -1,0 +1,29 @@
+portal/scripts/lint-baseline.json
+  s_012a949fbb852d::t_33edd85e09f87a 2-3
+portal/src/app/governance/pages/correlation-search/correlation-search.component.scss
+  s_102cddd76c43e9::t_42a7e74a04291d 303
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6bfccfa1f01dc41061c8be2d3023055954c43acc",
+  "prompts": {},
+  "sessions": {
+    "s_012a949fbb852d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1899cc87-d26f-4d5f-84d4-4774d4e1a2cb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_102cddd76c43e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "267708a9-2483-411a-abaf-536b681fbfb5",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

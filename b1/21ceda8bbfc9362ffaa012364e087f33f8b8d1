@@ -1,0 +1,66 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_3ed121661efe12::t_576e3a22f77851 279
+  s_3ed121661efe12::t_005f4ae8a89cca 93
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_3ed121661efe12::t_005f4ae8a89cca 2214-2220,2222
+  s_3ed121661efe12::t_576e3a22f77851 185-186
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_3ed121661efe12::t_576e3a22f77851 114-117,593
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_3ed121661efe12::t_576e3a22f77851 332-337
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_3ed121661efe12::t_005f4ae8a89cca 2514-2520,2522
+  s_3ed121661efe12::t_576e3a22f77851 203-204
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_3ed121661efe12::t_576e3a22f77851 291-297
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.row-lock.spec.ts
+  s_3ed121661efe12::t_5394ccd7c24a66 1-54
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_3ed121661efe12::t_005f4ae8a89cca 62-64,614
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_3ed121661efe12::t_005f4ae8a89cca 90
+  s_3ed121661efe12::t_576e3a22f77851 273
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_3ed121661efe12::t_005f4ae8a89cca 235-239
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.html
+  s_3ed121661efe12::t_576e3a22f77851 66
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_3ed121661efe12::t_005f4ae8a89cca 388-394
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_3ed121661efe12::t_005f4ae8a89cca 49-51,373
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_3ed121661efe12::t_576e3a22f77851 291-297
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.key-row-lock.spec.ts
+  s_3ed121661efe12::t_bbe383b9579e78 1-54,130-142
+  s_3ed121661efe12::t_e8110761e6804e 55-93
+  s_3ed121661efe12::t_1ab3730bacfd27 94-129
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_3ed121661efe12::t_005f4ae8a89cca 393-399
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_3ed121661efe12::t_005f4ae8a89cca 181-185
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_3ed121661efe12::t_576e3a22f77851 119-122,725
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.ts
+  s_3ed121661efe12::t_576e3a22f77851 328-330
+  s_3ed121661efe12::t_1c038344c46447 380-383
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_3ed121661efe12::t_576e3a22f77851 378-383
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.row-lock.spec.ts
+  s_3ed121661efe12::t_48e29472b381c2 1-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b121ceda8bbfc9362ffaa012364e087f33f8b8d1",
+  "prompts": {},
+  "sessions": {
+    "s_3ed121661efe12": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b59933f-9a05-4a37-838a-9f358a20502f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

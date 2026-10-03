@@ -1,0 +1,28 @@
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_3ed121661efe12::t_37a736de892f3c 22-26
+  s_3ed121661efe12::t_985df9381bb800 239-240
+  s_3ed121661efe12::t_c659cf5fb5a026 206-208,210
+  s_3ed121661efe12::t_be33f4f001110a 1-2
+  s_3ed121661efe12::t_b0c3865d548834 8
+  s_3ed121661efe12::t_322b1707dd6a4d 63-84
+  s_3ed121661efe12::t_5bbd99b03c422c 241
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.live-status.spec.ts
+  s_3ed121661efe12::t_53605e0b8e232f 1-67,96-104
+  s_3ed121661efe12::t_2788ad74ee474e 68-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ad3b8d570b6557404a8c495e13b9e5ddd7e91743",
+  "prompts": {},
+  "sessions": {
+    "s_3ed121661efe12": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b59933f-9a05-4a37-838a-9f358a20502f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
