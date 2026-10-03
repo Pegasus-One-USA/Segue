@@ -29,7 +29,10 @@ if ($Database -notmatch '_it$') {
 }
 
 function Invoke-Psql([string] $Sql) {
-    docker exec $Container psql -U $User -d postgres -v ON_ERROR_STOP=1 -q -c $Sql | Out-Null
+    # The SQL goes in on standard input, not as a -c argument: Windows PowerShell 5 strips the double quotes from a
+    # native command's arguments, so a quoted "FHIRBridge_it" reached psql unquoted, was folded to fhirbridge_it,
+    # and the real (mixed-case) test database was never dropped.
+    $Sql | docker exec -i $Container psql -U $User -d postgres -v ON_ERROR_STOP=1 -q | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "psql failed: $Sql" }
 }
 

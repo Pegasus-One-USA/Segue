@@ -187,7 +187,7 @@ public sealed class ApiFixture : IAsyncLifetime
     }
 
     /// <summary>EnsureSuccessStatusCode, but saying what the API answered: every test depends on this setup.</summary>
-    private static async Task EnsureOkAsync(HttpResponseMessage response)
+    public static async Task EnsureOkAsync(HttpResponseMessage response)
     {
         if (!response.IsSuccessStatusCode)
         {
