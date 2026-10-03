@@ -47,7 +47,7 @@ public sealed class EhrWriteBackPermissionTests(ApiFixture f)
         Trigger = trigger,
         Nodes = new[]
         {
-            Node("n-src", "EpicSourceNode", "Source", 0, new() { ["Resources"] = "AllergyIntolerance" }),
+            Node("n-src", "EpicSourceNode", "Source", 0, new() { ["Resources"] = "AllergyIntolerance" }, checkpointUrlEnabled: checkpoint),
             Node(WriteBackNodeId, "EhrWriteBackDestinationNode", "Destination", 70, new()
             {
                 ["dest_dryRun"] = dryRun ? "true" : "false",
@@ -189,5 +189,85 @@ public sealed class EhrWriteBackPermissionTests(ApiFixture f)
         var resp = await creator.PostAsJsonAsync($"/api/v1/workflows/{id}/copy", new { Name = "Copy of write-back" });
 
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_checkpoint_url_is_refused_for_any_node_of_a_write_back_workflow()
+    {
+        // A checkpoint run executes every node upstream of its target too, so even the source node of a workflow
+        // that writes back must not hand out an anonymous URL.
+        var created = await f.AdminClient.PostAsJsonAsync("/api/v1/workflows", Workflow(dryRun: false, checkpoint: true));
+        await ApiFixture.EnsureOkAsync(created);
+        var doc = JsonDocument.Parse(await created.Content.ReadAsStringAsync()).RootElement;
+        var id = doc.GetProperty("id").GetGuid();
+        var sourceNodeId = doc.GetProperty("nodes").EnumerateArray()
+            .First(n => n.GetProperty("nodeType").GetString() == "EpicSourceNode")
+            .GetProperty("id").GetGuid();
+
+        var resp = await f.AdminClient.GetAsync($"/api/v1/workflows/{id}/nodes/{sourceNodeId}/checkpoint-url");
+
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+        Assert.Contains("checkpoint_not_allowed", await resp.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task A_write_back_workflow_is_never_saved_as_publicly_launchable()
+    {
+        var id = await CreateAsAdminAsync(Workflow(dryRun: true, publiclyLaunchable: true));
+
+        var stored = JsonDocument.Parse(await (await f.AdminClient.GetAsync($"/api/v1/workflows/{id}")).Content.ReadAsStringAsync());
+
+        Assert.False(stored.RootElement.GetProperty("isPubliclyLaunchable").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Public_launch_cannot_be_enabled_on_a_write_back_workflow()
+    {
+        var id = await CreateAsAdminAsync(Workflow(dryRun: true));
+
+        var resp = await f.AdminClient.PostAsync($"/api/v1/workflows/{id}/enable-public-launch", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+        Assert.Contains("public_launch_not_allowed", await resp.Content.ReadAsStringAsync());
+    }
+
+    [DatabaseFact]
+    public async Task The_public_launch_endpoint_refuses_a_write_back_workflow()
+    {
+        var id = await CreateAsAdminAsync(Workflow(dryRun: false, publiclyLaunchable: true));
+
+        var resp = await f.AnonClient.GetAsync($"/api/v1/workflows/{id}/public-launch-context");
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
+    [DatabaseFact]
+    public async Task No_launch_url_is_minted_for_a_write_back_workflow()
+    {
+        var id = await CreateAsAdminAsync(Workflow(dryRun: false));
+
+        var resp = await f.AdminClient.GetAsync($"/api/v1/workflows/{id}/launch-url");
+
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+        Assert.Contains("launch_not_allowed", await resp.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Workflow_edit_alone_cannot_change_the_criteria_of_a_scheduled_write_back_workflow()
+    {
+        var id = await CreateAsAdminAsync(Workflow(dryRun: false, enabled: true, trigger: Schedule));
+        try
+        {
+            using var editor = await ClientWithAsync("workflow.view", "workflow.edit");
+
+            var resp = await editor.PostAsJsonAsync($"/api/v1/workflows/{id}/resource-type-criteria",
+                new { SourceNodeId = "n-src", ResourceType = "AllergyIntolerance", Criteria = "clinical-status=active" });
+
+            Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+        }
+        finally
+        {
+            await ApiFixture.EnsureOkAsync(await f.AdminClient.PostAsync($"/api/v1/workflows/{id}/deactivate", null));
+        }
     }
 }

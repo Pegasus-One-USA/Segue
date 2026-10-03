@@ -13,7 +13,7 @@ public sealed class DatabaseFactAttribute : FactAttribute
     {
         if (ApiFactory.DatabaseConnectionString is null)
         {
-            Skip = "Needs a database (set FHIRBRIDGE_IT_DB or use run-against-postgres.ps1): running a workflow does.";
+            Skip = "Needs a database (set FHIRBRIDGE_IT_DB or use run-against-postgres.ps1): running a workflow and the OAuth launch endpoints do.";
         }
     }
 }

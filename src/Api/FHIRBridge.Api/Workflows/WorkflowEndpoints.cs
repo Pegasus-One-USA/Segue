@@ -2038,7 +2038,8 @@ public static class WorkflowEndpoints
                 return Results.BadRequest(new { error = "checkpoint_not_enabled", error_description = "Enable the checkpoint flag on this node before requesting its URL." });
             }
 
-            if (IsEhrWriteBackNode(node.NodeType))
+            // The whole workflow, not just this node: a checkpoint run also executes every node upstream of it.
+            if (WorkflowNodeTypes.HasEhrWriteBack(workflow))
             {
                 return Results.BadRequest(new { error = "checkpoint_not_allowed", error_description = EhrWriteBackCheckpointRefusal });
             }
@@ -2074,10 +2075,10 @@ public static class WorkflowEndpoints
                 return Results.NotFound(new { error = "checkpoint_unavailable", error_description = "This checkpoint no longer exists or has been disabled." });
             }
 
-            // A checkpoint URL is anonymous, and a checkpoint run executes the target node itself. Re-checked here,
-            // not only when the URL is minted, because a URL minted earlier stays valid while the node behind it
-            // can be changed.
-            if (IsEhrWriteBackNode(node.NodeType))
+            // A checkpoint URL is anonymous, and a checkpoint run executes the target and every node upstream of it,
+            // so any write-back node in the workflow refuses it. Re-checked here, not only when the URL is minted,
+            // because a URL minted earlier stays valid while the workflow behind it can be changed.
+            if (WorkflowNodeTypes.HasEhrWriteBack(workflow))
             {
                 return Results.BadRequest(new { error = "checkpoint_not_allowed", error_description = EhrWriteBackCheckpointRefusal });
             }
@@ -2775,6 +2776,15 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
+            if (WorkflowNodeTypes.HasEhrWriteBack(workflow))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "public_launch_not_allowed",
+                    error_description = "A workflow that writes into an EHR cannot be publicly launchable.",
+                });
+            }
+
             workflow.EnablePublicLaunch();
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Ok(workflow);
@@ -2812,12 +2822,25 @@ public static class WorkflowEndpoints
 
         // Appends by default (request.Replace == false) — the button adds to whatever criteria the resource type
         // already has rather than overwriting it. Creates the row on first save.
+        // Criteria filter what a source node reads, so on a scheduled write-back workflow they change what the Worker
+        // writes into the EHR: the same run rights as arming the schedule (CanArmEhrWriteBackScheduleAsync).
         group.MapPost("/workflows/{workflowId:guid}/resource-type-criteria", async (
             Guid workflowId,
             SaveResourceTypeCriteriaRequest request,
             IResourceTypeCriteriaService criteriaService,
+            IWorkflowDefinitionStore store,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
-            Results.Ok(await criteriaService.SaveAsync(workflowId, request, cancellationToken)))
+        {
+            if (await store.GetAsync(workflowId, cancellationToken) is { } workflow
+                && !await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
+            return Results.Ok(await criteriaService.SaveAsync(workflowId, request, cancellationToken));
+        })
         .RequireAuthorization(AuthorizationPolicies.HasPermission(
             PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.Edit)));
 
@@ -2826,8 +2849,17 @@ public static class WorkflowEndpoints
             string sourceNodeId,
             string resourceType,
             IResourceTypeCriteriaService criteriaService,
+            IWorkflowDefinitionStore store,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
+            if (await store.GetAsync(workflowId, cancellationToken) is { } workflow
+                && !await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             await criteriaService.DeleteAsync(workflowId, sourceNodeId, resourceType, cancellationToken);
             return Results.NoContent();
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
@@ -3645,8 +3677,8 @@ public static class WorkflowEndpoints
     // such a node checks the EHR Write-Back permissions itself, not only the destination endpoints.
 
     private const string EhrWriteBackCheckpointRefusal =
-        "A checkpoint URL cannot run an EHR Write-Back node: it runs without a signed-in user, and writing into an "
-        + "EHR needs the EHR Write-Back Execute permission. Run the workflow instead.";
+        "A checkpoint URL cannot run a workflow that writes into an EHR: it runs without a signed-in user, and writing "
+        + "into an EHR needs the EHR Write-Back Execute permission. Run the workflow instead.";
 
     /// <summary>The node settings that change what an EHR Write-Back node writes, and where.</summary>
     private static readonly string[] EhrWriteBackNodeSettingKeys =
@@ -3655,8 +3687,7 @@ public static class WorkflowEndpoints
         "dest_maxWritesPerRun", "dest_noteDocStatus", "dest_sourceConnectionId", "destinationId",
     ];
 
-    private static bool IsEhrWriteBackNode(string? nodeType) =>
-        string.Equals(nodeType, WorkflowNodeTypes.EhrWriteBackDestination, StringComparison.OrdinalIgnoreCase);
+    private static bool IsEhrWriteBackNode(string? nodeType) => WorkflowNodeTypes.IsEhrWriteBack(nodeType);
 
     /// <summary>
     /// Saving a graph that adds an EHR Write-Back node needs ehrwriteback.create; one that changes such a node's
@@ -4076,8 +4107,12 @@ public static class WorkflowEndpoints
 
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request, int version = 1)
     {
+        // A workflow that writes into an EHR is never publicly launchable, whatever the request asks: an anonymous
+        // launch has no user to hold ehrwriteback.execute, and a plain save must not undo that.
+        var isPubliclyLaunchable = request.IsPubliclyLaunchable
+            && !request.Nodes.Any(node => WorkflowNodeTypes.IsEhrWriteBack(node.NodeType));
         var workflow = new WorkflowDefinition(
-            workflowId, request.Name, version: 1, request.IsEnabled, request.IsPubliclyLaunchable, request.Description);
+            workflowId, request.Name, version: 1, request.IsEnabled, isPubliclyLaunchable, request.Description);
         var nodeIdsByClientId = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var nodeRequest in request.Nodes)

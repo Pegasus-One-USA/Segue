@@ -4,6 +4,7 @@ using FHIRBridge.Application.Abstractions.Caching;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -124,14 +125,16 @@ public sealed class OAuthController : ControllerBase
         Guid workflowId, [FromQuery] string? callerId, [FromQuery] string? userIdentity, CancellationToken cancellationToken)
     {
         var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
-        if (workflow is null || !workflow.IsPubliclyLaunchable)
+        if (workflow is null || !workflow.IsPubliclyLaunchable || WorkflowNodeTypes.HasEhrWriteBack(workflow))
         {
             await LogRefusedLaunchAsync(
                 workflowId,
                 "EhrLaunch",
                 workflow is null
                     ? "Refused: no workflow with this id exists."
-                    : "Refused: workflow is not opted into public launch (POST /workflows/{id}/enable-public-launch).",
+                    : WorkflowNodeTypes.HasEhrWriteBack(workflow)
+                        ? "Refused: the workflow writes into an EHR (EHR Write-Back), which is never launchable without a signed-in user."
+                        : "Refused: workflow is not opted into public launch (POST /workflows/{id}/enable-public-launch).",
                 cancellationToken);
             return NotFound();
         }
@@ -216,6 +219,18 @@ public sealed class OAuthController : ControllerBase
     public async Task<IActionResult> GetWorkflowLaunchUrl(
         Guid workflowId, [FromQuery] Guid? ehrEndpointId, [FromQuery] string? callerId, CancellationToken cancellationToken)
     {
+        // The launch callback never runs a workflow that writes into an EHR (it has no user to check), so a launch URL
+        // for one would only send the user through EHR sign-in for nothing.
+        if (await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken) is { } launched
+            && WorkflowNodeTypes.HasEhrWriteBack(launched))
+        {
+            return BadRequest(new
+            {
+                error = "launch_not_allowed",
+                error_description = "This workflow writes into an EHR, so it cannot be launched from an EHR; run it from the portal.",
+            });
+        }
+
         var applicationType = await _authorizationService.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
         var context = _authorizationService.BuildWorkflowLaunchContextToken(workflowId, ehrEndpointId, callerId);
         return Ok(await BuildLaunchResponseAsync(applicationType, context, sessionId: null, cancellationToken));
@@ -252,7 +267,7 @@ public sealed class OAuthController : ControllerBase
             workflowId, ehrEndpointId);
 
         var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
-        if (workflow is null || !workflow.IsPubliclyLaunchable)
+        if (workflow is null || !workflow.IsPubliclyLaunchable || WorkflowNodeTypes.HasEhrWriteBack(workflow))
         {
             _logger.LogWarning(
                 "[Step 1/6] public-standalone-url rejected: workflowId={WorkflowId} found={Found} isPubliclyLaunchable={IsPubliclyLaunchable}",

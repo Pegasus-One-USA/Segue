@@ -4,6 +4,7 @@ using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Governance;
+using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.SharedKernel.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -83,13 +84,15 @@ public sealed class PatientStandaloneLaunchController : ControllerBase
         [FromQuery] string? userIdentity, CancellationToken cancellationToken)
     {
         var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken);
-        if (workflow is null || !workflow.IsPubliclyLaunchable)
+        if (workflow is null || !workflow.IsPubliclyLaunchable || WorkflowNodeTypes.HasEhrWriteBack(workflow))
         {
             await LogRefusedLaunchAsync(
                 workflowId,
                 workflow is null
                     ? "Refused: no workflow with this id exists."
-                    : "Refused: workflow is not opted into public launch (POST /workflows/{id}/enable-public-launch).",
+                    : WorkflowNodeTypes.HasEhrWriteBack(workflow)
+                        ? "Refused: the workflow writes into an EHR (EHR Write-Back), which is never launchable without a signed-in user."
+                        : "Refused: workflow is not opted into public launch (POST /workflows/{id}/enable-public-launch).",
                 cancellationToken);
             return NotFound();
         }

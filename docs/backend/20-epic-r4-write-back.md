@@ -258,9 +258,18 @@ There is no installation-wide release list. Until 2026-10-03 a third key, the sy
 request (migration `RemoveEhrWriteBackLiveWriteTypes` deletes its row for both providers). Who may take a
 destination off dry run is now decided by the EHR Write-Back permissions: `ehrwriteback.edit` to change the
 destination (including clearing Dry run) and `ehrwriteback.execute` to run a workflow that writes to an EHR. Only
-`EhrWriteBack:CloneModeEnabled` remains as a system setting. Note that an anonymous run of a publicly launchable
-workflow skips user permission checks, including `ehrwriteback.execute`; whether write-back workflows may be public
-is still an open decision.
+`EhrWriteBack:CloneModeEnabled` remains as a system setting.
+
+Every route that stores, copies, arms or runs a write-back node checks these permissions (commit after b9d4bdd8):
+POST `/workflows`, POST `/workflows/build` and PUT `/workflows/{id}` need `ehrwriteback.create` to add an EHR
+Write-Back node and `ehrwriteback.edit` to change its write settings (`dest_dryRun`, `dest_resources`,
+`dest_createPatientIfMissing`, `dest_cloneMode`, `dest_maxWritesPerRun`, `dest_noteDocStatus`,
+`dest_sourceConnectionId`, the destination); copying a workflow that has one needs `ehrwriteback.create`; `/run`
+checks `ehrwriteback.execute` on the node type; saving or activating a scheduled one (and changing its resource-type
+criteria) needs `workflow.run` and `ehrwriteback.execute`. A workflow that writes into an EHR only ever runs for a
+signed-in caller: it is never publicly launchable (saved as not public, enable-public-launch refuses it, the public
+launch endpoints and anonymous `/run` refuse it), never run from an EHR launch callback, and never reachable through
+a checkpoint URL. Still open: the EHR connection a write-back node targets is not itself permission-checked.
 
 A selected type the code does not support live is counted as `wouldWrite`; when the destination asked for live
 writes the reason `live-write-not-supported` says why it was not sent (runs recorded before the change may show

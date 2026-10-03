@@ -100,4 +100,16 @@ public static class WorkflowNodeTypes
     public const string HedisMeasureReport = "HedisMeasureReportNode";
     public const string AnomalyDetection = "AnomalyDetectionNode";
     public const string PatientAggregation = "PatientAggregationNode";
+
+    /// <summary>True for an EHR Write-Back destination node, the only node that writes into an EHR.</summary>
+    public static bool IsEhrWriteBack(string? nodeType) =>
+        string.Equals(nodeType, EhrWriteBackDestination, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when the workflow writes into an EHR. Such a workflow only ever runs for a signed-in caller holding
+    /// ehrwriteback.execute (or on a schedule armed by one): it is never publicly launchable, never run from an EHR
+    /// launch callback, and never reachable through a checkpoint URL, because none of those has a user to check.
+    /// </summary>
+    public static bool HasEhrWriteBack(FHIRBridge.Runtime.Domain.Workflows.WorkflowDefinition workflow) =>
+        workflow.Nodes.Any(node => IsEhrWriteBack(node.NodeType));
 }
