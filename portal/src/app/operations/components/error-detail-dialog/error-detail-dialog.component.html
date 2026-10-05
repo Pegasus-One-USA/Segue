@@ -1,4 +1,4 @@
-<dialog #dialog class="detail-dialog" aria-labelledby="detail-title" (click)="$event.target === dialog ? close() : null">
+<dialog #dialog class="detail-dialog" aria-labelledby="detail-title" tabindex="-1" (keyup.escape)="close()" (click)="$event.target === dialog ? close() : null">
   <div class="detail-head">
     <h2 id="detail-title">Error details</h2>
     <button class="icon-btn" type="button" aria-label="Close" (click)="close()">×</button>

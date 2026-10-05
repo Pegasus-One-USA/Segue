@@ -249,7 +249,7 @@
 
 <app-error-detail-dialog (showInList)="viewInList.emit($event)" />
 
-<dialog #deleteDialog class="delete-dialog" aria-labelledby="delete-title" (click)="$event.target === deleteDialog ? closeDelete() : null">
+<dialog #deleteDialog class="delete-dialog" aria-labelledby="delete-title" tabindex="-1" (keyup.escape)="closeDelete()" (click)="$event.target === deleteDialog ? closeDelete() : null">
   <div class="delete-head">
     <h2 id="delete-title">Delete errors permanently</h2>
     <button class="icon-btn" type="button" aria-label="Close" (click)="closeDelete()">×</button>
@@ -288,7 +288,7 @@
   </div>
 </dialog>
 
-<dialog #hideDialog class="delete-dialog" aria-labelledby="hide-title" (click)="$event.target === hideDialog ? closeHide() : null">
+<dialog #hideDialog class="delete-dialog" aria-labelledby="hide-title" tabindex="-1" (keyup.escape)="closeHide()" (click)="$event.target === hideDialog ? closeHide() : null">
   <div class="delete-head">
     <h2 id="hide-title">Hide old errors</h2>
     <button class="icon-btn" type="button" aria-label="Close" (click)="closeHide()">×</button>

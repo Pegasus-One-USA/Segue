@@ -135,11 +135,11 @@
 }
 
 .wrap {
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .wrap {
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .stack {
@@ -152,7 +152,7 @@
   background: var(--color-page);
   font-size: 12px;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .stack {
@@ -165,7 +165,7 @@
   background: var(--color-page);
   font-size: 12px;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .check {
@@ -178,7 +178,7 @@
 .sample {
   margin-top: 2px;
   color: var(--color-muted);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .mono {

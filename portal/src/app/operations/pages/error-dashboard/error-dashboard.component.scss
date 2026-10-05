@@ -91,7 +91,7 @@
 
 
 .wrap {
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 
@@ -209,7 +209,7 @@
 .sample {
   margin-top: 2px;
   color: var(--color-muted);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .mono {
