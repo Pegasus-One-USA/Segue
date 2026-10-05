@@ -1,0 +1,25 @@
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowRunStore.cs
+  s_0302d221bf5ca2::t_c9e3c96bb0c7b1 158-159,162
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_0302d221bf5ca2::t_284fdcee84bab1 495,506-508,512-513,519
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_0302d221bf5ca2::t_778feef7d6588f 2357
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IWorkflowRunStore.cs
+  s_0302d221bf5ca2::t_46393f8bf32088 47-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8e1de2d9e3becb4d4b05a6ed93ec676e19d91652",
+  "prompts": {},
+  "sessions": {
+    "s_0302d221bf5ca2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd474ba3-7268-4bb0-bdc3-ec93bfa43dd8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
