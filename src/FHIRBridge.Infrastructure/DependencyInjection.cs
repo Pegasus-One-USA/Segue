@@ -243,6 +243,7 @@ public static class DependencyInjection
             services.AddSingleton<IGovernanceLogger, NullGovernanceLogger>();
             services.AddSingleton<IGovernanceQueryService, EmptyGovernanceQueryService>();
             services.AddSingleton<IErrorResolutionService, NullErrorResolutionService>();
+            services.AddSingleton<IErrorLogMaintenanceService, NullErrorLogMaintenanceService>();
             services.AddSingleton<IComplianceReportService, NullComplianceReportService>();
             services.AddSingleton<IAuditChainVerificationService, NullAuditChainVerificationService>();
             services.AddSingleton<IGovernanceLogArchiveWriter, NullGovernanceLogArchiveWriter>();
@@ -272,7 +273,9 @@ public static class DependencyInjection
             services.AddSingleton<LicenseEnforcementSaveChangesInterceptor>();
             services.AddScoped<IGovernanceLogger, EfGovernanceLogger>();
             services.AddScoped<IGovernanceQueryService, EfGovernanceQueryService>();
+            services.AddScoped<FHIRBridge.Governance.IErrorCorrelationSource, FHIRBridge.Application.Services.Governance.ErrorCorrelationSource>();
             services.AddScoped<IErrorResolutionService, EfErrorResolutionService>();
+            services.AddScoped<IErrorLogMaintenanceService, EfErrorLogMaintenanceService>();
             services.AddScoped<IAuditChainVerificationService, EfAuditChainVerificationService>();
             services.AddScoped<Application.Abstractions.Licensing.IUsageLedgerRepository, EfUsageLedgerRepository>();
             services.AddScoped<Application.Abstractions.Licensing.ILicenseUsageExecutionStatsProvider, EfLicenseUsageExecutionStatsProvider>();
@@ -395,6 +398,12 @@ public static class DependencyInjection
         services.AddSingleton<IFailureDiagnosisRule, FHIRBridge.Infrastructure.Governance.MongoDestinationFailureDiagnosisRule>();
         services.AddSingleton<IFailureDiagnosisClassifier, DefaultFailureDiagnosisClassifier>();
         services.AddScoped<IGlobalExceptionManager, GlobalExceptionManager>();
+        services.AddScoped<ICorrelationIdAccessor, FHIRBridge.Infrastructure.Governance.CurrentUserCorrelationIdAccessor>();
+
+        // Error log handling (what is captured / how long it is kept): saved as one system setting, read through a
+        // cached, non-blocking policy by every host.
+        services.AddScoped<IErrorLogSettingsStore, FHIRBridge.Infrastructure.Governance.SystemSettingsErrorLogSettingsStore>();
+        services.Replace(ServiceDescriptor.Singleton<IErrorCapturePolicy, FHIRBridge.Infrastructure.Governance.SettingsErrorCapturePolicy>());
 
         services.AddRuntimeInfrastructure(configuration);
         services.AddMessaging(configuration);

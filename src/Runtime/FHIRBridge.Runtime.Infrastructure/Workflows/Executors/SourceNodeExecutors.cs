@@ -306,6 +306,16 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             return await base.ExecuteAsync(context, node, inputs, cancellationToken);
         }
 
+        FHIRBridge.Governance.ErrorContext.Set(
+            sourceName: source.Name,
+            resourceType: configuredResourceType
+                ?? (configuredResources is { Count: > 0 } ? string.Join(", ", configuredResources.Take(5)) : null));
+        FHIRBridge.Governance.WorkflowDebug.Write($"Source connection resolved: ‘{source.Name}’ ({source.SourceType}); starting to fetch data.");
+        if (FHIRBridge.Governance.WorkflowDebug.StagesEnabled)
+        {
+            FHIRBridge.Governance.WorkflowDebug.Stage(FHIRBridge.Runtime.Infrastructure.Workflows.WorkflowDebugConfig.DescribeSource(source));
+        }
+
         // Per-resource-type criteria authored in the destination wizard's Map-fields step, keyed by workflow +
         // canvas node id (both stamped onto every node's configuration by the API's StampNodeIdentity — the
         // persisted WorkflowNode.Id is regenerated on every save and so cannot key durable rows). Applied per
@@ -788,6 +798,14 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 resource.ResourceType,
                 resource.ResourceId ?? string.Empty,
                 resource.RawJson)));
+            FHIRBridge.Governance.WorkflowDebug.Stage($"Fetched {page.Count} ‘{type}’ resource(s) from source ‘{source.Name}’.");
+            if (FHIRBridge.Governance.WorkflowDebug.ResourcesEnabled)
+            {
+                foreach (var fetched in page)
+                {
+                    FHIRBridge.Governance.WorkflowDebug.Resource(() => $"Resource {fetched.ResourceType}/{fetched.ResourceId} fetched from source ‘{source.Name}’.");
+                }
+            }
 
             _logger.LogInformation(
                 LogEvents.ResourceTypeExtracted,
@@ -1521,6 +1539,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             {
                 // One Practitioner's PractitionerRole search failing (unauthorized, transient) only drops the
                 // roles tied to that one practitioner, not the whole resource type.
+                FHIRBridge.Governance.SwallowedError.Report(exception, "Source.PractitionerRole search");
                 continue;
             }
 

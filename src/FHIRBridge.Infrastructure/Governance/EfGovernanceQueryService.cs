@@ -244,10 +244,120 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
                 x.Id, x.OccurredOnUtc, x.Severity, x.ExceptionType, x.Message, x.StackTrace, x.Module, x.CorrelationId,
                 x.ErrorReferenceId, x.Category, x.UserFriendlyMessage, x.ExecutionId, x.WorkflowId, x.EndpointId,
                 x.RequestId, x.TraceId, x.SpanId, (string?)null, (string?)null, (DateTime?)null,
-                x.DiagnosisAction, x.DiagnosisCause))
+                x.DiagnosisAction, x.DiagnosisCause,
+                x.WorkflowName, x.NodeName, x.NodeType, x.SourceName, x.DestinationName, x.ResourceType))
             .ToListAsync(cancellationToken);
 
         return ToPaged(items, totalCount, skip, normalizedTake);
+    }
+
+    public async Task<ErrorDashboardDto> GetErrorDashboardAsync(
+        DateTime fromUtc, DateTime toUtc, string? severity, string? category, CancellationToken cancellationToken)
+    {
+        var hasSeverity = !string.IsNullOrWhiteSpace(severity);
+        var hasCategory = !string.IsNullOrWhiteSpace(category);
+        const int SignatureKeyLength = 80;
+        const int SampleLength = 200;
+
+        // Every figure is computed by the database (COUNT / GROUP BY) over the WHOLE period - nothing is loaded and
+        // aggregated in memory, so the totals stay exact however many entries the period holds.
+        var query = _dbContext.ErrorLogs.AsNoTracking()
+            .Where(e => (hasSeverity ? e.Severity == severity : e.Severity != "Informational" && e.Severity != "Information" && e.Severity != "WorkflowDebug")
+                        && (!hasCategory || e.Category == category)
+                        && e.OccurredOnUtc >= fromUtc && e.OccurredOnUtc <= toUtc);
+
+        var last24h = DateTime.UtcNow.AddHours(-24);
+
+        var totals = await query
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Total = g.Count(),
+                Critical = g.Count(x => x.Severity == "Critical"),
+                Last24 = g.Count(x => x.OccurredOnUtc >= last24h),
+                SelfFix = g.Count(x => x.DiagnosisAction == "SelfFix"),
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+        var total = totals?.Total ?? 0;
+
+        var resolved = total == 0
+            ? 0
+            : await query.CountAsync(
+                e => _dbContext.ErrorResolutions.Any(r => r.ErrorReferenceId == e.ErrorReferenceId && r.Status == ErrorResolution.StatusResolved),
+                cancellationToken);
+
+        static IReadOnlyList<ErrorCountDto> Normalise(IEnumerable<(string? Key, int Count)> groups, string fallback) =>
+            groups.GroupBy(x => string.IsNullOrWhiteSpace(x.Key) ? fallback : x.Key!)
+                .Select(g => new ErrorCountDto(g.Key, g.Sum(x => x.Count)))
+                .OrderByDescending(x => x.Count)
+                .ThenBy(x => x.Key)
+                .ToList();
+
+        var bySeverity = (await query.GroupBy(e => e.Severity).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(cancellationToken))
+            .Select(x => (x.Key, x.Count));
+        var byCategory = (await query.GroupBy(e => e.Category).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(cancellationToken))
+            .Select(x => (x.Key, x.Count));
+        var byModule = (await query.GroupBy(e => e.Module).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(cancellationToken))
+            .Select(x => (x.Key, x.Count));
+
+        var byDay = (await query
+                .GroupBy(e => e.OccurredOnUtc.Date)
+                .Select(g => new { Day = g.Key, Count = g.Count() })
+                .OrderBy(x => x.Day)
+                .ToListAsync(cancellationToken))
+            .Select(x => new ErrorDayCountDto(DateTime.SpecifyKind(x.Day, DateTimeKind.Utc), x.Count))
+            .ToList();
+
+        // Recurring errors: grouped in SQL by exception type + module + the first 80 characters of the (scrubbed) message.
+        var topGroups = await query
+            .GroupBy(e => new
+            {
+                e.ExceptionType,
+                e.Module,
+                Prefix = e.Message.Length > SignatureKeyLength ? e.Message.Substring(0, SignatureKeyLength) : e.Message,
+            })
+            .Select(g => new { g.Key.ExceptionType, g.Key.Module, g.Key.Prefix, Count = g.Count(), First = g.Min(x => x.OccurredOnUtc), Last = g.Max(x => x.OccurredOnUtc) })
+            .OrderByDescending(x => x.Count)
+            .ThenByDescending(x => x.Last)
+            .Take(15)
+            .ToListAsync(cancellationToken);
+
+        var signatures = new List<ErrorSignatureDto>(topGroups.Count);
+        foreach (var group in topGroups)
+        {
+            // One small indexed lookup per displayed signature (at most 15) for its newest example.
+            var latest = await query
+                .Where(e => e.ExceptionType == group.ExceptionType && e.Module == group.Module
+                            && (e.Message.Length > SignatureKeyLength ? e.Message.Substring(0, SignatureKeyLength) : e.Message) == group.Prefix)
+                .OrderByDescending(e => e.OccurredOnUtc)
+                .Select(e => new
+                {
+                    e.Category,
+                    e.ErrorReferenceId,
+                    Message = e.Message.Length > SampleLength ? e.Message.Substring(0, SampleLength) : e.Message,
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+            signatures.Add(new ErrorSignatureDto(
+                group.ExceptionType, group.Module, latest?.Category, latest?.Message ?? group.Prefix,
+                group.Count, group.Count, group.First, group.Last, latest?.ErrorReferenceId));
+        }
+
+        return new ErrorDashboardDto(
+            fromUtc, toUtc,
+            total,
+            total - resolved,
+            resolved,
+            totals?.Critical ?? 0,
+            totals?.Last24 ?? 0,
+            totals?.SelfFix ?? 0,
+            total - (totals?.SelfFix ?? 0),
+            Normalise(bySeverity, "Unknown"),
+            Normalise(byCategory, "Uncategorized"),
+            Normalise(byModule, "Unknown"),
+            byDay,
+            signatures,
+            ClearedAtUtc: null,
+            Truncated: false);
     }
 
     public async Task<PagedResult<ErrorLogDto>> SearchErrorLogsAsync(
@@ -276,10 +386,23 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         if (!string.IsNullOrWhiteSpace(search.Severity))
             query = query.Where(x => x.Severity == search.Severity);
         else
+        {
+            // WorkflowDebug trace lines are only listed when the search is scoped to one run (correlation / execution /
+            // workflow id) - otherwise a busy workflow's step-by-step trace would bury the actual errors.
+            var scopedToARun = !string.IsNullOrWhiteSpace(search.CorrelationId)
+                || !string.IsNullOrWhiteSpace(search.ExecutionId)
+                || !string.IsNullOrWhiteSpace(search.WorkflowId);
+            if (!scopedToARun)
+            {
+                query = query.Where(x => x.Severity != "WorkflowDebug");
+            }
+
             // Informational rows (routine sub-500 rejections captured via CaptureExpectedAsync) are findable
             // by CorrelationId/ExecutionId/etc. but must stay out of the default Operations → Errors view —
             // that's the whole point of not routing them through the heavy 5xx CaptureAsync path.
             query = query.Where(x => x.Severity != "Informational");
+        }
+
         if (!string.IsNullOrWhiteSpace(search.Category))
             query = query.Where(x => x.Category == search.Category);
         if (search.FromUtc.HasValue)
@@ -315,7 +438,9 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
                 x.Resolution == null ? ErrorResolution.StatusOpen : x.Resolution.Status,
                 x.Resolution == null ? null : x.Resolution.ResolvedBy,
                 x.Resolution == null ? null : x.Resolution.ResolvedOnUtc,
-                x.Error.DiagnosisAction, x.Error.DiagnosisCause))
+                x.Error.DiagnosisAction, x.Error.DiagnosisCause,
+                x.Error.WorkflowName, x.Error.NodeName, x.Error.NodeType, x.Error.SourceName,
+                x.Error.DestinationName, x.Error.ResourceType))
             .ToListAsync(cancellationToken);
 
         return ToPaged(items, totalCount, search.Skip, normalizedTake);
@@ -515,6 +640,108 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             securityEvents.Items, authorizationLogs.Items, schedulerHistory.Items, retryHistory.Items,
             errors.Items, apiRequests.Items, exports.Items, notifications.Items, validationFailures.Items,
             workflowRuns, smartLaunchLogs, describedDestinationActivity);
+    }
+
+    public async Task<IReadOnlyDictionary<string, CorrelationSearchResultDto>> GetCorrelationRunSummariesAsync(
+        IReadOnlyCollection<string> correlationIds, CancellationToken cancellationToken)
+    {
+        var ids = correlationIds.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal).ToList();
+        var results = new Dictionary<string, CorrelationSearchResultDto>(StringComparer.Ordinal);
+        if (ids.Count == 0)
+        {
+            return results;
+        }
+
+        // One query per table for ALL the ids; each table is read newest-first up to a fixed ceiling, then split per id.
+        // 100 rows per id is plenty for a timeline summary; the ceiling keeps one busy run from starving the others.
+        var perTable = ids.Count * 100;
+
+        var workflowRuns = (await _dbContext.WorkflowRuns.AsNoTracking()
+                .Where(r => r.CorrelationId != null && ids.Contains(r.CorrelationId))
+                .OrderByDescending(r => r.StartedAt).Take(perTable)
+                .Select(r => new
+                {
+                    r.CorrelationId,
+                    Dto = new WorkflowRunSummaryDto(
+                        r.Id, r.WorkflowDefinitionId, r.Status.ToString(), r.StartedAt, r.CompletedAt, r.TriggeredBy, r.TriggerType, r.ErrorMessage),
+                })
+                .ToListAsync(cancellationToken)).ToLookup(x => x.CorrelationId!, x => x.Dto);
+
+        var scheduler = (await _dbContext.SchedulerHistory.AsNoTracking()
+                .Where(x => x.CorrelationId != null && ids.Contains(x.CorrelationId))
+                .OrderByDescending(x => x.RunTimeUtc).Take(perTable)
+                .Select(x => new SchedulerHistoryDto(x.Id, x.SchedulerId, x.RunTimeUtc, x.Status, x.RouteCount, x.CorrelationId))
+                .ToListAsync(cancellationToken)).ToLookup(x => x.CorrelationId!);
+
+        var retries = (await _dbContext.RetryHistory.AsNoTracking()
+                .Where(x => x.CorrelationId != null && ids.Contains(x.CorrelationId))
+                .OrderByDescending(x => x.OccurredOnUtc).Take(perTable)
+                .Select(x => new RetryHistoryDto(x.Id, x.OccurredOnUtc, x.Context, x.RetryNumber, x.DelayMilliseconds, x.Reason, x.CorrelationId))
+                .ToListAsync(cancellationToken)).ToLookup(x => x.CorrelationId!);
+
+        var errors = (await _dbContext.ErrorLogs.AsNoTracking()
+                .Where(x => x.CorrelationId != null && ids.Contains(x.CorrelationId))
+                .OrderByDescending(x => x.OccurredOnUtc).Take(perTable)
+                .Select(x => new ErrorLogDto(
+                    x.Id, x.OccurredOnUtc, x.Severity, x.ExceptionType, x.Message, x.StackTrace, x.Module, x.CorrelationId,
+                    x.ErrorReferenceId, x.Category, x.UserFriendlyMessage, x.ExecutionId, x.WorkflowId, x.EndpointId,
+                    x.RequestId, x.TraceId, x.SpanId, (string?)null, (string?)null, (DateTime?)null,
+                    x.DiagnosisAction, x.DiagnosisCause,
+                    x.WorkflowName, x.NodeName, x.NodeType, x.SourceName, x.DestinationName, x.ResourceType))
+                .ToListAsync(cancellationToken)).ToLookup(x => x.CorrelationId!);
+
+        var apiRequests = (await _dbContext.ApiRequestLogs.AsNoTracking()
+                .Where(x => x.CorrelationId != null && ids.Contains(x.CorrelationId))
+                .OrderByDescending(x => x.OccurredOnUtc).Take(perTable)
+                .Select(x => new ApiRequestLogDto(
+                    x.Id, x.OccurredOnUtc, x.Method, x.Url, x.StatusCode, x.DurationMs, x.Error, x.CorrelationId, x.Direction, ""))
+                .ToListAsync(cancellationToken))
+            .Select(item => item with { Step = ApiRequestStepDescriber.Describe(item.Method, item.Url, item.Direction) })
+            .ToLookup(x => x.CorrelationId!);
+
+        var exports = (await _dbContext.ExportHistory.AsNoTracking()
+                .Where(x => x.CorrelationId != null && ids.Contains(x.CorrelationId))
+                .OrderByDescending(x => x.OccurredOnUtc).Take(perTable)
+                .Select(x => new ExportHistoryDto(
+                    x.Id, x.OccurredOnUtc, x.PipelineRunId, x.DestinationName, x.Format, x.RowCount, x.FileSizeBytes, x.Status, x.CorrelationId))
+                .ToListAsync(cancellationToken)).ToLookup(x => x.CorrelationId!);
+
+        var notifications = (await _dbContext.NotificationHistory.AsNoTracking()
+                .Where(x => x.CorrelationId != null && ids.Contains(x.CorrelationId))
+                .OrderByDescending(x => x.OccurredOnUtc).Take(perTable)
+                .Select(x => new NotificationHistoryDto(
+                    x.Id, x.OccurredOnUtc, x.NotificationType, x.Recipient, x.Subject, x.Status, x.Error, x.CorrelationId))
+                .ToListAsync(cancellationToken)).ToLookup(x => x.CorrelationId!);
+
+        var validation = (await _dbContext.ValidationFailureLogs.AsNoTracking()
+                .Where(x => x.CorrelationId != null && ids.Contains(x.CorrelationId))
+                .OrderByDescending(x => x.OccurredOnUtc).Take(perTable)
+                .Select(x => new ValidationFailureDto(
+                    x.Id, x.OccurredOnUtc, x.ResourceType, x.ResourceId, x.WarningsJson, x.DataQualityScore, x.PipelineRunId, x.CorrelationId))
+                .ToListAsync(cancellationToken)).ToLookup(x => x.CorrelationId!);
+
+        var destination = (await _dbContext.DestinationActivityLogs.AsNoTracking()
+                .Where(x => x.CorrelationId != null && ids.Contains(x.CorrelationId))
+                .OrderBy(x => x.OccurredOnUtc).Take(perTable)
+                .Select(x => new DestinationActivityLogDto(
+                    x.Id, x.OccurredOnUtc, x.DestinationId, x.DestinationName, x.DestinationType, x.Stage, x.Status,
+                    x.ResourceType, x.RecordCount, x.WrittenCount, x.DurationMs, x.Detail, x.Error, x.CorrelationId,
+                    x.PipelineRunId, string.Empty))
+                .ToListAsync(cancellationToken))
+            .Select(x => x with { Step = DestinationStepDescriber.Describe(x.Stage, x.Status, x.RecordCount, x.WrittenCount, x.Detail) })
+            .ToLookup(x => x.CorrelationId!);
+
+        foreach (var id in ids)
+        {
+            // The pipeline-run header is one indexed lookup per id.
+            var pipelineRun = await _pipelineRunRepository.GetByCorrelationIdAsync(id, cancellationToken);
+            results[id] = new CorrelationSearchResultDto(
+                id, pipelineRun, [], [], [], [], [], scheduler[id].ToList(), retries[id].ToList(),
+                errors[id].ToList(), apiRequests[id].ToList(), exports[id].ToList(), notifications[id].ToList(),
+                validation[id].ToList(), workflowRuns[id].ToList(), [], destination[id].ToList());
+        }
+
+        return results;
     }
 
     public Task<IReadOnlyList<RetentionPolicyDto>> GetRetentionPoliciesAsync(CancellationToken cancellationToken)

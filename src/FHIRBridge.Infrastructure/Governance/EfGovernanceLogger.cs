@@ -160,7 +160,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
 
         var errorLog = new ErrorLog(
             Guid.NewGuid(),
-            DateTime.UtcNow,
+            entry.OccurredUtc ?? DateTime.UtcNow,
             entry.Severity,
             entry.ExceptionType,
             entry.Message,
@@ -177,7 +177,13 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.TraceId,
             entry.SpanId,
             entry.DiagnosisAction?.ToString(),
-            Truncate(entry.DiagnosisCause, 500));
+            Truncate(entry.DiagnosisCause, 500),
+            Truncate(entry.WorkflowName, 200),
+            Truncate(entry.NodeName, 200),
+            Truncate(entry.NodeType, 200),
+            Truncate(entry.SourceName, 200),
+            Truncate(entry.DestinationName, 200),
+            Truncate(entry.ResourceType, 200));
 
         _dbContext.ErrorLogs.Add(errorLog);
 

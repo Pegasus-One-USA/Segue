@@ -434,8 +434,10 @@ export const routes: Routes = [
             canActivate: [permissionGuard],
             data: { permissions: ['governance.read'] },
             loadComponent: () =>
-              import('./operations/pages/errors/errors.component').then(m => m.ErrorsComponent),
+              import('./operations/pages/errors-hub/errors-hub.component').then(m => m.ErrorsHubComponent),
           },
+          // The old standalone dashboard now lives on the Errors screen's Overview tab - keep bookmarks working.
+          { path: 'error-dashboard', redirectTo: () => inject(Router).parseUrl('/operations/errors?view=overview') },
           {
             path: 'api-requests',
             canActivate: [permissionGuard],

@@ -1,0 +1,99 @@
+<dialog #dialog class="detail-dialog" aria-labelledby="detail-title" (click)="$event.target === dialog ? close() : null">
+  <div class="detail-head">
+    <h2 id="detail-title">Error details</h2>
+    <button class="icon-btn" type="button" aria-label="Close" (click)="close()">×</button>
+  </div>
+
+  <div class="detail-body">
+    @if (detail(); as e) {
+      <dl class="detail-grid">
+        <dt>Reference ID</dt><dd class="mono">{{ e.errorReferenceId || '—' }}</dd>
+        <dt>Time</dt><dd>{{ e.occurredOnUtc | date: 'medium' }}</dd>
+        <dt>Severity</dt><dd>{{ e.severity }}</dd>
+        <dt>Category</dt><dd>{{ e.category || '—' }}</dd>
+        <dt>Area</dt><dd>{{ e.module || '—' }}</dd>
+        <dt>What to do</dt><dd>{{ e.diagnosisAction === 'SelfFix' ? 'Check your configuration' : 'Contact support' }}</dd>
+        @if (e.diagnosisCause) { <dt>Likely cause</dt><dd class="wrap">{{ e.diagnosisCause }}</dd> }
+        @if (e.workflowName) { <dt>Workflow</dt><dd>{{ e.workflowName }}</dd> }
+        @if (e.nodeName || e.nodeType) { <dt>Node</dt><dd>{{ e.nodeName }}@if (e.nodeType) { <span class="sample"> ({{ e.nodeType }})</span> }</dd> }
+        @if (e.sourceName) { <dt>Source</dt><dd>{{ e.sourceName }}</dd> }
+        @if (e.destinationName) { <dt>Destination</dt><dd>{{ e.destinationName }}</dd> }
+        @if (e.resourceType) { <dt>Resource type</dt><dd>{{ e.resourceType }}</dd> }
+        <dt>Error type</dt><dd class="mono">{{ e.exceptionType }}</dd>
+        <dt>Message</dt><dd class="wrap">{{ e.message }}</dd>
+        @if (e.userFriendlyMessage) { <dt>Shown to the user</dt><dd class="wrap">{{ e.userFriendlyMessage }}</dd> }
+        @if (e.correlationId) { <dt>Correlation ID</dt><dd class="mono">{{ e.correlationId }}</dd> }
+        @if (e.executionId) { <dt>Execution ID</dt><dd class="mono">{{ e.executionId }}</dd> }
+        @if (e.workflowId) { <dt>Workflow ID</dt><dd class="mono">{{ e.workflowId }}</dd> }
+        @if (e.endpointId) { <dt>Endpoint</dt><dd class="mono">{{ e.endpointId }}</dd> }
+        @if (e.requestId) { <dt>Request ID</dt><dd class="mono">{{ e.requestId }}</dd> }
+        @if (e.traceId) { <dt>Trace ID</dt><dd class="mono">{{ e.traceId }}</dd> }
+        @if (e.spanId) { <dt>Span ID</dt><dd class="mono">{{ e.spanId }}</dd> }
+      </dl>
+
+      @if (e.stackTrace) {
+        <h3>Technical details</h3>
+        <pre class="stack">{{ e.stackTrace }}</pre>
+      }
+
+      @if (e.correlationId) {
+        <h3>Correlation details</h3>
+        @if (!correlation() && !correlationLoading()) {
+          <button class="btn-reset" type="button" (click)="loadCorrelation()">View correlation details</button>
+          @if (correlationFailed()) { <p class="empty-state">Could not load the correlation details. {{ correlationError() }}</p> }
+        }
+        @if (correlationLoading()) { <p class="empty-state">Loading…</p> }
+        @if (correlation(); as c) {
+          <dl class="detail-grid">
+            <dt>Run status</dt><dd>{{ c.runStatus || '—' }}</dd>
+            @if (c.runStartedUtc) { <dt>Started</dt><dd>{{ c.runStartedUtc | date: 'medium' }}</dd> }
+            @if (c.runCompletedUtc) { <dt>Completed</dt><dd>{{ c.runCompletedUtc | date: 'medium' }}</dd> }
+            @if (c.extractedCount !== null) { <dt>Records</dt><dd>{{ c.extractedCount }} extracted · {{ c.mappedCount }} mapped · {{ c.writtenCount }} written</dd> }
+          </dl>
+          @if (c.events.length === 0) {
+            <p class="empty-state">No other activity was recorded for this run.</p>
+          } @else {
+            <div class="table-wrapper">
+              <table class="plain-table">
+                <thead><tr><th>Time</th><th>Source</th><th>What happened</th><th>Status</th></tr></thead>
+                <tbody>
+                  @for (ev of c.events; track $index) {
+                    <tr>
+                      <td>{{ ev.occurredUtc | date: 'mediumTime' }}</td>
+                      <td>{{ ev.source }}</td>
+                      <td>
+                        <div class="wrap">{{ ev.title }}</div>
+                        @if (ev.detail) { <div class="sample">{{ ev.detail }}</div> }
+                      </td>
+                      <td>{{ ev.status || '' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            @if (c.truncated) { <p class="sample">Only the first events are shown.</p> }
+          }
+        }
+      }
+    } @else if (loading()) {
+      <p class="empty-state">Loading…</p>
+    } @else if (missing()) {
+      <p class="empty-state">The details for this error are no longer available.</p>
+    }
+  </div>
+
+  <div class="detail-foot">
+    <span class="foot-left">
+      @if (detail(); as e) {
+        @if (e.errorReferenceId) {
+          <button class="btn-reset" type="button" (click)="showReferenceInList()">Show in All errors</button>
+        }
+        @if (e.correlationId) {
+          <button class="btn-reset" type="button" (click)="showRunInList()">All errors from this run</button>
+        }
+      }
+    </span>
+    <button class="btn-reset" type="button" (click)="copyDetail()" [disabled]="!detail()">Copy details</button>
+    <button class="btn-search" type="button" (click)="close()">Close</button>
+  </div>
+</dialog>

@@ -86,7 +86,14 @@ public sealed record ErrorEntry(
     string? TraceId = null,
     string? SpanId = null,
     DiagnosisAction? DiagnosisAction = null,
-    string? DiagnosisCause = null);
+    string? DiagnosisCause = null,
+    string? WorkflowName = null,
+    string? NodeName = null,
+    string? NodeType = null,
+    string? SourceName = null,
+    string? DestinationName = null,
+    string? ResourceType = null,
+    DateTime? OccurredUtc = null);
 
 /// <summary>One outbound HTTP call — method/URL/status/duration only, never headers, tokens, or bodies.</summary>
 public sealed record ApiRequestEntry(
