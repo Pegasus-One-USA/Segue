@@ -21,13 +21,13 @@ function joinRow(): MappingRow {
   } as unknown as MappingRow;
 }
 
-type Popover = {
+interface Popover {
   hasUnsavedEdits(): boolean;
   onDelimiterInput(value: string): void;
   onClose(): void;
   onSave(): void;
   draft(): MappingRow | null;
-};
+}
 
 function suite(label: string, component: Type<unknown>): void {
   describe(label, () => {
