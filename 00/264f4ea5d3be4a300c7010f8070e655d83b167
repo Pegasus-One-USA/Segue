@@ -1,0 +1,127 @@
+src/FHIRBridge.Application/Services/Tabular/TabularSourceSettings.cs
+  s_d1b985c75f92bc::t_99267c80caf961 1-78
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_d1b985c75f92bc::t_3179dd034ef534 46,53,416
+src/FHIRBridge.Application/Services/Tabular/TabularFhirTemplateEngine.cs
+  s_d1b985c75f92bc::t_eb7aefe6d24050 1-330
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_d1b985c75f92bc::t_2395e8b1efaaf1 46-59
+src/FHIRBridge.Infrastructure/Persistence/EfTabularSourceFileRepository.cs
+  s_d1b985c75f92bc::t_85aae1c64f6bef 1-34
+src/FHIRBridge.Infrastructure/Persistence/Configurations/TabularSourceFileConfiguration.cs
+  s_d1b985c75f92bc::t_79bc2f450012a1 1-24
+portal/src/app/auth/models/permission.constants.ts
+  s_d1b985c75f92bc::t_524d4456e61d40 50
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_d1b985c75f92bc::t_34ab7941236c32 47
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_d1b985c75f92bc::t_75cfe8ca25cb6b 43
+src/FHIRBridge.Application/Services/Tabular/TabularSourceService.cs
+  s_d1b985c75f92bc::t_75cfe8ca25cb6b 101-104,180-183
+  s_d1b985c75f92bc::t_bd82419e95e3bd 1-100,105-179,184
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_d1b985c75f92bc::t_12fdadbca90e06 790-797
+src/FHIRBridge.Application/Abstractions/Tabular/ITabularRowReader.cs
+  s_d1b985c75f92bc::t_1289e1352d5eba 1-26
+src/FHIRBridge.Domain/Entities/TabularSourceFile.cs
+  s_d1b985c75f92bc::t_bfabf159da3842 1-55
+src/FHIRBridge.Application/Services/Tabular/TabularResourceBuilder.cs
+  s_d1b985c75f92bc::t_b7ea30bda69b04 1-55
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d1b985c75f92bc::t_34ab7941236c32 234,335,548-549
+src/Api/FHIRBridge.Api/Controllers/V1/TabularSourcesController.cs
+  s_d1b985c75f92bc::t_ef9d520b58e3e0 1-91
+src/FHIRBridge.Application/Services/Tabular/CsvTable.cs
+  s_d1b985c75f92bc::t_70bbc7a37676e3 1-184
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_01c7b2689c9ecc 1660-1673
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-source-form.component.ts
+  s_d1b985c75f92bc::t_314fc0f2692a54 197-198
+  s_d1b985c75f92bc::t_28204b345d856c 1,65-68
+  s_d1b985c75f92bc::t_a355eea1de3a50 2-64,69-196,199-256
+portal/src/app/user-management/pages/role-permissions/permission-matrix.config.ts
+  s_d1b985c75f92bc::t_524d4456e61d40 158-159
+portal/src/app/services/phase-config-v2.service.ts
+  s_d1b985c75f92bc::t_3179dd034ef534 48-49
+tests/FHIRBridge.UnitTests/Tabular/TabularSourceTests.cs
+  s_d1b985c75f92bc::t_e449920c163c1d 2-31,33-361
+  s_d1b985c75f92bc::t_b8df91fae0df2f 32
+  s_d1b985c75f92bc::t_702ba10c4aef02 1
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs
+  s_d1b985c75f92bc::t_2395e8b1efaaf1 14-16
+tests/FHIRBridge.Runtime.UnitTests/Workflows/TabularSourceNodeExecutorTests.cs
+  s_d1b985c75f92bc::t_5ec5563995deaf 1-135
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_420ad27aeeaa4d 336-384
+portal/src/app/data/sources-v2.data.ts
+  s_d1b985c75f92bc::t_3179dd034ef534 18-19
+portal/src/app/components/node-library-v2/source-node-vendor.util.ts
+  s_d1b985c75f92bc::t_3179dd034ef534 17,27-28
+  s_d1b985c75f92bc::t_8822031a65ea00 29-30
+src/FHIRBridge.Application/DTOs/TabularSourceDtos.cs
+  s_d1b985c75f92bc::t_c18a7be77b1fae 1-41
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/WorkflowInfrastructureServiceCollectionExtensions.cs
+  s_d1b985c75f92bc::t_12fdadbca90e06 21
+src/FHIRBridge.Application/Rbac/PermissionGroupCode.cs
+  s_d1b985c75f92bc::t_3aa913449baac0 189-194
+portal/src/app/services/tabular-source.service.ts
+  s_d1b985c75f92bc::t_a6732cc51bc0ae 1-73
+src/FHIRBridge.Application/Abstractions/Persistence/ITabularSourceFileRepository.cs
+  s_d1b985c75f92bc::t_9bceeeb128fb61 1-4,15-19,21-22,25-28
+  s_d1b985c75f92bc::t_49a3fe202ed9b7 5-14,20,23-24
+src/FHIRBridge.Infrastructure/Tabular/TabularRowReader.cs
+  s_d1b985c75f92bc::t_e79835ed1f44df 1-219,223-224
+  s_d1b985c75f92bc::t_99c7d832145b7a 220-222
+portal/src/app/components/node-library-v2/source-form.registry.ts
+  s_d1b985c75f92bc::t_3179dd034ef534 11,29
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_d1b985c75f92bc::t_3179dd034ef534 292-294
+portal/src/app/core/api-endpoints.ts
+  s_d1b985c75f92bc::t_98f5c7af932887 195-202
+src/FHIRBridge.Infrastructure/Persistence/InMemoryTabularSourceFileRepository.cs
+  s_d1b985c75f92bc::t_4d50f7cb52237b 1-30
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-source-form.component.scss
+  s_d1b985c75f92bc::t_8e65156dbac0b5 1-137
+src/FHIRBridge.Application/Services/Tabular/TabularTemplatePresets.cs
+  s_d1b985c75f92bc::t_27ab534ee73a26 1-103
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TabularSourceNodeExecutor.cs
+  s_d1b985c75f92bc::t_d1d393c538f4e8 1-111
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-source-form.component.html
+  s_d1b985c75f92bc::t_15181d8a07d972 1-116
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_351d9383fb34c9::t_0993b6e1e2c877 3159-3203
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_351d9383fb34c9::t_7f5269a46630f5 3186-3230
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261002041706_AddTabularSourceFiles.Designer.cs
+  s_d1b985c75f92bc::t_47f5aae90ee9de 1-6556
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261002041706_AddTabularSourceFiles.cs
+  s_d1b985c75f92bc::t_7eeb18b94e63ec 1-46
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261002041640_AddTabularSourceFiles.Designer.cs
+  s_d1b985c75f92bc::t_3b79271366bcf9 1-6593
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261002041640_AddTabularSourceFiles.cs
+  s_d1b985c75f92bc::t_6d3c29a009110c 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "00264f4ea5d3be4a300c7010f8070e655d83b167",
+  "prompts": {},
+  "sessions": {
+    "s_351d9383fb34c9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29e00a7e-8b4d-441e-aeac-eecf0708cd3d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
