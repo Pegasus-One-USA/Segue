@@ -469,6 +469,15 @@ export const routes: Routes = [
               ),
           },
           {
+            path: 'ehr-write-review',
+            canActivate: [permissionGuard],
+            data: { permissions: ['ehrwriteback.view'] },
+            loadComponent: () =>
+              import('./operations/pages/ehr-write-review/ehr-write-review.component').then(
+                m => m.EhrWriteReviewComponent
+              ),
+          },
+          {
             path: 'endpoint-health',
             canActivate: [permissionGuard],
             data: { permissions: ['governance.read'] },

@@ -92,8 +92,8 @@ public sealed class AuthTests(ApiFixture f)
             Password = f.PwChangeUserPassword
         });
         loginResp.EnsureSuccessStatusCode();
-        var jwt = JsonDocument.Parse(await loginResp.Content.ReadAsStringAsync())
-            .RootElement.GetProperty("accessToken").GetString()!;
+        // Tokens arrive as cookies now, not in the body.
+        var jwt = ApiFixture.SessionTokens(loginResp).Access!;
 
         using var client = f.CreateAuthenticatedClient(jwt);
         var resp = await client.PostAsJsonAsync("/api/v1/auth/internal/change-password", new
@@ -184,23 +184,17 @@ public sealed class AuthTests(ApiFixture f)
     [Fact]
     public async Task POST_auth_refresh__valid_token__returns_200_with_new_token()
     {
-        // Get a fresh refresh token so we don't exhaust the fixture's shared one
-        var loginResp = await f.AnonClient.PostAsJsonAsync("/api/v1/auth/internal/login", new
-        {
-            Email    = ApiFixture.AdminEmail,
-            Password = ApiFixture.AdminPassword
-        });
-        loginResp.EnsureSuccessStatusCode();
-        var freshRefreshToken = JsonDocument.Parse(await loginResp.Content.ReadAsStringAsync())
-            .RootElement.GetProperty("refreshToken").GetString()!;
+        // Get a fresh refresh token so we don't exhaust the fixture's shared one. The admin is enrolled in
+        // two-factor, so the login answers a challenge first.
+        var (_, freshRefreshToken) = await f.LoginWithMfaAsync(ApiFixture.AdminEmail, ApiFixture.AdminPassword, f.AdminMfaSecret);
 
+        // The body is still accepted when the refresh cookie is absent (AuthController.Refresh).
         var resp = await f.AnonClient.PostAsJsonAsync("/api/v1/auth/refresh", new
         {
             RefreshToken = freshRefreshToken
         });
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
-        Assert.True(doc.TryGetProperty("accessToken", out _));
+        Assert.NotNull(ApiFixture.SessionTokens(resp).Access);
     }
 
     [Fact]
@@ -221,14 +215,7 @@ public sealed class AuthTests(ApiFixture f)
     public async Task POST_auth_logout__authenticated__returns_204()
     {
         // Login fresh so we don't invalidate the shared admin client's session
-        var loginResp = await f.AnonClient.PostAsJsonAsync("/api/v1/auth/internal/login", new
-        {
-            Email    = ApiFixture.AdminEmail,
-            Password = ApiFixture.AdminPassword
-        });
-        loginResp.EnsureSuccessStatusCode();
-        var jwt = JsonDocument.Parse(await loginResp.Content.ReadAsStringAsync())
-            .RootElement.GetProperty("accessToken").GetString()!;
+        var (jwt, _) = await f.LoginWithMfaAsync(ApiFixture.AdminEmail, ApiFixture.AdminPassword, f.AdminMfaSecret);
 
         using var client = f.CreateAuthenticatedClient(jwt);
         var resp = await client.PostAsync("/api/v1/auth/logout", null);

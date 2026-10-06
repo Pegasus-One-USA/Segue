@@ -8,21 +8,37 @@ import { DestroyRef, Injectable, inject } from '@angular/core';
  */
 @Injectable({ providedIn: 'root' })
 export class UnsavedChangesRegistryService {
-  private readonly checks = new Set<() => boolean>();
+  private readonly entries = new Set<{ isDirty: () => boolean; isSaving?: () => boolean }>();
 
   /**
    * Registers a check and auto-unregisters it when the calling component is destroyed. Call
    * from a component field initializer or constructor (an active injection context) — mirrors
    * the same default-parameter pattern Angular's own `takeUntilDestroyed()` uses.
    */
-  register(check: () => boolean, destroyRef: DestroyRef = inject(DestroyRef)): void {
-    this.checks.add(check);
-    destroyRef.onDestroy(() => this.checks.delete(check));
+  register(isDirty: () => boolean, destroyRef: DestroyRef = inject(DestroyRef), isSaving?: () => boolean): void {
+    // `isSaving` is separate from `isDirty` so leaving can tell "unsaved edits" (ask) from "a save still in
+    // flight" (wait) — a single combined check made sign out offer "Leave" in the middle of a save.
+    const entry = { isDirty, isSaving };
+    this.entries.add(entry);
+    destroyRef.onDestroy(() => this.entries.delete(entry));
   }
 
+  /** Unsaved edits OR a save in flight — either way the tab should warn before closing (app-shell's
+   *  beforeunload). */
   hasAnyUnsavedChanges(): boolean {
-    for (const check of this.checks) {
-      if (check()) return true;
+    return this.hasAnyUnsavedEdits() || this.isAnySaveInProgress();
+  }
+
+  hasAnyUnsavedEdits(): boolean {
+    for (const entry of this.entries) {
+      if (entry.isDirty()) return true;
+    }
+    return false;
+  }
+
+  isAnySaveInProgress(): boolean {
+    for (const entry of this.entries) {
+      if (entry.isSaving?.()) return true;
     }
     return false;
   }

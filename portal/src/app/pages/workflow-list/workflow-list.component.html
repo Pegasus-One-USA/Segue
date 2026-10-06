@@ -543,87 +543,9 @@
   </div>
 }
 
-<!-- ── New workflow modal (name + description) ──────────────────────────────────
-     Creates the workflow up front so the builder always opens on a real id — node config, mappings and
-     transform rules then always have an owner to belong to. ── -->
+<!-- ── New workflow (name + description) — shared with the Dashboard's New button. ── -->
 @if (showNewWorkflow()) {
-  <!-- No (click) on the overlay: a stray click outside must NOT discard a half-filled form. Closing is
-       deliberate only — ×, Cancel, or Escape — and each of those routes through cancelNewWorkflow(),
-       which confirms first when anything has been typed. -->
-  <div class="modal-overlay" (keydown.escape)="cancelNewWorkflow()" tabindex="-1">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-workflow-title"
-         (keydown.escape)="cancelNewWorkflow()" tabindex="-1">
-      <div class="modal-head">
-        <h3 id="new-workflow-title">New workflow</h3>
-        <button class="modal-close" type="button" (click)="cancelNewWorkflow()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-sub">
-          Name it first — the builder opens on a saved workflow, so nothing you configure can be lost before
-          it has somewhere to live. It stays a <strong>Draft</strong> until you add a destination.
-        </p>
-
-        <label class="field-label" for="new-workflow-name">Name</label>
-        <input
-          id="new-workflow-name"
-          class="text-input"
-          type="text"
-          autocomplete="off"
-          [ngModel]="newWorkflowName()"
-          (ngModelChange)="newWorkflowName.set($event)"
-          placeholder="e.g. Epic Prod → Analytics SQL"
-          (keydown.enter)="confirmNewWorkflow()"
-        />
-
-        <label class="field-label" for="new-workflow-description">Description <span class="cell-muted">(optional)</span></label>
-        <textarea
-          id="new-workflow-description"
-          class="text-input"
-          rows="3"
-          [ngModel]="newWorkflowDescription()"
-          (ngModelChange)="newWorkflowDescription.set($event)"
-          placeholder="What this workflow moves, and why it exists."
-        ></textarea>
-
-        <div class="modal-actions">
-          <button class="btn-secondary" type="button" [disabled]="creatingWorkflow()" (click)="cancelNewWorkflow()">
-            Cancel
-          </button>
-          <button
-            class="btn-cta"
-            type="button"
-            [disabled]="creatingWorkflow() || !newWorkflowName().trim()"
-            (click)="confirmNewWorkflow()"
-          >
-            {{ creatingWorkflow() ? 'Creating…' : 'Create & open builder' }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Discard confirmation, layered ON TOP of the New-workflow modal (nested inside its @if, so the
-       form is still mounted behind it and "Keep editing" returns to it with every value intact). -->
-  @if (confirmDiscardNewWorkflow()) {
-    <div class="modal-overlay modal-overlay--stacked" (keydown.escape)="keepEditingNewWorkflow()" tabindex="-1">
-      <div class="modal modal--sm" role="alertdialog" aria-modal="true" aria-labelledby="discard-new-workflow-title"
-           (keydown.escape)="keepEditingNewWorkflow()" tabindex="-1">
-        <div class="modal-head">
-          <h3 id="discard-new-workflow-title">Discard this workflow?</h3>
-          <button class="modal-close" type="button" (click)="keepEditingNewWorkflow()">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p class="modal-sub">
-            You have unsaved changes that will be lost. The workflow has not been created yet.
-          </p>
-          <div class="modal-actions">
-            <button class="btn-secondary" type="button" (click)="keepEditingNewWorkflow()">Keep editing</button>
-            <button class="btn-danger" type="button" (click)="discardNewWorkflow()">Discard</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  }
+  <app-new-workflow-dialog (closed)="showNewWorkflow.set(false)" />
 }
 
 <!-- ── Copy (duplicate) workflow modal ──────────────────────────────────────── -->

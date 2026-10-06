@@ -155,6 +155,8 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
       vendor('genericfhir', 'Generic FHIR', 'genericfhir'),
       vendor('hl7v2', 'HL7 v2', 'hl7v2'),
       vendor('sample', 'Sample', 'sample'),
+      // CSV / SQL Table source: no source connection, so it has its own group (PermissionGroupCode.TabularSources).
+      vendor('tabularsources', 'CSV / SQL Table', 'tabularsources'),
       vendor('sqlserver', 'SQL Server', 'sqlserver'),
       vendor('azuresql', 'Azure SQL', 'azuresql'),
       vendor('mysql', 'MySQL', 'mysql'),
@@ -170,6 +172,7 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
       vendor('fhirrepository', 'Aidbox', 'fhirrepository'),
       vendor('medplum', 'Medplum (FHIR)', 'medplum'),
       vendor('azurefhirservice', 'Azure FHIR Service', 'azurefhirservice'),
+      vendor('ehrwriteback', 'EHR Write-Back', 'ehrwriteback'),
     ],
   },
   {

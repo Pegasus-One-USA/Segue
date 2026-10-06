@@ -22,7 +22,8 @@ const CATEGORY_TRANSFORM: WorkflowNodeCategory = 10;
  *  upstream Mapping node (see isFhirDirectDestination). MappingNodeExecutor already treats all three
  *  identically via its `wholeResourceFhir` branch; listing only dest-fhir here left a Medplum/Azure FHIR
  *  workflow with an inert synthetic Mapping node injected on save. */
-const FHIR_DIRECT_DESTINATION_IDS = new Set(['dest-fhir', 'dest-medplum', 'dest-azurefhir']);
+// EHR write-back takes whole FHIR resources too, and the backend refuses a Mapping node in front of it.
+const FHIR_DIRECT_DESTINATION_IDS = new Set(['dest-fhir', 'dest-medplum', 'dest-azurefhir', 'dest-ehr-writeback']);
 
 /** Backend NodeTypes of V2's three chain steps — the nodes that sit between source and destination and each
  *  need the destinationId stamped onto them at save time (see the stamping loop in toRequest). */
@@ -42,13 +43,14 @@ const CATALOG_GUARDED_VENDOR_TRANSFORM_IDS = new Set(['athena', 'healow']);
 // Anything outside this set — Cerner, Allscripts, Meditech, HL7 v2 — must still save as 'epic':
 // WorkflowGraphValidator rejects at RUN time any NodeType missing from DefaultWorkflowNodeCatalog.Items, and
 // those vendors are gated out of it until each has a registered IFhirSourceClient. Keep in step with that file.
-const VENDOR_SOURCE_TRANSFORM_IDS = new Set(['epic', 'athena', 'healow', 'generic-fhir', 'sample']);
+const VENDOR_SOURCE_TRANSFORM_IDS = new Set(['epic', 'athena', 'healow', 'generic-fhir', 'sample', 'tabular']);
 
 const FALLBACK_NODE_TYPES: Record<string, string> = {
   epic: 'EpicSourceNode',
   athena: 'AthenahealthSourceNode',
   healow: 'EClinicalWorksSourceNode',
   sample: 'SampleSourceNode',
+  tabular: 'TabularSourceNode',
   'generic-fhir': 'GenericFhirSourceNode',
   'fhir-validation': 'UsCoreValidationNode',
   normalize: 'NormalizationNode',
@@ -76,6 +78,7 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   'dest-medplum': 'MedplumDestinationNode',
   'dest-fhir': 'FhirRepositoryDestinationNode',
   'dest-azurefhir': 'AzureFhirServiceDestinationNode',
+  'dest-ehr-writeback': 'EhrWriteBackDestinationNode',
   'dest-blob': 'BlobDestinationNode',
   'dest-datalake-webhook': 'DataLakeWebhookDestinationNode',
   'dest-apiendpoint': 'ApiEndpointDestinationNode',
@@ -253,7 +256,21 @@ export class WorkflowGraphMapperServiceV2 {
     // Persisted graphs are in EXECUTION order (Transformation → De-identification → Mapping →
     // Destination); the canvas reads in AUTHORING order (Mapping → Transformation → De-identification →
     // Destination). Reorder so reopening a workflow shows it the way it was built.
-    this.store.loadGraph(nodes, this.toAuthoringOrder(nodes, edges));
+    const authoringEdges = this.toAuthoringOrder(nodes, edges);
+    this.stampSourceNames(nodes, authoringEdges);
+    this.store.loadGraph(nodes, authoringEdges);
+  }
+
+  /** Mirrors the builder's add-node path: a step's "from <source>" subtitle names its root source. */
+  private stampSourceNames(nodes: CanvasNode[], edges: CanvasEdge[]): void {
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const parentOf = (id: string) => byId.get(edges.find(edge => edge.to === id)?.from ?? '');
+    for (const node of nodes) {
+      if (node.kind !== 'transform') continue;
+      let current: CanvasNode | undefined = parentOf(node.id);
+      for (let guard = 0; current?.kind && guard < 50; guard++) current = parentOf(current.id);
+      node.sourceName = current?.fields['__name'];
+    }
   }
 
   findLaunchSourceId(): string | null {
@@ -371,7 +388,7 @@ export class WorkflowGraphMapperServiceV2 {
       id: node.id,
       kind: 'transform',
       transformId,
-      sourceName: '',
+      sourceName: undefined, // stamped from the root source by loadDefinition once edges are known
       statusAtAdd: 'show',
       x: node.positionX,
       y: node.positionY,
@@ -410,6 +427,7 @@ export class WorkflowGraphMapperServiceV2 {
     // ids a name match can't produce ('generic-fhir' never appears hyphenated in a display name).
     const vendorId = node.vendorId ?? this.guessVendorId(connector);
     if (vendorId && VENDOR_SOURCE_TRANSFORM_IDS.has(vendorId)) return vendorId;
+    if (node.fields['tab_kind']) return 'tabular';
     if (/sample/i.test(connector)) return 'sample';
     if (/generic.?fhir/i.test(connector)) return 'generic-fhir';
     return 'epic';

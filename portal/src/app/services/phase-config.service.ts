@@ -32,7 +32,7 @@ export interface PhaseConfig {
 }
 
 // ── Phase 1 ───────────────────────────────────────────────────────────────────
-// Sources:      Epic, Athenahealth, eClinicalWorks
+// Sources:      Epic, Athenahealth, eClinicalWorks, Generic FHIR R4
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
 // Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB + FHIR Repository (Aidbox) + Medplum +
@@ -42,7 +42,8 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'epic',
     'athena',
     'healow',
-    // Phase 2+: 'generic-fhir', 'cerner', 'allscripts', 'meditech', 'hl7v2', 'sample'
+    'generic-fhir',
+    // Phase 2+: 'cerner', 'allscripts', 'meditech', 'hl7v2', 'sample'
   ],
 
   enabledTransformIds: [
@@ -73,6 +74,8 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // General-purpose, fully configurable outbound REST API — writer, sender, validator, Step 1 form and
     // wizard family are all in place (see MappedApiEndpointDestinationWriter).
     'dest-apiendpoint',
+    // EHR write-back — mirrors phase-config-v2 so the type shows in list and history filters too.
+    'dest-ehr-writeback',
     // Phase 2+: 'field-mapping', 'audit-lineage', 'fhir-validation', 'normalize', 'patient-matching',
     //           'merge-patients', 'terminology', 'deid-safeharbor', 'deid-kanon'
     // Phase 2+ destinations: 'dest-azuresql',

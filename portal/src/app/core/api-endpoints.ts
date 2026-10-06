@@ -187,6 +187,25 @@ export const MAPPING_PROFILE_ENDPOINTS = {
 // ─── FHIR mapping catalog (MappingController — api/v1/mapping) ─────────────────
 // Array-aware FHIR element metadata (correct JSONPaths, cardinality, array ancestors) generated from
 // the Firely R4 model. Drives the destination wizard's field picker so paths aren't hand-guessed.
+/** Which resource types an EHR vendor accepts writes for (EhrWriteCapabilitiesController). */
+export const EHR_WRITE_CAPABILITIES_ENDPOINTS = {
+  byVendor: (vendor: string) => `${API_V1_BASE}/ehr-write-capabilities?vendor=${encodeURIComponent(vendor)}`,
+} as const;
+
+export const TABULAR_SOURCE_ENDPOINTS = {
+  files: `${API_V1_BASE}/tabular-sources/files`,
+  file: (id: string) => `${API_V1_BASE}/tabular-sources/files/${encodeURIComponent(id)}`,
+  sqlConnections: `${API_V1_BASE}/tabular-sources/sql-connections`,
+  templatePresets: `${API_V1_BASE}/tabular-sources/template-presets`,
+  preview: `${API_V1_BASE}/tabular-sources/preview`,
+} as const;
+
+export const EHR_WRITE_LEDGER_ENDPOINTS = {
+  review: `${API_V1_BASE}/ehr-write-ledger/review`,
+  markWritten: (id: string) => `${API_V1_BASE}/ehr-write-ledger/${encodeURIComponent(id)}/mark-written`,
+  release: (id: string) => `${API_V1_BASE}/ehr-write-ledger/${encodeURIComponent(id)}/release`,
+} as const;
+
 export const MAPPING_ENDPOINTS = {
   // vendor narrows the response to VendorResourceTypeSupport's known-supported list for that source
   // system (Athenahealth, Healow today) — omitted (or a vendor with no known restriction, e.g. Epic)

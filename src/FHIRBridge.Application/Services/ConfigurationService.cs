@@ -9,6 +9,7 @@ using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Validation;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
@@ -96,7 +97,8 @@ public sealed class ConfigurationService : IConfigurationService
             ConfigurationMapper.ToDomain(authentication),
             request.ApplicationType,
             ConfigurationMapper.ToDomain(request.Interactive),
-            ConfigurationMapper.ToDomain(request.Retrieval));
+            ConfigurationMapper.ToDomain(request.Retrieval),
+            request.Access ?? SourceConnectionAccess.Read);
 
         await _repository.AddSourceConnectionAsync(sourceConnection, cancellationToken);
 
@@ -106,10 +108,10 @@ public sealed class ConfigurationService : IConfigurationService
         _logger.LogInformation(
             LogEvents.SourceConnectionCreated,
             "Source connection '{SourceName}' ({SourceConnectionId}) created. SourceSystemType={SourceSystemType} " +
-            "ApplicationType={ApplicationType} BaseUrl={BaseUrl} RetrievalMethod={RetrievalMethod} " +
+            "ApplicationType={ApplicationType} Access={Access} BaseUrl={BaseUrl} RetrievalMethod={RetrievalMethod} " +
             "IncrementalSync={IncrementalSync} ResourceTypes=[{ResourceTypes}]",
             sourceConnection.Name, sourceConnection.Id, sourceConnection.SourceSystemType,
-            sourceConnection.ApplicationType, sourceConnection.BaseUrl,
+            sourceConnection.ApplicationType, sourceConnection.Access, sourceConnection.BaseUrl,
             sourceConnection.Retrieval?.RetrievalMethod ?? "none",
             sourceConnection.Retrieval?.IncrementalSyncEnabled,
             string.Join(", ", sourceConnection.Retrieval?.ResourceTypes ?? []));
@@ -133,6 +135,14 @@ public sealed class ConfigurationService : IConfigurationService
         await ValidateSourceConnectionRequestAsync(request, sourceConnectionId, cancellationToken);
         var resolvedRequestAuthentication = await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
         var sourceConnection = await GetSourceConnectionRequiredAsync(sourceConnectionId, cancellationToken);
+        // A request that leaves Access out keeps the saved value, so the saved Write access must still fit the
+        // vendor and application type this update sets — otherwise an audience change could leave a Patient or
+        // Standalone connection able to write.
+        if (request.Access is null && sourceConnection.Access.AllowsWrite())
+        {
+            ValidateSourceConnectionAccess(request, sourceConnection.Access);
+        }
+
         var authentication = PreserveSecretsIfBlank(ConfigurationMapper.ToDomain(resolvedRequestAuthentication), sourceConnection.Authentication);
         sourceConnection.Update(
             request.Name,
@@ -142,6 +152,12 @@ public sealed class ConfigurationService : IConfigurationService
             request.ApplicationType,
             ConfigurationMapper.ToDomain(request.Interactive),
             ConfigurationMapper.ToDomain(request.Retrieval));
+
+        // Null keeps the saved value: see CreateSourceConnectionRequest.Access.
+        if (request.Access is { } access)
+        {
+            sourceConnection.SetAccess(access);
+        }
 
         // Mapped immediately after Update(), before SaveChangesAsync — Update() reassigns brand-new owned-value-
         // object instances (Authentication/Interactive/Retrieval) onto this tracked entity, and EF Core's post-save
@@ -158,10 +174,11 @@ public sealed class ConfigurationService : IConfigurationService
         _logger.LogInformation(
             LogEvents.SourceConnectionUpdated,
             "Source connection '{SourceName}' ({SourceConnectionId}) updated. SourceSystemType={SourceSystemType} " +
-            "ApplicationType={ApplicationType} BaseUrl={BaseUrl} TokenEndpoint={TokenEndpoint} ClientId={ClientId} " +
-            "RetrievalMethod={RetrievalMethod} IncrementalSync={IncrementalSync} ResourceTypes=[{ResourceTypes}]",
+            "ApplicationType={ApplicationType} Access={Access} BaseUrl={BaseUrl} TokenEndpoint={TokenEndpoint} " +
+            "ClientId={ClientId} RetrievalMethod={RetrievalMethod} IncrementalSync={IncrementalSync} " +
+            "ResourceTypes=[{ResourceTypes}]",
             sourceConnection.Name, sourceConnection.Id, sourceConnection.SourceSystemType,
-            sourceConnection.ApplicationType, sourceConnection.BaseUrl,
+            sourceConnection.ApplicationType, sourceConnection.Access, sourceConnection.BaseUrl,
             sourceConnection.Authentication.TokenEndpoint, sourceConnection.Authentication.ClientId,
             sourceConnection.Retrieval?.RetrievalMethod ?? "none",
             sourceConnection.Retrieval?.IncrementalSyncEnabled,
@@ -464,6 +481,7 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         await ValidateRequestAsync(_destinationConfigurationValidator, request, cancellationToken);
+        await EnsureEhrWriteBackTargetAsync(request.DestinationType, request.ConnectionMetadataJson, cancellationToken);
         // License destination-type allow-list enforcement lives centrally in
         // LicenseEnforcementSaveChangesInterceptor (watches for a newly-Added DestinationConfiguration row).
 
@@ -572,6 +590,10 @@ public sealed class ConfigurationService : IConfigurationService
         await ValidateRequestAsync(_destinationConfigurationValidator, request, cancellationToken);
 
         var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
+        await EnsureEhrWriteBackTargetAsync(
+            request.DestinationType,
+            request.ConnectionMetadataJson ?? destinationConfiguration.ConnectionMetadataJson,
+            cancellationToken);
 
         // Same gate as the delete path below: once a destination has actually received pipeline data, its
         // identity is referenced by existing execution history and audit records, so it becomes view-only.
@@ -640,6 +662,16 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         var destinationConfiguration = await GetDestinationRequiredAsync(destinationId, cancellationToken);
+        if (deIdentificationProfileId is not null
+            && destinationConfiguration.DestinationType == DestinationType.EhrWriteBack)
+        {
+            // This path bypasses the request validator, which enforces the same rule on create and update.
+            throw new RequestValidationException(new Dictionary<string, string[]>
+            {
+                ["deIdentificationProfileId"] = ["An EHR Write-Back destination cannot have a de-identification profile."],
+            });
+        }
+
         destinationConfiguration.SetDeIdentificationProfile(deIdentificationProfileId);
 
         await _repository.UpdateDestinationAsync(destinationConfiguration, cancellationToken);
@@ -1244,6 +1276,109 @@ public sealed class ConfigurationService : IConfigurationService
         if (request.ApplicationType is ApplicationType.Backend or ApplicationType.Standalone && request.Retrieval is not null)
         {
             ValidateRetrievalConfiguration(request.Retrieval);
+        }
+
+        if (request.Access is { } access)
+        {
+            ValidateSourceConnectionAccess(request, access);
+        }
+    }
+
+    /// <summary>
+    /// Write access is offered only where an EHR Write-Back destination could use it: a vendor that accepts writes,
+    /// over a SMART application type that vendor accepts writes from. A null application type is a legacy Backend
+    /// row (its grant is inferred from its credentials), so it is treated as Backend.
+    /// </summary>
+    private static void ValidateSourceConnectionAccess(CreateSourceConnectionRequest request, SourceConnectionAccess access)
+    {
+        // The API's string enum converter also accepts integers, so an undefined value can reach this point.
+        if (!Enum.IsDefined(access))
+        {
+            throw new InvalidOperationException("Source connection access must be Read, Write or ReadWrite.");
+        }
+
+        if (!access.AllowsWrite())
+        {
+            return;
+        }
+
+        var capabilities = EhrWriteCapabilities.For(request.SourceSystemType);
+        if (capabilities.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"{request.SourceSystemType} connections can only be read from; EHR write-back is not available for it.");
+        }
+
+        var applicationType = request.ApplicationType ?? ApplicationType.Backend;
+        if (!capabilities.Any(capability => capability.AllowedApplicationTypes.Contains(applicationType)))
+        {
+            throw new InvalidOperationException(
+                $"EHR write-back to {request.SourceSystemType} needs a Backend System connection, not {applicationType}.");
+        }
+    }
+
+    /// <summary>
+    /// An EHR Write-Back destination must point at a connection that can take its writes. The request validator
+    /// checks the id's shape; this checks the connection behind it, against the EFFECTIVE metadata (an update that
+    /// sends no metadata keeps the saved one).
+    /// </summary>
+    private async Task EnsureEhrWriteBackTargetAsync(
+        DestinationType destinationType,
+        string? connectionMetadataJson,
+        CancellationToken cancellationToken)
+    {
+        if (destinationType != DestinationType.EhrWriteBack)
+        {
+            return;
+        }
+
+        var targetId = ReadMetadataString(connectionMetadataJson, "dest_sourceConnectionId");
+        string? problem;
+        if (!Guid.TryParse(targetId, out var sourceConnectionId) || sourceConnectionId == Guid.Empty)
+        {
+            problem = "Choose the EHR connection to write to.";
+        }
+        else
+        {
+            var target = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+            problem = target switch
+            {
+                null => "The chosen EHR connection no longer exists.",
+                { IsEnabled: false } => "The chosen EHR connection is disabled.",
+                _ when !EhrWriteCapabilities.HasAnyWriteCapability(target.SourceSystemType) =>
+                    $"{target.SourceSystemType} connections can only be read from; choose a connection to an EHR that accepts writes.",
+                _ when !target.Access.AllowsWrite() =>
+                    "The chosen EHR connection is read-only. Set its Access to Write or Read & Write first.",
+                _ => null,
+            };
+        }
+
+        if (problem is not null)
+        {
+            throw new RequestValidationException(
+                new Dictionary<string, string[]> { ["dest_sourceConnectionId"] = [problem] });
+        }
+    }
+
+    private static string? ReadMetadataString(string? connectionMetadataJson, string key)
+    {
+        if (string.IsNullOrWhiteSpace(connectionMetadataJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(connectionMetadataJson);
+            return document.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+                && document.RootElement.TryGetProperty(key, out var value)
+                && value.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? value.GetString()
+                    : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
         }
     }
 

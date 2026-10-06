@@ -171,7 +171,20 @@ export class WorkflowGraphMapperService {
       from: edge.fromNodeId,
       to: edge.toNodeId,
     }));
+    this.stampSourceNames(nodes, edges);
     this.store.loadGraph(nodes, edges);
+  }
+
+  /** Mirrors the builder's add-node path: a step's "from <source>" subtitle names its root source. */
+  private stampSourceNames(nodes: CanvasNode[], edges: CanvasEdge[]): void {
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const parentOf = (id: string) => byId.get(edges.find(edge => edge.to === id)?.from ?? '');
+    for (const node of nodes) {
+      if (node.kind !== 'transform') continue;
+      let current: CanvasNode | undefined = parentOf(node.id);
+      for (let guard = 0; current?.kind && guard < 50; guard++) current = parentOf(current.id);
+      node.sourceName = current?.fields['__name'];
+    }
   }
 
   findLaunchSourceId(): string | null {
@@ -275,7 +288,7 @@ export class WorkflowGraphMapperService {
       id: node.id,
       kind: 'transform',
       transformId,
-      sourceName: '',
+      sourceName: undefined, // stamped from the root source by loadDefinition once edges are known
       statusAtAdd: 'show',
       x: node.positionX,
       y: node.positionY,

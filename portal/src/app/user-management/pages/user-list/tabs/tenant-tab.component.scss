@@ -114,7 +114,6 @@
   font-weight:      600 !important;
   text-transform:   none !important;
   border-radius:    8px !important;
-  background-color: var(--color-primary) !important;
   background:       var(--color-primary) !important;
   color:            #fff !important;
   transition:       background 0.15s ease, box-shadow 0.15s ease !important;
@@ -138,7 +137,6 @@
     opacity: 0 !important;
   }
   app-tenant-tab .btn-submit:hover:not([disabled]) {
-    background-color: var(--color-primary-dark) !important;
     background:       var(--color-primary-dark) !important;
     color:            #fff !important;
     box-shadow:       0 2px 8px rgba(0, 168, 157, 0.3) !important;

@@ -54,6 +54,8 @@
 }
 
 .new-pipeline-btn {
+  // A <button> now (it opens the New workflow dialog) — no browser button border, so it looks as the link did.
+  border:          none;
   background:      var(--color-primary);
   color:           var(--color-surface);
   text-decoration: none;

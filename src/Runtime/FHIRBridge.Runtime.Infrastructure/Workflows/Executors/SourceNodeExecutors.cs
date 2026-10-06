@@ -1,4 +1,4 @@
-﻿using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.DTOs;
 using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 using FHIRBridge.Domain.Fhir;
@@ -304,6 +304,14 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         if (_sourceClientFactory is null || source is null)
         {
             return await base.ExecuteAsync(context, node, inputs, cancellationToken);
+        }
+
+        if (!source.AllowsRead)
+        {
+            // A Write-only connection exists for EHR write-back; its client id may not even be registered for reads.
+            throw new InvalidOperationException(
+                $"Source connection '{source.Name}' is set to Write only and cannot be read from. " +
+                "Set its Access to Read or Read & Write to use it as a workflow source.");
         }
 
         FHIRBridge.Governance.ErrorContext.Set(

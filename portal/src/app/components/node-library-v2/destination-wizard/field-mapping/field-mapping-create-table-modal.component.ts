@@ -1,4 +1,7 @@
-import { AfterViewInit, Component, ElementRef, HostListener, ViewChild, computed, input, output, signal } from '@angular/core';
+import {
+  AfterViewInit, ChangeDetectorRef, Component, ElementRef, HostListener, Injector, ViewChild, afterNextRender, computed,
+  inject, input, output, signal,
+} from '@angular/core';
 import { addColumnDataTypesFor } from './field-mapping-add-column-modal.component';
 
 export interface FmCreateTableColumnDraft {
@@ -31,6 +34,12 @@ export interface FmCreateTableSubmit {
 export class FieldMappingCreateTableModalComponent implements AfterViewInit {
   @ViewChild('nameInput') private readonly nameInput?: ElementRef<HTMLInputElement>;
   @ViewChild('parentTableSearchInput') private readonly parentTableSearchInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('parentPanel') private readonly parentPanel?: ElementRef<HTMLElement>;
+  private readonly injector = inject(Injector);
+  private readonly cdr = inject(ChangeDetectorRef);
+  /** How many renders alignParentTablePanelWhenRendered waits for the panel before giving up (the menu then
+   *  stays as it is — there is no panel on screen to correct). */
+  private static readonly PANEL_ALIGN_ATTEMPTS = 10;
 
   /** Already-known table full names (e.g. "dbo.PatientContact") offered as a parent. */
   readonly existingTables = input<string[]>([]);
@@ -66,7 +75,9 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
    *  coordinates measured from the trigger button's own getBoundingClientRect() instead — same
    *  technique as FieldMappingCanvasComponent's "+ Add a table…" panel. */
   readonly parentTableMenuOpen = signal(false);
-  readonly parentTableMenuStyle = signal<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
+  /** `aligned` is false until alignParentTablePanel has checked where the panel really landed — it stays
+   *  hidden until then, so it never flashes at the wrong spot first. */
+  readonly parentTableMenuStyle = signal<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number; aligned?: boolean } | null>(null);
   readonly parentTableSearchQuery = signal('');
 
   readonly filteredExistingTables = computed(() => {
@@ -94,7 +105,61 @@ export class FieldMappingCreateTableModalComponent implements AfterViewInit {
     );
     this.parentTableSearchQuery.set('');
     this.parentTableMenuOpen.set(true);
-    setTimeout(() => this.parentTableSearchInput?.nativeElement.focus());
+    this.alignParentTablePanelWhenRendered(0);
+  }
+
+  /** After the next render, so the panel exists; if it still doesn't, tries again on a later one (bounded). */
+  private alignParentTablePanelWhenRendered(attempt: number): void {
+    afterNextRender(() => {
+      if (!this.parentTableMenuOpen()) return;
+      if (this.parentPanel) {
+        this.alignParentTablePanel(this.parentPanel.nativeElement);
+        return;
+      }
+      if (attempt + 1 < FieldMappingCreateTableModalComponent.PANEL_ALIGN_ATTEMPTS) {
+        setTimeout(() => this.alignParentTablePanelWhenRendered(attempt + 1), 16);
+      }
+    }, { injector: this.injector });
+  }
+
+  /**
+   * The panel is position: fixed at viewport coordinates, but any ancestor with a transform, filter or
+   * backdrop-filter becomes what "fixed" is measured from instead — and the Map fields screen sits inside
+   * blurred overlays, which shifted the list right by the sidebar and down by the header. Moving the panel
+   * out of this modal's own backdrop fixed one of those; this corrects for any of them: measure where the
+   * panel actually is, and move it by the difference.
+   */
+  private alignParentTablePanel(panel: HTMLElement): void {
+    const style = this.parentTableMenuStyle();
+    if (!style) return;
+    const rect = panel.getBoundingClientRect();
+    const dx = rect.left - style.left;
+    const dy = style.top !== undefined
+      ? rect.top - style.top
+      : rect.bottom - (window.innerHeight - (style.bottom ?? 0));
+    const aligned = {
+      ...style,
+      left: style.left - dx,
+      ...(style.top !== undefined ? { top: style.top - dy } : { bottom: (style.bottom ?? 0) + dy }),
+      aligned: true,
+    };
+    // Marked aligned only now, with the corrected coordinates, and written only through the bindings.
+    this.parentTableMenuStyle.set(aligned);
+    // Render that before focusing: the panel is visibility: hidden until aligned, and a hidden element can't
+    // take focus — the cursor stayed in Table name, so typing didn't search and Escape didn't close the list.
+    this.cdr.detectChanges();
+    this.parentTableSearchInput?.nativeElement.focus({ preventScroll: true });
+  }
+
+  /** The panel is fixed at coordinates taken when it opened; the dialog body now scrolls, which would leave it
+   *  stranded away from its trigger — so it closes instead, like a native dropdown does. */
+  onBodyScroll(): void {
+    if (this.parentTableMenuOpen()) this.closeParentTableMenu();
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    if (this.parentTableMenuOpen()) this.closeParentTableMenu();
   }
 
   closeParentTableMenu(): void {

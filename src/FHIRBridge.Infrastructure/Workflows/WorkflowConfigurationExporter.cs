@@ -50,6 +50,8 @@ public sealed class WorkflowConfigurationExporter : IWorkflowConfigurationExport
         "webhookConfigurationId",
         "resourcePipelineRouteId",
         "ehrEndpointId",
+        // An EHR Write-Back destination node's target EHR connection.
+        "dest_sourceConnectionId",
     ];
 
     /// <summary>Column/JSON-property name fragments whose values are masked rather than printed.</summary>

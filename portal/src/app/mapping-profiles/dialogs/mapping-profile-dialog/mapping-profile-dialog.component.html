@@ -100,14 +100,6 @@
           }
         </div>
 
-        <mat-form-field appearance="outline" class="mpd-form-field">
-          <mat-label>Destination Object</mat-label>
-          <input matInput id="mpd-destinationObject" formControlName="destinationObject" placeholder="e.g. dbo.Patients, patients collection, patients.csv" autocomplete="off" />
-          @if (metaForm.controls.destinationObject.invalid && metaForm.controls.destinationObject.touched) {
-            <mat-error>Destination object is required.</mat-error>
-          }
-        </mat-form-field>
-
         <div class="mpd-meta-field mpd-meta-field--checkbox">
           <mat-checkbox formControlName="isEnabled">Enabled</mat-checkbox>
         </div>
@@ -124,7 +116,9 @@
         [sqlTables]="sqlTables()"
         [initialRows]="initialRows()"
         [initialTargets]="initialTargets()"
+        [schemaLoadState]="schemaLoadState()"
         [readOnly]="isView"
+        (retrySchemaLoad)="retrySchemaLoad()"
       />
     </div>
   } @else {

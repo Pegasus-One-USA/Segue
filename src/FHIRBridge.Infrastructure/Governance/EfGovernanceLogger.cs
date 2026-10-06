@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Governance;
@@ -34,7 +34,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             .Select(x => x.EntryHash)
             .FirstOrDefaultAsync(cancellationToken);
 
-        _dbContext.AuditLogs.Add(new AuditLog(
+        await PersistAsync(new AuditLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
             current.AuditName,
@@ -48,18 +48,16 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.Status,
             entry.Remarks,
             current.IpAddress,
-            current.UserAgent,
+            Truncate(current.UserAgent, 500),
             entry.CorrelationId ?? current.CorrelationId,
-            previousHash));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            previousHash), cancellationToken);
     }
 
     public async Task LogDataAccessAsync(DataAccessEntry entry, CancellationToken cancellationToken = default)
     {
         var current = _currentUserService.CurrentUser;
 
-        _dbContext.DataAccessLogs.Add(new DataAccessLog(
+        await PersistAsync(new DataAccessLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
             current.AuditName,
@@ -70,34 +68,30 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.Purpose,
             entry.PipelineRunId,
             entry.CorrelationId ?? current.CorrelationId,
-            current.IpAddress));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            current.IpAddress), cancellationToken);
     }
 
     public async Task LogAuthenticationAsync(AuthenticationEntry entry, CancellationToken cancellationToken = default)
     {
         var current = _currentUserService.CurrentUser;
 
-        _dbContext.AuthenticationLogs.Add(new AuthenticationLog(
+        await PersistAsync(new AuthenticationLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.UserEmail ?? current.Email,
             entry.AuthenticationType,
             entry.Success,
-            entry.FailureReason,
+            Truncate(entry.FailureReason, 500),
             current.IpAddress,
-            current.UserAgent,
-            entry.CorrelationId ?? current.CorrelationId));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            Truncate(current.UserAgent, 500),
+            entry.CorrelationId ?? current.CorrelationId), cancellationToken);
     }
 
     public async Task LogSecurityEventAsync(SecurityEventEntry entry, CancellationToken cancellationToken = default)
     {
         var current = _currentUserService.CurrentUser;
 
-        _dbContext.SecurityEvents.Add(new SecurityEvent(
+        await PersistAsync(new SecurityEvent(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.Severity,
@@ -105,16 +99,14 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.UserEmail ?? current.Email,
             current.IpAddress,
             entry.Details,
-            entry.CorrelationId ?? current.CorrelationId));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            entry.CorrelationId ?? current.CorrelationId), cancellationToken);
     }
 
     public async Task LogAuthorizationAsync(AuthorizationEntry entry, CancellationToken cancellationToken = default)
     {
         var current = _currentUserService.CurrentUser;
 
-        _dbContext.AuthorizationLogs.Add(new AuthorizationLog(
+        await PersistAsync(new AuthorizationLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.UserEmail ?? current.Email,
@@ -122,36 +114,30 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.PermissionCode,
             entry.Result,
             current.IpAddress,
-            entry.CorrelationId ?? current.CorrelationId));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            entry.CorrelationId ?? current.CorrelationId), cancellationToken);
     }
 
     public async Task LogSchedulerRunAsync(SchedulerRunEntry entry, CancellationToken cancellationToken = default)
     {
-        _dbContext.SchedulerHistory.Add(new SchedulerHistory(
+        await PersistAsync(new SchedulerHistory(
             Guid.NewGuid(),
             entry.SchedulerId,
             DateTime.UtcNow,
             entry.Status,
             entry.RouteCount,
-            entry.CorrelationId));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            entry.CorrelationId), cancellationToken);
     }
 
     public async Task LogRetryAsync(RetryEntry entry, CancellationToken cancellationToken = default)
     {
-        _dbContext.RetryHistory.Add(new RetryHistory(
+        await PersistAsync(new RetryHistory(
             Guid.NewGuid(),
             DateTime.UtcNow,
-            entry.Context,
+            Truncate(entry.Context, 500)!,
             entry.RetryNumber,
             entry.DelayMilliseconds,
             entry.Reason,
-            entry.CorrelationId));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            entry.CorrelationId), cancellationToken);
     }
 
     public async Task LogErrorAsync(ErrorEntry entry, CancellationToken cancellationToken = default)
@@ -206,7 +192,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
     {
         var current = _currentUserService.CurrentUser;
 
-        _dbContext.ApiRequestLogs.Add(new ApiRequestLog(
+        await PersistAsync(new ApiRequestLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.Method,
@@ -215,14 +201,12 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.DurationMs,
             Truncate(entry.Error, 1000),
             entry.CorrelationId ?? current.CorrelationId,
-            entry.Direction));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            entry.Direction), cancellationToken);
     }
 
     public async Task LogExportAsync(ExportEntry entry, CancellationToken cancellationToken = default)
     {
-        _dbContext.ExportHistory.Add(new ExportHistory(
+        await PersistAsync(new ExportHistory(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.PipelineRunId,
@@ -231,9 +215,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             entry.RowCount,
             entry.FileSizeBytes,
             entry.Status,
-            entry.CorrelationId));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            entry.CorrelationId), cancellationToken);
     }
 
     public async Task LogDestinationActivityAsync(
@@ -241,7 +223,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
     {
         var current = _currentUserService.CurrentUser;
 
-        _dbContext.DestinationActivityLogs.Add(new DestinationActivityLog(
+        await PersistAsync(new DestinationActivityLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.DestinationId,
@@ -256,14 +238,12 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             Truncate(entry.Detail, 500),
             Truncate(entry.Error, 1000),
             entry.CorrelationId ?? current.CorrelationId,
-            entry.PipelineRunId));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            entry.PipelineRunId), cancellationToken);
     }
 
     public async Task LogNotificationAsync(NotificationEntry entry, CancellationToken cancellationToken = default)
     {
-        _dbContext.NotificationHistory.Add(new NotificationHistory(
+        await PersistAsync(new NotificationHistory(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.NotificationType,
@@ -273,9 +253,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             Truncate(entry.Error, 1000),
             entry.CorrelationId,
             Truncate(entry.Body, 8000),
-            entry.AttachmentNames is { Count: > 0 } names ? Truncate(string.Join(", ", names), 1000) : null));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            entry.AttachmentNames is { Count: > 0 } names ? Truncate(string.Join(", ", names), 1000) : null), cancellationToken);
     }
 
     public async Task LogValidationFailureAsync(ValidationFailureEntry entry, CancellationToken cancellationToken = default)
@@ -285,7 +263,7 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             return;
         }
 
-        _dbContext.ValidationFailureLogs.Add(new ValidationFailureLog(
+        await PersistAsync(new ValidationFailureLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.ResourceType,
@@ -293,30 +271,26 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             Truncate(JsonSerializer.Serialize(entry.Warnings), 4000)!,
             entry.DataQualityScore,
             entry.PipelineRunId,
-            entry.CorrelationId));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            entry.CorrelationId), cancellationToken);
     }
 
     public async Task LogEndpointHealthAsync(EndpointHealthEntry entry, CancellationToken cancellationToken = default)
     {
-        _dbContext.EndpointHealthChecks.Add(new EndpointHealthCheck(
+        await PersistAsync(new EndpointHealthCheck(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.EndpointName,
             entry.EndpointType,
             entry.Status,
             entry.LatencyMs,
-            Truncate(entry.Message, 1000)));
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            Truncate(entry.Message, 1000)), cancellationToken);
     }
 
     public async Task LogSmartLaunchAsync(SmartLaunchEntry entry, CancellationToken cancellationToken = default)
     {
         var current = _currentUserService.CurrentUser;
 
-        _dbContext.SmartLaunchLogs.Add(new SmartLaunchLog(
+        await PersistAsync(new SmartLaunchLog(
             Guid.NewGuid(),
             DateTime.UtcNow,
             entry.SourceConnectionId,
@@ -327,9 +301,28 @@ public sealed class EfGovernanceLogger : IGovernanceLogger
             Truncate(entry.GrantedScope, 500),
             entry.PatientContextGranted,
             entry.TokenCacheKeyHash,
-            entry.CorrelationId ?? current.CorrelationId));
+            entry.CorrelationId ?? current.CorrelationId), cancellationToken);
+    }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+    /// <summary>
+    /// Adds one log row and saves it. A row that fails to save is detached before the exception is rethrown: this
+    /// logger shares the request's (or workflow run's) DbContext, and a row left tracked as Added would be resent by
+    /// every later SaveChanges in that scope. That is how one over-long authentication reason (a VPN-down token
+    /// failure) made every later save of a workflow run fail, including the one marking the run Failed, so the run
+    /// stayed "Running" for ever.
+    /// </summary>
+    private async Task PersistAsync(object entity, CancellationToken cancellationToken)
+    {
+        _dbContext.Add(entity);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            _dbContext.Entry(entity).State = EntityState.Detached;
+            throw;
+        }
     }
 
     private static string? Truncate(string? value, int maxLength) =>

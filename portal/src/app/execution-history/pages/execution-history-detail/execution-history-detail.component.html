@@ -135,6 +135,9 @@
     <div class="resource-list">
       @for (entry of nodeRuns().items; track entry.workflowNodeRunId; let i = $index) {
         <div class="resource-row" [class]="'resource-row--' + entry.status.toLowerCase()">
+          <!-- The report link sits beside the row toggle, not inside it: a button nested in a role=button is not
+               reachable or announced correctly by keyboard and screen-reader users. -->
+          <div class="resource-summary-bar">
           <div
             class="resource-summary"
             role="button"
@@ -159,6 +162,22 @@
             </div>
             <span class="cell-muted node-summary-meta">{{ headerItemCountFor(entry) !== null ? headerItemCountFor(entry) + ' item(s) · ' : '' }}{{ (entry.completedAt ?? entry.startedAt) | date:'MMM d, h:mm:ss a' }}</span>
             <mat-icon class="chevron">{{ isExpanded(entry.workflowNodeRunId) ? 'expand_less' : 'expand_more' }}</mat-icon>
+          </div>
+          @if (showEhrWriteReportLink(entry)) {
+            <!-- On the header, so the report is one click away without expanding the row first. Stays focusable
+                 while it loads (aria-disabled, not disabled) so keyboard focus is not dropped mid-click. -->
+            <button
+              type="button"
+              class="ehr-report-link ehr-report-link--header"
+              [attr.aria-disabled]="isLoadingPayload(entry.workflowNodeRunId) || null"
+              [attr.aria-busy]="isLoadingPayload(entry.workflowNodeRunId) || null"
+              [class.is-loading]="isLoadingPayload(entry.workflowNodeRunId)"
+              (click)="openEhrWriteReport(entry)"
+            >
+              <mat-icon>assessment</mat-icon>
+              {{ ehrWriteReportLinkLabel(entry) }}
+            </button>
+          }
           </div>
 
           @if (isExpanded(entry.workflowNodeRunId)) {
@@ -200,6 +219,13 @@
                             <dt>{{ line.label }}</dt><dd>{{ line.value }}</dd>
                           }
                         </dl>
+                        @if (ehrWriteReportFor(entry); as ehrReport) {
+                          <button type="button" class="ehr-report-link ehr-report-link--inline" (click)="openEhrWriteReport(entry)">
+                            <mat-icon>assessment</mat-icon>
+                            {{ ehrWriteReportLinkLabel(entry) }}
+                            <span class="cell-muted">{{ ehrReport.DryRun ? 'What a live run would write, what it would skip, and why' : 'What was written, what was skipped, and why' }}</span>
+                          </button>
+                        }
                       </div>
                     }
                   }

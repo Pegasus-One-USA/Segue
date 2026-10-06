@@ -79,4 +79,12 @@ public sealed record FhirSourceConfiguration(
     // that scopes Patient is meaningless on Condition). Criteria here were explicitly authored for the one type
     // they are keyed by, so they are applied AFTER those scrubs rather than being removed by them. Null/absent
     // for a type leaves it on the pre-existing connection-wide fallback, unchanged.
-    IReadOnlyDictionary<string, string>? SearchCriteriaByResourceType = null);
+    IReadOnlyDictionary<string, string>? SearchCriteriaByResourceType = null,
+    // Send no 'scope' on the token request at all, rather than the resolved scopes or the vendor wildcard. Set only
+    // by the EHR write-back channel, for vendors that ignore the requested scope and grant whatever APIs the client
+    // id is registered for (Epic, verified live). The granted scope is then read back from the token response. False
+    // leaves every other caller's scope handling unchanged.
+    bool OmitScopeParameter = false,
+    // False when the connection's Access is Write only: it exists for EHR write-back and must not be read from as a
+    // workflow source. Filled from the connection by the runtime resolver; true for every other caller.
+    bool AllowsRead = true);

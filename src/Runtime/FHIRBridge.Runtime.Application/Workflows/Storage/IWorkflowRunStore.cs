@@ -30,6 +30,20 @@ public interface IWorkflowRunStore
     /// </summary>
     Task<int> ExpireStaleValidatedAsync(DateTimeOffset olderThanUtc, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Fails every <see cref="WorkflowRunStatus.Running"/> run that <paramref name="host"/> executes and that started
+    /// before <paramref name="startedBeforeUtc"/>, with <paramref name="reason"/> as its error, returning how many.
+    /// <para>A run executes inside one process and nothing else ever finishes it, so when that process stops
+    /// (restart, shutdown, crash, or a save that failed while recording the outcome) the row would show "Running"
+    /// for ever and refuse to be cancelled. Each host calls this at start-up for its own runs only; see
+    /// <see cref="WorkflowRunHosts"/> for which runs belong to which host.</para>
+    /// </summary>
+    Task<int> FailInterruptedRunsAsync(
+        WorkflowRunHost host,
+        DateTimeOffset startedBeforeUtc,
+        string reason,
+        CancellationToken cancellationToken);
+
     Task<WorkflowRun?> FindValidatedAsync(
         Guid workflowDefinitionId,
         string correlationId,
@@ -44,7 +58,8 @@ public interface IWorkflowRunStore
         int count,
         CancellationToken cancellationToken);
 
-    /// <summary>All-time run count per status, across every workflow definition — every <see cref="WorkflowRunStatus"/>
+    /// <summary>All-time run count per status, across every workflow definition that still exists (a deleted workflow's
+    /// orphaned runs are excluded, matching the Execution History list) — every <see cref="WorkflowRunStatus"/>
     /// value is present even if its count is 0. Backs the Dashboard's status stat tiles; unlike
     /// <see cref="ListRecentAsync"/>, this is not capped to the most recent N runs.</summary>
     Task<IReadOnlyDictionary<WorkflowRunStatus, int>> GetStatusCountsAsync(CancellationToken cancellationToken);

@@ -28,7 +28,7 @@ const CHAIN_STEP_IDS: string[] = ['field-mapping', 'transformation', 'deidentifi
 /** Destinations whose transformation rules are workflow-scoped (FhirResource phase), so "does this
  *  workflow have rules?" can be asked of the server directly. Everything else is still Field-scoped
  *  and has to be intersected with the node's own mapped fields — see syncChainNodes. */
-const FHIR_DIRECT_DESTINATION_TYPES = new Set(['FhirRepository', 'Medplum', 'AzureFhirService']);
+const FHIR_DIRECT_DESTINATION_TYPES = new Set(['FhirRepository', 'Medplum', 'AzureFhirService', 'EhrWriteBack']);
 
 import { CanvasComponent } from '../../components/canvas-v2/canvas.component';
 import { PayloadPreviewComponent } from '../../components/modals-v2/payload-preview/payload-preview.component';
@@ -66,7 +66,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
 
   constructor() {
-    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
+    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges(), undefined, () => this.isSaveInProgress());
   }
 
   // ── page state ─────────────────────────────────────────────────────────────
@@ -807,6 +807,9 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   private syncDeIdentificationNode(destination: CanvasNode): void {
     const workflowId = this.currentWorkflowId();
     if (!workflowId) return;
+    // Never in front of an EHR write-back: redacted data must not reach a patient's chart.
+    const destinationTransformId = (destination as { transformId?: string }).transformId;
+    if (destinationTransformId && TRANSFORMS.find(t => t.id === destinationTransformId)?.destinationType === 'EhrWriteBack') return;
 
     this.deIdentificationProfiles.list().subscribe({
       next: profiles => {

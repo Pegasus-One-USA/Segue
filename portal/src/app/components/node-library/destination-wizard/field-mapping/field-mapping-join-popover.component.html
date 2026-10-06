@@ -178,7 +178,11 @@
     </div>
 
     <div class="fm-popover-footer">
-      <button type="button" class="fm-popover-delete" (click)="onRemove()">Delete mapping</button>
+      @if (locked()) {
+        <span class="fm-popover-locked">🔒 Upsert key — always mapped</span>
+      } @else {
+        <button type="button" class="fm-popover-delete" (click)="onRemove()">Delete mapping</button>
+      }
       <div class="fm-popover-footer-actions">
         <button type="button" class="fm-popover-cancel" (click)="onClose()">Cancel</button>
         <button type="button" class="fm-popover-save" (click)="onSave()">Save</button>
