@@ -52,9 +52,17 @@
       </div>
       <select class="type-select" aria-label="Entry type" [value]="severity()" (change)="severity.set($any($event.target).value)">
         <option value="" [selected]="!severity()">Errors (default)</option>
+        <option value="Critical" [selected]="severity() === 'Critical'">Critical</option>
+        <option value="Error" [selected]="severity() === 'Error'">Error</option>
         <option value="WorkflowDebug" [selected]="severity() === 'WorkflowDebug'">Workflow debug trace</option>
         <option value="Warning" [selected]="severity() === 'Warning'">Warnings</option>
         <option value="Information" [selected]="severity() === 'Information'">Information</option>
+      </select>
+      <select class="type-select" aria-label="Category" [value]="category()" (change)="category.set($any($event.target).value)">
+        <option value="" [selected]="!category()">All categories</option>
+        @for (c of categoryOptions; track c) {
+          <option [value]="c" [selected]="c === category()">{{ c }}</option>
+        }
       </select>
       <div class="filter-actions">
         <button class="btn-search" type="button" (click)="search()">Search</button>

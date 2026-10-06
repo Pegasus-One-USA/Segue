@@ -49,24 +49,29 @@ export class ErrorsComponent implements OnInit, OnDestroy {
   readonly correlationId = signal('');
   /** '' = the normal error view; or an entry type such as WorkflowDebug / Warning / Information. */
   readonly severity = signal('');
+  /** '' = every category; otherwise one of the backend's ErrorCategory names. */
+  readonly category = signal('');
+  readonly categoryOptions = ['Unknown', 'Business', 'Validation', 'Infrastructure', 'Authentication', 'Authorization', 'Database', 'Network', 'ExternalSystem'];
 
   /** The criteria the list below is actually showing (what was last searched), as opposed to what is typed above. */
-  readonly applied = signal({ errorReferenceId: '', correlationId: '', severity: '' });
+  readonly applied = signal({ errorReferenceId: '', correlationId: '', severity: '', category: '' });
 
   /** Typed or picked, but "Search" has not been pressed yet. */
   readonly dirty = computed(() => {
     const a = this.applied();
     return a.errorReferenceId !== this.errorReferenceId().trim()
       || a.correlationId !== this.correlationId()
-      || a.severity !== this.severity();
+      || a.severity !== this.severity()
+      || a.category !== this.category();
   });
 
   readonly chips = computed(() => {
     const a = this.applied();
-    const chips: { key: 'errorReferenceId' | 'correlationId' | 'severity'; label: string; value: string }[] = [];
+    const chips: { key: 'errorReferenceId' | 'correlationId' | 'severity' | 'category'; label: string; value: string }[] = [];
     if (a.errorReferenceId) { chips.push({ key: 'errorReferenceId', label: 'Reference ID', value: a.errorReferenceId }); }
     if (a.correlationId) { chips.push({ key: 'correlationId', label: 'Correlation ID', value: a.correlationId }); }
     if (a.severity) { chips.push({ key: 'severity', label: 'Type', value: a.severity }); }
+    if (a.category) { chips.push({ key: 'category', label: 'Category', value: a.category }); }
     return chips;
   });
 
@@ -77,10 +82,11 @@ export class ErrorsComponent implements OnInit, OnDestroy {
     this.load();
   }
 
-  removeChip(key: 'errorReferenceId' | 'correlationId' | 'severity'): void {
+  removeChip(key: 'errorReferenceId' | 'correlationId' | 'severity' | 'category'): void {
     if (key === 'errorReferenceId') { this.errorReferenceId.set(''); }
     if (key === 'correlationId') { this.correlationId.set(''); }
     if (key === 'severity') { this.severity.set(''); }
+    if (key === 'category') { this.category.set(''); }
     this.pageIndex.set(0);
     this.syncUrl();
     this.load();
@@ -150,11 +156,12 @@ export class ErrorsComponent implements OnInit, OnDestroy {
 
   load(): void {
     this.loading.set(true);
-    this.applied.set({ errorReferenceId: this.errorReferenceId().trim(), correlationId: this.correlationId(), severity: this.severity() });
+    this.applied.set({ errorReferenceId: this.errorReferenceId().trim(), correlationId: this.correlationId(), severity: this.severity(), category: this.category() });
     const search: ErrorLogSearch = {
       errorReferenceId: this.errorReferenceId() || undefined,
       correlationId: this.correlationId() || undefined,
       severity: this.severity() || undefined,
+      category: this.category() || undefined,
       page: this.pageIndex() + 1,
       pageSize: this.pageSize(),
     };
@@ -174,6 +181,7 @@ export class ErrorsComponent implements OnInit, OnDestroy {
     this.errorReferenceId.set('');
     this.correlationId.set('');
     this.severity.set('');
+    this.category.set('');
     this.pageIndex.set(0);
     // Clear the deep-link params too, otherwise they would be re-applied the next time this tab opens.
     void this.router.navigate([], {
