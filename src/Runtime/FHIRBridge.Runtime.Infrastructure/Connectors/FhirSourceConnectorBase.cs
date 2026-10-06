@@ -592,6 +592,16 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
             return string.IsNullOrWhiteSpace(query) ? criteria : $"{query}&{criteria}";
         }
 
+        // This run's own Search Criteria (Execute V2 / external trigger) are already in SearchParameters. They are the
+        // caller's explicit Patient search, so - exactly like PatientSearchCriteria above - they are used as given and
+        // are not combined with the launched patient's _id (a name/identifier search plus _id is rejected by eCW with
+        // "Unable to process the requested parameters", and would silently narrow the caller's search to one patient
+        // on servers that accept it).
+        if (isPatientResource && source.RunSearchCriteriaActive && !string.IsNullOrWhiteSpace(query))
+        {
+            return query;
+        }
+
         string? patientId = null;
         if (_accessTokenProvider is IFhirPatientContextProvider patientContextProvider)
         {

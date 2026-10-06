@@ -86,4 +86,10 @@ public sealed record FhirSourceConfiguration(
     // True for an "Execute V2" run (other hospital and/or other Group ID / Search Criteria). Such a run reads a different
     // slice of data than the saved configuration, so it neither uses nor advances the connection's incremental-sync
     // watermarks (which belong to the saved hospital/criteria). False for every ordinary run.
-    bool RunOverridesActive = false);
+    bool RunOverridesActive = false,
+    // True only when THIS run supplied its own Search Criteria (an "Execute V2" / external-trigger override) - not for a
+    // run that merely switched hospital or Group ID. Those criteria are the caller's explicit Patient search (they are
+    // carried in SearchParameters), so the Patient fetch must use them as given and must not ALSO be pinned to the
+    // launched patient's _id: servers such as eClinicalWorks reject name=...&_id=... outright. The same rule already
+    // holds for PatientSearchCriteria, the other channel a caller can use to say "search for these patients".
+    bool RunSearchCriteriaActive = false);

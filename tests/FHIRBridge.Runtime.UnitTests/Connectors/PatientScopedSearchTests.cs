@@ -180,6 +180,57 @@ public sealed class PatientScopedSearchTests
         handler.RequestUri.Should().Contain("/Organization?").And.NotContain("_id=oOrg1");
     }
 
+    [Fact]
+    public async Task Run_search_criteria_on_the_patient_search_are_not_pinned_to_the_launched_patient()
+    {
+        // External trigger / Execute V2: name=brown arrives as the run's SearchParameters. The launched patient's _id
+        // must not be appended - eCW answers name=...&_id=... with 400 "Unable to process the requested parameters".
+        var source = Source with { SearchParameters = "name=brown", RunOverridesActive = true, RunSearchCriteriaActive = true };
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(PatientId));
+
+        await client.SearchAsync("Patient", source, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain("name=brown").And.NotContain("_id=");
+    }
+
+    [Fact]
+    public async Task Patient_search_criteria_from_the_launch_page_behave_the_same_way()
+    {
+        var source = Source with { PatientSearchCriteria = "name=brown" };
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(PatientId));
+
+        await client.SearchAsync("Patient", source, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain("name=brown").And.NotContain("_id=");
+    }
+
+    [Fact]
+    public async Task A_run_that_only_switched_hospital_still_scopes_the_patient_search_to_the_launched_patient()
+    {
+        // RunOverridesActive alone (endpoint switch, Group ID) is not a caller-supplied search, so saved behaviour holds.
+        var source = Source with { SearchParameters = "active=true", RunOverridesActive = true };
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(PatientId));
+
+        await client.SearchAsync("Patient", source, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain("active=true").And.Contain($"_id={PatientId}");
+    }
+
+    [Fact]
+    public async Task Run_search_criteria_do_not_change_how_other_resource_types_are_scoped()
+    {
+        var source = Source with { RunOverridesActive = true, RunSearchCriteriaActive = true };
+        var handler = new CapturingHandler();
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new PatientContextProvider(PatientId));
+
+        await client.SearchAsync("AllergyIntolerance", source, CancellationToken.None);
+
+        handler.RequestUri.Should().Contain($"patient={PatientId}");
+    }
+
     // Access-token provider that also advertises a (possibly absent) launch patient context.
     private sealed class PatientContextProvider : IFhirAccessTokenProvider, IFhirPatientContextProvider
     {

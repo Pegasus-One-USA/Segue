@@ -286,7 +286,14 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
 
         if (runOverrides is not null)
         {
-            config = config with { LastUpdatedWatermarks = null, Since = null, RunOverridesActive = true };
+            config = config with
+            {
+                LastUpdatedWatermarks = null,
+                Since = null,
+                RunOverridesActive = true,
+                // "" is how a caller clears the saved criteria, which is not a search of its own.
+                RunSearchCriteriaActive = !string.IsNullOrWhiteSpace(runOverrides.SearchCriteria),
+            };
         }
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
