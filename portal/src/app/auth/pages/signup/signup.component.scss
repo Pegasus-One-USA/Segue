@@ -296,7 +296,6 @@
   }
 
   .submit-btn:hover:not([disabled]) {
-    background-color: var(--color-primary-dark) !important;
     background:       var(--color-primary-dark) !important;
     color:            #fff !important;
   }
@@ -383,7 +382,6 @@
   border-radius:    12px !important;
   position:         relative;
   overflow:         hidden;
-  background-color: var(--color-primary) !important;
   background:       var(--color-primary) !important;
   color:            #fff !important;
   box-shadow:       0 4px 14px rgba(0, 168, 157, 0.32), 0 1px 3px rgba(0, 168, 157, 0.18) !important;
@@ -401,7 +399,6 @@
   --mdc-filled-button-container-color:           var(--color-primary);
 
   &:hover:not([disabled]) {
-    background-color: var(--color-primary-dark) !important;
     background:       var(--color-primary-dark) !important;
     color:            #fff !important;
     box-shadow:       0 6px 20px rgba(0, 168, 157, 0.40),
@@ -410,7 +407,6 @@
   }
 
   &:active:not([disabled]) {
-    background-color: #006B64 !important;
     background:       #006B64 !important;
     color:            #fff !important;
     transform:        translateY(0);

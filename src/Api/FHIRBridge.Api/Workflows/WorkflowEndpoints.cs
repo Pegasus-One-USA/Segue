@@ -2453,7 +2453,7 @@ public static class WorkflowEndpoints
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
             PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
 
-        // All-time run count per status, across every workflow — unlike the paged /workflow-runs list above
+        // All-time run count per status, across every workflow that still exists (same rule as /workflow-runs) — unlike the paged /workflow-runs list above
         // (capped to the 500 most recent via ListRecentAsync), this queries the full WorkflowRuns table
         // directly so the Dashboard's stat tiles reflect a true global count. Backs the Dashboard screen.
         group.MapGet("/workflow-runs/stats", async (

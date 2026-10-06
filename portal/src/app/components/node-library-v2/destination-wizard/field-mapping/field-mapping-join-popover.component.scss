@@ -390,6 +390,13 @@
 // secondary action nested inside its own sub-section) reads as too easy to trigger by accident for the
 // one action here that discards the whole mapping — an outlined button gives it deliberate weight
 // without competing with Save's own solid-fill prominence.
+/* Takes Delete mapping's place on a locked row, so Cancel/Save stay right-aligned where they always are. */
+.fm-popover-locked {
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .fm-popover-delete {
   background: none;
   border: 1px solid var(--color-error-soft);

@@ -66,7 +66,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
 
   constructor() {
-    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
+    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges(), undefined, () => this.isSaveInProgress());
   }
 
   // ── page state ─────────────────────────────────────────────────────────────

@@ -185,8 +185,11 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
 
     public async Task<IReadOnlyDictionary<WorkflowRunStatus, int>> GetStatusCountsAsync(CancellationToken cancellationToken)
     {
+        // Runs of a deleted workflow are left behind in WorkflowRuns, but /workflow-runs drops them (it can't resolve
+        // their workflow), so counting them here made the Dashboard tiles disagree with the table beneath them.
         var counts = await _dbContext.WorkflowRuns
             .AsNoTracking()
+            .Where(run => _dbContext.WorkflowDefinitions.Any(definition => definition.Id == run.WorkflowDefinitionId))
             .GroupBy(run => run.Status)
             .Select(g => new { g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);

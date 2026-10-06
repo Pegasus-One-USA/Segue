@@ -256,7 +256,21 @@ export class WorkflowGraphMapperServiceV2 {
     // Persisted graphs are in EXECUTION order (Transformation → De-identification → Mapping →
     // Destination); the canvas reads in AUTHORING order (Mapping → Transformation → De-identification →
     // Destination). Reorder so reopening a workflow shows it the way it was built.
-    this.store.loadGraph(nodes, this.toAuthoringOrder(nodes, edges));
+    const authoringEdges = this.toAuthoringOrder(nodes, edges);
+    this.stampSourceNames(nodes, authoringEdges);
+    this.store.loadGraph(nodes, authoringEdges);
+  }
+
+  /** Mirrors the builder's add-node path: a step's "from <source>" subtitle names its root source. */
+  private stampSourceNames(nodes: CanvasNode[], edges: CanvasEdge[]): void {
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const parentOf = (id: string) => byId.get(edges.find(edge => edge.to === id)?.from ?? '');
+    for (const node of nodes) {
+      if (node.kind !== 'transform') continue;
+      let current: CanvasNode | undefined = parentOf(node.id);
+      for (let guard = 0; current?.kind && guard < 50; guard++) current = parentOf(current.id);
+      node.sourceName = current?.fields['__name'];
+    }
   }
 
   findLaunchSourceId(): string | null {
@@ -374,7 +388,7 @@ export class WorkflowGraphMapperServiceV2 {
       id: node.id,
       kind: 'transform',
       transformId,
-      sourceName: '',
+      sourceName: undefined, // stamped from the root source by loadDefinition once edges are known
       statusAtAdd: 'show',
       x: node.positionX,
       y: node.positionY,

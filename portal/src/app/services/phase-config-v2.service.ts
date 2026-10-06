@@ -35,7 +35,7 @@ export interface PhaseConfig {
 }
 
 // ── Phase 1 ───────────────────────────────────────────────────────────────────
-// Sources:      Epic, Athenahealth, eClinicalWorks
+// Sources:      Epic, Athenahealth, eClinicalWorks, Generic FHIR R4
 // Categories:   Destination visible; Field Mapping/Validation/Normalize/
 //               Terminology/De-identify hidden
 // Destinations: SQL Server + CSV + MySQL + PostgreSQL + MongoDB + FHIR Repository (Aidbox) + Medplum +
@@ -45,9 +45,10 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'epic',
     'athena',
     'healow',
+    'generic-fhir',
     // CSV / SQL Table rows → FHIR (feeds FHIR destinations and EHR write-back).
     'tabular',
-    // Phase 2+: 'generic-fhir', 'cerner', 'allscripts', 'meditech', 'hl7v2', 'sample'
+    // Phase 2+: 'cerner', 'allscripts', 'meditech', 'hl7v2', 'sample'
   ],
 
   enabledTransformIds: [
