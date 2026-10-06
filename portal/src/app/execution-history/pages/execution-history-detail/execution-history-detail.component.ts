@@ -423,14 +423,18 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
 
         this.cancelling.set(true);
         this.api.cancel(this.runId).subscribe({
-          next: () => {
-            this.toast.show('Cancellation requested', 'The run will stop once its current step finishes.');
+          next: response => {
+            if (response?.status === 'Cancelled') {
+              this.toast.show('Run cancelled', 'It was no longer executing, so it has been closed.');
+            } else {
+              this.toast.show('Cancellation requested', 'The run will stop once its current step finishes.');
+            }
             this.pollUntilSettled();
           },
           error: (err: HttpErrorResponse) => {
             this.cancelling.set(false);
             const message = err.status === 409
-              ? 'This run has already finished and cannot be cancelled.'
+              ? 'This run is not running any more and cannot be cancelled. Refresh to see its final status.'
               : 'Failed to request cancellation. Please try again.';
             this.toast.error(message);
           },

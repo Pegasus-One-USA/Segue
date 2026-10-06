@@ -105,6 +105,36 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
         return stale.Count;
     }
 
+    public async Task<int> FailInterruptedRunsAsync(
+        WorkflowRunHost host,
+        DateTimeOffset startedBeforeUtc,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var apiTriggerTypes = WorkflowRunHosts.ApiTriggerTypes.ToArray();
+        var running = _dbContext.WorkflowRuns
+            .Where(run => run.Status == WorkflowRunStatus.Running && run.StartedAt < startedBeforeUtc);
+        running = host == WorkflowRunHost.Api
+            ? running.Where(run => run.BulkRequestId == null && apiTriggerTypes.Contains(run.TriggerType!))
+            : running.Where(run => run.BulkRequestId != null || !apiTriggerTypes.Contains(run.TriggerType!));
+
+        // Tracked, through Fail(), for the same reason as ExpireStaleValidatedAsync: one place owns the terminal rule.
+        var interrupted = await running.ToListAsync(cancellationToken);
+        if (interrupted.Count == 0)
+        {
+            return 0;
+        }
+
+        var failedAt = DateTimeOffset.UtcNow;
+        foreach (var run in interrupted)
+        {
+            run.Fail(reason, failedAt);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return interrupted.Count;
+    }
+
     public async Task<WorkflowRun?> FindValidatedAsync(
         Guid workflowDefinitionId,
         string correlationId,

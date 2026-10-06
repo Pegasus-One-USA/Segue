@@ -1908,13 +1908,31 @@ public static class WorkflowEndpoints
         // executing when this is called is left to finish and keeps its normal terminal state, so cancelling never
         // leaves a node run half-written. A run already past this window (finished, or never started as async in
         // the first place) reports 409 rather than silently no-op'ing.
-        group.MapPost("/workflow-runs/{runId:guid}/cancel", (
+        group.MapPost("/workflow-runs/{runId:guid}/cancel", async (
             Guid runId,
-            IWorkflowRunTracker runTracker) =>
+            IWorkflowRunTracker runTracker,
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
         {
-            return runTracker.RequestCancellation(runId)
-                ? Results.Accepted(value: new WorkflowRunStatusResponse(runId, "CancellationRequested"))
-                : Results.Conflict(new { message = "This run is not currently active and cannot be cancelled." });
+            if (runTracker.RequestCancellation(runId))
+            {
+                return Results.Accepted(value: new WorkflowRunStatusResponse(runId, "CancellationRequested"));
+            }
+
+            // Not live in this process, yet still "Running" on record: a Run-button run is tracked for its whole
+            // execution (sync and async alike), so this one is dead. Its process stopped, or saving its outcome
+            // failed. Nothing will ever finish it, so cancelling closes it rather than refusing.
+            var run = await runStore.GetAsync(runId, cancellationToken);
+            if (run is { Status: WorkflowRunStatus.Running, TriggerType: "Manual", BulkRequestId: null })
+            {
+                run.Cancel(
+                    "Cancelled: this run was no longer executing (the API restarted, or its outcome could not be saved).",
+                    DateTimeOffset.UtcNow);
+                await runStore.SaveAsync(run, cancellationToken);
+                return Results.Ok(new WorkflowRunStatusResponse(runId, run.Status.ToString(), run.CorrelationId));
+            }
+
+            return Results.Conflict(new { message = "This run is not currently active and cannot be cancelled." });
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
             PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.Run)));
 
@@ -2221,9 +2239,12 @@ public static class WorkflowEndpoints
             IWorkflowRunStore runStore,
             IWorkflowDefinitionStore definitionStore,
             IConfigurationRepository configurationRepository,
+            IUserDisplayNameResolver userDisplayNameResolver,
             CancellationToken cancellationToken) =>
         {
             var runs = await runStore.ListRecentAsync(500, cancellationToken);
+            // TriggeredBy stores the user's id (CurrentUser.AuditName); show who it was, not the GUID.
+            var triggeredByNames = await userDisplayNameResolver.ResolveAsync(runs.Select(run => run.TriggeredBy), cancellationToken);
             var workflowsById = (await definitionStore.ListAsync(cancellationToken)).ToDictionary(w => w.Id);
             var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
             var sourceInfoById = sources.ToDictionary(s => s.Id, s => (s.Name, SystemType: s.SourceSystemType.ToString()));
@@ -2295,7 +2316,7 @@ public static class WorkflowEndpoints
                     run.Status.ToString(),
                     run.StartedAt,
                     run.CompletedAt,
-                    run.TriggeredBy,
+                    run.TriggeredBy is { } triggeredById ? triggeredByNames.GetValueOrDefault(triggeredById, triggeredById) : null,
                     run.TriggerType,
                     run.NodeRuns.Count,
                     run.ErrorMessage,
@@ -2463,6 +2484,7 @@ public static class WorkflowEndpoints
             IWorkflowRunStore runStore,
             IWorkflowDefinitionStore definitionStore,
             IConfigurationRepository configurationRepository,
+            IUserDisplayNameResolver userDisplayNameResolver,
             CancellationToken cancellationToken) =>
         {
             var run = await runStore.GetAsync(runId, cancellationToken);
@@ -2490,7 +2512,7 @@ public static class WorkflowEndpoints
                 run.Status.ToString(),
                 run.StartedAt,
                 run.CompletedAt,
-                run.TriggeredBy,
+                await userDisplayNameResolver.ResolveOneAsync(run.TriggeredBy, cancellationToken),
                 run.TriggerType,
                 run.NodeRuns.Count,
                 run.ErrorMessage,
