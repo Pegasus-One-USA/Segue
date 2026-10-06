@@ -9,51 +9,58 @@ using Microsoft.Extensions.Options;
 
 namespace FHIRBridge.Runtime.UnitTests.Connectors;
 
-/// <summary>The wire diagnostics (Runtime:Epic:Diagnostics) are off by default, log the request / response when on, and
-/// never write a bearer token.</summary>
+/// <summary>The TEMP-DEBUG wire diagnostics log exactly one request - GET .../FFBJCD/Patient - in full, and nothing else.</summary>
 public sealed class FhirHttpDiagnosticsTests
 {
-    private static readonly FhirSourceConfiguration Source = new(
-        RuntimeSourceType.Healow, "eCW", "https://fhir.example.com/R4", "https://auth/token", "client-1",
-        null, null, [], SearchCount: 100, MaxPages: 1,
-        PatientSearchCriteria: "name=brown");
+    private const string TargetBaseUrl = "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD";
 
-    private static async Task<List<string>> RunAsync(bool enabled, bool includeValues = true)
+    private static FhirSourceConfiguration SourceFor(string baseUrl, string? criteria) => new(
+        RuntimeSourceType.Healow, "eCW", baseUrl, "https://auth/token", "client-1",
+        null, null, [], SearchCount: 100, MaxPages: 1,
+        PatientSearchCriteria: criteria);
+
+    private static async Task<List<string>> RunAsync(string resourceType, string baseUrl = TargetBaseUrl, string? criteria = "name=brown", bool enabled = true)
     {
         var logger = new ListLogger<EClinicalWorksFhirSourceClient>();
-        var options = Options.Create(new EpicFhirClientOptions
-        {
-            Diagnostics = { Enabled = enabled, IncludeQueryValues = includeValues },
-        });
+        var options = Options.Create(new EpicFhirClientOptions { Diagnostics = { Enabled = enabled } });
         var client = new EClinicalWorksFhirSourceClient(new HttpClient(new StubHandler()), new Tokens(), options, logger);
 
-        await client.SearchAsync("Patient", Source, CancellationToken.None);
+        await client.SearchAsync(resourceType, SourceFor(baseUrl, criteria), CancellationToken.None);
         return logger.Lines.Where(l => l.Contains("[FHIR-DIAG]")).ToList();
     }
 
     [Fact]
-    public async Task Nothing_is_logged_unless_diagnostics_are_enabled() =>
-        (await RunAsync(enabled: false)).Should().BeEmpty();
+    public async Task The_target_request_is_logged_in_full_with_its_query_and_response_body()
+    {
+        var lines = await RunAsync("Patient");
+
+        lines.Should().Contain(l => l.Contains("REQUEST") && l.Contains("/FFBJCD/Patient?name=brown") && l.Contains("query: name=brown"));
+        lines.Should().Contain(l => l.Contains("RESPONSE 200") && l.Contains("\"resourceType\": \"Bundle\"") && l.Contains("body (") );
+    }
 
     [Fact]
-    public async Task Enabled_logs_scope_request_and_response_without_the_bearer_token()
+    public async Task The_bearer_token_is_never_written()
     {
-        var lines = await RunAsync(enabled: true);
+        var lines = await RunAsync("Patient");
 
-        lines.Should().Contain(l => l.Contains("SCOPE Patient") && l.Contains("patientSearchCriteria=True") && l.Contains("finalParameterNames=[name]"));
-        lines.Should().Contain(l => l.Contains("REQUEST") && l.Contains("query: name=brown") && l.Contains("Authorization: ***"));
-        lines.Should().Contain(l => l.Contains("RESPONSE 200") && l.Contains("\"resourceType\": \"Bundle\""));
+        lines.Should().Contain(l => l.Contains("Authorization: ***"));
         lines.Should().NotContain(l => l.Contains("secret-access-token"));
     }
 
     [Fact]
-    public async Task Query_values_can_be_withheld()
-    {
-        var lines = await RunAsync(enabled: true, includeValues: false);
+    public async Task Only_the_request_and_response_lines_exist() =>
+        (await RunAsync("Patient")).Should().HaveCount(2);
 
-        lines.Should().Contain(l => l.Contains("query: name=<withheld>"));
-        lines.Should().NotContain(l => l.Contains("brown"));
+    [Fact]
+    public async Task Any_other_request_logs_nothing()
+    {
+        (await RunAsync("Observation")).Should().BeEmpty();
+        (await RunAsync("Patient", baseUrl: "https://fhir.example.com/R4")).Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task Nothing_is_logged_when_disabled() =>
+        (await RunAsync("Patient", enabled: false)).Should().BeEmpty();
 
     private sealed class StubHandler : HttpMessageHandler
     {

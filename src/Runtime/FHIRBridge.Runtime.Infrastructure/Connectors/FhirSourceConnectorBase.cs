@@ -90,12 +90,6 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
         _ = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
         var scopedSearchParameters = await ApplyPatientScopeAsync(resourceType, source, cancellationToken);
         scopedSearchParameters = MergeAdditionalQueryParameters(scopedSearchParameters, source);
-        if (DiagnosticsEnabled)
-        {
-            var launchPatient = _accessTokenProvider is IFhirPatientContextProvider contextProvider
-                && !string.IsNullOrWhiteSpace(await contextProvider.GetPatientContextAsync(source, cancellationToken));
-            LogDiagnosticScope(resourceType, source, scopedSearchParameters, launchPatient);
-        }
 
         // Some default parameters (category, status) list several values for the resource type — Epic (confirmed;
         // likely other EHRs too) doesn't OR multiple comma-joined tokens together in one request the way a single
@@ -467,11 +461,18 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
             lastException);
     }
 
-    // ---- Wire diagnostics (Runtime:Epic:Diagnostics) - see FhirHttpDiagnosticsOptions. Nothing here runs unless enabled.
-    private bool DiagnosticsEnabled => _options.Diagnostics.Enabled;
+    // ---- TEMP-DEBUG wire diagnostics: logs ONE request - GET <DiagnosticTargetUrl> - in full, and nothing else.
+    // Remove this block and the two calls in SendWithRetryAsync when done. Only the bearer token and cookies are masked;
+    // the query, every other header and the whole response body are written as they are, so they can contain PHI.
+    private const string DiagnosticTargetUrl = "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD/Patient";
+
+    private bool IsDiagnosticTarget(HttpRequestMessage request) =>
+        _options.Diagnostics.Enabled
+        && request.RequestUri is { } uri
+        && string.Equals(uri.GetLeftPart(UriPartial.Path).TrimEnd('/'), DiagnosticTargetUrl, StringComparison.OrdinalIgnoreCase);
 
     private static readonly System.Text.RegularExpressions.Regex SecretHeaderName = new(
-        "authorization|cookie|token|secret|key|password|assertion", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+        "authorization|cookie", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static string DescribeHeaders(IEnumerable<KeyValuePair<string, IEnumerable<string>>> headers) =>
         string.Join("; ", headers.Select(h =>
@@ -479,89 +480,46 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
                 ? $"{h.Key}: ***({string.Join(",", h.Value).Length} chars)"
                 : $"{h.Key}: {string.Join(", ", h.Value)}"));
 
-    private string DescribeQueryForDiagnostics(string? query)
-    {
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return "(none)";
-        }
-
-        if (_options.Diagnostics.IncludeQueryValues)
-        {
-            return Uri.UnescapeDataString(query.TrimStart('?'));
-        }
-
-        return string.Join("&", query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
-            .Select(pair => (pair.IndexOf('=') is var i and >= 0 ? Uri.UnescapeDataString(pair[..i]) : Uri.UnescapeDataString(pair)) + "=<withheld>"));
-    }
-
     private void LogDiagnosticRequest(HttpRequestMessage request, int attempt, int maxAttempts)
     {
-        if (!DiagnosticsEnabled)
+        if (!IsDiagnosticTarget(request))
         {
             return;
         }
 
-        var body = request.Content is null ? "(none)" : "(request has a body; not logged)";
         _logger.LogInformation(
-            "[FHIR-DIAG] {Source} REQUEST (attempt {Attempt}/{MaxAttempts}) {Method} {Path} | query: {Query} | headers: {Headers} | body: {Body}",
-            SourceDisplayName, attempt, maxAttempts, request.Method, request.RequestUri?.GetLeftPart(UriPartial.Path),
-            DescribeQueryForDiagnostics(request.RequestUri?.Query), DescribeHeaders(request.Headers), body);
+            "[FHIR-DIAG] REQUEST (attempt {Attempt}/{MaxAttempts}) {Method} {Url} | query: {Query} | headers: {Headers} | body: {Body}",
+            attempt, maxAttempts, request.Method, request.RequestUri,
+            string.IsNullOrEmpty(request.RequestUri?.Query) ? "(none)" : Uri.UnescapeDataString(request.RequestUri!.Query.TrimStart('?')),
+            DescribeHeaders(request.Headers),
+            request.Content is null ? "(none)" : "(request has a body; not logged)");
     }
 
     private async Task LogDiagnosticResponseAsync(HttpRequestMessage request, HttpResponseMessage response, TimeSpan elapsed)
     {
-        if (!DiagnosticsEnabled)
+        if (!IsDiagnosticTarget(request))
         {
             return;
         }
 
-        string body = "(not logged)";
-        if (_options.Diagnostics.IncludeResponseBody)
+        string body;
+        try
         {
-            try
-            {
-                // Buffered, so the caller can still read the content afterwards.
-                await response.Content.LoadIntoBufferAsync();
-                var text = (await response.Content.ReadAsStringAsync()).ReplaceLineEndings(" ").Trim();
-                var max = Math.Max(200, _options.Diagnostics.MaxBodyCharacters);
-                body = text.Length > max ? $"{text[..max]}... [{text.Length} chars total]" : $"{text} [{text.Length} chars]";
-            }
-            catch (Exception exception)
-            {
-                body = $"(could not read the response body: {exception.GetType().Name})";
-            }
+            // Buffered, so the caller can still read the content afterwards.
+            await response.Content.LoadIntoBufferAsync();
+            body = await response.Content.ReadAsStringAsync();
+        }
+        catch (Exception exception)
+        {
+            body = $"(could not read the response body: {exception.GetType().Name})";
         }
 
         _logger.LogInformation(
-            "[FHIR-DIAG] {Source} RESPONSE {StatusCode} {Reason} for {Method} {Path} in {ElapsedMs:0} ms | response headers: {Headers} | content headers: {ContentHeaders} | body: {Body}",
-            SourceDisplayName, (int)response.StatusCode, response.ReasonPhrase, request.Method,
-            request.RequestUri?.GetLeftPart(UriPartial.Path), elapsed.TotalMilliseconds,
-            DescribeHeaders(response.Headers), DescribeHeaders(response.Content.Headers), body);
+            "[FHIR-DIAG] RESPONSE {StatusCode} {Reason} for {Method} {Url} in {ElapsedMs:0} ms | response headers: {Headers} | content headers: {ContentHeaders} | body ({Length} chars): {Body}",
+            (int)response.StatusCode, response.ReasonPhrase, request.Method, request.RequestUri, elapsed.TotalMilliseconds,
+            DescribeHeaders(response.Headers), DescribeHeaders(response.Content.Headers), body.Length, body);
     }
-
-    /// <summary>How the search for one resource type was put together - flags and counts only, no values - so two ways of
-    /// starting the same workflow can be compared by what each one asked the connector to do.</summary>
-    private void LogDiagnosticScope(string resourceType, FhirSourceConfiguration source, string? scopedParameters, bool launchPatientPresent)
-    {
-        if (!DiagnosticsEnabled)
-        {
-            return;
-        }
-
-        _logger.LogInformation(
-            "[FHIR-DIAG] {Source} SCOPE {ResourceType} | applicationType={ApplicationType} patientSearchCriteria={HasPatientCriteria} " +
-            "runSearchCriteriaActive={RunCriteria} runOverridesActive={RunOverrides} searchParametersSet={HasSearchParameters} " +
-            "targetPatientId={HasTarget} cohortPatientIds={CohortCount} launchPatientInToken={LaunchPatient} ehrEndpointOverride={HasEndpoint} " +
-            "-> finalParameterNames=[{FinalNames}]",
-            SourceDisplayName, resourceType, source.ApplicationType,
-            !string.IsNullOrWhiteSpace(source.PatientSearchCriteria), source.RunSearchCriteriaActive, source.RunOverridesActive,
-            !string.IsNullOrWhiteSpace(source.SearchParameters), !string.IsNullOrWhiteSpace(source.TargetPatientId),
-            source.PatientIds?.Count ?? 0, launchPatientPresent, source.EhrEndpointId.HasValue,
-            string.Join(", ", (scopedParameters ?? string.Empty).Split('&', StringSplitOptions.RemoveEmptyEntries)
-                .Select(p => p.IndexOf('=') is var i and >= 0 ? p[..i] : p)));
-    }
-    // ---- end wire diagnostics
+    // ---- end TEMP-DEBUG wire diagnostics
 
     private async Task WaitForSourceThrottleAsync(
         FhirSourceConfiguration source,
