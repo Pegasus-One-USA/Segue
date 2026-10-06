@@ -1,0 +1,115 @@
+@page
+@model FHIRBridge.LicenseServer.Pages.ErrorReports.IndexModel
+@{
+    ViewData["Title"] = "Error Reports";
+}
+
+<div class="page-header">
+    <h1>Error Reports</h1>
+    <p class="page-subtitle">
+        Import an error report a client exported from their Error Dashboard (JSON or CSV) to review their
+        errors here. Click an import to open its dashboard.
+    </p>
+</div>
+
+<div class="panel">
+    <h2>Import a report</h2>
+
+    @if (Model.ErrorMessage is not null)
+    {
+        <p class="error">@Model.ErrorMessage</p>
+    }
+
+    <form method="post" enctype="multipart/form-data">
+        <div class="field">
+            <label for="ImportName">Import name</label>
+            <input type="text" id="ImportName" asp-for="ImportName" maxlength="200" placeholder="e.g. Acme - October outage" />
+            <span class="error" asp-validation-for="ImportName"></span>
+        </div>
+
+        <div class="field">
+            <label for="ClientName">Client</label>
+            <input type="text" id="ClientName" asp-for="ClientName" maxlength="200" list="known-clients" placeholder="Which client is this report from?" autocomplete="off" />
+            <datalist id="known-clients">
+                @foreach (var client in Model.KnownClients)
+                {
+                    <option value="@client"></option>
+                }
+            </datalist>
+            <span class="error" asp-validation-for="ClientName"></span>
+        </div>
+
+        <div class="field">
+            <label for="ReportFile">Report file (.json or .csv)</label>
+            <input type="file" id="ReportFile" name="ReportFile" accept=".json,.csv" />
+            <span class="error" asp-validation-for="ReportFile"></span>
+        </div>
+
+        <button type="submit">Import</button>
+    </form>
+</div>
+
+<h2 style="margin-top:24px;">Imports</h2>
+
+@if (Model.Imports.Count == 0)
+{
+    <div class="panel empty-state">
+        <p>Nothing has been imported yet.</p>
+    </div>
+}
+else
+{
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>Import name</th>
+                    <th>Client</th>
+                    <th>Report period</th>
+                    <th>Errors</th>
+                    <th>Imported</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var import in Model.Imports)
+                {
+                    <tr class="clickable-row" onclick="location.href='/ErrorReports/Details/@import.Id'">
+                        <td>
+                            <a href="/ErrorReports/Details/@import.Id"><strong>@import.Name</strong></a>
+                            <div class="muted">@import.SourceFileName (@import.Format.ToUpperInvariant())</div>
+                        </td>
+                        <td>@import.ClientName</td>
+                        <td>
+                            @if (import.ReportFromUtc is not null && import.ReportToUtc is not null)
+                            {
+                                <div>@import.ReportFromUtc.Value.ToString("yyyy-MM-dd") &rarr; @import.ReportToUtc.Value.ToString("yyyy-MM-dd")</div>
+                            }
+                            else
+                            {
+                                <span class="muted">unknown</span>
+                            }
+                        </td>
+                        <td>
+                            @import.ErrorCount
+                            @if (import.ReportTruncated)
+                            {
+                                <div class="muted">truncated by client export</div>
+                            }
+                        </td>
+                        <td>
+                            <div>@import.ImportedAtUtc.ToString("u")</div>
+                            <div class="muted">by @import.ImportedBy</div>
+                        </td>
+                        <td>
+                            <form method="post" asp-page-handler="Delete" asp-route-id="@import.Id" onclick="event.stopPropagation()"
+                                  onsubmit="return confirm('Delete this import and its errors?');">
+                                <button type="submit" class="btn-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

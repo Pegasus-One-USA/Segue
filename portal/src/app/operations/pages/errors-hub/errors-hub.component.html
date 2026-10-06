@@ -1,0 +1,21 @@
+<div class="hub">
+  <div class="page-header">
+    <h1>Errors</h1>
+    <p class="page-sub">Problems that happened while running your workflows or connecting to Segue. Use the Overview to see what is happening and share a report; use All errors to search, filter and resolve individual errors.</p>
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Errors views">
+    <button class="tab" type="button" role="tab" id="tab-overview" [class.tab--active]="view() === 'overview'"
+            [attr.aria-selected]="view() === 'overview'" (click)="select('overview')">Overview</button>
+    <button class="tab" type="button" role="tab" id="tab-list" [class.tab--active]="view() === 'list'"
+            [attr.aria-selected]="view() === 'list'" (click)="select('list')">All errors</button>
+  </div>
+
+  <div role="tabpanel" [attr.aria-labelledby]="view() === 'overview' ? 'tab-overview' : 'tab-list'">
+    @if (view() === 'overview') {
+      <app-error-dashboard [embedded]="true" (viewInList)="showInList($event)" />
+    } @else {
+      <app-errors [embedded]="true" />
+    }
+  </div>
+</div>

@@ -1,4 +1,4 @@
-﻿using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.DTOs;
 using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 using FHIRBridge.Domain.Fhir;
@@ -304,6 +304,24 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         if (_sourceClientFactory is null || source is null)
         {
             return await base.ExecuteAsync(context, node, inputs, cancellationToken);
+        }
+
+        if (!source.AllowsRead)
+        {
+            // A Write-only connection exists for EHR write-back; its client id may not even be registered for reads.
+            throw new InvalidOperationException(
+                $"Source connection '{source.Name}' is set to Write only and cannot be read from. " +
+                "Set its Access to Read or Read & Write to use it as a workflow source.");
+        }
+
+        FHIRBridge.Governance.ErrorContext.Set(
+            sourceName: source.Name,
+            resourceType: configuredResourceType
+                ?? (configuredResources is { Count: > 0 } ? string.Join(", ", configuredResources.Take(5)) : null));
+        FHIRBridge.Governance.WorkflowDebug.Write($"Source connection resolved: ‘{source.Name}’ ({source.SourceType}); starting to fetch data.");
+        if (FHIRBridge.Governance.WorkflowDebug.StagesEnabled)
+        {
+            FHIRBridge.Governance.WorkflowDebug.Stage(FHIRBridge.Runtime.Infrastructure.Workflows.WorkflowDebugConfig.DescribeSource(source));
         }
 
         // Per-resource-type criteria authored in the destination wizard's Map-fields step, keyed by workflow +
@@ -788,6 +806,14 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 resource.ResourceType,
                 resource.ResourceId ?? string.Empty,
                 resource.RawJson)));
+            FHIRBridge.Governance.WorkflowDebug.Stage($"Fetched {page.Count} ‘{type}’ resource(s) from source ‘{source.Name}’.");
+            if (FHIRBridge.Governance.WorkflowDebug.ResourcesEnabled)
+            {
+                foreach (var fetched in page)
+                {
+                    FHIRBridge.Governance.WorkflowDebug.Resource(() => $"Resource {fetched.ResourceType}/{fetched.ResourceId} fetched from source ‘{source.Name}’.");
+                }
+            }
 
             _logger.LogInformation(
                 LogEvents.ResourceTypeExtracted,
@@ -1521,6 +1547,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             {
                 // One Practitioner's PractitionerRole search failing (unauthorized, transient) only drops the
                 // roles tied to that one practitioner, not the whole resource type.
+                FHIRBridge.Governance.SwallowedError.Report(exception, "Source.PractitionerRole search");
                 continue;
             }
 

@@ -40,7 +40,8 @@ public static class ConfigurationMapper
             sourceConnection.CreatedOnUtc,
             sourceConnection.CreatedBy,
             sourceConnection.ModifiedOnUtc,
-            sourceConnection.ModifiedBy);
+            sourceConnection.ModifiedBy,
+            sourceConnection.Access);
     }
 
     private static SourceInteractiveConfigurationDto? ToDto(SourceInteractiveConfiguration? interactive) =>

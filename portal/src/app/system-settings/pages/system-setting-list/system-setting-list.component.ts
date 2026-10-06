@@ -156,6 +156,14 @@ const LAUNCHER_ROWS: readonly LauncherRow[] = [
     summary: 'External identity providers for single sign-on',
     superAdminOnly: true,
   },
+  {
+    isLauncher: true,
+    code: 'error-log',
+    label: 'Error Log Handling',
+    summary: 'Which errors are recorded, how long they are kept, auto-clear and log size',
+    // Same permission the Errors screens use; saving inside needs governance.write.
+    permissions: ['governance.read'],
+  },
 ];
 
 @Component({

@@ -124,6 +124,28 @@ public sealed class ScopeGeneratorService : IScopeGeneratorService
             }
         }
 
+        // A note's text usually sits in a Binary its DocumentReference links to (eCW does this for every note), and
+        // the EHR write-back reads that Binary to file the note. Requested alongside DocumentReference only when this
+        // server is known to publish a Binary read scope (discovery or a vendor profile): guessing one could fail the
+        // whole token request on a vendor that rejects a single unknown scope.
+        if (prefix == "system"
+            && requestedResourceTypes.Contains("DocumentReference", StringComparer.OrdinalIgnoreCase)
+            && !requestedResourceTypes.Contains("Binary", StringComparer.OrdinalIgnoreCase))
+        {
+            var binaryAccessLevel = supportedScopes is { Count: > 0 }
+                ? FindAdvertisedReadAccessLevel(prefix, "Binary", supportedScopes)
+                : null;
+            if (binaryAccessLevel is null && profile is not null && profile.TryGetReadAccessLevel("Binary", out var profiledLevel))
+            {
+                binaryAccessLevel = profiledLevel;
+            }
+
+            if (binaryAccessLevel is not null)
+            {
+                resourceScopes.Add($"{prefix}/Binary.{binaryAccessLevel}");
+            }
+        }
+
         scopes.AddRange(resourceScopes);
 
         // Group $export (bulk) needs the Group read scope on top of the per-resource scopes above — eCW's Backend

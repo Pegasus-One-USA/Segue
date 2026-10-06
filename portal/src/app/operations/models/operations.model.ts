@@ -56,6 +56,105 @@ export interface ErrorLogEntry {
   diagnosisAction: string | null;
   /** Plain-language cause paired with diagnosisAction — sourced from the same computation as userFriendlyMessage. */
   diagnosisCause: string | null;
+  /** Where it failed, in human terms (admin-defined names and FHIR type names - never patient data). */
+  workflowName: string | null;
+  nodeName: string | null;
+  nodeType: string | null;
+  sourceName: string | null;
+  destinationName: string | null;
+  resourceType: string | null;
+}
+
+/** Matches the backend's ErrorLogSettings / ErrorLogStorageDto (api/v1/operations/error-log-settings). */
+export interface ErrorLogSettings {
+  captureSeverities: string[];
+  captureCategories: string[];
+  autoClearEnabled: boolean;
+  retentionDays: number;
+  /** 'Steps' | 'Stages' | 'Resources' - how detailed the WorkflowDebug trace is. */
+  workflowDebugDetail: string;
+}
+export interface ErrorLogStorage {
+  entryCount: number;
+  /** Space the database has allocated - often does not shrink after deletes. */
+  sizeBytes: number | null;
+  oldestUtc: string | null;
+  newestUtc: string | null;
+  /** Approximate size of the stored entries - the figure that goes down when entries are deleted. */
+  dataBytes: number | null;
+}
+export interface ErrorLogSettingsResponse {
+  settings: ErrorLogSettings;
+  storage: ErrorLogStorage;
+  availableSeverities: string[];
+  availableCategories: string[];
+  /** Deployment-set retention floor in days; nothing newer can be deleted. 0 = none. */
+  minimumRetentionDays: number;
+}
+/** Result of permanently deleting errors (POST operations/errors/delete). */
+export interface ErrorLogDeleteResult {
+  deleted: number;
+  spaceReclaimed: boolean;
+  note: string | null;
+}
+export interface ErrorLogPurgeResult {
+  deleted: number;
+  cutoffUtc: string;
+}
+
+/** Matches the backend's ErrorCorrelationDto: the run timeline around one error's correlation id. */
+export interface ErrorCorrelationEvent {
+  occurredUtc: string;
+  source: string;
+  title: string;
+  status: string | null;
+  detail: string | null;
+}
+export interface ErrorCorrelation {
+  correlationId: string;
+  runStatus: string | null;
+  runStartedUtc: string | null;
+  runCompletedUtc: string | null;
+  extractedCount: number | null;
+  mappedCount: number | null;
+  writtenCount: number | null;
+  events: ErrorCorrelationEvent[];
+  truncated: boolean;
+}
+
+/** Matches the backend's ErrorDashboardDto (api/v1/operations/errors/dashboard). */
+export interface ErrorCount { key: string; count: number; }
+export interface ErrorDayCount { dayUtc: string; count: number; }
+export interface ErrorSignature {
+  exceptionType: string;
+  module: string | null;
+  category: string | null;
+  sampleMessage: string;
+  count: number;
+  openCount: number;
+  firstSeenUtc: string;
+  lastSeenUtc: string;
+  sampleErrorReferenceId: string | null;
+}
+export interface ErrorDashboard {
+  fromUtc: string;
+  toUtc: string;
+  total: number;
+  open: number;
+  resolved: number;
+  critical: number;
+  last24Hours: number;
+  selfFixCount: number;
+  contactSupportCount: number;
+  bySeverity: ErrorCount[];
+  byCategory: ErrorCount[];
+  byModule: ErrorCount[];
+  byDay: ErrorDayCount[];
+  topSignatures: ErrorSignature[];
+  /** Set when an admin cleared the dashboard: errors recorded before this time are hidden here. */
+  clearedAtUtc: string | null;
+  /** True when the period holds more errors than the summary reads (the newest 20,000). */
+  truncated: boolean;
 }
 
 /** Multi-criteria filter for the Monitoring → Errors search (Phase 6A). All fields optional. */

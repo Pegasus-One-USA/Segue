@@ -37,6 +37,27 @@ public sealed class InMemoryWorkflowRunStore : IWorkflowRunStore
         return Task.FromResult(stale.Count);
     }
 
+    public Task<int> FailInterruptedRunsAsync(
+        WorkflowRunHost host,
+        DateTimeOffset startedBeforeUtc,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var interrupted = _runs.Values
+            .Where(run => run.Status == WorkflowRunStatus.Running
+                && run.StartedAt < startedBeforeUtc
+                && WorkflowRunHosts.HostOf(run) == host)
+            .ToList();
+
+        var failedAt = DateTimeOffset.UtcNow;
+        foreach (var run in interrupted)
+        {
+            run.Fail(reason, failedAt);
+        }
+
+        return Task.FromResult(interrupted.Count);
+    }
+
     public Task<WorkflowRun?> FindValidatedAsync(
         Guid workflowDefinitionId,
         string correlationId,

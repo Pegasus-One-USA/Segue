@@ -89,7 +89,9 @@ public sealed class GovernanceController : ControllerBase
     [ProducesResponseType(typeof(CorrelationSearchResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetCorrelationSearchResult(
-        [FromQuery] string correlationId, CancellationToken cancellationToken)
+        [FromQuery] string correlationId,
+        [FromServices] FHIRBridge.Application.Abstractions.Security.IUserDisplayNameResolver userDisplayNameResolver,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(correlationId))
         {
@@ -97,6 +99,19 @@ public sealed class GovernanceController : ControllerBase
         }
 
         var result = await _governanceQueryService.GetCorrelationSearchResultAsync(correlationId, cancellationToken);
+
+        // A workflow run's TriggeredBy stores the user's id; show who it was, not the GUID.
+        if (result.WorkflowRuns.Count > 0)
+        {
+            var names = await userDisplayNameResolver.ResolveAsync(result.WorkflowRuns.Select(run => run.TriggeredBy), cancellationToken);
+            result = result with
+            {
+                WorkflowRuns = result.WorkflowRuns
+                    .Select(run => run.TriggeredBy is { } id ? run with { TriggeredBy = names.GetValueOrDefault(id, id) } : run)
+                    .ToList(),
+            };
+        }
+
         return Ok(result);
     }
 

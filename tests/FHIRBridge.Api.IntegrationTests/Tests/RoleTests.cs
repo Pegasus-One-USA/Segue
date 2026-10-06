@@ -164,18 +164,16 @@ public sealed class RoleTests(ApiFixture f)
     }
 
     [Fact]
-    public async Task DELETE_roles__system_role__returns_400()
+    public async Task DELETE_roles__superadmin_role__returns_400()
     {
-        // Seeded system roles should be protected from deletion
+        // SuperAdmin alone is never deletable (RoleManagementService.DeleteRoleAsync); other built-in roles
+        // can be deleted once no user holds them, so the test targets SuperAdmin specifically.
         var rolesResp = await f.AdminClient.GetAsync("/api/v1/roles");
         var roles = JsonDocument.Parse(await rolesResp.Content.ReadAsStringAsync()).RootElement;
-        var systemRole = roles.EnumerateArray()
-            .FirstOrDefault(r => r.TryGetProperty("isSystemRole", out var sr) && sr.GetBoolean());
+        var superAdmin = roles.EnumerateArray()
+            .Single(r => string.Equals(r.GetProperty("name").GetString(), "SuperAdmin", StringComparison.OrdinalIgnoreCase));
 
-        if (systemRole.ValueKind == JsonValueKind.Undefined)
-            return; // no system role found — skip
-
-        var roleId = systemRole.GetProperty("id").GetGuid();
+        var roleId = superAdmin.GetProperty("id").GetGuid();
         var resp = await f.AdminClient.DeleteAsync($"/api/v1/roles/{roleId}");
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }

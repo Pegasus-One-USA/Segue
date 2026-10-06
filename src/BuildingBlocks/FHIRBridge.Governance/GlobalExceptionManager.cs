@@ -1,4 +1,5 @@
 using FHIRBridge.Observability.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Governance;
 
@@ -14,18 +15,63 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
     private readonly IExceptionClassifier _classifier;
     private readonly IFailureDiagnosisClassifier _diagnosisClassifier;
     private readonly IPhiRedactor _redactor;
+    private readonly IErrorScrubber _scrubber;
+    private readonly IErrorSinkRouter? _sinkRouter;
+    private readonly IErrorCapturePolicy? _policy;
+    private readonly ILogger<GlobalExceptionManager>? _logger;
+    private readonly IErrorWriteQueue? _writeQueue;
+    private readonly ICorrelationIdAccessor? _correlation;
 
     public GlobalExceptionManager(
         IGovernanceLogger governanceLogger,
         IExceptionClassifier classifier,
         IFailureDiagnosisClassifier? diagnosisClassifier = null,
-        IPhiRedactor? redactor = null)
+        IPhiRedactor? redactor = null,
+        IErrorScrubber? scrubber = null,
+        IErrorSinkRouter? sinkRouter = null,
+        IErrorCapturePolicy? policy = null,
+        ILogger<GlobalExceptionManager>? logger = null,
+        IErrorWriteQueue? writeQueue = null,
+        ICorrelationIdAccessor? correlation = null)
     {
+        _writeQueue = writeQueue;
+        _correlation = correlation;
+        _policy = policy;
+        _logger = logger;
         _governanceLogger = governanceLogger;
         _classifier = classifier;
         _diagnosisClassifier = diagnosisClassifier ?? new DefaultFailureDiagnosisClassifier();
         // HIPAA #10: same redaction rule set as the Serilog PhiMaskingEnricher — see its remarks.
         _redactor = redactor ?? new PhiRedactor();
+        // Central scrubber + configurable sinks (table / Application Insights / both). Both optional: when the host
+        // has not called AddFhirBridgeErrorCapture, behaviour is the original table-only capture.
+        _scrubber = scrubber ?? new ErrorScrubber(_redactor);
+        _sinkRouter = sinkRouter;
+    }
+
+    private Task WriteAsync(ErrorEntry entry, CancellationToken cancellationToken)
+    {
+        if (_writeQueue is not null)
+        {
+            // Recording an error never makes the caller wait: the entry is handed to the background writer (which retries
+            // while the table is busy or locked) and the caller carries on. What the writer cannot read later - the
+            // request's correlation id and the time it happened - is fixed now.
+            // Trade-off: the reference id is returned once the entry is QUEUED, not stored. If the database stays down
+            // past the writer's retries the entry is dropped (ErrorWriteService logs the id and tries Application
+            // Insights), so an id can then have no ErrorLogs row. Accepted to keep error handling non-blocking.
+            var queued = entry with
+            {
+                CorrelationId = entry.CorrelationId ?? _correlation?.CorrelationId,
+                OccurredUtc = entry.OccurredUtc ?? DateTime.UtcNow,
+            };
+            return _writeQueue.TryEnqueue(queued)
+                ? Task.CompletedTask
+                : Task.FromException(new InvalidOperationException("The error write queue is full."));
+        }
+
+        return _sinkRouter is null
+            ? _governanceLogger.LogErrorAsync(entry, cancellationToken)
+            : _sinkRouter.WriteAsync(entry, cancellationToken);
     }
 
     // Bounds retry-on-collision below: a same-day process restart can regenerate a reference id that collides
@@ -42,8 +88,46 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
             ? DefaultMessageFor(category, diagnosis)
             : context.UserFriendlyMessageOverride!;
 
+        // Tell the ambient catch-all this failure is handled, so it is never recorded a second time.
+        CapturedExceptionRegistry.Mark(exception);
+
+        // Error-log settings: an admin can switch off whole severities / categories. A skipped error is simply not
+        // recorded (no reference id is handed out - see ErrorReport).
+        if (_policy is not null && !_policy.Current.ShouldCapture(context.Severity, category.ToString()))
+        {
+            return new ErrorReport(null, category, friendlyMessage, context.CorrelationId, diagnosis.Action);
+        }
+        var where = ErrorContext.For(exception);
+        string? Name(string? explicitValue, string? ambient)
+        {
+            var value = string.IsNullOrWhiteSpace(explicitValue) ? ambient : explicitValue;
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            var clean = _scrubber.ScrubText(value);
+            return clean.Length <= 200 ? clean : clean[..200];
+        }
+
+        var workflowName = Name(context.WorkflowName, where?.WorkflowName);
+        var nodeName = Name(context.NodeName, where?.NodeName);
+        var nodeType = Name(context.NodeType, where?.NodeType);
+        var sourceName = Name(context.SourceName, where?.SourceName);
+        var destinationName = Name(context.DestinationName, where?.DestinationName);
+        var resourceType = Name(context.ResourceType, where?.ResourceType);
+
+        ScrubbedError scrubbed;
+        try
+        {
+            scrubbed = _scrubber.Scrub(exception);
+        }
+        catch
+        {
+            // Fail closed: if scrubbing itself breaks, record that the error happened but none of its text.
+            const string withheld = "[withheld: scrubbing failed]";
+            scrubbed = new ScrubbedError(exception.GetType().Name, withheld, withheld, exception.GetType().Name, withheld);
+        }
+
         var referenceId = ErrorReference.New();
         var persisted = false;
+        ErrorEntry? lastEntry = null;
 
         // Capturing an error must never itself throw — a failure here (e.g. DB unreachable) must not mask the
         // original exception or crash the host. On failure, a fresh reference id is tried again (see remarks on
@@ -55,12 +139,11 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
         {
             try
             {
-                await _governanceLogger.LogErrorAsync(
-                    new ErrorEntry(
+                lastEntry = new ErrorEntry(
                         context.Severity,
-                        exception.GetType().Name,
-                        _redactor.Redact(exception.Message) ?? exception.Message,
-                        _redactor.Redact(exception.ToString()) ?? exception.ToString(),
+                        scrubbed.ExceptionType,
+                        scrubbed.Message,
+                        scrubbed.Detail,
                         context.Module,
                         context.CorrelationId,
                         referenceId,
@@ -73,17 +156,26 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
                         context.TraceId,
                         context.SpanId,
                         diagnosis.Action,
-                        diagnosis.Cause),
-                    cancellationToken);
+                        diagnosis.Cause,
+                        workflowName,
+                        nodeName,
+                        nodeType,
+                        sourceName,
+                        destinationName,
+                        resourceType);
+                await WriteAsync(lastEntry, cancellationToken);
 
                 persisted = true;
                 break;
             }
-            catch
+            catch (Exception caught)
             {
                 if (attempt == MaxCaptureAttempts)
                 {
-                    // Intentionally swallowed: see remarks above.
+                    // Intentionally swallowed (see remarks above) - but never silently: say so in the application log.
+                    _logger?.LogWarning(
+                        caught, "Could not record an error entry ({ExceptionType}); it was not written to the error log.",
+                        exception.GetType().Name);
                     break;
                 }
 
@@ -91,7 +183,89 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
             }
         }
 
+        if (!persisted && lastEntry is not null && _sinkRouter is not null)
+        {
+            // Table unreachable on every attempt: if Application Insights is configured it still receives the error.
+            try
+            {
+                persisted = await _sinkRouter.WriteFallbackAsync(lastEntry with { ErrorReferenceId = referenceId }, cancellationToken);
+            }
+            catch
+            {
+                // Intentionally swallowed: see remarks above.
+            }
+        }
+
         return new ErrorReport(persisted ? referenceId : null, category, friendlyMessage, context.CorrelationId, diagnosis.Action);
+    }
+
+    public async Task<string?> CaptureTraceAsync(
+        string severity, string entryType, string message, ExceptionContext context,
+        DateTime? occurredUtc = null, CancellationToken cancellationToken = default)
+    {
+        if (_policy is not null && !_policy.Current.ShouldCapture(severity, null))
+        {
+            return null;
+        }
+
+        string? Name(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            var clean = _scrubber.ScrubText(value);
+            return clean.Length <= 200 ? clean : clean[..200];
+        }
+
+        var referenceId = ErrorReference.New();
+        for (var attempt = 1; attempt <= MaxCaptureAttempts; attempt++)
+        {
+            try
+            {
+                await WriteAsync(
+                    new ErrorEntry(
+                        severity,
+                        entryType,
+                        _scrubber.ScrubText(message),
+                        StackTrace: null,
+                        context.Module,
+                        context.CorrelationId,
+                        referenceId,
+                        Category: null,
+                        UserFriendlyMessage: null,
+                        context.ExecutionId,
+                        context.WorkflowId,
+                        context.EndpointId,
+                        context.RequestId,
+                        context.TraceId,
+                        context.SpanId,
+                        DiagnosisAction: null,
+                        DiagnosisCause: null,
+                        Name(context.WorkflowName),
+                        Name(context.NodeName),
+                        Name(context.NodeType),
+                        Name(context.SourceName),
+                        Name(context.DestinationName),
+                        Name(context.ResourceType),
+                        occurredUtc),
+                    cancellationToken);
+                return referenceId;
+            }
+            catch (Exception caught)
+            {
+                if (attempt == MaxCaptureAttempts)
+                {
+                    // Same never-throw guarantee as the other capture paths: a trace line must not fail the run it
+                    // describes. But say why it was lost - most often the ErrorLogs table is missing a column
+                    // (database migrations not applied) or the database is unreachable.
+                    _logger?.LogWarning(caught, "Could not record a {Severity} entry in the error log.", severity);
+                    return null;
+                }
+
+                // A reference id minted before a same-day restart can collide with one already stored: try a fresh one.
+                referenceId = ErrorReference.New();
+            }
+        }
+
+        return null;
     }
 
     public async Task<string?> CaptureExpectedAsync(
@@ -105,11 +279,11 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
         // id" guarantee.
         try
         {
-            await _governanceLogger.LogErrorAsync(
+            await WriteAsync(
                 new ErrorEntry(
                     "Informational",
                     failure.ExceptionType,
-                    failure.Message,
+                    _scrubber.ScrubText(failure.Message),
                     StackTrace: null,
                     context.Module,
                     context.CorrelationId,

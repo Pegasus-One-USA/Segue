@@ -434,8 +434,10 @@ export const routes: Routes = [
             canActivate: [permissionGuard],
             data: { permissions: ['governance.read'] },
             loadComponent: () =>
-              import('./operations/pages/errors/errors.component').then(m => m.ErrorsComponent),
+              import('./operations/pages/errors-hub/errors-hub.component').then(m => m.ErrorsHubComponent),
           },
+          // The old standalone dashboard now lives on the Errors screen's Overview tab - keep bookmarks working.
+          { path: 'error-dashboard', redirectTo: () => inject(Router).parseUrl('/operations/errors?view=overview') },
           {
             path: 'api-requests',
             canActivate: [permissionGuard],
@@ -464,6 +466,15 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./operations/pages/validation-failures/validation-failures.component').then(
                 m => m.ValidationFailuresComponent
+              ),
+          },
+          {
+            path: 'ehr-write-review',
+            canActivate: [permissionGuard],
+            data: { permissions: ['ehrwriteback.view'] },
+            loadComponent: () =>
+              import('./operations/pages/ehr-write-review/ehr-write-review.component').then(
+                m => m.EhrWriteReviewComponent
               ),
           },
           {

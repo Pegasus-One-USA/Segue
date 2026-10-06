@@ -14,12 +14,12 @@ namespace FHIRBridge.Api.IntegrationTests.Tests;
 [Collection("ApiTests")]
 public sealed class MappingProfileMasterScreenTests(ApiFixture f)
 {
-    private static object Body(string name, string resourceType = "Patient") => new
+    private static object Body(string name, Guid sourceConnectionId, Guid destinationId, string resourceType = "Patient") => new
     {
         Name = name,
         ResourceType = resourceType,
-        SourceConnectionId = Guid.NewGuid(),
-        DestinationId = Guid.NewGuid(),
+        SourceConnectionId = sourceConnectionId,
+        DestinationId = destinationId,
         DestinationObject = "dbo.Patients",
         Fields = new[]
         {
@@ -34,9 +34,36 @@ public sealed class MappingProfileMasterScreenTests(ApiFixture f)
         },
     };
 
+    /// <summary>A mapping profile must name a source connection and a destination that exist (the API checks
+    /// both), so each profile gets its own pair.</summary>
+    private async Task<(Guid SourceConnectionId, Guid DestinationId)> CreateReferencesAsync()
+    {
+        var sourceResp = await f.AdminClient.PostAsJsonAsync("/api/v1/source-connections", new
+        {
+            Name = $"MP-Source-{Guid.NewGuid():N}",
+            SourceSystemType = "GenericFhir",
+            BaseUrl = "https://example.test/fhir",
+            Authentication = new { AuthenticationType = "None", Scopes = Array.Empty<string>() },
+        });
+        sourceResp.EnsureSuccessStatusCode();
+        var destinationResp = await f.AdminClient.PostAsJsonAsync("/api/v1/destinations", new
+        {
+            Name = $"MP-Destination-{Guid.NewGuid():N}",
+            DestinationType = "SqlServer",
+            KeyVaultName = "test-vault",
+            SecretName = $"secret-{Guid.NewGuid():N}",
+            Target = "dbo.Patients",
+        });
+        destinationResp.EnsureSuccessStatusCode();
+        return (
+            JsonDocument.Parse(await sourceResp.Content.ReadAsStringAsync()).RootElement.GetProperty("id").GetGuid(),
+            JsonDocument.Parse(await destinationResp.Content.ReadAsStringAsync()).RootElement.GetProperty("id").GetGuid());
+    }
+
     private async Task<Guid> CreateMappingProfileAsync(string name, string resourceType = "Patient")
     {
-        var resp = await f.AdminClient.PostAsJsonAsync("/api/v1/mapping-profiles", Body(name, resourceType));
+        var (sourceConnectionId, destinationId) = await CreateReferencesAsync();
+        var resp = await f.AdminClient.PostAsJsonAsync("/api/v1/mapping-profiles", Body(name, sourceConnectionId, destinationId, resourceType));
         resp.EnsureSuccessStatusCode();
         var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
         return doc.GetProperty("id").GetGuid();

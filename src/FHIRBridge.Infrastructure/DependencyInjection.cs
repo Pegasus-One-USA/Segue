@@ -216,6 +216,10 @@ public static class DependencyInjection
         // that's the in-memory or EF-backed implementation registered below.
         services.AddScoped<IUserDisplayNameResolver, UserDisplayNameResolver>();
 
+        // Registered unconditionally: the API's HttpContextCurrentUserService depends on it with or without a
+        // database (it was database-only, which left the no-database host unable to resolve the current user).
+        services.TryAddSingleton<IAmbientActorContext, AmbientActorContext>();
+
         var connectionString = configuration.GetConnectionString("FHIRBridgeDb");
         var persistenceProvider = configuration.GetValue("Database:Provider", PersistenceProvider.SqlServer);
 
@@ -230,6 +234,15 @@ public static class DependencyInjection
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
+            services.AddSingleton<IEhrWriteLedgerRepository, InMemoryEhrWriteLedgerRepository>();
+            services.AddSingleton<ITabularSourceFileRepository, InMemoryTabularSourceFileRepository>();
+            // These had no no-database registration, so every screen that used one failed in this profile.
+            services.AddSingleton<ITransformationRuleRepository, InMemoryTransformationRuleRepository>();
+            services.AddSingleton<IDeIdentificationProfileRepository, InMemoryDeIdentificationProfileRepository>();
+            services.AddSingleton<IResourceTypeCriteriaRepository, InMemoryResourceTypeCriteriaRepository>();
+            services.AddSingleton<ISchemaMappingRepository, InMemorySchemaMappingRepository>();
+            services.AddSingleton<IUserFhirContextBindingRepository, InMemoryUserFhirContextBindingRepository>();
+            services.AddSingleton<IBulkExportJobRepository, InMemoryBulkExportJobRepository>();
             services.AddSingleton<ILicenseRequestRepository, InMemoryLicenseRequestRepository>();
             services.AddSingleton<ILicenseHistoryRepository, InMemoryLicenseHistoryRepository>();
             services.AddSingleton<INotificationSettingsRepository, InMemoryNotificationSettingsRepository>();
@@ -243,6 +256,7 @@ public static class DependencyInjection
             services.AddSingleton<IGovernanceLogger, NullGovernanceLogger>();
             services.AddSingleton<IGovernanceQueryService, EmptyGovernanceQueryService>();
             services.AddSingleton<IErrorResolutionService, NullErrorResolutionService>();
+            services.AddSingleton<IErrorLogMaintenanceService, NullErrorLogMaintenanceService>();
             services.AddSingleton<IComplianceReportService, NullComplianceReportService>();
             services.AddSingleton<IAuditChainVerificationService, NullAuditChainVerificationService>();
             services.AddSingleton<IGovernanceLogArchiveWriter, NullGovernanceLogArchiveWriter>();
@@ -261,8 +275,8 @@ public static class DependencyInjection
         else
         {
             // Fallback actor source for audit stamping in hosts without an HTTP context (Worker, migrations).
-            // The API host registers an HTTP-aware ICurrentUserService that takes precedence over this.
-            services.TryAddSingleton<IAmbientActorContext, AmbientActorContext>();
+            // The API host registers an HTTP-aware ICurrentUserService that takes precedence over this. The
+            // ambient actor context itself is registered above, for both profiles.
             services.TryAddScoped<ICurrentUserService, SystemCurrentUserService>();
             services.AddScoped<AuditingSaveChangesInterceptor>();
             // Singleton, not Scoped: it now only holds IServiceScopeFactory + ILogger (both safe as
@@ -272,7 +286,9 @@ public static class DependencyInjection
             services.AddSingleton<LicenseEnforcementSaveChangesInterceptor>();
             services.AddScoped<IGovernanceLogger, EfGovernanceLogger>();
             services.AddScoped<IGovernanceQueryService, EfGovernanceQueryService>();
+            services.AddScoped<FHIRBridge.Governance.IErrorCorrelationSource, FHIRBridge.Application.Services.Governance.ErrorCorrelationSource>();
             services.AddScoped<IErrorResolutionService, EfErrorResolutionService>();
+            services.AddScoped<IErrorLogMaintenanceService, EfErrorLogMaintenanceService>();
             services.AddScoped<IAuditChainVerificationService, EfAuditChainVerificationService>();
             services.AddScoped<Application.Abstractions.Licensing.IUsageLedgerRepository, EfUsageLedgerRepository>();
             services.AddScoped<Application.Abstractions.Licensing.ILicenseUsageExecutionStatsProvider, EfLicenseUsageExecutionStatsProvider>();
@@ -329,6 +345,8 @@ public static class DependencyInjection
             services.AddScoped<ITransformationRuleRepository, EfTransformationRuleRepository>();
             services.AddScoped<IDeIdentificationProfileRepository, EfDeIdentificationProfileRepository>();
             services.AddScoped<IResourceTypeCriteriaRepository, EfResourceTypeCriteriaRepository>();
+            services.AddScoped<IEhrWriteLedgerRepository, EfEhrWriteLedgerRepository>();
+            services.AddScoped<ITabularSourceFileRepository, EfTabularSourceFileRepository>();
             services.AddScoped<IDeIdentificationProfileSeeder, DeIdentificationProfileSeeder>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
@@ -395,6 +413,12 @@ public static class DependencyInjection
         services.AddSingleton<IFailureDiagnosisRule, FHIRBridge.Infrastructure.Governance.MongoDestinationFailureDiagnosisRule>();
         services.AddSingleton<IFailureDiagnosisClassifier, DefaultFailureDiagnosisClassifier>();
         services.AddScoped<IGlobalExceptionManager, GlobalExceptionManager>();
+        services.AddScoped<ICorrelationIdAccessor, FHIRBridge.Infrastructure.Governance.CurrentUserCorrelationIdAccessor>();
+
+        // Error log handling (what is captured / how long it is kept): saved as one system setting, read through a
+        // cached, non-blocking policy by every host.
+        services.AddScoped<IErrorLogSettingsStore, FHIRBridge.Infrastructure.Governance.SystemSettingsErrorLogSettingsStore>();
+        services.Replace(ServiceDescriptor.Singleton<IErrorCapturePolicy, FHIRBridge.Infrastructure.Governance.SettingsErrorCapturePolicy>());
 
         services.AddRuntimeInfrastructure(configuration);
         services.AddMessaging(configuration);
@@ -532,6 +556,24 @@ public static class DependencyInjection
         services.TryAddSingleton<IBackendServicesJwtFactory, FHIRBridge.Runtime.Infrastructure.Auth.BackendServicesJwtFactory>();
         services.AddSingleton<IMedplumTokenProvider, MedplumTokenProvider>();
         services.AddScoped<MappedMedplumDestinationWriter>();
+        // EHR write-back: one profile per (vendor, resource type), resolved through the registry, never a switch.
+        // A new vendor or API is a new profile registered here.
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicAllergyIntoleranceWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicConditionWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicClinicalNoteWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicVitalSignWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicPatientWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowAllergyIntoleranceWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowConditionWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowVitalSignWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowPatientWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.UsCore.HealowQuestionnaireResponseWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.UsCore.AthenahealthQuestionnaireResponseWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.EhrWriteProfileRegistry>();
+        services.AddSingleton<IEhrCloneModePolicy, Destinations.EhrWriteBack.SettingsEhrCloneModePolicy>();
+        // Tabular sources (CSV upload / SQL query → FHIR). Scoped: it reads the request's repository and secrets.
+        services.AddScoped<Application.Abstractions.Tabular.ITabularRowReader, Tabular.TabularRowReader>();
+        services.AddScoped<Destinations.EhrWriteBack.MappedEhrWriteBackDestinationWriter>();
         foreach (var registration in ConfiguredDestinationWriterFactory.DefaultRegistrations)
         {
             services.AddSingleton(registration);

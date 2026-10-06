@@ -5,6 +5,7 @@ using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
+using FHIRBridge.Governance;
 using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
 using FHIRBridge.Runtime.Application.Workflows;
@@ -84,6 +85,13 @@ if (!string.IsNullOrWhiteSpace(workerDataProtectionKeyVaultKeyId))
 // (no ASP.NET Core pipeline in this host), but HttpClient/.NET-runtime/custom-meter instrumentation still applies.
 builder.Services.AddFhirBridgeObservability(builder.Configuration, "FHIRBridge.Worker");
 
+// Central error capture: shared PHI scrubber, ErrorCapture:Sinks (Table | ApplicationInsights | Both) and the
+// ambient catch-all for failures no call site routed through the Global Exception Manager. Additive — see
+// FHIRBridge.Governance/ErrorCaptureServiceCollectionExtensions.cs.
+builder.Services.AddFhirBridgeErrorCapture(builder.Configuration);
+// Applies the error-log "auto-clear" setting (deletes entries older than the configured number of days).
+builder.Services.AddHostedService<FHIRBridge.Infrastructure.Governance.ErrorLogRetentionWorker>();
+
 builder.Services
     .AddFHIRBridgeApplication()
     .AddFHIRBridgeInfrastructure(builder.Configuration)
@@ -92,6 +100,12 @@ builder.Services
     .AddWorkflowSqlPersistence(builder.Configuration);
 
 builder.Services.Configure<RuntimeWorkerOptions>(builder.Configuration.GetSection("RuntimeWorker"));
+// Registered first so it runs before anything here can start a run: fails the Worker's own workflow runs (scheduled,
+// or resumed after a bulk export) left "Running" by the previous Worker process, never the API's.
+builder.Services.AddHostedService(serviceProvider => new FHIRBridge.Infrastructure.Persistence.Workflows.InterruptedWorkflowRunReconciler(
+    serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+    FHIRBridge.Runtime.Application.Workflows.Storage.WorkflowRunHost.Worker,
+    serviceProvider.GetRequiredService<ILogger<FHIRBridge.Infrastructure.Persistence.Workflows.InterruptedWorkflowRunReconciler>>()));
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddHostedService<ExpiredGeneratedFilePurgeJob>();
 

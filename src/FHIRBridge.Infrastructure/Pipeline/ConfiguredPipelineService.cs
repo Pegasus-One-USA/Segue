@@ -1594,8 +1594,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         {
             schema = await _destinationSchemaService.GetSchemaAsync(mappingProfile.DestinationId, cancellationToken);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            FHIRBridge.Governance.SwallowedError.Report(exception, "Pipeline.DestinationSchema lookup");
             return mappingFields;
         }
 

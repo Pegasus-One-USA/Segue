@@ -33,6 +33,10 @@ public interface IGovernanceQueryService
     /// <summary>Phase 6A – multi-criteria search for the Monitoring → Errors screen, including resolution status.</summary>
     Task<PagedResult<ErrorLogDto>> SearchErrorLogsAsync(ErrorLogSearch search, CancellationToken cancellationToken);
 
+    /// <summary>Aggregated counts, trend and recurring-error signatures for the Error Dashboard (Informational rows excluded).</summary>
+    Task<ErrorDashboardDto> GetErrorDashboardAsync(
+        DateTime fromUtc, DateTime toUtc, string? severity, string? category, CancellationToken cancellationToken);
+
     Task<PagedResult<ApiRequestLogDto>> GetApiRequestLogsAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken);
 
     Task<PagedResult<ExportHistoryDto>> GetExportHistoryAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken);
@@ -47,6 +51,12 @@ public interface IGovernanceQueryService
 
     /// <summary>Correlation Search — everything across every table that shares this CorrelationId, in one call.</summary>
     Task<CorrelationSearchResultDto> GetCorrelationSearchResultAsync(string correlationId, CancellationToken cancellationToken);
+
+    /// <summary>Run timelines for many correlation ids at once (one query per table, not per id): the operational sections
+    /// only - audit, authentication, security, authorization, data-access and SMART-launch lists are left empty. Used by
+    /// the error export.</summary>
+    Task<IReadOnlyDictionary<string, CorrelationSearchResultDto>> GetCorrelationRunSummariesAsync(
+        IReadOnlyCollection<string> correlationIds, CancellationToken cancellationToken);
 
     /// <summary>The real, currently-effective retention policy for every governance/operations table (purgeable and immutable).</summary>
     Task<IReadOnlyList<RetentionPolicyDto>> GetRetentionPoliciesAsync(CancellationToken cancellationToken);

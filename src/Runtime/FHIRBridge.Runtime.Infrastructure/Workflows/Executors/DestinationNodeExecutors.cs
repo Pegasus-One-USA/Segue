@@ -787,6 +787,14 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             .Where(candidate => upstream.Contains(candidate.Id) && candidate.Category == WorkflowNodeCategory.Source)
             .ToList();
 
+        // A CSV / SQL Table source has no FHIR server to fetch from; its identity is its dataset key, which keys the
+        // EHR write-back ledger the way a FHIR base URL does. Its rows must carry everything the writer needs.
+        if (sourceNodes.Count == 1 && sourceNodes[0].NodeType == WorkflowNodeTypes.TabularSource)
+        {
+            return (null, FHIRBridge.Application.Services.Tabular.TabularSourceSettings.SourceBaseUrlFor(
+                ReadStringConfiguration(sourceNodes[0], FHIRBridge.Application.Services.Tabular.TabularSourceSettings.DatasetKeyKey)));
+        }
+
         if (sourceNodes.Count != 1 || !SourceNodeTypeByNodeType.TryGetValue(sourceNodes[0].NodeType, out var sourceType))
         {
             return (null, null);
@@ -814,10 +822,24 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 return null;
             }
 
+            // A read by id is a single-resource REST call, never a bulk one, so its token must not carry the
+            // bulk-only Group scope a Group-export connection requests. eCW treats a token with system/Group.read
+            // as a bulk token and refuses it on REST reads ("No valid token found"), which is how a note's Binary
+            // read failed with 401 while the export itself succeeded.
+            var readScopes = WithoutBulkGroupScope(source.Scopes);
+            if (readScopes.Count != source.Scopes.Count)
+            {
+                source = source with { Scopes = readScopes };
+            }
+
             var envelope = await client.ReadByIdAsync(resourceType, id, source, ct);
             return envelope?.RawJson;
         }, resolvedSource?.BaseUrl);
     }
+
+    /// <summary>The scopes without any <c>{prefix}/Group.*</c> scope, which only a bulk Group <c>$export</c> needs.</summary>
+    internal static IReadOnlyCollection<string> WithoutBulkGroupScope(IReadOnlyCollection<string> scopes) =>
+        scopes.Where(scope => !scope.Contains("/Group.", StringComparison.OrdinalIgnoreCase)).ToList();
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
         WorkflowExecutionContext context,
@@ -826,7 +848,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         CancellationToken cancellationToken)
     {
         var records = PassThroughNodeExecutor.ReadMappedRecords(inputs).ToArray();
-        if (records.Length == 0 && _destinationType is DestinationType.FhirRepository or DestinationType.Medplum or DestinationType.AzureFhirService)
+        if (records.Length == 0 && _destinationType is DestinationType.FhirRepository or DestinationType.Medplum or DestinationType.AzureFhirService or DestinationType.EhrWriteBack)
         {
             // Whole-resource FHIR destinations (FHIR Repository, Medplum, Azure FHIR Service — the same
             // WholeResourceFhirDestinationNodeTypes set the graph validator and MappingNodeExecutor's
@@ -856,6 +878,17 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         // (never writes nothing). Surfaced in node metadata as "filteredOutResourceTypes".
         string[]? filteredOutResourceTypes = null;
         var selectedResourceTypes = ReadSelectedResourceTypes(node);
+
+        // An EHR write-back that files notes needs the Binaries holding their text (a bulk export's own Binary file;
+        // see BulkExportPollService). The writer uses them only as note text and never writes or reports a Binary.
+        if (_destinationType == DestinationType.EhrWriteBack
+            && selectedResourceTypes is { Count: > 0 }
+            && selectedResourceTypes.Contains("DocumentReference")
+            && !selectedResourceTypes.Contains("Binary"))
+        {
+            selectedResourceTypes = new HashSet<string>(selectedResourceTypes, StringComparer.OrdinalIgnoreCase) { "Binary" };
+        }
+
         if (selectedResourceTypes is { Count: > 0 } && records.Length > 0)
         {
             var kept = records.Where(record => selectedResourceTypes.Contains(record.ResourceType)).ToArray();
@@ -889,6 +922,25 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 
         var destination = ReadConfiguration<DestinationConfiguration>(node, "destination")
             ?? CreateDestinationConfiguration(context, node);
+        if (FHIRBridge.Governance.WorkflowDebug.StagesEnabled)
+        {
+            FHIRBridge.Governance.WorkflowDebug.Stage(FHIRBridge.Runtime.Infrastructure.Workflows.WorkflowDebugConfig.DescribeDestination(
+                destination,
+                [
+                    ("write mode", ReadStringConfiguration(node, "dest_writeMode")),
+                    ("FHIR mapping mode", ReadStringConfiguration(node, "dest_fhirMapMode")),
+                    ("destination object", ReadStringConfiguration(node, "destinationObject")),
+                    ("auth type", ReadStringConfiguration(node, "authType")),
+                    ("content type", ReadStringConfiguration(node, "contentType")),
+                    ("http method", ReadStringConfiguration(node, "httpMethod")),
+                    ("on failure", ReadStringConfiguration(node, "onFailure")),
+                ]));
+        }
+
+        FHIRBridge.Governance.ErrorContext.Set(
+            destinationName: destination.Name,
+            resourceType: string.Join(", ", records.Select(r => r.ResourceType)
+                .Where(t => !string.IsNullOrWhiteSpace(t)).Distinct().Take(5)));
 
         if (_writerFactory is null)
         {
@@ -913,6 +965,7 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
             // Carried so a push destination (see MappedDataLakeWebhookDestinationWriter) can emit a
             // self-identifying payload. Null for scheduled/webhook runs, which have no signed-in user.
             UserIdentity: context.UserIdentity);
+        writeContext = await CompleteWriteContextAsync(context, node, writeContext, cancellationToken);
 
         int written;
         string? downloadUrl;
@@ -973,6 +1026,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 // discards writeFailureReasons entirely, so the run reports only the downstream symptom
                 // ("no row in [dbo].[X] has [Y] = ...") and hides the failure that actually caused it.
                 FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult groupResult;
+                FHIRBridge.Governance.ErrorContext.Set(resourceType: group.Key);
+                FHIRBridge.Governance.WorkflowDebug.Write($"Writing {groupRecords.Length} ‘{group.Key}’ record(s) to destination ‘{destination.Name}’ ({_destinationType}).");
                 try
                 {
                     groupResult = await writer.WriteAsync(destination, effectiveProfile, groupRecords, writeContext, cancellationToken);
@@ -993,6 +1048,15 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 }
 
                 totalWritten += groupResult.Count;
+                if (groupResult.RecordErrors is { Count: > 0 } traceErrors)
+                {
+                    foreach (var recordError in traceErrors.Take(100))
+                    {
+                        FHIRBridge.Governance.WorkflowDebug.Resource($"Destination ‘{destination.Name}’: a ‘{group.Key}’ record was not written - {recordError}", isFailure: true);
+                    }
+                }
+
+                FHIRBridge.Governance.WorkflowDebug.Write($"Destination ‘{destination.Name}’: ‘{group.Key}’ write finished - {groupResult.Count} of {groupRecords.Length} record(s) written, {groupResult.RecordErrors?.Count ?? 0} record error(s).");
                 firstDownloadUrl ??= groupResult.DownloadUrl;
                 writeResult = groupResult;
 
@@ -1037,7 +1101,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                     emailDelivery.AttachmentNames,
                     emailDelivery.Status,
                     emailDelivery.Error)
-                : null);
+                : null,
+            ToEhrWriteSummary(writeResult?.EhrWrite));
 
         // Per docs/ERRORS_SCREEN_CATEGORIZATION_ANALYSIS.md discussion: Operations → Exports previously only ever
         // reflected the Configured Pipeline plane (ConfiguredPipelineService's own LogExportAsync call) — a
@@ -1051,7 +1116,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                     destination.Name,
                     _destinationType.ToString(),
                     written,
-                    written > 0 ? "Succeeded" : "NoData",
+                    // A dry run wrote nothing on purpose; saying "NoData" would read as if the source sent nothing.
+                    result.EhrWrite is { DryRun: true } ? "DryRun" : written > 0 ? "Succeeded" : "NoData",
                     inlineDownload?.Content.Length,
                     context.WorkflowRunId,
                     context.CorrelationId),
@@ -1081,9 +1147,38 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 // A reference whose target table this write does not contain. Reported even on a successful run:
                 // it succeeded because the rows happened to already exist, which is worth knowing before they
                 // don't. Null when every reference resolved against a table in this write.
-                ["unresolvedReferenceTables"] = referenceGaps.Count > 0 ? referenceGaps.ToArray() : null
+                ["unresolvedReferenceTables"] = referenceGaps.Count > 0 ? referenceGaps.ToArray() : null,
+                // EHR write-back only: what was (or, in a dry run, would be) written, per resource type. Counts and
+                // reason codes only — this metadata is stored as-is in run history.
+                ["ehrWrite"] = result.EhrWrite,
             });
     }
+
+    /// <summary>
+    /// Lets a destination type add to the write context before the write — the EHR write-back executor attaches
+    /// the EHR channel here. The default returns the context unchanged, so every other destination is unaffected.
+    /// </summary>
+    protected virtual Task<PipelineWriteContext> CompleteWriteContextAsync(
+        WorkflowExecutionContext context,
+        WorkflowNode node,
+        PipelineWriteContext writeContext,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(writeContext);
+
+    private static FHIRBridge.Runtime.Application.Workflows.Payloads.EhrWriteSummary? ToEhrWriteSummary(
+        FHIRBridge.Application.Abstractions.Destinations.EhrWriteReport? report) =>
+        report is null
+            ? null
+            : new FHIRBridge.Runtime.Application.Workflows.Payloads.EhrWriteSummary(
+                report.DryRun,
+                report.TargetVendor,
+                report.RecordsReceived,
+                report.ScopeStatus,
+                report.Resources
+                    .Select(r => new FHIRBridge.Runtime.Application.Workflows.Payloads.EhrWriteResourceCounts(
+                        r.ResourceType, r.Received, r.WouldWrite, r.Written, r.AlreadyWritten, r.Skipped, r.Rejected, r.Unknown, r.Reasons))
+                    .ToList(),
+                report.CloneMode);
 
     // The resource types this destination node was configured to write — the destination wizard's own selection,
     // stored as "dest_resources" (comma-separated) with the "dest_targets" ({sourceType: destType} JSON map) keys as

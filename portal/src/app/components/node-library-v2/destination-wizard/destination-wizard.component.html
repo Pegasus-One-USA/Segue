@@ -335,7 +335,11 @@
             </div>
             <div class="dw-rc-body">
               <strong class="dw-rc-name" [title]="r">{{ r }}</strong>
-              <span class="dw-rc-scope" [title]="'user/' + r + '.read'">{{ 'user/' + r + '.read' }}</span>
+              @if (isEhrWriteBack()) {
+                <span class="dw-rc-scope">Create in the EHR</span>
+              } @else {
+                <span class="dw-rc-scope" [title]="'user/' + r + '.read'">{{ 'user/' + r + '.read' }}</span>
+              }
               @if (unsupportedSelectedResources().includes(r)) {
                 <span class="dw-rc-warn-badge" title="No longer confirmed supported by this source">⚠ not confirmed supported</span>
               }
@@ -696,6 +700,36 @@
           </div>
         }
       }
+    } @else if (isStepActive(3) && isEhrWriteBack()) {
+      <!-- ── EHR Write-Back: nothing to map. Each resource is shaped server-side by the EHR's own write profile
+           (the subset its API accepts), its patient and encounter are resolved to records already in the EHR,
+           and the idempotency ledger stops a record being filed twice. ── -->
+      <div class="dw-section-head">
+        <span class="dw-section-num">3</span>
+        <span class="dw-section-title">How records are written</span>
+        <span class="dw-section-hint">{{ destLabel() }} shapes each resource to what the EHR accepts.</span>
+      </div>
+      <div class="dw-resources">
+        <div class="dw-resource-card selected">
+          <div class="dw-rc-check">●</div>
+          <div class="dw-rc-body">
+            <strong class="dw-rc-name">Shaped by the EHR's write rules</strong>
+            <span class="dw-rc-scope">Only the elements the EHR's API accepts are sent; inactive and entered-in-error records are skipped.</span>
+          </div>
+        </div>
+        <div class="dw-resource-card selected">
+          <div class="dw-rc-check">●</div>
+          <div class="dw-rc-body">
+            <strong class="dw-rc-name">Patients matched, never guessed</strong>
+            <span class="dw-rc-scope">Each record's patient is found by identifier or a certain Patient.$match. An uncertain match is left for review.</span>
+          </div>
+        </div>
+      </div>
+      <div class="dw-callout dw-callout--warn">
+        Dry run is on by default: every run checks and resolves each record and reports what it would write,
+        without sending anything to the EHR. With Dry run off, every type selected in Data groups that the EHR supports
+        live is written (Epic today); eClinicalWorks and athenahealth stay dry runs.
+      </div>
     } @else if (isStepActive(3) && (isMedplum() || isAzureFhir())) {
       <!-- ── Columnless FHIR server (Medplum / Azure FHIR Service): the whole normalized resource is written
            as-is (runtime wholeResourceFhir path — MappedDestinationRecord.SourceJson), so there is nothing to
@@ -1094,6 +1128,23 @@
             <span class="dw-review-key">Payload</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_apiPayloadShape'] }}, up to {{ activeFormConfig()['dest_apiBatchSize'] }} records per request{{ activeFormConfig()['dest_apiBodyTemplateJson'] ? ' (custom body template)' : '' }}</span>
           </div>
+        } @else if (isEhrWriteBack()) {
+          <div class="dw-review-card">
+            <span class="dw-review-key">Name</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Writes to</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_ehrVendor'] || '—' }} connection</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Mode</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_dryRun'] === 'false' ? 'Live (supported types only)' : 'Dry run' }}, up to {{ activeFormConfig()['dest_maxWritesPerRun'] || '500' }} records per run</span>
+          </div>
+          <div class="dw-review-card">
+            <span class="dw-review-key">Patients</span>
+            <span class="dw-review-val">{{ activeFormConfig()['dest_cloneMode'] === 'true' ? 'Clone mode: each patient written as a new synthetic test patient' : activeFormConfig()['dest_createPatientIfMissing'] === 'true' ? 'Matched, or created when the EHR has none' : 'Matched only' }}</span>
+          </div>
         } @else if (isAzureFhir()) {
           <div class="dw-review-card">
             <span class="dw-review-key">Name</span>
@@ -1125,7 +1176,7 @@
           <span class="dw-review-key">Data groups</span>
           <span class="dw-review-val">{{ selectedResources().join(', ') || '—' }}</span>
         </div>
-        @if (!isFhir() && !isAzureFhir()) {
+        @if (!isFhir() && !isAzureFhir() && !isEhrWriteBack()) {
           <div class="dw-review-card">
             <span class="dw-review-key">Mapped fields</span>
             <span class="dw-review-val">{{ mappingRows().length }} fields</span>

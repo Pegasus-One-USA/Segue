@@ -242,7 +242,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             PatientSearchCriteria: patientSearchCriteria,
             CallerId: callerId,
             PracticeId: sourceConnection.Authentication.PracticeId,
-            AuthPlacement: sourceConnection.Authentication.AuthPlacement);
+            AuthPlacement: sourceConnection.Authentication.AuthPlacement,
+            AllowsRead: sourceConnection.Access.AllowsRead());
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
         // connection's own configured base URL), a later, separately triggered run must keep hitting that SAME

@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- HIPAA #10: shares IPhiRedactor with the Serilog PhiMaskingEnricher so exception text persisted to
          ErrorLogs and exception text written to log sinks can never drift onto two different rule sets. -->
     <ProjectReference Include="..\FHIRBridge.Observability\FHIRBridge.Observability.csproj" />

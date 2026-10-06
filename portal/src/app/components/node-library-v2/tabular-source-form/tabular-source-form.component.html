@@ -1,0 +1,116 @@
+<div class="tab-form" [formGroup]="form">
+  <div class="tab-grid">
+    <div class="tab-field">
+      <label class="tab-label" for="tab-name">Name</label>
+      <input id="tab-name" class="tab-input" type="text" formControlName="name" placeholder="e.g. Allergy import" />
+    </div>
+
+    <div class="tab-field" [class.tab-field--error]="form.controls.datasetKey.touched && form.controls.datasetKey.invalid">
+      <label class="tab-label" for="tab-key">Dataset key <span class="tab-req">*</span></label>
+      <input id="tab-key" class="tab-input" type="text" formControlName="datasetKey" placeholder="e.g. clinic-allergies" />
+      <p class="tab-hint">Names this data set for good. Keep it the same when you upload a corrected file, so rows
+        already written to an EHR are recognised and not written twice.</p>
+      @if (form.controls.datasetKey.touched && form.controls.datasetKey.invalid) {
+        <p class="tab-error-msg">3 to 64 letters, digits, spaces, '.', '_' or '-'.</p>
+      }
+    </div>
+  </div>
+
+  <div class="tab-field">
+    <span class="tab-label">Rows come from</span>
+    <div class="tab-radios">
+      <label><input type="radio" formControlName="kind" value="csv" /> A CSV file</label>
+      <label><input type="radio" formControlName="kind" value="sql" /> A SQL query</label>
+    </div>
+  </div>
+
+  @if (kind() === 'csv') {
+    <div class="tab-field">
+      <label class="tab-label" for="tab-file">CSV file <span class="tab-req">*</span></label>
+      <input id="tab-file" type="file" accept=".csv,.txt,text/csv" (change)="onFileChosen($event)" [disabled]="busy() === 'upload'" />
+      @if (fileName()) {
+        <p class="tab-hint">{{ fileName() }}@if (fileRows() !== null) { — {{ fileRows() }} rows, columns: {{ fileColumns().join(', ') }} }</p>
+      }
+      <p class="tab-hint">Up to 10 MB and 50,000 rows. The first line is the header. The file is stored encrypted;
+        choose a new file to replace it.</p>
+    </div>
+  } @else {
+    <div class="tab-grid">
+      <div class="tab-field">
+        <label class="tab-label" for="tab-engine">Database</label>
+        <select id="tab-engine" class="tab-input" formControlName="sqlEngine">
+          @for (engine of engines; track engine.id) {
+            <option [value]="engine.id">{{ engine.label }}</option>
+          }
+        </select>
+      </div>
+      <div class="tab-field">
+        <label class="tab-label" for="tab-conn">Connection string</label>
+        <div class="tab-inline">
+          <input id="tab-conn" class="tab-input" type="password" autocomplete="off" formControlName="connectionString"
+            [placeholder]="secretName() ? 'Saved — enter a new one to replace it' : 'Server=…;Database=…;User Id=…;Password=…'" />
+          <button type="button" class="tab-btn" (click)="saveConnection()" [disabled]="busy() === 'connection'">Save</button>
+        </div>
+        <p class="tab-hint">Stored as a secret, never in the workflow. Use a login that can only read.</p>
+      </div>
+    </div>
+    <div class="tab-field">
+      <label class="tab-label" for="tab-query">Query <span class="tab-req">*</span></label>
+      <textarea id="tab-query" class="tab-input tab-mono" rows="4" formControlName="query"
+        placeholder="SELECT patient_id, allergy_id, allergen, rxnorm_code FROM allergies"></textarea>
+      <p class="tab-hint">One SELECT statement. It runs in a read-only transaction that is always rolled back.</p>
+    </div>
+  }
+
+  <div class="tab-field" [class.tab-field--error]="form.controls.maxRows.invalid">
+    <label class="tab-label" for="tab-max">Max rows per run</label>
+    <input id="tab-max" class="tab-input tab-narrow" type="text" inputmode="numeric" formControlName="maxRows" />
+  </div>
+
+  <div class="tab-field">
+    <span class="tab-label">Build these FHIR resources from each row</span>
+    <div class="tab-checks">
+      @for (preset of presets(); track preset.resourceType) {
+        <label>
+          <input type="checkbox" [checked]="selectedTypes().includes(preset.resourceType)"
+            (change)="togglePreset(preset.resourceType, $any($event.target).checked)" />
+          {{ preset.resourceType }}
+        </label>
+      }
+    </div>
+    <p class="tab-hint">Each template is FHIR JSON with <code>{{ '{{' }}column{{ '}}' }}</code> placeholders, and
+      formats such as <code>{{ '{{' }}birth_date|date{{ '}}' }}</code> or <code>{{ '{{' }}value|number{{ '}}' }}</code>.
+      An element whose column is empty is left out. Ticking a box rebuilds the templates and replaces hand edits.
+      For EHR write-back, include Patient, and give every resource an id column.</p>
+    <textarea class="tab-input tab-mono" rows="14" formControlName="templates" spellcheck="false"></textarea>
+  </div>
+
+  <div class="tab-actions">
+    <button type="button" class="tab-btn tab-btn--ghost" (click)="runPreview()" [disabled]="busy() === 'preview' || !hasSource()">
+      Preview first rows
+    </button>
+    @if (busy()) { <span class="tab-hint">Working…</span> }
+  </div>
+
+  @if (error(); as message) {
+    <p class="tab-error-banner" role="alert">{{ message }}</p>
+  }
+
+  @if (preview(); as p) {
+    <div class="tab-preview">
+      <p class="tab-hint">{{ p.rowsRead }} rows read, {{ p.resources.length }} resources built.</p>
+      @if (p.missingColumns.length > 0) {
+        <p class="tab-warn">The templates read columns the table does not have: {{ p.missingColumns.join(', ') }}.</p>
+      }
+      @for (err of p.errors; track $index) {
+        <p class="tab-warn">{{ err }}</p>
+      }
+      @for (r of p.resources; track $index) {
+        <details class="tab-resource">
+          <summary>Row {{ r.rowNumber }}: {{ r.resourceType }}{{ r.resourceId ? '/' + r.resourceId : ' (no id)' }}</summary>
+          <pre class="tab-mono">{{ prettyJson(r.json) }}</pre>
+        </details>
+      }
+    </div>
+  }
+</div>

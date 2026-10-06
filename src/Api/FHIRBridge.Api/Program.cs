@@ -5,6 +5,7 @@ using FHIRBridge.Api.Cors;
 using FHIRBridge.Api.Hubs;
 using FHIRBridge.Application.Services.Terminology;
 using FHIRBridge.Api.Security;
+using FHIRBridge.Governance;
 using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
 using Microsoft.AspNetCore.DataProtection;
@@ -183,6 +184,13 @@ builder.Services.AddScoped<IAuthorizationHandler, GenericConnectionPermissionAut
 // of whether an exporter is configured (see ObservabilityOptions.Enabled's remarks).
 builder.Services.AddFhirBridgeObservability(builder.Configuration, "FHIRBridge.Api");
 
+// Central error capture: shared PHI scrubber, ErrorCapture:Sinks (Table | ApplicationInsights | Both) and the
+// ambient catch-all for failures no call site routed through the Global Exception Manager. Additive — see
+// FHIRBridge.Governance/ErrorCaptureServiceCollectionExtensions.cs.
+builder.Services.AddFhirBridgeErrorCapture(builder.Configuration);
+// Applies the error-log "auto-clear" setting (deletes entries older than the configured number of days).
+builder.Services.AddHostedService<FHIRBridge.Infrastructure.Governance.ErrorLogRetentionWorker>();
+
 builder.Services
     .AddFHIRBridgeApplication()
     .AddFHIRBridgeInfrastructure(builder.Configuration)
@@ -283,6 +291,13 @@ builder.Services.AddSingleton<ITerminologyStatusNotifier, SignalRTerminologyStat
 // starting. The reconciler's StartAsync therefore completes while the loop is still waiting for its first
 // job, so no import it could interrupt has begun.
 builder.Services.AddHostedService<TerminologyImportOrphanReconciler>();
+
+// Fails the API's own workflow runs (Run button, checkpoint, launch callback) left "Running" by the previous API
+// process; only runs started before this process are touched, and never the Worker's.
+builder.Services.AddHostedService(serviceProvider => new FHIRBridge.Infrastructure.Persistence.Workflows.InterruptedWorkflowRunReconciler(
+    serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+    FHIRBridge.Runtime.Application.Workflows.Storage.WorkflowRunHost.Api,
+    serviceProvider.GetRequiredService<ILogger<FHIRBridge.Infrastructure.Persistence.Workflows.InterruptedWorkflowRunReconciler>>()));
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>

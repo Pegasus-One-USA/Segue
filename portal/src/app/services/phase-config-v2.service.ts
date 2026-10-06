@@ -46,6 +46,8 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'athena',
     'healow',
     'generic-fhir',
+    // CSV / SQL Table rows → FHIR (feeds FHIR destinations and EHR write-back).
+    'tabular',
     // Phase 2+: 'cerner', 'allscripts', 'meditech', 'hl7v2', 'sample'
   ],
 
@@ -77,6 +79,9 @@ const PHASE_1_CONFIG: PhaseConfig = {
     // General-purpose, fully configurable outbound REST API — writer, sender, validator, Step 1 form and
     // wizard family are all in place (see MappedApiEndpointDestinationWriter).
     'dest-apiendpoint',
+    // EHR write-back (Epic) — writer, node executor, validator, Step 1 form and wizard family are in place
+    // (see MappedEhrWriteBackDestinationWriter). Dry run by default; live only for released types.
+    'dest-ehr-writeback',
     // V2's chain steps — all three are the point of this builder, so none is phase-gated. (In V1 these
     // were 'field-mapping' plus the granular normalize/terminology/deid-* ids, all held back to a later
     // phase; V2 collapses them into these two consolidated steps — see transforms-v2.data.ts.)

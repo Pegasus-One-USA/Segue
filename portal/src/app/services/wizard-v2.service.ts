@@ -449,6 +449,8 @@ export class WizardServiceV2 {
       sourceSystemType: this.ehrType(),
       baseUrl:          fields['FHIR base URL'],
       applicationType:  AUDIENCE_TO_APPLICATION_TYPE[audienceKey] ?? null,
+      // Null keeps whatever is saved; the form always sends a value, so this only matters for older nodes.
+      access:           (fields['Access'] as 'Read' | 'Write' | 'ReadWrite' | undefined) || null,
       authentication: {
         authenticationType: AUTH_METHOD_TO_AUTHENTICATION_TYPE[liveAuthMethod] ?? 'OAuthClientCredentials',
         clientId:           liveClientId,
