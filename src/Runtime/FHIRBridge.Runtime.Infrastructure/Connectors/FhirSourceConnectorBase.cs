@@ -409,10 +409,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
 
             try
             {
-                LogDiagnosticRequest(request, attempt + 1, maxRetryCount + 1);
-                var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
                 var response = await _httpClient.SendAsync(request, timeoutCts.Token);
-                await LogDiagnosticResponseAsync(request, response, System.Diagnostics.Stopwatch.GetElapsedTime(sentAt));
                 if (!IsTransient(response) || attempt == maxRetryCount)
                 {
                     return response;
@@ -460,66 +457,6 @@ public abstract partial class FhirSourceConnectorBase : IFhirSourceClient, IReso
             $"{SourceDisplayName} request exhausted {maxRetryCount} retries for {requestUrl}.",
             lastException);
     }
-
-    // ---- TEMP-DEBUG wire diagnostics: logs ONE request - GET <DiagnosticTargetUrl> - in full, and nothing else.
-    // Remove this block and the two calls in SendWithRetryAsync when done. Only the bearer token and cookies are masked;
-    // the query, every other header and the whole response body are written as they are, so they can contain PHI.
-    private const string DiagnosticTargetUrl = "https://staging-fhir.ecwcloud.com/fhir/r4/FFBJCD/Patient";
-
-    private bool IsDiagnosticTarget(HttpRequestMessage request) =>
-        _options.Diagnostics.Enabled
-        && request.RequestUri is { } uri
-        && string.Equals(uri.GetLeftPart(UriPartial.Path).TrimEnd('/'), DiagnosticTargetUrl, StringComparison.OrdinalIgnoreCase);
-
-    private static readonly System.Text.RegularExpressions.Regex SecretHeaderName = new(
-        "authorization|cookie", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
-
-    private static string DescribeHeaders(IEnumerable<KeyValuePair<string, IEnumerable<string>>> headers) =>
-        string.Join("; ", headers.Select(h =>
-            SecretHeaderName.IsMatch(h.Key)
-                ? $"{h.Key}: ***({string.Join(",", h.Value).Length} chars)"
-                : $"{h.Key}: {string.Join(", ", h.Value)}"));
-
-    private void LogDiagnosticRequest(HttpRequestMessage request, int attempt, int maxAttempts)
-    {
-        if (!IsDiagnosticTarget(request))
-        {
-            return;
-        }
-
-        _logger.LogInformation(
-            "[FHIR-DIAG] REQUEST (attempt {Attempt}/{MaxAttempts}) {Method} {Url} | query: {Query} | headers: {Headers} | body: {Body}",
-            attempt, maxAttempts, request.Method, request.RequestUri,
-            string.IsNullOrEmpty(request.RequestUri?.Query) ? "(none)" : Uri.UnescapeDataString(request.RequestUri!.Query.TrimStart('?')),
-            DescribeHeaders(request.Headers),
-            request.Content is null ? "(none)" : "(request has a body; not logged)");
-    }
-
-    private async Task LogDiagnosticResponseAsync(HttpRequestMessage request, HttpResponseMessage response, TimeSpan elapsed)
-    {
-        if (!IsDiagnosticTarget(request))
-        {
-            return;
-        }
-
-        string body;
-        try
-        {
-            // Buffered, so the caller can still read the content afterwards.
-            await response.Content.LoadIntoBufferAsync();
-            body = await response.Content.ReadAsStringAsync();
-        }
-        catch (Exception exception)
-        {
-            body = $"(could not read the response body: {exception.GetType().Name})";
-        }
-
-        _logger.LogInformation(
-            "[FHIR-DIAG] RESPONSE {StatusCode} {Reason} for {Method} {Url} in {ElapsedMs:0} ms | response headers: {Headers} | content headers: {ContentHeaders} | body ({Length} chars): {Body}",
-            (int)response.StatusCode, response.ReasonPhrase, request.Method, request.RequestUri, elapsed.TotalMilliseconds,
-            DescribeHeaders(response.Headers), DescribeHeaders(response.Content.Headers), body.Length, body);
-    }
-    // ---- end TEMP-DEBUG wire diagnostics
 
     private async Task WaitForSourceThrottleAsync(
         FhirSourceConfiguration source,
