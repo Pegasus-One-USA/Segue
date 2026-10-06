@@ -1,0 +1,313 @@
+<div class="list-page">
+  @if (!embedded) {
+    <div class="page-header">
+      <div>
+        <h1>Error Overview</h1>
+        <p class="page-sub">A summary of problems recorded in this environment.</p>
+      </div>
+    </div>
+  }
+
+  <!-- Filters: pick, then press Apply. Nothing reloads while you are choosing. -->
+  <section class="filter-card" aria-label="Filters">
+    <div class="filter-grid">
+      <label class="field">
+        <span class="field-label">Period</span>
+        <select class="field-input" (change)="setRange(+$any($event.target).value)">
+          @for (r of ranges; track r.days) {
+            <option [value]="r.days" [selected]="r.days === rangeDays()">{{ r.label }}</option>
+          }
+        </select>
+      </label>
+
+      @if (rangeDays() === 0) {
+        <label class="field">
+          <span class="field-label">From</span>
+          <input class="field-input" type="date" [value]="customFrom()" [max]="customTo()" (change)="setCustomDate('from', $any($event.target).value)" />
+        </label>
+        <label class="field">
+          <span class="field-label">To</span>
+          <input class="field-input" type="date" [value]="customTo()" [min]="customFrom()" (change)="setCustomDate('to', $any($event.target).value)" />
+        </label>
+      }
+
+      <label class="field">
+        <span class="field-label">Type</span>
+        <select class="field-input" (change)="severity.set($any($event.target).value)">
+          <option value="" [selected]="!severity()">All (errors)</option>
+          @for (s of severityOptions; track s) {
+            <option [value]="s" [selected]="s === severity()">{{ s }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Category</span>
+        <select class="field-input" (change)="category.set($any($event.target).value)">
+          <option value="" [selected]="!category()">All</option>
+          @for (c of categoryOptions; track c) {
+            <option [value]="c" [selected]="c === category()">{{ c }}</option>
+          }
+        </select>
+      </label>
+
+      <div class="filter-buttons">
+        <button class="btn-search" type="button" (click)="applyFilters()" [disabled]="loading()">Apply filters</button>
+        <button class="btn-reset" type="button" (click)="resetFilters()" [disabled]="loading()">Reset</button>
+      </div>
+    </div>
+    @if (dirty()) {
+      <p class="dirty-note">You have changed the filters. Press <strong>Apply filters</strong> to update the results.</p>
+    }
+  </section>
+
+  <!-- What is being shown right now -->
+  <div class="applied" aria-live="polite">
+    <span class="applied-label">Showing:</span>
+    @for (chip of chips(); track chip.key) {
+      <span class="chip">
+        <span class="chip-label">{{ chip.label }}:</span> {{ chip.value }}
+        @if (chip.removable) {
+          <button class="chip-remove" type="button" [attr.aria-label]="'Remove ' + chip.label + ' filter'" (click)="removeChip(chip)">×</button>
+        }
+      </span>
+    }
+    @if (data(); as d) {
+      <span class="applied-count">{{ d.total | number }} error{{ d.total === 1 ? '' : 's' }} found</span>
+    }
+  </div>
+
+  <!-- Report, hide and delete -->
+  <section class="actions-row" aria-label="Actions">
+    <div class="actions-group">
+      <button class="btn-search" type="button" (click)="exportReport('json')" [disabled]="exporting() || loading()">Export report (JSON)</button>
+      <button class="btn-reset" type="button" (click)="exportReport('csv')" [disabled]="exporting() || loading()">Export as CSV</button>
+      <label class="check">
+        <input type="checkbox" [checked]="includeStackTrace()" (change)="includeStackTrace.set($any($event.target).checked)" />
+        Include technical details
+      </label>
+      <label class="check">
+        <input type="checkbox" [checked]="includeCorrelation()" (change)="includeCorrelation.set($any($event.target).checked)" />
+        Include correlation details
+      </label>
+    </div>
+    <div class="actions-group actions-group--end">
+      <button class="btn-reset" type="button" (click)="confirmHide()" [disabled]="loading()"
+              title="Hide errors older than a date you choose from this Overview. Nothing is deleted.">Hide old errors</button>
+      <button class="btn-reset btn-danger-outline" type="button" (click)="openDelete()"
+              title="Permanently delete errors and free up the space.">Delete errors…</button>
+    </div>
+  </section>
+
+  @if (storage(); as st) {
+    <p class="storage-note">
+      Error log size: <strong>{{ formatBytes(st.dataBytes ?? st.sizeBytes) }}</strong> · {{ st.entryCount | number }} entries
+      @if (st.oldestUtc) { · oldest {{ st.oldestUtc | date: 'mediumDate' }} }
+      · <button class="link-btn" type="button" (click)="openErrorLogSettings()">Error log settings</button>
+    </p>
+  }
+
+  @if (data()?.clearedAtUtc; as hiddenAt) {
+    <p class="cleared-note">Errors recorded before {{ hiddenAt | date: 'medium' }} are hidden from this Overview. They are still in <strong>All errors</strong>.
+      <button class="link-btn" type="button" (click)="restoreHidden()">Show them again</button></p>
+  }
+
+  @if (data()?.truncated) {
+    <p class="dirty-note">This period holds more than 20,000 errors, so the counts and charts below are based on the newest 20,000. Narrow the period or a day to see exact figures.</p>
+  }
+
+  @if (loading() && !data()) {
+    <p class="empty-state">Loading…</p>
+  }
+
+  @if (data(); as d) {
+    @if (d.total === 0) {
+      <p class="empty-state">No errors match these filters.</p>
+    } @else {
+      <section class="card" aria-label="Errors per day">
+        <h2>Errors per day <span class="hint">· click a bar to see just that day</span></h2>
+        <div class="trend">
+          @for (day of d.byDay; track day.dayUtc) {
+            <button class="trend-col" type="button"
+                    [class.trend-col--selected]="isSelectedDay(day.dayUtc)"
+                    [attr.aria-pressed]="isSelectedDay(day.dayUtc)"
+                    [attr.aria-label]="(day.dayUtc | date: 'mediumDate':'UTC') + ': ' + day.count + ' errors. Click to filter to this day.'"
+                    [title]="(day.dayUtc | date: 'mediumDate':'UTC') + ': ' + day.count"
+                    (click)="selectDay(day.dayUtc)">
+              <span class="trend-count">{{ day.count }}</span>
+              <span class="trend-bar" [style.height.%]="barHeight(day.count)"></span>
+              <span class="trend-day">{{ day.dayUtc | date: 'MMM d':'UTC' }}</span>
+            </button>
+          }
+        </div>
+      </section>
+
+      <div class="grid">
+        <section class="card">
+          <h2>By severity</h2>
+          @for (item of d.bySeverity; track item.key) {
+            <div class="bar-row">
+              <span class="bar-label">{{ item.key }}</span>
+              <span class="bar-track"><span class="bar-fill" [style.width.%]="percent(item, d.bySeverity)"></span></span>
+              <span class="bar-count">{{ item.count }}</span>
+            </div>
+          }
+        </section>
+
+        <section class="card">
+          <h2>By category</h2>
+          @for (item of d.byCategory; track item.key) {
+            <div class="bar-row">
+              <span class="bar-label">{{ item.key }}</span>
+              <span class="bar-track"><span class="bar-fill" [style.width.%]="percent(item, d.byCategory)"></span></span>
+              <span class="bar-count">{{ item.count }}</span>
+            </div>
+          }
+        </section>
+
+        <section class="card">
+          <h2>By area</h2>
+          @for (item of d.byModule; track item.key) {
+            <div class="bar-row">
+              <span class="bar-label" [title]="item.key">{{ item.key }}</span>
+              <span class="bar-track"><span class="bar-fill" [style.width.%]="percent(item, d.byModule)"></span></span>
+              <span class="bar-count">{{ item.count }}</span>
+            </div>
+          }
+        </section>
+      </div>
+
+      <section class="card" aria-label="Recurring errors">
+        <h2>Most frequent errors</h2>
+        <div class="table-wrapper">
+          <table class="plain-table">
+            <thead>
+              <tr>
+                <th>Error</th><th>Area</th><th class="num">Count</th><th>Last seen</th><th>Example</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of d.topSignatures; track s.sampleErrorReferenceId ?? s.exceptionType + s.lastSeenUtc) {
+                <tr class="row-click" (click)="openDetail(s.sampleErrorReferenceId)">
+                  <td>
+                    <strong>{{ s.exceptionType }}</strong>
+                    <div class="sample">{{ s.sampleMessage }}</div>
+                  </td>
+                  <td>{{ s.module || '—' }}</td>
+                  <td class="num">{{ s.count }}</td>
+                  <td>{{ s.lastSeenUtc | date: 'medium' }}</td>
+                  <td>
+                    @if (s.sampleErrorReferenceId) {
+                      <button class="link-btn mono" type="button" (click)="$event.stopPropagation(); openDetail(s.sampleErrorReferenceId)">{{ s.sampleErrorReferenceId }}</button>
+                    } @else { — }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Matching errors">
+        <h2>Matching errors <span class="hint">· {{ matches().totalCount | number }} found · newest first</span></h2>
+        <div class="table-wrapper">
+          <table class="plain-table">
+            <thead>
+              <tr><th>When</th><th>Reference</th><th>Type</th><th>Area</th><th>What happened</th></tr>
+            </thead>
+            <tbody>
+              @for (e of matches().items; track e.id) {
+                <tr class="row-click" (click)="openDetail(e)">
+                  <td>{{ e.occurredOnUtc | date: 'MMM d, h:mm:ss a' }}</td>
+                  <td><code class="mono">{{ e.errorReferenceId || '—' }}</code></td>
+                  <td>{{ e.severity }}</td>
+                  <td>{{ e.module || '—' }}</td>
+                  <td class="wrap">{{ e.userFriendlyMessage || e.message }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (matchesLoading()) {
+          <p class="empty-state">Loading…</p>
+        } @else if (matches().items.length === 0) {
+          <p class="empty-state">No errors to list.</p>
+        }
+        @if (matches().totalCount > pageSize()) {
+          <mat-paginator
+            [length]="matches().totalCount"
+            [pageSize]="pageSize()"
+            [pageIndex]="pageIndex()"
+            [pageSizeOptions]="[10, 25, 50]"
+            (page)="onPageChange($event)"
+          ></mat-paginator>
+        }
+      </section>
+    }
+  }
+</div>
+
+<app-error-detail-dialog (showInList)="viewInList.emit($event)" />
+
+<dialog #deleteDialog class="delete-dialog" aria-labelledby="delete-title" tabindex="-1" (keyup.escape)="closeDelete()" (click)="$event.target === deleteDialog ? closeDelete() : null">
+  <div class="delete-head">
+    <h2 id="delete-title">Delete errors permanently</h2>
+    <button class="icon-btn" type="button" aria-label="Close" (click)="closeDelete()">×</button>
+  </div>
+
+  <div class="delete-body">
+    <p class="delete-warning"><strong>This cannot be undone.</strong> The errors are removed from the database and the space they used is released. To only tidy the Overview without deleting anything, use <strong>Hide old errors</strong> instead.</p>
+
+    <label class="option">
+      <input type="radio" name="deleteMode" [checked]="deleteMode() === 'olderThan'" (change)="deleteMode.set('olderThan')" />
+      <span><strong>Errors older than a date</strong></span>
+    </label>
+    @if (deleteMode() === 'olderThan') {
+      <label class="field delete-date">
+        <span class="field-label">Delete everything recorded before</span>
+        <input class="field-input" type="date" [value]="deleteBefore()" (change)="deleteBefore.set($any($event.target).value)" />
+      </label>
+    }
+
+    <label class="option">
+      <input type="radio" name="deleteMode" [checked]="deleteMode() === 'all'" (change)="deleteMode.set('all')" />
+      <span><strong>All errors</strong><span class="hint">Deletes every error that is old enough. Errors inside the retention period set by your deployment (180 days by default) are always kept.</span></span>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Type DELETE to confirm</span>
+      <input class="field-input" type="text" autocomplete="off" [value]="deleteConfirm()" (input)="deleteConfirm.set($any($event.target).value)" />
+    </label>
+  </div>
+
+  <div class="delete-foot">
+    <button class="btn-reset" type="button" (click)="closeDelete()">Cancel</button>
+    <button class="btn-search btn-danger-solid" type="button" (click)="deletePermanently()" [disabled]="!canDelete() || deleting()">
+      {{ deleting() ? 'Deleting…' : 'Delete permanently' }}
+    </button>
+  </div>
+</dialog>
+
+<dialog #hideDialog class="delete-dialog" aria-labelledby="hide-title" tabindex="-1" (keyup.escape)="closeHide()" (click)="$event.target === hideDialog ? closeHide() : null">
+  <div class="delete-head">
+    <h2 id="hide-title">Hide old errors</h2>
+    <button class="icon-btn" type="button" aria-label="Close" (click)="closeHide()">×</button>
+  </div>
+
+  <div class="delete-body">
+    <p class="hide-info">Choose a date. Errors recorded <strong>before</strong> it are hidden from this Overview and from reports exported from it. Nothing is deleted: <strong>All errors</strong> still lists everything, and you can show the hidden errors again at any time.</p>
+
+    <label class="field">
+      <span class="field-label">Hide errors older than</span>
+      <input class="field-input" type="date" [value]="hideBefore()" [max]="todayInput" (change)="hideBefore.set($any($event.target).value)" />
+    </label>
+    <p class="hint">Today's date hides everything recorded before today, so the Overview starts fresh.</p>
+  </div>
+
+  <div class="delete-foot">
+    <button class="btn-reset" type="button" (click)="closeHide()">Cancel</button>
+    <button class="btn-search" type="button" (click)="hideErrors()" [disabled]="!hideBefore() || hiding()">
+      {{ hiding() ? 'Hiding…' : 'Hide errors' }}
+    </button>
+  </div>
+</dialog>

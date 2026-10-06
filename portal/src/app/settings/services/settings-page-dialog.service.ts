@@ -8,7 +8,8 @@ export type SettingsPageDialogKey =
   | 'allowed-origins'
   | 'email'
   | 'security'
-  | 'sso-configurations';
+  | 'sso-configurations'
+  | 'error-log';
 
 /**
  * Opens an existing settings PAGE component as a full, edge-to-edge dialog.
@@ -65,6 +66,9 @@ export class SettingsPageDialogService {
       case 'sso-configurations':
         return import('../pages/sso-configurations/sso-configurations.component')
           .then(m => m.SsoConfigurationsComponent as Type<unknown>);
+      case 'error-log':
+        return import('../../operations/pages/error-log-settings/error-log-settings.component')
+          .then(m => m.ErrorLogSettingsComponent as Type<unknown>);
     }
   }
 }

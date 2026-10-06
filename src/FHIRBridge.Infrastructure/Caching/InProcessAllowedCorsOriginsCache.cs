@@ -85,8 +85,9 @@ public sealed class InProcessAllowedCorsOriginsCache : IAllowedCorsOriginsCache
                 await _redis.GetSubscriber().SubscribeAsync(InvalidationChannel, (_, _) => _cached = null);
                 _subscribedToInvalidation = true;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                FHIRBridge.Governance.SwallowedError.Report(exception, "Cors.Redis subscribe");
                 // Still down/hung — ConnectionRestored will call this again; MaxAge bounds staleness meanwhile.
             }
         }

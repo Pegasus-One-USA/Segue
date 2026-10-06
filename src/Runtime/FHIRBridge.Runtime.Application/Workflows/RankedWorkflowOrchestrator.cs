@@ -274,11 +274,28 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         List<string> skippedResourceTypesAcrossRun,
         CancellationToken cancellationToken)
     {
+        // Names the central error capture attaches to anything that fails beneath this run (workflow, then per node).
+        var totalSteps = nodesToRun.Count;
+        using var workflowErrorScope = FHIRBridge.Governance.ErrorContext.Push(
+            workflowName: workflowDefinition.Name,
+            workflowId: workflowDefinition.Id.ToString(),
+            executionId: workflowRun.Id.ToString(),
+            correlationId: context.CorrelationId,
+            totalSteps: totalSteps);
+
+        // "WorkflowDebug" trace lines (only written when enabled in Error Log Handling): one per step, so a failed run
+        // shows exactly how far it got. Every line names the workflow, its id and the execution id.
+        string TraceLine(string text) =>
+            $"Workflow '{workflowDefinition.Name}' ({workflowDefinition.Id}) run {workflowRun.Id}: {text}";
+        FHIRBridge.Governance.WorkflowDebug.Write(TraceLine($"started - {totalSteps} step(s) to run."));
+        var stepNumber = 0;
+
         try
         {
             foreach (var node in nodesToRun)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                stepNumber++;
 
                 var incomingOutputs = GetIncomingOutputs(effectiveDefinition, node, outputsByNodeId);
                 var inputContract = incomingOutputs.FirstOrDefault()?.Contract ?? WorkflowDataContract.None;
@@ -316,7 +333,13 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                     ["CorrelationId"] = context.CorrelationId,
                 });
 
+                using var nodeErrorScope = FHIRBridge.Governance.ErrorContext.Push(
+                    nodeName: node.DisplayName, nodeType: node.NodeType,
+                    stepNumber: stepNumber, stage: node.Category.ToString());
+
                 var nodeStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+                var stepLabel = $"Step {stepNumber}/{totalSteps} [{node.Category}] ‘{node.DisplayName}’ ({node.NodeType})";
+                FHIRBridge.Governance.WorkflowDebug.Write(TraceLine($"{stepLabel} started."));
                 _logger.LogDebug(
                     LogEvents.NodeExecutionStarted,
                     "Node {NodeType} ({NodeId}) started at rank {NodeRank}.{NodeSubRank} with input contract {InputContract}.",
@@ -357,6 +380,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                             workflowRun.Id, node.NodeType, node.Id, deferredJobId, bulkRequestId);
 
                         workflowRun.AwaitBulkExport(bulkRequestId);
+                        FHIRBridge.Governance.WorkflowDebug.Write(TraceLine($"{stepLabel} paused - waiting for the source's bulk export job to finish."));
                         await _auditRecorder.RecordAsync(new(
                             WorkflowAuditEventType.WorkflowRunAwaitingBulkExport,
                             workflowDefinition.Id,
@@ -416,9 +440,12 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                         node.NodeType, node.Id,
                         (long)System.Diagnostics.Stopwatch.GetElapsedTime(nodeStartedAt).TotalMilliseconds,
                         output.Contract, DescribePayloadSize(output));
+                    FHIRBridge.Governance.WorkflowDebug.Write(TraceLine(
+                        $"{stepLabel} completed in {(long)System.Diagnostics.Stopwatch.GetElapsedTime(nodeStartedAt).TotalMilliseconds} ms -> {DescribePayloadSize(output)} record(s), contract {output.Contract}."));
                 }
                 catch (FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException cancelException)
                 {
+                    FHIRBridge.Governance.WorkflowDebug.Write(TraceLine($"{stepLabel} cancelled: {cancelException.Message}"));
                     workflowRun.AddNodeRun(nodeRun);
                     nodeRun.Cancel(cancelException.Message, DateTimeOffset.UtcNow);
                     await _auditRecorder.RecordAsync(new(
@@ -437,6 +464,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 }
                 catch (OperationCanceledException)
                 {
+                    FHIRBridge.Governance.WorkflowDebug.Write(TraceLine($"{stepLabel} cancelled by user request."));
                     // A user-initiated cancel (see /workflow-runs/{runId}/cancel) interrupted this node mid-flight
                     // (an HTTP/DB call inside the executor observed the same cancelled token) rather than being
                     // caught at the between-node check above. Without this catch, the generic Exception handler
@@ -461,6 +489,12 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 }
                 catch (Exception exception)
                 {
+                    // Pin node / source / destination / resource names to the exception: it leaves this scope on the
+                    // way to the run-level capture below, which would otherwise only know the workflow.
+                    FHIRBridge.Governance.ErrorContext.Remember(exception);
+                    FHIRBridge.Governance.WorkflowDebug.Write(TraceLine(
+                        $"{stepLabel} FAILED after {(long)System.Diagnostics.Stopwatch.GetElapsedTime(nodeStartedAt).TotalMilliseconds} ms: {exception.GetType().Name}: {exception.Message}"));
+
                     _logger.LogError(
                         LogEvents.NodeExecutionFailed,
                         exception,
@@ -486,6 +520,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                     throw;
                 }
             }
+
+            FHIRBridge.Governance.WorkflowDebug.Write(TraceLine($"all {totalSteps} step(s) finished."));
 
             if (skippedResourceTypesAcrossRun.Count > 0)
             {
@@ -675,6 +711,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 workflowRun.Id, workflowDefinition.Id, workflowDefinition.Name, workflowRun.NodeRuns.Count,
                 exception.Message);
 
+            // The failing node's names were pinned to the exception when it left its step (see ErrorContext.Remember).
+            var failedAt = FHIRBridge.Governance.ErrorContext.For(exception);
+            FHIRBridge.Governance.WorkflowDebug.Write(
+                TraceLine(
+                    $"FAILED at step {failedAt?.StepNumber?.ToString() ?? "?"}/{totalSteps} [{failedAt?.Stage}] ‘{failedAt?.NodeName}’ - {exception.GetType().Name}: {exception.Message}. "
+                    + $"{workflowRun.NodeRuns.Count} node(s) had completed or failed before this point."),
+                failedAt);
+
             workflowRun.Fail(exception.Message, DateTimeOffset.UtcNow);
             await _auditRecorder.RecordAsync(new(
                 WorkflowAuditEventType.WorkflowRunFailed,
@@ -819,8 +863,9 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 new RunStatusChangedEvent(workflowRunId, workflowDefinitionId, status, occurredAt, errorMessage, errorReferenceId),
                 cancellationToken);
         }
-        catch
+        catch (Exception exception)
         {
+            FHIRBridge.Governance.SwallowedError.Report(exception, "Workflow.Run status notification");
             // Swallowed by design — see the XML doc above.
         }
     }

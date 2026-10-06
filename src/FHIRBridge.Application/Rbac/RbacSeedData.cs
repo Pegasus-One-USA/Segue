@@ -220,6 +220,10 @@ public static class RbacSeedData
             "Resolve/reopen captured errors and manage alert rules.",
             PermissionGroupCode.Governance,
             PermissionActionCode.Write),
+        new(
+            "Permanently delete error log entries (delete errors, purge old entries) and release the space.",
+            PermissionGroupCode.Governance,
+            PermissionActionCode.Delete),
     ];
 
     /// <summary>

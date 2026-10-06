@@ -5,6 +5,7 @@ using FHIRBridge.Infrastructure.Persistence;
 using FHIRBridge.Infrastructure.Persistence.Workflows;
 using FHIRBridge.Infrastructure.Security;
 using FHIRBridge.Infrastructure.Terminology.Hapi;
+using FHIRBridge.Governance;
 using FHIRBridge.Observability;
 using FHIRBridge.Observability.Logging;
 using FHIRBridge.Runtime.Application.Workflows;
@@ -83,6 +84,13 @@ if (!string.IsNullOrWhiteSpace(workerDataProtectionKeyVaultKeyId))
 // Same reasoning as the Api host — see its Program.cs comment. AddAspNetCoreInstrumentation() is a no-op here
 // (no ASP.NET Core pipeline in this host), but HttpClient/.NET-runtime/custom-meter instrumentation still applies.
 builder.Services.AddFhirBridgeObservability(builder.Configuration, "FHIRBridge.Worker");
+
+// Central error capture: shared PHI scrubber, ErrorCapture:Sinks (Table | ApplicationInsights | Both) and the
+// ambient catch-all for failures no call site routed through the Global Exception Manager. Additive — see
+// FHIRBridge.Governance/ErrorCaptureServiceCollectionExtensions.cs.
+builder.Services.AddFhirBridgeErrorCapture(builder.Configuration);
+// Applies the error-log "auto-clear" setting (deletes entries older than the configured number of days).
+builder.Services.AddHostedService<FHIRBridge.Infrastructure.Governance.ErrorLogRetentionWorker>();
 
 builder.Services
     .AddFHIRBridgeApplication()

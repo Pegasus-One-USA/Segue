@@ -1,0 +1,22 @@
+@model FHIRBridge.LicenseServer.Pages.ErrorReports.DetailsModel.ErrorRowView
+@{
+    var e = Model.Entry;
+    var c = Model.Correlation;
+}
+<td hidden class="er-data"
+    data-ref="@e.ErrorReferenceId" data-when="@e.OccurredOnUtc.ToString("u")" data-severity="@e.Severity"
+    data-category="@e.Category" data-module="@e.Module" data-type="@e.ExceptionType"
+    data-whattodo="@e.WhatToDo" data-cause="@e.Cause" data-corr="@e.CorrelationId"
+    data-exec="@e.ExecutionId" data-workflow="@e.WorkflowId" data-endpoint="@e.EndpointId" data-wfname="@e.WorkflowName" data-node="@e.NodeName" data-nodetype="@e.NodeType"
+    data-sourcename="@e.SourceName" data-destname="@e.DestinationName" data-resource="@e.ResourceType"
+    data-trace="@e.TraceId">
+    <pre class="er-msg">@e.Message</pre>
+    <pre class="er-st">@e.StackTrace</pre>
+    @if (c is not null)
+    {
+        <pre class="er-corr"
+             data-runstatus="@c.RunStatus" data-started="@c.RunStartedUtc?.ToString("u")" data-completed="@c.RunCompletedUtc?.ToString("u")"
+             data-extracted="@c.ExtractedCount" data-mapped="@c.MappedCount" data-written="@c.WrittenCount"
+             data-truncated="@(c.Truncated ? "1" : "")">@c.EventsJson</pre>
+    }
+</td>
