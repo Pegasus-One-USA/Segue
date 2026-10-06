@@ -1,5 +1,5 @@
 import {
-  Component, signal, inject, input, HostListener, ElementRef,
+  Component, computed, signal, inject, input, HostListener, ElementRef,
 } from '@angular/core';
 import { ChildrenOutletContexts, Router } from '@angular/router';
 import { AuthService }        from '../../../auth/services/auth.service';
@@ -47,6 +47,10 @@ export class UserMenuComponent {
   protected readonly theme    = this.profSvc.theme;
   protected readonly fullName = this.profSvc.fullName;
   protected readonly initials = this.profSvc.initials;
+  // The Focused layout's sidebar-foot menu shows the first name only; the Standard topbar menu keeps the full
+  // name. Falls back to the full name for a profile with no first name, so the label is never blank.
+  protected readonly displayName = computed(() =>
+    this.anchor() === 'sidebar' ? (this.profile().firstName?.trim() || this.fullName()) : this.fullName());
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(e: MouseEvent): void {
