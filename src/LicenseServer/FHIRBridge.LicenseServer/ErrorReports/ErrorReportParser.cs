@@ -80,7 +80,8 @@ public static class ErrorReportParser
                 }
 
                 if (item.ValueKind != JsonValueKind.Object) continue;
-                entries.Add(ToEntry(name => TryGet(item, name, out var v) ? Text(v) : null));
+                var parsed = ToEntry(name => TryGet(item, name, out var v) ? Text(v) : null);
+                if (parsed is not null) entries.Add(parsed);
             }
 
             return new ParsedErrorReport(
@@ -127,6 +128,7 @@ public static class ErrorReportParser
             string? Cell(string name) => index.TryGetValue(name, out var i) && i < row.Count ? UndoFormulaGuard(row[i]) : null;
 
             var entry = ToEntry(Cell);
+            if (entry is null) continue;
             entries.Add(entry);
 
             // "CorrelationDetails" holds the run timeline as text on the first error row of each run.
@@ -250,10 +252,15 @@ public static class ErrorReportParser
         return result;
     }
 
-    private static ErrorReportEntry ToEntry(Func<string, string?> get)
+    /// <summary>Null when the row has no usable OccurredOnUtc: the column is non-nullable, and an Unspecified-kind
+    /// default(DateTime) would make Npgsql reject the whole import.</summary>
+    private static ErrorReportEntry? ToEntry(Func<string, string?> get)
     {
-        _ = DateTime.TryParse(get("OccurredOnUtc"), CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var occurred);
+        if (!DateTime.TryParse(get("OccurredOnUtc"), CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var occurred))
+        {
+            return null;
+        }
 
         return new ErrorReportEntry
         {

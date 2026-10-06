@@ -56,6 +56,9 @@ public sealed class GlobalExceptionManager : IGlobalExceptionManager
             // Recording an error never makes the caller wait: the entry is handed to the background writer (which retries
             // while the table is busy or locked) and the caller carries on. What the writer cannot read later - the
             // request's correlation id and the time it happened - is fixed now.
+            // Trade-off: the reference id is returned once the entry is QUEUED, not stored. If the database stays down
+            // past the writer's retries the entry is dropped (ErrorWriteService logs the id and tries Application
+            // Insights), so an id can then have no ErrorLogs row. Accepted to keep error handling non-blocking.
             var queued = entry with
             {
                 CorrelationId = entry.CorrelationId ?? _correlation?.CorrelationId,

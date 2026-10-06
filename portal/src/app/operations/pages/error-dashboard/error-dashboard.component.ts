@@ -1,5 +1,6 @@
 import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild, computed, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
+import { Subscription } from 'rxjs';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { SettingsPageDialogService } from '../../../settings/services/settings-page-dialog.service';
 import { ToastService } from '../../../services/toast.service';
@@ -41,6 +42,8 @@ export class ErrorDashboardComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly actionGuard = inject(PermissionActionGuard);
   private readonly settingsDialog = inject(SettingsPageDialogService);
+  private loadSub?: Subscription;
+  private matchesSub?: Subscription;
 
   readonly ranges: RangeOption[] = [
     { label: 'Last 24 hours', days: 1 },
@@ -245,7 +248,9 @@ export class ErrorDashboardComponent implements OnInit {
     this.loading.set(true);
     const { fromUtc, toUtc } = this.range();
     const a = this.applied();
-    this.api.errorDashboard(fromUtc, toUtc, a.severity || undefined, a.category || undefined).subscribe({
+    // A newer load supersedes an in-flight one, so a slow earlier response cannot overwrite the newer filter's numbers.
+    this.loadSub?.unsubscribe();
+    this.loadSub = this.api.errorDashboard(fromUtc, toUtc, a.severity || undefined, a.category || undefined).subscribe({
       next: result => { this.data.set(result); this.loading.set(false); this.loadMatches(); },
       error: () => this.loading.set(false),
     });
@@ -260,7 +265,8 @@ export class ErrorDashboardComponent implements OnInit {
     const hiddenBefore = this.data()?.clearedAtUtc;
     if (hiddenBefore && new Date(hiddenBefore) > new Date(fromUtc)) { fromUtc = hiddenBefore; }
     const a = this.applied();
-    this.api.searchErrors({
+    this.matchesSub?.unsubscribe();
+    this.matchesSub = this.api.searchErrors({
       fromUtc,
       toUtc: window.toUtc,
       severity: a.severity || undefined,

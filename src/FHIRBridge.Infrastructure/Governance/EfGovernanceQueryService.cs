@@ -400,7 +400,8 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             // Informational rows (routine sub-500 rejections captured via CaptureExpectedAsync) are findable
             // by CorrelationId/ExecutionId/etc. but must stay out of the default Operations → Errors view —
             // that's the whole point of not routing them through the heavy 5xx CaptureAsync path.
-            query = query.Where(x => x.Severity != "Informational");
+            // "Information" is excluded too, so this list and the export agree with the dashboard counts.
+            query = query.Where(x => x.Severity != "Informational" && x.Severity != "Information");
         }
 
         if (!string.IsNullOrWhiteSpace(search.Category))
@@ -653,7 +654,8 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         }
 
         // One query per table for ALL the ids; each table is read newest-first up to a fixed ceiling, then split per id.
-        // 100 rows per id is plenty for a timeline summary; the ceiling keeps one busy run from starving the others.
+        // 100 rows per id on average is plenty for a timeline summary. The ceiling is shared by all ids (and is
+        // newest-first), so one very busy run can crowd older events of the others out of a table's result.
         var perTable = ids.Count * 100;
 
         var workflowRuns = (await _dbContext.WorkflowRuns.AsNoTracking()

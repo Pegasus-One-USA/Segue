@@ -152,7 +152,9 @@ public sealed class ErrorWriteService : IHostedService
             }
             catch (Exception caught)
             {
-                if (attempt >= RetryPauses.Length || _draining)
+                // A duplicate reference id will fail identically every time, so waiting ~100 s on it would only stall
+                // every entry queued behind it.
+                if (attempt >= RetryPauses.Length || _draining || IsDuplicateKey(caught))
                 {
                     await GiveUpAsync(entry, caught);
                     return;
@@ -168,6 +170,27 @@ public sealed class ErrorWriteService : IHostedService
                 }
             }
         }
+    }
+
+    /// <summary>True for a unique-key violation (PostgreSQL SqlState 23505, SQL Server error 2601 / 2627). Governance has no
+    /// database-provider reference, so the provider exception is recognised by its public SqlState / Number property.</summary>
+    internal static bool IsDuplicateKey(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            var type = current.GetType();
+            if (type.GetProperty("SqlState")?.GetValue(current) is string state && state == "23505")
+            {
+                return true;
+            }
+
+            if (type.GetProperty("Number")?.GetValue(current) is int number && number is 2601 or 2627)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task GiveUpAsync(ErrorEntry entry, Exception caught)
