@@ -89,16 +89,6 @@
           (input)="search.set($any($event.target).value)"
         />
       </div>
-
-      <!-- Creating a raw SystemSetting row is a configuration.* action; an ehrendpoints.view-only viewer
-           is here only for the EHR Endpoints launcher row. -->
-      @if (canViewSettingGroups()) {
-        <div class="filter-actions">
-          <button class="btn-add" type="button" (click)="openAdd()">
-            New
-          </button>
-        </div>
-      }
     </div>
   </div>
 

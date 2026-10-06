@@ -501,22 +501,6 @@ export class SystemSettingListComponent implements OnInit {
     this.settingsPageDialog.open(row.code);
   }
 
-  openAdd(): void {
-    this.customDialog
-      .open<SystemSettingDialogComponent, SystemSettingDialogData, boolean>(SystemSettingDialogComponent, {
-        width: '520px',
-        disableClose: true,
-        data: { mode: 'create' },
-      })
-      .afterClosed()
-      .subscribe(res => {
-        if (res) {
-          this.toast.success('Setting saved.');
-          this.load();
-        }
-      });
-  }
-
   openEdit(setting: SystemSetting): void {
     this.customDialog
       .open<SystemSettingDialogComponent, SystemSettingDialogData, boolean>(SystemSettingDialogComponent, {
