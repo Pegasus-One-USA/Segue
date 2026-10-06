@@ -65,7 +65,8 @@
        carry external download credentials and endpoint URLs, matching Terminology's place in
        SUPER_ADMIN_ONLY_GROUPS. -->
   @if (terminologyServerTableEnabled && isElevated()) {
-    <app-hapi-terminology-table [searchTerm]="search()"></app-hapi-terminology-table>
+    <!-- Has its own search box: the page's search below filters only the settings table. -->
+    <app-hapi-terminology-table></app-hapi-terminology-table>
   }
 
   <!-- Filter Bar -->
@@ -88,16 +89,6 @@
           (input)="search.set($any($event.target).value)"
         />
       </div>
-
-      <!-- Creating a raw SystemSetting row is a configuration.* action; an ehrendpoints.view-only viewer
-           is here only for the EHR Endpoints launcher row. -->
-      @if (canViewSettingGroups()) {
-        <div class="filter-actions">
-          <button class="btn-add" type="button" (click)="openAdd()">
-            New
-          </button>
-        </div>
-      }
     </div>
   </div>
 

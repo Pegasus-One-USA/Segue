@@ -8,7 +8,8 @@ import {
 } from '../models/auth-request.model';
 
 export abstract class IUserService {
-  abstract getUsers(params?: UserQueryParams): Observable<PaginatedResponse<User>>;
+  /** `silent` (passed only from the User Management search box) skips the app-wide loader — see ApiUserService. */
+  abstract getUsers(params?: UserQueryParams, silent?: boolean): Observable<PaginatedResponse<User>>;
   abstract getUser(id: string): Observable<User>;
   abstract createUser(req: CreateUserRequest): Observable<User>;
   abstract updateUser(id: string, req: UpdateUserRequest): Observable<User>;

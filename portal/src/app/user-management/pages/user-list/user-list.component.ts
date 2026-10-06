@@ -138,7 +138,8 @@ export class UserListComponent implements OnInit, OnDestroy {
     ).subscribe(query => {
       this.search.set(query);
       this.page.set(1);
-      this.loadUsers();
+      // Silent: with the app-wide loader the page goes [inert] and the search box loses focus mid-typing.
+      this.loadUsers(true);
     });
 
     this.loadUsers();
@@ -157,7 +158,9 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   // ─── Data loading ─────────────────────────────────────────────────────────
-  loadUsers(): void {
+  /** `silent` comes only from the debounced search box — see ApiUserService.getUsers. Every other reload (open,
+   *  filters, sort, paging, after an edit) keeps the app-wide loader. */
+  loadUsers(silent = false): void {
     this.loading.set(true);
     const params: UserQueryParams = {
       page:      this.page(),
@@ -169,7 +172,7 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (this.roleFilter())   params.role   = this.roleFilter() as UserRole;
     if (this.statusFilter()) params.status = this.statusFilter() as UserStatus;
 
-    this.userService.getUsers(params)
+    this.userService.getUsers(params, silent)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: res => {

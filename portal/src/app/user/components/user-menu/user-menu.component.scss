@@ -86,7 +86,19 @@
     bottom:     96px;
     left:       16px;
     max-height: calc(100vh - 112px);
+    // left:16px + the fixed 308px width overran a phone-width viewport; keep 16px clear on the right too.
+    max-width:  calc(100vw - 32px);
     animation:  um-slide-in-up .18s cubic-bezier(.22,.68,0,1.2) both;
+
+    // The header's text column is only ~204px wide (308px panel − 36px padding − 52px avatar − 14px gap), so the
+    // shared nowrap + ellipsis rule cut most real addresses short. Here the email wraps instead, breaking inside the
+    // address only where it has to, so the whole address is always visible however long it is.
+    .um-header-email {
+      white-space:   normal;
+      overflow:      visible;
+      text-overflow: clip;
+      overflow-wrap: anywhere;
+    }
   }
 }
 

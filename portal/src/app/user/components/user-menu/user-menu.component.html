@@ -6,14 +6,14 @@
     [class.um-trigger--collapsed]="anchor() === 'sidebar' && collapsed()"
     type="button"
     (click)="toggleMenu($event)"
-    [title]="anchor() === 'sidebar' && collapsed() ? fullName() : 'Account menu'"
+    [title]="anchor() === 'sidebar' && collapsed() ? displayName() : 'Account menu'"
   >
     <span class="um-avatar" [style.background]="profile().avatarColor">
       {{ initials() }}
     </span>
     @if (!(anchor() === 'sidebar' && collapsed())) {
       <div class="um-trigger-info">
-        <span class="um-trigger-name">{{ fullName() }}</span>
+        <span class="um-trigger-name">{{ displayName() }}</span>
         <span class="um-trigger-role">{{ profile().roleLabel }}</span>
       </div>
       <svg class="um-chevron" [class.rotated]="menuOpen()" viewBox="0 0 16 16" fill="none">
@@ -37,7 +37,7 @@
           {{ initials() }}
         </div>
         <div class="um-header-info">
-          <span class="um-header-name">{{ fullName() }}</span>
+          <span class="um-header-name">{{ displayName() }}</span>
           <span class="um-header-email">{{ profile().email }}</span>
           <span class="um-header-role">{{ profile().roleLabel }}</span>
           <span class="um-header-org">{{ profile().organization }}</span>

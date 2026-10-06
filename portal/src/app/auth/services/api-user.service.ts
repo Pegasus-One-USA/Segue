@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
+import { SKIP_LOADER } from '../../core/loading.interceptor';
 import { Observable, throwError } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
 import { USERS_ENDPOINTS, ROLES_ENDPOINTS, PERMISSIONS_ENDPOINTS, AUTH_ENDPOINTS } from '../../core/api-endpoints';
@@ -194,8 +195,11 @@ export class ApiUserService extends IUserService {
   private readonly http = inject(HttpClient);
 
   // ─── List ──────────────────────────────────────────────────────────────────
-  getUsers(params?: UserQueryParams): Observable<PaginatedResponse<User>> {
-    return this.http.get<UserManagementDto[]>(USERS_ENDPOINTS.list).pipe(
+  /** `silent` (passed only from the debounced search box) sends SKIP_LOADER: the app-wide loader marks the routed
+   *  content [inert] (app.component.ts), which blurs the search input after every keystroke. */
+  getUsers(params?: UserQueryParams, silent = false): Observable<PaginatedResponse<User>> {
+    const context = silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<UserManagementDto[]>(USERS_ENDPOINTS.list, { context }).pipe(
       map(dtos => {
         let items = (dtos ?? []).map(mapListDto);
 

@@ -8,6 +8,10 @@ export interface ConfirmDialogData {
   message: string;
   confirmLabel?: string;
   danger?: boolean;
+  /** Adds a third, primary button that closes the dialog with 'save' (Cancel → false, confirm → true). Only the
+   *  unsaved-changes prompt sets it, for a page that can save itself before leaving; every other caller is
+   *  unchanged. */
+  saveLabel?: string;
 }
 
 @Component({
