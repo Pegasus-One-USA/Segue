@@ -127,10 +127,17 @@ public sealed class InMemoryUserAccessRepository : IUserAccessRepository
         return Task.FromResult(user);
     }
 
-    public Task AddUserAsync(User user, CancellationToken cancellationToken)
+    public async Task AddUserAsync(User user, CancellationToken cancellationToken)
     {
+        // The license user cap, at this store's one Add choke point (see the class remarks): without it the
+        // no-database profile let users be created past MaxUsers.
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ILicenseQuotaGuard>()
+                .EnsureUserQuotaAvailableAsync(cancellationToken);
+        }
+
         _users[user.Id] = user;
-        return Task.CompletedTask;
     }
 
     public Task UpdateUserAsync(User user, CancellationToken cancellationToken)

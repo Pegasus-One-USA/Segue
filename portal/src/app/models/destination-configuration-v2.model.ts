@@ -38,7 +38,10 @@ export type DestinationTypeV2 =
    *  the other Fabric destinations in the picker, but sharing nothing technical with them, and deliberately NOT
    *  reachable through 'Mongo': Fabric's Cosmos DB is the NoSQL API and speaks no MongoDB wire protocol. */
   | 'CosmosDbFabric'
-  | 'ApiEndpoint';
+  | 'ApiEndpoint'
+  /** FHIR write-back INTO an EHR (Epic first) over a source connection whose Access includes Write. Takes whole
+   *  FHIR resources (never mapped rows), so it is deliberately absent from SQL_FAMILY_DESTINATION_TYPES. */
+  | 'EhrWriteBack';
 
 /** SQL-family destinations are the only ones Mapping applies to in the V2 chain (Source → Destination →
  *  [Mapping →] Transformation → De-identification). "NoSQL" in the product spec maps to Mongo — the only

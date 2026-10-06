@@ -17,6 +17,9 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.FhirRepositoryDestination,
             WorkflowNodeTypes.MedplumDestination,
             WorkflowNodeTypes.AzureFhirServiceDestination,
+            // In the set for the Mapping-node exemption only. Its catalog entry is built by hand below, NOT through
+            // Destination(), whose widening would also let mapped and de-identified records in.
+            WorkflowNodeTypes.EhrWriteBackDestination,
         };
 
     private static readonly WorkflowNodeCatalogItem[] Items =
@@ -40,6 +43,20 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Source(WorkflowNodeTypes.GenericFhirSource),
         // Source(WorkflowNodeTypes.Hl7v2MllpSource),
         Source(WorkflowNodeTypes.SampleSource),
+        // Non-FHIR rows → FHIR through templates. Hand-built for its required keys (the same keys as
+        // FHIRBridge.Application's TabularSourceSettings, which this layer cannot reference). No source connection:
+        // its identity for EHR write-back is the dataset key.
+        new(
+            WorkflowNodeTypes.TabularSource,
+            WorkflowNodeCategory.Source,
+            0,
+            ["tab_kind", "tab_datasetKey", "tab_templates"],
+            [],
+            WorkflowDataContract.ResourceBatch,
+            WorkflowNodeTypes.TabularSource,
+            "CSV / SQL Table",
+            "tabular",
+            "Read rows from an uploaded CSV file or a SQL query and build FHIR resources from templates."),
         Compliance(WorkflowNodeTypes.Consent, "consent", "Consent", "Apply configured consent policy.", 10, [WorkflowDataContract.ResourceBatch], WorkflowDataContract.ResourceBatch),
         Compliance(WorkflowNodeTypes.UsCoreValidation, "fhir-validation", "FHIR Validation", "Validate resources against US Core / base R4 profiles.", 20, [WorkflowDataContract.ResourceBatch], WorkflowDataContract.NormalizedResourceBatch),
         Transform(WorkflowNodeTypes.Normalization, "normalize", "Normalize Data", "Normalize FHIR resources for downstream transforms.", 30, WorkflowDataContract.NormalizedResourceBatch, WorkflowDataContract.NormalizedResourceBatch),
@@ -86,6 +103,20 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
         Destination(WorkflowNodeTypes.DataFabricWarehouseDestination),
         Destination(WorkflowNodeTypes.CosmosDbFabricDestination),
         Destination(WorkflowNodeTypes.ApiEndpointDestination),
+        // EHR write-back takes whole FHIR resources only: raw or normalized. A Mapping node in front would hand it
+        // flattened rows, and a De-identification node would hand it redacted data to file into a chart, so neither
+        // contract is accepted. The target EHR connection is required configuration.
+        new(
+            WorkflowNodeTypes.EhrWriteBackDestination,
+            WorkflowNodeCategory.Destination,
+            70,
+            ["dest_sourceConnectionId"],
+            [WorkflowDataContract.ResourceBatch, WorkflowDataContract.NormalizedResourceBatch],
+            WorkflowDataContract.DestinationWriteResult,
+            WorkflowNodeTypes.EhrWriteBackDestination,
+            "EHR Write-Back",
+            "dest-ehr-writeback",
+            "Write FHIR resources back into an EHR (Epic): allergies, problems, vital signs, clinical notes and, opt-in, patients."),
         // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FhirRepository +
         // AzureFhirService + Blob destinations are exposed in the palette. The writers below remain registered in
         // ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.

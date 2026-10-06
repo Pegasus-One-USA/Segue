@@ -88,7 +88,8 @@ public sealed class ConfiguredDestinationWriterFactory : IConfiguredDestinationW
         // types share one implementation rather than duplicating the COPY INTO path.
         new(DestinationType.DataFabricWarehouse, typeof(MappedDataFabricDestinationWriter)),
         new(DestinationType.ApiEndpoint, typeof(MappedApiEndpointDestinationWriter)),
-        new(DestinationType.CosmosDbFabric, typeof(MappedCosmosDbFabricDestinationWriter))
+        new(DestinationType.CosmosDbFabric, typeof(MappedCosmosDbFabricDestinationWriter)),
+        new(DestinationType.EhrWriteBack, typeof(EhrWriteBack.MappedEhrWriteBackDestinationWriter))
     ];
 
     private static IReadOnlyDictionary<DestinationType, Type> BuildRegistry(

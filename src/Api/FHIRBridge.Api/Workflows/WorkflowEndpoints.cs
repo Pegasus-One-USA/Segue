@@ -75,12 +75,20 @@ public static class WorkflowEndpoints
         group.MapPost("/workflows", async (
             WorkflowDefinitionRequest request,
             IWorkflowDefinitionStore store,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
             // License workflow-quota enforcement lives centrally in LicenseEnforcementSaveChangesInterceptor,
             // which distinguishes this genuine create from an edit at the actual persistence choke point
             // (SqlWorkflowDefinitionStore.SaveAsync) rather than here.
             var workflow = BuildWorkflow(Guid.NewGuid(), request);
+            if (!await CanSaveEhrWriteBackNodesAsync(authorizationService, httpContext.User, request.Nodes, existing: null)
+                || !await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Created($"/api/v1/workflows/{workflow.Id}", workflow);
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
@@ -454,6 +462,12 @@ public static class WorkflowEndpoints
             // node-removal check) so version history is real instead of always 1.
             var workflow = BuildWorkflow(
                 request.WorkflowId ?? Guid.NewGuid(), definitionRequest, (existingDefinition?.Version ?? 0) + 1);
+            if (!await CanSaveEhrWriteBackNodesAsync(authorizationService, httpContext.User, definitionRequest.Nodes, existingDefinition)
+                || !await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             await store.SaveAsync(workflow, cancellationToken);
 
             // Retire the mapping profiles / workflow-scoped rules this save just stopped referencing (a
@@ -1160,7 +1174,10 @@ public static class WorkflowEndpoints
         // matches the portal's own canViewConfiguration gate on the menu item that calls it.
         group.MapGet("/workflows/{workflowId:guid}/configuration-export", async (
             Guid workflowId,
-            IWorkflowConfigurationExporter exporter,
+            // [FromServices]: the exporter is registered only with a database (AddWorkflowSqlPersistence). Without
+            // the attribute, a host with no database (the integration-test host) infers it as a request body and
+            // fails to build the endpoint table at startup; with it, only a call to this URL fails there.
+            [Microsoft.AspNetCore.Mvc.FromServices] IWorkflowConfigurationExporter exporter,
             CancellationToken cancellationToken) =>
         {
             var export = await exporter.ExportAsync(workflowId, cancellationToken);
@@ -1223,6 +1240,12 @@ public static class WorkflowEndpoints
             }
 
             var workflow = BuildWorkflow(workflowId, request, (existing?.Version ?? 0) + 1);
+            if (!await CanSaveEhrWriteBackNodesAsync(authorizationService, httpContext.User, request.Nodes, existing)
+                || !await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             await store.SaveAsync(workflow, cancellationToken);
 
             // Same retirement pass as /workflows/build — see the comment there. This path provisions
@@ -1268,6 +1291,15 @@ public static class WorkflowEndpoints
             if (source is null)
             {
                 return Results.NotFound();
+            }
+
+            // A copy creates new EHR Write-Back nodes, carrying the original's write settings (dry run included), so
+            // it needs the same right as adding one on the canvas: ehrwriteback.create.
+            if (source.Nodes.Any(n => IsEhrWriteBackNode(n.NodeType))
+                && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                    authorizationService, httpContext.User, DestinationType.EhrWriteBack, PermissionActionCode.Create))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
             }
 
             // A copy always mints a brand-new workflow id (see BuildWorkflow(Guid.NewGuid(), ...) below) — same
@@ -1635,6 +1667,14 @@ public static class WorkflowEndpoints
                 // exist. The id is not a credential — it travels through URLs, configs and support tickets.
                 return Results.NotFound();
             }
+            else if (workflow.Nodes.Any(n => IsEhrWriteBackNode(n.NodeType)))
+            {
+                // An anonymous caller has no permissions to check, and writing into an EHR is gated by
+                // ehrwriteback.execute alone now that there is no installation-wide live-write release. A workflow
+                // that writes back is therefore never publicly launchable, whatever its flag says; same refusal
+                // shape as above.
+                return Results.NotFound();
+            }
 
             // This is the Runtime plane's real run-trigger point (IRankedWorkflowOrchestrator.ExecuteAsync below,
             // both the sync and fire-and-forget-async branches) — checked once here, before either branch starts,
@@ -1657,6 +1697,20 @@ public static class WorkflowEndpoints
             // above.
             foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
             {
+                // A CSV / SQL Table source has no source connection, so the per-vendor check below never reaches it;
+                // it has its own Execute permission instead. No license allow-list applies: it names no EHR vendor.
+                if (string.Equals(node.NodeType, WorkflowNodeTypes.TabularSource, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (isAuthenticatedCaller
+                        && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                            authorizationService, httpContext.User, PermissionGroupCode.TabularSources, PermissionActionCode.Execute))
+                    {
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    }
+
+                    continue;
+                }
+
                 if (!TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceConnectionId))
                 {
                     continue;
@@ -1688,6 +1742,16 @@ public static class WorkflowEndpoints
 
             foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Destination))
             {
+                // Checked on the node type, before any destinationId lookup: a write-back node runs from its own
+                // settings, so one with a missing or stale destinationId must not slip past ehrwriteback.execute.
+                if (IsEhrWriteBackNode(node.NodeType)
+                    && isAuthenticatedCaller
+                    && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                        authorizationService, httpContext.User, DestinationType.EhrWriteBack, PermissionActionCode.Execute))
+                {
+                    return Results.StatusCode(StatusCodes.Status403Forbidden);
+                }
+
                 if (!TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId))
                 {
                     continue;
@@ -1844,13 +1908,31 @@ public static class WorkflowEndpoints
         // executing when this is called is left to finish and keeps its normal terminal state, so cancelling never
         // leaves a node run half-written. A run already past this window (finished, or never started as async in
         // the first place) reports 409 rather than silently no-op'ing.
-        group.MapPost("/workflow-runs/{runId:guid}/cancel", (
+        group.MapPost("/workflow-runs/{runId:guid}/cancel", async (
             Guid runId,
-            IWorkflowRunTracker runTracker) =>
+            IWorkflowRunTracker runTracker,
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
         {
-            return runTracker.RequestCancellation(runId)
-                ? Results.Accepted(value: new WorkflowRunStatusResponse(runId, "CancellationRequested"))
-                : Results.Conflict(new { message = "This run is not currently active and cannot be cancelled." });
+            if (runTracker.RequestCancellation(runId))
+            {
+                return Results.Accepted(value: new WorkflowRunStatusResponse(runId, "CancellationRequested"));
+            }
+
+            // Not live in this process, yet still "Running" on record: a Run-button run is tracked for its whole
+            // execution (sync and async alike), so this one is dead. Its process stopped, or saving its outcome
+            // failed. Nothing will ever finish it, so cancelling closes it rather than refusing.
+            var run = await runStore.GetAsync(runId, cancellationToken);
+            if (run is { Status: WorkflowRunStatus.Running, TriggerType: "Manual", BulkRequestId: null })
+            {
+                run.Cancel(
+                    "Cancelled: this run was no longer executing (the API restarted, or its outcome could not be saved).",
+                    DateTimeOffset.UtcNow);
+                await runStore.SaveAsync(run, cancellationToken);
+                return Results.Ok(new WorkflowRunStatusResponse(runId, run.Status.ToString(), run.CorrelationId));
+            }
+
+            return Results.Conflict(new { message = "This run is not currently active and cannot be cancelled." });
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
             PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.Run)));
 
@@ -1974,6 +2056,12 @@ public static class WorkflowEndpoints
                 return Results.BadRequest(new { error = "checkpoint_not_enabled", error_description = "Enable the checkpoint flag on this node before requesting its URL." });
             }
 
+            // The whole workflow, not just this node: a checkpoint run also executes every node upstream of it.
+            if (WorkflowNodeTypes.HasEhrWriteBack(workflow))
+            {
+                return Results.BadRequest(new { error = "checkpoint_not_allowed", error_description = EhrWriteBackCheckpointRefusal });
+            }
+
             var token = tokenProtector.ProtectWorkflowCheckpointContext(workflowId, nodeId);
             var url = $"{httpRequest.Scheme}://{httpRequest.Host}/api/v1/workflows/checkpoint/{token}";
             return Results.Ok(new { checkpointUrl = url });
@@ -2003,6 +2091,14 @@ public static class WorkflowEndpoints
             if (workflow is null || node is null || !node.CheckpointUrlEnabled)
             {
                 return Results.NotFound(new { error = "checkpoint_unavailable", error_description = "This checkpoint no longer exists or has been disabled." });
+            }
+
+            // A checkpoint URL is anonymous, and a checkpoint run executes the target and every node upstream of it,
+            // so any write-back node in the workflow refuses it. Re-checked here, not only when the URL is minted,
+            // because a URL minted earlier stays valid while the workflow behind it can be changed.
+            if (WorkflowNodeTypes.HasEhrWriteBack(workflow))
+            {
+                return Results.BadRequest(new { error = "checkpoint_not_allowed", error_description = EhrWriteBackCheckpointRefusal });
             }
 
             // Same Runtime-plane run-trigger gate as /workflows/{workflowId}/run above — this anonymous URL
@@ -2143,9 +2239,12 @@ public static class WorkflowEndpoints
             IWorkflowRunStore runStore,
             IWorkflowDefinitionStore definitionStore,
             IConfigurationRepository configurationRepository,
+            IUserDisplayNameResolver userDisplayNameResolver,
             CancellationToken cancellationToken) =>
         {
             var runs = await runStore.ListRecentAsync(500, cancellationToken);
+            // TriggeredBy stores the user's id (CurrentUser.AuditName); show who it was, not the GUID.
+            var triggeredByNames = await userDisplayNameResolver.ResolveAsync(runs.Select(run => run.TriggeredBy), cancellationToken);
             var workflowsById = (await definitionStore.ListAsync(cancellationToken)).ToDictionary(w => w.Id);
             var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
             var sourceInfoById = sources.ToDictionary(s => s.Id, s => (s.Name, SystemType: s.SourceSystemType.ToString()));
@@ -2217,7 +2316,7 @@ public static class WorkflowEndpoints
                     run.Status.ToString(),
                     run.StartedAt,
                     run.CompletedAt,
-                    run.TriggeredBy,
+                    run.TriggeredBy is { } triggeredById ? triggeredByNames.GetValueOrDefault(triggeredById, triggeredById) : null,
                     run.TriggerType,
                     run.NodeRuns.Count,
                     run.ErrorMessage,
@@ -2385,6 +2484,7 @@ public static class WorkflowEndpoints
             IWorkflowRunStore runStore,
             IWorkflowDefinitionStore definitionStore,
             IConfigurationRepository configurationRepository,
+            IUserDisplayNameResolver userDisplayNameResolver,
             CancellationToken cancellationToken) =>
         {
             var run = await runStore.GetAsync(runId, cancellationToken);
@@ -2412,7 +2512,7 @@ public static class WorkflowEndpoints
                 run.Status.ToString(),
                 run.StartedAt,
                 run.CompletedAt,
-                run.TriggeredBy,
+                await userDisplayNameResolver.ResolveOneAsync(run.TriggeredBy, cancellationToken),
                 run.TriggerType,
                 run.NodeRuns.Count,
                 run.ErrorMessage,
@@ -2432,7 +2532,7 @@ public static class WorkflowEndpoints
         group.MapGet("/workflow-runs/{runId:guid}/bulk-export-status", async (
             Guid runId,
             IWorkflowRunStore runStore,
-            IBulkExportJobRepository bulkExportJobRepository,
+            [Microsoft.AspNetCore.Mvc.FromServices] IBulkExportJobRepository bulkExportJobRepository,
             IFhirBulkExportClient bulkExportClient,
             ISourceConnectionRuntimeResolver sourceResolver,
             CancellationToken cancellationToken) =>
@@ -2643,6 +2743,8 @@ public static class WorkflowEndpoints
         group.MapPost("/workflows/{workflowId:guid}/activate", async (
             Guid workflowId,
             IWorkflowDefinitionStore store,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
             var workflow = await store.GetAsync(workflowId, cancellationToken);
@@ -2652,6 +2754,11 @@ public static class WorkflowEndpoints
             }
 
             workflow.Activate();
+            if (!await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Ok(workflow);
         // Toggling IsEnabled modifies the workflow definition — workflow.edit, same as any other change made
@@ -2691,6 +2798,15 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
+            if (WorkflowNodeTypes.HasEhrWriteBack(workflow))
+            {
+                return Results.BadRequest(new
+                {
+                    error = "public_launch_not_allowed",
+                    error_description = "A workflow that writes into an EHR cannot be publicly launchable.",
+                });
+            }
+
             workflow.EnablePublicLaunch();
             await store.SaveAsync(workflow, cancellationToken);
             return Results.Ok(workflow);
@@ -2728,12 +2844,25 @@ public static class WorkflowEndpoints
 
         // Appends by default (request.Replace == false) — the button adds to whatever criteria the resource type
         // already has rather than overwriting it. Creates the row on first save.
+        // Criteria filter what a source node reads, so on a scheduled write-back workflow they change what the Worker
+        // writes into the EHR: the same run rights as arming the schedule (CanArmEhrWriteBackScheduleAsync).
         group.MapPost("/workflows/{workflowId:guid}/resource-type-criteria", async (
             Guid workflowId,
             SaveResourceTypeCriteriaRequest request,
             IResourceTypeCriteriaService criteriaService,
+            IWorkflowDefinitionStore store,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
-            Results.Ok(await criteriaService.SaveAsync(workflowId, request, cancellationToken)))
+        {
+            if (await store.GetAsync(workflowId, cancellationToken) is { } workflow
+                && !await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
+            return Results.Ok(await criteriaService.SaveAsync(workflowId, request, cancellationToken));
+        })
         .RequireAuthorization(AuthorizationPolicies.HasPermission(
             PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.Edit)));
 
@@ -2742,8 +2871,17 @@ public static class WorkflowEndpoints
             string sourceNodeId,
             string resourceType,
             IResourceTypeCriteriaService criteriaService,
+            IWorkflowDefinitionStore store,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
+            if (await store.GetAsync(workflowId, cancellationToken) is { } workflow
+                && !await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             await criteriaService.DeleteAsync(workflowId, sourceNodeId, resourceType, cancellationToken);
             return Results.NoContent();
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
@@ -3001,7 +3139,9 @@ public static class WorkflowEndpoints
             // Resets the incremental-sync cursor — the clone has never actually run, so LastSuccessfulSyncUtc
             // carried over from the original would make its first real run think resources up to that point
             // were already fetched by THIS connection, silently skipping them.
-            dto.Retrieval is { } retrieval ? retrieval with { LastSuccessfulSyncUtcByResourceType = null } : null);
+            dto.Retrieval is { } retrieval ? retrieval with { LastSuccessfulSyncUtcByResourceType = null } : null,
+            // Without this the copy would silently drop to Read and its write-back destinations stop working.
+            dto.Access);
 
         var cloned = await configurationService.AddSourceConnectionAsync(createRequest, cancellationToken);
         var result = (cloned.Id, cloned.ApplicationType);
@@ -3552,6 +3692,91 @@ public static class WorkflowEndpoints
         }
     }
 
+    // ── EHR write-back permissions ────────────────────────────────────────────────────────────────────────────────
+    // There is no installation-wide live-write release any more (EhrWriteBack:LiveWriteTypes was removed). An EHR
+    // Write-Back node's OWN settings decide what is written live — EhrWriteBackDestinationNodeExecutor.ReadOptions
+    // reads dest_dryRun, dest_resources and the rest from the node — so every path that stores, copies, arms or runs
+    // such a node checks the EHR Write-Back permissions itself, not only the destination endpoints.
+
+    private const string EhrWriteBackCheckpointRefusal =
+        "A checkpoint URL cannot run a workflow that writes into an EHR: it runs without a signed-in user, and writing "
+        + "into an EHR needs the EHR Write-Back Execute permission. Run the workflow instead.";
+
+    /// <summary>The node settings that change what an EHR Write-Back node writes, and where.</summary>
+    private static readonly string[] EhrWriteBackNodeSettingKeys =
+    [
+        "dest_dryRun", "dest_resources", "dest_createPatientIfMissing", "dest_cloneMode",
+        "dest_maxWritesPerRun", "dest_noteDocStatus", "dest_sourceConnectionId", "destinationId",
+    ];
+
+    private static bool IsEhrWriteBackNode(string? nodeType) => WorkflowNodeTypes.IsEhrWriteBack(nodeType);
+
+    /// <summary>
+    /// Saving a graph that adds an EHR Write-Back node needs ehrwriteback.create; one that changes such a node's
+    /// write settings (taking it off dry run above all) needs ehrwriteback.edit. Workflow permissions alone are not
+    /// enough, or a workflow editor could switch a node live through PUT /workflows/{id} or /workflows/build without
+    /// ever touching the destination endpoints. Nodes are matched to the stored definition by their canvas key,
+    /// because node Guids are minted afresh on every save (see StampNodeIdentity).
+    /// </summary>
+    private static async Task<bool> CanSaveEhrWriteBackNodesAsync(
+        IAuthorizationService authorizationService,
+        System.Security.Claims.ClaimsPrincipal user,
+        IEnumerable<WorkflowNodeRequest> incoming,
+        WorkflowDefinition? existing)
+    {
+        var stored = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in (existing?.Nodes ?? []).Where(n => IsEhrWriteBackNode(n.NodeType)))
+        {
+            if (GetConfigurationString(node.ConfigurationJson, "canvasNodeId") is { Length: > 0 } key)
+            {
+                stored.TryAdd(key, node.ConfigurationJson);
+            }
+        }
+
+        foreach (var node in incoming.Where(n => IsEhrWriteBackNode(n.NodeType)))
+        {
+            var key = GetConfigurationString(node.ConfigurationJson, "canvasNodeId") is { Length: > 0 } stamped ? stamped : node.Id;
+            PermissionActionCode? required = !stored.TryGetValue(key, out var storedConfiguration)
+                ? PermissionActionCode.Create
+                : EhrWriteBackNodeSettingKeys.Any(setting => !string.Equals(
+                        GetConfigurationString(node.ConfigurationJson, setting),
+                        GetConfigurationString(storedConfiguration, setting),
+                        StringComparison.Ordinal))
+                    ? PermissionActionCode.Edit
+                    : null;
+
+            if (required is { } action
+                && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                    authorizationService, user, DestinationType.EhrWriteBack, action))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The Worker runs an enabled workflow with a Schedule or Poll trigger with no user to check, so whoever leaves a
+    /// workflow that writes into an EHR in that state must hold what /workflows/{id}/run would ask of them:
+    /// workflow.run and ehrwriteback.execute. Checked on every save or activation that leaves it armed.
+    /// </summary>
+    private static async Task<bool> CanArmEhrWriteBackScheduleAsync(
+        IAuthorizationService authorizationService,
+        System.Security.Claims.ClaimsPrincipal user,
+        WorkflowDefinition workflow)
+    {
+        if (!workflow.IsEnabled || workflow.Trigger is null || !workflow.Nodes.Any(n => IsEhrWriteBackNode(n.NodeType)))
+        {
+            return true;
+        }
+
+        return await ControllerAuthorizationExtensions.HasPermissionAsync(
+                authorizationService, user, PermissionGroupCode.Workflow, PermissionActionCode.Run)
+            && await ControllerAuthorizationExtensions.HasPermissionAsync(
+                authorizationService, user, DestinationType.EhrWriteBack, PermissionActionCode.Execute);
+    }
+
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)
     {
         value = Guid.Empty;
@@ -3904,8 +4129,12 @@ public static class WorkflowEndpoints
 
     private static WorkflowDefinition BuildWorkflow(Guid workflowId, WorkflowDefinitionRequest request, int version = 1)
     {
+        // A workflow that writes into an EHR is never publicly launchable, whatever the request asks: an anonymous
+        // launch has no user to hold ehrwriteback.execute, and a plain save must not undo that.
+        var isPubliclyLaunchable = request.IsPubliclyLaunchable
+            && !request.Nodes.Any(node => WorkflowNodeTypes.IsEhrWriteBack(node.NodeType));
         var workflow = new WorkflowDefinition(
-            workflowId, request.Name, version: 1, request.IsEnabled, request.IsPubliclyLaunchable, request.Description);
+            workflowId, request.Name, version: 1, request.IsEnabled, isPubliclyLaunchable, request.Description);
         var nodeIdsByClientId = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var nodeRequest in request.Nodes)

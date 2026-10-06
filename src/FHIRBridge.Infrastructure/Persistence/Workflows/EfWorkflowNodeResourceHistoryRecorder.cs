@@ -164,6 +164,13 @@ public sealed class EfWorkflowNodeResourceHistoryRecorder : IWorkflowNodeResourc
                 && !string.IsNullOrWhiteSpace(url),
         };
 
+        // EHR write-back's per-resource-type counts and reason codes, including what a dry run would write. PHI-free
+        // by construction (see EhrWriteReport), so it is kept whole.
+        if (type.GetProperty("EhrWrite")?.GetValue(payload) is { } ehrWrite)
+        {
+            summary["EhrWrite"] = ehrWrite;
+        }
+
         var email = type.GetProperty("EmailDelivery")?.GetValue(payload);
         if (email is not null)
         {

@@ -14,6 +14,7 @@ import { EHR_VENDOR_TO_SOURCE_FORM_KEY } from './source-form.registry';
 export function sourceFormKeyForNode(node: CanvasNode): string {
   if (isGenericFhirNode(node)) return 'generic-fhir';
   if (isHl7v2Node(node)) return 'hl7v2';
+  if (isTabularNode(node)) return 'tabular';
   const connector = isSourceNode(node) ? node.fields['Connector'] : undefined;
   const mapped = connector ? EHR_VENDOR_TO_SOURCE_FORM_KEY[connector] : undefined;
   return mapped ?? 'epic';
@@ -21,6 +22,10 @@ export function sourceFormKeyForNode(node: CanvasNode): string {
 
 function isGenericFhirNode(node: CanvasNode): boolean {
   return isSourceNode(node) && /generic.?fhir/i.test(node.fields['Connector'] ?? node.connectorLabel ?? '');
+}
+
+function isTabularNode(node: CanvasNode): boolean {
+  return isSourceNode(node) && (!!node.fields['tab_kind'] || /csv\s*\/\s*sql/i.test(node.fields['Connector'] ?? node.connectorLabel ?? ''));
 }
 
 function isHl7v2Node(node: CanvasNode): boolean {

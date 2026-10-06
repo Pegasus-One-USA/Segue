@@ -139,6 +139,11 @@ public sealed class SmartBackendServicesTokenProvider : IFhirAccessTokenProvider
     /// </summary>
     private static string ResolveScopeString(FhirSourceConfiguration source)
     {
+        if (source.OmitScopeParameter)
+        {
+            return string.Empty;
+        }
+
         if (source.Scopes.Count > 0)
         {
             return string.Join(' ', source.Scopes);

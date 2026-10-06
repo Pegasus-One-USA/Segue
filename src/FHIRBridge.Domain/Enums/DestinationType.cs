@@ -96,5 +96,23 @@ public enum DestinationType
     /// client, no addressing and no auth audience with them — it is grouped with them in the picker as one
     /// vendor, but it is its own destination. See <c>CosmosDbFabricDestinationSettings</c>.</para>
     /// </summary>
-    CosmosDbFabric = 28
+    CosmosDbFabric = 28,
+
+    /// <summary>
+    /// FHIR R4 write-back INTO an EHR (Epic first) — creates allergies, problems, vital signs, clinical notes and,
+    /// opt-in, patients in the EHR that a source connection points at.
+    ///
+    /// <para><b>Why this is not a mode of <see cref="FhirRepository"/>.</b> That writer PUTs <c>{type}/{id}</c>,
+    /// choosing the id and overwriting whatever is there. An EHR rejects client-chosen ids, supports no update,
+    /// delete, patch, batch or conditional create for these resources, and its chart must never be overwritten
+    /// blindly. Write-back instead shapes each resource to the vendor API's accepted subset, resolves every
+    /// reference to an id that already exists in the EHR (patients through identifier search and <c>$match</c>),
+    /// and records each create in an idempotency ledger, because a replayed allergy, problem or note is filed a
+    /// second time.</para>
+    ///
+    /// <para>It has no secret of its own: it writes over the credentials of the source connection named by
+    /// <c>dest_sourceConnectionId</c>, whose Access must include Write. Which resources a vendor accepts is
+    /// <c>EhrWriteCapabilities</c>. See <c>docs/backend/20-epic-r4-write-back.md</c>.</para>
+    /// </summary>
+    EhrWriteBack = 29
 }

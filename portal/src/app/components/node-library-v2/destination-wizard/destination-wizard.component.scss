@@ -444,6 +444,13 @@
   color: var(--color-ink-2);
 }
 
+.dw-hint--warn {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-warning-strong);
+  font-weight: 600;
+}
+
 /* ── Resources ────────────────────────────────────────────────────────────── */
 .dw-resources {
   display: grid;

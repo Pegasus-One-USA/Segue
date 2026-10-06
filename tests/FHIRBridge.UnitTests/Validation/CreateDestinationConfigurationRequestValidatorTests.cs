@@ -73,6 +73,73 @@ public sealed class CreateDestinationConfigurationRequestValidatorTests
         _sut.Validate(Request(DestinationType.SqlServer, metadata)).IsValid.Should().BeTrue();
     }
 
+    [Fact]
+    public void Ehr_write_back_with_a_target_connection_passes()
+    {
+        var metadata = new
+        {
+            dest_sourceConnectionId = Guid.NewGuid().ToString(),
+            dest_dryRun = "true",
+            dest_createPatientIfMissing = "false",
+            dest_maxWritesPerRun = "250",
+            dest_noteDocStatus = "preliminary",
+        };
+
+        _sut.Validate(Request(DestinationType.EhrWriteBack, metadata)).IsValid.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("not-a-guid")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    public void Ehr_write_back_without_a_usable_target_connection_fails(string? sourceConnectionId)
+    {
+        var metadata = new Dictionary<string, string?> { ["dest_dryRun"] = "true" };
+        if (sourceConnectionId is not null)
+        {
+            metadata["dest_sourceConnectionId"] = sourceConnectionId;
+        }
+
+        var result = _sut.Validate(Request(DestinationType.EhrWriteBack, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "dest_sourceConnectionId");
+    }
+
+    [Theory]
+    [InlineData("dest_maxWritesPerRun", "0")]
+    [InlineData("dest_maxWritesPerRun", "10001")]
+    [InlineData("dest_maxWritesPerRun", "lots")]
+    [InlineData("dest_dryRun", "yes")]
+    [InlineData("dest_createPatientIfMissing", "1")]
+    [InlineData("dest_cloneMode", "on")]
+    [InlineData("dest_noteDocStatus", "signed")]
+    public void Ehr_write_back_with_an_invalid_option_fails(string key, string value)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["dest_sourceConnectionId"] = Guid.NewGuid().ToString(),
+            [key] = value,
+        };
+
+        var result = _sut.Validate(Request(DestinationType.EhrWriteBack, metadata));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == key);
+    }
+
+    [Fact]
+    public void Ehr_write_back_refuses_a_de_identification_profile_even_without_metadata()
+    {
+        var request = Request(DestinationType.EhrWriteBack, metadata: null) with { DeIdentificationProfileId = Guid.NewGuid() };
+
+        var result = _sut.Validate(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "DeIdentificationProfileId");
+    }
+
     // Mongo has no required connection metadata of its own. The connection string is the whole credential and
     // lives in the encrypted secret, not here; the collection is chosen per resource on the mapping canvas
     // (the build sends target: null for Mongo so those per-resource choices win), and a collection that
