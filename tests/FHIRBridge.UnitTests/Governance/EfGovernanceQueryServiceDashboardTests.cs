@@ -3,6 +3,7 @@ using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Infrastructure.Governance;
 using FHIRBridge.Infrastructure.Persistence;
+using FHIRBridge.UnitTests.Infrastructure;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -12,11 +13,11 @@ namespace FHIRBridge.UnitTests.Governance;
 
 public sealed class EfGovernanceQueryServiceDashboardTests
 {
-    private static readonly InMemoryDatabaseRoot _root = new();
-    private readonly string _databaseName = Guid.NewGuid().ToString();
+    // See SharedInMemoryDatabase: a root of our own would cost the suite another of EF's twenty service providers.
+    private readonly string _databaseName = SharedInMemoryDatabase.NewDatabaseName();
 
     private FHIRBridgeDbContext CreateContext() =>
-        new(new DbContextOptionsBuilder<FHIRBridgeDbContext>().UseInMemoryDatabase(_databaseName, _root).Options);
+        new(SharedInMemoryDatabase.Options<FHIRBridgeDbContext>(_databaseName));
 
     private static EfGovernanceQueryService CreateSut(FHIRBridgeDbContext context) =>
         new(context, Mock.Of<IConfiguredPipelineRunRepository>(), Enumerable.Empty<IPurgeableStore>(), Mock.Of<IRetentionPolicyService>());

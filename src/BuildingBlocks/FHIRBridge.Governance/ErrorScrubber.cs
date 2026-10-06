@@ -89,8 +89,13 @@ public sealed class ErrorScrubber : IErrorScrubber
         }
     }
 
-    private static string Token(string id) =>
-        Convert.ToHexString(HMACSHA256.HashData(_tokenKey, Encoding.UTF8.GetBytes(id)))[..8].ToLowerInvariant();
+    private static string Token(string id)
+    {
+        var token = Convert.ToHexString(HMACSHA256.HashData(_tokenKey, Encoding.UTF8.GetBytes(id)))[..8].ToLowerInvariant();
+        // An all-digit token (about 2% of ids) would be rewritten to "[number]" by the long-number rule below, wiping the
+        // correlation. Forcing one letter keeps it stable per id and out of that rule's reach.
+        return token.All(char.IsDigit) ? token[..7] + "a" : token;
+    }
 
     private static string ResourceIdToken(Match match)
     {

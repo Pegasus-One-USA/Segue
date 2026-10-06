@@ -73,6 +73,16 @@ public sealed class ResourceIdScrubbingTests
     }
 
     [Fact]
+    public void ResourceIdTokens_NeverCollapseToNumberPlaceholder()
+    {
+        // About 2% of ids hash to an all-digit token; the long-number rule must not turn those into "[number]".
+        for (var i = 0; i < 3000; i++)
+        {
+            _scrubber.ScrubText($"Patient/id{i}").Should().MatchRegex(@"^Patient/#[0-9a-f]{8}$", $"id{i}");
+        }
+    }
+
+    [Fact]
     public void OrdinaryPathsAndWords_AreLeftAlone()
     {
         _scrubber.ScrubText("POST application/json to /fhir/R4 and read/write access, I/O error").Should()
