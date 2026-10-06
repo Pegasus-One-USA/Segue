@@ -1,4 +1,4 @@
-import { Component, DestroyRef, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -51,9 +51,9 @@ export class HapiTerminologyTableComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
-  /** Bound to the parent page's shared search box, so one search filters both General Settings
-   *  groups and this table's rows instead of needing a second search field. */
-  readonly searchTerm = input('');
+  /** This table's own search box. It used to be an input bound to the page's General Settings search, so one
+   *  term filtered both sections; each section now keeps its own, independent search. */
+  readonly search = signal('');
 
   readonly loading = signal(true);
   readonly configs = signal<HapiTerminologyConfiguration[]>([]);
@@ -63,7 +63,7 @@ export class HapiTerminologyTableComponent implements OnInit {
   protected readonly skeletonRows = Array.from({ length: 13 }, (_, i) => i);
 
   readonly filteredConfigs = computed(() => {
-    const term = this.searchTerm().trim().toLowerCase();
+    const term = this.search().trim().toLowerCase();
     if (!term) return this.configs();
     return this.configs().filter(c => c.displayName.toLowerCase().includes(term) || c.code.toLowerCase().includes(term));
   });

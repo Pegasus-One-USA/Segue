@@ -3,6 +3,20 @@
     <h3>Terminology Server</h3>
     <p>Grouped scheduler settings and credentials for the 13 code systems synced into the HAPI terminology server. Use the ⋮ menu to edit, run a sync now, or view its history.</p>
   </div>
+  <div class="search-wrap">
+    <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+      <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <input
+      type="search"
+      class="search-input"
+      placeholder="Search code systems…"
+      aria-label="Search terminology code systems"
+      [value]="search()"
+      (input)="search.set($any($event.target).value)"
+    />
+  </div>
   <button mat-stroked-button type="button" [disabled]="scanning()" (click)="scanForUpdates()">
     <mat-icon>{{ scanning() ? 'hourglass_empty' : 'refresh' }}</mat-icon>
     {{ scanning() ? 'Scanning…' : 'Scan for updates' }}
@@ -137,6 +151,9 @@
 
         <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
         <tr mat-row *matRowDef="let row; columns: displayedCols;"></tr>
+        <tr class="mat-row no-match-row" *matNoDataRow>
+          <td class="mat-cell" [attr.colspan]="displayedCols.length">No code systems match "{{ search() }}".</td>
+        </tr>
       </table>
     </div>
   }
