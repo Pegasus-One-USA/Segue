@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
+import { SKIP_LOADER } from '../../core/loading.interceptor';
 import { Observable, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { ROLES_ENDPOINTS, PERMISSIONS_ENDPOINTS } from '../../core/api-endpoints';
@@ -21,7 +22,9 @@ export class ApiRoleService extends IRoleService {
     );
   }
 
-  getPagedRoles(filter: RoleFilter): Observable<PagedResult<Role>> {
+  /** `silent` (passed only from the debounced search box) sends SKIP_LOADER: the app-wide loader marks the routed
+   *  content [inert] (app.component.ts), which blurs the search input after every keystroke. */
+  getPagedRoles(filter: RoleFilter, silent = false): Observable<PagedResult<Role>> {
     let params = new HttpParams()
       .set('page', String(filter.page))
       .set('pageSize', String(filter.pageSize));
@@ -29,7 +32,8 @@ export class ApiRoleService extends IRoleService {
     if (filter.search) params = params.set('search', filter.search);
     if (filter.sortDescending !== undefined) params = params.set('sortDescending', String(filter.sortDescending));
 
-    return this.http.get<PagedResult<RoleDto>>(ROLES_ENDPOINTS.paged, { params }).pipe(
+    const context = silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<PagedResult<RoleDto>>(ROLES_ENDPOINTS.paged, { params, context }).pipe(
       map(result => ({ ...result, items: result.items.map(mapRoleDto) })),
       catchError(err => throwError(() => err))
     );
