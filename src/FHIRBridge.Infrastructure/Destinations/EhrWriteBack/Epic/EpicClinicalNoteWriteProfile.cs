@@ -50,6 +50,15 @@ public sealed class EpicClinicalNoteWriteProfile : IEhrWriteProfile
             return EhrShapeResult.Skip("excluded-note-type");
         }
 
+        // A C-CDA document (eCW serves its Continuity of Care Document as a DocumentReference) is a structured summary
+        // of the whole chart, not a note: flattened into a progress note it would bury the chart in tens of kilobytes
+        // of text. EHRs take these through document exchange, not the clinical-notes API. A skip, not a rejection:
+        // nothing is wrong with the record.
+        if (IsCcdaDocument(source))
+        {
+            return EhrShapeResult.Skip("ccda-document");
+        }
+
         var loincOnly = CopyCodedConcept(typeSource, coding => String(coding, "system") == LoincSystem);
         var type = loincOnly?["coding"] is JsonArray { Count: > 0 } ? loincOnly : CopyCodedConcept(typeSource);
         if (type?["coding"] is not JsonArray { Count: > 0 })
@@ -67,7 +76,8 @@ public sealed class EpicClinicalNoteWriteProfile : IEhrWriteProfile
         var data = String(attachment, "data");
         if (string.IsNullOrWhiteSpace(data))
         {
-            // A note held as a Binary URL would have to be fetched first; not supported yet.
+            // The writer reads a source Binary into the note before shaping (EhrNoteContent); a note still without
+            // data here has a link the writer could not follow.
             return EhrShapeResult.Reject("note-content-not-inline");
         }
 
@@ -123,6 +133,14 @@ public sealed class EpicClinicalNoteWriteProfile : IEhrWriteProfile
 
         return EhrShapeResult.Shaped(shaped, subject, encounter);
     }
+
+    /// <summary>
+    /// A C-CDA document: content <c>format</c> from the HL7 SDWG C-CDA family (urn:hl7-org:sdwg:ccda-…), or a
+    /// Summarization of Episode note (LOINC 34133-9, the CCD's document type).
+    /// </summary>
+    private static bool IsCcdaDocument(JsonObject source) =>
+        Objects(source, "content").Any(c => String(Object(c, "format"), "code")?.StartsWith("urn:hl7-org:sdwg:ccda", StringComparison.OrdinalIgnoreCase) == true)
+        || Objects(Object(source, "type"), "coding").Any(c => String(c, "system") == LoincSystem && String(c, "code") == "34133-9");
 
     public void BindReferences(JsonObject shaped, string targetPatientId, string? targetEncounterId)
     {

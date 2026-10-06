@@ -428,6 +428,174 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
         result.EhrWrite!.ScopeStatus.Should().Be(expected);
     }
 
+    // ---- Notes whose text is a link to a Binary on the source (eClinicalWorks, Epic) ----
+
+    private static string LinkedNote(string url) => $$$"""
+        {"resourceType":"DocumentReference","id":"n1","status":"current",
+         "type":{"coding":[{"system":"http://loinc.org","code":"11506-3"}]},
+         "category":[{"coding":[{"code":"clinical-note"}]}],
+         "subject":{"reference":"Patient/p1"},
+         "content":[{"attachment":{"contentType":"text/html","url":"{{{url}}}"}}]}
+        """;
+
+    private static readonly string HtmlBinary =
+        $$"""{"resourceType":"Binary","id":"b1","contentType":"text/html","data":"{{Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("<p>Seen today.</p>"))}}"}""";
+
+    /// <summary>A source that serves the patient and, through <paramref name="binary"/>, Binary reads.</summary>
+    private static PipelineWriteContext ContextWithBinary(IEhrWriteChannel channel, Func<string, string?> binary, List<string>? reads = null) =>
+        new(false, "Workflow", DateTimeOffset.UtcNow,
+            FetchMissingReferenceAsync: (type, id, _) =>
+            {
+                reads?.Add($"{type}/{id}");
+                return Task.FromResult(type switch
+                {
+                    "Patient" when id == "p1" => SourcePatient,
+                    "Binary" => binary(id),
+                    _ => null,
+                });
+            },
+            SourceBaseUrl: SourceBaseUrl, EhrWriteChannel: channel);
+
+    private static FakeEhrWriteChannel NoteChannel() => new(dryRun: false)
+    {
+        Encounters = ["""{"resourceType":"Encounter","id":"eVisit","status":"finished"}"""],
+    };
+
+    [Theory]
+    [InlineData("Binary/b1")]
+    [InlineData(SourceBaseUrl + "/Binary/b1")]
+    public async Task A_note_linked_to_a_source_binary_is_read_from_the_source_and_filed_with_its_text(string url)
+    {
+        var channel = NoteChannel();
+        var reads = new List<string>();
+
+        var result = await CreateWriter().WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(LinkedNote(url))],
+            ContextWithBinary(channel, id => id == "b1" ? HtmlBinary : null, reads), CancellationToken.None);
+
+        reads.Should().Contain("Binary/b1");
+        channel.Creates.Should().Equal(["DocumentReference"]);
+        var attachment = channel.Sent.Single().Body["content"]![0]!["attachment"]!.AsObject();
+        attachment.ContainsKey("url").Should().BeFalse();
+        attachment["contentType"]!.GetValue<string>().Should().Be("text/plain");
+        System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(attachment["data"]!.GetValue<string>()))
+            .Should().Contain("Seen today.");
+        result.EhrWrite!.Resources.Single(r => r.ResourceType == "DocumentReference").Written.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("https://elsewhere.example.com/fhir/Binary/b1")]
+    [InlineData(SourceBaseUrl + "/Binary/b1?download=true")]
+    [InlineData("DocumentReference/b1")]
+    public async Task A_note_linked_anywhere_but_a_source_binary_is_never_followed(string url)
+    {
+        var channel = NoteChannel();
+        var reads = new List<string>();
+
+        var result = await CreateWriter().WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(LinkedNote(url))],
+            ContextWithBinary(channel, _ => HtmlBinary, reads), CancellationToken.None);
+
+        reads.Should().NotContain(r => r.StartsWith("Binary/"));
+        channel.Creates.Should().BeEmpty();
+        result.RecordErrors.Should().ContainSingle().Which.Should().Be("DocumentReference #2: note-content-url-not-on-source");
+    }
+
+    [Fact]
+    public async Task A_note_takes_its_text_from_a_binary_the_bulk_export_delivered_without_reading_the_source()
+    {
+        // eCW "Backend - Bulk API" tokens are refused on Binary/{id} reads, so the export's own Binary file is used.
+        var channel = NoteChannel();
+        var reads = new List<string>();
+
+        var result = await CreateWriter().WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(LinkedNote("Binary/b1")), Record(HtmlBinary)],
+            ContextWithBinary(channel, _ => throw new InvalidOperationException("401 No valid token found"), reads), CancellationToken.None);
+
+        reads.Should().NotContain(r => r.StartsWith("Binary/"));
+        channel.Creates.Should().Equal(["DocumentReference"]);
+        System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(
+                channel.Sent.Single().Body["content"]![0]!["attachment"]!["data"]!.GetValue<string>()))
+            .Should().Contain("Seen today.");
+        result.EhrWrite!.RecordsReceived.Should().Be(2, because: "a Binary is the text of a note, not a record to write");
+        result.EhrWrite.Resources.Should().NotContain(r => r.ResourceType == "Binary");
+    }
+
+    [Fact]
+    public async Task A_ccda_summary_document_is_skipped_before_its_text_is_read()
+    {
+        // eCW serves its Continuity of Care Document as a DocumentReference (LOINC 34133-9, C-CDA XML in a Binary).
+        // It is a structured summary of the chart, not a note, so it is never filed, and never fetched either.
+        var ccd = LinkedNote("Binary/b1")
+            .Replace("11506-3", "34133-9")
+            .Replace("\"contentType\":\"text/html\"", "\"contentType\":\"application/xml\"")
+            .Replace("}}]}", "},\"format\":{\"code\":\"urn:hl7-org:sdwg:ccda-structuredBody:2.1\"}}]}");
+        var channel = NoteChannel();
+        var reads = new List<string>();
+
+        var result = await CreateWriter().WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(ccd)],
+            ContextWithBinary(channel, _ => throw new InvalidOperationException("401"), reads), CancellationToken.None);
+
+        reads.Should().NotContain(r => r.StartsWith("Binary/"));
+        channel.Creates.Should().BeEmpty();
+        result.RecordErrors.Should().BeNull();
+        result.EhrWrite!.Resources.Single(r => r.ResourceType == "DocumentReference").Reasons.Should().ContainKey("ccda-document");
+    }
+
+    [Fact]
+    public async Task A_note_whose_binary_cannot_be_read_waits_for_the_next_run()
+    {
+        var channel = NoteChannel();
+
+        var result = await CreateWriter().WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(LinkedNote("Binary/b1"))],
+            ContextWithBinary(channel, _ => throw new InvalidOperationException("source returned 503")), CancellationToken.None);
+
+        channel.Creates.Should().BeEmpty();
+        result.RecordErrors.Should().BeNull(because: "a failed read is not the note's fault");
+        result.EhrWrite!.Resources.Single(r => r.ResourceType == "DocumentReference").Reasons.Should().ContainKey("note-content-fetch-failed");
+    }
+
+    [Fact]
+    public async Task A_note_whose_binary_is_missing_is_rejected()
+    {
+        var channel = NoteChannel();
+
+        var result = await CreateWriter().WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(LinkedNote("Binary/b1"))],
+            ContextWithBinary(channel, _ => null), CancellationToken.None);
+
+        channel.Creates.Should().BeEmpty();
+        result.RecordErrors.Should().ContainSingle().Which.Should().Be("DocumentReference #2: note-content-not-found");
+    }
+
+    [Fact]
+    public async Task A_linked_note_from_a_source_with_no_server_is_rejected_as_not_inline()
+    {
+        var channel = NoteChannel();
+        var context = new PipelineWriteContext(false, "Workflow", DateTimeOffset.UtcNow,
+            SourceBaseUrl: "urn:fhirbridge:tabular:notes", EhrWriteChannel: channel);
+
+        var result = await CreateWriter().WriteAsync(
+            Destination(), Profile(), [Record(LinkedNote("Binary/b1"))], context, CancellationToken.None);
+
+        result.RecordErrors.Should().ContainSingle().Which.Should().Be("DocumentReference #1: note-content-not-inline");
+    }
+
+    [Theory]
+    [InlineData("Binary/b1", "b1")]
+    [InlineData("/Binary/e.Ab-3", "e.Ab-3")]
+    [InlineData("HTTPS://SOURCE.example.com/api/FHIR/R4/Binary/b1", "b1")]
+    [InlineData("https://source.example.com/api/FHIR/R4/Binary/b1/extra", null)]
+    [InlineData("https://source.example.com/other/Binary/b1", null)]
+    [InlineData("Binary/", null)]
+    [InlineData("ftp://source.example.com/api/FHIR/R4/Binary/b1", null)]
+    public void Only_a_binary_on_the_source_is_followed(string url, string? expected)
+    {
+        EhrNoteContent.BinaryIdOnSource(url, SourceBaseUrl).Should().Be(expected);
+    }
+
     // ---- Phase 3: patients created in the run, and QA clone mode ----
 
     private static readonly EhrPatientMatchOutcome NoMatch = new(EhrPatientMatchKind.None, null, 200, []);

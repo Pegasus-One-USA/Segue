@@ -85,6 +85,15 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         }
 
         var parsed = Parse(records);
+
+        // Binaries a bulk export delivered with the notes: the text of notes that link to them, never records to
+        // write (no EHR API files a Binary), so they are neither counted nor reported.
+        var exportedBinaries = parsed
+            .Where(r => r.ResourceType == "Binary" && r.SourceId is not null && r.ParseProblem is null)
+            .GroupBy(r => r.SourceId!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().Resource, StringComparer.Ordinal);
+        parsed = parsed.Where(r => r.ResourceType != "Binary").ToList();
+
         var selected = new HashSet<string>(channel.Options.ResourceTypes, StringComparer.OrdinalIgnoreCase);
         var live = channel.Options.DryRun
             ? new HashSet<string>(StringComparer.Ordinal)
@@ -97,6 +106,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             // allergies, problems or notes, so sending them back would file second copies in the same chart. Clone
             // mode is the exception: it writes to a new test patient, never the original.
             SameEnvironment = !cloneMode && EhrWriteKeys.SameEnvironment(context.SourceBaseUrl, channel.TargetBaseUrl),
+            ExportedBinaries = exportedBinaries,
         };
         run.Resolver = new EhrReferenceResolver(
             channel,
@@ -208,7 +218,32 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             return Decision.Skip("not-writable");
         }
 
-        var shaped = profile.Shape(record.Resource, run.Channel.Options);
+        var resource = record.Resource;
+        if (record.ResourceType == "DocumentReference")
+        {
+            // A note the profile skips whatever its text (excluded type, C-CDA summary, superseded) is skipped before
+            // its text is fetched: no source read for a note that will not be sent, and its real reason is reported
+            // even when the read would have failed.
+            var unfetched = profile.Shape(resource, run.Channel.Options);
+            if (unfetched.Outcome == EhrShapeOutcome.Skipped)
+            {
+                return new Decision(unfetched.Outcome, null, unfetched.Reason);
+            }
+
+            // A note whose text sits in a Binary on the source is read from there first; the EHR takes it inline.
+            var (note, contentProblem) = await EhrNoteContent.InlineAsync(
+                resource, run.Context.SourceBaseUrl, run.ExportedBinaries, run.Context.FetchMissingReferenceAsync, _logger, cancellationToken);
+            if (contentProblem is not null)
+            {
+                return contentProblem == "note-content-fetch-failed"
+                    ? Decision.Skip(contentProblem)
+                    : Decision.Reject(contentProblem);
+            }
+
+            resource = note;
+        }
+
+        var shaped = profile.Shape(resource, run.Channel.Options);
         if (shaped.Outcome != EhrShapeOutcome.Shaped || shaped.Resource is null)
         {
             return new Decision(shaped.Outcome, null, shaped.Reason);
@@ -615,6 +650,9 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         /// <summary>Types sent for real: none in a dry run, else every type the vendor supports live.</summary>
         public IReadOnlySet<string> Live { get; }
         public bool SameEnvironment { get; init; }
+
+        /// <summary>Binaries delivered in the batch, by id; see <see cref="EhrNoteContent.InlineAsync"/>.</summary>
+        public IReadOnlyDictionary<string, JsonObject> ExportedBinaries { get; init; } = new Dictionary<string, JsonObject>();
         public EhrReferenceResolver Resolver { get; set; } = default!;
         public Dictionary<string, Tally> Tallies { get; } = new(StringComparer.Ordinal);
         public List<string> RecordErrors { get; } = [];

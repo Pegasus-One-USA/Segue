@@ -25,11 +25,21 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
 {
     private static readonly Guid TargetId = Guid.NewGuid();
 
+    [Fact]
+    public void A_read_by_id_never_carries_the_bulk_only_group_scope()
+    {
+        // eCW refuses a token with system/Group.read on REST reads: the note Binary read got 401 "No valid token".
+        DestinationNodeExecutor.WithoutBulkGroupScope(
+                ["system/DocumentReference.read", "system/Binary.r", "system/Group.read", "system/Patient.read"])
+            .Should().Equal("system/DocumentReference.read", "system/Binary.r", "system/Patient.read");
+    }
+
     private static SourceConnection Connection(SourceSystemType vendor = SourceSystemType.Epic, SourceConnectionAccess access = SourceConnectionAccess.Write) =>
         new("Epic write", vendor, "https://fhir.epic.com/R4", new SourceAuthenticationConfiguration(AuthenticationType.SmartBackendServices, "client", "https://auth/token", [], null, null, "kid"), access: access);
 
     private static (EhrWriteBackDestinationNodeExecutor Executor, List<PipelineWriteContext> Contexts, Mock<IFhirWriteClient> WriteClient) Build(
-        SourceConnection? connection)
+        SourceConnection? connection,
+        List<MappedDestinationRecord>? writtenRecords = null)
     {
         var contexts = new List<PipelineWriteContext>();
         var writer = new Mock<IConfiguredDestinationWriter>();
@@ -37,7 +47,11 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
                 It.IsAny<DestinationConfiguration>(), It.IsAny<MappingProfile>(),
                 It.IsAny<IReadOnlyCollection<MappedDestinationRecord>>(), It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
             .Callback<DestinationConfiguration, MappingProfile, IReadOnlyCollection<MappedDestinationRecord>, PipelineWriteContext, CancellationToken>(
-                (_, _, _, context, _) => contexts.Add(context))
+                (_, _, records, context, _) =>
+                {
+                    contexts.Add(context);
+                    writtenRecords?.AddRange(records);
+                })
             .ReturnsAsync(new DestinationWriteResult(0));
         var writerFactory = new Mock<IConfiguredDestinationWriterFactory>();
         writerFactory.Setup(f => f.Create(DestinationType.EhrWriteBack)).Returns(writer.Object);
@@ -93,6 +107,31 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
         channel.Options.MaxWritesPerRun.Should().Be(25);
         channel.Options.ResourceTypes.Should().Equal("AllergyIntolerance", "Condition");
         channel.Options.CloneMode.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("DocumentReference,Patient", true)]
+    [InlineData("Condition,Patient", false)]
+    public async Task Binaries_reach_the_writer_only_when_notes_are_selected(string selected, bool binaryPassed)
+    {
+        // A note's text sits in the Binary a bulk export delivers; the strict Data-groups filter used to drop it.
+        var records = new List<MappedDestinationRecord>();
+        var (executor, _, _) = Build(Connection(), records);
+        var node = Node($$"""{"dest_sourceConnectionId":"{{TargetId}}","dest_resources":"{{selected}}"}""");
+        var upstream = new WorkflowNodeOutput(
+            Guid.NewGuid(),
+            WorkflowNodeTypes.EClinicalWorksSource,
+            new FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceBatch(
+            [
+                new FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient","id":"p1"}"""),
+                new FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceEnvelope("DocumentReference", "n1", """{"resourceType":"DocumentReference","id":"n1"}"""),
+                new FHIRBridge.Runtime.Application.Workflows.Payloads.ResourceEnvelope("Binary", "b1", """{"resourceType":"Binary","id":"b1"}"""),
+            ]),
+            WorkflowDataContract.ResourceBatch);
+
+        await executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [upstream], CancellationToken.None);
+
+        records.Select(r => r.ResourceType).Contains("Binary").Should().Be(binaryPassed);
     }
 
     [Fact]

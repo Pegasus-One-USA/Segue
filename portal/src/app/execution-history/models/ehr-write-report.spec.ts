@@ -98,6 +98,12 @@ describe('ehrWriteReasonLabel', () => {
     expect(ehrWriteReasonLabel('patient-not-selected')).toBe('Patient not selected in Data groups, so the patient cannot be created');
   });
 
+  it('names why a linked note could not be read from the source', () => {
+    expect(ehrWriteReasonLabel('note-content-fetch-failed')).toBe('Note content could not be read from the source (retried next run)');
+    expect(ehrWriteReasonLabel('note-content-url-not-on-source')).toBe('Note content links outside the source system, so it was not fetched');
+    expect(ehrWriteReasonLabel('ccda-document')).toBe('Summary of care document (C-CDA), not a note: not sent');
+  });
+
   it('falls back to the code in words for a code it does not know', () => {
     expect(ehrWriteReasonLabel('some-new-reason')).toBe('Some new reason');
   });

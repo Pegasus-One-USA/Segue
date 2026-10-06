@@ -340,6 +340,22 @@ cells are kept; scripts, styles, RTF header tables, pictures and other destinati
 (Windows-1252) and Unicode escapes are decoded. Other formats are rejected as `note-format-not-supported`, content
 that is not base64 as `note-content-not-base64`, and a note with no text left as `note-empty-after-conversion`.
 
+**Notes whose text is a link** (eClinicalWorks, and Epic itself, serve `attachment.url` → `Binary/{id}`) get their
+text from the run's own source before shaping (`EhrNoteContent`), and the Binary's `data` and `contentType` replace
+the link. The Binary comes first from the batch itself: when a bulk export feeds a workflow with an EHR write-back
+node and DocumentReference was requested, `BulkExportPollService` keeps the export's Binary file (normally dropped as
+unrequested), and the writer uses those Binaries as note text, never counting or reporting them as records. This is
+the only route for eCW, whose "Backend - Bulk API" app tokens are refused on a plain `Binary/{id}` read (401 "No
+valid token found", with or without `system/Group.read`). Failing that, the Binary is read through the same source
+connection (`FetchMissingReferenceAsync("Binary", id)`, FHIR JSON, with a token that never carries the bulk-only
+Group scope). Only `Binary/{id}`, relative or absolute under the source's base URL,
+is followed; a link to another server, another resource type, or with a query string is rejected as
+`note-content-url-not-on-source`. A read that fails is skipped as `note-content-fetch-failed` (tried again next
+run); a Binary that is missing or empty is rejected as `note-content-not-found`. A CSV / SQL Table source has no
+server, so a linked note from it stays `note-content-not-inline`. The source connection needs `Binary.read`
+(already in the eCW scope list). The Binary is read on every run, dry runs included, because the content hash the
+ledger compares is computed on the shaped note.
+
 **Sandbox verification (pending: Epic down on 2026-10-02).**
 
 | # | Check | Expected |

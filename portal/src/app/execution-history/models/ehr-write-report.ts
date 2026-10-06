@@ -168,9 +168,13 @@ const REASON_LABELS: Record<string, string> = {
   // Notes
   'not-a-clinical-note': 'Not a clinical note',
   'excluded-note-type': 'Note type not sent (for example discharge instructions)',
+  'ccda-document': 'Summary of care document (C-CDA), not a note: not sent',
   'missing-note-type': 'Note has no type',
   'missing-note-content': 'Note has no content',
   'note-content-not-inline': 'Note content is a link, not attached',
+  'note-content-url-not-on-source': 'Note content links outside the source system, so it was not fetched',
+  'note-content-fetch-failed': 'Note content could not be read from the source (retried next run)',
+  'note-content-not-found': 'Note content was not found in the source',
   'note-content-not-base64': 'Note content is not valid base64',
   'note-format-not-supported': 'Note format not supported (plain text, HTML or RTF only)',
   'note-empty-after-conversion': 'Note is empty after conversion to text',

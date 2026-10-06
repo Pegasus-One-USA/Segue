@@ -822,10 +822,24 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 return null;
             }
 
+            // A read by id is a single-resource REST call, never a bulk one, so its token must not carry the
+            // bulk-only Group scope a Group-export connection requests. eCW treats a token with system/Group.read
+            // as a bulk token and refuses it on REST reads ("No valid token found"), which is how a note's Binary
+            // read failed with 401 while the export itself succeeded.
+            var readScopes = WithoutBulkGroupScope(source.Scopes);
+            if (readScopes.Count != source.Scopes.Count)
+            {
+                source = source with { Scopes = readScopes };
+            }
+
             var envelope = await client.ReadByIdAsync(resourceType, id, source, ct);
             return envelope?.RawJson;
         }, resolvedSource?.BaseUrl);
     }
+
+    /// <summary>The scopes without any <c>{prefix}/Group.*</c> scope, which only a bulk Group <c>$export</c> needs.</summary>
+    internal static IReadOnlyCollection<string> WithoutBulkGroupScope(IReadOnlyCollection<string> scopes) =>
+        scopes.Where(scope => !scope.Contains("/Group.", StringComparison.OrdinalIgnoreCase)).ToList();
 
     public override async Task<WorkflowNodeOutput> ExecuteAsync(
         WorkflowExecutionContext context,
@@ -864,6 +878,17 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
         // (never writes nothing). Surfaced in node metadata as "filteredOutResourceTypes".
         string[]? filteredOutResourceTypes = null;
         var selectedResourceTypes = ReadSelectedResourceTypes(node);
+
+        // An EHR write-back that files notes needs the Binaries holding their text (a bulk export's own Binary file;
+        // see BulkExportPollService). The writer uses them only as note text and never writes or reports a Binary.
+        if (_destinationType == DestinationType.EhrWriteBack
+            && selectedResourceTypes is { Count: > 0 }
+            && selectedResourceTypes.Contains("DocumentReference")
+            && !selectedResourceTypes.Contains("Binary"))
+        {
+            selectedResourceTypes = new HashSet<string>(selectedResourceTypes, StringComparer.OrdinalIgnoreCase) { "Binary" };
+        }
+
         if (selectedResourceTypes is { Count: > 0 } && records.Length > 0)
         {
             var kept = records.Where(record => selectedResourceTypes.Contains(record.ResourceType)).ToArray();
