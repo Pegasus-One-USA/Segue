@@ -1,0 +1,19 @@
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.no-new-button.spec.ts
+  s_0302d221bf5ca2::t_a6e73f8583bf69 1-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d28267a809071457baeaad0addb1d9f10ff5491c",
+  "prompts": {},
+  "sessions": {
+    "s_0302d221bf5ca2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd474ba3-7268-4bb0-bdc3-ec93bfa43dd8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
