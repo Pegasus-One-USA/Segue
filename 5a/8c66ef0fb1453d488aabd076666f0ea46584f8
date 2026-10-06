@@ -1,0 +1,186 @@
+portal/src/app/services/phase-config-v2.service.ts
+  s_d1b985c75f92bc::t_a1157af528e547 48
+  s_d1b985c75f92bc::t_4f09a4e9deb854 38,51
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_d1b985c75f92bc::t_24f0b014a2313a 259-273,391
+portal/scripts/lint-baseline.json
+  s_d1b985c75f92bc::t_cca7ce92227ae1 2-3
+portal/scripts/token-baseline.json
+  s_d1b985c75f92bc::t_bdf82a55f2fc6a 2-3
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_d1b985c75f92bc::t_1b50915ae1838b 93,275,279
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_d1b985c75f92bc::t_e6fcd063a39d9a 203-204,966-996,2520-2526,2528
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.component.html
+  s_d1b985c75f92bc::t_56e8ae37da6e1a 13-15,107,143,166,170
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.component.scss
+  s_d1b985c75f92bc::t_86d56138f33fbb 17-20,31,253-269,276,281-284,293-298,330-331,374
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_d1b985c75f92bc::t_870f1d7e2b5949 1-4,37-42,78-80,108-162
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.layout.spec.ts
+  s_d1b985c75f92bc::t_8448fb4660504f 1-174
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_d1b985c75f92bc::t_8f6ab9ccaac65e 235-239
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_d1b985c75f92bc::t_9d2ff754e39e1f 393-399
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_d1b985c75f92bc::t_db86cd433fc1af 12,63-65,122-135,156-168,641
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.unsaved-edits.spec.ts
+  s_d1b985c75f92bc::t_e39c3a9ec47e1e 1-123
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_d1b985c75f92bc::t_dff503df182ed6 332-337,345-349,429
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_d1b985c75f92bc::t_f7afa20a378c5e 291-297
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_d1b985c75f92bc::t_a039601fd52007 111-116,119-122,194-197,725
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.no-table-state.spec.ts
+  s_d1b985c75f92bc::t_74aae929838054 1-106
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-list.row-lock.spec.ts
+  s_d1b985c75f92bc::t_276fda26dc9310 1-54
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.html
+  s_d1b985c75f92bc::t_df9d0e17aab1dd 90,269,273
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-canvas.component.ts
+  s_d1b985c75f92bc::t_58589ac172bb8a 185-186,948-978,2220-2226,2228
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.html
+  s_d1b985c75f92bc::t_11496d5875770f 13-15,107,143,166,170
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.scss
+  s_d1b985c75f92bc::t_93a7cb10b94d47 17-20,31,253-269,276,281-284,293-298,330-331,374
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_d1b985c75f92bc::t_96b3d1667a1c79 1-4,37-42,78-80,108-162
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.html
+  s_d1b985c75f92bc::t_c9be307116587d 181-185
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.scss
+  s_d1b985c75f92bc::t_88accbb31bde07 388-394
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_d1b985c75f92bc::t_50870df62bcb78 7,50-52,97-110,131-143,400
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.html
+  s_d1b985c75f92bc::t_6cd171e5fba765 378-383,391-395,475
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.scss
+  s_d1b985c75f92bc::t_c06a9ce8bd988c 291-297
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.component.ts
+  s_d1b985c75f92bc::t_d1d1ef13734019 1,106-111,114-117,176-179,593
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.no-table-state.spec.ts
+  s_d1b985c75f92bc::t_6472b7e69187be 1-106
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-list.row-lock.spec.ts
+  s_d1b985c75f92bc::t_d4909a08b1f16e 1-54
+portal/src/app/components/shared/new-workflow-dialog/new-workflow-dialog.component.html
+  s_d1b985c75f92bc::t_a4c76d51dedd16 1-77
+portal/src/app/components/shared/new-workflow-dialog/new-workflow-dialog.component.scss
+  s_d1b985c75f92bc::t_62f0a57bda935f 1-104
+portal/src/app/components/shared/new-workflow-dialog/new-workflow-dialog.component.spec.ts
+  s_d1b985c75f92bc::t_8da71359c2d3a3 1-94
+portal/src/app/components/shared/new-workflow-dialog/new-workflow-dialog.component.ts
+  s_d1b985c75f92bc::t_9961a0aa6341db 1-107
+portal/src/app/core/components/dialog-shell/dialog-shell.component.scss
+  s_d1b985c75f92bc::t_e1d7b9286282c7 31,74
+portal/src/app/core/guards/unsaved-changes.guard.ts
+  s_d1b985c75f92bc::t_3b9fb24f11dc94 12-14
+portal/src/app/core/services/unsaved-changes-prompt.registry.spec.ts
+  s_d1b985c75f92bc::t_ae75d075741e5d 1-101
+portal/src/app/core/services/unsaved-changes-prompt.service.spec.ts
+  s_d1b985c75f92bc::t_a20cc1bc798856 1-106
+portal/src/app/core/services/unsaved-changes-prompt.service.ts
+  s_d1b985c75f92bc::t_bc36ea04058dfb 8,20,53-81,86-90
+portal/src/app/core/services/unsaved-changes-registry.service.ts
+  s_d1b985c75f92bc::t_dc4c9c0ad4ff31 11,18-23,26-27,29-41
+portal/src/app/dashboard/pages/dashboard/dashboard.component.html
+  s_d1b985c75f92bc::t_a0eea237f30f01 13-15,86-89
+portal/src/app/dashboard/pages/dashboard/dashboard.component.scss
+  s_d1b985c75f92bc::t_dac61123458ebe 57-58
+portal/src/app/dashboard/pages/dashboard/dashboard.component.ts
+  s_d1b985c75f92bc::t_1d21c35db2c979 14,42,62-64
+portal/src/app/dashboard/pages/dashboard/dashboard.new-workflow.spec.ts
+  s_d1b985c75f92bc::t_be7ff7166613dc 1-60
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_d1b985c75f92bc::t_89ef143eb3b2fc 243-244
+portal/src/app/destination-connections/services/destination-configuration.service.ts
+  s_d1b985c75f92bc::t_b2e6cb7f8961c1 74-79
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_d1b985c75f92bc::t_245a056f89db03 1-2,8,10,22-26,63-109,231-233,235-237,250,253-255
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.live-status.spec.ts
+  s_d1b985c75f92bc::t_12a4b53661cd4e 1-153
+portal/src/app/governance/pages/alert-rules/alert-rules.component.ts
+  s_d1b985c75f92bc::t_bc4aeaa38977ec 40
+portal/src/app/governance/pages/correlation-search/correlation-search.component.scss
+  s_d1b985c75f92bc::t_57b96a100e858b 303
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog-v2/mapping-profile-dialog-v2.component.html
+  s_d1b985c75f92bc::t_029c8fc5d796f8 103,105
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog-v2/mapping-profile-dialog-v2.component.ts
+  s_d1b985c75f92bc::t_0f1c9fe8381ce3 12,157-159,205-207,253,256-257,262-271,275-279,325-330,336
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.html
+  s_d1b985c75f92bc::t_a8236a52a21255 5-8,15,17-21,62-65
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.scss
+  s_d1b985c75f92bc::t_51d06408626686 45
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.component.ts
+  s_d1b985c75f92bc::t_1a8b0c00021606 1,9,78-81,97-122,344,359-361,377-390,402-404,417,427-436
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-canvas/mapping-profile-canvas.key-row-lock.spec.ts
+  s_d1b985c75f92bc::t_a8ea1940dceeaf 1-203
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.html
+  s_d1b985c75f92bc::t_a096a77179a8b2 119,121
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.component.ts
+  s_d1b985c75f92bc::t_27be13a330e030 15,161-163,215-217,273,276-277,282-291,295-299,345-350,356
+portal/src/app/mapping-profiles/dialogs/mapping-profile-dialog/mapping-profile-dialog.target-field.spec.ts
+  s_d1b985c75f92bc::t_2757a683d2cd50 1-206
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_d1b985c75f92bc::t_ad11d441ffcacf 69
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_d1b985c75f92bc::t_62e5e8108b1893 546,548
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_d1b985c75f92bc::t_b77bf6630df6a2 19,63,455,458
+portal/src/app/services/phase-config.generic-fhir.spec.ts
+  s_d1b985c75f92bc::t_7f4a1c8e76875e 1-25
+portal/src/app/services/phase-config.service.ts
+  s_d1b985c75f92bc::t_b0541d918b66cb 35,45-46
+portal/src/app/services/workflow-graph-mapper-v2.load-source-name.spec.ts
+  s_d1b985c75f92bc::t_9d5951e4ddece2 1-66
+portal/src/app/services/workflow-graph-mapper.load-source-name.spec.ts
+  s_d1b985c75f92bc::t_6020ba8ae12fe2 1-66
+portal/src/app/services/workflow-graph-mapper.service.ts
+  s_d1b985c75f92bc::t_7d46e8ec2004a6 174,178-189,291
+portal/src/app/settings/pages/branding/branding-settings.component.ts
+  s_d1b985c75f92bc::t_66d0bcf4bf6e74 47,49
+portal/src/app/settings/pages/email-settings/email-settings.component.ts
+  s_d1b985c75f92bc::t_ac6e56dde0d80f 61,63
+portal/src/app/settings/pages/sso-configurations/sso-configurations.component.ts
+  s_d1b985c75f92bc::t_eb4b1bf42db016 48,50
+portal/src/app/source-connections/pages/source-connection-list/connection-lists.search-focus.spec.ts
+  s_d1b985c75f92bc::t_8e0454825a99e9 1-59
+portal/src/app/source-connections/services/api-source-connection.service.ts
+  s_d1b985c75f92bc::t_ae17203c6d4350 71-72,74-75
+portal/src/app/user-management/pages/role-permissions/role-permissions.component.ts
+  s_d1b985c75f92bc::t_fb204da9dabfa7 97
+portal/src/app/user-management/pages/user-detail/user-detail.component.html
+  s_d1b985c75f92bc::t_06f60a9aeb6b72 81,85,91,96-97
+portal/src/app/user-management/pages/user-detail/user-detail.status-menu-style.spec.ts
+  s_d1b985c75f92bc::t_117d4f44053ed4 1-59
+portal/src/app/user/components/user-menu/user-menu.component.ts
+  s_d1b985c75f92bc::t_e4115ec8c2e8c3 4,10-12,28-30,89-120
+portal/src/app/user/components/user-menu/user-menu.sign-out-unsaved.spec.ts
+  s_d1b985c75f92bc::t_7935bb4dfc6f30 1-108
+portal/src/styles.scss
+  s_d1b985c75f92bc::t_e9baa9fe96762b 324-329,343-351
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_9e3fe8801a0514 2456
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowRunStore.cs
+  s_d1b985c75f92bc::t_36ab5b4bd26983 188-189,192
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IWorkflowRunStore.cs
+  s_d1b985c75f92bc::t_76e56d8821b42a 61-62
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowSqlStoreTests.cs
+  s_d1b985c75f92bc::t_01534c2d2494f1 495,506-508,512-513,519
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5a8c66ef0fb1453d488aabd076666f0ea46584f8",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
