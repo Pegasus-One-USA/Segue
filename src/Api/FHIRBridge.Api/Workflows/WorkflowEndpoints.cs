@@ -1597,6 +1597,7 @@ public static class WorkflowEndpoints
             IAuthorizationService authorizationService,
             ILicenseQuotaGuard licenseQuotaGuard,
             IEhrEndpointOverrideProvider ehrEndpointOverrideProvider,
+            IDataProtectionProvider dataProtectionProvider,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
@@ -1657,6 +1658,24 @@ public static class WorkflowEndpoints
                 // A client-credentials caller skips this check entirely: its authorization is the tenant-wide
                 // token itself, independent of any single workflow's public-launch opt-in.
                 return Results.NotFound();
+            }
+
+            // Group ID / Search Criteria an external trigger chose for this run, carried through the EHR sign-in as a signed
+            // token (see ExternalRunOverridesToken). A valid token IS the authorization for exactly those two values and
+            // replaces whatever the body says; an invalid one is refused outright rather than silently ignored, so a run
+            // is never started with criteria the caller did not ask for.
+            var effectiveGroupIdOverride = request?.GroupIdOverride;
+            var effectiveSearchCriteriaOverride = request?.SearchCriteriaOverride;
+            if (!string.IsNullOrWhiteSpace(request?.ExternalOverridesToken))
+            {
+                if (!ExternalRunOverridesToken.TryRead(
+                        dataProtectionProvider, request.ExternalOverridesToken, workflowId, out var tokenGroupId, out var tokenSearchCriteria))
+                {
+                    return Results.BadRequest(new { error = "invalid_overrides_token" });
+                }
+
+                effectiveGroupIdOverride = tokenGroupId;
+                effectiveSearchCriteriaOverride = tokenSearchCriteria;
             }
 
             // "Execute V2" per-run overrides (another EHR Endpoint, Group ID, Search Criteria) are an operator action:
@@ -1793,9 +1812,9 @@ public static class WorkflowEndpoints
                 ehrEndpointCode: request?.TargetEhrEndpointId is { } targetEhrEndpointId && targetEhrEndpointId != Guid.Empty
                     ? targetEhrEndpointId.ToString()
                     : null,
-                sourceOverrides: request is { } runRequest && (runRequest.GroupIdOverride is not null || runRequest.SearchCriteriaOverride is not null)
+                sourceOverrides: effectiveGroupIdOverride is not null || effectiveSearchCriteriaOverride is not null
                     ? new FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides(
-                        runRequest.GroupIdOverride?.Trim(), runRequest.SearchCriteriaOverride?.Trim())
+                        effectiveGroupIdOverride?.Trim(), effectiveSearchCriteriaOverride?.Trim())
                     : null);
 
             if (request?.Async == true)
@@ -2338,7 +2357,13 @@ public static class WorkflowEndpoints
                 var endpointQuery = Guid.TryParse(fields.EhrEndpointCode, out var parsedEndpointId) && parsedEndpointId != Guid.Empty
                     ? $"&ehrEndpointId={parsedEndpointId}"
                     : string.Empty;
-                return Results.Redirect($"{portalBaseUrl}/external-run?workflowId={workflowId}&flow={flow}{endpointQuery}{behaviourQuery}");
+                // Group ID / Search Criteria cannot ride a browser redirect in the clear (anyone could edit them, and /run only
+                // accepts per-run overrides from signed-in portal users). They go as a signed, expiring token the portal page
+                // hands back to /run after the EHR sign-in.
+                var overridesToken = ExternalRunOverridesToken.Protect(
+                    dataProtectionProvider, workflowId, NullIfBlank(fields.GroupId), NullIfBlank(fields.SearchCriteria));
+                var overridesQuery = overridesToken is null ? string.Empty : $"&overridesToken={Uri.EscapeDataString(overridesToken)}";
+                return Results.Redirect($"{portalBaseUrl}/external-run?workflowId={workflowId}&flow={flow}{endpointQuery}{overridesQuery}{behaviourQuery}");
             }
 
             var workflowRunId = Guid.NewGuid();

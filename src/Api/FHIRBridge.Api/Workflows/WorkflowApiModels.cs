@@ -80,7 +80,12 @@ public sealed record WorkflowRunRequest(
     // Set to "ExternalTrigger" by the hosted /external-run page, which runs an interactive (patient / provider) workflow on
     // behalf of an external caller. Only that one value is honoured (anything else stays "Manual"); it labels the run in
     // Execution History and grants no extra access.
-    string? TriggerType = null);
+    string? TriggerType = null,
+    // Issued by POST /workflows/external/run-page (see ExternalRunOverridesToken) when an external trigger supplied its own
+    // Group ID / Search Criteria for an interactive (Standalone / Patient) workflow. The hosted /external-run page echoes it
+    // back here after the EHR sign-in. It is the proof that an authenticated trigger chose those values, so - unlike the
+    // plain GroupIdOverride / SearchCriteriaOverride above - it needs no signed-in portal user.
+    string? ExternalOverridesToken = null);
 
 public sealed record WorkflowRunStatusResponse(Guid WorkflowRunId, string Status, string? CorrelationId = null);
 

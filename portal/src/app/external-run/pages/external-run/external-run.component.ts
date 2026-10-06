@@ -31,6 +31,8 @@ interface InteractiveRunState {
   ehrEndpointId: string | null;
   /** The interactive token-cache key: minted by FHIRBridge, then echoed back as callerId on every later call. */
   sessionId: string | null;
+  /** Signed token carrying the caller's own Group ID / Search Criteria for this run (opaque to this page); echoed to /run. */
+  overridesToken: string | null;
   options: CompletionOptions;
 }
 
@@ -161,6 +163,7 @@ export class ExternalRunComponent implements OnInit, OnDestroy {
         workflowId,
         flow,
         ehrEndpointId: params.get('ehrEndpointId'),
+        overridesToken: params.get('overridesToken'),
         // Reuse the session for the same workflow so a still-valid cached token is found instead of asking again.
         sessionId: previous?.workflowId === workflowId ? previous.sessionId : null,
         options: this.options,
@@ -266,7 +269,10 @@ export class ExternalRunComponent implements OnInit, OnDestroy {
     try {
       const result = await firstValueFrom(this.http.post<WorkflowRunResponse>(
         `${this.api}/workflows/${state.workflowId}/run`,
-        { patientId: null, patientSearchCriteria: null, callerId: state.sessionId, async: this.asyncMode, triggerType: 'ExternalTrigger' },
+        {
+          patientId: null, patientSearchCriteria: null, callerId: state.sessionId, async: this.asyncMode, triggerType: 'ExternalTrigger',
+          externalOverridesToken: state.overridesToken ?? null,
+        },
       ));
       const startedRunId = result.workflowRun?.id ?? result.workflowRunId ?? null;
       this.runId.set(startedRunId);
