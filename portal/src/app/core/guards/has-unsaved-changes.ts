@@ -17,4 +17,8 @@ export interface HasUnsavedChanges {
    *  pattern, not a MatDialog). Must resolve true to allow navigation, false to stay. Every route
    *  that doesn't implement this keeps getting the shared default dialog, unchanged. */
   confirmLeaveDialog?(): Observable<boolean>;
+  /** Lets the shared prompt offer Save next to Leave/Cancel: called when the user picks Save, it saves and resolves
+   *  true only if the save succeeded (navigation then continues), false to stay on the page with the edits intact.
+   *  A route without it keeps the plain Leave/Cancel prompt, unchanged. */
+  saveBeforeLeave?(): Observable<boolean>;
 }

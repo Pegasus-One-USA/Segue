@@ -1,7 +1,7 @@
 import { Component, effect, inject, OnInit, OnDestroy, DestroyRef, signal } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { debounceTime } from 'rxjs';
+import { Observable, catchError, debounceTime, map, of, tap } from 'rxjs';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../../core/services/unsaved-changes-registry.service';
 import { BrandAssetFieldComponent } from '../../components/brand-asset-field/brand-asset-field.component';
@@ -55,13 +55,18 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
     // snapshot could therefore capture DEFAULT_BRANDING instead of the saved values, and nothing would
     // ever re-populate the form once the real response arrived a moment later — exactly the "branding
     // reverts after refresh" bug. Reacting to every change instead fixes both cases (already resolved,
-    // or resolving later) — guarded by form.dirty so a later update never clobbers an edit in progress.
+    // or resolving later) — guarded by hasUnsavedChanges() so a later update never clobbers an edit in progress.
+    // That guard also skips this page's own live preview (applyToDocument sets current() to the draft): with the
+    // old form.dirty guard, a colour/theme/loader edit (set via setValue, so never dirty) was adopted here as the
+    // new "original", leaving nothing to warn about or revert to.
     effect(() => {
       const cfg = this.branding.current();
-      if (this.form.dirty) return;
+      if (this.hasUnsavedChanges()) return;
       this.originalConfig = cfg;
       this.populateForm(cfg);
+      this.markClean();
     });
+    this.markClean();
   }
 
   protected readonly themeModeOptions: { id: BrandThemeMode; label: string }[] = [
@@ -109,6 +114,10 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
   private originalConfig: BrandConfiguration = this.branding.current();
   private originalThemeMode: BrandThemeMode  = 'light';
   private savedThisSession = false;
+  /** The form's value as last loaded or saved. Unsaved = the form differs from it, not form.dirty: the colour
+   *  swatches and the theme/loader pills write through setValue(), which never marks a control dirty, and an edit
+   *  put back to its original value should not count as a change. */
+  private savedSnapshot = '';
 
   ngOnInit(): void {
     this.originalThemeMode = this.themeService.mode();
@@ -117,6 +126,7 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
     // was last saved into the branding record — avoids showing "Light" active
     // while the page is actually rendering in dark mode.
     this.form.controls.defaultThemeMode.setValue(this.originalThemeMode, { emitEvent: false });
+    this.markClean();
 
     // Live preview: every edit re-applies the brand tier immediately, so the real
     // sidebar/header/footer around this very page (plus the widget below) update
@@ -142,25 +152,32 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
   }
 
   protected save(): void {
-    if (!this.actionGuard.ensure('configuration.write', 'You do not have permission to modify branding.')) return;
-    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    this.persist().subscribe();
+  }
+
+  /** The Save button and the leave prompt's Save share this; emits true only once the save has succeeded. */
+  private persist(): Observable<boolean> {
+    if (!this.actionGuard.ensure('configuration.write', 'You do not have permission to modify branding.')) return of(false);
+    if (this.form.invalid) { this.form.markAllAsTouched(); return of(false); }
     this.saving.set(true);
-    this.branding.save(this.buildConfig()).subscribe({
-      next: (saved) => {
+    return this.branding.save(this.buildConfig()).pipe(
+      tap((saved) => {
         this.originalConfig    = saved;
         this.originalThemeMode = saved.defaultThemeMode;
         this.savedThisSession  = true;
         this.saving.set(false);
-        this.form.markAsPristine();
+        this.markClean();
         this.toast.success('Branding saved');
-      },
+      }),
+      map(() => true),
       // Now that save() actually round-trips to the backend, it can genuinely fail (validation, network,
       // permission) — previously the mock implementation never errored, so there was no error path here.
-      error: (e) => {
+      catchError((e) => {
         this.saving.set(false);
         this.toast.error('Save failed', e?.error?.message ?? 'Could not save branding. Please try again.');
-      },
-    });
+        return of(false);
+      }),
+    );
   }
 
   protected resetToDefault(): void {
@@ -171,13 +188,24 @@ export class BrandingSettingsComponent implements OnInit, OnDestroy, HasUnsavedC
     this.savedThisSession  = true; // the reset itself is the intended persisted state
     this.themeService.set(this.originalThemeMode);
     this.populateForm(this.originalConfig);
-    this.form.markAsPristine();
+    this.markClean();
     this.toast.success('Branding reset to default');
   }
 
   // ── HasUnsavedChanges (unsaved-changes.guard.ts) ────────────────────────────
   hasUnsavedChanges(): boolean {
-    return this.form.dirty;
+    return JSON.stringify(this.form.getRawValue()) !== this.savedSnapshot;
+  }
+
+  /** The leave prompt's Save: navigation continues only if the save succeeds; on failure (or an invalid form,
+   *  whose fields are now highlighted) the user stays here with their edits. */
+  saveBeforeLeave(): Observable<boolean> {
+    return this.persist();
+  }
+
+  private markClean(): void {
+    this.savedSnapshot = JSON.stringify(this.form.getRawValue());
+    this.form.markAsPristine();
   }
 
   isSaveInProgress(): boolean {
