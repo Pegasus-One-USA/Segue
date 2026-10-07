@@ -1052,7 +1052,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 
             if (writeResult.RecordErrors is { Count: > 0 } singleProfileErrors)
             {
-                writeFailureReasons.Add(DescribeWriteFailures(mappingProfile.ResourceType, records.Length, singleProfileErrors));
+                writeFailureReasons.Add(DescribeWriteFailures(
+                    FailedResourceTypesLabel(records, singleProfileErrors, mappingProfile.ResourceType), records.Length, singleProfileErrors));
             }
         }
 
@@ -1199,6 +1200,31 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
     {
         var sample = string.Join(" | ", errors.Distinct(StringComparer.Ordinal).Take(2));
         return $"{resourceType}: {errors.Count} of {totalCount} record(s) failed to write to the destination ({sample})";
+    }
+
+    /// <summary>
+    /// The resource type(s) a single-profile write's failures belong to. Whole-resource destinations (FHIR servers,
+    /// EHR write-back) write every type in one call under one profile whose own type is only a default (usually
+    /// Patient), so naming that would blame Patient for failed Observations. Each record error starts with its
+    /// record's type ("Observation #43: ...", "MedicationRequest/abc: ..."), which is used instead; a batch of one
+    /// type is that type, and errors that name no type of the batch fall back to "Records".
+    /// </summary>
+    internal static string FailedResourceTypesLabel(
+        IReadOnlyCollection<MappedDestinationRecord> records, IReadOnlyList<string> errors, string fallback)
+    {
+        var types = records.Select(r => r.ResourceType).Distinct(StringComparer.Ordinal).ToList();
+        if (types.Count <= 1)
+        {
+            return types.FirstOrDefault() ?? fallback;
+        }
+
+        var named = errors
+            .Select(e => e.Split([' ', '/', ':', '#'], 2)[0])
+            .Where(types.Contains)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        return named.Count > 0 ? string.Join(", ", named) : "Records";
     }
 
     protected override object CreatePayload(

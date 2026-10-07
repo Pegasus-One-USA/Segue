@@ -479,5 +479,26 @@ public sealed class DestinationNodeExecutorTests
             configurationJson: JsonSerializer.Serialize(config, JsonOptions));
     }
 
+    [Theory]
+    [InlineData("Observation #43: missing-value|Observation #44: missing-value", "Observation")]
+    [InlineData("MedicationRequest/e2Lv: references Medication/x|Observation #4: missing-value", "MedicationRequest, Observation")]
+    [InlineData("AUTO-FETCH SCOPE ERROR: token denied", "Records")]
+    public void A_mixed_batch_names_the_types_that_failed_not_the_default_profile_type(string errors, string expected)
+    {
+        MappedDestinationRecord Record(string type) => new(Guid.NewGuid(), type, type, "1", new Dictionary<string, object?>());
+
+        DestinationNodeExecutor.FailedResourceTypesLabel(
+                [Record("Patient"), Record("Observation"), Record("MedicationRequest")], errors.Split('|'), "Patient")
+            .Should().Be(expected);
+    }
+
+    [Fact]
+    public void A_single_type_batch_is_labelled_with_that_type()
+    {
+        var records = new[] { new MappedDestinationRecord(Guid.NewGuid(), "Condition", "Condition", "1", new Dictionary<string, object?>()) };
+
+        DestinationNodeExecutor.FailedResourceTypesLabel(records, ["anything"], "Patient").Should().Be("Condition");
+    }
+
     private static WorkflowExecutionContext CreateContext() => new(Guid.NewGuid(), "test-correlation");
 }
