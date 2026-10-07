@@ -1,0 +1,98 @@
+portal/src/app/execution-history/models/ehr-write-report.spec.ts
+  s_d1b985c75f92bc::t_8e4342bf6728bb 142-165
+portal/src/app/execution-history/components/ehr-write-report-dialog/ehr-write-report-dialog.component.ts
+  s_d1b985c75f92bc::t_a9c31825786862 47-50,52
+src/FHIRBridge.Domain/Fhir/EhrWriteCapability.cs
+  s_d1b985c75f92bc::t_ccbcaabf3d3cea 22-25,37-39,83-99
+  s_d1b985c75f92bc::t_d3f91808bf5fac 100
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/MappedEhrWriteBackDestinationWriter.cs
+  s_d1b985c75f92bc::t_546865482fcd2e 6,36-42,113,116-119,141-142,144,186-187,189-190,194-196,249-256,265,289-295,344-346,355,365-372,385-387,562,566-570
+  s_d1b985c75f92bc::t_97c75f6fe1f9c2 326-327
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/EhrWrite/EhrWriteChannels.cs
+  s_d1b985c75f92bc::t_d1d96f159dede6 3-4,11-17,25-33,39-55
+  s_d1b985c75f92bc::t_0a46733f0b9c83 56
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrWriteKeys.cs
+  s_d1b985c75f92bc::t_546865482fcd2e 16-21
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_d1b985c75f92bc::t_a3b86827c8951d 6,145-163
+src/FHIRBridge.Application/DTOs/EhrWriteCapabilitiesDto.cs
+  s_d1b985c75f92bc::t_1d878fb4c47c09 8-9,14-15,23-27,38-41
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_1d878fb4c47c09 3711
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.spec.ts
+  s_d1b985c75f92bc::t_84c31d1b884e3c 1-116
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d1b985c75f92bc::t_7ba460bd292b72 557-566,591-596
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrReferenceResolver.cs
+  s_d1b985c75f92bc::t_730cd771cb2c5f 50-53,77,91-92,104,208-212
+portal/src/app/components/node-library-v2/generic-fhir-source-form/generic-fhir-source-form.component.ts
+  s_d1b985c75f92bc::t_0cf3c973fc5e0a 89,217,273
+src/FHIRBridge.Application/Services/ConfigurationService.cs
+  s_d1b985c75f92bc::t_a3b86827c8951d 1362-1365
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.ts
+  s_d1b985c75f92bc::t_58ac8151b0d605 1,25-28,31-56,98,102-117,145,147,149,155,164-179,209-213,229,232-238,262-270,282,292,306-323,328-346,373-378,401,405-406,420,424-425,428-433,436-446,460-461
+tests/FHIRBridge.UnitTests/EhrWriteBack/TestRunAndOptInWriteBackTests.cs
+  s_d1b985c75f92bc::t_d78170df5412c6 1-290
+src/FHIRBridge.Application/Abstractions/Destinations/IEhrWriteChannel.cs
+  s_d1b985c75f92bc::t_837d30b0818554 86-91,101-103,109-113,171-172,179-180
+src/Api/FHIRBridge.Api/Controllers/V1/EhrWriteCapabilitiesController.cs
+  s_d1b985c75f92bc::t_1d878fb4c47c09 49-52,59-62
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/EhrWrite/AthenaOneTestServer.cs
+  s_d1b985c75f92bc::t_267cc73f6cb97e 1-295
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicOptInWriteProfiles.cs
+  s_d1b985c75f92bc::t_4e143b20c91bcf 554
+  s_d1b985c75f92bc::t_5fee218f7ba12f 1-553,555-965
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicVitalSignWriteProfile.cs
+  s_d1b985c75f92bc::t_4e143b20c91bcf 33-34
+portal/src/app/components/node-library-v2/generic-fhir-source-form/generic-fhir-source-form.component.html
+  s_d1b985c75f92bc::t_0cf3c973fc5e0a 28-40
+src/FHIRBridge.Domain/Fhir/EhrWriteCapabilities.cs
+  s_d1b985c75f92bc::t_d9c4562c979196 27-34,39-41,44-48,50-52,54-58,127-150,157,160-165,230-237
+  s_d1b985c75f92bc::t_a3b86827c8951d 167-173
+  s_d1b985c75f92bc::t_70ccb1a779b8d5 166
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicClinicalNoteWriteProfile.cs
+  s_d1b985c75f92bc::t_4e143b20c91bcf 26-27
+tests/FHIRBridge.Runtime.UnitTests/Workflows/EhrWriteBackDestinationNodeExecutorTests.cs
+  s_d1b985c75f92bc::t_bd56c6c4f2a418 193,201-247
+  s_d1b985c75f92bc::t_48eaa06f5d80a6 14
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_0b06d9c805fc18 28-36,40-42,512,602-690,696-697
+tests/FHIRBridge.Runtime.UnitTests/Workflows/AthenaOneTestServerTests.cs
+  s_d1b985c75f92bc::t_2d96429a2aac51 1-155
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_d1b985c75f92bc::t_0cf3c973fc5e0a 426-427
+src/FHIRBridge.Application/Services/Tabular/TabularSourceSettings.cs
+  s_d1b985c75f92bc::t_837d30b0818554 47,50-56
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/GenericFhir/GenericFhirWriteProfile.cs
+  s_d1b985c75f92bc::t_2482494fae226a 1-70,72-76,78-88,90-155
+  s_d1b985c75f92bc::t_ac77d00ecd5299 71,77,89
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/EhrWriteBackDestinationNodeExecutor.cs
+  s_d1b985c75f92bc::t_d1d96f159dede6 29-33,110-120,151-155,166,168,171,196-199,202-218
+tests/FHIRBridge.UnitTests/EhrWriteBack/EhrWriteCapabilitiesTests.cs
+  s_d1b985c75f92bc::t_20d4efd9d88bb5 17,22-24,107,109-111,121-159,165,203
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_d1b985c75f92bc::t_58ac8151b0d605 98
+tests/FHIRBridge.UnitTests/EhrWriteBack/EpicOptInWriteProfileTests.cs
+  s_d1b985c75f92bc::t_ab74e91ffcfe0e 1-115,117-256
+  s_d1b985c75f92bc::t_af2c85eded9417 116
+portal/src/app/execution-history/models/ehr-write-report.ts
+  s_d1b985c75f92bc::t_a9c31825786862 7-8,11,58,98,119-120,221-247,261
+portal/src/app/services/ehr-write-capabilities.service.ts
+  s_d1b985c75f92bc::t_58ac8151b0d605 23-28,37-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "48984ee2ad3f9c0a807704ae975ef9558f8ebf77",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
