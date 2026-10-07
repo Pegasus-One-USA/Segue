@@ -423,6 +423,8 @@ export class WorkflowBuildAssemblerServiceV2 {
         baseUrl: fields['FHIR base URL'] || '',
         authentication: { authenticationType: 'None', scopes: [] },
         applicationType: null,
+        // Write makes it an EHR Write-Back target (plain FHIR, or a test server). Null keeps the saved Access.
+        access: (fields['Access'] as 'Read' | 'Write' | 'ReadWrite' | undefined) || null,
         interactive: null,
         retrieval: this.buildRetrieval(fields),
       };

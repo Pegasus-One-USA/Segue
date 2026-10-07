@@ -44,8 +44,15 @@ public static partial class TabularSourceSettings
     public static string? SourceBaseUrlFor(string? datasetKey)
     {
         var normalized = NormalizeDatasetKey(datasetKey);
-        return normalized is null ? null : "urn:fhirbridge:tabular:" + normalized;
+        return normalized is null ? null : SourceUrlPrefix + normalized;
     }
+
+    /// <summary>The run's source is a CSV / SQL Table data set (its identity is <see cref="SourceBaseUrlFor"/>'s), whose
+    /// templates are written by the person who knows the target, so they may carry the target's own ids.</summary>
+    public static bool IsTabularSource(string? sourceBaseUrl) =>
+        sourceBaseUrl is not null && sourceBaseUrl.StartsWith(SourceUrlPrefix, StringComparison.Ordinal);
+
+    private const string SourceUrlPrefix = "urn:fhirbridge:tabular:";
 
     /// <summary>Lower case letters, digits and hyphens, 3 to 64 characters; null when nothing usable is left.</summary>
     public static string? NormalizeDatasetKey(string? datasetKey)

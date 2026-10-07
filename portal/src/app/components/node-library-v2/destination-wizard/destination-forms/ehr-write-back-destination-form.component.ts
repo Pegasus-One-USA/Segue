@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { forkJoin, map, of, switchMap } from 'rxjs';
@@ -22,7 +22,37 @@ interface WritableTarget {
   offersHolderEncounter: boolean;
   /** The QA-only clone-mode system setting is on, so clone mode may be offered. */
   cloneModeEnabled: boolean;
+  /** Vendors this connection can stand in for in a test run (a Generic FHIR test server); empty otherwise. */
+  testableVendors: string[];
+  /** APIs the destination must enable on top of selecting the type, one entry per variant. */
+  optInApis: OptInApi[];
 }
+
+interface OptInApi {
+  variant: string;
+  label: string;
+  /** Needs the target's own ids, so only a CSV / SQL Table source can feed it. */
+  tabularOnly: boolean;
+}
+
+/** Plain names for the variants a destination enables (EhrWriteVariants). */
+const VARIANT_LABELS: Record<string, string> = {
+  'lines-drains-airways': 'Lines, drains and airways',
+  'dicom-image-characteristics': 'DICOM image characteristics (CT dose)',
+  'radiotherapy-volume': 'Radiotherapy volumes',
+  'external-radiotherapy-summary': 'External radiotherapy summaries',
+  'document-information': 'Scanned document information (Hyperdrive scanning only)',
+  'non-patient-document': 'Non-patient documents',
+  'community-resource-message': 'Community resource referral messages',
+  'patient-entered-questionnaire': 'Patient-entered questionnaire answers',
+};
+
+/** How the test-as choices read. */
+const VENDOR_LABELS: Record<string, string> = {
+  Epic: 'Epic',
+  Healow: 'eClinicalWorks (Healow)',
+  Athenahealth: 'athenahealth',
+};
 
 /**
  * EHR Write-Back destination form. Picks the EHR connection to write INTO — only enabled connections whose Access
@@ -65,9 +95,25 @@ interface WritableTarget {
           }
           @if (!loading() && targets().length === 0) {
             <span class="dw-hint">No connection can take writes yet. Set a connection's Access to Write or
-              Read &amp; Write (Epic, eClinicalWorks or athenahealth, Backend System only).</span>
+              Read &amp; Write (Epic, eClinicalWorks or athenahealth with Backend System, or Generic FHIR).</span>
           }
         </div>
+
+        @if (selected()?.testableVendors?.length) {
+          <div class="dw-field">
+            <label class="dw-label" for="dw-ewb-testas">Test as</label>
+            <div class="dw-select-wrap">
+              <select id="dw-ewb-testas" class="dw-select" formControlName="testAsVendor" (change)="onTestAsChanged()">
+                <option value="">Nothing: write plain FHIR to this server</option>
+                @for (vendor of selected()!.testableVendors; track vendor) {
+                  <option [value]="vendor">{{ vendorLabel(vendor) }}</option>
+                }
+              </select>
+            </div>
+            <span class="dw-hint">Sends exactly what the chosen EHR would get, to this server instead, so the whole
+              write can be checked before it is pointed at the real EHR.</span>
+          </div>
+        }
 
         <div class="dw-field">
           <label class="dw-label" for="dw-ewb-max">Max writes per run</label>
@@ -96,17 +142,17 @@ interface WritableTarget {
             left for review. A created patient's records are filed in the same run.</span>
         </div>
 
-        @if (selected()?.vendor === 'Healow' || selected()?.vendor === 'Athenahealth') {
+        @if (effective()?.vendor === 'Healow' || effective()?.vendor === 'Athenahealth') {
           <div class="dw-field" [class.dw-field--error]="form.get('targetProviderId')!.invalid">
-            <label class="dw-label" for="dw-ewb-provider">{{ selected()?.vendor === 'Healow' ? 'Note author (eCW practitioner id)' : 'Provider id (athena)' }}</label>
+            <label class="dw-label" for="dw-ewb-provider">{{ effective()?.vendor === 'Healow' ? 'Note author (eCW practitioner id)' : 'Provider id (athena)' }}</label>
             <input id="dw-ewb-provider" class="dw-input" formControlName="targetProviderId" placeholder="e.g. 71" />
-            <span class="dw-hint">{{ selected()?.vendor === 'Healow'
+            <span class="dw-hint">{{ effective()?.vendor === 'Healow'
               ? 'eClinicalWorks files a note only with an author. Without one, notes are rejected.'
               : 'Optional: the provider athena files lab results and notes under.' }}</span>
           </div>
         }
 
-        @if (selected()?.vendor === 'Athenahealth') {
+        @if (effective()?.vendor === 'Athenahealth') {
           <div class="dw-field" [class.dw-field--error]="form.get('targetDepartmentId')!.invalid">
             <label class="dw-label" for="dw-ewb-department">Department id (athena)</label>
             <input id="dw-ewb-department" class="dw-input" formControlName="targetDepartmentId" placeholder="e.g. 1" />
@@ -115,7 +161,22 @@ interface WritableTarget {
           </div>
         }
 
-        @if (selected()?.offersHolderEncounter) {
+        @if (effective()?.optInApis?.length) {
+          <div class="dw-field dw-field--full">
+            <span class="dw-label">Also write through these {{ vendorLabel(effective()!.vendor) }} APIs</span>
+            @for (api of effective()!.optInApis; track api.variant) {
+              <label class="dw-label">
+                <input type="checkbox" [checked]="isVariantEnabled(api.variant)" (change)="toggleVariant(api.variant)" />
+                {{ api.label }}@if (api.tabularOnly) { <span class="dw-hint">(CSV / SQL Table sources only)</span> }
+              </label>
+            }
+            <span class="dw-hint">Selecting the resource type is not enough for these: each is sent only when ticked
+              here. Those marked CSV / SQL need the target EHR's own ids (a questionnaire, a referral, an imaging
+              report), so records from another EHR are skipped.</span>
+          </div>
+        }
+
+        @if (effective()?.offersHolderEncounter) {
           <div class="dw-field dw-field--full">
             <label class="dw-label">
               <input type="checkbox" formControlName="createHolderEncounter" />
@@ -145,8 +206,11 @@ interface WritableTarget {
           </label>
           <span class="dw-hint">A dry run reports what it would have written. Turn it off only after a dry run of
             this workflow looks right.</span>
-          @if (!form.value.dryRun && selected(); as target) {
-            @if (target.liveTypes.length > 0) {
+          @if (!form.value.dryRun && effective(); as target) {
+            @if (testAs()) {
+              <span class="dw-hint dw-hint--warn">Test run: the types you select are written to {{ selected()?.name }},
+                shaped exactly as {{ vendorLabel(testAs()) }} would receive them. Nothing reaches {{ vendorLabel(testAs()) }}.</span>
+            } @else if (target.liveTypes.length > 0) {
               <span class="dw-hint dw-hint--warn">Live: the types you select in Data groups will be written into
                 {{ target.name }}.</span>
             } @else if (target.awaitingActivationTypes.length > 0) {
@@ -162,9 +226,16 @@ interface WritableTarget {
       </div>
     </form>
 
-    @if (selected(); as target) {
+    @if (effective(); as target) {
       <div class="dw-callout dw-callout--info" style="margin-top: 12px;">
         {{ target.vendor }} accepts writes for: {{ target.resourceTypes.join(', ') }}.
+        @if (testAs() === 'Athenahealth') {
+          athenaOne's REST calls are answered by a built-in athenaOne test server and filed on
+          {{ selected()?.name }} as Basic resources (one per call, every field as sent); its allergen and medication
+          lookups always find the name asked for. A test server must assign numeric ids, as HAPI does.
+        } @else if (testAs()) {
+          Patients are found on the test server by identifier only; tick "Create the patient" to add the ones it lacks.
+        }
       </div>
     }
   `,
@@ -188,8 +259,15 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
   private readonly selectedId = signal<string | null>(null);
 
   readonly selected = computed(() => this.targets().find(t => t.id === this.selectedId()) ?? null);
-  readonly targetVendor = computed(() => this.selected()?.vendor ?? null);
-  readonly writableResourceTypes = computed(() => this.selected()?.resourceTypes ?? []);
+  /** The vendor a Generic FHIR connection stands in for, '' for none. */
+  readonly testAs = signal('');
+  /** The tested vendor's capabilities over the test server: everything is live, nothing waits for activation. */
+  private readonly testTarget = signal<WritableTarget | null>(null);
+  /** What the destination writes as: the tested vendor in a test run, else the connection's own. */
+  readonly effective = computed(() => (this.testAs() && this.testTarget()) || this.selected());
+  readonly targetVendor = computed(() => this.effective()?.vendor ?? null);
+  readonly writableResourceTypes = computed(() => this.effective()?.resourceTypes ?? []);
+  private readonly enabledVariants = signal<string[]>([]);
 
   readonly form = this.fb.group({
     name: ['EHR write-back', [Validators.required]],
@@ -201,6 +279,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
     createHolderEncounter: [false],
     targetProviderId: ['', [Validators.pattern(/^\S{0,64}$/)]],
     targetDepartmentId: ['', [Validators.pattern(/^\S{0,64}$/)]],
+    testAsVendor: [''],
     dryRun: [true],
   });
 
@@ -210,7 +289,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       switchMap(connections => connections.length === 0
         ? of([] as WritableTarget[])
         : forkJoin(connections.map(c => this.capabilities.forVendor(c.sourceSystemType).pipe(
-            map(result => this.toTarget(c, result.capabilities, result.cloneModeEnabled)))))),
+            map(result => this.toTarget(c, result.capabilities, result.cloneModeEnabled, result.testableVendors)))))),
       map(targets => targets.filter(t => t.resourceTypes.length > 0)),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe({
@@ -224,10 +303,47 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
         this.loading.set(false);
       },
     });
+
+    // The tested vendor's own capabilities, whenever the test-as choice (or the connection offering it) changes.
+    effect(onCleanup => {
+      const vendor = this.testAs();
+      const offered = this.selected()?.testableVendors ?? [];
+      if (!vendor || !offered.includes(vendor)) {
+        this.testTarget.set(null);
+        return;
+      }
+
+      const subscription = this.capabilities.forVendor(vendor).subscribe(result =>
+        this.testTarget.set(this.toTarget(
+          { id: '', name: vendor, sourceSystemType: vendor, vendorWriteApisActivated: true } as SourceConnectionModel,
+          result.capabilities,
+          false,
+          [])));
+      onCleanup(() => subscription.unsubscribe());
+    });
   }
 
   onTargetChanged(): void {
     this.selectedId.set(this.form.value.sourceConnectionId || null);
+    // A test-as choice belongs to the connection that offered it.
+    this.form.controls.testAsVendor.setValue('');
+    this.testAs.set('');
+  }
+
+  onTestAsChanged(): void {
+    this.testAs.set(this.form.value.testAsVendor ?? '');
+  }
+
+  vendorLabel(vendor: string | null | undefined): string {
+    return (vendor && VENDOR_LABELS[vendor]) || vendor || '';
+  }
+
+  isVariantEnabled(variant: string): boolean {
+    return this.enabledVariants().includes(variant);
+  }
+
+  toggleVariant(variant: string): void {
+    this.enabledVariants.update(list => list.includes(variant) ? list.filter(v => v !== variant) : [...list, variant]);
   }
 
   isValid(): boolean {
@@ -254,6 +370,12 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       dest_createHolderEncounter: v.createHolderEncounter && this.selected()?.offersHolderEncounter ? 'true' : 'false',
       dest_targetProviderId: (v.targetProviderId ?? '').trim(),
       dest_targetDepartmentId: (v.targetDepartmentId ?? '').trim(),
+      // Only a connection that offers it can test as another vendor; the server refuses it on any other.
+      dest_testAsVendor: this.selected()?.testableVendors.includes(this.testAs()) ? this.testAs() : '',
+      // Only the variants the vendor written as offers; switching vendor drops the others.
+      dest_enabledVariants: this.enabledVariants()
+        .filter(variant => this.effective()?.optInApis.some(api => api.variant === variant))
+        .join(','),
     };
   }
 
@@ -276,9 +398,12 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       createHolderEncounter: fields['dest_createHolderEncounter'] === 'true',
       targetProviderId: fields['dest_targetProviderId'] ?? '',
       targetDepartmentId: fields['dest_targetDepartmentId'] ?? '',
+      testAsVendor: fields['dest_testAsVendor'] ?? '',
       dryRun: fields['dest_dryRun'] !== 'false',
     });
     this.selectedId.set(fields['dest_sourceConnectionId'] || null);
+    this.testAs.set(fields['dest_testAsVendor'] ?? '');
+    this.enabledVariants.set((fields['dest_enabledVariants'] ?? '').split(',').map(v => v.trim()).filter(Boolean));
   }
 
   reset(): void {
@@ -292,14 +417,33 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       createHolderEncounter: false,
       targetProviderId: '',
       targetDepartmentId: '',
+      testAsVendor: '',
       dryRun: true,
     });
     this.selectedId.set(null);
+    this.testAs.set('');
+    this.enabledVariants.set([]);
   }
 
-  private toTarget(connection: SourceConnectionModel, capabilities: EhrWriteCapability[], cloneModeEnabled: boolean): WritableTarget {
+  private toTarget(
+    connection: SourceConnectionModel,
+    capabilities: EhrWriteCapability[],
+    cloneModeEnabled: boolean,
+    testableVendors: string[] | null | undefined,
+  ): WritableTarget {
     const activated = connection.vendorWriteApisActivated === true;
     const distinct = (types: string[]) => [...new Set(types)];
+    const optInApis: OptInApi[] = [];
+    for (const capability of capabilities.filter(c => c.requiresVariantOptIn && c.variant)) {
+      if (!optInApis.some(api => api.variant === capability.variant)) {
+        optInApis.push({
+          variant: capability.variant!,
+          label: VARIANT_LABELS[capability.variant!] ?? capability.variant!,
+          tabularOnly: capability.requiresTargetReferences === true,
+        });
+      }
+    }
+
     return {
       id: connection.id,
       name: connection.name,
@@ -313,6 +457,8 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
         .map(c => c.resourceType)),
       offersHolderEncounter: capabilities.some(c => c.createsHolderEncounter === true),
       cloneModeEnabled,
+      testableVendors: testableVendors ?? [],
+      optInApis,
     };
   }
 }

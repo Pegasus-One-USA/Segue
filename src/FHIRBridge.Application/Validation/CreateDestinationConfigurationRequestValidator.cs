@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.Fhir;
 using FluentValidation;
 
 namespace FHIRBridge.Application.Validation;
@@ -141,6 +142,25 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
             }
         }
         RequireOneOf(context, metadata, "dest_noteDocStatus", NoteDocStatusValues, "note status");
+
+        // A test run: the vendor a Generic FHIR connection stands in for (ConfigurationService checks the connection).
+        if (metadata.TryGetValue("dest_testAsVendor", out var testAs) && !string.IsNullOrWhiteSpace(testAs)
+            && !(EhrWriteCapabilities.TryParseVendor(testAs, out var tested) && EhrWriteCapabilities.TestableVendors.Contains(tested)))
+        {
+            context.AddFailure("dest_testAsVendor", "Test as Epic, eClinicalWorks (Healow) or athenahealth, or leave it empty.");
+        }
+
+        if (metadata.TryGetValue("dest_enabledVariants", out var variants) && !string.IsNullOrWhiteSpace(variants))
+        {
+            var unknown = variants.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(v => !EhrWriteCapabilities.OptInVariants.Contains(v))
+                .ToList();
+            if (unknown.Count > 0)
+            {
+                context.AddFailure("dest_enabledVariants", $"Unknown write API: {string.Join(", ", unknown)}.");
+            }
+        }
+
         RequireOptionalIntInRange(
             context,
             metadata,

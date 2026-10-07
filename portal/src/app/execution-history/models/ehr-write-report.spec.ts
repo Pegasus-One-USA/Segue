@@ -139,3 +139,27 @@ describe('ehrWriteReportToText', () => {
     expect(text).toContain('31 × Not a problem-list entry (the EHR accepts problems only) (not-a-problem-list-item)');
   });
 });
+
+describe('a test run on a Generic FHIR server', () => {
+  const detail = JSON.stringify({
+    EhrWrite: {
+      DryRun: false, CloneMode: false, TestRun: true, TargetVendor: 'Athenahealth', RecordsReceived: 2, ScopeStatus: 'test-server',
+      Resources: [{ ResourceType: 'Observation', Received: 2, WouldWrite: 0, Written: 1, AlreadyWritten: 0, Skipped: 1, Rejected: 0, Unknown: 0,
+        Reasons: { 'variant-not-enabled': 1 } }],
+    },
+  });
+
+  it('is read as a test run whose vendor access is not checked', () => {
+    const report = parseEhrWriteReport(detail)!;
+
+    expect(report.TestRun).toBeTrue();
+    expect(ehrWriteScopeLabel(report.ScopeStatus).ok).toBeTrue();
+    expect(ehrWriteReportToText(report)).toContain('Live run (test run on a Generic FHIR server) to Athenahealth');
+    expect(ehrWriteReasonLabel('variant-not-enabled')).toContain('has not turned on');
+    expect(ehrWriteReasonLabel('target-references-unmappable')).toContain('CSV / SQL Table');
+  });
+
+  it('is not a test run when an older report says nothing', () => {
+    expect(parseEhrWriteReport(DRY_RUN_DETAIL)!.TestRun).toBeFalse();
+  });
+});

@@ -46,13 +46,19 @@ public sealed class EhrWriteCapabilitiesController : ControllerBase
                 capability.AllowedApplicationTypes.Order().Select(type => type.ToString()).ToList(),
                 capability.LiveWriteSupported,
                 capability.RequiresVendorActivation,
-                capability.CreatesHolderEncounter))
+                capability.CreatesHolderEncounter,
+                capability.RequiresVariantOptIn,
+                capability.RequiresPatient,
+                capability.RequiresTargetReferences))
             .ToList();
 
         return Ok(new EhrWriteCapabilitiesDto(
             profile?.Vendor.ToString() ?? vendor,
             profile?.SupportsPatientMatch ?? false,
             cloneModeEnabled,
-            capabilities));
+            capabilities,
+            profile is not null && profile.Vendor == EhrWriteCapabilities.TestServerType
+                ? EhrWriteCapabilities.TestableVendors.Select(v => v.ToString()).ToList()
+                : []));
     }
 }

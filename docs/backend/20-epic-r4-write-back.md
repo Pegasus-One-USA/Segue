@@ -25,17 +25,21 @@ Epic R4 accepts bridge-style writes for **five resource types**, plus `Patient/$
 | Observation.Create (Vital Signs) (963) | Backend, Clinician, Patient | Yes for backend/clinician calls — existing, not closed, not a future appointment | Chart flowsheets | **In** |
 | Patient.Create (Demographics) (930) | Backend, Clinician | n/a | A new patient, **or an existing one** when Epic finds a certain match | **In, opt-in only** |
 | Patient.$match (10423) | Backend, Clinician, Patient (not MyChart) | n/a | Nothing filed; at most one certain match | **In** (resolution) |
-| Observation.Create / .Update (Lines, Drains, Airways) (962 / 974) | Backend, Clinician, Patient | Yes, not closed | LDA flowsheet | Deferred — spec contradicts itself on required elements |
-| DocumentReference.Create / .Update (Document Information) (10050 / 10051) | Backend, Clinician, Patient | Sometimes | Scan metadata | Out — Hyperdrive scan workflow only |
-| DocumentReference.Create (Non-Patient Document Information) (10303) | Backend, Clinician, Patient | n/a | Tapestry non-patient documents | Out |
-| QuestionnaireResponse.Create (Patient-Entered) (10023) | Backend, Clinician | n/a | Answers a questionnaire Epic already assigned | Out — needs Epic questionnaire/question ids and an existing assignment |
-| Communication.Create (Community Resource) (10090) | Backend, Clinician | Yes | Community-referral message | Out — referral messaging only |
+| Observation.Create (Lines, Drains, Airways) (962) | Backend, Clinician, Patient | Yes, not closed | LDA flowsheet | **In, Phase 7, opt-in** (section 14) |
+| DocumentReference.Create (Document Information) (10050) | Backend, Clinician, Patient | Sometimes | Scan metadata | **In, Phase 7, opt-in** — Epic: Hyperdrive scan workflow only |
+| DocumentReference.Create (Non-Patient Document Information) (10303) | Backend, Clinician, Patient | n/a | Tapestry non-patient documents | **In, Phase 7, opt-in, CSV / SQL only** |
+| QuestionnaireResponse.Create (Patient-Entered) (10023) | Backend, Clinician | n/a | Answers a questionnaire Epic already assigned | **In, Phase 7, opt-in, CSV / SQL only** — needs Epic questionnaire/question ids and the assignment |
+| Communication.Create (Community Resource) (10090) | Backend, Clinician | Yes | Community-referral message | **In, Phase 7, opt-in, CSV / SQL only** |
+| BodyStructure.Create (Radiotherapy Volume) (11040) | Backend, Clinician, Patient | n/a | Radiotherapy planning volume | **In, Phase 7, opt-in** |
+| Procedure.Create / ServiceRequest.Create (External Radiotherapy Summary) (11048 / 11044) | Backend, Clinician, Patient | n/a | Delivered / prescribed radiotherapy course | **In, Phase 7, opt-in** |
+| Observation.Create (DICOM Image Characteristics) (11224) | Backend, Clinician, Patient | n/a | CT dose finding on an imaging report | **In, Phase 7, opt-in, CSV / SQL only** |
+| CriteriaReview.Create (1009), ReviewCollection.Create (1026) | — | — | Utilization management | Out — Epic proprietary, not FHIR (`IsFhir: false` in the catalog) |
 | Goal.Create (Patient) (878) | STU3 only | n/a | Received document | Out — no R4 create |
 
 **How the list was enumerated.** Every R4 entry in Epic's interface catalog (639 interfaces) that is not a plain
-Read or Search was listed. All other R4 write APIs belong to CDS Hooks (unsigned orders, encounter diagnoses),
-Radiotherapy (BodyStructure, ServiceRequest, Procedure), DICOM (Observation), Prior Auth (ServiceRequest,
-MedicationRequest, Claim) or Community Resource (Task) workflows, and are out. `DiagnosticReport` update and
+Read or Search was listed. All other R4 write APIs belong to CDS Hooks (unsigned orders, encounter diagnoses), Prior
+Auth (ServiceRequest, MedicationRequest, Claim) or Community Resource (Task) workflows, and are out. (Radiotherapy and
+DICOM were out until Phase 7.) `DiagnosticReport` update and
 `ConceptMap` create appear in the CapabilityStatement but have no public spec.
 
 ## 2. Platform facts that constrain the design
@@ -505,7 +509,7 @@ in clone mode (section 9).
 
 Left out on purpose: orders and prescriptions (eCW MedicationRequest orders need a prescriber), ServiceRequest,
 referrals, Coverage, Appointment, ChargeItem, Task and Communication. They are workflow actions in the target EHR,
-not chart records copied from another EHR. Epic's lines/drains/airways API stays deferred (section 1).
+not chart records copied from another EHR. Epic's remaining create APIs came in Phase 7 (section 14).
 
 ### 13.2 The contract switch
 
@@ -595,11 +599,100 @@ then tick *Vendor write APIs activated* on the connection and run one live write
 Product Activation > FHIR APIs > Backend/Bulk Access Apps), add the write scopes eCW provisions to the connection, dry
 run, then tick *Vendor write APIs activated* and run one live write per type.
 
-## 14. Sources
+## 14. Phase 7 — Generic FHIR target, test runs, and Epic's remaining create APIs
+
+**Built 2026-10-07 on `feature/ehr-write-back-multi-vendor`.** Write-back is no longer only EHR to EHR: the source is
+any of Epic, eClinicalWorks, athenahealth or a CSV / SQL Table data set (section 10), and the target is any of Epic,
+eClinicalWorks, athenahealth or a Generic FHIR R4 server. A Generic FHIR server can also stand in for one of the three
+EHRs, so every write can be rehearsed end to end before it is pointed at the real one.
+
+### 14.1 Generic FHIR R4 as a target
+
+- `EhrWriteCapabilities.GenericFhir`: `EhrWriteCapabilities.GenericFhirResourceTypes` as plain creates, all live, no
+  contract switch, no encounter; Patient is opt-in like everywhere else. Patients resolve by identifier, then
+  `Patient/$match` where the server has it (HAPI only with MDM on; otherwise `patient-match-failed`).
+- `GenericFhirWriteProfile` (one per type) copies the record and drops what belongs to the source server: `id`,
+  `meta` (declared profiles kept), the narrative, and the record's encounter. Every other literal reference (a
+  practitioner, an organisation, a medication) loses its `reference` and keeps its `display` / `identifier`, or gets
+  the display "{Type} reference not transferred": a source id names nothing on another server, and a server that
+  checks references would refuse the whole record. Contained (`#`) references stay. The patient is bound to the
+  server's own.
+- A Generic FHIR connection gets an **Access** field (Read / Write / Read & Write) on its form; Write makes it a
+  write-back target. It has no authentication (anonymous, as the Generic FHIR source already was).
+
+### 14.2 Test runs ("Test as")
+
+`dest_testAsVendor` = `Epic`, `Healow` or `Athenahealth` on an EHR Write-Back destination whose connection is Generic
+FHIR (`EhrWriteCapabilities.TestServerType`; the executor and `ConfigurationService` refuse it on any other, so a test
+run can never reach a real EHR). The executor builds the TESTED vendor's channel over the test server's connection,
+and the writer runs exactly the vendor's path — capabilities, variants, profiles, encounter rules, ledger, write cap,
+report — with four differences:
+
+| | Real write | Test run |
+|---|---|---|
+| Contract switch (eCW, athena) | must be on | counts as on (nothing reaches the vendor) |
+| Patients | ledger, identifier, then `$match` (Epic) or the MPI (eCW, athena) | ledger and identifier only; not found = not on the test server, created when the destination opts in |
+| Ledger key | the EHR's base URL | the test server's base URL **and** the tested vendor (`EhrWriteKeys.TestTargetKey`), so testing as Epic and then as athena on one server both write, and no test row is ever mistaken for a production write |
+| Report | `TargetVendor`, scope checked | `TestRun: true`, `ScopeStatus: test-server` |
+
+What reaches the test server, per vendor:
+
+- **Epic** — the same `POST /{type}` Epic gets.
+- **eClinicalWorks** — the same transaction Bundle (`EcwEhrWriteChannel`); HAPI answers `201 Created` with
+  `Patient/1/_history/1`, which the channel already reads. The telephone holder encounter is created there too.
+- **athenahealth** — athenaOne is REST, not FHIR, so its calls go through `AthenaOneTestServer`, an in-process
+  stand-in the athenaOne channel cannot tell apart: `POST patients` registers a FHIR Patient from the form fields; every
+  other write is stored as a FHIR `Basic` (code system `urn:fhirbridge:athenaone-test`, code = the API, e.g.
+  `problems`; one extension per form field, exactly as sent; subject = the patient); `GET patients/{id}` reads the test
+  server's patient (department `1`); `GET chart/{id}/encounters` maps the test server's Encounters to athena's
+  statuses; allergen and medication lookups always find the name asked for. Practice id `1`. The test server must
+  assign numeric ids (HAPI does), as athenaOne does.
+
+**What a test run does not prove:** the vendor's own validation (Epic's open-encounter and duplicate rules, eCW's
+status "1", athena's field rules), organisation-specific codes (Epic flowsheet ids), and athena's reference lists. One
+real sandbox or preview write per vendor is still the last step.
+
+### 14.3 Epic's remaining create APIs
+
+Built from each spec (`fhir.epic.com/Specifications/Api?id=<id>`, read 2026-10-07; profiles in
+`EpicOptInWriteProfiles.cs`). Each is a **variant the destination must enable** (`EhrWriteCapability.RequiresVariantOptIn`,
+`dest_enabledVariants`) on top of selecting the type, so no existing destination starts sending something new; until
+enabled a record is reported `variant-not-enabled`. Epic's vitals and clinical-note profiles now name their variants,
+because Observation and DocumentReference have several APIs each.
+
+| API (id) | Variant | Recognised by | Notes |
+|---|---|---|---|
+| Lines, Drains, Airways (962) | `lines-drains-airways` | category `LDA` | open encounter only; final; code as given (a flowsheet id is organisation-specific); the sequelTo parent is a source id and is dropped; note ≤ 254 |
+| DICOM Image Characteristics (11224) | `dicom-image-characteristics` | category `imaging` + LOINC 96914-7 | `focus` = the imaging DiagnosticReport **in the target**; components 96912-1 / 96913-9 only |
+| Radiotherapy Volume (11040) | `radiotherapy-volume` | CodeX profile or a `urn:dicom:uid` identifier | ≥ 2 identifiers with `use`; `meta.lastUpdated` from the source (never "now": the content hash must not change) |
+| External Radiotherapy Summary, Procedure (11048) / ServiceRequest (11044) | `external-radiotherapy-summary` | SNOMED 1287742003 + a course code | ≥ 2 identifiers, profiles, lastUpdated; mCODE / CodeX extensions kept unless they hold a reference (dose-to-volume names source BodyStructures); plan, Condition, location and requester references dropped; ServiceRequest intent original-order / filler-order |
+| Document Information (10050) | `document-information` | category `document-information` | identifier, type, patient, date, description, service period; scanning user dropped; Epic accepts it only inside the Hyperdrive scan workflow |
+| Non-Patient Document Information (10303) | `non-patient-document` | category `nonpatient-document-information` | no patient; `context.related` = a Group / Account / Communication / Organization / Contract **in the target** |
+| Community Resource Communication (10090) | `community-resource-message` | `basedOn` a ServiceRequest | in-progress only; basedOn, sender, recipient **in the target**; patient and encounter bound; text or attachment payload |
+| Patient-Entered Questionnaires (10023) | `patient-entered-questionnaire` | — | no patient: `subject` is the assignment identifier (appointment or questionnaire series); questionnaire and linkIds are **Epic ids**; integers sent as decimals; 59159 = an answer failed validation |
+
+The four marked **in the target** carry ids only the target EHR knows, so their capability has
+`RequiresTargetReferences` and the writer takes them **only from a CSV / SQL Table source** (whose template is written
+for the target); from any other source they are `target-references-unmappable`. Two have `RequiresPatient` false
+(non-patient documents, questionnaires): the writer resolves and binds no patient.
+
+Not built: CriteriaReview.Create (1009) and ReviewCollection.Create (1026) — Epic proprietary utilization-management
+APIs (`IsFhir: false` in Epic's catalog), with no public spec, which a FHIR test server could not take either.
+
+### 14.4 To test a write before going live
+
+1. Start a FHIR server (docker-compose `hapi-fhir`), add it as a Generic FHIR connection with Access **Write**.
+2. Point the EHR Write-Back destination at it, choose **Test as** (Epic, eClinicalWorks or athenahealth), select the
+   types (and tick the extra Epic APIs to try), untick Dry run, run.
+3. Read the test-run report, then the server: the records (or, for athena, the `Basic` call records).
+4. Point the same destination at the real connection, clear **Test as**, dry run once, then go live.
+
+## 15. Sources
 
 - Sandbox CapabilityStatement: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/metadata
 - Sandbox SMART configuration: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/.well-known/smart-configuration
 - Interface catalog: https://open.epic.com/Interface/FHIR
 - API specs (page / raw data): `https://fhir.epic.com/Specifications?api=<id>` / `https://fhir.epic.com/Specifications/Api?id=<id>`
-  for ids 945, 949, 1046, 963, 930, 10423, 962, 974, 10050, 10051, 10303, 10023, 10090, 878
+  for ids 945, 949, 1046, 963, 930, 10423, 962, 974, 10050, 10051, 10303, 10023, 10090, 878, and (Phase 7) 11040,
+  11044, 11048, 11224
 - OAuth 2.0 documentation: https://fhir.epic.com/Documentation?docId=oauth2

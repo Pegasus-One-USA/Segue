@@ -14,12 +14,14 @@ namespace FHIRBridge.UnitTests.EhrWriteBack;
 public sealed class EhrWriteCapabilitiesTests
 {
     [Fact]
-    public void Only_epic_eclinicalworks_and_athenahealth_accept_writes()
+    public void Only_epic_eclinicalworks_athenahealth_and_generic_fhir_accept_writes()
     {
         foreach (var vendor in Enum.GetValues<SourceSystemType>())
         {
             EhrWriteCapabilities.HasAnyWriteCapability(vendor)
-                .Should().Be(vendor is SourceSystemType.Epic or SourceSystemType.Healow or SourceSystemType.Athenahealth, because: vendor.ToString());
+                .Should().Be(
+                    vendor is SourceSystemType.Epic or SourceSystemType.Healow or SourceSystemType.Athenahealth or SourceSystemType.GenericFhir,
+                    because: vendor.ToString());
         }
     }
 
@@ -102,9 +104,11 @@ public sealed class EhrWriteCapabilitiesTests
     }
 
     [Fact]
-    public void Epic_lists_the_five_verified_apis()
+    public void Epic_lists_the_five_verified_apis_and_its_nine_opt_in_ones()
     {
-        EhrWriteCapabilities.For(SourceSystemType.Epic)
+        var epic = EhrWriteCapabilities.For(SourceSystemType.Epic);
+
+        epic.Where(c => !c.RequiresVariantOptIn)
             .Select(c => (c.ResourceType, c.VendorApiId))
             .Should().BeEquivalentTo(new[]
             {
@@ -114,12 +118,51 @@ public sealed class EhrWriteCapabilitiesTests
                 ("Observation", "963"),
                 ("Patient", "930"),
             });
+        epic.Where(c => c.RequiresVariantOptIn)
+            .Select(c => (c.ResourceType, c.VendorApiId))
+            .Should().BeEquivalentTo(new[]
+            {
+                ("BodyStructure", "11040"),
+                ("Communication", "10090"),
+                ("DocumentReference", "10050"),
+                ("DocumentReference", "10303"),
+                ("Observation", "962"),
+                ("Observation", "11224"),
+                ("Procedure", "11048"),
+                ("QuestionnaireResponse", "10023"),
+                ("ServiceRequest", "11044"),
+            });
+    }
+
+    [Fact]
+    public void Epic_apis_that_name_target_records_take_a_tabular_source_only()
+    {
+        EhrWriteCapabilities.For(SourceSystemType.Epic)
+            .Where(c => c.RequiresTargetReferences)
+            .Select(c => c.VendorApiId)
+            .Should().BeEquivalentTo(["10090", "10303", "11224", "10023"]);
+        EhrWriteCapabilities.For(SourceSystemType.Epic)
+            .Where(c => !c.RequiresPatient)
+            .Select(c => c.VendorApiId)
+            .Should().BeEquivalentTo(["10303", "10023"]);
+    }
+
+    [Fact]
+    public void Generic_fhir_takes_plain_creates_live_with_no_contract_and_no_encounter()
+    {
+        var generic = EhrWriteCapabilities.VendorProfile(SourceSystemType.GenericFhir)!;
+
+        generic.Capabilities.Select(c => c.ResourceType).Should().BeEquivalentTo(EhrWriteCapabilities.GenericFhirResourceTypes);
+        generic.Capabilities.Should().OnlyContain(c => c.LiveWriteSupported && !c.RequiresVendorActivation && !c.RequiresEncounter && c.Variant == null);
+        generic.Capabilities.Single(c => c.ResourceType == "Patient").OptInOnly.Should().BeTrue();
+        EhrWriteCapabilities.TestServerType.Should().Be(SourceSystemType.GenericFhir);
+        EhrWriteCapabilities.TestableVendors.Should().BeEquivalentTo([SourceSystemType.Epic, SourceSystemType.Healow, SourceSystemType.Athenahealth]);
     }
 
     [Fact]
     public void Every_capability_is_create_only_backend_only_and_a_canonical_resource_type()
     {
-        foreach (var capability in new[] { SourceSystemType.Epic, SourceSystemType.Healow, SourceSystemType.Athenahealth }.SelectMany(EhrWriteCapabilities.For))
+        foreach (var capability in new[] { SourceSystemType.Epic, SourceSystemType.Healow, SourceSystemType.Athenahealth, SourceSystemType.GenericFhir }.SelectMany(EhrWriteCapabilities.For))
         {
             capability.Operations.Should().BeEquivalentTo([EhrWriteOperation.Create], because: capability.ResourceType);
             capability.AllowedApplicationTypes.Should().BeEquivalentTo([ApplicationType.Backend], because: capability.ResourceType);
@@ -157,7 +200,7 @@ public sealed class EhrWriteCapabilitiesTests
     [InlineData(" EPIC ")]
     public void Vendor_names_parse_case_insensitively(string vendor)
     {
-        EhrWriteCapabilities.For(vendor).Should().HaveCount(5);
+        EhrWriteCapabilities.For(vendor).Should().HaveCount(14);
     }
 
     [Fact]

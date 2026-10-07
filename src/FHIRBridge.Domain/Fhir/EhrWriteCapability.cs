@@ -19,7 +19,10 @@ public sealed class EhrWriteCapability
         IReadOnlySet<ApplicationType> allowedApplicationTypes,
         bool liveWriteSupported = false,
         bool requiresVendorActivation = false,
-        bool createsHolderEncounter = false)
+        bool createsHolderEncounter = false,
+        bool requiresVariantOptIn = false,
+        bool requiresPatient = true,
+        bool requiresTargetReferences = false)
     {
         ResourceType = SupportedFhirResourceTypes.Normalize(resourceType);
         Operations = operations;
@@ -31,6 +34,9 @@ public sealed class EhrWriteCapability
         LiveWriteSupported = liveWriteSupported;
         RequiresVendorActivation = requiresVendorActivation;
         CreatesHolderEncounter = createsHolderEncounter;
+        RequiresVariantOptIn = requiresVariantOptIn;
+        RequiresPatient = requiresPatient;
+        RequiresTargetReferences = requiresTargetReferences;
     }
 
     /// <summary>Canonical FHIR resource type name, as in <see cref="SupportedFhirResourceTypes.All"/>.</summary>
@@ -73,6 +79,24 @@ public sealed class EhrWriteCapability
     /// surgical history go on an open telephone encounter). Written only when the destination opts in, one encounter
     /// per patient per run, created only when at least one such record is actually sent.</summary>
     public bool CreatesHolderEncounter { get; }
+
+    /// <summary>One flavour of a type that other flavours already cover (Epic files lines, drains and airways through a
+    /// different Observation API than vital signs). Selecting the resource type is not enough: a record goes to this
+    /// variant only when the destination also lists the variant (<c>dest_enabledVariants</c>), so turning on a new API
+    /// never changes what an existing destination sends. Otherwise reported as <c>variant-not-enabled</c>.</summary>
+    public bool RequiresVariantOptIn { get; }
+
+    /// <summary>The record is filed against a patient, which the writer resolves in the EHR first. False for an API whose
+    /// record is not about one patient (Epic non-patient documents) or names its context some other way (Epic
+    /// patient-entered questionnaires answer an assignment, not a patient).</summary>
+    public bool RequiresPatient { get; }
+
+    /// <summary>The API needs references to records that already exist in the TARGET EHR and that the writer cannot
+    /// resolve (a questionnaire and its question ids, the referral a message belongs to, the report an image finding is
+    /// about). Only a CSV / SQL Table source, whose template is written for the target, can carry them; from any other
+    /// source the record is skipped as <c>target-references-unmappable</c>, because a source system's ids would point at
+    /// nothing, or at the wrong record, in the target.</summary>
+    public bool RequiresTargetReferences { get; }
 
     /// <summary>True when a destination that is not a dry run sends this type for real over a connection whose vendor
     /// write APIs are (<paramref name="vendorWriteApisActivated"/>) or are not activated.</summary>

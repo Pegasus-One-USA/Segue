@@ -20,6 +20,12 @@ export interface EhrWriteCapability {
   requiresVendorActivation?: boolean;
   /** Filed on an encounter the bridge creates, only when the destination opts in (eCW medical/surgical history). */
   createsHolderEncounter?: boolean;
+  /** Used only when the destination also enables this variant (dest_enabledVariants), not just the type. */
+  requiresVariantOptIn?: boolean;
+  /** Filed against a patient the writer resolves. Older API builds omit it: treat as true. */
+  requiresPatient?: boolean;
+  /** Needs ids of records in the target EHR, so it takes a CSV / SQL Table source only. */
+  requiresTargetReferences?: boolean;
 }
 
 /** EhrWriteCapabilitiesDto. */
@@ -28,6 +34,8 @@ export interface EhrWriteCapabilities {
   supportsPatientMatch: boolean;
   cloneModeEnabled: boolean;
   capabilities: EhrWriteCapability[];
+  /** For a test-server vendor (Generic FHIR): the vendors a destination can test as. */
+  testableVendors?: string[] | null;
 }
 
 const NONE: EhrWriteCapabilities = { vendor: null, supportsPatientMatch: false, cloneModeEnabled: false, capabilities: [] };

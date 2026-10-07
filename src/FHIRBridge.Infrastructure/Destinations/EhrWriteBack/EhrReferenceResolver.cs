@@ -47,6 +47,10 @@ public sealed record EhrPatientResolution(
 /// <para><b>Clone mode</b> never searches or matches: the real patient is exactly what must not be written to. A source
 /// patient resolves to its clone through the ledger (clone-keyed rows), or else to a new clone to create
 /// (<see cref="EhrClonePatient"/>).</para>
+///
+/// <para><b>A test run</b> (a Generic FHIR server standing in for a vendor) resolves by ledger and identifier only. A
+/// test server has neither the vendor's <c>$match</c> nor the MPI, and holds only test data, so a patient its identifier
+/// search does not find is one it does not have.</para>
 /// </summary>
 public sealed class EhrReferenceResolver
 {
@@ -70,6 +74,7 @@ public sealed class EhrReferenceResolver
     private readonly Func<string, string, CancellationToken, Task<string?>>? _fetchFromSource;
     private readonly bool _cloneMode;
     private readonly IEhrTargetPatientMatcher? _patientMatcher;
+    private readonly bool _testRun;
     private readonly Dictionary<string, EhrPatientResolution> _patients = new(StringComparer.Ordinal);
     private readonly Dictionary<(string PatientId, bool OpenOnly), string?> _encounters = new();
 
@@ -83,7 +88,8 @@ public sealed class EhrReferenceResolver
         IReadOnlyDictionary<string, JsonObject> batchPatients,
         Func<string, string, CancellationToken, Task<string?>>? fetchFromSource,
         bool cloneMode = false,
-        IEhrTargetPatientMatcher? patientMatcher = null)
+        IEhrTargetPatientMatcher? patientMatcher = null,
+        bool testRun = false)
     {
         _channel = channel;
         _ledger = ledger;
@@ -95,6 +101,7 @@ public sealed class EhrReferenceResolver
         _fetchFromSource = fetchFromSource;
         _cloneMode = cloneMode;
         _patientMatcher = patientMatcher;
+        _testRun = testRun;
     }
 
     /// <summary>The source patient's id from a reference like <c>Patient/123</c>, or null when it is not one.</summary>
@@ -198,7 +205,11 @@ public sealed class EhrReferenceResolver
         }
 
         EhrPatientMatchOutcome match;
-        if (_vendor.SupportsPatientMatch)
+        if (_testRun)
+        {
+            match = new EhrPatientMatchOutcome(EhrPatientMatchKind.None, null, null, []);
+        }
+        else if (_vendor.SupportsPatientMatch)
         {
             match = await _channel.MatchPatientAsync(shaped.Resource.ToJsonString(), cancellationToken);
         }

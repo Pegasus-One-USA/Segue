@@ -83,6 +83,12 @@ public interface IEhrWriteChannel
 /// one (an eClinicalWorks note's author, an athenaOne document's provider). Null when not configured.</param>
 /// <param name="TargetDepartmentId">athenaOne: the department a new patient is registered in, and the department used
 /// when a patient's own primary department cannot be read. Null when not configured.</param>
+/// <param name="TestAsVendor">A test run: the connection is a Generic FHIR test server standing in for this vendor.
+/// Every record goes through the vendor's own capabilities, profiles and channel, and is sent to the test server
+/// instead (athenaOne calls to an in-process athenaOne test server that files them there). Null for a real
+/// write.</param>
+/// <param name="EnabledVariants">Variants the destination turned on (<c>dest_enabledVariants</c>), for the APIs that
+/// need it on top of the resource type (<c>EhrWriteCapability.RequiresVariantOptIn</c>).</param>
 public sealed record EhrWriteBackRunOptions(
     bool DryRun,
     bool CreatePatientIfMissing,
@@ -92,12 +98,19 @@ public sealed record EhrWriteBackRunOptions(
     bool CloneMode = false,
     bool CreateHolderEncounter = false,
     string? TargetProviderId = null,
-    string? TargetDepartmentId = null)
+    string? TargetDepartmentId = null,
+    SourceSystemType? TestAsVendor = null,
+    IReadOnlyCollection<string>? EnabledVariants = null)
 {
     public const int DefaultMaxWritesPerRun = 500;
     public const int MaxAllowedWritesPerRun = 10000;
     public const string PreliminaryDocStatus = "preliminary";
     public const string FinalDocStatus = "final";
+
+    public bool IsTestRun => TestAsVendor is not null;
+
+    public bool IsVariantEnabled(string? variant) =>
+        variant is not null && (EnabledVariants?.Contains(variant, StringComparer.Ordinal) ?? false);
 }
 
 /// <summary>One OperationOutcome issue, reduced to what is safe to log and store.</summary>
@@ -155,13 +168,16 @@ public sealed record EhrCreateOutcome(
 /// </summary>
 /// <param name="ScopeStatus">"verified" when the granted scope covers every type written, "missing:Type,Type" when it
 /// does not, "unknown" when the token response echoed no scope.</param>
+/// <param name="TestRun">The writes went to a Generic FHIR test server standing in for <paramref name="TargetVendor"/>,
+/// not to the vendor.</param>
 public sealed record EhrWriteReport(
     bool DryRun,
     string TargetVendor,
     int RecordsReceived,
     string ScopeStatus,
     IReadOnlyList<EhrWriteResourceSummary> Resources,
-    bool CloneMode = false);
+    bool CloneMode = false,
+    bool TestRun = false);
 
 /// <param name="WouldWrite">Records that passed every check; in a dry run, what a live run would send.</param>
 /// <param name="AlreadyWritten">Records the ledger shows are already in the EHR (or awaiting review).</param>

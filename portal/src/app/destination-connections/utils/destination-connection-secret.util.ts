@@ -95,7 +95,7 @@ export function buildFhirSecretBlob(f: Record<string, string>): string {
 export const EHR_WRITE_BACK_METADATA_KEYS = [
   'dest_name', 'dest_sourceConnectionId', 'dest_ehrVendor', 'dest_dryRun', 'dest_createPatientIfMissing',
   'dest_maxWritesPerRun', 'dest_noteDocStatus', 'dest_cloneMode', 'dest_createHolderEncounter',
-  'dest_targetProviderId', 'dest_targetDepartmentId',
+  'dest_targetProviderId', 'dest_targetDepartmentId', 'dest_testAsVendor', 'dest_enabledVariants',
 ] as const;
 
 export function buildConnectionMetadata(

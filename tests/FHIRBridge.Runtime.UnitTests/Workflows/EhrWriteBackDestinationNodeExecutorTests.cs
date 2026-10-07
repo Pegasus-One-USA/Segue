@@ -11,6 +11,7 @@ using FHIRBridge.Runtime.Application.Workflows;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.Runtime.Domain.Workflows;
+using FHIRBridge.Runtime.Infrastructure.Workflows.EhrWrite;
 using FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 using FluentAssertions;
 using Moq;
@@ -189,12 +190,59 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
     [Fact]
     public async Task Vendor_without_write_capability_is_refused()
     {
-        var (executor, _, _) = Build(Connection(vendor: SourceSystemType.GenericFhir));
+        var (executor, _, _) = Build(Connection(vendor: SourceSystemType.Cerner));
         var node = Node($$"""{"dest_sourceConnectionId":"{{TargetId}}"}""");
 
         var act = () => executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*does not accept EHR write-back*");
+    }
+
+    [Theory]
+    [InlineData("Healow", typeof(EcwEhrWriteChannel))]
+    [InlineData("Athenahealth", typeof(AthenaOneEhrWriteChannel))]
+    [InlineData("Epic", typeof(FhirClientEhrWriteChannel))]
+    public async Task A_test_run_builds_the_tested_vendors_channel_over_the_generic_fhir_connection(string vendor, Type channelType)
+    {
+        var (executor, contexts, _) = Build(Connection(vendor: SourceSystemType.GenericFhir));
+        var node = Node($$"""
+            {"dest_sourceConnectionId":"{{TargetId}}","dest_testAsVendor":"{{vendor}}","dest_enabledVariants":"lines-drains-airways, radiotherapy-volume"}
+            """);
+
+        await executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        var channel = contexts.Single().EhrWriteChannel!;
+        channel.Should().BeOfType(channelType);
+        channel.TargetVendor.ToString().Should().Be(vendor);
+        channel.Options.IsTestRun.Should().BeTrue();
+        channel.Options.EnabledVariants.Should().Equal("lines-drains-airways", "radiotherapy-volume");
+    }
+
+    [Fact]
+    public async Task A_test_run_never_writes_to_a_real_ehr()
+    {
+        var (executor, contexts, _) = Build(Connection(vendor: SourceSystemType.Epic));
+        var node = Node($$"""{"dest_sourceConnectionId":"{{TargetId}}","dest_testAsVendor":"Epic"}""");
+
+        var act = () => executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*needs a Generic FHIR connection as the test server*");
+        contexts.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Cerner")]
+    [InlineData("GenericFhir")]
+    [InlineData("epic,healow")]
+    public async Task A_test_run_as_a_vendor_that_cannot_be_tested_fails_instead_of_writing(string vendor)
+    {
+        var (executor, contexts, _) = Build(Connection(vendor: SourceSystemType.GenericFhir));
+        var node = Node($$"""{"dest_sourceConnectionId":"{{TargetId}}","dest_testAsVendor":"{{vendor}}"}""");
+
+        var act = () => executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*not a vendor that can be tested*");
+        contexts.Should().BeEmpty();
     }
 
     [Fact]

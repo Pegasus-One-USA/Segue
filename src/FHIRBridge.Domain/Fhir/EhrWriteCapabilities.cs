@@ -24,14 +24,38 @@ public static class EhrWriteCapabilities
     // update, delete, patch, batch or conditional create. See docs/backend/20-epic-r4-write-back.md sections 1 and 6.
     // Live writes: allergies, problems and notes since Phase 2; vitals (open encounter only) and patients (only after
     // $match found no one, and only when the destination opts in) since Phase 3.
+    //
+    // Phase 7 adds the rest of Epic's incoming R4 create APIs, each a variant the destination must enable on top of
+    // selecting its type, so no existing destination starts sending something new. They were held back because no Epic
+    // write can be undone; they are rehearsed on a Generic FHIR test server first (dest_testAsVendor). Specs:
+    // fhir.epic.com/Specifications/Api?id=<id>. Three of them file against records that must already exist in the
+    // target Epic (a referral, an imaging report, a questionnaire assignment), so they take a CSV / SQL Table source
+    // only. Not here: CriteriaReview.Create (1009) and ReviewCollection.Create (1026), Epic proprietary
+    // (non-FHIR) utilization-management APIs.
     private static readonly EhrWriteVendorProfile Epic = new(
         SourceSystemType.Epic,
         [
             new("AllergyIntolerance", CreateOnly, "945", variant: null, requiresEncounter: false, optInOnly: false, BackendOnly, liveWriteSupported: true),
+            new("BodyStructure", CreateOnly, "11040", EhrWriteVariants.RadiotherapyVolume, requiresEncounter: false, optInOnly: true, BackendOnly, liveWriteSupported: true, requiresVariantOptIn: true),
+            // Community-resource referral messages: basedOn names the referral's ServiceRequest in the target Epic.
+            new("Communication", CreateOnly, "10090", EhrWriteVariants.CommunityResourceMessage, requiresEncounter: true, optInOnly: true, BackendOnly, liveWriteSupported: true, requiresVariantOptIn: true, requiresTargetReferences: true),
             new("Condition", CreateOnly, "949", EhrWriteVariants.ProblemListItem, requiresEncounter: false, optInOnly: false, BackendOnly, liveWriteSupported: true),
             new("DocumentReference", CreateOnly, "1046", EhrWriteVariants.ClinicalNote, requiresEncounter: true, optInOnly: false, BackendOnly, liveWriteSupported: true),
+            // Scan metadata. Epic: "designed for scanning integrations through the Hyperdrive Scan Acquisition Workflow.
+            // It cannot be called outside of this workflow."
+            new("DocumentReference", CreateOnly, "10050", EhrWriteVariants.DocumentInformation, requiresEncounter: false, optInOnly: true, BackendOnly, liveWriteSupported: true, requiresVariantOptIn: true),
+            // Tapestry business documents linked to a group, account, CRM contact, vendor or contract: no patient.
+            new("DocumentReference", CreateOnly, "10303", EhrWriteVariants.NonPatientDocument, requiresEncounter: false, optInOnly: true, BackendOnly, liveWriteSupported: true, requiresVariantOptIn: true, requiresPatient: false, requiresTargetReferences: true),
             new("Observation", CreateOnly, "963", EhrWriteVariants.VitalSigns, requiresEncounter: true, optInOnly: false, BackendOnly, liveWriteSupported: true),
+            new("Observation", CreateOnly, "962", EhrWriteVariants.LinesDrainsAirways, requiresEncounter: true, optInOnly: true, BackendOnly, liveWriteSupported: true, requiresVariantOptIn: true),
+            // Excessive-radiation CT findings: focus names the imaging DiagnosticReport in the target Epic.
+            new("Observation", CreateOnly, "11224", EhrWriteVariants.ImagingCharacteristics, requiresEncounter: false, optInOnly: true, BackendOnly, liveWriteSupported: true, requiresVariantOptIn: true, requiresTargetReferences: true),
             new("Patient", CreateOnly, "930", variant: null, requiresEncounter: false, optInOnly: true, BackendOnly, liveWriteSupported: true),
+            new("Procedure", CreateOnly, "11048", EhrWriteVariants.RadiotherapySummary, requiresEncounter: false, optInOnly: true, BackendOnly, liveWriteSupported: true, requiresVariantOptIn: true),
+            // Answers a patient-entered questionnaire Epic already assigned: subject is the appointment or questionnaire
+            // series, questionnaire and linkIds are Epic ids.
+            new("QuestionnaireResponse", CreateOnly, "10023", EhrWriteVariants.PatientEnteredQuestionnaire, requiresEncounter: false, optInOnly: true, BackendOnly, liveWriteSupported: true, requiresVariantOptIn: true, requiresPatient: false, requiresTargetReferences: true),
+            new("ServiceRequest", CreateOnly, "11044", EhrWriteVariants.RadiotherapySummary, requiresEncounter: false, optInOnly: true, BackendOnly, liveWriteSupported: true, requiresVariantOptIn: true),
         ],
         supportsPatientMatch: true,
         requestsScopeOnTokenRequest: false,
@@ -100,13 +124,52 @@ public static class EhrWriteCapabilities
         alreadyAtTargetOutcomeCodes: new HashSet<string>(StringComparer.Ordinal) { "athena-409" },
         proprietaryApiScope: "athena/service/Athenanet.MDP.*");
 
+    /// <summary>Resource types a Generic FHIR R4 server takes as plain creates.</summary>
+    public static readonly IReadOnlyList<string> GenericFhirResourceTypes =
+    [
+        "AllergyIntolerance", "BodyStructure", "CarePlan", "Communication", "Condition", "DiagnosticReport",
+        "DocumentReference", "Goal", "Immunization", "MedicationRequest", "MedicationStatement", "Observation",
+        "Patient", "Procedure", "QuestionnaireResponse", "ServiceRequest",
+    ];
+
+    // Generic FHIR R4 (HAPI, Aidbox, a hospital's own server), Phase 7: any standard resource as a plain create. The
+    // server's own rules are not known, so nothing needs an encounter; references other than the patient are not
+    // carried over (a source id names nothing on another server). Patients resolve by identifier, then $match where the
+    // server offers it. The same connection is the test server for "test as" runs, which use the TESTED vendor's
+    // profile instead of this one.
+    private static readonly EhrWriteVendorProfile GenericFhir = new(
+        SourceSystemType.GenericFhir,
+        GenericFhirResourceTypes
+            .Select(type => new EhrWriteCapability(
+                type, CreateOnly, "fhir-r4-create", variant: null, requiresEncounter: false,
+                optInOnly: type == "Patient", BackendOnly, liveWriteSupported: true))
+            .ToList(),
+        supportsPatientMatch: true,
+        requestsScopeOnTokenRequest: true,
+        alreadyAtTargetOutcomeCodes: new HashSet<string>(StringComparer.Ordinal));
+
     private static readonly IReadOnlyDictionary<SourceSystemType, EhrWriteVendorProfile> ByVendor =
         new Dictionary<SourceSystemType, EhrWriteVendorProfile>
         {
             [SourceSystemType.Epic] = Epic,
             [SourceSystemType.Healow] = Healow,
             [SourceSystemType.Athenahealth] = Athenahealth,
+            [SourceSystemType.GenericFhir] = GenericFhir,
         };
+
+    /// <summary>Vendors a Generic FHIR server can stand in for in a test run (<c>dest_testAsVendor</c>).</summary>
+    public static readonly IReadOnlyList<SourceSystemType> TestableVendors =
+        [SourceSystemType.Epic, SourceSystemType.Healow, SourceSystemType.Athenahealth];
+
+    /// <summary>The connection type that serves as the test server for <see cref="TestableVendors"/>.</summary>
+    public const SourceSystemType TestServerType = SourceSystemType.GenericFhir;
+
+    /// <summary>Every variant a destination can enable (<c>dest_enabledVariants</c>), across vendors.</summary>
+    public static IReadOnlySet<string> OptInVariants { get; } = ByVendor.Values
+        .SelectMany(profile => profile.Capabilities)
+        .Where(capability => capability.RequiresVariantOptIn && capability.Variant is not null)
+        .Select(capability => capability.Variant!)
+        .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>The vendor's write-back profile, or null when the vendor cannot be written to.</summary>
     public static EhrWriteVendorProfile? VendorProfile(SourceSystemType vendor) =>
@@ -164,4 +227,12 @@ public static class EhrWriteVariants
     public const string LaboratoryResult = "laboratory-result";
     public const string HistoricalImmunization = "historical-immunization";
     public const string MedicationList = "medication-list";
+    public const string LinesDrainsAirways = "lines-drains-airways";
+    public const string ImagingCharacteristics = "dicom-image-characteristics";
+    public const string RadiotherapyVolume = "radiotherapy-volume";
+    public const string RadiotherapySummary = "external-radiotherapy-summary";
+    public const string DocumentInformation = "document-information";
+    public const string NonPatientDocument = "non-patient-document";
+    public const string CommunityResourceMessage = "community-resource-message";
+    public const string PatientEnteredQuestionnaire = "patient-entered-questionnaire";
 }

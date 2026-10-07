@@ -44,9 +44,12 @@ export class EhrWriteReportDialogComponent {
   readonly outcomes = EHR_WRITE_OUTCOMES;
   readonly totals = computed(() => ehrWriteTotals(this.report));
   readonly scope = ehrWriteScopeLabel(this.report.ScopeStatus);
-  readonly vendor = this.report.TargetVendor || 'the EHR';
+  /** A test run never reaches the vendor: its writes went to the Generic FHIR test server standing in for it. */
+  readonly vendor = this.report.TestRun
+    ? `the test server (as ${this.report.TargetVendor || 'the EHR'})`
+    : this.report.TargetVendor || 'the EHR';
 
-  readonly title = this.report.DryRun ? 'Dry-run report' : 'Write-back report';
+  readonly title = this.report.TestRun ? 'Test-run report' : this.report.DryRun ? 'Dry-run report' : 'Write-back report';
 
   /** What this run did, so the reader knows how to read the numbers below. A live run is "live" as soon as one
    *  selected type can be sent; types that are only counted are called out, as are refusals and unknown outcomes,

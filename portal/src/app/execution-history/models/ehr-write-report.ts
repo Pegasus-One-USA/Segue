@@ -4,9 +4,11 @@
 export interface EhrWriteReport {
   DryRun: boolean;
   CloneMode: boolean;
+  /** The writes went to a Generic FHIR test server standing in for TargetVendor, not to the vendor. */
+  TestRun: boolean;
   TargetVendor: string;
   RecordsReceived: number;
-  /** "verified", "missing:<types>" or "unknown". */
+  /** "verified", "missing:<types>", "unknown", or "test-server" for a test run. */
   ScopeStatus: string;
   Resources: EhrWriteResourceCounts[];
 }
@@ -53,6 +55,7 @@ export function parseEhrWriteReport(deliveryDetailJson: string | null | undefine
   return {
     DryRun: raw.DryRun === true,
     CloneMode: raw.CloneMode === true,
+    TestRun: raw.TestRun === true,
     TargetVendor: typeof raw.TargetVendor === 'string' ? raw.TargetVendor : '',
     RecordsReceived: count(raw.RecordsReceived),
     ScopeStatus: typeof raw.ScopeStatus === 'string' ? raw.ScopeStatus : 'unknown',
@@ -92,6 +95,7 @@ export function ehrWriteReasons(resource: EhrWriteResourceCounts): { code: strin
 /** Plain wording for the scope check: whether the EHR's token covers the types the run writes. */
 export function ehrWriteScopeLabel(scopeStatus: string): { text: string; ok: boolean } {
   if (scopeStatus === 'verified') return { text: 'Access verified for every type this run would write', ok: true };
+  if (scopeStatus === 'test-server') return { text: "Not checked: a test run never reaches the vendor, so the vendor's access does not apply", ok: true };
   if (scopeStatus.startsWith('missing:')) {
     return { text: `The EHR app is missing access for: ${scopeStatus.slice('missing:'.length).split(',').join(', ')}`, ok: false };
   }
@@ -112,6 +116,8 @@ const REASON_LABELS: Record<string, string> = {
   'write-cap-reached': 'Max writes per run reached',
   'not-selected': 'Type not selected in Data groups',
   'not-writable': 'This EHR does not accept this type',
+  'variant-not-enabled': 'Goes through an API this destination has not turned on (tick it under "Also write through")',
+  'target-references-unmappable': "Needs the target EHR's own ids, which only a CSV / SQL Table source can give",
   'not-a-fhir-resource': 'Not a FHIR resource',
   'missing-id': 'Source record has no id',
   // Ledger
@@ -212,6 +218,33 @@ const REASON_LABELS: Record<string, string> = {
   'in-progress': 'In progress',
   'missing-questionnaire': 'No questionnaire reference',
   'missing-answers': 'No answers',
+  'not-in-progress-or-completed': 'Neither in progress nor completed',
+  'missing-questionnaire-assignment': 'No questionnaire assignment (the appointment or series it was assigned through)',
+  // Epic's other APIs (lines and drains, imaging, radiotherapy, scanned and non-patient documents, referral messages)
+  'not-a-line-drain-airway': 'Not a line, drain or airway',
+  'not-an-imaging-characteristic': 'Not a CT dose finding',
+  'missing-imaging-report': 'No imaging report in the target EHR named',
+  'not-a-radiotherapy-volume': 'Not a radiotherapy volume',
+  'not-a-radiotherapy-summary': 'Not a radiotherapy course summary',
+  'missing-identifiers': 'Needs an official and a usual identifier',
+  'missing-last-updated': 'No last-updated time',
+  'missing-profile': 'No declared profile',
+  'missing-status': 'No status',
+  'intent-not-supported': 'Order intent the EHR does not accept',
+  'not-document-information': 'Not scanned document information',
+  'not-a-non-patient-document': 'Not a non-patient document',
+  'missing-identifier': 'No identifier',
+  'missing-document-type': 'No document type',
+  'missing-date': 'No date',
+  'missing-description': 'No description',
+  'missing-service-period': 'No service period',
+  'missing-related-record': 'Not linked to a group, account, vendor or contract in the target EHR',
+  'not-a-community-resource-message': 'Not a message on a community resource referral',
+  'not-in-progress': 'Not in progress',
+  'missing-sender': 'No sender',
+  'missing-recipient': 'No recipient',
+  'missing-sent-time': 'No time sent',
+  'missing-payload': 'No message text or attachment',
 };
 
 export function ehrWriteReasonLabel(code: string): string {
@@ -225,7 +258,7 @@ export function ehrWriteReasonLabel(code: string): string {
 export function ehrWriteReportToText(report: EhrWriteReport): string {
   const totals = ehrWriteTotals(report);
   const lines = [
-    `${report.DryRun ? 'Dry run' : 'Live run'}${report.CloneMode ? ' (clone mode)' : ''} to ${report.TargetVendor || 'EHR'}`,
+    `${report.DryRun ? 'Dry run' : 'Live run'}${report.CloneMode ? ' (clone mode)' : ''}${report.TestRun ? ' (test run on a Generic FHIR server)' : ''} to ${report.TargetVendor || 'EHR'}`,
     `Records received: ${report.RecordsReceived}`,
     ...EHR_WRITE_OUTCOMES.map(o => `${o.label}: ${totals[o.key]}`),
     `Access: ${ehrWriteScopeLabel(report.ScopeStatus).text}`,

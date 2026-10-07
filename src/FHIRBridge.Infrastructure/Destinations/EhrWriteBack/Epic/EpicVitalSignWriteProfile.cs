@@ -30,6 +30,8 @@ public sealed partial class EpicVitalSignWriteProfile : IEhrWriteProfile
 
     public string ResourceType => "Observation";
 
+    public string? Variant => FHIRBridge.Domain.Fhir.EhrWriteVariants.VitalSigns;
+
     public EhrShapeResult Shape(JsonObject source, EhrWriteBackRunOptions options)
     {
         if (!Objects(source, "category").Any(category => Codes(category).Contains("vital-signs")))

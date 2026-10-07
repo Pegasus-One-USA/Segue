@@ -25,6 +25,19 @@
           }
           <p class="eaf-hint">No authentication is configured — this connects as an anonymous client, matching a public/test FHIR server.</p>
         </div>
+
+        <div class="eaf-field">
+          <label class="eaf-label" for="gff-access">Access</label>
+          <div class="eaf-select-wrap">
+            <select id="gff-access" class="eaf-select" formControlName="access">
+              <option value="Read">Read</option>
+              <option value="Write">Write</option>
+              <option value="ReadWrite">Read &amp; Write</option>
+            </select>
+          </div>
+          <p class="eaf-hint">With Write, an EHR Write-Back destination can write to this server: as plain FHIR, or as a
+            test server that receives exactly what Epic, eClinicalWorks or athenahealth would.</p>
+        </div>
       </div>
     </div>
 
