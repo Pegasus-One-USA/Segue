@@ -117,6 +117,16 @@ public sealed class VendorEhrWriteChannelTests
     }
 
     [Theory]
+    [InlineData("Patient/eA-zy.Mx3", "eA-zy.Mx3")]
+    [InlineData("42", "42")]
+    [InlineData("a b", null)]
+    [InlineData("", null)]
+    public void On_a_test_server_any_fhir_patient_id_is_used_as_it_is(string? target, string? expected)
+    {
+        AthenaOneEhrWriteChannel.TestServerPatientId(target).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData("195900", "https://api.preview.platform.athenahealth.com/v1/195900")]
     [InlineData("Organization/a-1.Practice-195900", "https://api.preview.platform.athenahealth.com/v1/195900")]
     public void Athena_api_base_is_the_fhir_host_with_the_practice(string practice, string expected)

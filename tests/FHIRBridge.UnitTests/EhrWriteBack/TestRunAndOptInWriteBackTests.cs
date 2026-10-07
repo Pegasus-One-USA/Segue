@@ -169,6 +169,39 @@ public sealed class TestRunAndOptInWriteBackTests
     }
 
     [Fact]
+    public async Task A_document_no_epic_document_api_takes_is_reported_as_not_a_clinical_note()
+    {
+        // Epic exports documents under its own categories; none of its three DocumentReference APIs takes this one.
+        // The clinical-note reason must win over another API's "this record is not mine".
+        const string ImagingDocument = """
+            {"resourceType":"DocumentReference","id":"d1","status":"current",
+             "category":[{"coding":[{"system":"http://loinc.org","code":"18748-4"}]}],
+             "type":{"coding":[{"system":"http://loinc.org","code":"18748-4"}]},
+             "subject":{"reference":"Patient/p1"},
+             "content":[{"attachment":{"contentType":"text/plain","data":"VGV4dA=="}}]}
+            """;
+        var writer = new MappedEhrWriteBackDestinationWriter(
+            new EhrWriteProfileRegistry(
+            [
+                new EpicPatientWriteProfile(), new EpicClinicalNoteWriteProfile(),
+                new EpicDocumentInformationWriteProfile(), new EpicNonPatientDocumentWriteProfile(),
+            ]),
+            new InMemoryEhrWriteLedgerRepository(),
+            Mock.Of<IEhrCloneModePolicy>(),
+            NullLogger<MappedEhrWriteBackDestinationWriter>.Instance,
+            new NoMpi());
+        var channel = new ScriptedChannel(
+            SourceSystemType.Epic, types: ["DocumentReference"],
+            variants: [EhrWriteVariants.DocumentInformation, EhrWriteVariants.NonPatientDocument]) { IdentifierHit = "e-1" };
+
+        var result = await RunAsync(writer, channel, FhirSource, Patient, ImagingDocument);
+
+        channel.Creates.Should().BeEmpty();
+        Summary(result, "DocumentReference").Reasons.Should().ContainKey("not-a-clinical-note")
+            .And.HaveCount(1);
+    }
+
+    [Fact]
     public async Task An_api_that_names_target_records_takes_no_records_from_another_ehr()
     {
         var channel = new ScriptedChannel(SourceSystemType.Epic, types: ["QuestionnaireResponse"], variants: [EhrWriteVariants.PatientEnteredQuestionnaire]);

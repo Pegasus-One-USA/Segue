@@ -653,8 +653,9 @@ What reaches the test server, per vendor:
   other write is stored as a FHIR `Basic` (code system `urn:fhirbridge:athenaone-test`, code = the API, e.g.
   `problems`; one extension per form field, exactly as sent; subject = the patient); `GET patients/{id}` reads the test
   server's patient (department `1`); `GET chart/{id}/encounters` maps the test server's Encounters to athena's
-  statuses; allergen and medication lookups always find the name asked for. Practice id `1`. The test server must
-  assign numeric ids (HAPI does), as athenaOne does.
+  statuses; allergen and medication lookups always find the name asked for. Practice id `1`. Patients are the test
+  server's own, by their FHIR id: numeric like athenaOne's, or not (a server that also holds records copied with their
+  source ids).
 
 **What a test run does not prove:** the vendor's own validation (Epic's open-encounter and duplicate rules, eCW's
 status "1", athena's field rules), organisation-specific codes (Epic flowsheet ids), and athena's reference lists. One

@@ -231,7 +231,7 @@ const REASON_LABELS: Record<string, string> = {
   'missing-profile': 'No declared profile',
   'missing-status': 'No status',
   'intent-not-supported': 'Order intent the EHR does not accept',
-  'not-document-information': 'Not scanned document information',
+  'not-a-scanned-document': 'Not scanned document information',
   'not-a-non-patient-document': 'Not a non-patient document',
   'missing-identifier': 'No identifier',
   'missing-document-type': 'No document type',

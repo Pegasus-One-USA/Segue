@@ -24,7 +24,7 @@ namespace FHIRBridge.Runtime.Infrastructure.Workflows.EhrWrite;
 /// </list>
 /// FHIR calls (identifier search, encounter search, QuestionnaireResponse) go to the test server as they are. What a
 /// test therefore does not prove: athena's own validation of each call, and that its reference lists hold the names.
-/// The test server must assign numeric ids (HAPI does), as athenaOne's do.
+/// Patients are the test server's own, by their FHIR id (numeric, as athenaOne's are, or not).
 /// </summary>
 public sealed class AthenaOneTestServer : IFhirWriteClient
 {
@@ -220,6 +220,9 @@ public sealed class AthenaOneTestServer : IFhirWriteClient
     }
 
     /// <summary>Files one athenaOne write as a Basic on the test server: what was called, and every field as sent.</summary>
+    /// <summary>athenaOne path words in the patient position of <c>chart/...</c> that are not a patient.</summary>
+    private static readonly HashSet<string> NonPatientChartSegments = new(StringComparer.Ordinal) { "encounter", "configuration" };
+
     private async Task<FhirRawWriteResult> FileRequestAsync(
         string method,
         string path,
@@ -250,8 +253,11 @@ public sealed class AthenaOneTestServer : IFhirWriteClient
             },
         };
 
-        // chart/{patientid}/..., patients/{patientid}/...: the patient the write was filed for.
-        if (segments is ["chart" or "patients", var patientId, ..] && patientId.All(char.IsAsciiDigit))
+        // chart/{patientid}/..., patients/{patientid}/...: the patient the write was filed for (the test server's own
+        // patient id, numeric or not). chart/encounter/{encounterid}/... and chart/configuration/... name no patient.
+        if (segments is ["chart" or "patients", var patientId, ..]
+            && !NonPatientChartSegments.Contains(patientId)
+            && AthenaOneEhrWriteChannel.TestServerPatientId(patientId) is not null)
         {
             basic["subject"] = new JsonObject { ["reference"] = $"Patient/{patientId}" };
         }

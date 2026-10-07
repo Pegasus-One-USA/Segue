@@ -76,6 +76,42 @@ public sealed class AthenaOneTestServerTests
     }
 
     [Fact]
+    public async Task A_test_server_patient_whose_id_is_not_numeric_is_still_the_patient_of_the_call()
+    {
+        // A shared test server also holds records copied there with their source ids (an Epic patient, say).
+        var server = Build();
+        server.Client.Setup(c => c.SendAsync(It.Is<FhirRawWriteRequest>(r => r.Url == $"{TestServer}/Patient/eA-zy.Mx3"), Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FhirRawWriteResult(FhirWriteOutcomeKind.Created, 200, """{"resourceType":"Patient","id":"eA-zy.Mx3"}""", []));
+        var request = """
+            {"resourceType":"AthenaOneRequest","operation":"problem","method":"POST","path":"chart/{patientid}/problems",
+             "multipart":false,"department":true,"fields":{"snomedcode":"38341003"},"idField":"problemid","patient":"eA-zy.Mx3"}
+            """;
+
+        var outcome = await server.Channel.CreateAsync("Condition", request, CancellationToken.None);
+
+        outcome.Kind.Should().Be(EhrCreateKind.Created);
+        server.Created.Single().Body["subject"]!["reference"]!.GetValue<string>().Should().Be("Patient/eA-zy.Mx3");
+    }
+
+    [Fact]
+    public async Task Vitals_on_an_encounter_are_filed_without_naming_a_patient()
+    {
+        var server = Build();
+        var request = """
+            {"resourceType":"AthenaOneRequest","operation":"vitals","method":"POST","path":"chart/encounter/{encounterid}/vitals",
+             "multipart":false,"department":false,"fields":{},"jsonFields":{"vitals":[[{"clinicalelementid":"VITALS.WEIGHT","value":"81"}]]},
+             "encounter":"7","patient":"42"}
+            """;
+
+        var outcome = await server.Channel.CreateAsync("Observation", request, CancellationToken.None);
+
+        outcome.Kind.Should().Be(EhrCreateKind.Created);
+        var basic = server.Created.Single().Body;
+        basic["code"]!["coding"]![0]!["display"]!.GetValue<string>().Should().Be("POST /v1/1/chart/encounter/7/vitals");
+        basic["subject"].Should().BeNull(because: "'encounter' in chart/encounter/... is not a patient id");
+    }
+
+    [Fact]
     public async Task An_allergy_lookup_finds_the_name_asked_for_and_its_id_reaches_the_call()
     {
         var server = Build();

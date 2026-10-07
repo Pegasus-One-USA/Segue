@@ -596,7 +596,7 @@ public sealed class EpicDocumentInformationWriteProfile : IEhrWriteProfile
     {
         if (!Objects(source, "category").Any(c => HasCoding(c, EpicOptIn.DocumentCategorySystem, "document-information")))
         {
-            return EhrShapeResult.Skip("not-document-information");
+            return EhrShapeResult.Skip("not-a-scanned-document");
         }
 
         var status = String(source, "status");

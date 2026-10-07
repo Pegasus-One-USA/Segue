@@ -68,7 +68,7 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
             return await _fhir.SearchForPatientAsync(resourceType, targetPatientId, cancellationToken);
         }
 
-        var patientId = PatientId(targetPatientId);
+        var patientId = AthenaPatientId(targetPatientId);
         var department = patientId is null ? null : await DepartmentAsync(patientId, cancellationToken);
         if (patientId is null || department is null)
         {
@@ -103,7 +103,7 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
         }
 
         var operation = Text(request, R.Operation) ?? "request";
-        var patientId = PatientId(Text(request, R.Patient));
+        var patientId = AthenaPatientId(Text(request, R.Patient));
         var path = Text(request, R.Path) ?? string.Empty;
         if (path.Contains(R.PatientIdToken, StringComparison.Ordinal))
         {
@@ -235,6 +235,24 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
 
         id ??= SyntheticId(operation, patientId, fields);
         return new EhrCreateOutcome(EhrCreateKind.Created, result.StatusCode, id, []);
+    }
+
+    /// <summary>The patient id the athenaOne calls carry. On a test server (a test run) the patient is the server's own
+    /// FHIR Patient, which <see cref="AthenaOneTestServer"/> reads by that id whatever its form: a server that also
+    /// holds copied records has non-numeric ids too.</summary>
+    private string? AthenaPatientId(string? targetPatientId) =>
+        PatientId(targetPatientId) ?? (Options.IsTestRun ? TestServerPatientId(targetPatientId) : null);
+
+    /// <summary>A FHIR id (letters, digits, '-' and '.', at most 64), without a leading <c>Patient/</c>.</summary>
+    internal static string? TestServerPatientId(string? targetPatientId)
+    {
+        var id = targetPatientId?.Trim() ?? string.Empty;
+        if (id.StartsWith("Patient/", StringComparison.Ordinal))
+        {
+            id = id["Patient/".Length..];
+        }
+
+        return id.Length is > 0 and <= 64 && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.') ? id : null;
     }
 
     /// <summary>athenaOne's patient id from a target patient id: athena's FHIR id <c>a-{practice}.E-{enterpriseid}</c>
