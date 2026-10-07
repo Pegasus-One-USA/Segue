@@ -731,9 +731,11 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
           next: rules => {
             if (rules.some(rule => rule.resourcePipelineRouteId === workflowId)) {
               this.ensureChainNode(destination, 'transformation');
+            } else {
+              this.removeChainStep(destination, 'transformation');
             }
           },
-          error: () => { /* a rules lookup failure must not add a node on a guess */ },
+          error: () => { /* a rules lookup failure must not add — or remove — a node on a guess */ },
         });
       return;
     }
@@ -754,7 +756,11 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     if (!workflowId) return;
 
     const mappedKeys = this.mappedRuleKeys(fields);
-    if (mappedKeys.size === 0) return;
+    // No mapped column means no rule can apply here (the intersection below would find nothing either).
+    if (mappedKeys.size === 0) {
+      this.removeChainStep(destination, 'transformation');
+      return;
+    }
 
     this.transformationRules.list({ destinationType, resourcePipelineRouteId: workflowId }).subscribe({
       next: rules => {
@@ -767,9 +773,15 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
           && mappedKeys.has(`${rule.resourceType}|${rule.destinationField}`)
           // A rule naming a different source field is about a different mapping of the same column.
           && (!rule.sourceField || mappedKeys.has(`${rule.resourceType}|${rule.destinationField}|${rule.sourceField}`)));
-        if (appliesHere) this.ensureChainNode(destination, 'transformation');
+        if (appliesHere) {
+          this.ensureChainNode(destination, 'transformation');
+        } else {
+          // Every rule was removed (or none applies to what is mapped any more): the step has nothing to do,
+          // so it leaves the canvas the same way it arrived — automatically.
+          this.removeChainStep(destination, 'transformation');
+        }
       },
-      error: () => { /* as above — never add a node on a guess */ },
+      error: () => { /* as above — never add or remove a node on a guess */ },
     });
   }
 
@@ -814,7 +826,11 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     this.deIdentificationProfiles.list().subscribe({
       next: profiles => {
         const owned = profiles.find(profile => profile.name === workflowId);
-        if (!owned) return;
+        if (!owned) {
+          // No policy belongs to this workflow, so nothing here redacts anything.
+          this.removeChainStep(destination, 'deidentification');
+          return;
+        }
 
         // Filtered client-side: the rules endpoint has no deIdentificationProfileId parameter (it was built
         // to filter by resource/destination/field), and this is the same one-off check the destination
@@ -823,9 +839,12 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
           next: rules => {
             if (rules.some(rule => rule.deIdentificationProfileId === owned.id && rule.isEnabled)) {
               this.ensureChainNode(destination, 'deidentification');
+            } else {
+              // The policy exists but has no enabled rule left: the step would redact nothing.
+              this.removeChainStep(destination, 'deidentification');
             }
           },
-          error: () => { /* a rules lookup failure must not add a node on a guess */ },
+          error: () => { /* a rules lookup failure must not add — or remove — a node on a guess */ },
         });
       },
       error: () => { /* nor a profile lookup failure */ },
@@ -897,7 +916,36 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       this.store.addEdge({ id: this.store.nextEdgeId(), from: sequence[i].id, to: sequence[i + 1].id });
     }
 
-    // Lay the segment out left-to-right from whatever feeds it, pushing the destination to the end.
+    this.layoutChain(destination);
+  }
+
+  /**
+   * The inverse of ensureChainNode: takes `transformId`'s step out of `destination`'s chain and joins its
+   * neighbours back up. Called only once the server has confirmed the step has nothing left to apply (no
+   * transformation rule for this workflow, no enabled rule in its de-identification policy) — the step was put
+   * on the canvas automatically for those rules, so it goes the same way when they are gone, rather than
+   * lingering as an empty node. A lookup that fails removes nothing.
+   */
+  private removeChainStep(destination: CanvasNode, transformId: string): void {
+    const step = this.chainStepsBefore(destination).find(n => (n as TransformNode).transformId === transformId);
+    if (!step) return;
+
+    const from = this.store.inboundEdges(step.id)[0]?.from;
+    const to = this.store.outboundEdges(step.id)[0]?.to;
+    this.store.removeNode(step.id);   // also drops its edges
+    if (from && to) {
+      this.store.addEdge({ id: this.store.nextEdgeId(), from, to });
+    }
+
+    this.layoutChain(destination);
+  }
+
+  /** Lays `destination`'s chain out left-to-right from whatever feeds it, pushing the destination to the end. */
+  private layoutChain(destination: CanvasNode): void {
+    const ordered = this.chainStepsBefore(destination);
+    const head = this.store.inboundEdges(ordered.length ? ordered[0].id : destination.id)[0];
+    const upstream = head ? this.store.byId(head.from) : undefined;
+
     const baseX = upstream ? upstream.x : destination.x - 300 * (ordered.length + 1);
     const baseY = upstream ? upstream.y : destination.y;
     ordered.forEach((n, i) => this.store.moveNode(n.id, baseX + 300 * (i + 1), baseY));
