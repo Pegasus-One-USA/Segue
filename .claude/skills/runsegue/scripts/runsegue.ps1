@@ -242,7 +242,8 @@ if ($Provider -eq 'PostgreSql') {
     # Match case-insensitively: an unquoted CREATE DATABASE folds the name to lower case,
     # so an exact datname= comparison can miss a database that really does exist.
     $exists = ((& docker exec $DbContainer psql -U $DbUser -tAc "SELECT 1 FROM pg_database WHERE datname ILIKE '$DatabaseName'" 2>$null) -join '').Trim()
-    if ($exists -ne '1') {
+    # ILIKE can match more than one database (e.g. FHIRBridge_v2 and fhirbridge_v2 both exist), giving '11'.
+    if ($exists -notmatch '1') {
         Write-Info "database '$DatabaseName' does not exist - creating it"
         # Double-quote the identifier so mixed-case names are preserved verbatim.
         $createSql = 'CREATE DATABASE "' + $DatabaseName + '"'
