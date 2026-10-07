@@ -296,6 +296,9 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         CancellationToken cancellationToken)
     {
         var present = new HashSet<ResourceReference>();
+        // A reference names its target by the id it will be written under (see DestinationId); the source only knows
+        // the original, so an auto-fetch reads it by that.
+        var sourceIdByReference = new Dictionary<ResourceReference, string>();
         var identityByRecord = new Dictionary<MappedDestinationRecord, ResourceReference>(ReferenceEqualityComparer.Instance);
         var referencesByRecord = new Dictionary<MappedDestinationRecord, List<ResourceReference>>(ReferenceEqualityComparer.Instance);
 
@@ -310,7 +313,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                 identityByRecord[record] = identity;
             }
 
-            var referenced = ExtractReferencedResources(record.SourceJson, sourceBaseUrl);
+            var referenced = ExtractReferencedResources(record.SourceJson, sourceBaseUrl, sourceIdByReference);
             if (referenced.Count > 0)
             {
                 referencesByRecord[record] = referenced;
@@ -399,7 +402,8 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
 
                 autoFetchBudgetRemaining--;
                 var (fetchedRecord, failureReason) = await TryFetchRecordForReferenceAsync(
-                    reference, fetchMissingReferenceAsync, pipelineRunId, cancellationToken);
+                    reference, sourceIdByReference.GetValueOrDefault(reference, reference.Id),
+                    fetchMissingReferenceAsync, pipelineRunId, cancellationToken);
                 if (fetchedRecord is null)
                 {
                     confirmedMissing.Add(reference);
@@ -536,13 +540,14 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     /// </summary>
     private static async Task<(MappedDestinationRecord? Record, string? FailureReason)> TryFetchRecordForReferenceAsync(
         ResourceReference reference,
+        string sourceId,
         Func<string, string, CancellationToken, Task<string?>> fetchMissingReferenceAsync,
         Guid pipelineRunId,
         CancellationToken cancellationToken)
     {
         try
         {
-            var json = await fetchMissingReferenceAsync(reference.Type, reference.Id, cancellationToken);
+            var json = await fetchMissingReferenceAsync(reference.Type, sourceId, cancellationToken);
             if (string.IsNullOrWhiteSpace(json))
             {
                 // A null/empty response means the source genuinely doesn't have it (e.g. a 404) — the fetch
@@ -558,9 +563,10 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                 return (null, "fetched response did not match the expected resource type");
             }
 
-            fetchedResource["id"] = reference.Id;
+            // The source's own id: ParseFhirResource turns an invalid one into reference.Id, as for any record.
+            fetchedResource["id"] = sourceId;
             return (new MappedDestinationRecord(
-                pipelineRunId, reference.Type, reference.Type, reference.Id, new Dictionary<string, object?>(),
+                pipelineRunId, reference.Type, reference.Type, sourceId, new Dictionary<string, object?>(),
                 fetchedResource.ToJsonString(JsonOptions)), null);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -1082,13 +1088,13 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             // lenient, Azure is not). Substituting a deterministic replacement keeps the write idempotent
             // (the same source id always maps to the same replacement id across re-runs) at the cost of the
             // logical id no longer visually matching the source system's own id — the original is preserved
-            // as an identifier so it's still traceable. Known gap: another resource in the SAME batch that
-            // references this one by its original (now-replaced) id won't resolve — narrow enough in
-            // practice (this only ever fires for a source id that was already invalid) that a full
-            // batch-wide reference-rewrite pass isn't implemented; revisit if that's actually hit.
+            // as an identifier so it's still traceable. Because the replacement depends only on type and id, a
+            // reference to this resource is rewritten the same way wherever it appears (RewriteInvalidIdReferences),
+            // and reference resolution matches on it too (TryParseReference): Epic's 66-character Medication ids
+            // otherwise left every MedicationRequest pointing at a Medication written under another id.
             if (!IsValidFhirId(id))
             {
-                var sanitizedId = CreateNameBasedUuid(InvalidIdNamespace, $"{type}|{id}").ToString();
+                var sanitizedId = DestinationId(type, id);
                 if (parsed["identifier"] is not JsonArray identifiers)
                 {
                     identifiers = [];
@@ -1101,6 +1107,8 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
 
             parsed["id"] = id;
 
+            // A reference to a resource whose source id is invalid points at the id that resource is written under.
+            RewriteInvalidIdReferences(parsed);
             StripVersionFromStableCodings(parsed);
 
             return (type, parsed);
@@ -1115,6 +1123,73 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     private static readonly Regex ValidFhirIdPattern = new(@"^[A-Za-z0-9\-\.]{1,64}$", RegexOptions.Compiled);
 
     private static bool IsValidFhirId(string id) => ValidFhirIdPattern.IsMatch(id);
+
+    /// <summary>The id a resource is written under: its own when valid FHIR, else a stable name-based UUID of
+    /// type and id. The one rule for both a resource's id and every reference to it.</summary>
+    internal static string DestinationId(string resourceType, string id) =>
+        IsValidFhirId(id) ? id : CreateNameBasedUuid(InvalidIdNamespace, $"{resourceType}|{id}").ToString();
+
+    /// <summary>
+    /// Rewrites every relative <c>"reference": "Type/{id}"</c> (optionally <c>/_history/{vid}</c>) whose id is not
+    /// valid FHIR to <see cref="DestinationId"/>. Contained (<c>#</c>), logical (<c>urn:</c>) and absolute
+    /// references are left as they are.
+    /// </summary>
+    private static void RewriteInvalidIdReferences(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var property in obj.ToList())
+                {
+                    if (property.Key == "reference"
+                        && property.Value is JsonValue value
+                        && value.TryGetValue<string>(out var reference)
+                        && RewrittenInvalidIdReference(reference) is { } rewritten)
+                    {
+                        obj[property.Key] = rewritten;
+                    }
+                    else
+                    {
+                        RewriteInvalidIdReferences(property.Value);
+                    }
+                }
+
+                break;
+            case JsonArray array:
+                foreach (var item in array)
+                {
+                    RewriteInvalidIdReferences(item);
+                }
+
+                break;
+        }
+    }
+
+    private static string? RewrittenInvalidIdReference(string reference)
+    {
+        if (string.IsNullOrEmpty(reference)
+            || reference[0] == '#'
+            || reference.StartsWith("urn:", StringComparison.OrdinalIgnoreCase)
+            || reference.Contains("://", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var slash = reference.IndexOf('/');
+        if (slash <= 0 || slash == reference.Length - 1)
+        {
+            return null;
+        }
+
+        var resourceType = reference[..slash];
+        var rest = reference[(slash + 1)..];
+        var idEnd = rest.IndexOf('/');
+        var id = idEnd < 0 ? rest : rest[..idEnd];
+        var tail = idEnd < 0 ? string.Empty : rest[idEnd..];
+        return IsAllLetters(resourceType) && !IsValidFhirId(id)
+            ? $"{resourceType}/{DestinationId(resourceType, id)}{tail}"
+            : null;
+    }
 
     // Fixed namespace for deriving a stable v5 (name-based) UUID replacement for a source id that violates
     // FHIR's id constraint. Value is arbitrary but MUST stay constant — changing it re-maps every previously
@@ -1295,7 +1370,8 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     /// non-FHIR fallback flow has no references to extract. See <see cref="TryParseReference"/> for exactly which
     /// reference shapes are resolved and which are deliberately left alone.
     /// </summary>
-    private static List<ResourceReference> ExtractReferencedResources(string? sourceJson, string? sourceBaseUrl)
+    private static List<ResourceReference> ExtractReferencedResources(
+        string? sourceJson, string? sourceBaseUrl, Dictionary<ResourceReference, string>? sourceIds = null)
     {
         var referencedResources = new List<ResourceReference>();
         if (string.IsNullOrWhiteSpace(sourceJson))
@@ -1306,7 +1382,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         try
         {
             using var document = JsonDocument.Parse(sourceJson);
-            WalkForReferences(document.RootElement, referencedResources, sourceBaseUrl);
+            WalkForReferences(document.RootElement, referencedResources, sourceBaseUrl, sourceIds);
         }
         catch (JsonException)
         {
@@ -1317,7 +1393,8 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     }
 
     private static void WalkForReferences(
-        JsonElement element, List<ResourceReference> referencedResources, string? sourceBaseUrl)
+        JsonElement element, List<ResourceReference> referencedResources, string? sourceBaseUrl,
+        Dictionary<ResourceReference, string>? sourceIds)
     {
         switch (element.ValueKind)
         {
@@ -1327,22 +1404,26 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                     if (string.Equals(property.Name, "reference", StringComparison.Ordinal)
                         && property.Value.ValueKind == JsonValueKind.String)
                     {
-                        var parsed = TryParseReference(property.Value.GetString(), sourceBaseUrl);
+                        var parsed = TryParseReference(property.Value.GetString(), sourceBaseUrl, out var sourceId);
                         if (parsed is { } reference)
                         {
                             referencedResources.Add(reference);
+                            if (sourceIds is not null && sourceId is not null)
+                            {
+                                sourceIds[reference] = sourceId;
+                            }
                         }
                     }
                     else
                     {
-                        WalkForReferences(property.Value, referencedResources, sourceBaseUrl);
+                        WalkForReferences(property.Value, referencedResources, sourceBaseUrl, sourceIds);
                     }
                 }
                 break;
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
                 {
-                    WalkForReferences(item, referencedResources, sourceBaseUrl);
+                    WalkForReferences(item, referencedResources, sourceBaseUrl, sourceIds);
                 }
                 break;
         }
@@ -1362,8 +1443,9 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     /// <c>'/'</c>-delimited segments are taken as Type and Id, so a versioned reference still matches the same
     /// (Type, Id) an unversioned one would.
     /// </summary>
-    private static ResourceReference? TryParseReference(string? reference, string? sourceBaseUrl = null)
+    private static ResourceReference? TryParseReference(string? reference, string? sourceBaseUrl, out string? sourceId)
     {
+        sourceId = null;
         if (string.IsNullOrEmpty(reference) || reference[0] == '#')
         {
             return null;
@@ -1392,7 +1474,10 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             return null;
         }
 
-        return new ResourceReference(segments[0], segments[1]);
+        // Named by the id the target is written under, so it matches that record in the batch and at the
+        // destination; the source id is kept for an auto-fetch.
+        sourceId = segments[1];
+        return new ResourceReference(segments[0], DestinationId(segments[0], segments[1]));
     }
 
     /// <summary>

@@ -234,6 +234,88 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
         firstEndpoint.Should().Be(secondEndpoint);
     }
 
+    // Epic's Medication ids are 66 characters, so the Medication is written under a replacement id; every
+    // MedicationRequest naming it by the original id used to be refused (not in the batch) or written dangling.
+    private const string EpicMedicationId = "eAMyTcggmIulnQ2tTBjDzeMxAPhGFRQec80WL2RjqMGrsblT3hZoNDiMmVQiqZHKE3";
+
+    private static MappedDestinationRecord MedicationRequestFor(string medicationId) =>
+        Record($$$"""{"resourceType":"MedicationRequest","id":"mr-1","medicationReference":{"reference":"Medication/{{{medicationId}}}"}}""",
+            sourceResourceId: "mr-1", resourceType: "MedicationRequest");
+
+    [Fact]
+    public async Task A_reference_to_a_resource_with_an_invalid_id_points_at_the_id_that_resource_is_written_under()
+    {
+        EpicMedicationId.Length.Should().Be(66);
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none"}""");
+        var medication = Record($$"""{"resourceType":"Medication","id":"{{EpicMedicationId}}"}""", sourceResourceId: EpicMedicationId, resourceType: "Medication");
+
+        var result = await writer.WriteAsync(destination, Mapping(), [MedicationRequestFor(EpicMedicationId), medication], Context(), CancellationToken.None);
+
+        result.RecordErrors.Should().BeNull();
+        var puts = handler.Requests.Where(r => r.Request.Method == HttpMethod.Put).ToList();
+        puts.Select(p => p.Request.RequestUri!.AbsolutePath).Should().HaveCount(2);
+        var medicationPut = puts.Single(p => p.Request.RequestUri!.AbsolutePath.StartsWith("/Medication/", StringComparison.Ordinal));
+        var medicationId = medicationPut.Request.RequestUri!.AbsolutePath["/Medication/".Length..];
+        medicationId.Should().MatchRegex("^[0-9a-f-]{36}$");
+        puts.IndexOf(medicationPut).Should().BeLessThan(
+            puts.FindIndex(p => p.Request.RequestUri!.AbsolutePath.StartsWith("/MedicationRequest/", StringComparison.Ordinal)),
+            because: "the Medication is ordered before the request that references it");
+        puts.Single(p => p.Request.RequestUri!.AbsolutePath == "/MedicationRequest/mr-1").Body
+            .Should().Contain($"\"reference\":\"Medication/{medicationId}\"").And.NotContain(EpicMedicationId);
+    }
+
+    [Fact]
+    public async Task A_missing_resource_with_an_invalid_id_is_fetched_from_the_source_by_its_own_id()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none","dest_autoFetchMissingReferences":"true"}""");
+        var fetched = new List<string>();
+        Task<string?> Fetch(string type, string id, CancellationToken ct)
+        {
+            fetched.Add($"{type}/{id}");
+            return Task.FromResult<string?>($$"""{"resourceType":"{{type}}","id":"{{id}}"}""");
+        }
+
+        var result = await writer.WriteAsync(destination, Mapping(), [MedicationRequestFor(EpicMedicationId)], Context(Fetch), CancellationToken.None);
+
+        result.RecordErrors.Should().BeNull();
+        fetched.Should().Equal($"Medication/{EpicMedicationId}");
+        var puts = handler.Requests.Where(r => r.Request.Method == HttpMethod.Put).Select(r => r.Request.RequestUri!.AbsolutePath).ToList();
+        puts.Should().HaveCount(2).And.OnlyContain(path => !path.Contains(EpicMedicationId));
+        var medicationId = puts.Single(p => p.StartsWith("/Medication/", StringComparison.Ordinal))["/Medication/".Length..];
+        handler.Requests.Single(r => r.Request.RequestUri!.AbsolutePath == "/MedicationRequest/mr-1").Body
+            .Should().Contain($"\"reference\":\"Medication/{medicationId}\"");
+    }
+
+    [Fact]
+    public async Task A_resource_with_an_invalid_id_already_at_the_destination_is_found_under_its_replacement_id()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none"}""");
+        handler.RespondWith = (request, _) =>
+        {
+            if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath == "/Medication")
+            {
+                // Answer the existence check with whatever id was asked for: present at the destination.
+                var askedFor = Uri.UnescapeDataString(request.RequestUri.Query.Split("_id=")[1].Split('&')[0]);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent($$$"""{"resourceType":"Bundle","entry":[{"resource":{"resourceType":"Medication","id":"{{{askedFor}}}"}}]}"""),
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), [MedicationRequestFor(EpicMedicationId)], Context(), CancellationToken.None);
+
+        result.RecordErrors.Should().BeNull();
+        var check = handler.Requests.Single(r => r.Request.Method == HttpMethod.Get).Request.RequestUri!.Query;
+        check.Should().NotContain(EpicMedicationId, because: "the destination only knows the replacement id");
+        handler.Requests.Should().ContainSingle(r => r.Request.Method == HttpMethod.Put);
+    }
+
     [Fact]
     public async Task An_id_within_the_64_character_limit_using_only_valid_characters_is_left_unchanged()
     {
