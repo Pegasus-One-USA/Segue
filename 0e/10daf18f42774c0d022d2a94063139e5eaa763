@@ -1,0 +1,27 @@
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.html
+  s_0302d221bf5ca2::t_cec3f63e2a1c0e 6-19,154-156
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.scss
+  s_0302d221bf5ca2::t_cec3f63e2a1c0e 23-53
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.independent-search.spec.ts
+  s_0302d221bf5ca2::t_19288790793b7c 1-149
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.html
+  s_0302d221bf5ca2::t_2639c5cbb1b5b6 68-69
+portal/src/app/system-settings/components/hapi-terminology-table/hapi-terminology-table.component.ts
+  s_0302d221bf5ca2::t_cec3f63e2a1c0e 1,54-56,66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0e10daf18f42774c0d022d2a94063139e5eaa763",
+  "prompts": {},
+  "sessions": {
+    "s_0302d221bf5ca2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd474ba3-7268-4bb0-bdc3-ec93bfa43dd8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
