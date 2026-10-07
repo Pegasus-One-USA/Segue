@@ -368,6 +368,33 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         }
     }
 
+    public object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop)
+    {
+        // The hop carries the rule's own config, so the strategy is read exactly as DeIdentifyAsync read it.
+        if (value is null || !TryReadStrategy(hop.ConfigJson, out var strategy))
+        {
+            return value;
+        }
+
+        return value switch
+        {
+            string text => RedactValue(text, strategy, hop.ConfigJson),
+            // A transform chain can hand back a list (split, a PerItem step): each string in it is one value.
+            System.Collections.IEnumerable items => items.Cast<object?>()
+                .Select(item => item is string text ? RedactValue(text, strategy, hop.ConfigJson) : RedactNonString(item, strategy))
+                .ToArray(),
+            _ => RedactNonString(value, strategy),
+        };
+    }
+
+    // Same outcomes as ApplyStrategy for a single property: Remove deletes, every other strategy rewrites the string.
+    private static string? RedactValue(string raw, DeIdentificationStrategy strategy, string configJson) =>
+        strategy == DeIdentificationStrategy.Remove ? null : TransformScalar(raw, strategy, configJson);
+
+    // ApplyStrategy leaves a number/bool alone under every string strategy and removes it under Redact or Remove.
+    private static object? RedactNonString(object? value, DeIdentificationStrategy strategy) =>
+        strategy is DeIdentificationStrategy.Remove or DeIdentificationStrategy.Redact ? null : value;
+
     private static bool TryReadStrategy(string configJson, out DeIdentificationStrategy strategy)
     {
         strategy = default;

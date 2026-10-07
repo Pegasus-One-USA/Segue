@@ -5,6 +5,15 @@ public interface IDeIdentificationService
     Task<DeIdentificationResult> DeIdentifyAsync(
         DeIdentificationRequest request,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Applies the rule behind one <see cref="DeIdentificationFieldHop"/> (its Strategy and ConfigJson) to a value
+    /// that has already been mapped and transformed — used when a mapped column's own Transformations must run
+    /// before its De-identification rule. Same strategy definitions as <see cref="DeIdentifyAsync"/>: a string is
+    /// redacted, a list of strings is redacted item by item, and anything without a string form is left as is,
+    /// except Remove (and Redact of a non-string), which yield null.
+    /// </summary>
+    object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop);
 }
 
 public sealed record DeIdentificationRequest(

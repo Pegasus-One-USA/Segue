@@ -216,6 +216,17 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
                         ? TakeFirstInstance(resolved, values)
                         : values);
 
+            // A path that stops ON an array of plain values ("$.name[*].given" rather than "...given[*]") resolves
+            // each array as ONE value, so the parts above held a single, already ", "-joined string and a template's
+            // {0} {1} swallowed it whole: ["DB","Tester"] became "DB, Tester". Hand the chain the array's items
+            // instead — the same parts "...given[*]" yields, narrowed by the same instance selection. Only the
+            // chain's input changes; the column's own value above is exactly what it was.
+            if (joinedRows is null && correlatedPositions is null && !HasCsvAggregate(field.Format)
+                && TryReadPrimitiveArrayItems(root, field, policy, instanceIndex) is { } arrayItems)
+            {
+                rawArrayValues[field.TargetField] = arrayItems;
+            }
+
             // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
             // delimited string on the parent row" — no ArrayPolicy value represents that (see
             // MappingImportService.ResolveArrayMetadata's doc comment on why it's encoded onto Format
@@ -640,6 +651,43 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     /// choice, never two at once). 0-based: 0 means the first occurrence — the same occurrence "First"
     /// (no marker at all) already picks — so a row switched from "First" to "Nth instance" at N=0 behaves
     /// identically.</summary>
+    /// <summary>
+    /// The items of the arrays-of-plain-values a field's path stops on, as transform-chain parts — each item
+    /// carrying its array's index path plus its own position, so <see cref="SelectInstance"/> and
+    /// <see cref="TakeFirstInstance"/> narrow them exactly as they narrow "...[*]" matches. Null when the path
+    /// matched no such array (an object, a scalar, or an array holding objects), leaving the parts as they were.
+    /// </summary>
+    private static List<object?>? TryReadPrimitiveArrayItems(
+        JsonElement root, MappingFieldDto field, ArrayPolicy policy, int? instanceIndex)
+    {
+        var matches = ResolveAll(root, field.JsonPath);
+        if (matches.Count == 0 || !matches.All(m => m.Element.ValueKind == JsonValueKind.Array
+                && m.Element.EnumerateArray().All(item => item.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))))
+        {
+            return null;
+        }
+
+        // Conversion errors were already reported for the column's own value; these are the same source values.
+        var discardedErrors = new List<string>();
+        var items = matches
+            .SelectMany(m => m.Element.EnumerateArray().Select((item, position) => (
+                Value: ConvertElement(
+                    item, field.ValueType, field.Format, field.TargetField, discardedErrors,
+                    field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform),
+                Indices: (IReadOnlyList<int>)[.. m.Indices, position])))
+            .ToList();
+
+        if (instanceIndex is int selected)
+        {
+            items = SelectInstance(items, selected);
+        }
+
+        var values = items.Select(i => i.Value).ToList();
+        return policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+            ? TakeFirstInstance(items, values).ToList()
+            : values;
+    }
+
     private static int? ParseInstanceIndex(string? format)
     {
         if (string.IsNullOrWhiteSpace(format))

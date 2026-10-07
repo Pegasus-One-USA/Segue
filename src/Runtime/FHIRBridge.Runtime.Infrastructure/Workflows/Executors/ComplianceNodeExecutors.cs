@@ -222,10 +222,12 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
             var redactionsByResourceId = new Dictionary<string, IReadOnlyList<DeIdentificationFieldHop>>();
             foreach (var resource in resourceInputs)
             {
+                var originalJson = Convert.ToString(resource.Payload) ?? "{}";
                 string sourceJson;
+                string? preDeIdentificationPayload = null;
                 if (_deIdentificationService is null)
                 {
-                    sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+                    sourceJson = originalJson;
                 }
                 else
                 {
@@ -233,7 +235,7 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                         new DeIdentificationRequest(
                             resource.ResourceType,
                             resource.ResourceId,
-                            Convert.ToString(resource.Payload) ?? "{}",
+                            originalJson,
                             [],
                             resolvedProfileId),
                         cancellationToken);
@@ -241,10 +243,13 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                     if (result.Hops.Count > 0)
                     {
                         redactionsByResourceId[resource.ResourceId] = result.Hops;
+                        // Kept (in memory only — see ResourceEnvelope.PreDeIdentificationPayload) so a mapped column
+                        // with its own Transformations can run them on the real values and be redacted afterwards.
+                        preDeIdentificationPayload = originalJson;
                     }
                 }
 
-                deIdentifiedResources.Add(resource with { Payload = sourceJson });
+                deIdentifiedResources.Add(resource with { Payload = sourceJson, PreDeIdentificationPayload = preDeIdentificationPayload });
             }
 
             // De-identification was asked for and nothing at all was redacted. Almost always a misconfiguration
