@@ -23,6 +23,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly IBulkExportPauseRecorder? _bulkExportPauseRecorder;
     private readonly EhrDataDumpWriter? _ehrDataDumpWriter;
+    private readonly IActiveWorkflowRuns? _activeRuns;
     private readonly ILogger<RankedWorkflowOrchestrator> _logger;
 
     public RankedWorkflowOrchestrator(
@@ -37,7 +38,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         IWorkflowDefinitionStore? workflowDefinitionStore = null,
         IBulkExportPauseRecorder? bulkExportPauseRecorder = null,
         ILogger<RankedWorkflowOrchestrator>? logger = null,
-        EhrDataDumpWriter? ehrDataDumpWriter = null)
+        EhrDataDumpWriter? ehrDataDumpWriter = null,
+        IActiveWorkflowRuns? activeRuns = null)
     {
         _graphValidator = graphValidator;
         _executorRegistry = executorRegistry;
@@ -51,6 +53,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         _bulkExportPauseRecorder = bulkExportPauseRecorder;
         _logger = logger ?? NullLogger<RankedWorkflowOrchestrator>.Instance;
         _ehrDataDumpWriter = ehrDataDumpWriter;
+        _activeRuns = activeRuns;
     }
 
     public Task<WorkflowRunResult> ExecuteAsync(
@@ -114,6 +117,13 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             "CorrelationId={CorrelationId}",
             workflowRun.Id, workflowDefinition.Id, workflowDefinition.Name, workflowDefinition.Version,
             orderedNodes.Count, context.TriggerType, context.TriggeredBy, targetNodeId, context.CorrelationId);
+
+        // The Running row carries this process's lease from the start; the heartbeat renews it while the run is held
+        // in IActiveWorkflowRuns (see RunNodesAsync), so no instance mistakes it for a dead run.
+        if (_activeRuns is not null)
+        {
+            workflowRun.HoldLease(_activeRuns.InstanceId, DateTimeOffset.UtcNow + WorkflowRunLease.Duration);
+        }
 
         await PersistRunStartedAsync(workflowRun, cancellationToken);
         await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Running", DateTimeOffset.UtcNow, null, cancellationToken);
@@ -274,6 +284,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         List<string> skippedResourceTypesAcrossRun,
         CancellationToken cancellationToken)
     {
+        // Held for as long as this process executes the run, whichever entry point started it.
+        using var held = _activeRuns?.Hold(workflowRun.Id);
         try
         {
             foreach (var node in nodesToRun)

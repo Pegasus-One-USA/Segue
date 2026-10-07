@@ -78,6 +78,34 @@ public sealed class WorkflowRun
 
     public IReadOnlyCollection<WorkflowNodeRun> NodeRuns => _nodeRuns;
 
+    /// <summary>The process executing this run (host name, process id and a per-start id), while it is Running.
+    /// Diagnostic: who may close the run is decided by <see cref="LeaseExpiresAt"/>, not by this.</summary>
+    public string? LeaseOwner { get; private set; }
+
+    /// <summary>Until when the executing process has vouched that the run is alive. The process renews it on a
+    /// heartbeat; once it lapses, any instance may close the run as interrupted, and Cancel closes it at once. Null
+    /// on runs started before leases existed.</summary>
+    public DateTimeOffset? LeaseExpiresAt { get; private set; }
+
+    /// <summary>When a user asked to cancel the run from an instance that is not executing it. The executing process
+    /// sees it on its next heartbeat and stops the run between nodes.</summary>
+    public DateTimeOffset? CancellationRequestedAt { get; private set; }
+
+    /// <summary>The executing process takes (or renews) the run's lease.</summary>
+    public void HoldLease(string owner, DateTimeOffset expiresAt)
+    {
+        LeaseOwner = owner;
+        LeaseExpiresAt = expiresAt;
+    }
+
+    /// <summary>Records a cancel request made from an instance that is not executing the run.</summary>
+    public void RequestCancellation(DateTimeOffset requestedAt) => CancellationRequestedAt ??= requestedAt;
+
+    /// <summary>True when nothing is vouching for the run any more: its lease lapsed, or, for a run from before
+    /// leases, it started longer than <paramref name="legacyGrace"/> ago.</summary>
+    public bool IsLeaseExpired(DateTimeOffset now, TimeSpan legacyGrace) =>
+        LeaseExpiresAt is { } expires ? expires < now : StartedAt < now - legacyGrace;
+
     public void AddNodeRun(WorkflowNodeRun nodeRun) => _nodeRuns.Add(nodeRun);
 
     /// <summary>The caller's parameters passed validate-run; the run is now waiting to be executed. Non-terminal,

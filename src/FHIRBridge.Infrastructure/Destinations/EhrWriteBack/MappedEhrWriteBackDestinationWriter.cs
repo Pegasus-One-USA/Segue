@@ -18,7 +18,9 @@ namespace FHIRBridge.Infrastructure.Destinations.EhrWriteBack;
 /// <item>shape it to the vendor API's accepted subset (<see cref="IEhrWriteProfile"/>);</item>
 /// <item>resolve its patient, and its encounter when the API needs one, to records that exist in the EHR
 /// (<see cref="EhrReferenceResolver"/>);</item>
-/// <item>check the ledger, the only duplicate guard there is, because the EHR files a replayed create again;</item>
+/// <item>check the ledger, the only duplicate guard there is, because the EHR files a replayed create again. A
+/// record the ledger already holds as written or awaiting review stops here, before its note text is fetched or its
+/// patient and encounter are looked up; the ledger is read again, row by row, right before each send;</item>
 /// <item>send it once, or in a dry run count it as what a live run would send.</item>
 /// </list>
 ///
@@ -120,6 +122,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
 
         var run = new RunState(channel, vendor, context, targetKey, cloneMode, selected, live)
         {
+            KnownLedgerRows = await PrefetchLedgerAsync(parsed, targetKey, context.SourceBaseUrl, cloneMode, cancellationToken),
             // Reading from and writing to the same EHR: every record is already there. Epic does not deduplicate
             // allergies, problems or notes, so sending them back would file second copies in the same chart. Clone
             // mode is the exception: it writes to a new test patient, never the original.
@@ -157,6 +160,13 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             }
 
             var decision = await DecideAsync(record, run, cancellationToken);
+            if (decision.AlreadyInLedger)
+            {
+                tally.AlreadyWritten++;
+                tally.Reason(decision.Reason!);
+                continue;
+            }
+
             if (decision.Outcome != EhrShapeOutcome.Shaped || decision.Resource is null)
             {
                 tally.Count(decision.Outcome, decision.Reason!);
@@ -244,6 +254,13 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         if (capability is null || profile is null)
         {
             return new Decision(firstShape.Outcome, null, firstShape.Reason);
+        }
+
+        // Written before, or waiting for review: nothing below would send it, so none of the source reads and EHR
+        // searches below are made for it, and a source that cannot be read now cannot misreport it.
+        if (LedgerShortCircuit(run, record) is { } ledgerReason)
+        {
+            return Decision.InLedger(ledgerReason);
         }
 
         if (capability.RequiresTargetReferences && !TabularSourceSettings.IsTabularSource(run.Context.SourceBaseUrl))
@@ -568,6 +585,44 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
     private static bool ActivatedFor(IEhrWriteChannel channel) =>
         channel.VendorWriteApisActivated || channel.Options.IsTestRun;
 
+    /// <summary>Every ledger row for the batch's records, read once per resource type.</summary>
+    private async Task<IReadOnlyDictionary<(string ResourceType, string SourceKey), EhrWriteLedgerEntry>> PrefetchLedgerAsync(
+        IReadOnlyList<ParsedRecord> records,
+        string targetKey,
+        string? sourceBaseUrl,
+        bool cloneMode,
+        CancellationToken cancellationToken)
+    {
+        var known = new Dictionary<(string, string), EhrWriteLedgerEntry>();
+        foreach (var group in records.Where(r => r.SourceId is not null && r.ParseProblem is null).GroupBy(r => r.ResourceType, StringComparer.Ordinal))
+        {
+            var keys = group.Select(r => EhrWriteKeys.SourceKey(sourceBaseUrl, group.Key, r.SourceId!, cloneMode)).Distinct(StringComparer.Ordinal).ToList();
+            foreach (var (key, entry) in await _ledger.FindAsync(targetKey, group.Key, keys, cancellationToken))
+            {
+                known[(group.Key, key)] = entry;
+            }
+        }
+
+        return known;
+    }
+
+    /// <summary>
+    /// The ledger already settles this record whatever its content: written or already in the EHR (no in-scope API
+    /// updates, so it is never resent), or sent with an unknown outcome and awaiting review. Reported as
+    /// "already-written" / "awaiting-review". A rejected or released row is not settled: the record goes on to be
+    /// shaped and checked again at send time.
+    /// </summary>
+    private static string? LedgerShortCircuit(RunState run, ParsedRecord record)
+    {
+        var key = EhrWriteKeys.SourceKey(run.Context.SourceBaseUrl, record.ResourceType, record.SourceId!, run.CloneMode);
+        return run.KnownLedgerRows.GetValueOrDefault((record.ResourceType, key))?.State switch
+        {
+            EhrWriteLedgerState.Written or EhrWriteLedgerState.AlreadyAtTarget => "already-written",
+            EhrWriteLedgerState.Unknown or EhrWriteLedgerState.Pending => "awaiting-review",
+            _ => null,
+        };
+    }
+
     /// <summary>Why the ledger stops this record being sent again, or null when it may be sent.</summary>
     private static string? LedgerBlocks(EhrWriteLedgerEntry? existing, string contentHash)
     {
@@ -659,6 +714,16 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
 
             tally.Reason("outcome-unknown");
             return null;
+        }
+
+        if (outcome.Kind == EhrCreateKind.Rejected
+            && outcome.Issues.Any(i => i.VendorCode == EhrWriteOutcomeCodes.CancelledBeforeSend))
+        {
+            // The run was cancelled before the create left: nothing reached the EHR. Recorded as a refusal with no
+            // HTTP status, which the next run retries as is, rather than an unknown outcome a person must review.
+            entry.MarkRejected(null, EhrWriteOutcomeCodes.CancelledBeforeSend, DateTime.UtcNow);
+            await _ledger.SaveChangesAsync(CancellationToken.None);
+            throw new OperationCanceledException(cancellationToken);
         }
 
         string? createdId = null;
@@ -825,6 +890,10 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         public IReadOnlySet<string> Live { get; }
         public bool SameEnvironment { get; init; }
 
+        /// <summary>The batch's ledger rows as read before the first record, for <see cref="LedgerShortCircuit"/>.</summary>
+        public IReadOnlyDictionary<(string ResourceType, string SourceKey), EhrWriteLedgerEntry> KnownLedgerRows { get; init; } =
+            new Dictionary<(string, string), EhrWriteLedgerEntry>();
+
         /// <summary>Binaries delivered in the batch, by id; see <see cref="EhrNoteContent.InlineAsync"/>.</summary>
         public IReadOnlyDictionary<string, JsonObject> ExportedBinaries { get; init; } = new Dictionary<string, JsonObject>();
         public EhrReferenceResolver Resolver { get; set; } = default!;
@@ -855,8 +924,11 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         string? Reason,
         EhrWriteCapability? Capability = null,
         IEhrWriteProfile? Profile = null,
-        string? TargetPatientId = null)
+        string? TargetPatientId = null,
+        bool AlreadyInLedger = false)
     {
+        public static Decision InLedger(string reason) => new(EhrShapeOutcome.Skipped, null, reason, AlreadyInLedger: true);
+
         public static Decision Skip(string reason) => new(EhrShapeOutcome.Skipped, null, reason);
 
         public static Decision Reject(string reason) => new(EhrShapeOutcome.Rejected, null, reason);

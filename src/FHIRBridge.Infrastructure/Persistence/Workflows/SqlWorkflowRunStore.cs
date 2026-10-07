@@ -105,35 +105,64 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
         return stale.Count;
     }
 
-    public async Task<int> FailInterruptedRunsAsync(
-        WorkflowRunHost host,
-        DateTimeOffset startedBeforeUtc,
+    public async Task<IReadOnlyCollection<Guid>> RenewLeasesAsync(
+        IReadOnlyCollection<Guid> runIds,
+        string owner,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = runIds.ToArray();
+        // Targeted updates, not SaveAsync: the executing process saves the whole run row when the run ends, and a
+        // heartbeat must never rewrite (or be rewritten by) that.
+        await _dbContext.WorkflowRuns
+            .Where(run => ids.Contains(run.Id) && run.Status == WorkflowRunStatus.Running)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(run => run.LeaseOwner, owner).SetProperty(run => run.LeaseExpiresAt, expiresAt),
+                cancellationToken);
+
+        return await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Where(run => ids.Contains(run.Id) && run.Status == WorkflowRunStatus.Running && run.CancellationRequestedAt != null)
+            .Select(run => run.Id)
+            .ToArrayAsync(cancellationToken);
+    }
+
+    public async Task<int> FailExpiredRunsAsync(
+        DateTimeOffset now,
+        DateTimeOffset legacyStartedBefore,
         string reason,
         CancellationToken cancellationToken)
     {
-        var apiTriggerTypes = WorkflowRunHosts.ApiTriggerTypes.ToArray();
-        var running = _dbContext.WorkflowRuns
-            .Where(run => run.Status == WorkflowRunStatus.Running && run.StartedAt < startedBeforeUtc);
-        running = host == WorkflowRunHost.Api
-            ? running.Where(run => run.BulkRequestId == null && apiTriggerTypes.Contains(run.TriggerType!))
-            : running.Where(run => run.BulkRequestId != null || !apiTriggerTypes.Contains(run.TriggerType!));
-
         // Tracked, through Fail(), for the same reason as ExpireStaleValidatedAsync: one place owns the terminal rule.
-        var interrupted = await running.ToListAsync(cancellationToken);
-        if (interrupted.Count == 0)
+        var expired = await _dbContext.WorkflowRuns
+            .Where(run => run.Status == WorkflowRunStatus.Running
+                && (run.LeaseExpiresAt != null ? run.LeaseExpiresAt < now : run.StartedAt < legacyStartedBefore))
+            .ToListAsync(cancellationToken);
+        if (expired.Count == 0)
         {
             return 0;
         }
 
-        var failedAt = DateTimeOffset.UtcNow;
-        foreach (var run in interrupted)
+        foreach (var run in expired)
         {
-            run.Fail(reason, failedAt);
+            run.Fail(reason, now);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        return interrupted.Count;
+        return expired.Count;
     }
+
+    public async Task<bool> RequestCancellationAsync(Guid workflowRunId, DateTimeOffset requestedAt, CancellationToken cancellationToken) =>
+        await _dbContext.WorkflowRuns
+            .Where(run => run.Id == workflowRunId && run.Status == WorkflowRunStatus.Running)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(run => run.CancellationRequestedAt, run => run.CancellationRequestedAt ?? requestedAt),
+                cancellationToken) > 0;
 
     public async Task<WorkflowRun?> FindValidatedAsync(
         Guid workflowDefinitionId,

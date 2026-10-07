@@ -245,7 +245,7 @@ public sealed class TabularSourceTests
         vaults.Setup(v => v.ResolveVaultName(It.IsAny<string>())).Returns<string>(name => "kv-" + name);
         var user = new Mock<ICurrentUserService>();
         user.SetupGet(u => u.CurrentUser).Returns(new CurrentUserInfo("ext", "uploader@example.com", "U", [], true));
-        var reader = new TabularRowReader(files, encryptor, new Mock<ISecretProvider>().Object);
+        var reader = new TabularRowReader(files, encryptor, new Mock<ISecretProvider>().Object, vaults.Object);
         var service = new TabularSourceService(files, reader, encryptor, secrets.Object, vaults.Object, user.Object, NullLogger<TabularSourceService>.Instance);
         return (service, files, secrets);
     }

@@ -284,12 +284,9 @@ builder.Services.AddSingleton<ITerminologyStatusNotifier, SignalRTerminologyStat
 // job, so no import it could interrupt has begun.
 builder.Services.AddHostedService<TerminologyImportOrphanReconciler>();
 
-// Fails the API's own workflow runs (Run button, checkpoint, launch callback) left "Running" by the previous API
-// process; only runs started before this process are touched, and never the Worker's.
-builder.Services.AddHostedService(serviceProvider => new FHIRBridge.Infrastructure.Persistence.Workflows.InterruptedWorkflowRunReconciler(
-    serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-    FHIRBridge.Runtime.Application.Workflows.Storage.WorkflowRunHost.Api,
-    serviceProvider.GetRequiredService<ILogger<FHIRBridge.Infrastructure.Persistence.Workflows.InterruptedWorkflowRunReconciler>>()));
+// Renews the leases of the workflow runs this instance executes, stops runs cancelled from another instance, and
+// fails Running runs whose lease lapsed (their process stopped). Safe with several API and Worker instances.
+builder.Services.AddHostedService<FHIRBridge.Infrastructure.Persistence.Workflows.WorkflowRunLeaseService>();
 
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>

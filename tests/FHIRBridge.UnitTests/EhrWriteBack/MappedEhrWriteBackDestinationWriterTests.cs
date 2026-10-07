@@ -727,6 +727,56 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
             .Should().NotBe(EhrClonePatient.Build(source, "p2")["identifier"]!.ToJsonString());
     }
 
+    // ---- PR #240 review: the ledger first, and a cancellation before the send is not an unknown outcome ----
+
+    [Fact]
+    public async Task A_record_written_before_is_reported_without_reading_the_source_or_searching_the_ehr_again()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = NoteChannel();
+        await CreateWriter(ledger).WriteAsync(
+            Destination(), Profile(), [Record(LinkedNote("Binary/b1"))], ContextWithBinary(channel, _ => HtmlBinary), CancellationToken.None);
+        var matchesAfterFirstRun = channel.MatchCalls;
+
+        // The source cannot serve the Binary any more: before, the rerun reported the note as note-content-fetch-failed.
+        var reads = new List<string>();
+        var rerun = await CreateWriter(ledger).WriteAsync(
+            Destination(), Profile(), [Record(LinkedNote("Binary/b1"))], ContextWithBinary(channel, _ => null, reads), CancellationToken.None);
+
+        var note = rerun.EhrWrite!.Resources.Single();
+        note.AlreadyWritten.Should().Be(1);
+        note.Reasons.Should().ContainKey("already-written").And.NotContainKey("note-content-fetch-failed");
+        reads.Should().BeEmpty(because: "neither the note text nor the patient is read for a record already written");
+        channel.MatchCalls.Should().Be(matchesAfterFirstRun);
+        channel.Creates.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task A_create_cancelled_before_it_was_sent_is_retried_next_run_not_left_for_review()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = new FakeEhrWriteChannel(dryRun: false)
+        {
+            CreateResult = new EhrCreateOutcome(
+                EhrCreateKind.Rejected, null, null, [new EhrOutcomeIssue("error", "transient", EhrWriteOutcomeCodes.CancelledBeforeSend, null)]),
+        };
+
+        var cancelled = () => CreateWriter(ledger).WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        await cancelled.Should().ThrowAsync<OperationCanceledException>();
+        var row = (await ledger.ListNeedingReviewAsync(null, DateTime.UtcNow, 0, 10, CancellationToken.None)).Items.Single();
+        row.State.Should().Be(EhrWriteLedgerState.Rejected, because: "nothing reached the EHR, so it is not an unknown outcome");
+        row.HttpStatus.Should().BeNull(because: "a refusal with no HTTP status is retried as is");
+        row.OutcomeCodes.Should().Be(EhrWriteOutcomeCodes.CancelledBeforeSend);
+
+        channel.CreateResult = new EhrCreateOutcome(EhrCreateKind.Created, 201, "eAllergy", []);
+        var next = await CreateWriter(ledger).WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        next.EhrWrite!.Resources.Single().Written.Should().Be(1);
+    }
+
     private sealed class FakeEhrWriteChannel : IEhrWriteChannel
     {
         public FakeEhrWriteChannel(
