@@ -106,6 +106,7 @@ const REASON_LABELS: Record<string, string> = {
   // Recorded both when the source is the target EHR itself and when the EHR answers a create with "duplicate".
   'already-in-ehr': 'Already in the EHR (read from it, or it reported a duplicate)',
   'live-write-not-supported': 'This EHR accepts dry runs only for this type',
+  'vendor-activation-required': "Dry run: the EHR vendor's write APIs are not marked as activated on this connection",
   // Recorded only by runs before the live-write release setting was removed.
   'live-write-not-released': 'Type was not released for live writes (older run)',
   'write-cap-reached': 'Max writes per run reached',
@@ -125,6 +126,7 @@ const REASON_LABELS: Record<string, string> = {
   'patient-unresolved': 'Patient could not be found in the EHR',
   'patient-not-in-ehr': 'Patient not in the EHR (create is off)',
   'patient-not-matched': 'Patient not found by identifier',
+  'patient-awaiting-mpi': 'Patient not found by identifier; waiting for the master patient index to match them',
   'patient-match-needs-review': 'Uncertain patient match, left for review',
   'patient-match-failed': 'Patient match failed',
   'patient-identifier-ambiguous': 'Identifier matches more than one patient',
@@ -145,6 +147,8 @@ const REASON_LABELS: Record<string, string> = {
   'patient-deceased-patient': 'Patient is deceased',
   // Visits
   'no-eligible-encounter': 'No suitable visit for this patient in the EHR',
+  'holder-encounter-not-enabled': 'Needs a telephone encounter, which this destination does not create (turn it on to send)',
+  'holder-encounter-not-created': 'The telephone encounter could not be created (retried next run)',
   // Allergies and problems
   'not-active': 'Not active',
   'entered-in-error': 'Entered in error',
@@ -153,6 +157,26 @@ const REASON_LABELS: Record<string, string> = {
   'text-only-problem': 'Problem has text but no code',
   'missing-problem-name': 'Problem has no name',
   'missing-code': 'No code',
+  'not-an-encounter-diagnosis': 'Not a visit diagnosis',
+  'not-a-medical-history-item': 'Not a medical-history entry',
+  'missing-icd10-or-snomed-code': 'No ICD-10 or SNOMED code',
+  'missing-snomed-code': 'No SNOMED code (athena files problems by SNOMED only)',
+  'resolved-without-abatement-date': 'Resolved, but with no resolution date',
+  'unsupported-clinical-status': 'Clinical status the EHR does not accept',
+  'missing-condition-name': 'Condition has no name',
+  'missing-allergen-name': 'Allergy has no allergen name',
+  // Procedures, immunizations, medications, lab results
+  'not-a-surgical-procedure': 'Not a surgical procedure (only surgical history is sent)',
+  'missing-procedure-name': 'Procedure has no name',
+  'missing-cvx-code': 'No CVX vaccine code',
+  'missing-occurrence-date': 'No date given',
+  'medication-not-inline': 'Medication is a link to another record, not included',
+  'missing-rxnorm-or-ndc-code': 'No RxNorm or NDC code',
+  'missing-medication-name': 'Medication has no name',
+  'not-an-order': 'A proposal or plan, not a medication the patient takes',
+  'not-taken': 'Not taken',
+  'not-a-laboratory-result': 'Not a lab result',
+  'missing-test-name': 'Lab test has no name',
   // Vitals
   'not-a-vital-sign': 'Not a vital sign',
   'vital-signs-panel': 'A vitals panel, not a single reading',
@@ -164,6 +188,8 @@ const REASON_LABELS: Record<string, string> = {
   'effective-without-time': 'Has a date but no time',
   'effective-without-timezone': 'Time has no time zone',
   'blood-pressure-missing-component': 'Blood pressure missing a reading',
+  'vital-not-accepted-by-ecw': 'eClinicalWorks does not take this vital sign',
+  'vital-not-accepted-by-athena': 'athenahealth does not take this vital sign',
   'unable-to-assess': 'Marked unable to assess',
   // Notes
   'not-a-clinical-note': 'Not a clinical note',
@@ -178,8 +204,11 @@ const REASON_LABELS: Record<string, string> = {
   'note-content-not-base64': 'Note content is not valid base64',
   'note-format-not-supported': 'Note format not supported (plain text, HTML or RTF only)',
   'note-empty-after-conversion': 'Note is empty after conversion to text',
+  'note-author-not-configured': 'No note author set on the destination (eClinicalWorks needs one)',
+  // Patients created in athena
+  'target-department-not-configured': 'No athena department set on the destination for new patients',
   // Questionnaires
-  'not-completed': 'Questionnaire not completed',
+  'not-completed': 'Not completed',
   'in-progress': 'In progress',
   'missing-questionnaire': 'No questionnaire reference',
   'missing-answers': 'No answers',

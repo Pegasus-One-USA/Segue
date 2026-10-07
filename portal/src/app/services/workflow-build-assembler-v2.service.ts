@@ -624,6 +624,8 @@ export class WorkflowBuildAssemblerServiceV2 {
       applicationType: appType,
       // Null keeps the saved Access; only a node saved with the Access field sends one.
       access: (fields['Access'] as 'Read' | 'Write' | 'ReadWrite' | undefined) || null,
+      // Null keeps the saved value; only a node saved with the field sends one.
+      vendorWriteApisActivated: fields['Vendor write APIs activated'] === 'true' ? true : fields['Vendor write APIs activated'] === 'false' ? false : null,
       interactive,
       // Provider Standalone gets a curated Search REST subset too (Resource Types/Search Criteria/Max Results/
       // Include Related Resources — no scheduler, since it's a user-initiated one-shot fetch, not automated).

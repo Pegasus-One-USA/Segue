@@ -947,6 +947,15 @@ export class EhrVendorSourceFormComponent
     { initialValue: false },
   );
 
+  /** The vendor writes some types through contracted / proprietary APIs that a practice must have activated. */
+  protected readonly vendorWritesNeedActivation = toSignal(
+    toObservable(this.vendor).pipe(
+      switchMap((vendor) => this.ehrWriteCapabilitiesSvc.forVendor(vendor)),
+      map((result) => result.capabilities.some((c) => c.requiresVendorActivation === true)),
+    ),
+    { initialValue: false },
+  );
+
   /** True only when opened in read-only View mode from the Source Connections page — disables every control and
    *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
   protected get isReadonly(): boolean {
@@ -1076,6 +1085,9 @@ export class EhrVendorSourceFormComponent
     // Read / Write / Read & Write (SourceConnectionAccess). Write is offered only for a vendor that accepts EHR
     // write-back over a Backend System connection — see canChooseWriteAccess.
     access: ['Read' as 'Read' | 'Write' | 'ReadWrite', Validators.required],
+    // The practice has the vendor's contracted / proprietary write APIs (eCW, athenaOne) turned on: their write-back
+    // types go live only then. Offered only with Write access, for a vendor that has such types.
+    vendorWriteApisActivated: [false],
     epicBaseUrl: [
       'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4',
       [Validators.required, urlValidator],
@@ -2258,6 +2270,9 @@ export class EhrVendorSourceFormComponent
 
     // Restored before any early return below: a connection created in Settings has no retrieval method.
     setIfPresent('access', 'Access');
+    if (fields['Vendor write APIs activated'] !== undefined) {
+      this.form.controls.vendorWriteApisActivated.setValue(fields['Vendor write APIs activated'] === 'true');
+    }
     setIfPresent('launchDisplayMode', 'Launch display mode');
     setIfPresent('jwksUrl', 'JWKS URL');
     setIfPresent('jwtKid', 'JWT kid');
@@ -2411,6 +2426,7 @@ export class EhrVendorSourceFormComponent
     // default on reopen/re-save, the same data-loss bug as canvas mode.
     if (auth?.authPlacement) fields['Auth placement'] = auth.authPlacement;
     if (dto.access) fields['Access'] = dto.access;
+    fields['Vendor write APIs activated'] = dto.vendorWriteApisActivated ? 'true' : 'false';
     if (dto.interactive?.launchDisplayMode)
       fields['Launch display mode'] = dto.interactive.launchDisplayMode;
 
@@ -3194,6 +3210,7 @@ export class EhrVendorSourceFormComponent
       audience,
       environment: 'sandbox',
       access: dto.access ?? 'Read',
+      vendorWriteApisActivated: dto.vendorWriteApisActivated === true,
       appName: dto.name,
       epicBaseUrl: dto.baseUrl,
       tokenEndpoint: dto.authentication?.tokenEndpoint ?? '',
@@ -3746,6 +3763,8 @@ export class EhrVendorSourceFormComponent
       // is tracked as follow-up work, not part of this UI-layer split).
       Connector: this.vendor(),
       Access: v.access ?? 'Read',
+      // Only meaningful with write access; the server also clears it when Access drops to Read.
+      'Vendor write APIs activated': v.access !== 'Read' && v.vendorWriteApisActivated ? 'true' : 'false',
       'Client ID': v.clientId ?? '',
       // Only meaningful when the audience is on Client Secret auth (showSecret()) — WizardServiceV2.save() treats
       // a blank value here as "leave whatever secret is already stored untouched" (existingClientSecretRef),

@@ -24,30 +24,81 @@ public sealed class EhrWriteCapabilitiesTests
     }
 
     [Fact]
-    public void Athenahealth_accepts_only_its_certified_questionnaire_response_create_as_a_dry_run()
+    public void Athenahealth_writes_clinical_types_through_athenaone_once_activated()
     {
         var athena = EhrWriteCapabilities.VendorProfile(SourceSystemType.Athenahealth)!;
 
-        athena.Capabilities.Should().ContainSingle().Which.ResourceType.Should().Be("QuestionnaireResponse");
-        athena.Capabilities.Single().LiveWriteSupported.Should().BeFalse();
+        athena.Capabilities.Select(c => (c.ResourceType, c.Variant)).Should().BeEquivalentTo(new (string, string?)[]
+        {
+            ("AllergyIntolerance", null),
+            ("Condition", EhrWriteVariants.ProblemListItem),
+            ("DocumentReference", EhrWriteVariants.ClinicalNote),
+            ("Immunization", EhrWriteVariants.HistoricalImmunization),
+            ("MedicationRequest", EhrWriteVariants.MedicationList),
+            ("MedicationStatement", EhrWriteVariants.MedicationList),
+            ("Observation", EhrWriteVariants.VitalSigns),
+            ("Observation", EhrWriteVariants.LaboratoryResult),
+            ("Patient", null),
+            ("QuestionnaireResponse", null),
+        });
+        athena.Capabilities.Where(c => c.ResourceType != "QuestionnaireResponse")
+            .Should().OnlyContain(c => c.LiveWriteSupported && c.RequiresVendorActivation && c.VendorApiId.StartsWith("athenaone-"));
+        EhrWriteCapabilities.Find(SourceSystemType.Athenahealth, "QuestionnaireResponse")!.LiveWriteSupported.Should().BeFalse(
+            because: "the certified FHIR create is not verified yet");
         athena.SupportsPatientMatch.Should().BeFalse();
-        EhrWriteCapabilities.Find(SourceSystemType.Athenahealth, "AllergyIntolerance").Should().BeNull(
-            because: "athena writes allergies through athenaOne, not FHIR R4");
+        athena.ProprietaryApiScope.Should().Be("athena/service/Athenanet.MDP.*");
+        athena.IsAlreadyAtTarget("athena-409", null).Should().BeTrue();
+        EhrWriteCapabilities.FindAll(SourceSystemType.Athenahealth, "Observation").Should().HaveCount(2);
+        EhrWriteCapabilities.Find(SourceSystemType.Athenahealth, "Observation")!.Variant.Should().Be(EhrWriteVariants.VitalSigns);
     }
 
     [Fact]
-    public void Eclinicalworks_is_dry_run_only_identifier_matched_and_scope_requesting()
+    public void Eclinicalworks_lists_every_published_create_api_live_only_once_contracted()
     {
         var healow = EhrWriteCapabilities.VendorProfile(SourceSystemType.Healow)!;
 
-        healow.Capabilities.Select(c => c.ResourceType)
-            .Should().BeEquivalentTo(["AllergyIntolerance", "Condition", "Observation", "Patient", "QuestionnaireResponse"]);
-        healow.Capabilities.Should().OnlyContain(c => !c.LiveWriteSupported, because: "no eCW sandbox has verified a write");
+        healow.Capabilities.Select(c => (c.ResourceType, c.Variant)).Should().BeEquivalentTo(new (string, string?)[]
+        {
+            ("AllergyIntolerance", null),
+            ("Condition", EhrWriteVariants.ProblemListItem),
+            ("Condition", EhrWriteVariants.EncounterDiagnosis),
+            ("Condition", EhrWriteVariants.MedicalHistory),
+            ("DocumentReference", EhrWriteVariants.ClinicalNote),
+            ("Immunization", EhrWriteVariants.HistoricalImmunization),
+            ("MedicationRequest", EhrWriteVariants.MedicationList),
+            ("MedicationStatement", EhrWriteVariants.MedicationList),
+            ("Observation", EhrWriteVariants.VitalSigns),
+            ("Patient", null),
+            ("Procedure", EhrWriteVariants.SurgicalHistory),
+            ("QuestionnaireResponse", null),
+        });
+        healow.Capabilities.Where(c => c.ResourceType != "QuestionnaireResponse")
+            .Should().OnlyContain(c => c.LiveWriteSupported && c.RequiresVendorActivation, because: "eCW's clinical Create APIs are contracted");
+        healow.Capabilities.Where(c => c.CreatesHolderEncounter).Select(c => c.Variant)
+            .Should().BeEquivalentTo([EhrWriteVariants.MedicalHistory, EhrWriteVariants.SurgicalHistory]);
+        healow.Capabilities.Where(c => c.CreatesHolderEncounter).Should().OnlyContain(c => c.OptInOnly);
+        EhrWriteCapabilities.Find(SourceSystemType.Healow, "Observation")!.RequiresEncounter.Should().BeFalse(
+            because: "eCW files vitals by effectiveDateTime, with no encounter reference");
         healow.Capabilities.Should().OnlyContain(c => c.Operations.SetEquals(new[] { EhrWriteOperation.Create }));
         healow.SupportsPatientMatch.Should().BeFalse();
         healow.RequestsScopeOnTokenRequest.Should().BeTrue();
         healow.IsAlreadyAtTarget("202", null).Should().BeTrue();
-        EhrWriteCapabilities.Find(SourceSystemType.Healow, "DocumentReference").Should().BeNull();
+        healow.ProprietaryApiScope.Should().BeNull(because: "eCW's contracted APIs are FHIR, under FHIR scopes");
+    }
+
+    [Theory]
+    [InlineData(true, false, false, true)]
+    [InlineData(true, true, false, false)]
+    [InlineData(true, true, true, true)]
+    [InlineData(false, false, true, false)]
+    public void A_type_is_live_only_when_supported_and_activated_where_activation_is_needed(
+        bool liveWriteSupported, bool requiresActivation, bool activated, bool expected)
+    {
+        var capability = new EhrWriteCapability(
+            "AllergyIntolerance", new HashSet<EhrWriteOperation> { EhrWriteOperation.Create }, "x", null, false, false,
+            new HashSet<ApplicationType> { ApplicationType.Backend }, liveWriteSupported, requiresActivation);
+
+        capability.IsLive(activated).Should().Be(expected);
     }
 
     [Fact]

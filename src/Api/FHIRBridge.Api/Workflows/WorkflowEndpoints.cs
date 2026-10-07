@@ -3707,6 +3707,7 @@ public static class WorkflowEndpoints
     [
         "dest_dryRun", "dest_resources", "dest_createPatientIfMissing", "dest_cloneMode",
         "dest_maxWritesPerRun", "dest_noteDocStatus", "dest_sourceConnectionId", "destinationId",
+        "dest_createHolderEncounter", "dest_targetProviderId", "dest_targetDepartmentId",
     ];
 
     private static bool IsEhrWriteBackNode(string? nodeType) => WorkflowNodeTypes.IsEhrWriteBack(nodeType);

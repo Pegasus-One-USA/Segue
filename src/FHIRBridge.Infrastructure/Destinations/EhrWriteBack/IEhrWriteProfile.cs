@@ -6,7 +6,7 @@ namespace FHIRBridge.Infrastructure.Destinations.EhrWriteBack;
 
 /// <summary>
 /// Turns a source FHIR resource into exactly what one vendor write API accepts, or says why it cannot be sent. One
-/// implementation per (vendor, resource type), resolved through <see cref="EhrWriteProfileRegistry"/>, never a
+/// implementation per (vendor, resource type, variant), resolved through <see cref="EhrWriteProfileRegistry"/>, never a
 /// switch. Profiles build their output from an allow-list in a fixed property order: the content hash in the ledger
 /// depends on that order.
 /// </summary>
@@ -15,6 +15,12 @@ public interface IEhrWriteProfile
     SourceSystemType Vendor { get; }
 
     string ResourceType { get; }
+
+    /// <summary>The <c>EhrWriteCapability.Variant</c> this profile shapes for, when the vendor files one resource type
+    /// through several APIs (eClinicalWorks problems, encounter diagnoses and medical history). Null for the vendor's
+    /// only API for the type. A record of another variant is skipped with a reason starting <c>not-a-</c> or
+    /// <c>not-an-</c>, which tells the writer to try the type's next variant.</summary>
+    string? Variant => null;
 
     /// <summary>Shapes <paramref name="source"/>. Never mutates it. References in the output still point at the
     /// source system until <see cref="BindReferences"/> runs.</summary>
@@ -54,27 +60,35 @@ public sealed record EhrShapeResult(
     public static EhrShapeResult Reject(string reason) => new(EhrShapeOutcome.Rejected, null, reason, null, null);
 }
 
-/// <summary>Registry of write profiles by (vendor, resource type), built from every <see cref="IEhrWriteProfile"/>
-/// registered in DI. Two profiles for the same key fail at construction rather than one silently winning.</summary>
+/// <summary>Registry of write profiles by (vendor, resource type, variant), built from every
+/// <see cref="IEhrWriteProfile"/> registered in DI. Two profiles for the same key fail at construction rather than one
+/// silently winning.</summary>
 public sealed class EhrWriteProfileRegistry
 {
-    private readonly IReadOnlyDictionary<(SourceSystemType Vendor, string ResourceType), IEhrWriteProfile> _profiles;
+    private readonly IReadOnlyDictionary<(SourceSystemType Vendor, string ResourceType, string Variant), IEhrWriteProfile> _profiles;
 
     public EhrWriteProfileRegistry(IEnumerable<IEhrWriteProfile> profiles)
     {
-        var map = new Dictionary<(SourceSystemType, string), IEhrWriteProfile>();
+        var map = new Dictionary<(SourceSystemType, string, string), IEhrWriteProfile>();
         foreach (var profile in profiles)
         {
-            if (!map.TryAdd((profile.Vendor, profile.ResourceType), profile))
+            if (!map.TryAdd((profile.Vendor, profile.ResourceType, profile.Variant ?? string.Empty), profile))
             {
                 throw new InvalidOperationException(
-                    $"Two EHR write profiles are registered for {profile.Vendor} {profile.ResourceType}.");
+                    $"Two EHR write profiles are registered for {profile.Vendor} {profile.ResourceType} {profile.Variant}.".TrimEnd() + ".");
             }
         }
 
         _profiles = map;
     }
 
-    public IEhrWriteProfile? Find(SourceSystemType vendor, string resourceType) =>
-        _profiles.TryGetValue((vendor, resourceType), out var profile) ? profile : null;
+    /// <summary>The profile for the vendor's capability of this type and variant. A vendor that lists one API for the
+    /// type may register its profile with no variant; it then serves the capability whatever the capability's
+    /// variant says.</summary>
+    public IEhrWriteProfile? Find(SourceSystemType vendor, string resourceType, string? variant = null) =>
+        _profiles.TryGetValue((vendor, resourceType, variant ?? string.Empty), out var profile)
+            ? profile
+            : variant is not null && _profiles.TryGetValue((vendor, resourceType, string.Empty), out var single)
+                ? single
+                : null;
 }

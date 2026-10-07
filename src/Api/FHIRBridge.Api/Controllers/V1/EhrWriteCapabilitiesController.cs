@@ -44,7 +44,9 @@ public sealed class EhrWriteCapabilitiesController : ControllerBase
                 capability.RequiresEncounter,
                 capability.OptInOnly,
                 capability.AllowedApplicationTypes.Order().Select(type => type.ToString()).ToList(),
-                capability.LiveWriteSupported))
+                capability.LiveWriteSupported,
+                capability.RequiresVendorActivation,
+                capability.CreatesHolderEncounter))
             .ToList();
 
         return Ok(new EhrWriteCapabilitiesDto(

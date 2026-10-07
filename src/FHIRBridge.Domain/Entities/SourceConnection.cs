@@ -62,6 +62,15 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisp
     /// </summary>
     public SourceConnectionAccess Access { get; private set; } = SourceConnectionAccess.Read;
 
+    /// <summary>
+    /// The practice behind this connection has the vendor's non-public write APIs turned on: eClinicalWorks' contracted
+    /// Create APIs (activated per practice) or athenaOne's proprietary chart APIs. Write-back types that need them
+    /// (<c>EhrWriteCapability.RequiresVendorActivation</c>) stay dry runs until this is set. Meaningful only with Write
+    /// access; changed only through <see cref="SetVendorWriteApisActivated"/>, for the same reason as
+    /// <see cref="Access"/>.
+    /// </summary>
+    public bool VendorWriteApisActivated { get; private set; }
+
     public void Update(
         string name,
         SourceSystemType sourceSystemType,
@@ -93,6 +102,23 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisp
         }
 
         Access = access;
+        if (!access.AllowsWrite())
+        {
+            // Activation only means something for a connection that writes; dropping write access drops it too, so
+            // a later switch back to Write starts from dry run.
+            VendorWriteApisActivated = false;
+        }
+    }
+
+    public void SetVendorWriteApisActivated(bool activated)
+    {
+        if (activated && !Access.AllowsWrite())
+        {
+            throw new InvalidOperationException(
+                "Vendor write APIs can only be marked as activated on a connection with Write or Read & Write access.");
+        }
+
+        VendorWriteApisActivated = activated;
     }
 
     /// <summary>Advances the incremental-sync cursor for the given resource types after a workflow run completes

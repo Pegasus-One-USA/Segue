@@ -22,12 +22,17 @@ namespace FHIRBridge.Infrastructure.Destinations.EhrWriteBack;
 /// </list>
 ///
 /// <para><b>Live only where supported.</b> A record is sent only when the destination is not a dry run AND the code
-/// supports live writes for its type (<see cref="FHIRBridge.Domain.Fhir.EhrWriteCapability.LiveWriteSupported"/>).
-/// Who may switch a destination off dry run and run it is decided by the EHR Write-Back permissions. Every other
-/// record is counted as what a live run would send, with the reason <c>live-write-not-supported</c> when the
-/// destination asked for live writes (a dry-run-only vendor such as eClinicalWorks or athenahealth). Reads
-/// (identifier search, <c>$match</c>, encounter search) always run, because resolving references is what a dry run
-/// is for.</para>
+/// supports live writes for its type (<see cref="FHIRBridge.Domain.Fhir.EhrWriteCapability.LiveWriteSupported"/>) AND,
+/// for a vendor API that is contracted or proprietary (eClinicalWorks, athenaOne), the write connection says the
+/// practice has it activated. Who may switch a destination off dry run and run it is decided by the EHR Write-Back
+/// permissions. Every other record is counted as what a live run would send, with the reason
+/// <c>vendor-activation-required</c> or <c>live-write-not-supported</c> when the destination asked for live writes.
+/// Reads (identifier search, <c>$match</c>, encounter search) always run, because resolving references is what a dry
+/// run is for.</para>
+///
+/// <para><b>Variants.</b> A vendor can file one resource type through several APIs (eClinicalWorks: problems,
+/// encounter diagnoses, medical history). Each record goes to the first variant whose profile does not skip it as
+/// another variant.</para>
 ///
 /// <para><b>PHI.</b> The report and every record error hold resource types, positions and reason codes only. Nothing
 /// read from a resource, a search result or an OperationOutcome's diagnostics is logged.</para>
@@ -38,17 +43,20 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
     private readonly IEhrWriteLedgerRepository _ledger;
     private readonly IEhrCloneModePolicy _cloneModePolicy;
     private readonly ILogger<MappedEhrWriteBackDestinationWriter> _logger;
+    private readonly IEhrTargetPatientMatcher? _patientMatcher;
 
     public MappedEhrWriteBackDestinationWriter(
         EhrWriteProfileRegistry profiles,
         IEhrWriteLedgerRepository ledger,
         IEhrCloneModePolicy cloneModePolicy,
-        ILogger<MappedEhrWriteBackDestinationWriter> logger)
+        ILogger<MappedEhrWriteBackDestinationWriter> logger,
+        IEhrTargetPatientMatcher? patientMatcher = null)
     {
         _profiles = profiles;
         _ledger = ledger;
         _cloneModePolicy = cloneModePolicy;
         _logger = logger;
+        _patientMatcher = patientMatcher;
     }
 
     public async Task<DestinationWriteResult> WriteAsync(
@@ -97,7 +105,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         var selected = new HashSet<string>(channel.Options.ResourceTypes, StringComparer.OrdinalIgnoreCase);
         var live = channel.Options.DryRun
             ? new HashSet<string>(StringComparer.Ordinal)
-            : vendor.Capabilities.Where(c => c.LiveWriteSupported).Select(c => c.ResourceType).ToHashSet(StringComparer.Ordinal);
+            : vendor.Capabilities.Where(c => c.IsLive(channel.VendorWriteApisActivated)).Select(c => c.ResourceType).ToHashSet(StringComparer.Ordinal);
         var targetKey = EhrWriteKeys.TargetKey(channel.TargetBaseUrl);
 
         var run = new RunState(channel, vendor, context, targetKey, cloneMode, selected, live)
@@ -119,7 +127,8 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
                 .GroupBy(r => r.SourceId!, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.First().Resource, StringComparer.Ordinal),
             context.FetchMissingReferenceAsync,
-            cloneMode);
+            cloneMode,
+            _patientMatcher);
 
         var grantedScope = await TryGetGrantedScopeAsync(channel, cancellationToken);
 
@@ -148,7 +157,10 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
                 continue;
             }
 
-            var sent = await PlanAndSendAsync(run, record.ResourceType, record.SourceId!, record.Index, decision.Resource, tally, cancellationToken);
+            var prepare = decision.Capability?.CreatesHolderEncounter == true
+                ? ct => BindHolderEncounterAsync(run, decision.Profile!, decision.Resource, decision.TargetPatientId!, ct)
+                : (Func<CancellationToken, Task<string?>>?)null;
+            var sent = await PlanAndSendAsync(run, record.ResourceType, record.SourceId!, record.Index, decision.Resource, tally, cancellationToken, prepare);
             if (record.ResourceType == "Patient")
             {
                 RecordPatientOutcome(run, record.SourceId!, sent);
@@ -160,7 +172,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             dryRun,
             channel.TargetVendor.ToString(),
             parsed.Count,
-            ScopeStatus(grantedScope, run.Tallies),
+            ScopeStatus(grantedScope, run.Tallies, vendor),
             run.Tallies.OrderBy(t => t.Key, StringComparer.Ordinal).Select(t => t.Value.ToSummary(t.Key)).ToList(),
             cloneMode);
 
@@ -201,8 +213,10 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             return Decision.Reject("missing-id");
         }
 
-        var capability = run.Vendor.Capabilities.FirstOrDefault(c => c.ResourceType == record.ResourceType);
-        if (capability is null || !capability.Supports(EhrWriteOperation.Create))
+        var candidates = run.Vendor.Capabilities
+            .Where(c => c.ResourceType == record.ResourceType && c.Supports(EhrWriteOperation.Create))
+            .ToList();
+        if (candidates.Count == 0)
         {
             return Decision.Skip("not-writable");
         }
@@ -212,25 +226,27 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             return await DecidePatientAsync(record, run.Resolver, cancellationToken);
         }
 
-        var profile = _profiles.Find(run.Vendor.Vendor, record.ResourceType);
-        if (profile is null)
+        var resource = record.Resource;
+        var (capability, profile, firstShape) = PickVariant(run, candidates, resource);
+        if (capability is null || profile is null)
         {
-            return Decision.Skip("not-writable");
+            return new Decision(firstShape.Outcome, null, firstShape.Reason);
         }
 
-        var resource = record.Resource;
+        if (capability.CreatesHolderEncounter && !run.Channel.Options.CreateHolderEncounter)
+        {
+            // The vendor files this only on an encounter the bridge would have to create; the destination did not
+            // opt into that.
+            return Decision.Skip("holder-encounter-not-enabled");
+        }
+
+        var shaped = firstShape;
         if (record.ResourceType == "DocumentReference")
         {
-            // A note the profile skips whatever its text (excluded type, C-CDA summary, superseded) is skipped before
-            // its text is fetched: no source read for a note that will not be sent, and its real reason is reported
-            // even when the read would have failed.
-            var unfetched = profile.Shape(resource, run.Channel.Options);
-            if (unfetched.Outcome == EhrShapeOutcome.Skipped)
-            {
-                return new Decision(unfetched.Outcome, null, unfetched.Reason);
-            }
-
-            // A note whose text sits in a Binary on the source is read from there first; the EHR takes it inline.
+            // A note the profile skips whatever its text (excluded type, C-CDA summary, superseded) was already skipped
+            // by PickVariant, before its text is fetched: no source read for a note that will not be sent, and its
+            // real reason is reported even when the read would have failed. A note whose text sits in a Binary on the
+            // source is read from there now; the EHR takes it inline.
             var (note, contentProblem) = await EhrNoteContent.InlineAsync(
                 resource, run.Context.SourceBaseUrl, run.ExportedBinaries, run.Context.FetchMissingReferenceAsync, _logger, cancellationToken);
             if (contentProblem is not null)
@@ -241,9 +257,9 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             }
 
             resource = note;
+            shaped = profile.Shape(resource, run.Channel.Options);
         }
 
-        var shaped = profile.Shape(resource, run.Channel.Options);
         if (shaped.Outcome != EhrShapeOutcome.Shaped || shaped.Resource is null)
         {
             return new Decision(shaped.Outcome, null, shaped.Reason);
@@ -289,7 +305,90 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         }
 
         profile.BindReferences(shaped.Resource, patient.TargetPatientId!, encounterId);
-        return new Decision(EhrShapeOutcome.Shaped, shaped.Resource, null);
+        return new Decision(EhrShapeOutcome.Shaped, shaped.Resource, null, capability, profile, patient.TargetPatientId);
+    }
+
+    /// <summary>
+    /// The capability (and profile) a record goes to: the first, in table order, whose profile does not skip it as
+    /// another variant. A profile that rejects the record has recognised it as its own, so it is chosen and the
+    /// rejection reported. When every variant skips it, the reason reported is the first that is not a variant
+    /// mismatch (<c>not-a-...</c>, <c>not-an-...</c>), e.g. "entered-in-error", else the first variant's.
+    /// </summary>
+    private (EhrWriteCapability? Capability, IEhrWriteProfile? Profile, EhrShapeResult FirstShape) PickVariant(
+        RunState run,
+        IReadOnlyList<EhrWriteCapability> candidates,
+        JsonObject resource)
+    {
+        EhrShapeResult? firstSkip = null;
+        EhrShapeResult? realSkip = null;
+        foreach (var candidate in candidates)
+        {
+            var profile = _profiles.Find(run.Vendor.Vendor, candidate.ResourceType, candidate.Variant);
+            if (profile is null)
+            {
+                continue;
+            }
+
+            var shaped = profile.Shape(resource, run.Channel.Options);
+            if (shaped.Outcome != EhrShapeOutcome.Skipped)
+            {
+                return (candidate, profile, shaped);
+            }
+
+            firstSkip ??= shaped;
+            if (realSkip is null && shaped.Reason is { } reason && !IsVariantMismatch(reason))
+            {
+                realSkip = shaped;
+            }
+        }
+
+        return (null, null, realSkip ?? firstSkip ?? EhrShapeResult.Skip("not-writable"));
+    }
+
+    /// <summary>A profile's "this record is another variant" skip: <c>not-a-...</c> or <c>not-an-...</c>.</summary>
+    private static bool IsVariantMismatch(string reason) =>
+        reason.StartsWith("not-a-", StringComparison.Ordinal) || reason.StartsWith("not-an-", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Files a record that the vendor takes only on an encounter the bridge creates (eClinicalWorks medical and
+    /// surgical history on a telephone encounter): one encounter per patient per run, created when the first such
+    /// record is actually sent, so a run whose records are all already written creates none. Returns why the record
+    /// cannot be sent, or null once it is bound to the encounter.
+    /// </summary>
+    private async Task<string?> BindHolderEncounterAsync(
+        RunState run,
+        IEhrWriteProfile profile,
+        JsonObject shaped,
+        string targetPatientId,
+        CancellationToken cancellationToken)
+    {
+        if (!run.HolderEncounters.TryGetValue(targetPatientId, out var encounterId))
+        {
+            try
+            {
+                var outcome = await run.Channel.CreateHolderEncounterAsync(targetPatientId, cancellationToken);
+                encounterId = outcome.Kind == EhrCreateKind.Created ? outcome.ResourceId : null;
+                _logger.LogInformation(
+                    "EHR write-back holder encounter for {Vendor}: {Outcome} ({StatusCode}).",
+                    run.Vendor.Vendor, outcome.Kind, outcome.HttpStatus);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning("EHR write-back holder encounter for {Vendor} failed ({ExceptionType}).", run.Vendor.Vendor, ex.GetType().Name);
+                encounterId = null;
+            }
+
+            // Cached either way: a failed or uncertain create is not repeated for every record of the patient.
+            run.HolderEncounters[targetPatientId] = encounterId;
+        }
+
+        if (encounterId is null)
+        {
+            return "holder-encounter-not-created";
+        }
+
+        profile.BindReferences(shaped, targetPatientId, encounterId);
+        return null;
     }
 
     /// <summary>A source patient is written only when the EHR has no such patient and the destination opted in (or
@@ -367,7 +466,8 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         int? recordIndex,
         JsonObject shaped,
         Tally tally,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<CancellationToken, Task<string?>>? prepare = null)
     {
         var sourceKey = EhrWriteKeys.SourceKey(run.Context.SourceBaseUrl, resourceType, sourceId, run.CloneMode);
         var contentHash = EhrWriteKeys.ContentHash(shaped);
@@ -392,15 +492,34 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             tally.WouldWrite++;
             if (!run.Channel.Options.DryRun)
             {
-                tally.Reason("live-write-not-supported");
+                tally.Reason(NotLiveReason(run, resourceType));
             }
 
             return new SendResult(SendKind.WouldWrite, null);
         }
 
+        // Last step before the send, after every check that could stop it: anything it creates (a holder encounter)
+        // exists only for a record that is really sent. The content hash above was taken before it, so it does not
+        // change from run to run.
+        if (prepare is not null && await prepare(cancellationToken) is { } prepareProblem)
+        {
+            tally.Count(EhrShapeOutcome.Skipped, prepareProblem);
+            return new SendResult(SendKind.NotWritten, null);
+        }
+
         var createdId = await SendAsync(run, resourceType, sourceId, recordIndex, shaped, existing, sourceKey, contentHash, tally, cancellationToken);
         return new SendResult(createdId is null ? SendKind.NotWritten : SendKind.Written, createdId);
     }
+
+    /// <summary>Why a live run counts a type as "would write" instead of sending it: the vendor API is not activated on
+    /// the connection, or the code does not send the type live at all.</summary>
+    private static string NotLiveReason(RunState run, string resourceType) =>
+        run.Vendor.Capabilities.Any(c => c.ResourceType == resourceType
+                                         && c.LiveWriteSupported
+                                         && c.RequiresVendorActivation
+                                         && !run.Channel.VendorWriteApisActivated)
+            ? "vendor-activation-required"
+            : "live-write-not-supported";
 
     /// <summary>Why the ledger stops this record being sent again, or null when it may be sent.</summary>
     private static string? LedgerBlocks(EhrWriteLedgerEntry? existing, string contentHash)
@@ -552,7 +671,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
 
     /// <summary>Checked against the types that would actually be written, so a scope gap is reported before the
     /// first live write fails on it.</summary>
-    private static string ScopeStatus(string? grantedScope, IReadOnlyDictionary<string, Tally> tallies)
+    private static string ScopeStatus(string? grantedScope, IReadOnlyDictionary<string, Tally> tallies, EhrWriteVendorProfile vendor)
     {
         if (grantedScope is null)
         {
@@ -560,12 +679,20 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         }
 
         var missing = tallies
-            .Where(t => t.Value.WouldWrite + t.Value.Written > 0 && !EhrWriteScopeMatcher.AllowsCreate(grantedScope, t.Key))
+            .Where(t => t.Value.WouldWrite + t.Value.Written > 0 && !AllowsWrite(grantedScope, t.Key, vendor))
             .Select(t => t.Key)
             .OrderBy(t => t, StringComparer.Ordinal)
             .ToList();
         return missing.Count == 0 ? "verified" : "missing:" + string.Join(",", missing);
     }
+
+    /// <summary>A FHIR create scope for the type, or, for a type the vendor writes through its proprietary API, that
+    /// API's scope.</summary>
+    private static bool AllowsWrite(string grantedScope, string resourceType, EhrWriteVendorProfile vendor) =>
+        vendor.ProprietaryApiScope is { } proprietary
+        && vendor.Capabilities.Any(c => c.ResourceType == resourceType && c.RequiresVendorActivation)
+            ? grantedScope.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(proprietary, StringComparer.Ordinal)
+            : EhrWriteScopeMatcher.AllowsCreate(grantedScope, resourceType);
 
     private static List<ParsedRecord> Parse(IReadOnlyCollection<MappedDestinationRecord> records)
     {
@@ -654,6 +781,10 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         /// <summary>Binaries delivered in the batch, by id; see <see cref="EhrNoteContent.InlineAsync"/>.</summary>
         public IReadOnlyDictionary<string, JsonObject> ExportedBinaries { get; init; } = new Dictionary<string, JsonObject>();
         public EhrReferenceResolver Resolver { get; set; } = default!;
+
+        /// <summary>Encounters created in this run to file records on, by target patient; null when the create
+        /// failed.</summary>
+        public Dictionary<string, string?> HolderEncounters { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, Tally> Tallies { get; } = new(StringComparer.Ordinal);
         public List<string> RecordErrors { get; } = [];
         public List<string?> WrittenIds { get; } = [];
@@ -671,7 +802,13 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         }
     }
 
-    private sealed record Decision(EhrShapeOutcome Outcome, JsonObject? Resource, string? Reason)
+    private sealed record Decision(
+        EhrShapeOutcome Outcome,
+        JsonObject? Resource,
+        string? Reason,
+        EhrWriteCapability? Capability = null,
+        IEhrWriteProfile? Profile = null,
+        string? TargetPatientId = null)
     {
         public static Decision Skip(string reason) => new(EhrShapeOutcome.Skipped, null, reason);
 

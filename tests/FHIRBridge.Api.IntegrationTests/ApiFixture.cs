@@ -18,6 +18,9 @@ public sealed class ApiFixture : IAsyncLifetime
 {
     private readonly ApiFactory _factory = new();
 
+    /// <summary>The app's own service provider, for checks on what DI actually registers.</summary>
+    public IServiceProvider Services => _factory.Services;
+
     // ── Shared clients ──────────────────────────────────────────────────────────
     public HttpClient AdminClient { get; private set; } = null!;
     public HttpClient AnonClient  { get; private set; } = null!;

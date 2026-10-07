@@ -23,6 +23,8 @@ public abstract class DelegatingEhrWriteProfile : IEhrWriteProfile
 
     public string ResourceType => _shapeLike.ResourceType;
 
+    public virtual string? Variant => _shapeLike.Variant;
+
     public virtual EhrShapeResult Shape(JsonObject source, EhrWriteBackRunOptions options) => _shapeLike.Shape(source, options);
 
     public virtual void BindReferences(JsonObject shaped, string targetPatientId, string? targetEncounterId) =>

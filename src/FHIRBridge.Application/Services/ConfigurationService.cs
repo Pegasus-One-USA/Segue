@@ -99,6 +99,10 @@ public sealed class ConfigurationService : IConfigurationService
             ConfigurationMapper.ToDomain(request.Interactive),
             ConfigurationMapper.ToDomain(request.Retrieval),
             request.Access ?? SourceConnectionAccess.Read);
+        if (request.VendorWriteApisActivated is true)
+        {
+            sourceConnection.SetVendorWriteApisActivated(true);
+        }
 
         await _repository.AddSourceConnectionAsync(sourceConnection, cancellationToken);
 
@@ -157,6 +161,12 @@ public sealed class ConfigurationService : IConfigurationService
         if (request.Access is { } access)
         {
             sourceConnection.SetAccess(access);
+        }
+
+        // Null keeps the saved value, as for Access. Applied after Access, which clears it when write access goes.
+        if (request.VendorWriteApisActivated is { } activated)
+        {
+            sourceConnection.SetVendorWriteApisActivated(activated && sourceConnection.Access.AllowsWrite());
         }
 
         // Mapped immediately after Update(), before SaveChangesAsync — Update() reassigns brand-new owned-value-

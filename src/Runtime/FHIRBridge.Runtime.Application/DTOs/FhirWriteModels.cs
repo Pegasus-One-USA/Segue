@@ -54,3 +54,33 @@ public sealed record FhirPatientMatchResult(
     string? PatientId,
     int? StatusCode,
     IReadOnlyList<FhirOperationOutcomeIssue> Issues);
+
+/// <summary>
+/// One request a vendor's write API needs that is not a plain FHIR create: an eClinicalWorks transaction Bundle POSTed
+/// to the FHIR base URL, or a call to athenaOne's proprietary REST API.
+/// </summary>
+/// <param name="Method">The HTTP method name, e.g. "POST".</param>
+/// <param name="Url">Absolute URL.</param>
+/// <param name="Body">A raw body (with <paramref name="ContentType"/>); null when <paramref name="FormFields"/> is used.</param>
+/// <param name="FormFields">Form fields, sent url-encoded, or as multipart/form-data when <paramref name="Multipart"/>.</param>
+/// <param name="Idempotent">True for reads (retried like a search); false for writes, which are sent once.</param>
+/// <param name="AddSourceQueryParameters">Append the connector's own per-request query parameters (athenahealth FHIR's
+/// <c>ah-practice</c>); false for a non-FHIR API that does not take them.</param>
+public sealed record FhirRawWriteRequest(
+    string Method,
+    string Url,
+    string? Body = null,
+    string? ContentType = null,
+    IReadOnlyDictionary<string, string>? FormFields = null,
+    bool Multipart = false,
+    bool Idempotent = false,
+    bool AddSourceQueryParameters = true);
+
+/// <param name="Kind"><see cref="FhirWriteOutcomeKind.Created"/> for any 2xx, which the caller interprets from
+/// <paramref name="Body"/>; otherwise as for a create.</param>
+/// <param name="Body">The response body, held in memory only: it may carry PHI and is never logged.</param>
+public sealed record FhirRawWriteResult(
+    FhirWriteOutcomeKind Kind,
+    int? StatusCode,
+    string? Body,
+    IReadOnlyList<FhirOperationOutcomeIssue> Issues);

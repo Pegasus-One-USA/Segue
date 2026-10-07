@@ -124,7 +124,7 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
             PatientSearchCriteria = null,
             SearchCriteriaByResourceType = null,
             OmitScopeParameter = !vendor.RequestsScopeOnTokenRequest,
-            Scopes = vendor.RequestsScopeOnTokenRequest ? source.Scopes : [],
+            Scopes = vendor.RequestsScopeOnTokenRequest ? EhrWriteChannels.WriteScopes(source.Scopes, vendor.ProprietaryApiScope) : [],
         };
 
         if (_sourceClientFactory!.Create(source.SourceType) is not IFhirWriteClient writeClient)
@@ -137,21 +137,22 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
                 ? parsedDestinationId
                 : null;
 
-        var channel = new FhirClientEhrWriteChannel(
+        var fhirChannel = new FhirClientEhrWriteChannel(
             writeClient,
             source,
             _accessTokenProvider,
             targetId,
             connection.SourceSystemType,
             destinationId,
-            ReadOptions(node));
+            ReadOptions(node),
+            connection.VendorWriteApisActivated);
 
-        return writeContext with { EhrWriteChannel = channel };
+        return writeContext with { EhrWriteChannel = EhrWriteChannels.For(connection.SourceSystemType, fhirChannel) };
     }
 
     /// <summary>The node's write-back settings. The portal stores every value as a string. Anything missing or
-    /// unparseable falls to the safe side: a dry run, no patient creation, no clone mode, the default cap,
-    /// preliminary notes. Clone mode is checked against its system setting by the writer.</summary>
+    /// unparseable falls to the safe side: a dry run, no patient creation, no clone mode, no holder encounters, the
+    /// default cap, preliminary notes. Clone mode is checked against its system setting by the writer.</summary>
     private static EhrWriteBackRunOptions ReadOptions(WorkflowNode node)
     {
         var dryRun = !bool.TryParse(ReadStringConfiguration(node, "dest_dryRun"), out var parsedDryRun) || parsedDryRun;
@@ -168,7 +169,11 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
             .ToList();
 
         var cloneMode = bool.TryParse(ReadStringConfiguration(node, "dest_cloneMode"), out var parsedClone) && parsedClone;
+        var holderEncounter = bool.TryParse(ReadStringConfiguration(node, "dest_createHolderEncounter"), out var parsedHolder) && parsedHolder;
+        var providerId = ReadStringConfiguration(node, "dest_targetProviderId") is { } provider && !string.IsNullOrWhiteSpace(provider) ? provider.Trim() : null;
+        var departmentId = ReadStringConfiguration(node, "dest_targetDepartmentId") is { } department && !string.IsNullOrWhiteSpace(department) ? department.Trim() : null;
 
-        return new EhrWriteBackRunOptions(dryRun, createPatient, maxWrites, docStatus, resources, cloneMode);
+        return new EhrWriteBackRunOptions(
+            dryRun, createPatient, maxWrites, docStatus, resources, cloneMode, holderEncounter, providerId, departmentId);
     }
 }

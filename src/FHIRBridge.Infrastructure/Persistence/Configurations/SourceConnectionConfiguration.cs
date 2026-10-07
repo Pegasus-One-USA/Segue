@@ -49,6 +49,10 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
             .IsRequired()
             .HasDefaultValue(FHIRBridge.Domain.Enums.SourceConnectionAccess.Read);
 
+        builder.Property(x => x.VendorWriteApisActivated)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         builder.OwnsOne(x => x.Interactive, interactive =>
         {
             var redirectUris = interactive.Property(x => x.RedirectUris)

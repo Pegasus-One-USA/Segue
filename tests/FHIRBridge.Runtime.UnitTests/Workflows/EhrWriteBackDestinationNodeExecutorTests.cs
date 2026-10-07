@@ -148,6 +148,30 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
         options.MaxWritesPerRun.Should().Be(EhrWriteBackRunOptions.DefaultMaxWritesPerRun);
         options.NoteDocStatus.Should().Be("preliminary");
         options.CloneMode.Should().BeFalse();
+        options.CreateHolderEncounter.Should().BeFalse();
+        options.TargetProviderId.Should().BeNull();
+        options.TargetDepartmentId.Should().BeNull();
+        contexts.Single().EhrWriteChannel!.VendorWriteApisActivated.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task The_vendor_options_and_the_connections_activation_reach_the_channel()
+    {
+        var connection = Connection();
+        connection.SetVendorWriteApisActivated(true);
+        var (executor, contexts, _) = Build(connection);
+        var node = Node($$"""
+            {"dest_sourceConnectionId":"{{TargetId}}","dest_createHolderEncounter":"true",
+             "dest_targetProviderId":" 71 ","dest_targetDepartmentId":"150"}
+            """);
+
+        await executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        var channel = contexts.Single().EhrWriteChannel!;
+        channel.VendorWriteApisActivated.Should().BeTrue();
+        channel.Options.CreateHolderEncounter.Should().BeTrue();
+        channel.Options.TargetProviderId.Should().Be("71");
+        channel.Options.TargetDepartmentId.Should().Be("150");
     }
 
     [Fact]

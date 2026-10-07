@@ -15,6 +15,11 @@ export interface EhrWriteCapability {
   /** The product can send this type live: a destination that selects it and is not a dry run sends it. False keeps
    *  it dry-run-only. */
   liveWriteSupported: boolean;
+  /** Live only over a connection whose vendor write APIs are activated (eClinicalWorks contracted APIs, athenaOne).
+   *  Older API builds omit it: treat as false. */
+  requiresVendorActivation?: boolean;
+  /** Filed on an encounter the bridge creates, only when the destination opts in (eCW medical/surgical history). */
+  createsHolderEncounter?: boolean;
 }
 
 /** EhrWriteCapabilitiesDto. */
@@ -55,8 +60,9 @@ export class EhrWriteCapabilitiesService {
     return stream;
   }
 
-  /** Resource types the vendor can be written to, in the order the API lists them. */
+  /** Resource types the vendor can be written to, in the order the API lists them. A vendor that files one type
+   *  through several APIs (eCW Condition) lists it once. */
   writableResourceTypes(vendor: string | null | undefined): Observable<string[]> {
-    return this.forVendor(vendor).pipe(map(result => result.capabilities.map(c => c.resourceType)));
+    return this.forVendor(vendor).pipe(map(result => [...new Set(result.capabilities.map(c => c.resourceType))]));
   }
 }

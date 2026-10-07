@@ -68,6 +68,9 @@ public sealed class ConfigurationsController : ControllerBase
         var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Create);
         if (denied is not null) return denied;
 
+        denied = await AuthorizeVendorWriteActivationAsync(request, savedActivation: false);
+        if (denied is not null) return denied;
+
         var sourceConnection = await _configurationService.AddSourceConnectionAsync(request, cancellationToken);
 
         return Created($"/api/v1/source-connections/{sourceConnection.Id}", sourceConnection);
@@ -83,6 +86,13 @@ public sealed class ConfigurationsController : ControllerBase
     {
         var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Edit);
         if (denied is not null) return denied;
+
+        if (request.VendorWriteApisActivated is true)
+        {
+            var saved = await _configurationService.GetSourceConnectionByIdAsync(sourceConnectionId, cancellationToken);
+            denied = await AuthorizeVendorWriteActivationAsync(request, saved?.VendorWriteApisActivated ?? false);
+            if (denied is not null) return denied;
+        }
 
         var sourceConnection = await _configurationService.UpdateSourceConnectionAsync(
             sourceConnectionId,
@@ -470,4 +480,12 @@ public sealed class ConfigurationsController : ControllerBase
 
         return Ok(route);
     }
+
+    /// <summary>Turning on a connection's vendor write APIs takes its eCW / athenaOne write-back types off dry run for
+    /// every destination that writes over it, so it needs the EHR Write-Back edit right, the same right that takes a
+    /// destination off dry run. Saving a connection that already had it on does not.</summary>
+    private async Task<IActionResult?> AuthorizeVendorWriteActivationAsync(CreateSourceConnectionRequest request, bool savedActivation) =>
+        request.VendorWriteApisActivated is true && !savedActivation
+            ? await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, PermissionActionCode.Edit)
+            : null;
 }

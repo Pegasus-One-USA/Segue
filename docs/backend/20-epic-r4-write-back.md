@@ -251,7 +251,8 @@ report `already-in-ehr`.
 2. the destination selects the type in Data groups (`dest_resources`);
 3. the code supports live writes for the type (`EhrWriteCapability.LiveWriteSupported`): Epic AllergyIntolerance
    (945), Condition problem-list item (949) and DocumentReference clinical note (1046); vitals and patients were
-   added in Phase 3 (section 9). No eClinicalWorks or athenahealth type is live-capable yet.
+   added in Phase 3 (section 9). eClinicalWorks and athenahealth types are live-capable since Phase 6, and need a fourth
+   condition: the write connection's vendor write APIs are marked as activated (section 13.2).
 
 There is no installation-wide release list. Until 2026-10-03 a third key, the system setting
 `EhrWriteBack:LiveWriteTypes`, had to list each type before it could go live; it was removed at the product owner's
@@ -416,6 +417,9 @@ Tabular source does not have.
 
 ## 11. Phase 5a — eClinicalWorks (Healow), dry run only
 
+> Superseded by section 13 (2026-10-06): eCW types are now live-capable once the connection's vendor write APIs
+> are activated, are sent as transaction Bundles, and include notes, immunizations, medications and history.
+
 **Discovery (2026-10-02, practice `JAFJCD`, `https://fhir4.healow.com/fhir/r4/JAFJCD`).** The certified FHIR server
 (eCW FHIR Facade 1.6) declares one write in its CapabilityStatement: QuestionnaireResponse create. Its SMART
 configuration nevertheless advertises `system/*.c` and `.u` for most clinical types — the same scope-versus-API gap
@@ -450,6 +454,8 @@ there, then set the verified types `liveWriteSupported: true`; destinations that
 
 ## 12. Phase 5b — athenahealth: QuestionnaireResponse only, dry run
 
+> Superseded by section 13 (2026-10-06): the clinical types are now written through athenaOne.
+
 **Discovery (2026-10-02, preview `https://api.preview.platform.athenahealth.com/fhir/r4`).** The certified FHIR R4
 API is read and search plus one create, **QuestionnaireResponse**. Two operations also write: FamilyMemberHistory
 `$batch-write` and MeasureReport `$submit-care-gaps`; their definitions are not readable anonymously (403). The SMART
@@ -478,7 +484,118 @@ write-back is wanted, together with an athenaOne (non-FHIR) channel for the clin
 **To go live with athena:** verify QuestionnaireResponse create against the preview environment with a
 questionnaire athena defines, then set `liveWriteSupported: true` for QuestionnaireResponse.
 
-## 13. Sources
+## 13. Phase 6 — eClinicalWorks and athenahealth as targets, every EHR-to-EHR combination
+
+**Built 2026-10-06 on `feature/ehr-write-back-multi-vendor`.** Supersedes the "dry run only" parts of sections 11 and
+12. Every write-back path now goes through the same writer, ledger and report; what differs per target is the
+capability table, the write profiles and the channel that sends.
+
+### 13.1 What each target accepts
+
+| Target | Types | Sent as | Live when |
+|---|---|---|---|
+| Epic | Patient (opt-in), AllergyIntolerance, Condition problem, DocumentReference note, Observation vitals | FHIR `POST /{type}` | not a dry run (unchanged) |
+| eClinicalWorks | Patient (opt-in), AllergyIntolerance, Condition problem, Condition encounter diagnosis, Condition medical history (opt-in), Procedure surgical history (opt-in), Immunization (historical), MedicationRequest / MedicationStatement → MedicationStatement, Observation vitals, DocumentReference note | FHIR **transaction Bundle** `POST {base}` (eCW's contracted Create APIs) | not a dry run **and** the connection's *Vendor write APIs activated* is on |
+| athenahealth | Patient (opt-in), AllergyIntolerance, Condition problem, Observation vitals (open encounter), Observation lab result, MedicationRequest / MedicationStatement, Immunization, DocumentReference note | athenaOne REST `/v1/{practiceid}/…` (form / multipart) | not a dry run **and** *Vendor write APIs activated* is on |
+| eCW, athena | QuestionnaireResponse | FHIR create | dry run only (needs eCW's Backend-Questionnaire app / an athena-defined questionnaire) |
+
+Sources are unchanged: Epic, eClinicalWorks, athenahealth (and CSV / SQL Table, section 10) all feed any target. The
+nine EHR-to-EHR pairs are the same code path; a pair whose source and target are the same server still writes only
+in clone mode (section 9).
+
+Left out on purpose: orders and prescriptions (eCW MedicationRequest orders need a prescriber), ServiceRequest,
+referrals, Coverage, Appointment, ChargeItem, Task and Communication. They are workflow actions in the target EHR,
+not chart records copied from another EHR. Epic's lines/drains/airways API stays deferred (section 1).
+
+### 13.2 The contract switch
+
+`SourceConnection.VendorWriteApisActivated` (migration `AddVendorWriteApisActivated`, both providers) records that the
+practice behind a write connection has the vendor's non-public write APIs turned on: eCW's contracted Create APIs
+activated for the practice, or the athenaOne API enabled for the app. Capabilities that need it carry
+`RequiresVendorActivation`; `EhrWriteCapability.IsLive(activated)` decides. Until it is on, a live run of those types
+counts them as *would write* with the reason `vendor-activation-required`, exactly like a dry run.
+
+- Shown on the connection form (Access section) for a Write / Read & Write connection of a vendor that has such types.
+- Turning it on needs **ehrwriteback.edit** (checked in `ConfigurationsController` only when it changes from off to
+  on, so saving an activated connection does not need it).
+- Dropping the connection's write access clears it.
+
+### 13.3 Patient matching
+
+eCW and athena have no certain-only `$match`. After the ledger and an exact identifier search, the resolver asks
+`IEhrTargetPatientMatcher` — the master patient index being built separately. Until the MPI registers its
+implementation, `UnavailableEhrTargetPatientMatcher` answers "no index" and the record waits as
+`patient-awaiting-mpi`; nothing is guessed. The MPI's contract is on the interface: `Certain` only for one sure
+patient (target id), `None` only when it knows the patient has no record there (which lets an opted-in destination
+create one), `Ambiguous` to manual review. Epic keeps `$match`.
+
+### 13.4 Variants and holder encounters
+
+A vendor may list one resource type several times, once per API (`EhrWriteCapabilities.FindAll`). The writer tries
+the variants in table order and uses the first whose profile does not skip the record as another variant (skip
+reasons `not-a-…` / `not-an-…`). eCW files Conditions this way: problem-list item → Problems API, encounter-diagnosis →
+Encounter Diagnosis API, `medical-history` (or SNOMED 435871000124102) → Medical History API; a health concern matches
+none and is skipped. athena splits Observations into vital signs and lab results.
+
+eCW medical and surgical history are filed only on an open telephone encounter, which eCW will not create for us.
+`CreatesHolderEncounter` capabilities are skipped (`holder-encounter-not-enabled`) unless the destination ticks
+*File medical and surgical history on a new telephone encounter*. Then the channel creates one telephone encounter
+per patient per run, **at send time**, after the ledger, the write cap and the live check — so a dry run, or a run
+whose history items are all already written, creates none. A failed create skips the items for this run
+(`holder-encounter-not-created`) without a ledger row, so the next run tries again. The content hash is taken before
+the encounter is bound, so it is the same on every run.
+
+### 13.5 eClinicalWorks specifics (from eCW's published Create API pages, 2026-08-07)
+
+- Every write is a transaction Bundle POSTed to the base URL (`EcwEhrWriteChannel`). The answer is a
+  transaction-response Bundle: `entry[0].response.status` "1" with `location` `Type/id` is created; any other status is
+  eCW's error code, reported as the vendor code (202 *patient already exists* is already at target). eCW's codes
+  overlap HTTP's (201 *multiple patients found*, 202), so a bare 2xx number is an error, never a success.
+- Problems and encounter diagnoses send ICD-10-CM codings first, then SNOMED, nothing else; resolved problems need
+  `abatementDateTime`. Medical history and surgical history send `code.text` only.
+- Medications: RxNorm or NDC **and** the medication's text; a source MedicationRequest is filed as a MedicationStatement
+  (reconciliation). Immunizations are historical (`primarySource` false) and need CVX.
+- Vitals: eCW's LOINC list only, UCUM on blood-pressure components, **no encounter** — eCW files the reading on the
+  appointment whose time matches `effectiveDateTime`, else under Vitals Notes.
+- Notes: needs the destination's *Note author* (eCW practitioner id) and an existing encounter of the patient. The text
+  goes as an HL7 v2 message in the attachment (`text/hl7v2`), built like eCW's sample: ORU^R01 from PROG, OBR with the
+  encounter id and a section, OBX TX with the text (HL7-escaped, line breaks as `\.br\`). Deterministic per note.
+- Most creates land in eCW's **App Data** tab for a user to reconcile; notes go straight into the Progress Note.
+- UNCONFIRMED until a contracted practice runs it: the note's section names per note type, whether PID-3 takes the
+  eCW FHIR patient id, the exact scope strings eCW provisions, and the success HTTP status.
+
+### 13.6 athenahealth specifics (from athena's API reference)
+
+- `AthenaOneEhrWriteChannel` sends to `https://{host}/v1/{practiceid}/…` with the connection's own token; the write
+  connection requests `athena/service/Athenanet.MDP.*` alongside its FHIR scopes
+  (`EhrWriteVendorProfile.ProprietaryApiScope`, which the granted-scope check also uses). Search by identifier and
+  QuestionnaireResponse stay on FHIR. Patient ids are athena's FHIR ids `a-{practice}.E-{id}` (the number after `E-`).
+- Profiles shape an `AthenaOneWriteRequest` description (method, path, form / JSON fields, lookups, id field); the
+  channel adds `departmentid` (the destination's *Department id*, else the patient's primary department), resolves
+  lookups, sends once, and reads the new id. A 409 is already at target; a refusal is reported as `athena-{status}`
+  without athena's error text, which can echo what was sent.
+- Allergies (`PUT chart/{id}/allergies`, an upsert) and medications (`POST chart/{id}/medications`) need athena's own
+  allergen / medication id, looked up by **exact** name (`/reference/allergies`, `/reference/medications`); no exact
+  single match refuses the record before anything is sent (`athena-allergen-not-found`, retried next run).
+- Problems need SNOMED (`missing-snomed-code` otherwise); lab results go one analyte per document with LOINC, value,
+  units, range and abnormal flag; immunizations need a numeric CVX and a full date; notes go as a clinical document
+  (`documentdata`) in the subclass that fits the LOINC type; new patients need the destination's *Department id*.
+- Encounters for vitals come from athenaOne (`chart/{id}/encounters`): OPEN and REVIEW count as open.
+- UNCONFIRMED until a preview run: the vitals element format and `VITALS.*` ids (inferred from GET responses — check
+  `GET /chart/configuration/vitals` first), whether a clinical document is accepted with text only, duplicate
+  behaviour of problems / medications / vaccines / documents, and that one token serves FHIR and `/v1`.
+
+### 13.7 To go live
+
+**athenahealth (preview practice 195900 is available now):** give the write connection's app the athenaOne API
+(2-legged, `athena/service/Athenanet.MDP.*`), dry run a workflow, check the UNCONFIRMED items above against preview,
+then tick *Vendor write APIs activated* on the connection and run one live write per type.
+
+**eClinicalWorks:** contract the Create APIs (interop@eclinicalworks.com), have a practice activate the app (Admin >
+Product Activation > FHIR APIs > Backend/Bulk Access Apps), add the write scopes eCW provisions to the connection, dry
+run, then tick *Vendor write APIs activated* and run one live write per type.
+
+## 14. Sources
 
 - Sandbox CapabilityStatement: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/metadata
 - Sandbox SMART configuration: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/.well-known/smart-configuration

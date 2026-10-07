@@ -161,6 +161,19 @@
             <p class="eaf-hint">Write access needs a vendor that accepts EHR write-back and the Backend System audience.</p>
           }
         </div>
+
+        @if (canChooseWriteAccess() && vendorWritesNeedActivation() && form.controls.access.value !== 'Read') {
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-vendor-activation">
+              <input id="eaf-vendor-activation" type="checkbox" formControlName="vendorWriteApisActivated" />
+              Vendor write APIs activated
+            </label>
+            <p class="eaf-hint">{{ displayVendor() }} writes clinical records through APIs the practice must have turned
+              on (eClinicalWorks: contracted Create APIs activated for this practice; athenahealth: athenaOne APIs
+              enabled for this app). Until this is ticked, write-back to this connection runs as a dry run. Needs the
+              EHR Write-Back edit permission.</p>
+          </div>
+        }
       </div>
     </div>
 

@@ -104,6 +104,91 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
         }
     }
 
+    public async Task<FhirRawWriteResult> SendAsync(
+        FhirRawWriteRequest request,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        string accessToken;
+        try
+        {
+            accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning("{Source} {Method} not sent: no access token ({ExceptionType}).", SourceDisplayName, request.Method, ex.GetType().Name);
+            return new FhirRawWriteResult(FhirWriteOutcomeKind.Rejected, null, null, [TokenIssue()]);
+        }
+
+        var requestUrl = request.AddSourceQueryParameters ? WithAdditionalQuery(request.Url, source) : request.Url;
+        var method = new HttpMethod(request.Method);
+        var exchange = await SendOnceOrOnRefusalAsync(
+            () => Authorize(new HttpRequestMessage(method, requestUrl) { Content = BuildContent(request) }, accessToken),
+            request.Idempotent,
+            source,
+            cancellationToken);
+
+        if (exchange.Response is not { } response)
+        {
+            if (exchange.RefusedBeforeSend)
+            {
+                _logger.LogWarning("{Source} {Method} {Url} not sent ({Reason}).", SourceDisplayName, request.Method, RedactRequestUrl(requestUrl), exchange.FailureReason);
+                return new FhirRawWriteResult(FhirWriteOutcomeKind.Rejected, null, null, [NotSentIssue()]);
+            }
+
+            _logger.LogWarning("{Source} {Method} {Url}: outcome unknown ({Reason}).", SourceDisplayName, request.Method, RedactRequestUrl(requestUrl), exchange.FailureReason);
+            return new FhirRawWriteResult(FhirWriteOutcomeKind.OutcomeUnknown, null, null, []);
+        }
+
+        using (response)
+        {
+            var status = (int)response.StatusCode;
+            var body = await ReadBodyAsync(response, cancellationToken);
+            var issues = ParseIssues(body);
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("{Source} {Method} {Url} returned {StatusCode}.", SourceDisplayName, request.Method, RedactRequestUrl(requestUrl), status);
+                return new FhirRawWriteResult(FhirWriteOutcomeKind.Created, status, body, issues);
+            }
+
+            if (issues.Count == 0 && (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden))
+            {
+                issues = [new FhirOperationOutcomeIssue("error", "security", DescribeAuthenticationChallenge(response) is { } challenge ? [challenge] : [], [])];
+            }
+
+            var refusedBeforeWork = status == 429
+                || (response.StatusCode == HttpStatusCode.ServiceUnavailable && response.Headers.RetryAfter is not null);
+            var kind = !request.Idempotent && !refusedBeforeWork && status >= 500
+                ? FhirWriteOutcomeKind.OutcomeUnknown
+                : FhirWriteOutcomeKind.Rejected;
+            _logger.LogWarning("{Source} {Method} {Url} {Outcome} ({StatusCode}).", SourceDisplayName, request.Method, RedactRequestUrl(requestUrl), kind, status);
+            return new FhirRawWriteResult(kind, status, body, issues);
+        }
+    }
+
+    private static HttpContent? BuildContent(FhirRawWriteRequest request)
+    {
+        if (request.FormFields is { } fields)
+        {
+            if (!request.Multipart)
+            {
+                return new FormUrlEncodedContent(fields);
+            }
+
+            var multipart = new MultipartFormDataContent();
+            foreach (var (name, value) in fields)
+            {
+                multipart.Add(new StringContent(value, Encoding.UTF8), name);
+            }
+
+            return multipart;
+        }
+
+        return request.Body is null
+            ? null
+            : new StringContent(request.Body, Encoding.UTF8, request.ContentType ?? FhirJsonMediaType);
+    }
+
     public Task<FhirSearchPage> SearchByIdentifierAsync(
         string resourceType,
         string system,

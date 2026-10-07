@@ -208,6 +208,8 @@ export interface CreateSourceConnectionRequest {
   retrieval?: SourceRetrievalConfigurationRequest | null;
   /** Read | Write | ReadWrite. Null keeps the saved value (and means Read for a new connection). */
   access?: 'Read' | 'Write' | 'ReadWrite' | null;
+  /** Null keeps the saved value (see CreateSourceConnectionRequest.VendorWriteApisActivated). */
+  vendorWriteApisActivated?: boolean | null;
 }
 
 export interface CreateDestinationConfigurationRequest {

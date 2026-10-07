@@ -8,6 +8,38 @@ internal static class EhrFhirJson
 {
     public const string LoincSystem = "http://loinc.org";
     public const string SnomedSystem = "http://snomed.info/sct";
+    public const string Icd10CmSystem = "http://hl7.org/fhir/sid/icd-10-cm";
+    public const string RxNormSystem = "http://www.nlm.nih.gov/research/umls/rxnorm";
+    public const string NdcSystem = "http://hl7.org/fhir/sid/ndc";
+    public const string CvxSystem = "http://hl7.org/fhir/sid/cvx";
+    public const string UcumSystem = "http://unitsofmeasure.org";
+
+    /// <summary>The first code of the given system in a CodeableConcept, or null.</summary>
+    public static string? CodeOf(JsonNode? codeableConcept, string system) =>
+        Objects(codeableConcept, "coding")
+            .Where(c => string.Equals(String(c, "system"), system, StringComparison.OrdinalIgnoreCase))
+            .Select(c => String(c, "code"))
+            .FirstOrDefault(c => !string.IsNullOrWhiteSpace(c));
+
+    /// <summary>A CodeableConcept's human name: its text, else the first coding display.</summary>
+    public static string? DisplayName(JsonNode? codeableConcept) =>
+        String(codeableConcept, "text") is { Length: > 0 } text
+            ? text
+            : Objects(codeableConcept, "coding").Select(c => String(c, "display")).FirstOrDefault(d => !string.IsNullOrWhiteSpace(d));
+
+    /// <summary>The year, month and day of a FHIR date or dateTime ("2024", "2024-05", "2024-05-01T10:00:00Z"), each
+    /// null when absent; null altogether when the text is not a FHIR date.</summary>
+    public static (int Year, int? Month, int? Day)? DateParts(string? fhirDate)
+    {
+        if (string.IsNullOrWhiteSpace(fhirDate) || fhirDate.Length < 4 || !int.TryParse(fhirDate[..4], out var year))
+        {
+            return null;
+        }
+
+        int? month = fhirDate.Length >= 7 && fhirDate[4] == '-' && int.TryParse(fhirDate[5..7], out var m) ? m : null;
+        int? day = month is not null && fhirDate.Length >= 10 && fhirDate[7] == '-' && int.TryParse(fhirDate[8..10], out var d) ? d : null;
+        return (year, month, day);
+    }
 
     public static string? String(JsonNode? node, string property) =>
         node is JsonObject obj && obj[property] is JsonValue value && value.TryGetValue<string>(out var text)

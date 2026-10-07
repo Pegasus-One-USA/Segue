@@ -104,6 +104,17 @@ describe('ehrWriteReasonLabel', () => {
     expect(ehrWriteReasonLabel('ccda-document')).toBe('Summary of care document (C-CDA), not a note: not sent');
   });
 
+  it('names why an eClinicalWorks or athena record waits', () => {
+    expect(ehrWriteReasonLabel('vendor-activation-required'))
+      .toBe("Dry run: the EHR vendor's write APIs are not marked as activated on this connection");
+    expect(ehrWriteReasonLabel('patient-awaiting-mpi'))
+      .toBe('Patient not found by identifier; waiting for the master patient index to match them');
+    expect(ehrWriteReasonLabel('holder-encounter-not-enabled'))
+      .toBe('Needs a telephone encounter, which this destination does not create (turn it on to send)');
+    expect(ehrWriteReasonLabel('missing-snomed-code')).toBe('No SNOMED code (athena files problems by SNOMED only)');
+    expect(ehrWriteReasonLabel('not-completed')).toBe('Not completed');
+  });
+
   it('falls back to the code in words for a code it does not know', () => {
     expect(ehrWriteReasonLabel('some-new-reason')).toBe('Some new reason');
   });

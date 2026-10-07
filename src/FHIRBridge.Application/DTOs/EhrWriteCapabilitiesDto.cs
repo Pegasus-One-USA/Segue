@@ -12,7 +12,11 @@ public sealed record EhrWriteCapabilitiesDto(
     IReadOnlyList<EhrWriteCapabilityDto> Capabilities);
 
 /// <param name="LiveWriteSupported">The product can send this type live (it is not dry-run-only in code): a destination
-/// that selects it and is not a dry run sends it.</param>
+/// that selects it and is not a dry run sends it, once <paramref name="RequiresVendorActivation"/> is satisfied.</param>
+/// <param name="RequiresVendorActivation">Sent live only over a connection whose vendor write APIs are activated
+/// (eClinicalWorks contracted APIs, athenaOne).</param>
+/// <param name="CreatesHolderEncounter">Filed on an encounter the bridge creates, only when the destination opts in
+/// (eClinicalWorks medical and surgical history).</param>
 public sealed record EhrWriteCapabilityDto(
     string ResourceType,
     IReadOnlyList<string> Operations,
@@ -21,4 +25,6 @@ public sealed record EhrWriteCapabilityDto(
     bool RequiresEncounter,
     bool OptInOnly,
     IReadOnlyList<string> AllowedApplicationTypes,
-    bool LiveWriteSupported);
+    bool LiveWriteSupported,
+    bool RequiresVendorActivation = false,
+    bool CreatesHolderEncounter = false);

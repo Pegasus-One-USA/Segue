@@ -91,6 +91,8 @@ export interface SourceConnectionModel {
   modifiedBy?: string | null;
   /** What the connection may be used for (SourceConnectionAccess). Older API builds omit it: treat as Read. */
   access?: SourceConnectionAccessModel | null;
+  /** The practice has the vendor's contracted / proprietary write APIs turned on (eCW, athenaOne). */
+  vendorWriteApisActivated?: boolean | null;
 }
 
 /** Matches CreateSourceConnectionRequest's expected body shape for both create (POST) and update (PUT). */
@@ -104,6 +106,8 @@ export interface SourceConnectionRequest {
   retrieval?: SourceRetrievalConfigurationModel | null;
   /** Null keeps the saved value on update and means Read on create (see CreateSourceConnectionRequest.Access). */
   access?: SourceConnectionAccessModel | null;
+  /** Null keeps the saved value on update, false on create. Turning it on needs the EHR Write-Back edit right. */
+  vendorWriteApisActivated?: boolean | null;
 }
 
 /** Matches the backend's SourceConnectionAccess enum (serialized as a string). */

@@ -512,6 +512,7 @@ export class WizardService {
       applicationType:  AUDIENCE_TO_APPLICATION_TYPE[audienceKey] ?? null,
       // Null keeps whatever is saved; the form always sends a value, so this only matters for older nodes.
       access:           (fields['Access'] as 'Read' | 'Write' | 'ReadWrite' | undefined) || null,
+      vendorWriteApisActivated: fields['Vendor write APIs activated'] === 'true' ? true : fields['Vendor write APIs activated'] === 'false' ? false : null,
       authentication: {
         authenticationType: AUTH_METHOD_TO_AUTHENTICATION_TYPE[liveAuthMethod] ?? 'OAuthClientCredentials',
         clientId:           liveClientId,

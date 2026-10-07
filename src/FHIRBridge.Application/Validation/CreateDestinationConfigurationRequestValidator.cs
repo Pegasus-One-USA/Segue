@@ -130,6 +130,16 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         RequireOneOf(context, metadata, "dest_dryRun", BooleanFlagValues, "dry-run flag");
         RequireOneOf(context, metadata, "dest_createPatientIfMissing", BooleanFlagValues, "create-patient flag");
         RequireOneOf(context, metadata, "dest_cloneMode", BooleanFlagValues, "clone-mode flag");
+        RequireOneOf(context, metadata, "dest_createHolderEncounter", BooleanFlagValues, "holder-encounter flag");
+        foreach (var idKey in new[] { "dest_targetProviderId", "dest_targetDepartmentId" })
+        {
+            // EHR-side ids (an eCW practitioner id, an athena provider or department number): short, no spaces.
+            if (metadata.TryGetValue(idKey, out var id) && !string.IsNullOrWhiteSpace(id)
+                && (id.Trim().Length > 64 || id.Trim().Any(char.IsWhiteSpace)))
+            {
+                context.AddFailure(idKey, "Enter the EHR's id as shown in the EHR: up to 64 characters, no spaces.");
+            }
+        }
         RequireOneOf(context, metadata, "dest_noteDocStatus", NoteDocStatusValues, "note status");
         RequireOptionalIntInRange(
             context,
