@@ -84,7 +84,18 @@
         </div>
       </div>
 
-      @if (ex.errorMessage) {
+      @if (ex.errorMessage && ex.status === 'PartialSuccess') {
+        <!-- A partial success completed normally: say what was left out, not that the run went wrong. -->
+        <div class="error-banner warning-banner">
+          <mat-icon>warning_amber</mat-icon>
+          <span>
+            {{ ex.errorMessage }}
+            @if (ex.errorReferenceId) {
+              <a class="mono link" [routerLink]="['/operations/errors']" [queryParams]="{ errorReferenceId: ex.errorReferenceId }" title="View in Operations → Errors">Reference: {{ ex.errorReferenceId }}</a>
+            }
+          </span>
+        </div>
+      } @else if (ex.errorMessage) {
         <div class="error-banner">
           <mat-icon>error_outline</mat-icon>
           @if (ex.errorReferenceId) {

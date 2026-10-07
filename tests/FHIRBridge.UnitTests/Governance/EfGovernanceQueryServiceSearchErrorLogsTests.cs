@@ -70,4 +70,23 @@ public sealed class EfGovernanceQueryServiceSearchErrorLogsTests
         result.Items.Should().ContainSingle();
         result.Items.Single().Severity.Should().Be("Informational");
     }
+
+    [Fact]
+    public async Task SearchErrorLogsAsync_ByTheReferenceAPartialSuccessRunLinksTo_FindsTheInformationalRow()
+    {
+        await using var context = CreateContext();
+        context.ErrorLogs.AddRange(
+            new ErrorLog(Guid.NewGuid(), DateTime.UtcNow, "Informational", "PartialSuccess", "Partial success — one or more resource types were excluded",
+                null, "Workflow", "usecase-t3", errorReferenceId: "ERR-20261007-00IVSY", executionId: "run-1"),
+            new ErrorLog(Guid.NewGuid(), DateTime.UtcNow, "Error", "InvalidOperationException", "Boom", null, "Api", "corr-1"));
+        await context.SaveChangesAsync();
+
+        var sut = CreateSut(context);
+
+        var byReference = await sut.SearchErrorLogsAsync(new ErrorLogSearch(ErrorReferenceId: "err-20261007-00ivsy"), CancellationToken.None);
+        var byExecution = await sut.SearchErrorLogsAsync(new ErrorLogSearch(ExecutionId: "run-1"), CancellationToken.None);
+
+        byReference.Items.Should().ContainSingle().Which.ErrorReferenceId.Should().Be("ERR-20261007-00IVSY");
+        byExecution.Items.Should().ContainSingle();
+    }
 }
