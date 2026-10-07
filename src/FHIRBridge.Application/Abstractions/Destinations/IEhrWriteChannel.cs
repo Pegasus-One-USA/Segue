@@ -76,6 +76,14 @@ public sealed record EhrWriteBackRunOptions(
     public const string FinalDocStatus = "final";
 }
 
+/// <summary>Codes the write path itself puts on an <see cref="EhrOutcomeIssue"/>.</summary>
+public static class EhrWriteOutcomeCodes
+{
+    /// <summary>The run was cancelled before the create left this process (while waiting for a token, the rate
+    /// limiter, or a retry delay): nothing reached the EHR, so the record is retried as is, not left for review.</summary>
+    public const string CancelledBeforeSend = "cancelled-before-send";
+}
+
 /// <summary>One OperationOutcome issue, reduced to what is safe to log and store.</summary>
 /// <param name="VendorCode">The vendor's own code from <c>details.coding</c>, e.g. Epic's "59189".</param>
 /// <param name="Expression">The element path the issue is about, e.g. "identifier (ssn)".</param>

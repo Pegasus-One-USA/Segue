@@ -21,8 +21,12 @@ public sealed record TabularRenderedResource(string ResourceType, string? Resour
 /// <item><c>"{{column|format}}"</c>: the cell converted — <c>number</c>, <c>integer</c>, <c>boolean</c>,
 /// <c>date</c> (to YYYY-MM-DD), <c>datetime</c> (to ISO 8601, UTC when no offset), <c>base64</c> (UTF-8, for note
 /// text), <c>lower</c>, <c>upper</c>;</item>
-/// <item><c>"Patient/{{patient_id}}"</c>: text with placeholders inside.</item>
+/// <item><c>"Patient/{{patient_id}}"</c>: text with placeholders inside, each converted by its format and written
+/// as text.</item>
 /// </list>
+/// Format names ignore case (<c>{{dob|Date}}</c>). A template string holding <c>{{</c> or <c>}}</c> that is not a
+/// readable placeholder is refused when the templates are saved, so placeholder text can never reach a built
+/// resource (and through it an EHR).
 /// An element whose placeholder's cell is empty is removed, and objects and arrays left empty are removed with
 /// it, so one template serves rows that fill different columns. Column names ignore case.
 ///
@@ -89,6 +93,13 @@ public static partial class TabularFhirTemplateEngine
                 {
                     throw new BusinessRuleException($"The {resourceType} template uses an unknown format '{format}'.");
                 }
+            }
+
+            if (Strings(template).Any(text => Placeholder().Replace(text, string.Empty) is var rest
+                                              && (rest.Contains("{{", StringComparison.Ordinal) || rest.Contains("}}", StringComparison.Ordinal))))
+            {
+                throw new BusinessRuleException(
+                    $"The {resourceType} template has a placeholder that cannot be read. Write it as {{{{column}}}} or {{{{column|format}}}}.");
             }
 
             templates.Add(new TabularFhirTemplate(resourceType, (JsonObject)template.DeepClone()));
@@ -194,7 +205,7 @@ public static partial class TabularFhirTemplateEngine
         if (matches.Count == 1 && matches[0].Value.Length == text.Length)
         {
             var column = matches[0].Groups["column"].Value.Trim();
-            var format = matches[0].Groups["format"].Success ? matches[0].Groups["format"].Value.Trim() : null;
+            var format = FormatOf(matches[0]);
             var cell = context.Cell(column);
             if (cell is null)
             {
@@ -209,13 +220,20 @@ public static partial class TabularFhirTemplateEngine
         var last = 0;
         foreach (Match match in matches)
         {
-            var cell = context.Cell(match.Groups["column"].Value.Trim());
+            var column = match.Groups["column"].Value.Trim();
+            var cell = context.Cell(column);
             if (cell is null)
             {
                 return null;
             }
 
-            builder.Append(text, last, match.Index - last).Append(cell);
+            // The format applies here too ("Observed {{taken|date}}"); the converted value is written as text.
+            if (Convert(cell, FormatOf(match), column, context) is not JsonValue converted)
+            {
+                return null;
+            }
+
+            builder.Append(text, last, match.Index - last).Append(AsText(converted));
             last = match.Index + match.Length;
         }
 
@@ -278,15 +296,29 @@ public static partial class TabularFhirTemplateEngine
             : null;
     }
 
-    private static IEnumerable<(string Column, string? Format)> Placeholders(JsonNode? node) => node switch
+    private static IEnumerable<(string Column, string? Format)> Placeholders(JsonNode? node) =>
+        Strings(node).SelectMany(text => Placeholder().Matches(text).Select(m => (m.Groups["column"].Value.Trim(), FormatOf(m))));
+
+    /// <summary>Every string value in a template, at any depth.</summary>
+    private static IEnumerable<string> Strings(JsonNode? node) => node switch
     {
-        JsonObject obj => obj.SelectMany(p => Placeholders(p.Value)),
-        JsonArray array => array.SelectMany(Placeholders),
-        JsonValue value when value.GetValueKind() == JsonValueKind.String =>
-            Placeholder().Matches(value.GetValue<string>()).Select(m => (
-                m.Groups["column"].Value.Trim(),
-                m.Groups["format"].Success ? m.Groups["format"].Value.Trim() : (string?)null)),
+        JsonObject obj => obj.SelectMany(p => Strings(p.Value)),
+        JsonArray array => array.SelectMany(Strings),
+        JsonValue value when value.GetValueKind() == JsonValueKind.String => [value.GetValue<string>()],
         _ => [],
+    };
+
+    /// <summary>A placeholder's format, lower-cased (format names ignore case), or null when it has none.</summary>
+    private static string? FormatOf(Match match) =>
+        match.Groups["format"].Success ? match.Groups["format"].Value.Trim().ToLowerInvariant() : null;
+
+    /// <summary>A converted scalar as it reads inside text: numbers and booleans in invariant form.</summary>
+    private static string AsText(JsonValue value) => value.GetValueKind() switch
+    {
+        JsonValueKind.String => value.GetValue<string>(),
+        JsonValueKind.True => "true",
+        JsonValueKind.False => "false",
+        _ => value.ToJsonString(),
     };
 
     private sealed class RenderContext
@@ -322,7 +354,9 @@ public static partial class TabularFhirTemplateEngine
         }
     }
 
-    [GeneratedRegex(@"\{\{\s*(?<column>[^{}|]+?)\s*(\|\s*(?<format>[a-z0-9]+)\s*)?\}\}")]
+    // Any format word is read (and lower-cased), so an unknown or mis-cased one is reported instead of the
+    // placeholder going unrecognised and its text being copied into the resource.
+    [GeneratedRegex(@"\{\{\s*(?<column>[^{}|]+?)\s*(\|\s*(?<format>[^{}|\s]+)\s*)?\}\}")]
     private static partial Regex Placeholder();
 
     [GeneratedRegex(@"^[A-Za-z0-9\-\.]{1,64}$")]

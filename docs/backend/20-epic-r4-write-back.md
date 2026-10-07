@@ -378,13 +378,21 @@ destinations and FHIR transforms take it unchanged.
   only encrypted (`TabularSourceFiles.EncryptedContent`, AES-GCM through `IPhiFieldEncryptor`). It is deleted for
   real, not soft-deleted. The node keeps only the file id.
 - **SQL query** on SQL Server, PostgreSQL or MySQL. The connection string is stored as a secret
-  (`POST api/v1/tabular-sources/sql-connections`, vault `tabular-sources`); the node keeps only the reference.
-  Only one `SELECT` / `WITH … SELECT` is accepted, with comments stripped, no `;` between statements and no
-  data- or schema-changing keywords. It runs in a transaction that is always rolled back, declared `READ ONLY` on
-  PostgreSQL and MySQL. A read-only login is still the recommended setup.
+  (`POST api/v1/tabular-sources/sql-connections`, vault `tabular-sources`); the node keeps only the reference, and
+  a run or preview uses a reference only if it is one that endpoint created (`tabular-sources` vault, name
+  `tabular-sql-{engine}-{id}` for the same engine), so a node can never be pointed at another connection's secret.
+  `TabularSqlGuard` reads the query in one pass, recognising literals, quoted identifiers and comments the way the
+  engine does (MySQL backslash escapes, PostgreSQL dollar quotes), and checks the copy without comments or literal
+  content: one `SELECT` / `WITH … SELECT`, no `;` between statements, no data- or schema-changing keyword, and none
+  of `OPENQUERY`, `OPENROWSET`, `OPENDATASOURCE` or `dblink`, which run text on another server. The query runs as
+  written. It runs in a transaction that is always rolled back, declared `READ ONLY` on PostgreSQL and MySQL; SQL
+  Server has no read-only transaction, so a SQL Server login that can insert, update, delete, alter, execute or is
+  sysadmin is refused before the query runs (use a `db_datareader`-only user).
 
 **Templates** (`tab_templates`, `TabularFhirTemplateEngine`): FHIR JSON with `{{column}}` placeholders and
-formats `number`, `integer`, `boolean`, `date`, `datetime`, `base64` (note text), `lower`, `upper`. An element
+formats `number`, `integer`, `boolean`, `date`, `datetime`, `base64` (note text), `lower`, `upper` (any case,
+`{{dob|Date}}`; inside text, `"born {{dob|date}}"`, the format applies too). A template with `{{` or `}}` that is not a
+readable placeholder is refused when saved, so placeholder text never reaches a resource. An element
 whose column is empty is dropped, along with objects and arrays left empty, so one template serves rows that fill
 different columns. Presets for Patient, AllergyIntolerance, Condition (problem-list item), Observation (vital sign)
 and DocumentReference (clinical note) use conventional column names. A resource repeated on several rows with the

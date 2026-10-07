@@ -1919,15 +1919,30 @@ public static class WorkflowEndpoints
                 return Results.Accepted(value: new WorkflowRunStatusResponse(runId, "CancellationRequested"));
             }
 
-            // Not live in this process, yet still "Running" on record: a Run-button run is tracked for its whole
-            // execution (sync and async alike), so this one is dead. Its process stopped, or saving its outcome
-            // failed. Nothing will ever finish it, so cancelling closes it rather than refusing.
+            // Not live in this process, yet still "Running" on record. The run's lease says whether another instance
+            // is executing it: if so, the cancel is recorded and that instance stops the run on its next heartbeat
+            // (WorkflowRunLeaseService); if the lease lapsed, nothing will ever finish the run, so cancelling closes it.
             var run = await runStore.GetAsync(runId, cancellationToken);
-            if (run is { Status: WorkflowRunStatus.Running, TriggerType: "Manual", BulkRequestId: null })
+            if (run is { Status: WorkflowRunStatus.Running })
             {
+                var now = DateTimeOffset.UtcNow;
+                if (!run.IsLeaseExpired(now, WorkflowRunLease.LegacyGrace))
+                {
+                    // Only a Run-button run has a cancellation handle (IWorkflowRunTracker) on the instance executing
+                    // it; a scheduled or resumed run on the Worker cannot be stopped part-way.
+                    if (run is not { TriggerType: "Manual", BulkRequestId: null })
+                    {
+                        return Results.Conflict(new { message = "This run is executing on the Worker and cannot be cancelled." });
+                    }
+
+                    return await runStore.RequestCancellationAsync(runId, now, cancellationToken)
+                        ? Results.Accepted(value: new WorkflowRunStatusResponse(runId, "CancellationRequested"))
+                        : Results.Conflict(new { message = "This run is not currently active and cannot be cancelled." });
+                }
+
                 run.Cancel(
-                    "Cancelled: this run was no longer executing (the API restarted, or its outcome could not be saved).",
-                    DateTimeOffset.UtcNow);
+                    "Cancelled: this run was no longer executing (the process running it stopped, or its outcome could not be saved).",
+                    now);
                 await runStore.SaveAsync(run, cancellationToken);
                 return Results.Ok(new WorkflowRunStatusResponse(runId, run.Status.ToString(), run.CorrelationId));
             }

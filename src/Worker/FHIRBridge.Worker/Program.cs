@@ -92,12 +92,9 @@ builder.Services
     .AddWorkflowSqlPersistence(builder.Configuration);
 
 builder.Services.Configure<RuntimeWorkerOptions>(builder.Configuration.GetSection("RuntimeWorker"));
-// Registered first so it runs before anything here can start a run: fails the Worker's own workflow runs (scheduled,
-// or resumed after a bulk export) left "Running" by the previous Worker process, never the API's.
-builder.Services.AddHostedService(serviceProvider => new FHIRBridge.Infrastructure.Persistence.Workflows.InterruptedWorkflowRunReconciler(
-    serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-    FHIRBridge.Runtime.Application.Workflows.Storage.WorkflowRunHost.Worker,
-    serviceProvider.GetRequiredService<ILogger<FHIRBridge.Infrastructure.Persistence.Workflows.InterruptedWorkflowRunReconciler>>()));
+// Renews the leases of the workflow runs this Worker executes and fails Running runs whose lease lapsed (see the API's
+// registration). Safe with several API and Worker instances.
+builder.Services.AddHostedService<FHIRBridge.Infrastructure.Persistence.Workflows.WorkflowRunLeaseService>();
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddHostedService<ExpiredGeneratedFilePurgeJob>();
 

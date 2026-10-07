@@ -31,18 +31,32 @@ public interface IWorkflowRunStore
     Task<int> ExpireStaleValidatedAsync(DateTimeOffset olderThanUtc, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Fails every <see cref="WorkflowRunStatus.Running"/> run that <paramref name="host"/> executes and that started
-    /// before <paramref name="startedBeforeUtc"/>, with <paramref name="reason"/> as its error, returning how many.
-    /// <para>A run executes inside one process and nothing else ever finishes it, so when that process stops
-    /// (restart, shutdown, crash, or a save that failed while recording the outcome) the row would show "Running"
-    /// for ever and refuse to be cancelled. Each host calls this at start-up for its own runs only; see
-    /// <see cref="WorkflowRunHosts"/> for which runs belong to which host.</para>
+    /// Renews the lease of each <see cref="WorkflowRunStatus.Running"/> run in <paramref name="runIds"/> (the runs this
+    /// process is executing) and returns those a user has asked to cancel from another instance. A targeted update:
+    /// it never rewrites the run row the executing process saves when the run ends.
     /// </summary>
-    Task<int> FailInterruptedRunsAsync(
-        WorkflowRunHost host,
-        DateTimeOffset startedBeforeUtc,
+    Task<IReadOnlyCollection<Guid>> RenewLeasesAsync(
+        IReadOnlyCollection<Guid> runIds,
+        string owner,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Fails every <see cref="WorkflowRunStatus.Running"/> run whose lease lapsed before <paramref name="now"/> (or,
+    /// with no lease, that started before <paramref name="legacyStartedBefore"/>), with <paramref name="reason"/> as
+    /// its error, returning how many. Safe from any instance: a live run's lease is renewed far more often than it
+    /// lapses, so only a run whose process stopped (restart, shutdown, crash) or stopped vouching for it is closed.
+    /// </summary>
+    Task<int> FailExpiredRunsAsync(
+        DateTimeOffset now,
+        DateTimeOffset legacyStartedBefore,
         string reason,
         CancellationToken cancellationToken);
+
+    /// <summary>Records that a user asked to cancel the <see cref="WorkflowRunStatus.Running"/> run, for the instance
+    /// executing it to act on. Returns false when the run is not Running. A targeted update, like
+    /// <see cref="RenewLeasesAsync"/>.</summary>
+    Task<bool> RequestCancellationAsync(Guid workflowRunId, DateTimeOffset requestedAt, CancellationToken cancellationToken);
 
     Task<WorkflowRun?> FindValidatedAsync(
         Guid workflowDefinitionId,

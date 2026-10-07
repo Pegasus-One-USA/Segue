@@ -148,6 +148,9 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.TriggerType).HasMaxLength(50);
         builder.Property(x => x.TargetNodeId);
         builder.Property(x => x.CorrelationId).HasMaxLength(100);
+        builder.Property(x => x.LeaseOwner).HasMaxLength(200);
+        builder.Property(x => x.LeaseExpiresAt);
+        builder.Property(x => x.CancellationRequestedAt);
 
         builder.HasMany(x => x.NodeRuns)
             .WithOne()
@@ -160,6 +163,8 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.HasIndex(x => x.WorkflowDefinitionId);
         builder.HasIndex(x => x.StartedAt);
         builder.HasIndex(x => x.CorrelationId);
+        // The lease sweep reads Running runs only.
+        builder.HasIndex(x => x.Status);
     }
 }
 
