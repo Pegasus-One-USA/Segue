@@ -1,0 +1,161 @@
+src/FHIRBridge.Infrastructure/Sources/EpicSourceConnectionScopeSyncService.cs
+  s_d1b985c75f92bc::t_2fc7b134a36007 4,16-20,200-201,227,231,233,257-261,263-264,266-270,276,283-289,291,293,298-299,322-325,327,342,347,350,362-364
+  s_d1b985c75f92bc::t_674f810c457f53 202-203,205-211,237-239,241
+  s_d1b985c75f92bc::t_a842c08ccdd398 279-280
+  s_d1b985c75f92bc::t_c282cceafca0e0 21-24
+  s_d1b985c75f92bc::t_07cde2d66083f5 25-26
+  s_d1b985c75f92bc::t_32e413dfcf800a 86
+  s_d1b985c75f92bc::t_efe551beb7f0b5 6,91-106,204,212-213,215-219,222-223,234-236,240,242-256,265,271-275,277-278,281
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.ts
+  s_d1b985c75f92bc::t_babf3a2144fb39 10
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_d1b985c75f92bc::t_5048d08abeb7f2 283-286,447-448,462
+  s_d1b985c75f92bc::t_32e413dfcf800a 443-446,453,456,459-461,1074-1075,1093-1094
+  s_d1b985c75f92bc::t_90ea88cfb9ef44 463-464
+src/FHIRBridge.Application/Services/Workflows/WorkflowResourceTypeSubsetRule.cs
+  s_d1b985c75f92bc::t_0b403832206933 1-11,17-132,135-137,139-141,152-156
+  s_d1b985c75f92bc::t_e48a4485066e95 12-16
+  s_d1b985c75f92bc::t_4bcf5fab8881b4 133-134,138,142-151
+src/FHIRBridge.Infrastructure/Destinations/MappedFhirRepositoryDestinationWriter.cs
+  s_d1b985c75f92bc::t_32e413dfcf800a 160-165
+tests/FHIRBridge.UnitTests/Workflows/WorkflowResourceTypeSubsetRuleTests.cs
+  s_d1b985c75f92bc::t_ab9616b3e788fe 1-18,20-21,25-77,79,84-85,87-93,95-160,162-211,342
+  s_d1b985c75f92bc::t_e33acf1cde882d 212-248,250-254,258-260,265-341
+  s_d1b985c75f92bc::t_e26add2e1d125c 19,22-24,94
+  s_d1b985c75f92bc::t_4863fad2dcd17e 249,255-257,261-264
+  s_d1b985c75f92bc::t_4bcf5fab8881b4 78,80-83,86,161
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_d1b985c75f92bc::t_c06bc8fbaa8458 710-712
+  s_d1b985c75f92bc::t_7df34ded20fd23 539-543,546-548
+  s_d1b985c75f92bc::t_412cc1427d20eb 7,431,483-484,544
+  s_d1b985c75f92bc::t_ac5fca409c40a9 260,275,373-379,384-392,404-405,427-428,477-482,536-538,1847-1853
+  s_d1b985c75f92bc::t_c35a7c701e7efb 380-383,393-403,406-426
+portal/src/app/components/node-library-v2/node-library-dialog.upstream-source.spec.ts
+  s_d1b985c75f92bc::t_b90732b7b5bf8a 1-85
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_d1b985c75f92bc::t_83058dcb33587e 293-300
+portal/src/app/components/shared-v2/source-resource-type-picker/source-resource-type-picker.component.html
+  s_d1b985c75f92bc::t_1c5e4d87bf1015 1-57
+portal/src/app/components/node-library-v2/generic-fhir-source-form/generic-fhir-source-form.component.ts
+  s_d1b985c75f92bc::t_5ca53b728768a3 7,199-207,256-262,267,285-286,292-300,307
+  s_d1b985c75f92bc::t_0c96143b522560 4,6,55,191-198,263-266,268,287-289
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-type-grid.component.scss
+  s_d1b985c75f92bc::t_2c8971599aa9af 1-117
+portal/src/app/components/node-library-v2/node-library-dialog.component.ts
+  s_d1b985c75f92bc::t_4514d15f3bb4d7 149-153,331-335,337-342
+  s_d1b985c75f92bc::t_196da20b4c0fcd 19,312-330,336,345-354,365-367
+portal/src/app/components/shared-v2/source-resource-type-picker/source-resource-type-picker.component.ts
+  s_d1b985c75f92bc::t_744cf26919c4cf 1-94
+portal/src/app/components/shared-v2/source-resource-type-picker/source-resource-type-picker.component.spec.ts
+  s_d1b985c75f92bc::t_5eb9ec8f849ef8 1-71
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-type-grid.component.spec.ts
+  s_d1b985c75f92bc::t_13b1f84f205b5b 1-5,7,10-61,138-184
+  s_d1b985c75f92bc::t_ddffe228e1d558 6,8-9,62-137
+portal/src/app/components/node-library-v2/generic-fhir-source-form/generic-fhir-source-form.component.html
+  s_d1b985c75f92bc::t_0c96143b522560 35-36,61-62,365-373,378-385
+  s_d1b985c75f92bc::t_5ca53b728768a3 374-377
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_d1b985c75f92bc::t_c5f3bbad6cb922 49,1761-1770,1783-1798,1804,1806,1811,1820,2241-2245,3930-3932,3936
+  s_d1b985c75f92bc::t_49744f99b22550 2246
+  s_d1b985c75f92bc::t_785ba556b51dd8 3352-3357,3403-3406
+  s_d1b985c75f92bc::t_a67d87da6e448f 48,295-296,301-311,474-476,525,579-582,769,870-871,899,1146-1149,1659-1660,1753-1760,1771-1782,1805,1807-1810,1812-1819,1821-1837,1873-1874,2239-2240,2304-2305,2311,2636-2638,2652-2653,2778-2801,3993-3996,4013-4027,4093-4095
+  s_d1b985c75f92bc::t_3601161d51681f 297-300,1799-1803,3911-3913,3933-3935
+  s_d1b985c75f92bc::t_6996b9607c736f 2640-2641,2643-2649
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-type-grid.model.ts
+  s_d1b985c75f92bc::t_e1012444b2fa6b 1-165
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-type-grid.component.ts
+  s_d1b985c75f92bc::t_9d6e726ecb5c25 1-43
+portal/src/app/services/workflow-build-assembler-v2.source-types.spec.ts
+  s_d1b985c75f92bc::t_896ddd56efe6bb 1-100,139-181
+  s_d1b985c75f92bc::t_2a292a14c14978 101-138
+src/FHIRBridge.Application/Services/Workflows/WorkflowNodeResourceTypes.cs
+  s_d1b985c75f92bc::t_acda4d0118aa65 54,56-59,69,81-84,90-96,99
+  s_d1b985c75f92bc::t_c3eba5c8af376b 36-37,40-47
+  s_d1b985c75f92bc::t_7705036b80e580 48-53,55
+  s_d1b985c75f92bc::t_952092e39714d8 19-26
+  s_d1b985c75f92bc::t_baafb6205ce1b6 1-18,27-35,60-68,70-80,85-89,105-258
+  s_d1b985c75f92bc::t_d8fe2c06c75a35 38-39,97-98,100-104
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-type-grid.component.html
+  s_d1b985c75f92bc::t_cb2ddda227843e 1-34
+portal/src/app/components/node-library-v2/generic-fhir-source-form/generic-fhir-source-form.component.spec.ts
+  s_d1b985c75f92bc::t_dcc58ce039e7de 1-66
+tests/FHIRBridge.Api.IntegrationTests/Tests/WorkflowResourceTypeSubsetTests.cs
+  s_d1b985c75f92bc::t_2d4eb0fc71f75a 177-183
+  s_d1b985c75f92bc::t_b52f3aa4e4d8f5 114-141,187
+  s_d1b985c75f92bc::t_56aed6d5cf0e4a 1-35,37-113,188
+  s_d1b985c75f92bc::t_1dd33051694b78 36,142-176,184-186
+portal/src/app/components/shared-v2/source-resource-type-picker/source-resource-type-picker.component.scss
+  s_d1b985c75f92bc::t_608f970022bf83 1-149
+portal/src/app/services/upstream-source-v2.util.ts
+  s_d1b985c75f92bc::t_80d67969a3ad7d 73,77
+  s_d1b985c75f92bc::t_e7fa7f1a4e5e65 1-65,92,104,107-109,116,136-138,143-144,154-158,163-168,170-172,174,176-193,202-204,206-207,210-212,215,218-231
+  s_d1b985c75f92bc::t_42244efd0c17f5 74-75,78
+  s_d1b985c75f92bc::t_031193d8768ad9 123-128
+  s_d1b985c75f92bc::t_dd5f2dec8ec960 66-72,76,79-91,93-103,105-106,110-115,117-122,129-135,139-142,145-153,159-162
+  s_d1b985c75f92bc::t_3f40b9ff0ad648 169,173,175,194-201,205,208-209,213-214,216-217
+portal/src/app/components/node-library-v2/node-library-dialog.component.html
+  s_d1b985c75f92bc::t_196da20b4c0fcd 340-341
+tests/FHIRBridge.UnitTests/Sources/EpicSourceConnectionScopeSyncServiceTests.cs
+  s_d1b985c75f92bc::t_49e1868c38c696 81-89,351,375
+  s_d1b985c75f92bc::t_f15a92d9642267 75-76,78,94,145-146,151-152,154,158,177-236,287-330,333-350,352-374,376-388
+  s_d1b985c75f92bc::t_1edda2bffd82ca 57,60,63,71,74,77,79,90-91,93,95,98,105,107,109,115,120,122,124-127,132,135,137,139,142-143,160,164,166,168-169,172,175,389-402,404,408-416,418-424,429-439
+  s_d1b985c75f92bc::t_5cd05ee196f8b9 149,237-286
+  s_d1b985c75f92bc::t_8e80fbd8aeb34a 417,425-428
+  s_d1b985c75f92bc::t_9000a54366d185 80,92,96-97,99-104,106,108,110-114,116-119,121,123,128-131,133-134,136,138,140-141,144,147-148,150,153,155-157,159,161-163,165,167,170-171,173-174,176
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d1b985c75f92bc::t_e69ee0fd209840 40-41,567,1227-1228,1230-1231,1233-1235,1238,1241-1242,4629,4631
+  s_d1b985c75f92bc::t_94ad8178b1f059 39,538,608-609,611-613,1229,1232,1236-1237,1239-1240,1243-1251,1261-1263,1266,1268,1272,1277,1279,2784,4612-4618,4630,4632-4633,5043
+  s_d1b985c75f92bc::t_c06bc8fbaa8458 4593-4596
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_d1b985c75f92bc::t_a2f8ead3f7fc01 308-309,325-332,360
+portal/src/app/services/upstream-source-v2.util.spec.ts
+  s_d1b985c75f92bc::t_eb5ee631de477a 9,19-20,25-29,43-49,59-76,90-100,106,146,148-150,153,155-164,171,174-209,214
+  s_d1b985c75f92bc::t_cc5962f0bc936c 1,3-8,10-18,22-24,30-31,50-58,77-89,101-105,107-145,147,151-152,154,165-170,172-173,210-213,215-223
+  s_d1b985c75f92bc::t_fb249d2d836875 2,21
+  s_d1b985c75f92bc::t_9bceaaef0d174f 32
+  s_d1b985c75f92bc::t_73f713e62969d2 33-42
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_d1b985c75f92bc::t_e620eb0d85518a 9
+  s_d1b985c75f92bc::t_83058dcb33587e 341,343
+  s_d1b985c75f92bc::t_c380d3cc91489c 339-340,344-349
+  s_d1b985c75f92bc::t_ce2fd7625adac8 342
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-target.service.ts
+  s_d1b985c75f92bc::t_9b0e70483d51b7 1-38
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.source-types.spec.ts
+  s_d1b985c75f92bc::t_a8e4ecf4d20c59 1-95,112
+  s_d1b985c75f92bc::t_ddffe228e1d558 96-111
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.spec.ts
+  s_d1b985c75f92bc::t_1371eb6082e8b9 1-28,31-157,188-195
+  s_d1b985c75f92bc::t_283f94a0e8dc56 158
+  s_d1b985c75f92bc::t_b7d950e44a7f75 29-30,159-186
+  s_d1b985c75f92bc::t_3f26a58f45f0d5 187
+src/Api/FHIRBridge.Api/Workflows/WorkflowBuildModels.cs
+  s_d1b985c75f92bc::t_32e413dfcf800a 78
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_905e486ef48c8d 17,65-72,171-179,1296-1297
+  s_d1b985c75f92bc::t_e4019f808ddd2c 1291-1295
+src/FHIRBridge.Application/Abstractions/Sources/IEpicSourceConnectionScopeSyncService.cs
+  s_d1b985c75f92bc::t_32e413dfcf800a 4-8
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.html
+  s_d1b985c75f92bc::t_3c336c4072b988 269,541,605,662,703,741,917-955
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/destination-form-api.ts
+  s_d1b985c75f92bc::t_552ae7920594ed 130-131
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorResourceTypeResolutionTests.cs
+  s_d1b985c75f92bc::t_021114795b3014 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0d50d5f2f4e5d35f08d8c914a6a7c39a5ae59386",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
