@@ -1,0 +1,26 @@
+portal/src/app/services/phase-config.generic-fhir.spec.ts
+  s_0302d221bf5ca2::t_d66484ec5571ad 3,8-9,11
+  s_0302d221bf5ca2::t_cb5f309bac331e 12-24
+  s_0302d221bf5ca2::t_08e7c4073bd109 1-2,4-7,10,25
+portal/src/app/services/phase-config-v2.service.ts
+  s_0302d221bf5ca2::t_71c0f4fdc52855 38
+  s_0302d221bf5ca2::t_d833dc0b877df3 48-49
+portal/src/app/services/phase-config.service.ts
+  s_0302d221bf5ca2::t_6e072d1cc2a7ba 35,45-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9a628da0cc50e9c158e771d2262c7a59db8220e5",
+  "prompts": {},
+  "sessions": {
+    "s_0302d221bf5ca2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd474ba3-7268-4bb0-bdc3-ec93bfa43dd8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

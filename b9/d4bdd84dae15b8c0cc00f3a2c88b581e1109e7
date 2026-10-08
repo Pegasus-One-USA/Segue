@@ -1,0 +1,70 @@
+portal/src/app/services/ehr-write-capabilities.service.ts
+  s_d1b985c75f92bc::t_ce6bbb1b2596b2 15-16
+tests/FHIRBridge.UnitTests/Tabular/TabularSourceTests.cs
+  s_d1b985c75f92bc::t_d8dde74448d3f2 320
+src/FHIRBridge.Domain/Fhir/EhrWriteCapability.cs
+  s_d1b985c75f92bc::t_91fed8d2027c3f 56-59
+tests/FHIRBridge.UnitTests/EhrWriteBack/HealowWriteBackTests.cs
+  s_d1b985c75f92bc::t_d8dde74448d3f2 34,44,88,92
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.ts
+  s_d1b985c75f92bc::t_e2dca87b3e9d6a 114-115
+  s_d1b985c75f92bc::t_ce6bbb1b2596b2 16,27-29,117-118,254
+src/FHIRBridge.Application/DTOs/EhrWriteCapabilitiesDto.cs
+  s_d1b985c75f92bc::t_c627791a673c2c 24
+  s_d1b985c75f92bc::t_5223bb327bd7d1 14-15
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_350daeb7d4bcf3 248,251-252,254-269,286-287,307,312,327,340,424,454
+src/FHIRBridge.Application/Services/EhrWriteBackSettings.cs
+  s_d1b985c75f92bc::t_c3a4131056ce83 4-7
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/SettingsEhrCloneModePolicy.cs
+  s_d1b985c75f92bc::t_c3a4131056ce83 1-20
+tests/FHIRBridge.UnitTests/EhrWriteBack/EhrWriteReviewTests.cs
+  s_d1b985c75f92bc::t_e2dca87b3e9d6a 6,17,42-46,48,51-54,56
+src/FHIRBridge.Application/Abstractions/Destinations/IEhrCloneModePolicy.cs
+  s_d1b985c75f92bc::t_c3a4131056ce83 1-16
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/MappedEhrWriteBackDestinationWriter.cs
+  s_d1b985c75f92bc::t_c3a4131056ce83 24-30,39,45,50,80,89,91,94,148,237,286,298,355,360,579,598,606,615-616
+  s_d1b985c75f92bc::t_e2dca87b3e9d6a 220-226,323,326
+src/Api/FHIRBridge.Api/Controllers/V1/EhrWriteCapabilitiesController.cs
+  s_d1b985c75f92bc::t_c3a4131056ce83 22,47
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261003055730_RemoveEhrWriteBackLiveWriteTypes.cs
+  s_d1b985c75f92bc::t_84de2df568e9fa 13-23
+  s_d1b985c75f92bc::t_8eed2c1ec41394 1-12,24-26
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_d1b985c75f92bc::t_e2dca87b3e9d6a 730-731,1142
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261003055805_RemoveEhrWriteBackLiveWriteTypes.cs
+  s_d1b985c75f92bc::t_84de2df568e9fa 13-23
+  s_d1b985c75f92bc::t_df44b1396eaca9 1-12,24-26
+tests/FHIRBridge.UnitTests/EhrWriteBack/MappedEhrWriteBackDestinationWriterTests.cs
+  s_d1b985c75f92bc::t_ae768ce36e8844 16,47,58,107,109-110,116-117,119-120,124,128,133,137,142,144,163,165,170,175-191,200,202,213,231,249,444,459,474,483,485,487,491-493,501,514,537,622,624,626,628,631
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d1b985c75f92bc::t_c3a4131056ce83 564
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261003055805_RemoveEhrWriteBackLiveWriteTypes.Designer.cs
+  s_d1b985c75f92bc::t_336f2dcf57616d 1-6556
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261003055730_RemoveEhrWriteBackLiveWriteTypes.Designer.cs
+  s_dc768a10621e89::t_5ba7082e11301a 1-6593
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "b9d4bdd84dae15b8c0cc00f3a2c88b581e1109e7",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_dc768a10621e89": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-afd11775076a4ff5c",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

@@ -1,0 +1,75 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_d1b985c75f92bc::t_ad7ad1da0d1d6f 1117-1118
+tests/FHIRBridge.UnitTests/EhrWriteBack/MappedEhrWriteBackDestinationWriterTests.cs
+  s_d1b985c75f92bc::t_530d722addc8c6 613,616,619-620,623-624
+  s_d1b985c75f92bc::t_8e42bbcefe8e84 596-600,604-605
+  s_d1b985c75f92bc::t_c5db0db7216cfc 61
+  s_d1b985c75f92bc::t_28cfd129e8dfa5 551-556,559-561
+  s_d1b985c75f92bc::t_d761549b4f1970 48-50
+  s_d1b985c75f92bc::t_aea3341474b3c2 417-548
+src/FHIRBridge.Domain/Fhir/EhrWriteCapabilities.cs
+  s_d1b985c75f92bc::t_460b84e222121a 25-26,33-34
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_07a5fa1a97ec84 252-253
+  s_d1b985c75f92bc::t_fbed2573713aaf 291-336
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.ts
+  s_d1b985c75f92bc::t_9c967ebb510aac 18-19,89,92-103,160,170,207-208,229,242,248,255
+tests/FHIRBridge.Runtime.UnitTests/Workflows/EhrWriteBackDestinationNodeExecutorTests.cs
+  s_d1b985c75f92bc::t_81cb289c0f1b9d 80-81,95,111
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicClinicalNoteWriteProfile.cs
+  s_d1b985c75f92bc::t_4ddf6bae06fc19 74-79,82-98
+  s_d1b985c75f92bc::t_39501934127fb6 12
+  s_d1b985c75f92bc::t_cf55c973c3ea7c 1
+tests/FHIRBridge.UnitTests/Validation/CreateDestinationConfigurationRequestValidatorTests.cs
+  s_d1b985c75f92bc::t_d3bd7c17587098 116
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrClonePatient.cs
+  s_d1b985c75f92bc::t_cc5b8b68161f6e 1-74
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/MappedEhrWriteBackDestinationWriter.cs
+  s_d1b985c75f92bc::t_9d96d6b1187946 75-84,90,92-99,109-110,114,117,120,127,133,139-140,142,146,151-153,156-159,167-169,173,181,192,200,203,209,215-220,228-229,239,251-253,267,274-360,391-396,404-405,411-413,419,423-424,430,436,451,454,456,459-467,471-472,483,493,560-565,567-589,591-597,600-620,622-624
+tests/FHIRBridge.UnitTests/EhrWriteBack/EpicWriteProfileTests.cs
+  s_d1b985c75f92bc::t_687b2fe4b210d4 195-196
+  s_d1b985c75f92bc::t_3af03ead517f09 182-185,187,192-194,197-211
+portal/src/app/destination-connections/utils/destination-connection-secret.util.ts
+  s_d1b985c75f92bc::t_9c967ebb510aac 97
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrReferenceResolver.cs
+  s_d1b985c75f92bc::t_ece5acc949e6ad 24,43-46,68,80-81,91,116-125,157,172-176,209-221
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrNoteText.cs
+  s_d1b985c75f92bc::t_38adc9d4d15d80 1
+  s_d1b985c75f92bc::t_6beb5bb0226230 243-252
+  s_d1b985c75f92bc::t_dd0f9b373d61d7 112,114-115
+  s_d1b985c75f92bc::t_c0807dc13bca66 2-111,113,116-242,253-274
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/SettingsEhrWriteReleasePolicy.cs
+  s_d1b985c75f92bc::t_f8bfe0391e8d51 25-27
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Payloads/DestinationWriteResult.cs
+  s_d1b985c75f92bc::t_ad7ad1da0d1d6f 26-27
+src/FHIRBridge.Application/Validation/CreateDestinationConfigurationRequestValidator.cs
+  s_d1b985c75f92bc::t_2393bc0db08034 132
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrWriteKeys.cs
+  s_d1b985c75f92bc::t_dbfc2408bac769 17-20
+tests/FHIRBridge.UnitTests/EhrWriteBack/EhrWriteReviewTests.cs
+  s_d1b985c75f92bc::t_9eccc7c3c12990 45
+src/FHIRBridge.Application/Abstractions/Destinations/IEhrWriteChannel.cs
+  s_d1b985c75f92bc::t_3425e1a622a57e 61-64,70-71,139-140
+src/FHIRBridge.Application/Abstractions/Destinations/IEhrWriteReleasePolicy.cs
+  s_d1b985c75f92bc::t_f8bfe0391e8d51 14-17
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/EhrWriteBackDestinationNodeExecutor.cs
+  s_d1b985c75f92bc::t_ad7ad1da0d1d6f 153-154,170-172
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_d1b985c75f92bc::t_c77950fda84aec 1145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f74b1568fff83e69bd18f0f5632bf28233451e3f",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

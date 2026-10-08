@@ -1,0 +1,34 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.layout.spec.ts
+  s_3ed121661efe12::t_0135980232b5de 1-70,85-134
+  s_3ed121661efe12::t_35b4c509cc9b62 71-84
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.scss
+  s_3ed121661efe12::t_35b4c509cc9b62 264-267
+  s_3ed121661efe12::t_76ee26ded27abb 17-20,31,253-263,268-269,276,281-284,293-298,330-331,374
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.html
+  s_3ed121661efe12::t_76ee26ded27abb 13-15,107,143,166,170
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_3ed121661efe12::t_76ee26ded27abb 34,70-72,100-127
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_3ed121661efe12::t_76ee26ded27abb 34,70-72,100-127
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.component.scss
+  s_3ed121661efe12::t_35b4c509cc9b62 264-267
+  s_3ed121661efe12::t_76ee26ded27abb 17-20,31,253-263,268-269,276,281-284,293-298,330-331,374
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.component.html
+  s_3ed121661efe12::t_76ee26ded27abb 13-15,107,143,166,170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "262ddf7b13826550857779fa04f2a8a4b7f743ea",
+  "prompts": {},
+  "sessions": {
+    "s_3ed121661efe12": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b59933f-9a05-4a37-838a-9f358a20502f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

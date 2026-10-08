@@ -1,0 +1,34 @@
+src/Api/FHIRBridge.Api/Controllers/V1/OAuthController.cs
+  s_d1b985c75f92bc::t_4ea7135323b8a1 7,128,135-137,222-233,270
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_4ea7135323b8a1 2041-2042,2078-2081,2779-2787,2825-2826,2831-2833,2835-2843,2852-2854,2857-2862,3680-3681,3690,4110-4113,4115
+tests/FHIRBridge.Api.IntegrationTests/TestHelpers/DatabaseFactAttribute.cs
+  s_d1b985c75f92bc::t_ead642eff12c00 16
+tests/FHIRBridge.Api.IntegrationTests/Tests/EhrWriteBackPermissionTests.cs
+  s_d1b985c75f92bc::t_ead642eff12c00 234,244
+  s_d1b985c75f92bc::t_1e9f6808edfc90 50,193-233,235-243,245-272
+src/FHIRBridge.Infrastructure/Sources/InteractiveSourceAuthorizationService.cs
+  s_d1b985c75f92bc::t_4ea7135323b8a1 17,949-958,992-998
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_4ea7135323b8a1 261-272
+src/Api/FHIRBridge.Api/Controllers/V1/PatientStandaloneLaunchController.cs
+  s_d1b985c75f92bc::t_4ea7135323b8a1 7,87,93-95
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/WorkflowNodeTypes.cs
+  s_d1b985c75f92bc::t_4ea7135323b8a1 103-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "639cb8431a7b63f8e00f64b778c3ae204a6f0d00",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
