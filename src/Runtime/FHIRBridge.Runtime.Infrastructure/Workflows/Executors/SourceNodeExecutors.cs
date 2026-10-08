@@ -280,7 +280,10 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // node's own, per-workflow declaration of what it fetches — two workflows can share one SourceConnection
         // (and so one set of granted scopes) while each still fetching a different, deliberately narrower or wider
         // subset. Takes priority over anything resolved from the connection below, since that's connection-wide and
-        // can't express a per-workflow difference the way this node-level field can.
+        // can't express a per-workflow difference the way this node-level field can. Read whether or not the node
+        // carries the portal's "Resource types declared" marker: an unmarked (legacy) list, such as the Generic FHIR
+        // form's silent default, is still fetched as before, narrowed to the destinations' selections below. The
+        // marker only decides the save-time check and the connection's scopes (WorkflowNodeResourceTypes).
         var configuredResources = ParseCommaSeparatedResourceTypes(ReadStringConfiguration(node, "Resources"));
 
         // Option A: prefer a real SourceConnection referenced by id (base URL + auth + token resolved live at run time).
@@ -437,26 +440,28 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         }
         else
         {
-            // Last resort before failing outright: a source with no resource-type config of its own (e.g. Generic
-            // FHIR, which has no OAuth scopes to derive from at all) still has a real answer as long as some
-            // reachable destination declares its own "dest_resources" — the same field RestrictToDestinationResourceTypesAsync
-            // below already reads to *narrow* an existing list. Using it to *seed* one too means the source form's
-            // own Resource Type field can be optional rather than mandatory, since the destination wizard's data-group
-            // picker already captures the same choice for any workflow that has a destination at all.
+            // Last resort before failing outright, kept for workflows saved before source nodes declared their
+            // resource types: a legacy source with no resource-type config of its own (e.g. Generic FHIR, which has
+            // no OAuth scopes to derive from at all) still has a real answer as long as some reachable destination
+            // declares its own "dest_resources" — the same field RestrictToDestinationResourceTypesAsync below reads
+            // to *narrow* an existing list. A node saved now from the portal declares its types on the source
+            // ("Resources", marked "Resource types declared"), and destinations choose only from that list.
             var fromDestination = await GetDestinationResourceTypesAsync(node, cancellationToken);
             resourceTypes = fromDestination.Count > 0
                 ? fromDestination
                 : throw new InvalidOperationException(
-                    $"Source node '{node.Id}' ({node.NodeType}) has no resolvable FHIR resource type: " +
+                    $"Source node '{node.Id}' ({node.NodeType}) has no resource types to read: " +
                     "no 'Resources'/'resourceType' node configuration, no connection-level ResourceTypes, no SMART " +
                     "scopes to derive one from, and no reachable destination's own resource selection to fall back " +
-                    "to. Configure at least one resource type for this node or its destination.");
+                    "to. Open the source node and choose its resource types to read.");
         }
 
-        // Narrow to whatever this node's downstream destination(s) actually selected — a destination wizard's own
-        // "dest_resources" picker is the real record of what's ever written anywhere; without this, a source
-        // configured (or scope-derived) for a broader set than any destination consumes silently over-fetches
-        // (and, upstream of here, over-requests OAuth scopes for) resource types nobody ever asked for. Only applies
+        // Narrow to whatever this node's downstream destination(s) actually selected. The source's declared list is
+        // what the workflow may read; each destination chooses a subset of it ("dest_resources"), so a type no
+        // destination chose is never fetched. This only ever shrinks the list — a destination can never add a type
+        // the source does not read (the save endpoints reject that for a source that declares its types; a legacy
+        // source is not checked, and a type outside its list is simply not fetched). Also keeps a legacy source
+        // configured (or scope-derived) for a broader set than any destination consumes from over-fetching. Only applies
         // a constraint when at least one reachable destination exists — a destination-less run (e.g. a caller that
         // reads this node's raw output directly, with no destination node at all) has nothing to narrow against and
         // keeps fetching exactly what was resolved above, unchanged.
@@ -1066,7 +1071,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     /// than any destination ever consumes. A run with no destination reachable at all (e.g. a caller that reads this
     /// node's raw output directly, with nothing downstream to narrow against) returns <paramref name="resourceTypes"/>
     /// unchanged — this only ever removes types nothing downstream wants, never adds ones the source itself wasn't
-    /// already configured/authorized for.
+    /// already configured/authorized for. The source node's declared list stays the record of what is read; the
+    /// destinations only choose from it.
     /// </summary>
     private async Task<IReadOnlyCollection<string>> RestrictToDestinationResourceTypesAsync(
         IReadOnlyCollection<string> resourceTypes,
@@ -1084,8 +1090,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     /// wizard-authored "dest_resources" field — unioned across all such destinations. Shared by
     /// <see cref="RestrictToDestinationResourceTypesAsync"/> (uses this to narrow an already-resolved list) and the
     /// resource-type resolution fallback chain in <see cref="ExecuteAsync"/> (uses this to seed one from scratch
-    /// when the source itself has no configured/connection-level/scope-derived resource types of its own — e.g. a
-    /// Generic FHIR source, which has no OAuth scopes to derive anything from). Returns an empty set (never throws)
+    /// only for a legacy source node that declares no resource types and has no connection-level/scope-derived ones
+    /// either — e.g. an older Generic FHIR source, which has no OAuth scopes to derive anything from). Returns an empty set (never throws)
     /// when there's no workflow store, no workflow definition, or no reachable destination at all.
     /// <para>
     /// Purely what the wizard's "dest_resources" field lists — no types are added beyond that. A type outside the

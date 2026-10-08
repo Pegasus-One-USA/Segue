@@ -1,10 +1,11 @@
 namespace FHIRBridge.Application.Abstractions.Sources;
 
 /// <summary>
-/// Keeps an interactive source connection's persisted OAuth scopes derived from what its pipelines actually consume
-/// (the union of every destination's selected resource types, across every workflow whose source node references
-/// this connection) rather than a value an admin can hand-edit and let drift out of sync — the direct cause of a
-/// source connection requesting more (or less) than its pipelines really need.
+/// Keeps an interactive source connection's persisted OAuth scopes derived from what its pipelines actually read
+/// (the union of the resource types declared by every source node that references this connection, across every
+/// workflow; a legacy source node with no declared list contributes its reachable destinations' selections instead)
+/// rather than a value an admin can hand-edit and let drift out of sync — the direct cause of a source connection
+/// requesting more (or less) than its pipelines really need.
 /// </summary>
 public interface IEpicSourceConnectionScopeSyncService
 {

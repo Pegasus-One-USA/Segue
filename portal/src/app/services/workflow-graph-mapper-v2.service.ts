@@ -290,6 +290,14 @@ export class WorkflowGraphMapperServiceV2 {
     return this.store.nodes().find(node => !node.kind)?.id ?? null;
   }
 
+  /** The displayName a canvas node is saved under (nodeToRequest) — what the server's save-time messages name it by,
+   *  so the builder's own pre-checks can name it the same way. */
+  savedDisplayName(node: CanvasNode): string {
+    const catalog = this.workflowApi.catalog();
+    const transformId = this.catalogSupportedTransformId(this.transformIdForNode(node), node, catalog);
+    return this.displayNameFor(node, this.catalogForTransform(transformId, catalog));
+  }
+
   private nodeToRequest(node: CanvasNode, catalog: WorkflowCatalogItem[]): WorkflowNodeRequest {
     const transformId = this.catalogSupportedTransformId(this.transformIdForNode(node), node, catalog);
     const item = this.catalogForTransform(transformId, catalog);

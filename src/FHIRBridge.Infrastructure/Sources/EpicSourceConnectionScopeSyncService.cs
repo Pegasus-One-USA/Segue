@@ -1,8 +1,9 @@
-using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Sources;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Workflows;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.Fhir;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -12,10 +13,17 @@ using Microsoft.Extensions.Logging;
 namespace FHIRBridge.Infrastructure.Sources;
 
 /// <summary>
-/// See <see cref="IEpicSourceConnectionScopeSyncService"/>. Reads the resource-type selection straight out of each
-/// destination node's <see cref="WorkflowNode.ConfigurationJson"/> blob (the same field the destination wizard
-/// writes as "dest_resources") rather than any per-source-node snapshot — a source node's own "Resources" field is
-/// only ever a single pipeline's view and is what caused the last-save-wins drift this service replaces.
+/// See <see cref="IEpicSourceConnectionScopeSyncService"/>. The resource types a connection is scoped for are the
+/// ones its SOURCE nodes declare they read ("Resources", see <see cref="WorkflowNodeResourceTypes.ReadSourceDeclared"/>),
+/// unioned across every source node in every workflow that references the connection, so two workflows sharing one
+/// connection never overwrite each other's scopes (the last-save-wins drift this service was built to replace).
+/// Destinations choose from their source's list and can never widen it, so they no longer drive scopes; only a legacy
+/// source node with no declared list falls back to what the destinations reachable from it write ("dest_resources" plus
+/// the "dest_mappings" rows, as the portal's build does) — or, for a legacy node with no outgoing edges, what every
+/// destination in its workflow writes. Auto-fetch reference targets are the one deliberate widening (see
+/// GetUsedResourceTypes).
+/// A node is legacy unless it carries the "Resource types declared" marker (or is a CSV / SQL Table node): an
+/// unmarked "Resources" list (the Generic FHIR form's silent 12-type default, say) never drives scopes.
 /// </summary>
 public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnectionScopeSyncService
 {
@@ -27,7 +35,6 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
     // Matched by suffix rather than an enumerated list so a vendor added to the catalog later needs no change here.
     private const string SourceNodeTypeSuffix = "SourceNode";
     private const string SourceConnectionIdConfigKey = "sourceConnectionId";
-    private const string DestinationResourcesConfigKey = "dest_resources";
     private const string AutoFetchMissingReferencesConfigKey = "dest_autoFetchMissingReferences";
 
     private readonly IWorkflowDefinitionStore _workflowStore;
@@ -76,12 +83,27 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         if (sourceConnection.Interactive is null && !isAthenahealthBackend)
         {
             // Every other vendor's Backend Services sources have no Interactive configuration and aren't driven by
-            // a destination resource picker the same way — leave their scopes exactly as configured.
+            // the workflow's resource-type picker the same way — leave their scopes exactly as configured.
             return null;
         }
 
         var workflows = await _workflowStore.ListAsync(cancellationToken);
-        var usedResourceTypes = GetUsedResourceTypes(workflows, sourceConnectionId, sourceConnection.ApplicationType);
+        var usedResourceTypes = GetUsedResourceTypes(
+            workflows,
+            sourceConnectionId,
+            sourceConnection.ApplicationType,
+            VendorResourceTypeSupport.For(sourceConnection.SourceSystemType),
+            out var unsupportedDeclared);
+        if (unsupportedDeclared.Count > 0)
+        {
+            // A declared type the vendor cannot serve would put an unregistered scope in the token request, and
+            // athenahealth / eClinicalWorks reject the WHOLE request for one (invalid_scope). The portal picker only
+            // offers supported types, so this guards hand-authored or API-built nodes.
+            _logger.LogWarning(
+                "Source connection {SourceConnectionId} ({Vendor}): left out declared resource types the vendor does " +
+                "not support: [{UnsupportedTypes}].",
+                sourceConnectionId, sourceConnection.SourceSystemType, string.Join(", ", unsupportedDeclared));
+        }
 
         // eClinicalWorks (Healow) has the same hard v1-only requirement as athenahealth (confirmed against a live
         // authorize attempt, which eCW rejected with invalid_scope for a v2/.rs resource scope) — without this,
@@ -175,34 +197,106 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         return changed;
     }
 
-    // Every source node across every workflow that references this connection contributes its sibling
-    // destination nodes' selected resource types — the union across ALL such workflows, not just one.
+    // Every source node across every workflow that references this connection contributes the resource types it
+    // declares it reads — the union across ALL such nodes and workflows, not just one. A legacy source node with no
+    // declared list contributes what the destinations reachable from it write instead (selection plus mapping rows;
+    // never those of a destination fed by some other source in the same workflow).
+    //
+    // Either way, a reachable destination with auto-fetch on adds the types its records may reference (see
+    // GetAutoFetchReferenceTargets). This is the one deliberate exception to "destinations never widen the source":
+    // those types are not read by the source node (its fetch stays its declared list), they are only resolved one
+    // reference at a time by the destination writer with this connection's token, which 403s without the scope. The
+    // portal sends exactly the declared list at build time; this sync, which runs right after every build, is what
+    // adds them, so the connection's final scopes (and athenahealth's Retrieval.ResourceTypes) carry them.
+    //
+    // A declared list is intersected with the vendor's known-supported types (when the vendor has such a list); the
+    // types left out are reported through unsupportedDeclared. The legacy path is left exactly as it was.
     private static IReadOnlyList<string> GetUsedResourceTypes(
-        IReadOnlyCollection<WorkflowDefinition> workflows, Guid sourceConnectionId, ApplicationType? applicationType)
+        IReadOnlyCollection<WorkflowDefinition> workflows,
+        Guid sourceConnectionId,
+        ApplicationType? applicationType,
+        IReadOnlyList<string>? vendorSupported,
+        out IReadOnlyList<string> unsupportedDeclared)
     {
         var resourceTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var unsupported = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var supported = vendorSupported is null ? null : new HashSet<string>(vendorSupported, StringComparer.OrdinalIgnoreCase);
 
         foreach (var workflow in workflows)
         {
-            var referencesThisConnection = workflow.Nodes.Any(node =>
+            var referencingSourceNodes = workflow.Nodes.Where(node =>
                 node.NodeType.EndsWith(SourceNodeTypeSuffix, StringComparison.OrdinalIgnoreCase) &&
                 TryGetSourceConnectionId(node) == sourceConnectionId);
 
-            if (!referencesThisConnection)
+            foreach (var sourceNode in referencingSourceNodes)
             {
-                continue;
-            }
-
-            foreach (var node in workflow.Nodes)
-            {
-                foreach (var resourceType in GetDestinationResourceTypes(node, applicationType))
+                var declared = WorkflowNodeResourceTypes.ReadSourceDeclared(sourceNode.NodeType, sourceNode.ConfigurationJson);
+                var reachableDestinations = GetReachableDestinations(workflow, sourceNode, legacy: declared is null);
+                if (declared is null)
                 {
-                    resourceTypes.Add(resourceType);
+                    // What the destinations write: their selection plus every mapping row's resource — the same
+                    // union the portal's build assembler scopes a legacy source for (destinationWrittenResourceTypes),
+                    // so a type that only appears in a mapping row is not dropped by the sync after the build.
+                    resourceTypes.UnionWith(reachableDestinations
+                        .SelectMany(destination => WorkflowNodeResourceTypes.ReadDestinationWritten(destination.ConfigurationJson)));
+                }
+                else
+                {
+                    foreach (var type in declared)
+                    {
+                        if (supported is null || supported.Contains(type))
+                        {
+                            resourceTypes.Add(type);
+                        }
+                        else
+                        {
+                            unsupported.Add(type);
+                        }
+                    }
+                }
+
+                foreach (var destination in reachableDestinations)
+                {
+                    resourceTypes.UnionWith(GetAutoFetchReferenceTargets(destination, applicationType));
                 }
             }
         }
 
+        unsupportedDeclared = [.. unsupported];
         return [.. resourceTypes];
+    }
+
+    // The destination nodes downstream of this source node through the canvas edges — the same walk the run-time
+    // source executor uses to narrow its fetch, so the scopes and the fetch agree on which destinations count.
+    // A legacy source node with no outgoing edges at all keeps the behaviour from before sources declared their
+    // types: every destination in its workflow counts, so re-syncing an edge-less saved workflow never narrows the
+    // shared connection's scopes (or, for athenahealth, its Retrieval.ResourceTypes).
+    private static IReadOnlyList<WorkflowNode> GetReachableDestinations(
+        WorkflowDefinition workflow, WorkflowNode sourceNode, bool legacy)
+    {
+        if (legacy && !workflow.Edges.Any(edge => edge.FromNodeId == sourceNode.Id))
+        {
+            // Every node, as the pre-declaration sync read them: only one carrying dest_resources contributes.
+            return [.. workflow.Nodes.Where(node => node.Id != sourceNode.Id)];
+        }
+
+        var reachable = new HashSet<Guid>();
+        var frontier = new Queue<Guid>();
+        frontier.Enqueue(sourceNode.Id);
+        while (frontier.Count > 0)
+        {
+            var current = frontier.Dequeue();
+            foreach (var edge in workflow.Edges.Where(e => e.FromNodeId == current))
+            {
+                if (reachable.Add(edge.ToNodeId))
+                {
+                    frontier.Enqueue(edge.ToNodeId);
+                }
+            }
+        }
+
+        return [.. workflow.Nodes.Where(node =>
+            reachable.Contains(node.Id) && node.Category == WorkflowNodeCategory.Destination)];
     }
 
     private static Guid? TryGetSourceConnectionId(WorkflowNode node)
@@ -225,12 +319,12 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
     // sourced from FHIR R4's own StructureDefinitions (which resource types each reference-typed element on a given
     // resource can point to) rather than hand-maintained per vendor surprise — it only needs revisiting on a FHIR
     // version change, not every time a new vendor-specific reference pattern turns up.
-    private static IEnumerable<string> GetDestinationResourceTypes(WorkflowNode node, ApplicationType? applicationType)
+    //
+    // Returns only the added reference targets; the destination's own selection is already within its source's
+    // declared types (or, for a legacy source, added by the caller).
+    private static IEnumerable<string> GetAutoFetchReferenceTargets(WorkflowNode node, ApplicationType? applicationType)
     {
-        var raw = TryGetConfigValue(node, DestinationResourcesConfigKey);
-        var selected = string.IsNullOrWhiteSpace(raw)
-            ? []
-            : raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var selected = WorkflowNodeResourceTypes.ReadDestinationSelected(node.ConfigurationJson);
 
         // A patient-facing app never gets the widened set, however the destination is configured. The widening
         // below was verified against athenahealth's BACKEND registration, whose system/ scopes cover the referenced
@@ -245,15 +339,15 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         // so the engine's dispatch stays in the strategy registry per the architecture rule.
         if (applicationType is ApplicationType.Patient)
         {
-            return selected;
+            return [];
         }
 
         if (!string.Equals(TryGetConfigValue(node, AutoFetchMissingReferencesConfigKey), "true", StringComparison.OrdinalIgnoreCase))
         {
-            return selected;
+            return [];
         }
 
-        var widened = new SortedSet<string>(selected, StringComparer.OrdinalIgnoreCase);
+        var widened = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var type in selected)
         {
             foreach (var referenced in FhirReferenceTargets.For(type))
@@ -265,20 +359,9 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         return widened;
     }
 
-    private static string? TryGetConfigValue(WorkflowNode node, string key)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(node.ConfigurationJson);
-            return document.RootElement.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String
-                ? value.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
+    // Envelope-aware: an enveloped node keeps its settings under "config" (see WorkflowNodeConfigurationEnvelope).
+    private static string? TryGetConfigValue(WorkflowNode node, string key) =>
+        WorkflowNodeResourceTypes.ReadString(node.ConfigurationJson, key);
 
     // The generator's own default when nothing else is known; the persisted scope string was itself produced with
     // this same default the vast majority of the time, so re-deriving from it keeps behavior stable across a sync.

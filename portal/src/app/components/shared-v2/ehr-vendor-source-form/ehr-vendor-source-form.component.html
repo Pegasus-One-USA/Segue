@@ -266,7 +266,7 @@
 
       <!-- ═══════════ SECTION 4: Credentials ══════════════════════════════════ -->
       <div class="eaf-section"
-           [class.eaf-section--last]="!(showApplicationUrlsSection && (audienceConfig().showLaunchUrl || audienceConfig().showRedirect)) && !audienceConfig().showCdsHooks && !showConnectionTest && !showRetrievalSection()">
+           [class.eaf-section--last]="!(showApplicationUrlsSection && (audienceConfig().showLaunchUrl || audienceConfig().showRedirect)) && !audienceConfig().showCdsHooks && !showConnectionTest && !hasTrailingSections()">
         <div class="eaf-section-head">
           <span class="eaf-section-num">4</span>
           <span class="eaf-section-title">Credentials</span>
@@ -538,7 +538,7 @@
       @if (showApplicationUrlsSection && (audienceConfig().showLaunchUrl || audienceConfig().showRedirect)) {
         <!-- ═══════════ SECTION: Application URLs ═══════════════════════════════ -->
         <div class="eaf-section"
-             [class.eaf-section--last]="!audienceConfig().showCdsHooks && !showConnectionTest && !showRetrievalSection()">
+             [class.eaf-section--last]="!audienceConfig().showCdsHooks && !showConnectionTest && !hasTrailingSections()">
           <div class="eaf-section-head">
             <span class="eaf-section-num">{{ sectionNumbers().urls }}</span>
             <span class="eaf-section-title">Application URLs</span>
@@ -602,7 +602,7 @@
 
       @if (audienceConfig().showCdsHooks) {
         <!-- ═══════════ SECTION: CDS Hooks ═══════════════════════════════════════ -->
-        <div class="eaf-section" [class.eaf-section--last]="!showConnectionTest && !showRetrievalSection()">
+        <div class="eaf-section" [class.eaf-section--last]="!showConnectionTest && !hasTrailingSections()">
           <div class="eaf-section-head">
             <span class="eaf-section-num">{{ sectionNumbers().cds }}</span>
             <span class="eaf-section-title">CDS Hooks</span>
@@ -659,7 +659,7 @@
 
       <!-- ═══════════ Connection Test ═══════════════════════════════════════════ -->
       @if (showConnectionTest) {
-        <div class="eaf-section" [class.eaf-section--last]="!showRetrievalSection()">
+        <div class="eaf-section" [class.eaf-section--last]="!hasTrailingSections()">
           <div class="eaf-section-head">
             <span class="eaf-section-num">{{ sectionNumbers().test }}</span>
             <span class="eaf-section-title">Connection Test</span>
@@ -700,7 +700,7 @@
 
     @if (showRetrievalSection()) {
       <!-- ═══════════ Data Retrieval Method ═══════════════════════════════════ -->
-      <div class="eaf-section" [class.eaf-section--last]="!retrievalConfig()">
+      <div class="eaf-section" [class.eaf-section--last]="!retrievalConfig() && !showResourceTypesToRead()">
         <div class="eaf-section-head">
           <span class="eaf-section-num">{{ sectionNumbers().retrievalMethod }}</span>
           <span class="eaf-section-title">Data Retrieval Method</span>
@@ -738,24 +738,12 @@
 
       @if (retrievalConfig(); as method) {
         <!-- ═══════════ Retrieval Configuration ════════════════════════════════ -->
-        <div class="eaf-section eaf-section--last">
+        <div class="eaf-section" [class.eaf-section--last]="!showResourceTypesToRead()">
           <div class="eaf-section-head">
             <span class="eaf-section-num">{{ sectionNumbers().retrievalConfig }}</span>
             <span class="eaf-section-title">Retrieval Configuration</span>
             <span class="eaf-badge-neutral">{{ method.label }}</span>
           </div>
-
-          @if (vendor() === 'Athenahealth') {
-            <p class="eaf-section-sub">Resource types (and the OAuth scopes requested) are derived automatically
-              from whatever is mapped on the destination — configure them there, not here.</p>
-          }
-
-          @if (vendorOmittedResources().length) {
-            <p class="eaf-section-sub">{{ displayVendor() }} publishes no <code>system/</code> read scope for
-              {{ vendorOmittedResources().join(', ') }}, so {{ vendorOmittedResources().length === 1 ? 'it is' : 'they are' }}
-              left out of this connection's scope request. Anything mapped for
-              {{ vendorOmittedResources().length === 1 ? 'it' : 'them' }} on a destination will not be retrieved.</p>
-          }
 
           <div class="eaf-grid">
             @for (field of visibleRetrievalFields(); track field.key) {
@@ -924,6 +912,45 @@
           </div>
         </div>
       }
+    }
+
+    @if (showResourceTypesToRead()) {
+      <!-- ═══════════ Resource types to read ═══════════════════════════════════ -->
+      <!-- The source declares what it reads: destinations choose only from these types, and the run never fetches
+           more. Drives this connection's scopes as well. -->
+      <div class="eaf-section eaf-section--last">
+        <div class="eaf-section-head">
+          <span class="eaf-section-num">{{ sectionNumbers().resourceTypes }}</span>
+          <span class="eaf-section-title">Resource types to read <span class="eaf-req">*</span></span>
+          <span class="eaf-badge-neutral">{{ declaredResourceTypes().length }} selected</span>
+        </div>
+        <p class="eaf-section-sub">The FHIR resource types this source reads from {{ displayVendor() }}. Destinations
+          can only write types chosen here, and the connection requests scopes for exactly these.</p>
+
+        @if (keepsLegacyTypes()) {
+          <p class="eaf-section-sub">This source was saved before sources declared the types they read, so its
+            destinations still decide what it fetches. Change the list to declare it.</p>
+        }
+
+        @if (readableResourceTypesLoading()) {
+          <p class="eaf-section-sub">The resource types {{ displayVendor() }} supports have not loaded (yet). Nothing can be
+            picked until they do: {{ displayVendor() }} refuses a token request naming a type it does not support.</p>
+        }
+
+        @if (vendorOmittedResources().length) {
+          <p class="eaf-section-sub">{{ displayVendor() }} publishes no <code>system/</code> read scope for
+            {{ vendorOmittedResources().join(', ') }}, so {{ vendorOmittedResources().length === 1 ? 'it is' : 'they are' }}
+            left out of this connection's scope request and will not be retrieved. Remove
+            {{ vendorOmittedResources().length === 1 ? 'it' : 'them' }} from this list.</p>
+        }
+
+        <app-source-resource-type-picker
+          [available]="readableResourceTypes()"
+          [selected]="declaredResourceTypes()"
+          [disabled]="isReadonly"
+          [showError]="resourceTypesSaveAttempted()"
+          (selectionChange)="onDeclaredResourceTypesChange($event)" />
+      </div>
     }
 
   </div><!-- /eaf-body -->

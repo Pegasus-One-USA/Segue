@@ -157,11 +157,12 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         records = OrderRecordsByFhirReferenceDependency(writableRecords, resolvedResourceCache, sourceBaseUrl);
 
         // Best-effort, pre-write warning for a gap this destination genuinely can't help with: a resource type
-        // referenced by something in THIS batch but never included in it at all — this destination's own resource
-        // selection (dest_resources) is the only thing that decides what's ever fetched now (manual selection is
-        // fully in control again — see SourceNodeExecutors.GetDestinationResourceTypesAsync), so this fires
-        // whenever a selected type references one the user didn't also check (e.g. keeping Encounter but excluding
-        // Location) — surfacing a clear pre-write message instead of Aidbox's own opaque 422. Surfaced through the
+        // referenced by something in THIS batch but never included in it at all — the source node's declared resource
+        // types decide what's fetched, narrowed to this destination's own selection (dest_resources; a destination
+        // can only choose from its source's list, never widen it — see SourceNodeExecutors
+        // .RestrictToDestinationResourceTypesAsync), so this fires whenever a selected type references one the user
+        // didn't also choose (e.g. keeping Encounter but excluding Location) — surfacing a clear pre-write message
+        // instead of Aidbox's own opaque 422. Surfaced through the
         // same RecordErrors field per-record write failures already use, so it shows up alongside them rather
         // than needing new UI.
         var writeMode = ConnectionMetadataReader.GetString(destination.ConnectionMetadataJson, "dest_fhirWriteMode") ?? "individual";

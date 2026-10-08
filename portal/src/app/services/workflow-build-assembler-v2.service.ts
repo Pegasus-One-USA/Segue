@@ -4,6 +4,7 @@ import { WorkflowGraphMapperServiceV2 } from './workflow-graph-mapper-v2.service
 import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
 import { EHR_WRITE_BACK_METADATA_KEYS } from '../destination-connections/utils/destination-connection-secret.util';
 import { vendorScopeProfile } from '../data/vendor-scope-catalog.data';
+import { declaredSourceResourceTypes, destinationWrittenResourceTypes, firstUpstreamSourceId } from './upstream-source-v2.util';
 import {
   CreateDestinationConfigurationRequest,
   CreateSourceConnectionRequest,
@@ -256,30 +257,7 @@ export class WorkflowBuildAssemblerServiceV2 {
         .map((node) => node.id),
     );
 
-    // Pre-computed, per source node, the union of resource types its destinations actually map — used to derive
-    // athenahealth's retrieval resource types (and therefore the OAuth scopes it requests) from what's genuinely
-    // consumed downstream, instead of a separately-configured source-side picker that could silently drift out of
-    // sync with it (the real cause of repeated "Invalid Scope" failures against the live sandbox). A cheap
-    // pre-pass over dest_mappings — far cheaper than the full buildMappings() schema-diff work done in the real
-    // destinations loop below, and this only needs the bare resource name per row. Also unions in dest_resources
-    // (the Step 2 "Data groups" selection) directly: a FHIR-passthrough destination (Aidbox/Medplum) never
-    // populates dest_mappings at all — there's no field-by-field mapping table for a whole-resource passthrough
-    // write — so relying on dest_mappings alone left athenahealth's retrieval resourceTypes permanently empty for
-    // that combination, failing save with "At least one resource type is required for Search (REST) retrieval"
-    // even after the user picked resources in Step 2.
-    const destinationResourceTypesBySourceNodeId = new Map<string, Set<string>>();
-    for (const destNode of graph.nodes.filter((node) => this.isDestinationNode(node))) {
-      const destFields = this.fieldsFor(destNode.id, nodesById);
-      const mappingNodeId = this.mappingNodeFeeding(destNode.id, graph);
-      const sourceNodeId = this.sourceFeeding(mappingNodeId ?? destNode.id, graph, sourceNodeIds);
-      if (!sourceNodeId) continue;
-      const mappedResources = this.parseMappingRows(destFields['dest_mappings']).map((row) => row.resource);
-      const selectedResources = (destFields['dest_resources'] ?? '').split(',').map((r) => r.trim()).filter(Boolean);
-      const resources = new Set([...mappedResources, ...selectedResources]);
-      const set = destinationResourceTypesBySourceNodeId.get(sourceNodeId) ?? new Set<string>();
-      resources.forEach((r) => set.add(r));
-      destinationResourceTypesBySourceNodeId.set(sourceNodeId, set);
-    }
+    const retrievalResourceTypes = this.retrievalResourceTypesBySourceNodeId(graph, nodesById, sourceNodeIds);
 
     const sources: SourceBuildSpec[] = [];
     for (const id of sourceNodeIds) {
@@ -294,7 +272,7 @@ export class WorkflowBuildAssemblerServiceV2 {
       if (fields['tab_kind']) continue;
       sources.push({
         nodeId: id,
-        source: this.buildSource(fields, [...(destinationResourceTypesBySourceNodeId.get(id) ?? [])]),
+        source: this.buildSource(fields, retrievalResourceTypes.get(id) ?? []),
         existingId: fields['sourceConnectionId'] || null,
       });
     }
@@ -392,9 +370,65 @@ export class WorkflowBuildAssemblerServiceV2 {
   }
 
   // ── source ────────────────────────────────────────────────────────────────
+  /**
+   * Per source node, the resource types its connection retrieves (and, for athenahealth / eClinicalWorks, requests
+   * scopes for): the source's own declared "Resource types to read" ('Resources', see
+   * declaredSourceResourceTypes). Only a legacy source node with no declared list falls back to the union of what
+   * its destinations write — dest_resources (the Step 2 "Data groups" selection; a FHIR-passthrough destination
+   * never populates dest_mappings) plus every resource named in dest_mappings — which is how these were derived
+   * before the source declared them, so a workflow saved then still builds the same connection.
+   *
+   * A legacy source counts every destination it reaches (legacyDestinationIdsFor), the same walk the server's scope
+   * sync (EpicSourceConnectionScopeSyncService.GetReachableDestinations) runs right after the build: a destination
+   * behind a merge counts for each source feeding it, not only for the one on its first inbound edge.
+   */
+  private retrievalResourceTypesBySourceNodeId(
+    graph: WorkflowBuildRequest,
+    nodesById: Map<string, WorkflowNodeRequest>,
+    sourceNodeIds: Set<string>,
+  ): Map<string, string[]> {
+    const result = new Map<string, string[]>();
+    for (const id of sourceNodeIds) {
+      const declared = declaredSourceResourceTypes(this.fieldsFor(id, nodesById));
+      if (declared) {
+        result.set(id, declared);
+        continue;
+      }
+      const written = new Map<string, string>();
+      for (const destId of this.legacyDestinationIdsFor(id, graph)) {
+        for (const type of destinationWrittenResourceTypes(this.fieldsFor(destId, nodesById))) {
+          if (!written.has(type.toLowerCase())) written.set(type.toLowerCase(), type);
+        }
+      }
+      result.set(id, [...written.values()]);
+    }
+    return result;
+  }
+
+  /** The destinations whose types a legacy source is scoped for: every destination reached walking forward over the
+   *  edges from it. A source with no outgoing edges at all counts every destination in the workflow, as the server
+   *  does for an edge-less legacy node; a destination no source reaches counts for none. */
+  private legacyDestinationIdsFor(sourceNodeId: string, graph: WorkflowBuildRequest): string[] {
+    const destinations = graph.nodes.filter((node) => this.isDestinationNode(node));
+    if (!graph.edges.some((e) => e.fromNodeId === sourceNodeId)) return destinations.map((node) => node.id);
+
+    const reached = new Set<string>();
+    const queue = [sourceNodeId];
+    while (queue.length) {
+      const current = queue.shift()!;
+      for (const edge of graph.edges) {
+        if (edge.fromNodeId === current && !reached.has(edge.toNodeId)) {
+          reached.add(edge.toNodeId);
+          queue.push(edge.toNodeId);
+        }
+      }
+    }
+    return destinations.filter((node) => reached.has(node.id)).map((node) => node.id);
+  }
+
   private buildSource(
     fields: Record<string, string>,
-    destinationResourceTypes: string[] = [],
+    retrievalResourceTypes: string[] = [],
   ): CreateSourceConnectionRequest {
     const connector = fields['Connector'] ?? fields['__name'] ?? '';
     const isSample =
@@ -440,16 +474,14 @@ export class WorkflowBuildAssemblerServiceV2 {
     // blank secret sends nulls, which ConfigurationService.PreserveSecretsIfBlank keeps rather than clears.
     if (/athenahealth/i.test(connector)) {
       const athenaAppType = this.applicationTypeFor(fields);
-      // Resource types (and therefore OAuth scopes) come from what the destination actually maps — see
-      // destinationResourceTypesBySourceNodeId in assemble() — not the source's own Retrieval Configuration
-      // picker, which is now hidden for athenahealth in the form (ehr-vendor-source-form.component.ts's
-      // visibleRetrievalFields). Falls back to whatever fields['Scopes']/['Retrieval resource type'] already
-      // held when no destination is wired up yet (e.g. the very first save of a bare source node), so this
-      // never regresses to an empty/invalid request. The backend's own SourceConnectionRuntimeResolver
-      // regenerates the actual OAuth scope string fresh from Retrieval.ResourceTypes on every run regardless —
-      // this is just what gets initially persisted/validated at build time.
-      const athenaResourceTypes = destinationResourceTypes.length
-        ? destinationResourceTypes
+      // Resource types (and therefore OAuth scopes) are the source's own declared "Resource types to read" — see
+      // retrievalResourceTypesBySourceNodeId, which falls back to what the destinations write only for a legacy
+      // source with no declared list. Falls back further to whatever fields['Scopes']/['Retrieval resource type']
+      // already held when neither exists, so this never regresses to an empty/invalid request. The backend's own
+      // SourceConnectionRuntimeResolver regenerates the actual OAuth scope string fresh from
+      // Retrieval.ResourceTypes on every run regardless — this is just what gets initially persisted/validated.
+      const athenaResourceTypes = retrievalResourceTypes.length
+        ? retrievalResourceTypes
         : (fields['Retrieval resource type'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
       const athenaScopes = athenaResourceTypes.length
         ? athenaResourceTypes.map((rt) => `system/${rt}.read`)
@@ -501,20 +533,25 @@ export class WorkflowBuildAssemblerServiceV2 {
     // secret), mirroring the Epic branch, so Backend System's private_key_jwt key material is persisted, not dropped.
     if (/healow/i.test(connector)) {
       const healowIsBackend = this.applicationTypeFor(fields) === 'Backend';
-      // Resource types (and therefore OAuth scopes) come from what the destination actually maps — see
-      // destinationResourceTypesBySourceNodeId in assemble() — exactly as for athenahealth, and for the same
-      // reason: eCW fails the WHOLE token request on one unrecognized scope, so a broad guess is worse than a
-      // narrow truth. Falls back to whatever the node already held when no destination is wired up yet.
-      const healowResourceTypes = destinationResourceTypes.length
-        ? destinationResourceTypes
+      // Resource types (and therefore OAuth scopes) are the source's declared "Resource types to read" (legacy
+      // source: what its destinations write) — see retrievalResourceTypesBySourceNodeId — exactly as for
+      // athenahealth. eCW fails the WHOLE token request on one unrecognized scope, so the source picker offers only
+      // types eCW can read. Falls back to whatever the node already held when neither exists. Backend System keeps
+      // only the types eCW publishes a system/ read scope for (healowProfile below): one it cannot be scoped for is
+      // never fetched, so it must not reach Retrieval.ResourceTypes either.
+      const healowProfile = vendorScopeProfile('Healow');
+      const healowRequestedTypes = retrievalResourceTypes.length
+        ? retrievalResourceTypes
         : (fields['Retrieval resource type'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      const healowResourceTypes = healowIsBackend && healowProfile
+        ? healowRequestedTypes.filter((rt) => !!healowProfile.readAccessLevelByResourceType[rt])
+        : healowRequestedTypes;
       // eCW does not spell every system/ read scope the same way (ServiceRequest, Coverage, RelatedPerson,
       // Binary, Specimen, MedicationDispense, QuestionnaireResponse, Media and Claim are '.r'-only; the rest are
       // '.read'), and publishes none at all for some resource types. Use the vendor profile rather than a uniform
       // suffix. The backend's SourceConnectionRuntimeResolver regenerates the real scope string from
       // Retrieval.ResourceTypes on every run using its own copy of the same table — this is just what gets
       // initially persisted and validated at build time.
-      const healowProfile = vendorScopeProfile('Healow');
       const healowSystemScopes = healowResourceTypes
         .map((rt) => {
           const level = healowProfile?.readAccessLevelByResourceType[rt];
@@ -670,9 +707,9 @@ export class WorkflowBuildAssemblerServiceV2 {
     return 'Backend';
   }
 
-  /** Overrides a retrieval config's resourceTypes with the destination-derived list when there is one, leaving
-   *  whatever buildRetrieval() already resolved when the graph has no destination wired up yet. Used by the vendor
-   *  branches that derive scopes from what the destination actually maps rather than from a wizard guess. */
+  /** Overrides a retrieval config's resourceTypes with the source's declared list (legacy source: what its
+   *  destinations write — see retrievalResourceTypesBySourceNodeId) when there is one, leaving whatever
+   *  buildRetrieval() already resolved otherwise. Used by the vendor branches whose scopes follow these types. */
   private withResourceTypes(
     retrieval: SourceRetrievalConfigurationRequest | null,
     resourceTypes: string[],
@@ -1807,16 +1844,13 @@ export class WorkflowBuildAssemblerServiceV2 {
     graph: WorkflowBuildRequest,
     sourceNodeIds: Set<string>,
   ): string | null {
-    let current: string | null = startNodeId;
-    const seen = new Set<string>();
-    while (current && !seen.has(current)) {
-      if (sourceNodeIds.has(current)) return current;
-      seen.add(current);
-      current =
-        graph.edges.find((e) => e.toNodeId === current)?.fromNodeId ?? null;
-    }
-    // Fallback: the first source in the graph (linear single-source pipelines).
-    return [...sourceNodeIds][0] ?? null;
+    const edges = graph.edges.map((e) => ({ from: e.fromNodeId, to: e.toNodeId }));
+    return (
+      firstUpstreamSourceId(startNodeId, edges, (id) => sourceNodeIds.has(id)) ??
+      // Fallback: the first source in the graph (linear single-source pipelines).
+      [...sourceNodeIds][0] ??
+      null
+    );
   }
 
   private fieldsFor(

@@ -1,0 +1,117 @@
+:host {
+  display: block;
+}
+
+.ewtg-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.ewtg-empty {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--color-warning-strong);
+  background: var(--color-warning-soft);
+  border-radius: 8px;
+}
+
+.ewtg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.ewtg-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-primary);
+  }
+
+  &--selected {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+  }
+
+  &--greyed {
+    background: var(--color-bg);
+    border-style: dashed;
+  }
+
+  &--greyed.ewtg-card--selected {
+    border-color: var(--color-warning);
+    background: var(--color-warning-soft);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+
+.ewtg-check {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+  color: var(--color-on-primary);
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  transition: background 0.15s, border-color 0.15s;
+
+  .ewtg-card--selected & {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+}
+
+.ewtg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ewtg-name {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ewtg-sub,
+.ewtg-reason,
+.ewtg-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.ewtg-sub {
+  color: var(--color-muted-2);
+}
+
+.ewtg-reason {
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.ewtg-note {
+  font-weight: 600;
+  color: var(--color-warning-strong);
+}

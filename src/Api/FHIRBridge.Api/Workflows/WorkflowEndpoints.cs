@@ -14,6 +14,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Workflows;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Security;
@@ -60,6 +61,14 @@ public static class WorkflowEndpoints
             message,
             fieldErrors = (IReadOnlyDictionary<string, string[]>?)new Dictionary<string, string[]> { [field] = [message] },
         });
+
+    // See WorkflowResourceTypeSubsetRule. Null when every destination writes only what its source(s) read.
+    private static string? CheckDestinationResourceTypesAgainstSources(
+        IReadOnlyCollection<WorkflowNodeRequest>? nodes, IReadOnlyCollection<WorkflowEdgeRequest>? edges) =>
+        WorkflowResourceTypeSubsetRule.Check(
+            (nodes ?? []).Select(node => new WorkflowResourceTypeSubsetRule.Node(
+                node.Id, node.NodeType, node.Category, node.DisplayName, node.ConfigurationJson)).ToList(),
+            (edges ?? []).Select(edge => new WorkflowResourceTypeSubsetRule.Edge(edge.FromNodeId, edge.ToNodeId)).ToList());
 
     public static IEndpointRouteBuilder MapWorkflowEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -157,6 +166,15 @@ public static class WorkflowEndpoints
             if (parentReferenceError is not null)
             {
                 return ValidationBadRequest(parentReferenceError);
+            }
+
+            // A destination may only write what its source reads: the source node declares its resource types,
+            // destinations choose from them. Checked on save only (not in WorkflowGraphValidator, which also runs at
+            // run time), so a workflow saved before sources declared their types still runs unchanged.
+            var resourceTypeSubsetError = CheckDestinationResourceTypesAgainstSources(request.Nodes, request.Edges);
+            if (resourceTypeSubsetError is not null)
+            {
+                return ValidationBadRequest(resourceTypeSubsetError);
             }
 
             // Destinations, Sources, Mappings, and the workflow-definition save below used to each commit
@@ -1268,6 +1286,13 @@ public static class WorkflowEndpoints
                         return Results.StatusCode(StatusCodes.Status403Forbidden);
                     }
                 }
+            }
+
+            // Same save-time rule as /workflows/build: a destination may only write what its source reads.
+            var resourceTypeSubsetError = CheckDestinationResourceTypesAgainstSources(request.Nodes, request.Edges);
+            if (resourceTypeSubsetError is not null)
+            {
+                return ValidationBadRequest(resourceTypeSubsetError);
             }
 
             var workflow = BuildWorkflow(workflowId, request, (existing?.Version ?? 0) + 1);

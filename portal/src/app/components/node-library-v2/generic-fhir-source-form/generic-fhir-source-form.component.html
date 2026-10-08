@@ -32,8 +32,8 @@
     </div>
 
     <!-- ═══════════ SECTION 2: Data Retrieval Method ══════════════════════════ -->
-    <!-- Resource Type is deliberately not asked here — the destination node's own "dest_resources" picker already
-         captures it, and the backend derives it from there when this source node has none of its own. -->
+    <!-- The resource types this source reads are declared in "Resource types to read" (section 4) — destinations
+         choose only from them, and the run never fetches more. -->
     <div class="eaf-section">
       <div class="eaf-section-head">
         <span class="eaf-section-num">2</span>
@@ -58,8 +58,8 @@
       </div>
     </div>
 
-    <!-- ═══════════ SECTION 4: Retrieval Configuration ═══════════════════════ -->
-    <div class="eaf-section eaf-section--last">
+    <!-- ═══════════ SECTION 3: Retrieval Configuration ═══════════════════════ -->
+    <div class="eaf-section">
       <div class="eaf-section-head">
         <span class="eaf-section-num">3</span>
         <span class="eaf-section-title">Retrieval Configuration</span>
@@ -360,6 +360,27 @@
         }
 
       </div>
+    </div>
+
+    <!-- ═══════════ SECTION 4: Resource types to read ════════════════════════ -->
+    <div class="eaf-section eaf-section--last">
+      <div class="eaf-section-head">
+        <span class="eaf-section-num">4</span>
+        <span class="eaf-section-title">Resource types to read <span class="eaf-req">*</span></span>
+        <span class="eaf-badge-neutral">{{ selectedResources().length }} selected</span>
+      </div>
+      <p class="eaf-section-sub">The FHIR resource types this source reads from the server. Destinations can only
+        write types chosen here.</p>
+      @if (keepsLegacyTypes()) {
+        <p class="eaf-section-sub">This source was saved before sources declared the types they read, so its
+          destinations still decide what it fetches. Change the list to declare it.</p>
+      }
+
+      <app-source-resource-type-picker
+        [available]="readableResourceTypes"
+        [selected]="selectedResources()"
+        [showError]="resourceTypesSaveAttempted()"
+        (selectionChange)="onResourceTypesChange($event)" />
     </div>
 
   </div>

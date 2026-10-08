@@ -305,6 +305,8 @@
             Choose which FHIR resources to include in this destination. Checking which ones this source supports…
           } @else if (discoverProbeStatus() === 'done' && availableGroups().length < SUPPORTED_RESOURCE_TYPES.length) {
             Showing {{ availableGroups().length }} of {{ SUPPORTED_RESOURCE_TYPES.length }} resources — filtered to what this source supports.
+          } @else if (sourceResources().length > 0) {
+            Choose from the resource types this destination's source reads.
           } @else {
             Choose which FHIR resources to include in this destination.
           }
@@ -320,6 +322,14 @@
           it was allowed when this route was saved, but the filter has since narrowed. Review and remove it if it's no longer needed.
         </div>
       }
+      @if (isEhrWriteBack() && ehrWriteTypeRows(); as writeRows) {
+        <!-- What the source reads, with the types this EHR cannot take greyed and their reason. -->
+        <app-ehr-write-type-grid
+          [rows]="writeRows"
+          [selected]="selectedResources()"
+          [query]="groupSearchQuery()"
+          (toggled)="toggleResource($event)" />
+      } @else {
       <div class="dw-resources">
         @for (r of filteredGroups(); track r) {
           <button
@@ -347,6 +357,7 @@
           </button>
         }
       </div>
+      }
       @if (selectedResources().length === 0) {
         <div class="dw-callout dw-callout--warn">
           Select at least one data group to continue.

@@ -1,0 +1,34 @@
+@if (rows().length === 0) {
+  <div class="ewtg-empty">The source reads no resource types this EHR can take.</div>
+} @else if (greyedCount() > 0) {
+  <p class="ewtg-hint">Greyed types are read by the source but cannot be written to this EHR.</p>
+}
+
+<div class="ewtg-grid">
+  @for (row of visibleRows(); track row.resourceType) {
+    <button
+      type="button"
+      class="ewtg-card"
+      [class.ewtg-card--selected]="isSelected(row.resourceType)"
+      [class.ewtg-card--greyed]="!row.selectable"
+      [disabled]="isLocked(row)"
+      [attr.aria-pressed]="isSelected(row.resourceType)"
+      [title]="row.reason ?? row.note ?? ''"
+      (click)="toggle(row)"
+    >
+      <span class="ewtg-check">
+        @if (isSelected(row.resourceType)) { ✓ }
+      </span>
+      <span class="ewtg-body">
+        <strong class="ewtg-name" [title]="row.resourceType">{{ row.resourceType }}</strong>
+        @if (row.reason) {
+          <span class="ewtg-reason">{{ row.reason }}</span>
+        } @else if (row.note) {
+          <span class="ewtg-note">{{ row.note }}</span>
+        } @else {
+          <span class="ewtg-sub">Create in the EHR</span>
+        }
+      </span>
+    </button>
+  }
+</div>

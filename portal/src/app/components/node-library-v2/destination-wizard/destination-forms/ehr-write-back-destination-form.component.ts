@@ -7,6 +7,7 @@ import { ISourceConnectionService } from '../../../../source-connections/service
 import { SourceConnectionModel } from '../../../../source-connections/models/source-connection.model';
 import { EhrWriteCapabilitiesService, EhrWriteCapability } from '../../../../services/ehr-write-capabilities.service';
 import { EhrWriteBackFormApi } from './destination-form-api';
+import { VARIANT_LABELS } from '../ehr-write-type-grid/ehr-write-type-grid.model';
 
 interface WritableTarget {
   id: string;
@@ -36,18 +37,6 @@ interface OptInApi {
   /** Needs the target's own ids, so only a CSV / SQL Table source can feed it. */
   tabularOnly: boolean;
 }
-
-/** Plain names for the variants a destination enables (EhrWriteVariants). */
-const VARIANT_LABELS: Record<string, string> = {
-  'lines-drains-airways': 'Lines, drains and airways',
-  'dicom-image-characteristics': 'DICOM image characteristics (CT dose)',
-  'radiotherapy-volume': 'Radiotherapy volumes',
-  'external-radiotherapy-summary': 'External radiotherapy summaries',
-  'document-information': 'Scanned document information (Hyperdrive scanning only)',
-  'non-patient-document': 'Non-patient documents',
-  'community-resource-message': 'Community resource referral messages',
-  'patient-entered-questionnaire': 'Patient-entered questionnaire answers',
-};
 
 /** How the test-as choices read. */
 const VENDOR_LABELS: Record<string, string> = {

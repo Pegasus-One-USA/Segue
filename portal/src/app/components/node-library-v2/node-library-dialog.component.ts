@@ -16,6 +16,7 @@ import { MergeNodeOption } from '../../models/wizard-state-v2.model';
 import { SourceConfigFormComponent } from '../shared-v2/config-form/config-form-v2.contract';
 import { SOURCE_FORM_REGISTRY, EHR_VENDOR_TO_SOURCE_FORM_KEY, SELF_CONTAINED_SOURCE_FORM_KEYS } from './source-form.registry';
 import { sourceFormKeyForNode } from './source-node-vendor.util';
+import { declaredTypesOfSources, upstreamSourceNodes } from '../../services/upstream-source-v2.util';
 import { EpicSourceFormComponent } from './epic-source-form/epic-source-form.component';
 import { CernerSourceFormComponent } from './cerner-source-form/cerner-source-form.component';
 import { AthenahealthSourceFormComponent } from './athenahealth-source-form/athenahealth-source-form.component';
@@ -143,6 +144,11 @@ const RANK_META: Record<number, { icon: string; catColor: string }> = {
   7: { icon: '▶', catColor: '#64748B' },
   8: { icon: '◎', catColor: '#0EA5E9' },
   9: { icon: '◈', catColor: '#D946EF' },
+};
+
+/** Source nodes whose 'Connector' is a display label rather than the SourceSystemType name it stands for. */
+const CONNECTOR_TO_VENDOR: Record<string, string> = {
+  'Generic FHIR R4': 'GenericFhir',
 };
 
 @Component({
@@ -303,18 +309,49 @@ export class NodeLibraryDialogComponent {
   // onOverlayClosed() to decide whether Escape/backdrop-click should prompt "Discard changes?".
   private readonly activeSourceForm = viewChild<{ hasUnsavedChanges(): boolean }>('activeSourceForm');
 
-  // FHIR resource types the pipeline's source(s) pull — union of every source node's saved "Resources" field plus the
-  // active wizard selection. Passed to the destination wizard so its data groups mirror the source's Resource Type.
-  readonly sourceResources = computed(() => {
-    const fromNodes = this.store.nodes()
-      .filter(isSourceNode)
-      .flatMap(n => (n.fields?.['Resources'] ?? '').split(',').map(s => s.trim()).filter(Boolean));
-    return Array.from(new Set([...fromNodes, ...this.wiz.resources()]));
+  /** The source node(s) feeding the destination being configured, reached through the canvas edges from the
+   *  destination itself (editing) or from the node it attaches to (adding) — not every source in the workflow. */
+  readonly upstreamSources = computed(() => {
+    const start = this.destEditNode() ?? this.destWizardAttach();
+    return start ? upstreamSourceNodes(start.id, this.store.nodes(), this.store.edges()) : [];
   });
 
-  // The pipeline's launch source node's saved connection id — the Mapping JSON's per-resource
-  // "sourceConnectionId" field. Reactive to store.nodes() via findLaunchSourceId()'s own read of it.
-  readonly sourceConnectionId = computed(() => this.graphMapper.findLaunchSourceId());
+  // FHIR resource types the upstream source declares it reads ("Resource types to read") — the destination may only
+  // choose from these. Empty when the source is a legacy node with no declared list (or none is wired up yet), in
+  // which case the destination wizard keeps its previous, unnarrowed choices.
+  readonly sourceResources = computed(() => declaredTypesOfSources(this.upstreamSources()) ?? []);
+
+  /** Every upstream source is a CSV / SQL Table source — the only kind that can carry the target EHR's own ids, which
+   *  some write-back types need (EhrWriteCapability.requiresTargetReferences). */
+  readonly sourceIsTabular = computed(() => {
+    const sources = this.upstreamSources();
+    return sources.length > 0 && sources.every(s => !!s.fields['tab_kind']);
+  });
+
+  /** The upstream source's EHR vendor (a SourceSystemType name, for the wizard's vendor resource filter and the
+   *  Mapping JSON), read off its node's 'Connector'. The Generic FHIR form writes its own label there ('Generic FHIR
+   *  R4'). '' — no vendor narrowing — for a CSV / SQL Table source or a connector that names no known vendor; the
+   *  vendor of the source form last opened (the previous behaviour) only when nothing upstream records a Connector
+   *  at all, e.g. an Epic node saved before 'Connector'. */
+  readonly sourceVendor = computed(() => {
+    const upstream = this.upstreamSources()[0];
+    if (upstream?.fields['tab_kind']) return '';
+    const connector = upstream?.fields['Connector'];
+    if (!connector) return this.wiz.ehrType();
+    const vendor = CONNECTOR_TO_VENDOR[connector] ?? connector;
+    return EHR_VENDOR_TO_SOURCE_FORM_KEY[vendor] ? vendor : '';
+  });
+
+  // The upstream source node's saved connection id — the Mapping JSON's per-resource "sourceConnectionId" field.
+  // Falls back to the pipeline's launch source (findLaunchSourceId, reactive to store.nodes()) when the upstream
+  // source has none yet or nothing upstream is a source.
+  readonly sourceConnectionId = computed(() => {
+    const f = this.upstreamSources()[0]?.fields;
+    const own = f
+      ? (f['Source connection id'] ?? f['SourceConnectionId'] ?? f['sourceConnectionId'] ?? f['source_connection_id'])
+      : undefined;
+    return own || this.graphMapper.findLaunchSourceId();
+  });
 
   // FHIR resource types the source's live Discover (/metadata) probe actually returned this session — see
   // EhrVendorSourceFormComponent's 'Discovered resource types' field. Distinct from sourceResources above
@@ -325,8 +362,9 @@ export class NodeLibraryDialogComponent {
   // falls back to a live re-probe via sourceConnectionId when this is empty (e.g. editing a destination on an
   // already-saved workflow whose source form hasn't been reopened this session).
   readonly sourceDiscoveredResourceTypes = computed(() => {
-    const fromNodes = this.store.nodes()
-      .filter(isSourceNode)
+    const upstream = this.upstreamSources();
+    const sources = upstream.length ? upstream : this.store.nodes().filter(isSourceNode);
+    const fromNodes = sources
       .flatMap(n => (n.fields?.['Discovered resource types'] ?? '').split(',').map(s => s.trim()).filter(Boolean));
     return Array.from(new Set(fromNodes));
   });

@@ -1,0 +1,57 @@
+<div class="srtp" data-control="sourceResourceTypes">
+  <div class="srtp-toolbar">
+    <div class="srtp-search">
+      <input
+        type="text"
+        class="srtp-search-input"
+        placeholder="Search resource types…"
+        aria-label="Search resource types"
+        [value]="query()"
+        (input)="onQueryInput($any($event.target).value)"
+      />
+      @if (query()) {
+        <button type="button" class="srtp-search-clear" (click)="clearQuery()" aria-label="Clear search">✕</button>
+      }
+    </div>
+    <button type="button" class="srtp-action" [disabled]="disabled() || allVisibleSelected()" (click)="selectAll()">
+      Select all{{ query() ? ' (' + visibleRows().length + ')' : '' }}
+    </button>
+    <button type="button" class="srtp-action" [disabled]="disabled() || selectedCount() === 0" (click)="clear()">
+      Clear
+    </button>
+    <span class="srtp-count">{{ selectedCount() }} selected</span>
+  </div>
+
+  @if (visibleRows().length === 0) {
+    <p class="srtp-empty">
+      @if (query()) {
+        No resource types match "{{ query() }}".
+      } @else {
+        No resource types are available for this source yet.
+      }
+    </p>
+  }
+
+  <div class="srtp-grid">
+    @for (row of visibleRows(); track row.type) {
+      <label
+        class="srtp-item"
+        [class.srtp-item--checked]="isSelected(row.type)"
+        [class.srtp-item--unoffered]="!row.offered"
+        [title]="row.offered ? '' : 'Not offered for this vendor. Untick to remove it.'"
+      >
+        <input
+          type="checkbox"
+          [checked]="isSelected(row.type)"
+          [disabled]="disabled() || (!row.offered && !isSelected(row.type))"
+          (change)="toggle(row.type)"
+        />
+        <span class="srtp-name">{{ row.type }}</span>
+      </label>
+    }
+  </div>
+
+  @if (showError() && selectedCount() === 0) {
+    <p class="srtp-error" role="alert">Choose at least one resource type this source reads.</p>
+  }
+</div>

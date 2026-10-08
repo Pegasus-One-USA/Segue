@@ -127,8 +127,8 @@ export function isCosmosDbFabricForm(
 }
 
 /** Extra members exposed only by EhrWriteBackDestinationFormComponent. The wizard copies the target's vendor and
- *  writable resource types into its own signals on Step 1's Next, because Step 2's resource picker must be filtered
- *  by what the TARGET EHR accepts, not by the upstream source. */
+ *  writable resource types into its own signals on Step 1's Next, because Step 2's resource picker shows the upstream
+ *  source's types with the ones the TARGET EHR does not accept greyed out (EhrWriteTypeGridComponent). */
 export interface EhrWriteBackFormApi extends WizardDestinationFormApi {
   readonly kind: 'ehrWriteBack';
   /** SourceSystemType name of the selected target connection, or null before one is chosen. */

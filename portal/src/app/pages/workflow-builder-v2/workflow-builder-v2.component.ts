@@ -6,6 +6,7 @@ import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 import { BlockingConfirmService } from '../../core/services/blocking-confirm.service';
 import { PipelineStoreV2 } from '../../services/pipeline-v2.store';
+import { findDestinationTypesOutsideSource } from '../../services/upstream-source-v2.util';
 import { TransformationRulesService } from '../../components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
 import { DeIdentificationProfileService } from '../../destination-connections/services/deidentification-profile.service';
 import type { LegacyMappingRow } from '../../components/node-library-v2/destination-wizard/field-mapping/field-mapping-model';
@@ -332,6 +333,17 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
     if (this.workflowApi.catalog().length === 0) {
       this.workflowStatus.set('Catalog is not loaded yet.');
+      return;
+    }
+
+    // Same rule the server applies on save: a destination may only write types its upstream source reads. Caught
+    // here so the builder names the destination and the types instead of round-tripping for the same rejection.
+    const typeMismatch = findDestinationTypesOutsideSource(this.store.nodes(), this.store.edges(), (node) =>
+      this.graphMapper.savedDisplayName(node).trim() || node.id,
+    );
+    if (typeMismatch) {
+      this.workflowStatus.set(typeMismatch.message);
+      this.toast.error('Cannot save workflow', typeMismatch.message);
       return;
     }
 

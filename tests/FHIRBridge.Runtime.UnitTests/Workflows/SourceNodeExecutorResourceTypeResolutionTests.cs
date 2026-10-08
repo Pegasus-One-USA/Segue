@@ -45,7 +45,7 @@ public sealed class SourceNodeExecutorResourceTypeResolutionTests
         var act = () => executor.ExecuteAsync(context, node, [], CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*has no resolvable FHIR resource type*");
+            .WithMessage("*has no resource types to read*choose its resource types to read*");
     }
 
     [Fact]

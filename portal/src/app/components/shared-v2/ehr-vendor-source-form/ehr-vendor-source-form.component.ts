@@ -45,6 +45,8 @@ import { APP_ORIGIN, OAUTH_DEFAULT_URLS } from '../../../core/api-endpoints';
 import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { SourceConfigFormComponent } from '../config-form/config-form-v2.contract';
+import { SourceResourceTypePickerComponent } from '../source-resource-type-picker/source-resource-type-picker.component';
+import { SOURCE_TYPES_DECLARED_KEY, hasDeclaredTypesMarker } from '../../../services/upstream-source-v2.util';
 
 export type { EpicAudience };
 
@@ -290,6 +292,23 @@ export const TIME_ZONE_OPTIONS: readonly RetrievalFieldOption[] = (() => {
   return zones.map((zone) => ({ value: zone, label: zone.replace(/_/g, ' ') }));
 })();
 
+/** The Resource Type control each retrieval method keeps its selection on (Backend System's "Resource types to
+ *  read" — see EhrVendorSourceFormComponent.declaredResourceTypes). */
+/** Vendors whose token endpoint rejects the whole request for one scope the app is not registered for: their
+ *  "Resource types to read" picker offers only their verified list, and nothing while it is unknown. */
+const STRICT_SCOPE_VENDORS: ReadonlySet<string> = new Set(['Athenahealth', 'Healow']);
+
+const RETRIEVAL_RESOURCE_KEYS: Record<
+  RetrievalMethod,
+  'subscriptionResourceType' | 'webhookResourceType' | 'searchRestResourceType' | 'bulkExportResourceType' | 'singlePatientResourceType'
+> = {
+  subscription: 'subscriptionResourceType',
+  webhook: 'webhookResourceType',
+  'search-rest': 'searchRestResourceType',
+  'bulk-export': 'bulkExportResourceType',
+  'single-patient': 'singlePatientResourceType',
+};
+
 /** Blank/default value for each retrieval field, matching the form's own initial values — used to clear a field
  *  out when switching Retrieval Method away from the method that owns it (see clearInapplicableRetrievalFields). */
 const RETRIEVAL_FIELD_DEFAULTS: Record<RetrievalFieldKey, unknown> = {
@@ -452,9 +471,9 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
       description:
         'Epic pushes change notifications through a FHIR Subscription.',
       fields: [
-        // Hidden here for the same reason as searchRestResourceType below (Resource Type is already captured by the
-        // destination node's own "dest_resources" picker) — the control itself stays in the form: scope generation
-        // (activeRetrievalResourceTypes/scopeString) still reads it. See ensureRetrievalResourceTypeDefault.
+        // Hidden here: the form's own "Resource types to read" section (SourceResourceTypePickerComponent) edits
+        // this control while this method is active — see declaredResourceTypes. Scope generation
+        // (activeRetrievalResourceTypes/scopeString) still reads it.
         {
           key: 'subscriptionResourceType',
           label: 'Resource Type',
@@ -503,7 +522,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
       description:
         'Epic (or a middleware relay) posts updates to a Segue callback endpoint.',
       fields: [
-        // Hidden — see subscriptionResourceType above / ensureRetrievalResourceTypeDefault.
+        // Hidden — see subscriptionResourceType above / declaredResourceTypes.
         {
           key: 'webhookResourceType',
           label: 'Resource Type',
@@ -557,10 +576,10 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
         // For Standalone this field is hidden — it reuses the shared Resource Type & Scopes picker (Section 5)
         // instead of a second, separate multiselect, since that picker already drives the SMART scopes this
         // connection's one-shot fetch runs under.
-        // Hidden for every retrieval scope (Standalone already reused the shared Resource Type & Scopes picker
-        // instead; Backend System now gets the same full-MVP1-set default automatically — see
-        // ensureRetrievalResourceTypeDefault — rather than a second, separate multiselect). The control itself
-        // stays in the form: scope generation (activeRetrievalResourceTypes/scopeString) still reads it.
+        // Hidden for every retrieval scope: Standalone declares its types on the shared `resources` control, and
+        // Backend System edits this control through the form's "Resource types to read" section (see
+        // declaredResourceTypes) rather than a second, separate multiselect. The control itself stays in the form:
+        // scope generation (activeRetrievalResourceTypes/scopeString) still reads it.
         {
           key: 'searchRestResourceType',
           label: 'Resource Type',
@@ -747,7 +766,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
       description:
         'Kicks off a FHIR Bulk Data $export job and retrieves the resulting NDJSON files.',
       fields: [
-        // Hidden — see subscriptionResourceType above / ensureRetrievalResourceTypeDefault.
+        // Hidden — see subscriptionResourceType above / declaredResourceTypes.
         {
           key: 'bulkExportResourceType',
           label: 'Resource Type',
@@ -848,8 +867,8 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
       description:
         'Fetches one authorized patient’s resources via a patient-scoped REST search.',
       fields: [
-        // Hidden - see subscriptionResourceType above / ensureRetrievalResourceTypeDefault. Backend System has no
-        // shared Resource Type picker, so scope generation (activeRetrievalResourceTypes/scopeString) reads this.
+        // Hidden - see subscriptionResourceType above / declaredResourceTypes. Backend System has no shared
+        // `resources` control, so scope generation (activeRetrievalResourceTypes/scopeString) reads this.
         {
           key: 'singlePatientResourceType',
           label: 'Resource Type',
@@ -877,7 +896,7 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
 @Component({
   selector: 'app-ehr-vendor-source-form',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, SourceResourceTypePickerComponent],
   templateUrl: './ehr-vendor-source-form.component.html',
   styleUrl: './ehr-vendor-source-form.component.scss',
 })
@@ -1124,11 +1143,10 @@ export class EhrVendorSourceFormComponent
       OAUTH_DEFAULT_URLS.redirectUri,
       [Validators.required, urlValidator],
     ],
-    // No UI picks this anymore (Resource Type & Scopes was removed from the form) — a brand-new source
-    // starts with no resource-derived scopes at all. EpicSourceConnectionScopeSyncService (backend) fills
-    // this in for real the first time a workflow referencing this source is built, from the union of every
-    // connected destination's own selected resource types — see clearInapplicableFields/ngOnInit above.
-    // Deliberately not required: an empty selection here is the valid, expected starting state.
+    // The source's declared "Resource types to read" for every audience except Backend System (which keeps them on
+    // its retrieval method's own control — see declaredResourceTypes). Canvas mode edits it through the "Resource
+    // types to read" section; a brand-new node starts empty and save() refuses it until at least one is chosen.
+    // Not a required validator: Backend System never uses this control, and a legacy node may have no list.
     resources: [[] as string[]],
     scopeVersion: ['v2'],
     appName: ['Segue Epic'],
@@ -1638,9 +1656,8 @@ export class EhrVendorSourceFormComponent
   /**
    * athenahealth rejects an unscoped `Patient` search outright ("open enumeration forbidden") — it requires at
    * least one identifying criterion (identifier, name, or family + birthdate/gender/given) on every Patient
-   * search. Search REST's own Resource Type picker is hidden and silently defaults to the full MVP1 resource set
-   * (see ensureRetrievalResourceTypeDefault), which always includes Patient — so Search Criteria is the only
-   * lever an admin has here to avoid a run that always fails on the Patient resource type. Independent of whether
+   * search. Whenever the source reads Patient (see declaredResourceTypes), Search Criteria is the only lever an
+   * admin has here to avoid a run that always fails on the Patient resource type. Independent of whether
    * the field currently has a value — drives the Search Criteria control's required validator (see
    * syncRetrievalValidators), which doesn't need that distinction since Angular re-evaluates Validators.required
    * against the live value on every keystroke regardless.
@@ -1733,6 +1750,91 @@ export class EhrVendorSourceFormComponent
     return field ? this.selectedRetrievalResourceTypes(field.key) : [];
   });
 
+  /** Backend System keeps its declared types on the chosen retrieval method's own control; until a method is chosen
+   *  (or after an audience switch away from the shared `resources` control) they wait here and seed it on the next
+   *  method pick — see carryDeclaredResourceTypes. */
+  private readonly pendingDeclaredResourceTypes = signal<string[]>([]);
+
+  /** True once a save was refused for having no resource type — turns the picker's empty state into an error. */
+  protected readonly resourceTypesSaveAttempted = signal(false);
+
+  /** Set in ngOnInit: re-opening a canvas node saved before sources declared their types — it has no
+   *  SOURCE_TYPES_DECLARED_KEY marker, whatever its 'Resources' / 'Retrieval resource type' hold (the form used to
+   *  fill those silently: every supported type, or a cloned connection's list). Its fetch and scopes are still decided
+   *  by its connection and destinations, the same rule declaredSourceResourceTypes applies. */
+  protected readonly legacyNode = signal(false);
+  /** The admin changed "Resource types to read" in this session — a legacy node then declares its list. */
+  private readonly declaredTypesEdited = signal(false);
+  /** Still legacy on save: a legacy node whose list was not touched. It may be saved with nothing selected, and is
+   *  saved without the marker, so it keeps being fetched exactly as before. */
+  protected readonly keepsLegacyTypes = computed(() => this.legacyNode() && !this.declaredTypesEdited());
+
+  /** The source's "Resource types to read" — what destinations may choose from and what drives this connection's
+   *  scopes. Stored on the shared `resources` control for interactive audiences (and entity mode), and on the active
+   *  retrieval method's own control for Backend System; saved as the node's 'Resources' field either way (save()). */
+  protected readonly declaredResourceTypes = computed<string[]>(() => {
+    if (this.showResourcePickerSection()) return this.selectedResources();
+    return this.retrievalConfig() ? this.activeRetrievalResourceTypes() : this.pendingDeclaredResourceTypes();
+  });
+
+  /** Canvas mode only: Settings › Source Connections manages the connection, never what a workflow reads. */
+  protected readonly showResourceTypesToRead = computed(() => this.wiz.wizardMode() === 'canvas');
+
+  /** The types the picker offers: those this vendor can read (isResourceSupported) and, for a system/-scoped
+   *  audience of a vendor with a scope profile (eClinicalWorks Backend), only those it publishes a system/ read scope
+   *  for — scopeString() leaves any other out, so it would never be fetched. athenahealth and eClinicalWorks reject a
+   *  whole token request for a scope the app is not registered for, so for them nothing is offered until their
+   *  verified list has loaded (vendorResourceTypes; a failed load offers nothing rather than everything). A saved
+   *  type outside the list still shows, ticked, in the picker so it can be removed. */
+  protected readonly readableResourceTypes = computed(() => {
+    if (STRICT_SCOPE_VENDORS.has(this.vendor()) && !this.vendorResourceTypes()) return [];
+    const profile = this.audienceConfig().scopePrefix === 'system' ? vendorScopeProfile(this.vendor()) : null;
+    const selectable = this.selectableResources();
+    return profile ? selectable.filter((r) => !!profile.readAccessLevelByResourceType[r]) : selectable;
+  });
+
+  /** The picker has nothing to offer yet: a strict-scope vendor whose verified list has not loaded (or failed). */
+  protected readonly readableResourceTypesLoading = computed(
+    () => STRICT_SCOPE_VENDORS.has(this.vendor()) && !this.vendorResourceTypes(),
+  );
+
+  /** This save records a declared list: a canvas node that is not an untouched legacy node. */
+  protected readonly writesDeclaredTypes = computed(
+    () => this.showResourceTypesToRead() && !this.keepsLegacyTypes(),
+  );
+
+  /** A save must name at least one type, except when re-saving an untouched legacy node. */
+  protected readonly resourceTypesMissing = computed(
+    () =>
+      this.showResourceTypesToRead() &&
+      this.declaredResourceTypes().length === 0 &&
+      !this.keepsLegacyTypes(),
+  );
+
+  /** Any section rendered after Credentials / CDS Hooks — decides which section drops its bottom border. */
+  protected readonly hasTrailingSections = computed(
+    () => this.showRetrievalSection() || this.showResourceTypesToRead(),
+  );
+
+  protected onDeclaredResourceTypesChange(types: string[]): void {
+    this.declaredTypesEdited.set(true);
+    if (this.showResourcePickerSection()) {
+      this.form.controls.resources.setValue(types);
+      this.form.controls.resources.markAsDirty();
+    } else {
+      const method = this.retrievalMethod();
+      if (method) {
+        const control = this.form.controls[RETRIEVAL_RESOURCE_KEYS[method]];
+        control.setValue(types);
+        control.markAsDirty();
+      } else {
+        this.pendingDeclaredResourceTypes.set(types);
+        this.form.markAsDirty();
+      }
+    }
+    if (types.length > 0) this.resourceTypesSaveAttempted.set(false);
+  }
+
   /** Connection Test is hidden for now — flip this back to re-enable it (see sectionNumbers/template). */
   protected readonly showConnectionTest = false;
 
@@ -1768,7 +1870,8 @@ export class EhrVendorSourceFormComponent
     const test = this.showConnectionTest ? ++n : null;
     const retrievalMethod = this.showRetrievalSection() ? ++n : null;
     const retrievalConfig = this.showRetrievalSection() ? ++n : null;
-    return { urls, cds, test, retrievalMethod, retrievalConfig };
+    const resourceTypes = this.showResourceTypesToRead() ? ++n : null;
+    return { urls, cds, test, retrievalMethod, retrievalConfig, resourceTypes };
   });
 
   protected readonly clientIdLabel = computed(() => {
@@ -2133,12 +2236,14 @@ export class EhrVendorSourceFormComponent
       | 'jwt';
     this.prevRetrievalMethod = this.form.controls.retrievalMethod.value;
 
-    // A brand-new connection starts with no resource-derived scopes at all — no UI picks this anymore (the
-    // Resource Type & Scopes picker was removed). EpicSourceConnectionScopeSyncService (backend) fills this
-    // in for real the first time a workflow referencing this source is built, from the union of every
-    // connected destination's own selected resource types. Editing an existing connection keeps whatever was
-    // actually saved (restored above), never overwritten here.
-    this.ensureRetrievalResourceTypeDefault();
+    // A brand-new node starts with no resource types: the admin picks them in "Resource types to read", and save()
+    // refuses an empty list. Editing keeps exactly what was saved (restored above), never widened here. A saved node
+    // without the declared-types marker is a legacy node, still fetched the old way, and may be re-saved as it is.
+    this.legacyNode.set(
+      this.isEditing &&
+        this.wiz.wizardMode() === 'canvas' &&
+        !hasDeclaredTypesMarker(this.wiz.editingFields()),
+    );
 
     this.lockRetrievalMethodIfOneShot();
     this.syncValidators();
@@ -2196,12 +2301,14 @@ export class EhrVendorSourceFormComponent
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((next) => {
         const nextMethod = (next as RetrievalMethod) || '';
+        // Read before the clear below resets the previous method's own Resource Type control.
+        const carried = this.retrievalResourceTypesOf(this.prevRetrievalMethod);
         this.clearInapplicableRetrievalFields(
           this.prevRetrievalMethod,
           nextMethod,
         );
         this.prevRetrievalMethod = nextMethod;
-        this.ensureRetrievalResourceTypeDefault();
+        this.carryDeclaredResourceTypes(nextMethod, carried);
         this.syncRetrievalValidators();
       });
 
@@ -2393,8 +2500,6 @@ export class EhrVendorSourceFormComponent
     setIfPresent('retryPolicy', 'Retry policy');
     setIfPresent('timeoutSeconds', 'Timeout (seconds)');
     setIfPresent('maxRecordsPerRun', 'Max records per run');
-
-    this.ensureRetrievalResourceTypeDefault();
   }
 
   /**
@@ -2528,13 +2633,24 @@ export class EhrVendorSourceFormComponent
     const nextShowsResources =
       nextCfg.showResourcePicker || this.wiz.wizardMode() === 'entity';
 
+    // The declared "Resource types to read" move with the audience instead of being reset or widened: leaving the
+    // shared `resources` control parks them until a retrieval method is chosen (carryDeclaredResourceTypes), and
+    // coming back to it takes over whatever the active retrieval method held. Never a silent "every type" default.
     if (prevShowsResources && !nextShowsResources) {
+      const declared = [...this.form.controls.resources.value];
+      this.pendingDeclaredResourceTypes.set(declared);
       this.form.patchValue({ resources: [] });
+      // A retrieval method already chosen (Standalone's locked Search REST, kept on the way to Backend System)
+      // fires no method change, so carryDeclaredResourceTypes never runs: the types go onto its control now. They
+      // replace whatever that hidden control held, since the shared control was the one declaring them.
+      const method = this.form.controls.retrievalMethod.value as RetrievalMethod | '';
+      if (method && nextCfg.showRetrieval) {
+        this.form.controls[RETRIEVAL_RESOURCE_KEYS[method]].setValue(declared);
+      }
     }
-    // Switching the other way: default to every supported resource type's scope, same as the initial
-    // load — there's no visible picker for the user to fill this in themselves anymore.
     if (!prevShowsResources && nextShowsResources) {
-      this.form.patchValue({ resources: [...SUPPORTED_RESOURCE_TYPES] });
+      const method = this.form.controls.retrievalMethod.value as RetrievalMethod | '';
+      this.form.patchValue({ resources: this.retrievalResourceTypesOf(method) });
     }
 
     if (prevCfg.showRetrieval && !nextCfg.showRetrieval) {
@@ -2659,38 +2775,30 @@ export class EhrVendorSourceFormComponent
     this.form.patchValue(patch);
   }
 
-  /** Every retrieval method's own Resource Type control is hidden entirely from the UI (see RETRIEVAL_METHOD_CONFIG
-   *  fields) — the destination node's own "dest_resources" picker (and, at execution time, the backend's
-   *  destination-derived fallback) already captures the same choice. Scope generation
-   *  (activeRetrievalResourceTypes/scopeString) still reads whichever control belongs to the active method, so a
-   *  connection needs a non-empty value from somewhere other than a picker the admin can no longer see. Defaults it
-   *  to every MVP1 resource type, same as the shared Resource Type picker already does for audiences that show it
-   *  (see the showResourcePicker default in ngOnInit). Never overwrites a real, already-populated value — a
-   *  genuinely restored/edited selection (from a saved connection or an edited canvas node) is left exactly as-is. */
-  private ensureRetrievalResourceTypeDefault(): void {
-    // athenahealth AND eClinicalWorks (Healow) are excluded from this default: their OAuth servers reject the ENTIRE
-    // token request if even one requested scope isn't provisioned on the app registration (verified against both live
-    // sandboxes — eCW returns 400 invalid_scope), so silently seeding every canonical resource type here — fine for
-    // Epic, which just ignores an unsupported scope rather than rejecting the whole grant — reliably produces an
-    // unusable connection (the exact eCW backend bulk-export invalid_scope failure this guards against). Leaving it
-    // empty means a fresh athenahealth/eCW connection requests no resource scopes until something explicit sets them
-    // (the workflow builder's destination-derived resourceTypes, or a deliberate selection here) — the operator picks
-    // from the vendor's actually-registered resource types, never a broad guess that has to be pared back every time.
-    if (this.vendor() === 'Athenahealth' || this.vendor() === 'Healow') return;
+  /** The declared types a retrieval method holds: its own Resource Type control, or — with no method chosen yet —
+   *  the types picked before one was (pendingDeclaredResourceTypes). */
+  private retrievalResourceTypesOf(method: RetrievalMethod | ''): string[] {
+    return method
+      ? [...this.form.controls[RETRIEVAL_RESOURCE_KEYS[method]].value]
+      : this.pendingDeclaredResourceTypes();
+  }
 
-    const key = (
-      {
-        subscription: 'subscriptionResourceType',
-        webhook: 'webhookResourceType',
-        'search-rest': 'searchRestResourceType',
-        'bulk-export': 'bulkExportResourceType',
-        'single-patient': 'singlePatientResourceType',
-      } as const
-    )[this.form.controls.retrievalMethod.value as RetrievalMethod];
-    if (!key) return;
-    const control = this.form.controls[key];
-    if (control.value.length > 0) return;
-    control.setValue([...SUPPORTED_RESOURCE_TYPES]);
+  /** Switching retrieval method keeps the source's declared "Resource types to read": each method owns its own
+   *  Resource Type control, so the previous method's selection is copied onto the new one when that is still empty.
+   *  There is deliberately no "every type" default any more (athenahealth and eCW reject a whole token request for
+   *  one unregistered scope, and a destination may only choose from what the source declares). Skipped for an
+   *  audience that declares on the shared `resources` control (Standalone), whose search-rest control stays empty so
+   *  the build falls back to 'Resources'. */
+  private carryDeclaredResourceTypes(next: RetrievalMethod | '', carried: string[]): void {
+    if (carried.length === 0) return;
+    if (!next) {
+      this.pendingDeclaredResourceTypes.set(carried);
+      return;
+    }
+    const audience = this.form.controls.audience.value as EpicAudience;
+    if (AUDIENCE_FIELD_CONFIG[audience].showResourcePicker || this.wiz.wizardMode() === 'entity') return;
+    const control = this.form.controls[RETRIEVAL_RESOURCE_KEYS[next]];
+    if (control.value.length === 0) control.setValue(carried);
   }
 
   /** Standalone always uses Search REST — force-select it whenever the current audience is one-shot scoped, so
@@ -3241,18 +3349,12 @@ export class EhrVendorSourceFormComponent
       callbackUrl:
         dto.interactive?.redirectUris?.[0] ??
         this.form.controls.callbackUrl.value,
-      // Unlike launchUrl/callbackUrl above (whose FormBuilder-literal initial value is already a real, usable
-      // default), `resources`' own literal initial is `[]` — it only becomes SUPPORTED_RESOURCE_TYPES via an
-      // explicit ngOnInit-time setValue for new/non-editing sources. Since form.reset() (just above, at the top
-      // of this method) wipes that back to `[]`, falling back to `this.form.controls.resources.value` here would
-      // silently leave a required field required-and-empty on every clone whose DTO has no persisted
-      // resourceTypes (e.g. Provider Standalone connections, which never persist a resource-type selection
-      // server-side) — exactly the "Add to Pipeline stays disabled" bug this fallback exists to prevent.
-      // SUPPORTED_RESOURCE_TYPES directly is the same fallback already used a few lines below for the
-      // per-method retrieval resource-type control.
-      resources: retrieval?.resourceTypes?.length
-        ? [...retrieval.resourceTypes]
-        : [...SUPPORTED_RESOURCE_TYPES],
+      // None, never the cloned connection's own list: a connection's retrieval.resourceTypes is not something the
+      // admin chose for THIS workflow (for athenahealth it is whatever the scope sync last wrote — the union of every
+      // workflow sharing the connection plus auto-fetch reference targets), and save() records the list as this
+      // node's declaration. The admin picks them in "Resource types to read" (save() refuses an empty list), the same
+      // as for a brand-new node. `resources` is not a required control, so an empty value never blocks Save.
+      resources: [],
       retrievalMethod: resolvedRetrievalMethod,
       searchCriteria: retrieval?.searchCriteria ?? '',
       incrementalCursor: retrieval?.incrementalSyncEnabled ?? false,
@@ -3298,18 +3400,10 @@ export class EhrVendorSourceFormComponent
         dto.authentication?.scopes?.includes('system/Group.read') ?? false,
     });
 
-    // Same reasoning as resolvedRetrievalMethod above: this per-method Resource Type control needs a non-empty
-    // value even when the cloned connection has no retrieval data to restore it from — same full-MVP1-set
-    // fallback the shared `resources` picker's own default above uses (see also ensureRetrievalResourceTypeDefault,
-    // for the case where the field is one of the retrieval methods' own hidden controls and this clone had no
-    // retrieval data at all).
-    this.form
-      .get(retrievalResourceKey)
-      ?.setValue(
-        retrieval?.resourceTypes?.length
-          ? [...retrieval.resourceTypes]
-          : [...SUPPORTED_RESOURCE_TYPES],
-      );
+    // The per-method Resource Type control (Backend System's declared types) starts empty too, for the same reason
+    // as the shared `resources` control above: the admin picks them in "Resource types to read".
+    this.form.get(retrievalResourceKey)?.setValue([]);
+    this.pendingDeclaredResourceTypes.set([]);
 
     // Cloned key material still deserves the "already configured, confirm before replacing" guard — clicking
     // Generate/Import here would fork a brand-new SourceConnection on save (this is a clone into a new node, not
@@ -3814,6 +3908,9 @@ export class EhrVendorSourceFormComponent
       // SourceConnection required, since a brand-new source may not have one yet in this same builder
       // session. Empty when Discover hasn't run.
       'Discovered resource types': this.discoveredResourceTypes().join(', '),
+      // Marks 'Resources' as the admin's own "Resource types to read" (declaredSourceResourceTypes); absent on an
+      // untouched legacy node and in Settings › Source Connections, which never decide what a workflow reads.
+      ...(this.writesDeclaredTypes() ? { [SOURCE_TYPES_DECLARED_KEY]: 'true' } : {}),
       // Only meaningful for EHR launch — cleared to '' otherwise so it's never wired into the build request
       // (see WorkflowBuildAssemblerServiceV2.buildSource, which only reads this key for the EhrLaunch application type).
       'Launch display mode': cfg.showLaunchDisplayMode
@@ -3830,8 +3927,13 @@ export class EhrVendorSourceFormComponent
             // Machine-readable retrieval method key (e.g. "search-rest"), distinct from the display label above —
             // consumed by WorkflowBuildAssemblerServiceV2 to build the CreateSourceConnectionRequest.retrieval payload.
             'Retrieval method key': this.retrievalMethod(),
-            'Retrieval resource type':
-              this.activeRetrievalResourceTypes().join(', '),
+            // The declared types once the node declares them — for Standalone too, whose own hidden search-rest
+            // control may still hold an older silent default that buildRetrieval would otherwise prefer over
+            // 'Resources'. An untouched legacy node keeps exactly what its retrieval method held.
+            'Retrieval resource type': (this.writesDeclaredTypes()
+              ? this.declaredResourceTypes()
+              : this.activeRetrievalResourceTypes()
+            ).join(', '),
             'Event type': v.eventType ?? '',
             'Notification payload': v.notificationPayload ?? '',
             'Endpoint type': v.endpointType ?? '',
@@ -3888,6 +3990,10 @@ export class EhrVendorSourceFormComponent
       this.form.markAllAsTouched();
       return null;
     }
+    if (this.resourceTypesMissing()) {
+      this.resourceTypesSaveAttempted.set(true);
+      return null;
+    }
     const v = this.form.getRawValue();
     const aud = v.audience as EpicAudience;
     const cfg = this.audienceConfig();
@@ -3902,6 +4008,21 @@ export class EhrVendorSourceFormComponent
       // Wait one tick so the error classes/messages just triggered by markAllAsTouched
       // are in the DOM before we measure scroll position and focus the field.
       setTimeout(() => this.focusFirstInvalidField());
+      return;
+    }
+    // A source declares what it reads; destinations choose only from that, so a new node with nothing picked would
+    // leave every destination with nothing to offer.
+    if (this.resourceTypesMissing()) {
+      this.resourceTypesSaveAttempted.set(true);
+      this.toast.show(
+        'Choose resource types',
+        'Choose at least one resource type this source reads before saving.',
+      );
+      setTimeout(() =>
+        this.formRoot?.nativeElement
+          .querySelector<HTMLElement>('[data-control="sourceResourceTypes"]')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+      );
       return;
     }
     // getRawValue (not .value) so the Incremental Sync checkbox is included even while
@@ -3969,13 +4090,9 @@ export class EhrVendorSourceFormComponent
     if (aud === 'provider-ehr-launch') {
       this.wiz.trustedIssuers.set((v.epicBaseUrl ?? '').trim());
     }
-    // Backend System has no shared Resource Type picker — fall back to whichever
-    // retrieval method's own Resource Type list is currently set.
-    this.wiz.resources.set(
-      this.showResourcePickerSection()
-        ? (v.resources ?? [])
-        : this.activeRetrievalResourceTypes(),
-    );
+    // The declared "Resource types to read" — saved as the node's 'Resources' field, which the destination wizard
+    // and the server's save-time check read as what this source reads.
+    this.wiz.resources.set(this.declaredResourceTypes());
 
     const formValuesToSave = {
       stepName: resolvedName,
