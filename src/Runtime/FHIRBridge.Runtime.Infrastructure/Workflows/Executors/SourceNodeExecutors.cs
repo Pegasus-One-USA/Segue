@@ -465,13 +465,29 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // a constraint when at least one reachable destination exists — a destination-less run (e.g. a caller that
         // reads this node's raw output directly, with no destination node at all) has nothing to narrow against and
         // keeps fetching exactly what was resolved above, unchanged.
+        var readable = resourceTypes;
         resourceTypes = await RestrictToDestinationResourceTypesAsync(resourceTypes, node, cancellationToken);
+
+        var useBulkExport = string.Equals(source.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase)
+            && _bulkExportClient is not null;
+
+        // Patient anchors the search: its ids scope every patient-compartment type below. A destination that writes,
+        // say, only AllergyIntolerance and Condition from a source that reads Patient too must not lose that anchor,
+        // or the compartment searches run unscoped (Epic answers 403). Patient is still searched in that case but
+        // never handed on, since no destination chose it.
+        var patientOnlyForCohort = !useBulkExport
+            && !resourceTypes.Contains("Patient", StringComparer.OrdinalIgnoreCase)
+            && readable.Contains("Patient", StringComparer.OrdinalIgnoreCase)
+            && resourceTypes.Any(PatientCompartmentResourceTypes.IsSupported);
+        var handedOnResourceTypes = resourceTypes;
+        if (patientOnlyForCohort)
+        {
+            resourceTypes = ["Patient", .. resourceTypes];
+        }
 
         // A source configured for bulk export ($export) pulls each resource type via the Bulk Data flow instead of a
         // paged search — same downstream envelope projection, so the rest of the DAG is identical. Every other source
-        // (and any bulk-configured source when no bulk client is wired) keeps using search — unchanged behavior.
-        var useBulkExport = string.Equals(source.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase)
-            && _bulkExportClient is not null;
+        // (and any bulk-configured source when no bulk client is wired) keeps using search — unchanged behavior (see useBulkExport above).
 
         // Fail with the actual reason rather than letting a Group-only vendor answer a Group-less kick-off with a
         // vendor-specific error that names neither the scope nor the missing id (Epic returns a FHIR "Invalid FHIR
@@ -838,6 +854,12 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             skippedResourceTypes.AddRange(extractionDiagnostics.DrainIncompleteReasons());
         }
 
+        if (patientOnlyForCohort)
+        {
+            resources.RemoveAll(resource => string.Equals(resource.ResourceType, "Patient", StringComparison.OrdinalIgnoreCase));
+            syncedResourceTypes.RemoveAll(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase));
+        }
+
         if (source.MaxRecords is { } maxRecords && resources.Count > maxRecords)
         {
             resources.RemoveRange(maxRecords, resources.Count - maxRecords);
@@ -877,7 +899,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             new Dictionary<string, object?>
             {
                 ["executor"] = GetType().Name,
-                ["resourceType"] = string.Join(',', resourceTypes),
+                ["resourceType"] = string.Join(',', handedOnResourceTypes),
                 ["count"] = resources.Count,
                 // Per-type breakdown of the combined "count" above — without this, a multi-resource-type source
                 // node's execution history can only ever say "extracted 501 resources total", leaving no way to

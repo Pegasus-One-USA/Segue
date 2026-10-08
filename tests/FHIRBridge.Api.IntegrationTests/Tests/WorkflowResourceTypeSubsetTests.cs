@@ -95,6 +95,16 @@ public sealed class WorkflowResourceTypeSubsetTests(ApiFixture f)
     }
 
     [Fact]
+    public async Task Create_rejects_a_destination_type_the_source_does_not_read()
+    {
+        var response = await f.AdminClient.PostAsJsonAsync(
+            "/api/v1/workflows", Definition(NewName("subset-create"), "Patient", "Patient,Condition"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("writes Condition", await MessageOfAsync(response));
+    }
+
+    [Fact]
     public async Task Put_rejects_a_destination_type_the_source_does_not_read_and_accepts_a_subset()
     {
         var name = NewName("subset-put");

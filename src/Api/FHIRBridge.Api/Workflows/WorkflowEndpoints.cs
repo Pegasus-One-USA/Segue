@@ -91,6 +91,13 @@ public static class WorkflowEndpoints
             // License workflow-quota enforcement lives centrally in LicenseEnforcementSaveChangesInterceptor,
             // which distinguishes this genuine create from an edit at the actual persistence choke point
             // (SqlWorkflowDefinitionStore.SaveAsync) rather than here.
+            // Same save-time rule as /workflows/build and PUT: a destination may only write what its source reads.
+            var resourceTypeSubsetError = CheckDestinationResourceTypesAgainstSources(request.Nodes, request.Edges);
+            if (resourceTypeSubsetError is not null)
+            {
+                return ValidationBadRequest(resourceTypeSubsetError);
+            }
+
             var workflow = BuildWorkflow(Guid.NewGuid(), request);
             if (!await CanSaveEhrWriteBackNodesAsync(authorizationService, httpContext.User, request.Nodes, existing: null)
                 || !await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))

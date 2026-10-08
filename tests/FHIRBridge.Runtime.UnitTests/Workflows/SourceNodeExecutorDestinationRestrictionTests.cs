@@ -71,6 +71,66 @@ public sealed class SourceNodeExecutorDestinationRestrictionTests
     }
 
     [Fact]
+    public async Task Patient_still_anchors_the_search_when_no_destination_chose_it_but_is_not_handed_on()
+    {
+        // A destination writing only Condition from a source that reads Patient and Condition: without Patient the
+        // Condition search would run unscoped (Epic answers 403). Patient is searched for its ids, Condition is
+        // scoped to them, and only Condition reaches the destination.
+        var sourceConnectionId = Guid.NewGuid();
+        var source = new FhirSourceConfiguration(
+            RuntimeSourceType.Epic, "Epic Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
+            SourceConnectionId: sourceConnectionId);
+
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        resolver
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(source);
+
+        var client = new Mock<IFhirSourceClient>();
+        client
+            .Setup(x => x.SearchAsync("Patient", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ResourceEnvelope>)[new ResourceEnvelope("Patient", "p1", "{}", null, null)]);
+        client
+            .Setup(x => x.SearchAsync("Condition", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ResourceEnvelope>)[new ResourceEnvelope("Condition", "c1", "{}", null, null)]);
+
+        var clientFactory = new Mock<IFhirSourceClientFactory>();
+        clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(client.Object);
+
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "patient-anchor-test", 1);
+        var sourceNode = workflow.AddNode(
+            WorkflowNodeTypes.EpicSource,
+            WorkflowNodeCategory.Source,
+            rank: 0,
+            configurationJson: $$"""{"sourceConnectionId":"{{sourceConnectionId}}","Resources":"Patient, Condition","Resource types declared":"true"}""");
+        var destinationNode = workflow.AddNode(
+            WorkflowNodeTypes.FhirRepositoryDestination,
+            WorkflowNodeCategory.Destination,
+            rank: 1,
+            configurationJson: """{"dest_resources":"Condition"}""");
+        workflow.AddEdge(sourceNode.Id, destinationNode.Id);
+        await workflowStore.SaveAsync(workflow, CancellationToken.None);
+
+        var executor = new EpicSourceNodeExecutor(
+            clientFactory.Object, resolver.Object, workflowDefinitionStore: workflowStore);
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
+
+        var output = await executor.ExecuteAsync(context, sourceNode, [], CancellationToken.None);
+
+        client.Verify(x => x.SearchAsync("Patient", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Once);
+        client.Verify(
+            x => x.SearchAsync(
+                "Condition",
+                It.Is<FhirSourceConfiguration>(cfg => cfg.PatientIds != null && cfg.PatientIds.Contains("p1")),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().ContainSingle()
+            .Which.ResourceType.Should().Be("Condition");
+        output.Metadata["resourceType"].Should().Be("Condition");
+    }
+
+    [Fact]
     public async Task Non_compartment_type_referenced_by_a_selected_resource_is_excluded_when_not_itself_selected()
     {
         // Reverted behavior, explicitly requested by the user over the earlier auto-reference-resolution fix:
