@@ -266,18 +266,24 @@ export class WorkflowBuildAssemblerServiceV2 {
     // write — so relying on dest_mappings alone left athenahealth's retrieval resourceTypes permanently empty for
     // that combination, failing save with "At least one resource type is required for Search (REST) retrieval"
     // even after the user picked resources in Step 2.
+    //
+    // EVERY source feeding the destination gets them, not just the first: several sources routed into the MPI
+    // step all reach its destination (the saved graph joins each of them straight to it — see
+    // WorkflowGraphMapperServiceV2.bypassMpi), and a second athenahealth/eCW source credited with nothing failed
+    // the save with the same "At least one resource type is required" error. Walked from the destination itself:
+    // a whole-resource FHIR destination has no Mapping node in front of it, so starting from "the node feeding it"
+    // would start AT the first source and never see the others.
     const destinationResourceTypesBySourceNodeId = new Map<string, Set<string>>();
     for (const destNode of graph.nodes.filter((node) => this.isDestinationNode(node))) {
       const destFields = this.fieldsFor(destNode.id, nodesById);
-      const mappingNodeId = this.mappingNodeFeeding(destNode.id, graph);
-      const sourceNodeId = this.sourceFeeding(mappingNodeId ?? destNode.id, graph, sourceNodeIds);
-      if (!sourceNodeId) continue;
       const mappedResources = this.parseMappingRows(destFields['dest_mappings']).map((row) => row.resource);
       const selectedResources = (destFields['dest_resources'] ?? '').split(',').map((r) => r.trim()).filter(Boolean);
       const resources = new Set([...mappedResources, ...selectedResources]);
-      const set = destinationResourceTypesBySourceNodeId.get(sourceNodeId) ?? new Set<string>();
-      resources.forEach((r) => set.add(r));
-      destinationResourceTypesBySourceNodeId.set(sourceNodeId, set);
+      for (const sourceNodeId of this.sourcesFeeding(destNode.id, graph, sourceNodeIds)) {
+        const set = destinationResourceTypesBySourceNodeId.get(sourceNodeId) ?? new Set<string>();
+        resources.forEach((r) => set.add(r));
+        destinationResourceTypesBySourceNodeId.set(sourceNodeId, set);
+      }
     }
 
     const sources: SourceBuildSpec[] = [];
@@ -1785,6 +1791,32 @@ export class WorkflowBuildAssemblerServiceV2 {
     }
     // Fallback: the first source in the graph (linear single-source pipelines).
     return [...sourceNodeIds][0] ?? null;
+  }
+
+  /** Every source upstream of `startNodeId`, along every inbound edge — sourceFeeding follows only the first,
+   *  which is all a single-source pipeline needs but misses the rest of a fan-in. Same fallback as sourceFeeding
+   *  when no source is reachable at all. */
+  private sourcesFeeding(
+    startNodeId: string,
+    graph: WorkflowBuildRequest,
+    sourceNodeIds: Set<string>,
+  ): string[] {
+    const found: string[] = [];
+    const seen = new Set<string>();
+    const stack = [startNodeId];
+    while (stack.length) {
+      const current = stack.pop()!;
+      if (seen.has(current)) continue;
+      seen.add(current);
+      if (sourceNodeIds.has(current)) {
+        found.push(current);
+        continue;
+      }
+      graph.edges.filter((e) => e.toNodeId === current).forEach((e) => stack.push(e.fromNodeId));
+    }
+    if (found.length) return found;
+    const fallback = [...sourceNodeIds][0];
+    return fallback ? [fallback] : [];
   }
 
   private fieldsFor(

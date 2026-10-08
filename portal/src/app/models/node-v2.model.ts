@@ -1,4 +1,4 @@
-export type NodeKind = 'source' | 'transform' | 'merge';
+export type NodeKind = 'source' | 'transform' | 'merge' | 'mpi';
 
 export interface BaseNode {
   id: string;
@@ -39,7 +39,17 @@ export interface MergeNode extends BaseNode {
   sourceName?: string;
 }
 
-export type CanvasNode = SourceNode | TransformNode | MergeNode;
+/**
+ * The Master Patient Index step — optional, at most one per workflow, added from a source's `+` and placed
+ * directly after it (Source → MPI → …). An ordinary graph node on the canvas, but bypassed in the graph a run
+ * executes (see WorkflowGraphMapperServiceV2.bypassMpi). The identifiers it matches on live in
+ * fields[MPI_IDENTIFIERS_FIELD].
+ */
+export interface MpiNode extends BaseNode {
+  kind: 'mpi';
+}
+
+export type CanvasNode = SourceNode | TransformNode | MergeNode | MpiNode;
 
 export function isSourceNode(n: CanvasNode): n is SourceNode {
   return !n.kind;
@@ -51,4 +61,8 @@ export function isTransformNode(n: CanvasNode): n is TransformNode {
 
 export function isMergeNode(n: CanvasNode): n is MergeNode {
   return n.kind === 'merge';
+}
+
+export function isMpiNode(n: CanvasNode): n is MpiNode {
+  return n.kind === 'mpi';
 }

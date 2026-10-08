@@ -1,4 +1,4 @@
-import { Transform } from '../models/transform-v2.model';
+import { MPI_RANK, Transform } from '../models/transform-v2.model';
 
 /** V2's simplified straight-chain catalog: Source(0) → Destination(1) → Mapping(2) → Transformation(3) →
  *  De-identification(4). Mapping only applies when the destination is SQL-family (see
@@ -8,6 +8,10 @@ import { Transform } from '../models/transform-v2.model';
  *  single 'transformation' and 'deidentification' entries below — each still backed by the same
  *  transform-rules-dialog/rule-config-form config UI those steps always used (see field-mapping/). */
 export const TRANSFORMS: Transform[] = [
+  // Optional, at most one per workflow, and always placed directly after a source (see ApplicabilityServiceV2's
+  // picker model and WorkflowBuilderV2Component.insertMpiNode). Not a destination: no destinationType.
+  { id: 'mpi',              rank: MPI_RANK, category: 'Patient matching', name: 'Master Patient Index (MPI)', sub: 'Match patients across records on the identifiers you choose.' },
+
   { id: 'dest-sqlserver',   rank: 1, category: 'Relational',   destinationType: 'SqlServer',      name: 'SQL Server',         sub: 'Write to Microsoft SQL Server.',    permissionPrefix: 'sqlserver' },
   { id: 'dest-azuresql',    rank: 1, category: 'Relational',   destinationType: 'AzureSql',       name: 'Azure SQL',          sub: 'Write to Azure SQL Database.',      permissionPrefix: 'azuresql' },
   { id: 'dest-postgres',    rank: 1, category: 'Relational',   destinationType: 'PostgreSql',     name: 'PostgreSQL',         sub: 'Write to PostgreSQL.',              permissionPrefix: 'postgresql' },

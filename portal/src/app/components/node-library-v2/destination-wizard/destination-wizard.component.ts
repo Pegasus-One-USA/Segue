@@ -23,7 +23,10 @@ import {
   switchMap,
   finalize,
 } from 'rxjs/operators';
-import { CanvasNode } from '../../../models/node-v2.model';
+import { CanvasNode, isMpiNode } from '../../../models/node-v2.model';
+import {
+  DEFAULT_MPI_THRESHOLDS, MPI_THRESHOLDS_FIELD, MpiThresholds, mpiThresholdErrors,
+} from '../../../services/mpi-node.util';
 import { AddTransformEvent } from '../node-library-dialog.component';
 import {
   DestinationSchemaService,
@@ -597,6 +600,38 @@ export class DestinationWizardComponent implements OnInit {
   readonly fabricLandingMode = input<string | null>(null);
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode = input<CanvasNode | null>(null);
+
+  /** Whether an MPI step feeds this destination — walked upstream from where it attaches (the MPI itself, a
+   *  chain step in front of it, …), along every input. Shows the mapping list's "MPI Rule" tab, which has
+   *  nothing to configure for a destination no MPI feeds. */
+  protected readonly mpiInPipeline = computed(() => {
+    const edges = this.pipelineStore.edges();
+    const seen = new Set<string>();
+    const stack = [this.attachNode().id];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const node = this.pipelineStore.byId(id);
+      if (node && isMpiNode(node)) return true;
+      edges.filter(edge => edge.to === id).forEach(edge => stack.push(edge.from));
+    }
+    return false;
+  });
+
+  /** Each resource's MPI score thresholds, set on the mapping list's "MPI Rule" tab. Absent until changed,
+   *  which reads as DEFAULT_MPI_THRESHOLDS. Saved as dest_mpiThresholds and, like the mapping rows, put back
+   *  as they were when the group's canvas is left without saving (see openGroupMapping/confirmExitMapping). */
+  readonly mpiThresholdsByResource = signal<Record<string, MpiThresholds>>({});
+  private mpiThresholdsSnapshot: Record<string, MpiThresholds> | null = null;
+
+  mpiThresholdsFor(resource: string): MpiThresholds {
+    return this.mpiThresholdsByResource()[resource] ?? { ...DEFAULT_MPI_THRESHOLDS };
+  }
+
+  setMpiThresholds(resource: string, thresholds: MpiThresholds): void {
+    this.mpiThresholdsByResource.update(all => ({ ...all, [resource]: thresholds }));
+  }
   /** FHIR resource types the upstream source is configured to pull — drives the data-group list (Step 2). */
   readonly sourceResources = input<string[]>([]);
   /** The upstream source's EHR vendor (e.g. "Epic") — the Mapping JSON's top-level "source" field. */
@@ -3235,12 +3270,14 @@ export class DestinationWizardComponent implements OnInit {
   openGroupMapping(resource: string): void {
     this.mappingRowsSnapshot = structuredClone(this.mappingRows());
     this.targetByResourceSnapshot = structuredClone(this.targetByResource());
+    this.mpiThresholdsSnapshot = structuredClone(this.mpiThresholdsByResource());
     this.selectedGroupForMapping.set(resource);
   }
 
   private closeGroupMapping(): void {
     this.mappingRowsSnapshot = null;
     this.targetByResourceSnapshot = null;
+    this.mpiThresholdsSnapshot = null;
     this.selectedGroupForMapping.set(null);
   }
 
@@ -3418,6 +3455,14 @@ export class DestinationWizardComponent implements OnInit {
 
     const rows = this.mappingRows().filter((r) => r.resource === resource);
     if (rows.length === 0) return errors; // nothing else mapped yet isn't itself an error — Save just no-ops.
+
+    // The MPI Rule tab's score thresholds. Checked whenever that tab is offered, not just once a field is
+    // chosen: whatever the tab shows is what gets saved, so an invalid pair is never silently persisted.
+    if (this.mpiInPipeline()) {
+      const thresholdErrors = mpiThresholdErrors(this.mpiThresholdsFor(resource));
+      if (thresholdErrors.autoApprove) errors.push(`MPI auto-approve threshold: ${thresholdErrors.autoApprove}`);
+      if (thresholdErrors.manualReview) errors.push(`MPI manual review threshold: ${thresholdErrors.manualReview}`);
+    }
 
     // Mirrors WorkflowBuildAssemblerServiceV2.buildMappingForResource's own "Upsert/Update with no id
     // column mapped" check — that one only ever ran once "Add to Workflow" assembled the full build
@@ -4085,6 +4130,8 @@ export class DestinationWizardComponent implements OnInit {
       this.mappingRows.set(this.mappingRowsSnapshot);
     if (this.targetByResourceSnapshot)
       this.targetByResource.set(this.targetByResourceSnapshot);
+    if (this.mpiThresholdsSnapshot)
+      this.mpiThresholdsByResource.set(this.mpiThresholdsSnapshot);
     this.pendingExitConfirm.set(false);
     this.closeGroupMapping();
   }
@@ -4993,6 +5040,13 @@ export class DestinationWizardComponent implements OnInit {
         /* ignore malformed */
       }
     }
+    if (f[MPI_THRESHOLDS_FIELD]) {
+      try {
+        this.mpiThresholdsByResource.set(JSON.parse(f[MPI_THRESHOLDS_FIELD]) as Record<string, MpiThresholds>);
+      } catch {
+        /* ignore malformed — the defaults apply */
+      }
+    }
     // Preferred: the canonical Mapping JSON — restores tables/relations/mappings in one shot, including
     // anything dest_mappings_v2 alone can't (e.g. which extra tables are children, and of what). Falls
     // back to dest_mappings_v2/dest_mappings for nodes saved before this contract existed.
@@ -5736,6 +5790,9 @@ export class DestinationWizardComponent implements OnInit {
     // Endpoint) would vanish the moment the mapping canvas is torn down, since dest_mapping_summary_v1's
     // mapping rows only ever record columns that actually got a source field dragged onto them.
     config['dest_pendingColumns'] = JSON.stringify(this.pendingFreeColumnsByCard());
+    // The MPI Rule tab's per-resource score thresholds. Read back on reopen and, at workflow save, onto the
+    // MPI node's rules (WorkflowGraphMapperServiceV2.mpiRules).
+    config[MPI_THRESHOLDS_FIELD] = JSON.stringify(this.mpiThresholdsByResource());
     config['dest_mappings'] = JSON.stringify(
       serializeRowsFlat(
         this.mappingRows(),

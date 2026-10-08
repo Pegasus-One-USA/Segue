@@ -1,5 +1,6 @@
-import { CanvasNode, TransformNode, isSourceNode, isTransformNode } from '../models/node-v2.model';
+import { CanvasNode, TransformNode, isMpiNode, isSourceNode, isTransformNode } from '../models/node-v2.model';
 import { TRANSFORMS } from '../data/transforms-v2.data';
+import { mpiIdentifierIds } from './mpi-node.util';
 
 /** Minimal edge shape — the store's CanvasEdge, narrowed so this file stays dependency-free. */
 export interface PlanEdge {
@@ -173,6 +174,10 @@ function mappingRowCount(fields: Record<string, string>): number {
 function detailOf(node: CanvasNode, ownerFields: Record<string, string>): string | null {
   const fields = node.fields ?? {};
   if (isDestinationNode(node)) return fields['dest_name'] || null;
+  if (isMpiNode(node)) {
+    const count = mpiIdentifierIds(node).length;
+    return count ? `${count} selected identifier${count === 1 ? '' : 's'}` : null;
+  }
   switch (transformIdOf(node)) {
     case 'field-mapping': {
       const count = mappingRowCount(ownerFields);
@@ -202,6 +207,7 @@ function detailOf(node: CanvasNode, ownerFields: Record<string, string>): string
  *  - **Mapping** — takes Transformation and De-identification, which run on mapped records. The
  *    destination survives; the source is relinked straight to it.
  *  - **Transformation / De-identification** — itself only. Its neighbours are spliced back together.
+ *  - **MPI** — itself only. The source is relinked straight to whatever the MPI fed.
  *  - **Anything else** (a plain transform, a merge) — itself only, as before.
  */
 export function buildNodeDeletePlanV2(

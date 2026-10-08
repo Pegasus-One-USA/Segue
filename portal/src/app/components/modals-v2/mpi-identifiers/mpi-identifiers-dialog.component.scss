@@ -1,0 +1,265 @@
+/* ── MPI identifiers dialog ──────────────────────────────────────────────────── */
+.mpi-dialog {
+  width: min(780px, calc(100vw - 32px));
+  max-height: min(88vh, 760px);
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  animation: mpi-dialog-in var(--transition-modal) both;
+}
+
+@keyframes mpi-dialog-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+.mpi-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding: var(--space-10) var(--space-10) var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mpi-dialog__icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--color-secondary);
+  background: color-mix(in srgb, var(--color-secondary) 8%, var(--color-surface));
+
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: var(--color-secondary);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.mpi-dialog__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.mpi-dialog__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--color-ink);
+}
+
+.mpi-dialog__desc {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.mpi-dialog__close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base);
+
+  svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; fill: none; }
+
+  &:hover { background: var(--color-side); color: var(--color-ink); }
+
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-primary-mid); }
+}
+
+/* ── Sources being matched ──────────────────────────────────────────────────── */
+.mpi-dialog__sources {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-10) 0;
+}
+
+.mpi-dialog__sources-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.mpi-dialog__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mpi-dialog__chip {
+  padding: var(--space-1) var(--space-6);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-side);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+
+/* ── Count + bulk actions ───────────────────────────────────────────────────── */
+.mpi-dialog__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-10);
+}
+
+.mpi-dialog__count {
+  font-size: 13px;
+  color: var(--color-muted);
+
+  strong { color: var(--color-ink); font-weight: 700; }
+}
+
+.mpi-dialog__bulk {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ── Checklist ──────────────────────────────────────────────────────────────── */
+.mpi-dialog__list {
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 var(--space-10) var(--space-8);
+  border: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--space-4);
+}
+
+// Kept for assistive tech (a fieldset needs its name) but not shown: the dialog title already says it.
+.mpi-dialog__legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mpi-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: background var(--transition-base), border-color var(--transition-base);
+
+  &:hover { background: var(--color-side); border-color: var(--color-border-input); }
+
+  &:has(.mpi-option__input:focus-visible) {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-mid);
+  }
+}
+
+.mpi-option--checked {
+  border-color: var(--color-primary-mid);
+  background: var(--color-primary-soft);
+
+  &:hover { background: var(--color-primary-soft); border-color: var(--color-primary); }
+}
+
+.mpi-dialog__list:disabled .mpi-option {
+  cursor: default;
+
+  &:hover { background: var(--color-surface); border-color: var(--color-border); }
+}
+
+.mpi-dialog__list:disabled .mpi-option--checked:hover {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-mid);
+}
+
+.mpi-option__input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: var(--space-1) 0 0;
+  accent-color: var(--color-primary);
+  cursor: inherit;
+
+  &:focus-visible { outline: none; }
+}
+
+.mpi-option__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.mpi-option__label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-ink);
+}
+
+.mpi-option__hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────────── */
+.mpi-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-10);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-side);
+
+  .btn { min-height: 40px; }
+}
+
+.mpi-dialog__note {
+  margin-right: auto;
+  font-size: 12.5px;
+  color: var(--color-muted);
+}
+
+.mpi-dialog__note--warn {
+  color: var(--color-warning-strong);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .mpi-dialog__list { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mpi-dialog { animation: none; }
+}

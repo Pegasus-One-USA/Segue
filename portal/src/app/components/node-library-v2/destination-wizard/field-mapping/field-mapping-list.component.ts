@@ -10,6 +10,7 @@ import { TransformationRulesService, TransformationRule, TransformNodeSchema, Tr
 import { RuleConfigFormComponent, applyNodeDefaults, isConfigFieldVisible } from './rule-config-form/rule-config-form.component';
 import { DeIdentificationProfileService } from '../../../../destination-connections/services/deidentification-profile.service';
 import { ToastService } from '../../../../services/toast.service';
+import { DEFAULT_MPI_THRESHOLDS, MpiThresholds, mpiThresholdErrors } from '../../../../services/mpi-node.util';
 import { Observable, of, switchMap, tap } from 'rxjs';
 
 interface NewDeIdRuleDraft {
@@ -149,6 +150,8 @@ export class FieldMappingListComponent {
   /** Emitted when the user picks (or clears) which OTHER resource a reference field resolves against —
    *  referencesResource is null to clear it back to "written verbatim". */
   readonly referenceResourceChanged = output<{ resource: string; tableName: string; targetName: string; referencesResource: string | null }>();
+  /** Emitted when a field is ticked or unticked on the "MPI Rule" tab — see MappingRow.isMpiMatch. */
+  readonly mpiMatchChanged = output<{ resource: string; tableName: string; targetName: string; isMpiMatch: boolean }>();
 
   // Auto-hidden on entering Map Fields — the canvas gets the full height by default; toggleCollapsed()
   // (the existing "Mapping list" header button) still opens it on demand.
@@ -158,8 +161,8 @@ export class FieldMappingListComponent {
   toggleCollapsed(): void { this.collapsed.update(v => !v); }
 
   // ── "Transformations" tab — flat view of every connector's attached rule, alongside "Mappings" ──────
-  readonly activeTab = signal<'mappings' | 'transformations' | 'deidentification'>('mappings');
-  switchTab(tab: 'mappings' | 'transformations' | 'deidentification'): void { this.activeTab.set(tab); }
+  readonly activeTab = signal<'mappings' | 'transformations' | 'deidentification' | 'mpi'>('mappings');
+  switchTab(tab: 'mappings' | 'transformations' | 'deidentification' | 'mpi'): void { this.activeTab.set(tab); }
   /** Which tab to land on when this list first renders — set from the V2 chain node that opened the
    *  wizard (Mapping / Transformation / De-identification node). Applied as a starting value only, so
    *  switching tabs by hand still works normally. */
@@ -198,6 +201,13 @@ export class FieldMappingListComponent {
     effect(() => {
       const tab = this.initialListTab();
       untracked(() => this.activeTab.set(tab));
+    });
+    // The MPI Rule tab only exists while an MPI step feeds this destination — never leave the panel on it
+    // once it doesn't, which would show an empty body under no highlighted tab.
+    effect(() => {
+      if (!this.mpiAvailable() && untracked(() => this.activeTab()) === 'mpi') {
+        untracked(() => this.activeTab.set('mappings'));
+      }
     });
 
     effect(() => {
@@ -250,6 +260,50 @@ export class FieldMappingListComponent {
         error: () => this.deIdRules.set([]),
       });
     });
+  }
+
+  // ── "MPI Rule" tab — which mapped fields the Master Patient Index compares to decide whether a patient
+  // already exists. Only shown while an MPI step feeds this destination: without one nothing reads the choice.
+  /** True when an MPI step feeds the destination being mapped (DestinationWizardComponent.mpiInPipeline). */
+  readonly mpiAvailable = input(false);
+
+  /** The rows the MPI Rule tab offers: every displayed row with a real source. A fixed-value ('default')
+   *  column has nothing to match a record on, so it is left out. */
+  readonly mpiCandidateRows = computed(() => this.displayedRows().filter(r => r.mode !== 'default'));
+
+  /** How many of this resource's mapped fields are chosen for MPI matching — the tab's badge. Counted over
+   *  visibleRows (not the search-filtered list), like the other tabs' badges. */
+  readonly mpiMatchCount = computed(() =>
+    this.visibleRows().filter(r => r.isMpiMatch === true && r.mode !== 'default').length);
+
+  onMpiMatchToggle(row: MappingRow, isMpiMatch: boolean): void {
+    this.mpiMatchChanged.emit({ resource: row.resource, tableName: row.tableName, targetName: row.targetName, isMpiMatch });
+  }
+
+  /** The score thresholds for the resource being mapped — owned by DestinationWizardComponent (so they're saved
+   *  and discarded with the rest of this mapping), edited here. */
+  readonly mpiThresholds = input<MpiThresholds>({ ...DEFAULT_MPI_THRESHOLDS });
+  readonly mpiThresholdsChange = output<MpiThresholds>();
+
+  readonly mpiThresholdErrors = computed(() => mpiThresholdErrors(this.mpiThresholds()));
+  readonly mpiThresholdsValid = computed(() => {
+    const errors = this.mpiThresholdErrors();
+    return !errors.autoApprove && !errors.manualReview;
+  });
+
+  /** Widths of the score scale under the thresholds — no match, manual review, auto-approve, left to right. */
+  readonly mpiBandWidths = computed(() => {
+    const { autoApprove, manualReview } = this.mpiThresholds();
+    if (!this.mpiThresholdsValid()) return null;
+    return { none: manualReview!, manual: autoApprove! - manualReview!, auto: 100 - autoApprove! };
+  });
+
+  /** Every keystroke is passed up as-is — an empty or out-of-range value included, so what the wizard holds is
+   *  what the field shows and its Save can refuse it (validateMappingForSave) rather than quietly keeping an
+   *  older value. */
+  onMpiThresholdInput(field: keyof MpiThresholds, raw: string): void {
+    const value = raw.trim() === '' ? null : Number(raw);
+    this.mpiThresholdsChange.emit({ ...this.mpiThresholds(), [field]: Number.isFinite(value) ? value : null });
   }
 
   /** displayedRows filtered to 'value'-mode rows only — childJson rows have no single sourceField the

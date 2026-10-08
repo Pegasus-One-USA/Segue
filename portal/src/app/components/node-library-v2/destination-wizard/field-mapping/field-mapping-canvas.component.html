@@ -276,6 +276,8 @@
     [isApproximated]="isApproximatedFn"
     [rulesDestinationType]="rulesDestinationType()"
     [workflowId]="workflowId()"
+    [mpiAvailable]="mpiAvailable()"
+    [mpiThresholds]="mpiThresholds()"
     [ruleRefreshTrigger]="ruleRefreshTrigger()"
     [deIdentificationProfiles]="deIdentificationProfiles()"
     [selectedDeIdentificationProfileId]="selectedDeIdentificationProfileId()"
@@ -290,6 +292,8 @@
     (delimiterChanged)="onListDelimiterChange($event)"
     (instanceChanged)="onListInstanceChange($event)"
     (referenceResourceChanged)="onListReferenceResourceChange($event)"
+    (mpiMatchChanged)="onListMpiMatchChange($event)"
+    (mpiThresholdsChange)="mpiThresholdsChange.emit($event)"
   />
 
   <app-field-mapping-preview-drawer

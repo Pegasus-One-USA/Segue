@@ -5,10 +5,11 @@ import { PipelineStoreV2 } from '../../services/pipeline-v2.store';
 import { CanvasServiceV2 } from '../../services/canvas-v2.service';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityServiceV2 } from '../../services/applicability-v2.service';
-import { CanvasNode, TransformNode } from '../../models/node-v2.model';
+import { CanvasNode, TransformNode, isMpiNode } from '../../models/node-v2.model';
 import { SourceNodeComponent } from '../nodes-v2/source-node/source-node.component';
 import { TransformNodeComponent } from '../nodes-v2/transform-node/transform-node.component';
 import { MergeNodeComponent } from '../nodes-v2/merge-node/merge-node.component';
+import { MpiNodeComponent } from '../nodes-v2/mpi-node/mpi-node.component';
 import { CanvasConnectorsComponent } from './canvas-connectors/canvas-connectors.component';
 import { ZoomDockComponent } from './zoom-dock/zoom-dock.component';
 import { PermissionService } from '../../auth/services/permission.service';
@@ -26,6 +27,7 @@ import { DestinationType } from '../../destination-connections/models/destinatio
     SourceNodeComponent,
     TransformNodeComponent,
     MergeNodeComponent,
+    MpiNodeComponent,
     CanvasConnectorsComponent,
     ZoomDockComponent,
   ],
@@ -72,6 +74,7 @@ export class CanvasComponent {
   protected isSourceNode(n: CanvasNode): boolean    { return !n.kind; }
   protected isTransformNode(n: CanvasNode): boolean { return n.kind === 'transform'; }
   protected isMergeNode(n: CanvasNode): boolean     { return n.kind === 'merge'; }
+  protected isMpiNode(n: CanvasNode): boolean       { return isMpiNode(n); }
 
   // ── pan ───────────────────────────────────────────────────────────────────
   private panning: { px: number; py: number; x: number; y: number } | null = null;
@@ -404,7 +407,8 @@ export class CanvasComponent {
   ctxCopy(): void {
     const id   = this.ctxMenu()?.nodeId;
     const node = id ? this.store.byId(id) : null;
-    if (node) {
+    // A workflow has at most one MPI node, so there is nothing a pasted copy could be (the menu hides Copy for it).
+    if (node && !isMpiNode(node)) {
       this.clipboard.set(node);
       this.toast.show('Copied', 'Node copied to clipboard.');
     }
@@ -443,6 +447,20 @@ export class CanvasComponent {
     const id = this.ctxMenu()?.nodeId;
     const node = id ? this.store.byId(id) : undefined;
     return !!node?.checkpointUrlEnabled;
+  }
+
+  /** The node under the context menu is the MPI node — it gets "Choose identifiers" in place of Copy (one per
+   *  workflow) and the checkpoint actions (it is bypassed when a run executes, so there is nothing to resume). */
+  protected ctxNodeIsMpi(): boolean {
+    const id = this.ctxMenu()?.nodeId;
+    const node = id ? this.store.byId(id) : undefined;
+    return !!node && isMpiNode(node);
+  }
+
+  ctxConfigure(): void {
+    const id = this.ctxMenu()?.nodeId;
+    this.ctxMenu.set(null);
+    if (id) this.onNodeConfigure(id);
   }
 
   /** Merge nodes are a client-side-only grouping concept (never sent to the backend) — no checkpoint actions for them. */

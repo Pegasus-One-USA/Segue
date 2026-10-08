@@ -24,7 +24,14 @@ export interface PayloadMergeEntry {
   mergesInputs: string[];
 }
 
-export type PayloadEntry = PayloadSourceEntry | PayloadTransformEntry | PayloadMergeEntry;
+export interface PayloadMpiEntry {
+  ref: number;
+  stage: 'mpi';
+  identifiers: string[];
+  matchesSources: string[];
+}
+
+export type PayloadEntry = PayloadSourceEntry | PayloadTransformEntry | PayloadMergeEntry | PayloadMpiEntry;
 
 export interface PipelinePayload {
   scenario: string;

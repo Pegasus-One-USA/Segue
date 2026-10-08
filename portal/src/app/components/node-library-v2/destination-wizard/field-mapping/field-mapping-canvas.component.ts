@@ -2,6 +2,7 @@ import {
   Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, viewChild, AfterViewInit, OnDestroy, OnInit,
 } from '@angular/core';
 import type { ResourceFieldDef } from '../destination-wizard.component';
+import { DEFAULT_MPI_THRESHOLDS, MpiThresholds } from '../../../../services/mpi-node.util';
 import { MappingRow, MappingSourceRef, MappingInstanceSelection, isApproximated, PendingSchemaOp, MappingDestType, SchemaLoadState, qualifyTableName, splitTableName } from './field-mapping-model';
 import { canQueueAddColumn, describeCreateTableConflict, describeLiveCreateTableConflict } from './field-mapping-schema-ops.util';
 import { FmTreeNode, buildForest, findNode } from './field-mapping-tree.util';
@@ -133,6 +134,11 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  THIS workflow's own tier — see the join popover's own workflowId
    *  input. Null while the workflow is unsaved. */
   readonly workflowId = input<string | null>(null);
+  /** True when an MPI step feeds this destination — shows the mapping list's "MPI Rule" tab. */
+  readonly mpiAvailable = input(false);
+  /** The MPI score thresholds for the resource being mapped — owned by the wizard, edited on that tab. */
+  readonly mpiThresholds = input<MpiThresholds>({ ...DEFAULT_MPI_THRESHOLDS });
+  readonly mpiThresholdsChange = output<MpiThresholds>();
   // ── pass-through to the "De-identification" tab (field-mapping-list) — same shared state
   // DestinationWizardComponent's Step 1 picker owns; this canvas has no logic of its own here. ──────────
   readonly deIdentificationProfiles = input<DeIdentificationProfileDto[]>([]);
@@ -2421,6 +2427,16 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
   onListReferenceResourceChange(e: { resource: string; tableName: string; targetName: string; referencesResource: string | null }): void {
     const row = this.rowForColumnFn(e.resource, e.tableName, e.targetName);
     if (row) this.updateRow({ ...row, referencesResource: e.referencesResource ?? undefined });
+  }
+
+  /** A field ticked or unticked on the mapping list's "MPI Rule" tab. Cleared by removing the key rather than
+   *  writing false, so a row nobody chose stays exactly as it was before the tab existed. */
+  onListMpiMatchChange(e: { resource: string; tableName: string; targetName: string; isMpiMatch: boolean }): void {
+    const row = this.rowForColumnFn(e.resource, e.tableName, e.targetName);
+    if (!row) return;
+    const next: MappingRow = { ...row, isMpiMatch: true };
+    if (!e.isMpiMatch) delete next.isMpiMatch;
+    this.updateRow(next);
   }
 
   /** Bumped every time the join popover closes — the "Transformations" tab's rule lookup (field-mapping-

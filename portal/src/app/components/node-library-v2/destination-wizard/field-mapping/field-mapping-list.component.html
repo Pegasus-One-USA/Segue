@@ -26,6 +26,11 @@
   @if (!collapsed() && rulesDestinationType()) {
     <span class="fm-list-divider" aria-hidden="true"></span>
     <span class="fm-list-tabs">
+      @if (mpiAvailable()) {
+        <button type="button" class="fm-list-tab" [class.fm-list-tab--active]="activeTab() === 'mpi'" (click)="$event.stopPropagation(); switchTab('mpi')">
+          MPI Rule <span class="fm-list-count">{{ mpiMatchCount() }}</span>
+        </button>
+      }
       <button type="button" class="fm-list-tab" [class.fm-list-tab--active]="activeTab() === 'mappings'" (click)="$event.stopPropagation(); switchTab('mappings')">
         Mappings <span class="fm-list-count">{{ visibleRows().length }}</span>
       </button>
@@ -205,6 +210,124 @@
     @if (!deIdDraft()) {
       <button type="button" class="fm-list-add" (click)="startDeIdDraft()">+ Add rule</button>
     }
+  </div>
+}
+
+@if (!collapsed() && activeTab() === 'mpi' && rulesDestinationType() && mpiAvailable()) {
+  <div class="fm-list-body">
+    <!-- How the match score is acted on. Only auto-approve and manual review are set; "no match" is whatever
+         falls below manual review, so the three can never overlap or leave a gap. -->
+    @let thresholds = mpiThresholds();
+    @let errors = mpiThresholdErrors();
+    <section class="fm-mpi-outcomes" aria-labelledby="fm-mpi-outcomes-title">
+      <div class="fm-mpi-section-head">
+        <h4 class="fm-mpi-section-title" id="fm-mpi-outcomes-title">Match outcome</h4>
+        <p class="fm-mpi-section-desc">How a record's match score against existing patients decides what happens to it.</p>
+      </div>
+
+      <div class="fm-mpi-bands">
+        <div class="fm-mpi-band fm-mpi-band--auto">
+          <span class="fm-mpi-band-name">Auto-approve</span>
+          <label class="fm-mpi-band-rule">
+            <span>Score ≥</span>
+            <input
+              type="number" min="0" max="100" step="1" inputmode="numeric"
+              class="fm-mpi-percent"
+              aria-label="Auto-approve when the score is at least, in percent"
+              [value]="thresholds.autoApprove ?? ''"
+              [attr.aria-invalid]="errors.autoApprove ? 'true' : null"
+              [attr.aria-describedby]="errors.autoApprove ? 'fm-mpi-auto-error' : null"
+              (input)="onMpiThresholdInput('autoApprove', $any($event.target).value)"
+            />
+            <span>%</span>
+          </label>
+          @if (errors.autoApprove) {
+            <span class="fm-mpi-error" id="fm-mpi-auto-error">{{ errors.autoApprove }}</span>
+          }
+        </div>
+
+        <div class="fm-mpi-band fm-mpi-band--manual">
+          <span class="fm-mpi-band-name">Manual review</span>
+          <label class="fm-mpi-band-rule">
+            <span>Score ≥</span>
+            <input
+              type="number" min="0" max="100" step="1" inputmode="numeric"
+              class="fm-mpi-percent"
+              aria-label="Send for manual review when the score is at least, in percent"
+              [value]="thresholds.manualReview ?? ''"
+              [attr.aria-invalid]="errors.manualReview ? 'true' : null"
+              [attr.aria-describedby]="errors.manualReview ? 'fm-mpi-manual-error' : null"
+              (input)="onMpiThresholdInput('manualReview', $any($event.target).value)"
+            />
+            <span>%</span>
+            @if (mpiThresholdsValid()) {
+              <span class="fm-mpi-band-note">and below {{ thresholds.autoApprove }}%</span>
+            }
+          </label>
+          @if (errors.manualReview) {
+            <span class="fm-mpi-error" id="fm-mpi-manual-error">{{ errors.manualReview }}</span>
+          }
+        </div>
+
+        <div class="fm-mpi-band fm-mpi-band--none">
+          <span class="fm-mpi-band-name">No match</span>
+          <span class="fm-mpi-band-rule">
+            @if (mpiThresholdsValid()) {
+              Score below {{ thresholds.manualReview }}%
+            } @else {
+              <span class="fm-list-dash">Below manual review</span>
+            }
+          </span>
+        </div>
+      </div>
+
+      @if (mpiBandWidths(); as widths) {
+        <div class="fm-mpi-scale" aria-hidden="true">
+          <span class="fm-mpi-scale-seg fm-mpi-scale-seg--none" [style.flex-grow]="widths.none"></span>
+          <span class="fm-mpi-scale-seg fm-mpi-scale-seg--manual" [style.flex-grow]="widths.manual"></span>
+          <span class="fm-mpi-scale-seg fm-mpi-scale-seg--auto" [style.flex-grow]="widths.auto"></span>
+        </div>
+        <div class="fm-mpi-scale-ticks" aria-hidden="true">
+          <span>0%</span><span>100%</span>
+        </div>
+      }
+    </section>
+
+    <div class="fm-mpi-section-head">
+      <h4 class="fm-mpi-section-title" id="fm-mpi-fields-title">Fields to match on</h4>
+      <p class="fm-mpi-section-desc" id="fm-mpi-intro">Only fields already mapped for this resource can be used.</p>
+    </div>
+    <table class="data-table" aria-labelledby="fm-mpi-fields-title" aria-describedby="fm-mpi-intro">
+      <thead class="data-table__header">
+        <tr>
+          <th class="fm-mpi-check-col">Use for MPI</th>
+          <th>Source field(s)</th>
+          <th>Destination</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of mpiCandidateRows(); track rowKey(row)) {
+          <tr class="data-table__row" [class.fm-mpi-row--selected]="row.isMpiMatch === true">
+            <td class="fm-mpi-check-col">
+              <input
+                type="checkbox"
+                class="fm-mpi-check"
+                [checked]="row.isMpiMatch === true"
+                [attr.aria-label]="'Use ' + sourceSummary(row) + ' for MPI matching'"
+                (change)="onMpiMatchToggle(row, $any($event.target).checked)"
+              />
+            </td>
+            <td class="fm-mono">{{ sourceSummary(row) }}</td>
+            <td class="fm-mono">{{ row.tableName || row.resource }}.{{ row.targetName }}</td>
+          </tr>
+        }
+        @if (searchQuery() && !mpiCandidateRows().length && visibleRows().length) {
+          <tr><td colspan="3" class="fm-list-empty">No mapped fields match "{{ searchQuery() }}".</td></tr>
+        } @else if (!mpiCandidateRows().length) {
+          <tr><td colspan="3" class="fm-list-empty">No mapped fields yet — map a field first, then choose it here.</td></tr>
+        }
+      </tbody>
+    </table>
   </div>
 }
 

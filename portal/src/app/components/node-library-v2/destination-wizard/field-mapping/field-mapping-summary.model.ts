@@ -110,6 +110,10 @@ export interface MappingSummaryColumn {
    *  designated as the resource's upsert key via the target card's toggle. Omitted (not false) on every
    *  other column, matching referenceLookup's spread convention above. */
   isUpsertKey?: boolean;
+  /** Mirrors MappingRow.isMpiMatch — present (true) only on a column chosen on the "MPI Rule" tab, omitted
+   *  everywhere else, same spread convention as isUpsertKey. Has to be here and not just in dest_mappings_v2:
+   *  a reopened node is rebuilt from THIS document (see jsonWriteMode below). */
+  isMpiMatch?: boolean;
   /** Mirrors MappingRow.jsonWriteMode — present ('document') only on a Json-valued column the user
    *  explicitly switched to MongoDB's native document storage. Omitted (never 'string') everywhere else,
    *  same spread convention as isUpsertKey above, so the document stays byte-for-byte what it was for
@@ -247,6 +251,9 @@ function toSummaryColumn(
   // mapping, and sidesteps any ambiguity in how a test's equality check treats an undefined-valued key.
   const referenceLookup = keyInfo ? { referenceLookup: { table: keyInfo.table, keyColumn: keyInfo.keyColumn } } : {};
   const upsertKey = row.isUpsertKey === true ? { isUpsertKey: true } : {};
+  // A fixed-value column has no source to match on, so the MPI Rule tab never offers one — and a stray flag
+  // on one (a column re-defaulted after being chosen) is not carried forward.
+  const mpiMatch = row.isMpiMatch === true && row.mode !== 'default' ? { isMpiMatch: true } : {};
   // Same spread convention as upsertKey: only a deliberate 'document' choice on a Json-valued column is
   // recorded, so nothing changes in the document for any mapping that hasn't made the choice. Without
   // this, reopening the node rebuilds every row from here with the choice gone (applyMappingSummaryDocument
@@ -259,7 +266,7 @@ function toSummaryColumn(
     return {
       column: row.targetName, mode: 'wholeNodeAsJson', sourceNode: row.childNodeId ?? '',
       instance, ...(instance ? { instanceIsExplicit: true as const } : {}),
-      ...referenceLookup, ...upsertKey, ...jsonWriteMode,
+      ...referenceLookup, ...upsertKey, ...mpiMatch, ...jsonWriteMode,
     };
   }
   if (row.mode === 'default') {
@@ -276,9 +283,14 @@ function toSummaryColumn(
     // No jsonWriteMode: a join's value is a delimited string by construction (JsonMappingEngine.
     // ResolveJoinedFields), so there is no such choice to make for one — supportsJsonWriteMode() returns
     // false for a multi-source row, which is what keeps `jsonWriteMode` above empty here in the first place.
-    return { column: row.targetName, mode: 'joinedFields', sources, delimiter: row.delimiter ?? ', ', instance, ...referenceLookup, ...upsertKey };
+    return {
+      column: row.targetName, mode: 'joinedFields', sources, delimiter: row.delimiter ?? ', ', instance,
+      ...referenceLookup, ...upsertKey, ...mpiMatch,
+    };
   }
-  return { column: row.targetName, mode: 'directField', sources, instance, ...referenceLookup, ...upsertKey, ...jsonWriteMode };
+  return {
+    column: row.targetName, mode: 'directField', sources, instance, ...referenceLookup, ...upsertKey, ...mpiMatch, ...jsonWriteMode,
+  };
 }
 
 // ── per-resource table set + schema-change/processing-order derivation ──────────────────────────────
@@ -693,6 +705,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
             instance: col.instanceIsExplicit ? instance : undefined,
             targetName: col.column, tableName: fullName,
             ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
+            ...(col.isMpiMatch ? { isMpiMatch: true } : {}),
             ...(col.jsonWriteMode ? { jsonWriteMode: col.jsonWriteMode } : {}),
           });
           continue;
@@ -718,6 +731,7 @@ export function applyMappingSummaryDocument(doc: MappingSummaryDocument, destTyp
           targetName: col.column, tableName: fullName,
           ...(referencesResource ? { referencesResource } : {}),
           ...(col.isUpsertKey ? { isUpsertKey: true } : {}),
+          ...(col.isMpiMatch ? { isMpiMatch: true } : {}),
           ...(col.jsonWriteMode ? { jsonWriteMode: col.jsonWriteMode } : {}),
         });
       }

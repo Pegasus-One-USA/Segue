@@ -2,8 +2,10 @@ import { Injectable, inject } from '@angular/core';
 import { TRANSFORMS } from '../data/transforms-v2.data';
 import { SOURCES } from '../data/sources-v2.data';
 import { CanvasEdge } from '../models/edge-v2.model';
-import { CanvasNode, SourceNode, TransformNode } from '../models/node-v2.model';
+import { CanvasNode, MpiNode, SourceNode, TransformNode, isMpiNode } from '../models/node-v2.model';
 import { PipelineStoreV2 } from './pipeline-v2.store';
+import { MPI_NODE_NAME, MPI_RULES_FIELD, MPI_TRANSFORM_ID, MpiRule, mpiThresholdsFor } from './mpi-node.util';
+import type { MappingRow } from '../components/node-library-v2/destination-wizard/field-mapping/field-mapping-model';
 import {
   WorkflowApiService,
   WorkflowCatalogItem,
@@ -17,6 +19,12 @@ import {
 
 const CATEGORY_SOURCE: WorkflowNodeCategory = 0;
 const CATEGORY_TRANSFORM: WorkflowNodeCategory = 10;
+
+/** Where the MPI node sat in its chain, recorded on it at save time: the stable keys (see stableKey) of the nodes
+ *  feeding it and of the nodes it fed, comma-separated. The saved graph routes AROUND the MPI (see bypassMpi), so
+ *  this is the only record of its position, and loadDefinition threads it back in from it (see rethreadMpi). */
+const MPI_UPSTREAM_FIELD = '__mpiUpstream';
+const MPI_DOWNSTREAM_FIELD = '__mpiDownstream';
 
 /** Destinations that persist whole FHIR resources rather than mapped relational rows, so they need no
  *  upstream Mapping node (see isFhirDirectDestination). MappingNodeExecutor already treats all three
@@ -54,6 +62,9 @@ const FALLBACK_NODE_TYPES: Record<string, string> = {
   normalize: 'NormalizationNode',
   'patient-matching': 'PatientMatchingNode',
   'merge-patients': 'PatientMatchingNode',
+  // After 'patient-matching' on purpose: transformIdFromNodeType returns the FIRST key for a node type, and a
+  // PatientMatchingNode without an `__transformId` is a V1 step, not an MPI node.
+  [MPI_TRANSFORM_ID]: 'PatientMatchingNode',
   terminology: 'TerminologyNode',
   'deid-safeharbor': 'DeIdentificationNode',
   'deid-kanon': 'DeIdentificationNode',
@@ -129,13 +140,21 @@ export class WorkflowGraphMapperServiceV2 {
   ): WorkflowDefinitionRequest {
     const catalog = this.workflowApi.catalog();
     const nodes = this.store.nodes();
-    const edges = this.store.edges();
+    // Everything below works on the graph with the MPI step routed around — see bypassMpi.
+    const { edges, mpiPosition } = this.bypassMpi(nodes, this.store.edges());
     const requests: WorkflowNodeRequest[] = [];
     const requestIds = new Set<string>();
 
     for (const node of nodes) {
       if (node.kind === 'merge') continue;
       const request = this.nodeToRequest(node, catalog);
+      if (isMpiNode(node)) {
+        request.configurationJson = JSON.stringify({
+          ...this.parseConfig(request.configurationJson),
+          ...mpiPosition,
+          [MPI_RULES_FIELD]: JSON.stringify(this.mpiRules(node, nodes, this.store.edges())),
+        });
+      }
       requests.push(request);
       requestIds.add(request.id);
     }
@@ -252,8 +271,169 @@ export class WorkflowGraphMapperServiceV2 {
     }));
     // Persisted graphs are in EXECUTION order (Transformation → De-identification → Mapping →
     // Destination); the canvas reads in AUTHORING order (Mapping → Transformation → De-identification →
-    // Destination). Reorder so reopening a workflow shows it the way it was built.
-    this.store.loadGraph(nodes, this.toAuthoringOrder(nodes, edges));
+    // Destination). Reorder so reopening a workflow shows it the way it was built — then put the MPI step back
+    // where it was, which the saved graph routes around.
+    this.store.loadGraph(nodes, this.rethreadMpi(nodes, this.toAuthoringOrder(nodes, edges)));
+  }
+
+  /**
+   * The canvas graph with the MPI step routed around: every edge into it is joined to every edge out of it
+   * (Source → MPI → Mapping becomes Source → Mapping), and the MPI node is left with no edges at all.
+   *
+   * PatientMatchingNode is still a pass-through executor, so putting it in the run graph would only add a
+   * normalization pass over every record with no matching behind it — and the build assembler's single-hop
+   * source/mapping lookups would stop finding the source behind it. So the run graph is exactly what it would be
+   * without the MPI, the MPI node itself is saved disabled (see nodeToRequest), and `mpiPosition` records where
+   * it sat so loading can put it back.
+   */
+  private bypassMpi(
+    nodes: CanvasNode[],
+    canvasEdges: CanvasEdge[],
+  ): { edges: CanvasEdge[]; mpiPosition: Record<string, string> } {
+    const mpi = nodes.find(isMpiNode);
+    if (!mpi) return { edges: canvasEdges, mpiPosition: {} };
+
+    const inbound = canvasEdges.filter(edge => edge.to === mpi.id);
+    const outbound = canvasEdges.filter(edge => edge.from === mpi.id);
+    const edges = canvasEdges.filter(edge => edge.to !== mpi.id && edge.from !== mpi.id);
+    for (const into of inbound) {
+      for (const out of outbound) {
+        if (into.from === out.to || edges.some(edge => edge.from === into.from && edge.to === out.to)) continue;
+        edges.push({ id: `__mpi_bypass_${edges.length}`, from: into.from, to: out.to });
+      }
+    }
+
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const keysOf = (ids: string[]) => ids
+      .map(id => byId.get(id))
+      .filter((node): node is CanvasNode => !!node)
+      .map(node => this.stableKey(node))
+      .join(',');
+    return {
+      edges,
+      mpiPosition: {
+        [MPI_UPSTREAM_FIELD]: keysOf(inbound.map(edge => edge.from)),
+        [MPI_DOWNSTREAM_FIELD]: keysOf(outbound.map(edge => edge.to)),
+      },
+    };
+  }
+
+  /**
+   * Threads a loaded MPI node back into its chain from the position recorded at save time (see bypassMpi): each
+   * recorded upstream node feeds the MPI again, and that node's edges toward the recorded downstream nodes leave
+   * from the MPI instead. "Toward" rather than "to" because the hop in the saved graph may not be the one that
+   * was recorded — a synthetic Mapping node can have been inserted in front of a destination, or the chain
+   * reordered for execution and back — so an edge is moved when its target is, or leads to, a recorded node.
+   *
+   * A position that no longer resolves (a neighbour since removed) leaves the MPI on the canvas unconnected, where
+   * it was placed, rather than dropping it and its identifier selection.
+   */
+  private rethreadMpi(nodes: CanvasNode[], loadedEdges: CanvasEdge[]): CanvasEdge[] {
+    const mpi = nodes.find(isMpiNode);
+    if (!mpi) return loadedEdges;
+
+    const idByKey = new Map(nodes.map(node => [this.stableKey(node), node.id]));
+    const resolve = (raw: string | undefined): string[] => (raw ?? '')
+      .split(',')
+      .map(key => idByKey.get(key.trim()))
+      .filter((id): id is string => !!id && id !== mpi.id);
+    const upstream = resolve(mpi.fields[MPI_UPSTREAM_FIELD]);
+    const downstream = new Set(resolve(mpi.fields[MPI_DOWNSTREAM_FIELD]));
+    // Recomputed on every save, so never worth carrying on the canvas.
+    delete mpi.fields[MPI_UPSTREAM_FIELD];
+    delete mpi.fields[MPI_DOWNSTREAM_FIELD];
+    delete mpi.fields[MPI_RULES_FIELD];
+
+    const base = loadedEdges.filter(edge => edge.from !== mpi.id && edge.to !== mpi.id);
+    const leadsToDownstream = (startId: string): boolean => {
+      const seen = new Set<string>();
+      const stack = [startId];
+      while (stack.length) {
+        const id = stack.pop()!;
+        if (downstream.has(id)) return true;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        base.filter(edge => edge.from === id).forEach(edge => stack.push(edge.to));
+      }
+      return false;
+    };
+
+    let result = [...base];
+    let synthetic = 0;
+    const link = (from: string, to: string): void => {
+      if (result.some(edge => edge.from === from && edge.to === to)) return;
+      result.push({ id: `__mpi_${synthetic++}`, from, to });
+    };
+    for (const from of upstream) {
+      const moved = result.filter(edge => edge.from === from && leadsToDownstream(edge.to));
+      result = result.filter(edge => !moved.includes(edge));
+      moved.forEach(edge => link(mpi.id, edge.to));
+      link(from, mpi.id);
+    }
+    return result;
+  }
+
+  /**
+   * What was set on the "MPI Rule" tab of every destination this MPI feeds — per resource, the mapped fields
+   * its matching compares and the score thresholds that decide auto-approve / manual review / no match. Read
+   * from each destination's own configuration (the chosen fields ride on its mapping rows in dest_mappings_v2,
+   * the thresholds in dest_mpiThresholds), so a choice lives with the mapping it was made on and the MPI node
+   * is just handed the result on save. A resource with no field chosen has no rule: there would be nothing to
+   * score. Walked over the canvas edges, before the MPI is routed around.
+   */
+  private mpiRules(mpi: CanvasNode, nodes: CanvasNode[], canvasEdges: CanvasEdge[]): MpiRule[] {
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const rules: MpiRule[] = [];
+    const seen = new Set<string>();
+    const stack = [mpi.id];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      canvasEdges.filter(edge => edge.from === id).forEach(edge => stack.push(edge.to));
+
+      const node = byId.get(id);
+      if (!node || !this.isDestination(node)) continue;
+      let rows: MappingRow[];
+      try {
+        rows = JSON.parse(node.fields['dest_mappings_v2'] ?? '[]') as MappingRow[];
+      } catch {
+        continue; // malformed mapping config is the wizard's problem to report, not a reason to fail the save
+      }
+      if (!Array.isArray(rows)) continue;
+
+      const byResource = new Map<string, MpiRule>();
+      for (const row of rows) {
+        if (row?.isMpiMatch !== true || row.mode === 'default') continue;
+        let rule = byResource.get(row.resource);
+        if (!rule) {
+          const thresholds = mpiThresholdsFor(node.fields, row.resource);
+          rule = {
+            destination: this.stableKey(node),
+            resourceType: row.resource,
+            // Validated by the wizard's Save (validateMappingForSave), so never null on a saved configuration.
+            autoApprovePercent: thresholds.autoApprove!,
+            manualReviewPercent: thresholds.manualReview!,
+            fields: [],
+          };
+          byResource.set(row.resource, rule);
+          rules.push(rule);
+        }
+        rule.fields.push({
+          sourceFields: row.mode === 'childJson' ? [row.childNodeId ?? ''] : (row.sources ?? []).map(source => source.fhirPath),
+          table: row.tableName,
+          column: row.targetName,
+        });
+      }
+    }
+    return rules;
+  }
+
+  /** A node's identity across save → reload. Its id doesn't survive (the server issues new node ids on every
+   *  save — WorkflowEndpoints.BuildWorkflow), but the server stamps the id the canvas sent as `canvasNodeId` on
+   *  the first save and keeps it on every later one, so a node not saved yet is keyed by the id it will get. */
+  private stableKey(node: CanvasNode): string {
+    return node.fields?.['canvasNodeId'] || node.id;
   }
 
   findLaunchSourceId(): string | null {
@@ -305,7 +485,11 @@ export class WorkflowGraphMapperServiceV2 {
       }),
       positionX: node.x,
       positionY: node.y,
-      isEnabled: true,
+      // The MPI node is saved so its identifier selection and position survive a reload, but DISABLED and
+      // without edges (toRequest routes around it — see bypassMpi): every enabled-node pass skips it
+      // (WorkflowGraphValidator, RankedWorkflowOrchestrator's TopologicalSort, WorkflowIsRunnableRule), so it
+      // can't change what a run does.
+      isEnabled: !isMpiNode(node),
       checkpointUrlEnabled: !!node.checkpointUrlEnabled,
     };
   }
@@ -342,6 +526,16 @@ export class WorkflowGraphMapperServiceV2 {
     const item = catalog.find(candidate => candidate.nodeType === node.nodeType);
     const transformId = config['__transformId'] ?? item?.transformId ?? this.transformIdFromNodeType(node.nodeType);
     const name = config['__name'] ?? node.displayName ?? item?.displayName ?? transformId;
+
+    if (transformId === MPI_TRANSFORM_ID) {
+      return {
+        id: node.id,
+        kind: 'mpi',
+        x: node.positionX,
+        y: node.positionY,
+        fields: { ...config, __name: name },
+      } satisfies MpiNode;
+    }
 
     if (this.isSourceCategory(node.category)) {
       // transformId is still not enough on its own for display: a vendor with no NodeType of its own
@@ -402,6 +596,7 @@ export class WorkflowGraphMapperServiceV2 {
   private transformIdForNode(node: CanvasNode): string {
     if (node.kind === 'transform') return node.transformId;
     if (node.kind === 'merge') return 'merge';
+    if (node.kind === 'mpi') return MPI_TRANSFORM_ID;
     const connector = node.fields['Connector'] ?? node.connectorLabel ?? node.fields['__name'] ?? '';
     // The vendor the canvas/wizard actually recorded on this node comes first, so a saved node carries its own
     // vendor NodeType (AthenahealthSourceNode, EClinicalWorksSourceNode, ...) instead of every EHR sharing
@@ -438,6 +633,7 @@ export class WorkflowGraphMapperServiceV2 {
       return TRANSFORMS.find(transform => transform.id === node.transformId)?.name ?? node.transformId;
     }
     if (node.kind === 'merge') return node.fields['__name'] ?? 'Merge';
+    if (node.kind === 'mpi') return MPI_NODE_NAME;
     return node.connectorLabel ?? 'Epic';
   }
 
@@ -516,20 +712,44 @@ export class WorkflowGraphMapperServiceV2 {
     const added: CanvasEdge[] = [];
     let synthetic = 0;
 
+    const isChainEdge = (edge: CanvasEdge): boolean => {
+      const from = byId.get(edge.from);
+      return !!from && this.isChainStep(from);
+    };
+
     for (const destination of destinations) {
-      // Walk backwards from the destination for as long as each predecessor is a V2 chain step.
+      // Walk backwards from the destination for as long as each predecessor is a V2 chain step, collecting
+      // the segment's HEADS — every edge that feeds it from outside — on the way.
+      //
+      // There used to be exactly one head, and the walk gave up on any step with more than one input. But a
+      // segment can be fed from several places: sources routed through the MPI step all feed its first step
+      // once the MPI is routed around (see bypassMpi), as do sources whose ports were dragged onto it. Giving
+      // up there left those edges pointing at what was the TOP of the segment, while the segment was still
+      // reordered — so after a save, Source → Mapping skipped Transformation and De-identification entirely,
+      // and every record reached the destination untransformed and un-redacted.
       const chain: CanvasNode[] = [];
-      let cursor: CanvasNode | undefined = destination;
+      const heads: CanvasEdge[] = [];
+      let cursor: CanvasNode = destination;
       let guard = 0;
-      let head: CanvasEdge | undefined;
-      while (cursor && guard++ < 20) {
-        const inbound = edges.filter(e => e.to === cursor!.id);
-        if (inbound.length !== 1) break;
-        const predecessor = byId.get(inbound[0].from);
-        if (!predecessor || !this.isChainStep(predecessor)) { head = inbound[0]; break; }
-        dropped.add(inbound[0].id);
-        chain.unshift(predecessor);
-        cursor = predecessor;
+      while (guard++ < 20) {
+        const inbound = edges.filter(e => e.to === cursor.id);
+        const fromChain = inbound.filter(isChainEdge);
+        if (cursor === destination) {
+          // The destination's own inputs are left exactly as they were unless a single chain step feeds it.
+          if (inbound.length !== 1 || fromChain.length !== 1) break;
+        } else if (fromChain.length !== 1) {
+          // Top of the segment: whatever feeds it is a head — one source normally, several on a fan-in. (Two
+          // chain steps merging into one is not a V2 shape; they're treated as heads rather than guessed at.)
+          heads.push(...inbound);
+          break;
+        } else {
+          // A step fed by its chain predecessor AND from outside — the shape the old walk saved on a fan-in.
+          // Those outside inputs are heads of this segment too, which is also what repairs such a graph.
+          heads.push(...inbound.filter(edge => !isChainEdge(edge)));
+        }
+        dropped.add(fromChain[0].id);
+        cursor = byId.get(fromChain[0].from)!;
+        chain.unshift(cursor);
       }
       if (!chain.length) continue;
 
@@ -537,8 +757,11 @@ export class WorkflowGraphMapperServiceV2 {
         .map(id => chain.find(node => node.kind === 'transform' && node.transformId === id))
         .filter((node): node is CanvasNode => !!node);
 
-      if (head) dropped.add(head.id);
-      const hops = [...(head ? [head.from] : []), ...ordered.map(node => node.id), destination.id];
+      heads.forEach(edge => dropped.add(edge.id));
+      for (const from of new Set(heads.map(edge => edge.from))) {
+        added.push({ id: `${idPrefix}${synthetic++}`, from, to: ordered[0].id });
+      }
+      const hops = [...ordered.map(node => node.id), destination.id];
       for (let i = 0; i < hops.length - 1; i++) {
         added.push({ id: `${idPrefix}${synthetic++}`, from: hops[i], to: hops[i + 1] });
       }

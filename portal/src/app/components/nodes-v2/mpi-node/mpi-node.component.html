@@ -1,0 +1,61 @@
+<span class="port port-in"></span>
+<span class="port port-out" (pointerdown)="onPortPointerDown($event)"></span>
+
+@if (!readOnly()) {
+  @if (canDelete()) {
+    <button
+      class="sn-del-btn"
+      type="button"
+      aria-label="Delete MPI module"
+      title="Delete this module"
+      (click)="onDeleteClick($event)"
+      (pointerdown)="$event.stopPropagation()"
+    >
+      <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+    </button>
+  }
+
+  @if (canAddNext()) {
+    <button
+      class="sn-add-btn"
+      type="button"
+      aria-label="Add next module"
+      title="Add next module"
+      (click)="onAddNextClick($event)"
+      (pointerdown)="$event.stopPropagation()"
+    >
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+  }
+}
+
+<div
+  class="mpi-circle"
+  role="button"
+  tabindex="0"
+  [attr.aria-label]="ariaLabel()"
+  title="Choose MPI identifiers"
+  (pointerdown)="onCirclePointerDown($event)"
+  (pointermove)="onCirclePointerMove($event)"
+  (pointerup)="onCirclePointerUp($event)"
+  (pointercancel)="onCirclePointerUp($event)"
+  (keydown.enter)="onKeyOpen($event)"
+  (keydown.space)="onKeyOpen($event)"
+>
+  <svg class="mpi-glyph" viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="8" cy="8" r="3"/>
+    <circle cx="16" cy="8" r="3"/>
+    <path d="M3 19c0-3 2.2-5 5-5s5 2 5 5"/>
+    <path d="M11 19c0-3 2.2-5 5-5s5 2 5 5"/>
+  </svg>
+  <span class="mpi-abbr">MPI</span>
+</div>
+
+<span class="mpi-badge" [class.mpi-badge--pending]="!count()" aria-hidden="true">
+  {{ count() ? count() + '/' + total : 'Set up' }}
+</span>
+
+<div class="sn-labels">
+  <strong class="sn-name">{{ name }}</strong>
+  <span class="sn-context" [class.sn-context--pending]="!count()">{{ summary() }}</span>
+</div>

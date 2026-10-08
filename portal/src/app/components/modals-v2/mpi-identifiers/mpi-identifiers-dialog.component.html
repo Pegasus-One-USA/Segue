@@ -1,0 +1,94 @@
+<!-- An unsaved selection isn't thrown away by a stray backdrop click; Cancel, × and Esc still discard it. -->
+<app-modal-overlay [open]="open()" [closeOnBackdropClick]="!dirty()" (closed)="closed.emit()">
+  <section
+    class="mpi-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="mpi-dialog-title"
+    aria-describedby="mpi-dialog-desc"
+    cdkTrapFocus
+    [cdkTrapFocusAutoCapture]="true"
+  >
+    <header class="mpi-dialog__header">
+      <div class="mpi-dialog__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <circle cx="8" cy="8" r="3"/>
+          <circle cx="16" cy="8" r="3"/>
+          <path d="M3 19c0-3 2.2-5 5-5s5 2 5 5"/>
+          <path d="M11 19c0-3 2.2-5 5-5s5 2 5 5"/>
+        </svg>
+      </div>
+      <div class="mpi-dialog__heading">
+        <h2 class="mpi-dialog__title" id="mpi-dialog-title">MPI identifiers</h2>
+        <p class="mpi-dialog__desc" id="mpi-dialog-desc">
+          Choose the identifiers the Master Patient Index uses to recognize the same patient across records.
+        </p>
+      </div>
+      <button class="mpi-dialog__close" type="button" aria-label="Close dialog" (click)="closed.emit()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+      </button>
+    </header>
+
+    @if (sourceNames().length) {
+      <div class="mpi-dialog__sources">
+        <span class="mpi-dialog__sources-label">Matching records from</span>
+        <ul class="mpi-dialog__chips">
+          @for (name of sourceNames(); track $index) {
+            <li class="mpi-dialog__chip">{{ name }}</li>
+          }
+        </ul>
+      </div>
+    }
+
+    <div class="mpi-dialog__toolbar">
+      <span class="mpi-dialog__count" aria-live="polite">
+        <strong>{{ selectedCount() }}</strong> of {{ identifiers.length }} selected
+      </span>
+      @if (!readOnly()) {
+        <div class="mpi-dialog__bulk">
+          <button type="button" class="btn btn-text btn-sm" [disabled]="allSelected()" (click)="selectAll()">Select all</button>
+          <button type="button" class="btn btn-text btn-sm" [disabled]="selectedCount() === 0" (click)="clearAll()">Clear</button>
+        </div>
+      }
+    </div>
+
+    <fieldset class="mpi-dialog__list" [disabled]="readOnly()">
+      <legend class="mpi-dialog__legend">Identifiers</legend>
+      @for (identifier of identifiers; track identifier.id) {
+        <label class="mpi-option" [class.mpi-option--checked]="isSelected(identifier.id)">
+          <input
+            class="mpi-option__input"
+            type="checkbox"
+            [checked]="isSelected(identifier.id)"
+            (change)="toggle(identifier.id, $any($event.target).checked)"
+          />
+          <span class="mpi-option__text">
+            <span class="mpi-option__label">{{ identifier.label }}</span>
+            @if (identifier.hint) {
+              <span class="mpi-option__hint">{{ identifier.hint }}</span>
+            }
+          </span>
+        </label>
+      }
+    </fieldset>
+
+    <footer class="mpi-dialog__footer">
+      @if (readOnly()) {
+        <span class="mpi-dialog__note">View only — you don't have permission to change this workflow.</span>
+        <button type="button" class="btn btn-secondary" (click)="closed.emit()">Close</button>
+      } @else {
+        @if (selectedCount() === 0) {
+          <span class="mpi-dialog__note mpi-dialog__note--warn" id="mpi-dialog-hint">Select at least one identifier.</span>
+        }
+        <button type="button" class="btn btn-secondary" (click)="closed.emit()">Cancel</button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          [disabled]="selectedCount() === 0"
+          [attr.aria-describedby]="selectedCount() === 0 ? 'mpi-dialog-hint' : null"
+          (click)="save()"
+        >Save identifiers</button>
+      }
+    </footer>
+  </section>
+</app-modal-overlay>

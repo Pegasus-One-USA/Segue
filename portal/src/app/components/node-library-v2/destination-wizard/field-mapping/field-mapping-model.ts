@@ -257,6 +257,15 @@ export interface MappingRow {
    */
   isUpsertKey?: boolean;
   /**
+   * Chosen on the mapping list's "MPI Rule" tab: this mapped field is one the Master Patient Index compares
+   * to decide whether a patient already exists. Only offered while an MPI step feeds the destination, and
+   * only on a row with a real source (never a fixed-value 'default' column). Rides on the row, so it goes
+   * wherever the mapping goes — removed with it, and dropped when the column is remapped to a different
+   * source (a row is replaced wholesale then). Collected onto the saved MPI node as `mpiRules`
+   * (WorkflowGraphMapperServiceV2.mpiRules), which is where the MPI's matching reads it.
+   */
+  isMpiMatch?: boolean;
+  /**
    * How this row's JSON value is materialized in the destination column — only meaningful when the row's
    * effective ValueType is 'Json' (see effectiveMappingValueType) AND the destination stores structure
    * natively, which today means MongoDB only. Undefined everywhere else, and undefined means 'string':

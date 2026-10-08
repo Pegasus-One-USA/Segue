@@ -30,10 +30,10 @@ export interface PickerItem {
 export interface PickerModel {
   mode: string;
   rule: string;
-  attachTo: import('./node.model').CanvasNode;
+  attachTo: import('./node-v2.model').CanvasNode;
   ruleLabel: string;
   items: PickerItem[];
   mergeOpt: MergeNodeOption | null;
   cfg: import('./transform-applicability.model').EpicConfig;
-  node: import('./node.model').CanvasNode;
+  node: import('./node-v2.model').CanvasNode;
 }

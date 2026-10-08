@@ -60,6 +60,21 @@
           (portMove)="onPortMove($event)"
           (portEnd)="onPortEnd($event)"
         />
+      } @else if (isMpiNode(node)) {
+        <app-mpi-node
+          [attr.data-node-id]="node.id"
+          [node]="node"
+          [readOnly]="readOnly()"
+          [canAddNext]="canAddNext(node)"
+          [canDelete]="canDeleteNode(node.id)"
+          (configure)="onNodeConfigure($event)"
+          (addNext)="onAddNext($event)"
+          (delete)="onNodeDelete($event)"
+          (dragMove)="onNodeDragMove($event)"
+          (portStart)="onPortStart($event)"
+          (portMove)="onPortMove($event)"
+          (portEnd)="onPortEnd($event)"
+        />
       }
     }
 
@@ -72,7 +87,19 @@
          (keydown.escape)="closeCtx()"
          (contextmenu)="$event.preventDefault(); closeCtx()"></div>
     <div class="ctx-menu" [style.left.px]="menu.x" [style.top.px]="menu.y">
-      @if (menu.type === 'node') {
+      @if (menu.type === 'node' && ctxNodeIsMpi()) {
+        <button class="ctx-item" (click)="ctxConfigure()">
+          <svg class="ctx-ico" viewBox="0 0 16 16"><polyline points="2.5,8.5 5.5,11.5 13.5,3.5"/></svg>
+          {{ readOnly() ? 'View identifiers' : 'Choose identifiers' }}
+        </button>
+        @if (!readOnly() && ctxNodeCanDelete()) {
+          <div class="ctx-sep"></div>
+          <button class="ctx-item ctx-item--danger" (click)="ctxDelete()">
+            <svg class="ctx-ico" viewBox="0 0 16 16"><polyline points="2,4 14,4"/><path d="M6,4V2h4v2"/><rect x="3" y="4" width="10" height="10" rx="1"/></svg>
+            Delete
+          </button>
+        }
+      } @else if (menu.type === 'node') {
         <button class="ctx-item" (click)="ctxCopy()">
           <svg class="ctx-ico" viewBox="0 0 16 16"><rect x="5" y="1" width="9" height="11" rx="1.5"/><rect x="2" y="4" width="9" height="11" rx="1.5"/></svg>
           Copy

@@ -131,6 +131,15 @@
   (closed)="payloadOpen.set(false)"
 />
 
+<app-mpi-identifiers-dialog
+  [open]="!!mpiDialogNode()"
+  [node]="mpiDialogNode()"
+  [sourceNames]="mpiSourceNames()"
+  [readOnly]="!canMutate()"
+  (closed)="mpiDialogNodeId.set(null)"
+  (saved)="onMpiIdentifiersSaved($event)"
+/>
+
 @if (confirmReset()) {
   <div class="reset-backdrop" tabindex="0"
        (click)="onResetBackdropClick($event)"

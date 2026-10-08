@@ -25,6 +25,7 @@ import { MeditechSourceFormComponent } from './meditech-source-form/meditech-sou
 import { SampleSourceFormComponent } from './sample-source-form/sample-source-form.component';
 import { DestinationWizardComponent, ConfigTab } from './destination-wizard/destination-wizard.component';
 import { ZoomDockComponent } from '../canvas-v2/zoom-dock/zoom-dock.component';
+import { MPI_TRANSFORM_ID } from '../../services/mpi-node.util';
 
 // SELF_CONTAINED_SOURCE_FORM_KEYS (imported above) distinguishes the WizardServiceV2-backed vendor forms (Epic,
 // Cerner, ...) — each with its own full save/cancel flow and topbar/footer chrome, exactly like the old
@@ -88,6 +89,8 @@ interface LibraryCategory {
 }
 
 const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
+  // Same colour as the MPI canvas node (mpi-node.component.scss), so the row and the node read as one thing.
+  'mpi':              { abbr: 'MPI', color: 'var(--color-secondary)' },
   'fhir-validation':  { abbr: 'VAL', color: '#10B981' },
   'normalize':        { abbr: 'NRM', color: '#3B82F6' },
   'patient-matching': { abbr: 'MPI', color: '#3B82F6' },
@@ -730,6 +733,17 @@ export class NodeLibraryDialogComponent {
       this.openSourceForm(item.id);
       return;
     }
+    // The MPI has no wizard of its own — its identifier picker opens on the canvas once the node is placed (see
+    // WorkflowBuilderV2Component.insertMpiNode), so picking it adds it straight away, as picking a destination
+    // goes straight into that destination's wizard.
+    if (item.id === MPI_TRANSFORM_ID) {
+      const pm = this.pickerModel();
+      if (!pm) return;
+      this._close();
+      this.transformSelected.emit({ attachNode: pm.attachTo, transformId: item.id, status: item.status });
+      return;
+    }
+
     // V2 chain nodes (Mapping / Transformation / De-identification) — configured on their own Step-3 tab
     // of the upstream destination's wizard, then added to the canvas as the next node in the chain.
     if (NodeLibraryDialogComponent.CHAIN_TABS[item.id]) {

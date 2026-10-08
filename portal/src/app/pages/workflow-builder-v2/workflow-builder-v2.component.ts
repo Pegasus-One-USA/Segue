@@ -11,7 +11,9 @@ import { DeIdentificationProfileService } from '../../destination-connections/se
 import type { LegacyMappingRow } from '../../components/node-library-v2/destination-wizard/field-mapping/field-mapping-model';
 import { ToastService } from '../../services/toast.service';
 import { ApplicabilityServiceV2 } from '../../services/applicability-v2.service';
-import { WorkflowApiService, WorkflowBuildRequest, WorkflowBuildResult, WorkflowTriggerRequest } from '../../services/workflow-api.service';
+import {
+  WorkflowApiService, WorkflowBuildRequest, WorkflowBuildResult, WorkflowEdgeRequest, WorkflowNodeRequest, WorkflowTriggerRequest,
+} from '../../services/workflow-api.service';
 import { WorkflowGraphMapperServiceV2 } from '../../services/workflow-graph-mapper-v2.service';
 import { WorkflowBuildAssemblerServiceV2 } from '../../services/workflow-build-assembler-v2.service';
 import { SOURCES } from '../../data/sources-v2.data';
@@ -19,7 +21,10 @@ import { TRANSFORMS } from '../../data/transforms-v2.data';
 import { SQL_FAMILY_DESTINATION_TYPES } from '../../models/transform-v2.model';
 
 import { Source } from '../../models/source.model';
-import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node-v2.model';
+import { CanvasNode, SourceNode, TransformNode, MergeNode, MpiNode, isMpiNode, isSourceNode } from '../../models/node-v2.model';
+import {
+  MPI_IDENTIFIERS_FIELD, MPI_NODE_NAME, MPI_TRANSFORM_ID, mpiIdentifierIds,
+} from '../../services/mpi-node.util';
 import { APP_ORIGIN } from '../../core/api-endpoints';
 /** V2's chain steps in canonical canvas order — Source → Mapping → Transformation →
  *  De-identification → Destination. Mirrors ApplicabilityServiceV2.CHAIN_STEP_IDS. */
@@ -32,6 +37,7 @@ const FHIR_DIRECT_DESTINATION_TYPES = new Set(['FhirRepository', 'Medplum', 'Azu
 
 import { CanvasComponent } from '../../components/canvas-v2/canvas.component';
 import { PayloadPreviewComponent } from '../../components/modals-v2/payload-preview/payload-preview.component';
+import { MpiIdentifiersDialogComponent } from '../../components/modals-v2/mpi-identifiers/mpi-identifiers-dialog.component';
 import {
   NodeLibraryDialogComponent,
   LibraryMode,
@@ -45,6 +51,7 @@ import {
   imports: [
     CanvasComponent,
     PayloadPreviewComponent,
+    MpiIdentifiersDialogComponent,
     NodeLibraryDialogComponent,
   ],
   templateUrl: './workflow-builder-v2.component.html',
@@ -91,6 +98,22 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   protected readonly libraryMode      = signal<LibraryMode>('source');
   protected readonly libraryOriginId  = signal<string | null>(null);
   protected readonly editingNodeId    = signal<string | null>(null);
+
+  // ── MPI identifiers dialog (opened from the MPI node) ──────────────────────
+  protected readonly mpiDialogNodeId = signal<string | null>(null);
+  protected readonly mpiDialogNode = computed(() => {
+    const id = this.mpiDialogNodeId();
+    return id ? this.store.byId(id) ?? null : null;
+  });
+  /** The sources feeding the MPI node — shown in its dialog so it's clear whose records are being matched. */
+  protected readonly mpiSourceNames = computed(() => {
+    const id = this.mpiDialogNodeId();
+    if (!id) return [];
+    return this.store.inboundEdges(id)
+      .map(edge => this.store.byId(edge.from))
+      .filter((node): node is CanvasNode => !!node)
+      .map(node => this._nodeDisplayName(this.store.rootSourceOf(node) ?? node));
+  });
 
   // ── other modals ───────────────────────────────────────────────────────────
   protected readonly payloadOpen  = signal(false);
@@ -351,6 +374,20 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       this.toast.error('Cannot save workflow', msg);
       return;
     }
+
+    // A step no source reaches never receives a record — and the run still reports success, having quietly
+    // written nothing through it. Checked on the graph that will actually run (the MPI routed around, the chain
+    // in execution order), so it catches a chain cut off from its source however that happened, e.g. a Mapping
+    // step left behind when its MPI was disconnected.
+    const unreachable = this.stepsWithoutSource(request);
+    if (unreachable.length) {
+      const one = unreachable.length === 1;
+      const msg = `${unreachable.join(', ')} ${one ? 'is' : 'are'} not connected to a source, so ${one ? 'it' : 'they'} `
+        + `would never receive any records. Connect ${one ? 'it' : 'them'} before saving.`;
+      this.workflowStatus.set(msg);
+      this.toast.error('Pipeline not connected', msg);
+      return;
+    }
     // Mappings must count too: a workflow wired entirely to already-provisioned source/destination
     // connections (sourceConnectionResolved/destinationResolved both "true") has zero source/destination
     // specs to create, but can still carry new/changed mapping rows that need a MappingProfile created and
@@ -372,6 +409,24 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
     // No wizard-drawn specs → plain design save.
     this.saveWorkflow(name, existingId, isLaunch);
+  }
+
+  /** Display names of the enabled steps in `graph` that no source reaches — see onSave. Disabled nodes (the MPI)
+   *  are left out: nothing runs through them anyway. */
+  private stepsWithoutSource(graph: { nodes: WorkflowNodeRequest[]; edges: WorkflowEdgeRequest[] }): string[] {
+    const enabled = graph.nodes.filter(node => node.isEnabled);
+    const enabledIds = new Set(enabled.map(node => node.id));
+    const reached = new Set(enabled.filter(node => node.category === 0 || node.category === 'Source').map(node => node.id));
+    const stack = [...reached];
+    while (stack.length) {
+      const id = stack.pop()!;
+      for (const edge of graph.edges) {
+        if (edge.fromNodeId !== id || !enabledIds.has(edge.toNodeId) || reached.has(edge.toNodeId)) continue;
+        reached.add(edge.toNodeId);
+        stack.push(edge.toNodeId);
+      }
+    }
+    return enabled.filter(node => !reached.has(node.id)).map(node => node.displayName || node.nodeType);
   }
 
   /** True if any canvas node holds a freshly typed secret (source Client Secret, destination password/secret/
@@ -602,6 +657,11 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     if (!this.canMutate()) return;
     const t = TRANSFORMS.find(x => x.id === e.transformId);
     if (!t) return;
+
+    if (e.transformId === MPI_TRANSFORM_ID) {
+      this.insertMpiNode(e.attachNode);
+      return;
+    }
 
     // Same View/Create/Edit split as onSourceSelected — editNodeId present means this is the dest
     // wizard's edit flow (Edit), absent means it's adding a brand-new destination node (Create).
@@ -901,6 +961,83 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     this.store.moveNode(destination.id, baseX + 300 * (ordered.length + 1), baseY);
   }
 
+  /**
+   * Adds the MPI step directly after the source whose `+` was used — Source → MPI → whatever that source fed
+   * before — then opens its identifier picker, since an MPI with nothing chosen has nothing to match on.
+   * Everything downstream shifts one column right to make room.
+   *
+   * At most one per workflow, so once there is one, picking it from another source's `+` connects that source
+   * into the existing MPI instead (see connectSourceToMpi).
+   */
+  private insertMpiNode(attach: CanvasNode): void {
+    const source = isSourceNode(attach) ? attach : this.store.rootSourceOf(attach);
+    if (!source) return;
+
+    const existing = this.store.nodes().find(isMpiNode);
+    if (existing) {
+      this.connectSourceToMpi(source, existing);
+      return;
+    }
+
+    const outbound = this.store.outboundEdges(source.id);
+    for (const id of this.downstreamOf(outbound.map(edge => edge.to))) {
+      const node = this.store.byId(id);
+      if (node) this.store.moveNode(id, node.x + 300, node.y);
+    }
+
+    const mpi: MpiNode = {
+      id:     this.store.nextMpiId(),
+      kind:   'mpi',
+      x:      source.x + 300,
+      y:      source.y,
+      fields: { '__name': MPI_NODE_NAME, [MPI_IDENTIFIERS_FIELD]: '' },
+    };
+    this.store.addNode(mpi);
+    for (const edge of outbound) {
+      this.store.removeEdge(edge.id);
+      this.store.addEdge({ id: this.store.nextEdgeId(), from: mpi.id, to: edge.to });
+    }
+    this.store.addEdge({ id: this.store.nextEdgeId(), from: source.id, to: mpi.id });
+
+    this.toast.show('MPI added', 'Choose the identifiers it matches patients on.');
+    this.mpiDialogNodeId.set(mpi.id);
+  }
+
+  /**
+   * Routes another source into the workflow's MPI, so the MPI matches patients across every source feeding it.
+   * Only offered for a source with nothing downstream (see ApplicabilityServiceV2's mpiItem); refused otherwise,
+   * for the same reason — a source with its own pipeline would end up forked, or feeding its destination the
+   * other sources' records. Dragging the source's port onto the MPI is the way to do that deliberately.
+   */
+  private connectSourceToMpi(source: CanvasNode, mpi: CanvasNode): void {
+    if (this.store.hasEdge(source.id, mpi.id)) {
+      this.toast.show('Already connected', `${this._nodeDisplayName(source)} already feeds the MPI.`);
+      return;
+    }
+    if (this.store.outboundEdges(source.id).length > 0) {
+      this.toast.warning(
+        'Source already has a pipeline',
+        'Only a source with nothing after it can be connected to the MPI from here.',
+      );
+      return;
+    }
+    this.store.addEdge({ id: this.store.nextEdgeId(), from: source.id, to: mpi.id });
+    this.toast.show('Connected to MPI', `${this._nodeDisplayName(source)} now feeds the Master Patient Index.`);
+  }
+
+  /** Every node reachable from `startIds`, including the starts themselves. */
+  private downstreamOf(startIds: string[]): Set<string> {
+    const seen = new Set<string>();
+    const stack = [...startIds];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      this.store.outboundEdges(id).forEach(edge => stack.push(edge.to));
+    }
+    return seen;
+  }
+
   // V2 attaches every node exactly where the user clicked `+`, giving the authored straight chain
   // Source → Destination → [Mapping →] Transformation → De-identification. V1's
   // resolveDestinationAttachPoint()/insertMappingNode()/cloneMappingNode() trio lived here and forced a
@@ -948,6 +1085,12 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   // so the no-nodeId case (formerly opening the legacy epic-source-wizard directly) is unreachable.
   onOpenWizard(nodeId: string): void {
     const node = this.store.byId(nodeId);
+    if (node && isMpiNode(node)) {
+      // Opens for a view-only role too — like every other node's configuration, it can be looked at without
+      // workflow.edit/create; the dialog itself goes read-only and onMpiIdentifiersSaved re-checks canMutate().
+      this.mpiDialogNodeId.set(nodeId);
+      return;
+    }
     if (node?.kind === 'transform') {
       const tId = (node as TransformNode).transformId;
       // Destinations open their own wizard; V2's chain steps (Mapping / Transformation /
@@ -977,6 +1120,16 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   onLibraryClosed(): void {
     this.libraryOpen.set(false);
     this.editingNodeId.set(null);
+  }
+
+  onMpiIdentifiersSaved(serialized: string): void {
+    const node = this.mpiDialogNode();
+    this.mpiDialogNodeId.set(null);
+    if (!node || !this.canMutate()) return;
+
+    this.store.updateNode(node.id, { fields: { ...node.fields, [MPI_IDENTIFIERS_FIELD]: serialized } });
+    const count = mpiIdentifierIds(this.store.byId(node.id) ?? node).length;
+    this.toast.show('MPI identifiers saved', `Matching on ${count} identifier${count === 1 ? '' : 's'}. Save the workflow to keep them.`);
   }
 
   // ── checkpoint (Phase 1) ────────────────────────────────────────────────────

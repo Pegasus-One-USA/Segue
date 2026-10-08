@@ -5,6 +5,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import { CanvasNode as CN, TransformNode } from '../models/node-v2.model';
 import { CanvasEdge as CE } from '../models/edge-v2.model';
 import { TRANSFORMS } from '../data/transforms-v2.data';
+import { MPI_RANK } from '../models/transform-v2.model';
 
 const SOURCE_RANK_VALUE = 0;
 
@@ -129,6 +130,7 @@ export class PipelineStoreV2 {
 
   // ── pipeline helpers ───────────────────────────────────────────────────────
   nodeRank(node: CN): number {
+    if (node.kind === 'mpi') return MPI_RANK;
     if (node.kind === 'merge') {
       const t = TRANSFORMS.find(x => x.group === node.group);
       return t ? t.rank : 0;
@@ -143,7 +145,7 @@ export class PipelineStoreV2 {
   rootSourceOf(node: CN): CN | undefined {
     let cur: CN | undefined = node;
     let guard = 0;
-    while (cur && (cur.kind === 'transform' || cur.kind === 'merge') && guard++ < 50) {
+    while (cur && (cur.kind === 'transform' || cur.kind === 'merge' || cur.kind === 'mpi') && guard++ < 50) {
       const inbound = this.edges().find(e => e.to === cur!.id);
       cur = inbound ? this.byId(inbound.from) : undefined;
     }
@@ -238,5 +240,9 @@ export class PipelineStoreV2 {
 
   nextMergeId(): string {
     return 'm' + Date.now() + '-' + (++this.idSequence);
+  }
+
+  nextMpiId(): string {
+    return 'mpi' + Date.now() + '-' + (++this.idSequence);
   }
 }

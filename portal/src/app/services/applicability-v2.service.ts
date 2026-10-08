@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { TRANSFORMS } from '../data/transforms-v2.data';
-import { SQL_FAMILY_DESTINATION_TYPES } from '../models/transform-v2.model';
+import { MPI_RANK, SQL_FAMILY_DESTINATION_TYPES } from '../models/transform-v2.model';
 import { EpicConfig } from '../models/transform-applicability-v2.model';
-import { CanvasNode, TransformNode, isSourceNode, isMergeNode, isTransformNode } from '../models/node-v2.model';
+import { CanvasNode, TransformNode, isSourceNode, isMergeNode, isMpiNode, isTransformNode } from '../models/node-v2.model';
 import { PickerModel, PickerItem, MergeNodeOption } from '../models/wizard-state-v2.model';
+import { MPI_NODE_NAME, MPI_TRANSFORM_ID, hasMpiNode } from './mpi-node.util';
 
 export const SOURCE_RANK = 0;
 export const DESTINATION_RANK = 1;
@@ -31,6 +32,7 @@ export class ApplicabilityServiceV2 {
   }
 
   nodeRankFromStore(node: CanvasNode): number {
+    if (isMpiNode(node))       return MPI_RANK;
     if (isMergeNode(node))     return this.groupRank(node.group);
     if (isTransformNode(node)) return TRANSFORMS.find(t => t.id === node.transformId)?.rank ?? DESTINATION_RANK;
     return SOURCE_RANK;
@@ -38,6 +40,7 @@ export class ApplicabilityServiceV2 {
 
   nodeDisplayName(node: CanvasNode | undefined): string {
     if (!node) return '?';
+    if (isMpiNode(node))       return MPI_NODE_NAME;
     if (isMergeNode(node))     return 'Merge · ' + this.groupLabel(node.group);
     if (isTransformNode(node)) return TRANSFORMS.find(t => t.id === node.transformId)?.name ?? 'transform';
     return node.fields['__name'] ?? 'Source';
@@ -56,6 +59,24 @@ export class ApplicabilityServiceV2 {
     const t = TRANSFORMS.find(x => x.id === id);
     if (!t) return null;
     return { id: t.id, name: t.name, sub: t.sub, rank: t.rank, group: null, status: 'show', reason: null };
+  }
+
+  /** Every destination type, as picker rows — what can follow a bare source or a bare MPI node. */
+  private destinationItems(): PickerItem[] {
+    return TRANSFORMS.filter(t => t.rank === DESTINATION_RANK).map(t => this.transformItem(t.id)!).filter(Boolean);
+  }
+
+  /**
+   * The MPI row for a source's `+`. While the workflow has no MPI it adds one after this source. Once it has one
+   * (at most one per workflow), the same row connects another source into it — but only a source with nothing
+   * downstream yet: routing a source that already has its own pipeline through the MPI would either fork it or
+   * hand its destination the other sources' records, and neither is what "connect" should silently mean.
+   */
+  private mpiItem(allNodes: CanvasNode[], sourceHasChild: boolean): PickerItem | null {
+    const item = this.transformItem(MPI_TRANSFORM_ID);
+    if (!item) return null;
+    if (!hasMpiNode(allNodes)) return item;
+    return sourceHasChild ? null : { ...item, reason: 'Connect to this workflow’s MPI' };
   }
 
   /** V2's chain steps, in the canonical order they're laid out between source and destination. */
@@ -150,12 +171,15 @@ export class ApplicabilityServiceV2 {
   }
 
   // ── picker model — V2's straight chain, in canvas order:
-  //   Source → [Mapping] → [Transformation] → [De-identification] → Destination
-  // The source offers destinations. Every other node (the destination itself, or any chain step) offers
-  // whichever chain steps this pipeline is still missing — they all get inserted between the source and
-  // the destination in canonical order, so which node's `+` was used doesn't affect placement. Mapping is
-  // offered only for SQL-family destinations; the other two always apply. Multi-source merge (picking 2+
-  // EHR sources and merging them) is unrelated to this chain and preserved from the original picker. ────
+  //   Source → [MPI] → [Mapping] → [Transformation] → [De-identification] → Destination
+  // The source offers destinations, plus the optional MPI while the workflow has none (it is always inserted
+  // directly after the source — see WorkflowBuilderV2Component.insertMpiNode). The MPI node offers what a
+  // source would: destinations until it has one, chain steps after. Every other node (the destination
+  // itself, or any chain step) offers whichever chain steps this pipeline is still missing — they all get
+  // inserted between the source (or its MPI) and the destination in canonical order, so which node's `+` was
+  // used doesn't affect placement. Mapping is offered only for SQL-family destinations; the other two always
+  // apply. Multi-source merge (picking 2+ EHR sources and merging them) is unrelated to this chain and
+  // preserved from the original picker. ────
   pickerModel(
     node: CanvasNode,
     allNodes: CanvasNode[],
@@ -180,13 +204,16 @@ export class ApplicabilityServiceV2 {
       mode = 'source'; rule = 'Source';
       ruleLabel = `Applicable next steps after "${this.nodeDisplayName(node)}".`;
       if (!hasChild(node.id)) {
-        // No destination yet — that's the only thing that can follow a bare source.
-        items = TRANSFORMS.filter(t => t.rank === DESTINATION_RANK).map(t => this.transformItem(t.id)!).filter(Boolean);
+        // No destination yet — that's the only thing that can follow a bare source (besides the MPI below).
+        items = this.destinationItems();
       } else {
         // A destination exists, so the source's `+` is where the first chain step goes — chain steps are
         // inserted between the source and the destination, which is exactly "after the source".
         items = this.addableChainSteps(node, allNodes, allEdges).map(id => this.transformItem(id)!).filter(Boolean);
       }
+      // Listed first because that's where it lands: directly after the source, ahead of everything above.
+      const mpi = this.mpiItem(allNodes, hasChild(node.id));
+      if (mpi) items = [mpi, ...items];
       // Multi-source merge: 2+ EHR source nodes not yet merged — unrelated to the Destination/Mapping/
       // Transformation/De-identification chain, preserved as-is from the original picker.
       const sources = allNodes.filter(n => !n.kind);
@@ -194,6 +221,14 @@ export class ApplicabilityServiceV2 {
       if (sources.length >= 2 && !srcMergeExists) {
         mergeOpt = { group: 'source', source: true, sourceIds: sources.map(s => s.id), count: sources.length };
       }
+
+    } else if (isMpiNode(node)) {
+      // The MPI stands where the source did in this pipeline, so it offers exactly what the source would have.
+      mode = 'mpi'; rule = 'MPI';
+      ruleLabel = `Applicable next steps after "${this.nodeDisplayName(node)}".`;
+      items = hasChild(node.id)
+        ? this.addableChainSteps(node, allNodes, allEdges).map(id => this.transformItem(id)!).filter(Boolean)
+        : this.destinationItems();
 
     } else if (isTransformNode(node)) {
       if (node.transformId.startsWith('dest-')) {

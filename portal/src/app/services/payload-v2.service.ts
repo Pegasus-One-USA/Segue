@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { PipelineStoreV2 } from './pipeline-v2.store';
-import { CanvasNode, isTransformNode, isMergeNode } from '../models/node-v2.model';
+import { CanvasNode, isTransformNode, isMergeNode, isMpiNode } from '../models/node-v2.model';
+import { mpiIdentifierIds } from './mpi-node.util';
 import { TRANSFORMS } from '../data/transforms-v2.data';
 import { PipelinePayload, PayloadEntry } from '../models/pipeline-payload-v2.model';
 import { ApplicabilityServiceV2 } from './applicability-v2.service';
@@ -42,6 +43,14 @@ export class PayloadServiceV2 {
           group:       n.group,
           rank:        this.appService.groupRank(n.group),
           mergesInputs: edges.filter(e => e.to === n.id).map(e => nodeName(e.from)),
+        };
+      }
+      if (isMpiNode(n)) {
+        return {
+          ref:            i + 1,
+          stage:          'mpi' as const,
+          identifiers:    mpiIdentifierIds(n),
+          matchesSources: edges.filter(e => e.to === n.id).map(e => nodeName(e.from)),
         };
       }
       return {

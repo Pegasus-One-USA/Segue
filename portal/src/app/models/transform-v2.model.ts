@@ -50,8 +50,13 @@ export interface Transform {
  *  De-identification. Mapping (rank 2) only applies when the destination is SQL-family (see
  *  SQL_FAMILY_DESTINATION_TYPES); Transformation and De-identification apply regardless of destination
  *  type. No branching/merge in this chain. */
+/** The MPI step's rank: after the source it follows (0) and before any destination (1), which is where it sits on
+ *  the canvas (Source → MPI → …) and so where it sorts in the node library and in port-connect rank checks. */
+export const MPI_RANK = 0.5;
+
 export const RANK_LABEL: Record<number, string> = {
   0: 'Source',
+  [MPI_RANK]: 'Master Patient Index',
   1: 'Destination',
   2: 'Mapping',
   3: 'Transformation',

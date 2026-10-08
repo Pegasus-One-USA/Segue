@@ -49,6 +49,8 @@ const PHASE_1_CONFIG: PhaseConfig = {
   ],
 
   enabledTransformIds: [
+    // Master Patient Index — optional step after a source
+    'mpi',
     // Destinations — Phase 1
     'dest-sqlserver',
     'dest-csv',
