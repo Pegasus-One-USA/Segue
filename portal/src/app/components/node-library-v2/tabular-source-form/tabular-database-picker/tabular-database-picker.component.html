@@ -1,0 +1,21 @@
+<div class="tab-field">
+  <label class="tab-label" for="tab-conn">Database <span class="tab-req">*</span></label>
+  <div class="tab-inline">
+    <select id="tab-conn" class="tab-input" [value]="current() ?? ''" (change)="choose($any($event.target).value)">
+      <option value="">{{ connections().length ? 'Choose a saved database' : 'No saved databases yet' }}</option>
+      @for (c of connections(); track c.id) {
+        <option [value]="c.id">{{ c.name }} ({{ c.engine }})</option>
+      }
+    </select>
+    <button type="button" class="tab-btn tab-btn--ghost" (click)="runTest()" [disabled]="!current() || testing()">Test</button>
+    <button type="button" class="tab-btn tab-btn--ghost" (click)="adding.set(!adding())" [disabled]="adding()">New database</button>
+  </div>
+  @if (test(); as t) {
+    <p [class]="t.ok ? 'tab-ok' : 'tab-warn'">{{ t.message }}</p>
+  }
+  <p class="tab-hint">Saved databases are listed under Source Connections and can be used by any workflow.</p>
+</div>
+
+@if (adding()) {
+  <app-tabular-database-editor (saved)="onSaved($event)" (cancelled)="adding.set(false)" />
+}

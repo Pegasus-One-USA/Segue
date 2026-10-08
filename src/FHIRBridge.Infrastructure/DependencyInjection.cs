@@ -236,6 +236,7 @@ public static class DependencyInjection
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<IEhrWriteLedgerRepository, InMemoryEhrWriteLedgerRepository>();
             services.AddSingleton<ITabularSourceFileRepository, InMemoryTabularSourceFileRepository>();
+            services.AddSingleton<ITabularSqlConnectionRepository, InMemoryTabularSqlConnectionRepository>();
             // These had no no-database registration, so every screen that used one failed in this profile.
             services.AddSingleton<ITransformationRuleRepository, InMemoryTransformationRuleRepository>();
             services.AddSingleton<IDeIdentificationProfileRepository, InMemoryDeIdentificationProfileRepository>();
@@ -344,6 +345,7 @@ public static class DependencyInjection
             services.AddScoped<IResourceTypeCriteriaRepository, EfResourceTypeCriteriaRepository>();
             services.AddScoped<IEhrWriteLedgerRepository, EfEhrWriteLedgerRepository>();
             services.AddScoped<ITabularSourceFileRepository, EfTabularSourceFileRepository>();
+            services.AddScoped<ITabularSqlConnectionRepository, EfTabularSqlConnectionRepository>();
             services.AddScoped<IDeIdentificationProfileSeeder, DeIdentificationProfileSeeder>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();

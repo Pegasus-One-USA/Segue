@@ -1,0 +1,75 @@
+<div class="tab-card" [class.tab-card--ok]="check()?.passed" [class.tab-card--bad]="check() && !check()!.passed">
+  <div class="tab-card-head">
+    <span class="tab-label">{{ entry().resourceType }}</span>
+    @if (check(); as c) {
+      <span [class]="c.passed ? 'tab-ok' : 'tab-warn'">{{ c.passed ? 'Passed' : 'Needs fixing' }}</span>
+    }
+  </div>
+
+  @if (kind() === 'sql') {
+    <div class="tab-field">
+      <label class="tab-label" [for]="'tab-q-' + index()">Query</label>
+      <textarea [id]="'tab-q-' + index()" class="tab-input tab-mono" rows="4" spellcheck="false" [value]="entry().query"
+        (input)="set('query', $any($event.target).value)"
+        placeholder="SELECT … FROM … (one SELECT; joins, views and WITH are fine)"></textarea>
+    </div>
+  } @else {
+    <div class="tab-grid">
+      <div class="tab-field">
+        <label class="tab-label" [for]="'tab-f-' + index()">File</label>
+        <select [id]="'tab-f-' + index()" class="tab-input" [value]="entry().fileId" (change)="set('fileId', $any($event.target).value)">
+          <option value="">Choose a file</option>
+          @for (f of files(); track f.id) {
+            <option [value]="f.id">{{ f.fileName }}</option>
+          }
+        </select>
+      </div>
+      <div class="tab-field">
+        <label class="tab-label" [for]="'tab-fc-' + index()">Only rows where (optional)</label>
+        <div class="tab-inline">
+          <select [id]="'tab-fc-' + index()" class="tab-input" [value]="entry().rowFilterColumn" (change)="set('rowFilterColumn', $any($event.target).value)">
+            <option value="">All rows</option>
+            @for (col of fileColumns(entry().fileId); track col) {
+              <option [value]="col">{{ col }}</option>
+            }
+          </select>
+          @if (entry().rowFilterColumn) {
+            <input class="tab-input" type="text" [value]="entry().rowFilterValue" placeholder="equals…"
+              (input)="set('rowFilterValue', $any($event.target).value)" />
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <details class="tab-template">
+    <summary>Template (FHIR JSON with <code>{{ '{{' }}column{{ '}}' }}</code> placeholders)</summary>
+    <textarea class="tab-input tab-mono" rows="12" spellcheck="false" [value]="entry().template"
+      (input)="set('template', $any($event.target).value)"></textarea>
+    <p class="tab-hint">Formats: <code>{{ '{{' }}birth_date|date{{ '}}' }}</code>, <code>{{ '{{' }}value|number{{ '}}' }}</code>,
+      <code>|datetime</code>, <code>|integer</code>, <code>|boolean</code>, <code>|base64</code>. An element whose column is
+      empty is left out.
+      <button type="button" class="tab-link" (click)="resetTemplate.emit()">Use the starting template</button></p>
+  </details>
+
+  @if (check(); as c) {
+    @for (p of c.problems; track $index) {
+      <p class="tab-warn">{{ p }}</p>
+    }
+    @if (c.passed && c.columns.length) {
+      <p class="tab-hint">Returns: {{ c.columns.join(', ') }}</p>
+    }
+    @if (c.rowsRead !== null) {
+      <p class="tab-hint">{{ c.rowsRead }} rows read, {{ c.resources.length }} resources built.</p>
+      @for (err of c.rowErrors; track $index) {
+        <p class="tab-warn">{{ err }}</p>
+      }
+      @for (r of c.resources; track $index) {
+        <details class="tab-resource">
+          <summary>Row {{ r.rowNumber }}: {{ r.resourceType }}{{ r.resourceId ? '/' + r.resourceId : ' (no id)' }}</summary>
+          <pre class="tab-mono">{{ prettyJson(r.json) }}</pre>
+        </details>
+      }
+    }
+  }
+</div>

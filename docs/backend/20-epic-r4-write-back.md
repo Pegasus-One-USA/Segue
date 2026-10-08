@@ -423,6 +423,20 @@ it in place of the per-vendor check; no license allow-list applies, since it nam
 feed a Mapping node into a SQL or file destination: mapping profiles are keyed on a source connection, which a
 Tabular source does not have.
 
+**One query or file per resource type (2026-10-08).** A source now names the resource types it reads
+(`tab_streams`): each type has its own SQL query, or its own CSV file with an optional "only rows where column =
+value" filter, and its own template, so every query can use plain column names and there is no wide `UNION` table.
+The results become one batch (the same resource from two types is kept once). An older node (`tab_query` /
+`tab_fileId` + `tab_templates`) still runs unchanged, and opens in the form as one entry per template reading that
+same query or file. **Check** (`POST api/v1/tabular-sources/check`) verifies every entry without reading a row: SQL
+Server describes the query (`sp_describe_first_result_set`), PostgreSQL and MySQL run it inside `LIMIT 0` under the
+same read-only rules; a missing table, view or column, or a syntax error, comes back in the database's own words
+(only those error codes are passed on), and template columns the query does not return are listed. A CSV entry is
+checked against the header recorded at upload. The form saves only after a check of the current settings passed.
+**Saved databases** (`TabularSqlConnections`, migration `AddTabularSqlConnections`) are listed by name under Source
+Connections (Database connections: New, Test, Edit, Delete) and picked in any workflow; the connection string stays
+a secret, and replacing it rewrites the same secret, so every workflow using that database follows.
+
 **Gate.** "A CSV of allergies lands in the Epic sandbox through the same writer, unchanged" is covered offline by
 `TabularSourceTests.A_csv_of_allergies_reaches_the_ehr_write_back_writer_unchanged` (patient matched by
 `$match`, allergy would be written). The sandbox run is pending Epic's return.

@@ -45,6 +45,7 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<PipelineRunRouteExecution> PipelineRunRouteExecutions => Set<PipelineRunRouteExecution>();
     public DbSet<EhrWriteLedgerEntry> EhrWriteLedgerEntries => Set<EhrWriteLedgerEntry>();
     public DbSet<TabularSourceFile> TabularSourceFiles => Set<TabularSourceFile>();
+    public DbSet<TabularSqlConnection> TabularSqlConnections => Set<TabularSqlConnection>();
     public DbSet<PipelineRunResourceRecord> PipelineRunResourceRecords => Set<PipelineRunResourceRecord>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
     public DbSet<User> Users => Set<User>();

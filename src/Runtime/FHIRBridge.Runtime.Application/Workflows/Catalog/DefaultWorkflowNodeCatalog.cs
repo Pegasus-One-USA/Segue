@@ -50,7 +50,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.TabularSource,
             WorkflowNodeCategory.Source,
             0,
-            ["tab_kind", "tab_datasetKey", "tab_templates"],
+            ["tab_kind", "tab_datasetKey"],
             [],
             WorkflowDataContract.ResourceBatch,
             WorkflowNodeTypes.TabularSource,

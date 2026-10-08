@@ -1,0 +1,29 @@
+<div class="tab-card" [formGroup]="form">
+  <div class="tab-grid">
+    <div class="tab-field">
+      <label class="tab-label" for="tab-db-name">Name</label>
+      <input id="tab-db-name" class="tab-input" type="text" formControlName="name" placeholder="e.g. Clinic warehouse" />
+    </div>
+    <div class="tab-field">
+      <label class="tab-label" for="tab-db-engine">Engine</label>
+      <select id="tab-db-engine" class="tab-input" formControlName="engine" [attr.disabled]="existing() ? true : null">
+        @for (engine of engines; track engine.id) {
+          <option [value]="engine.id">{{ engine.label }}</option>
+        }
+      </select>
+    </div>
+  </div>
+  <div class="tab-field">
+    <label class="tab-label" for="tab-db-conn">Connection string</label>
+    <input id="tab-db-conn" class="tab-input" type="password" autocomplete="off" formControlName="connectionString"
+      [placeholder]="existing() ? 'Saved — enter a new one to replace it' : 'Server=…;Database=…;User Id=…;Password=…'" />
+    <p class="tab-hint">Stored as a secret, never in a workflow. Use a login that can only read.</p>
+  </div>
+  @if (error(); as message) {
+    <p class="tab-error-banner" role="alert">{{ message }}</p>
+  }
+  <div class="tab-actions">
+    <button type="button" class="tab-btn" (click)="save()" [disabled]="busy()">Save</button>
+    <button type="button" class="tab-btn tab-btn--ghost" (click)="cancelled.emit()">Cancel</button>
+  </div>
+</div>

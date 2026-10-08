@@ -264,6 +264,9 @@
 
   </div>
 
+  <!-- Databases read by CSV / SQL Table sources: their own list, their own component. -->
+  <app-database-connections-panel />
+
   <!-- EHR picker — the step between "New" and the vendor's own form. Card grid rather than a dropdown, matching
        the Destination Connections create flow, so the choice is visible and described rather than hidden in a
        toolbar select. Picking a card runs the same per-vendor create permission guard openAdd() always did. -->

@@ -32,6 +32,8 @@ import { PaginationBarComponent, PageChangeEvent } from '../../../components/sha
 import { PermissionService } from '../../../auth/services/permission.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 
+import { DatabaseConnectionsPanelComponent } from '../../components/database-connections-panel/database-connections-panel.component';
+
 @Component({
   selector: 'app-source-connection-list',
   standalone: true,
@@ -45,6 +47,7 @@ import { PermissionActionGuard } from '../../../auth/services/permission-action-
     MatTooltipModule,
     MatMenuModule,
     HideWithoutPermissionDirective,
+    DatabaseConnectionsPanelComponent,
     EpicSourceFormComponent,
     CernerSourceFormComponent,
     AthenahealthSourceFormComponent,

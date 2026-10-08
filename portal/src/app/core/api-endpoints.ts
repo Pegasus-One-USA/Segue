@@ -196,6 +196,9 @@ export const TABULAR_SOURCE_ENDPOINTS = {
   files: `${API_V1_BASE}/tabular-sources/files`,
   file: (id: string) => `${API_V1_BASE}/tabular-sources/files/${encodeURIComponent(id)}`,
   sqlConnections: `${API_V1_BASE}/tabular-sources/sql-connections`,
+  sqlConnection: (id: string) => `${API_V1_BASE}/tabular-sources/sql-connections/${encodeURIComponent(id)}`,
+  sqlConnectionTest: (id: string) => `${API_V1_BASE}/tabular-sources/sql-connections/${encodeURIComponent(id)}/test`,
+  check: `${API_V1_BASE}/tabular-sources/check`,
   templatePresets: `${API_V1_BASE}/tabular-sources/template-presets`,
   preview: `${API_V1_BASE}/tabular-sources/preview`,
 } as const;

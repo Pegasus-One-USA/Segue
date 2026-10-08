@@ -7,6 +7,7 @@ using FHIRBridge.Application.Abstractions.Tabular;
 using FHIRBridge.Application.Services.Tabular;
 using FHIRBridge.Integration.Sql;
 using FHIRBridge.SharedKernel.Exceptions;
+using Microsoft.Data.SqlClient;
 using MySqlConnector;
 using Npgsql;
 
@@ -23,6 +24,11 @@ namespace FHIRBridge.Infrastructure.Tabular;
 /// one the Tabular form saved.</para>
 ///
 /// <para><b>PHI.</b> Cell values never reach a log or an error message; errors carry row numbers and column names.</para>
+///
+/// <para><b>Checking a query</b> (<see cref="DescribeSqlAsync"/>) returns no row: SQL Server describes the result
+/// without running the query (<c>sp_describe_first_result_set</c>); PostgreSQL and MySQL run it wrapped in
+/// <c>LIMIT 0</c>, under the same read-only rules. Only the database errors that name a missing object or column, or
+/// a syntax error, are passed on with the database's own text: those name objects, never values.</para>
 /// </summary>
 public sealed class TabularRowReader : ITabularRowReader
 {
@@ -50,7 +56,11 @@ public sealed class TabularRowReader : ITabularRowReader
                     OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'EXECUTE') = 1
                     OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'CONTROL') = 1
                 THEN 1 ELSE 0 END
-                """),
+                """,
+            DescribeAsync: DescribeSqlServerAsync,
+            // 208 invalid object, 207 invalid column, 4104 multi-part identifier, 102/156 syntax, 195 unknown function,
+            // 2812 unknown procedure.
+            ExplainedError: ex => ex is SqlException { Number: 208 or 207 or 4104 or 102 or 156 or 195 or 2812 } ? ex.Message : null),
         ["postgresql"] = new(
             async (connectionString, ct) =>
             {
@@ -58,7 +68,12 @@ public sealed class TabularRowReader : ITabularRowReader
                 await connection.OpenAsync(ct);
                 return connection;
             },
-            BeginReadOnly: "SET TRANSACTION READ ONLY"),
+            BeginReadOnly: "SET TRANSACTION READ ONLY",
+            DescribeAsync: DescribeWithLimitZeroAsync,
+            // undefined table / column / function, syntax error, unknown schema.
+            ExplainedError: ex => ex is PostgresException { SqlState: "42P01" or "42703" or "42883" or "42601" or "3F000" } pg
+                ? pg.MessageText
+                : null),
         ["mysql"] = new(
             async (connectionString, ct) =>
             {
@@ -67,6 +82,9 @@ public sealed class TabularRowReader : ITabularRowReader
                 return connection;
             },
             BeginReadOnly: null,
+            DescribeAsync: DescribeWithLimitZeroAsync,
+            // 1146 no such table, 1054 unknown column, 1064 syntax, 1305 unknown function, 1049 unknown database.
+            ExplainedError: ex => ex is MySqlException { Number: 1146 or 1054 or 1064 or 1305 or 1049 } ? ex.Message : null,
             StartTransactionSql: "START TRANSACTION READ ONLY"),
     };
 
@@ -89,7 +107,35 @@ public sealed class TabularRowReader : ITabularRowReader
         return CsvTable.Parse(_encryptor.Decrypt(file.EncryptedContent), Math.Max(maxRows, 1));
     }
 
-    public async Task<TabularRows> ReadSqlAsync(TabularSqlQuery query, int maxRows, CancellationToken cancellationToken)
+    public Task<TabularRows> ReadSqlAsync(TabularSqlQuery query, int maxRows, CancellationToken cancellationToken) =>
+        RunReadOnlyAsync(query, (_, connection, transaction, sql, ct) => ReadRowsAsync(connection, transaction, sql, maxRows, ct), cancellationToken);
+
+    public Task<IReadOnlyList<string>> DescribeSqlAsync(TabularSqlQuery query, CancellationToken cancellationToken) =>
+        RunReadOnlyAsync(
+            query,
+            async (engine, connection, transaction, sql, ct) =>
+            {
+                IReadOnlyList<string> columns;
+                try
+                {
+                    columns = await engine.DescribeAsync(connection, transaction, sql, ct);
+                }
+                catch (DbException ex) when (engine.ExplainedError(ex) is { } message)
+                {
+                    throw new BusinessRuleException($"The database says: {message}");
+                }
+
+                RequireUniqueColumns(columns);
+                return columns;
+            },
+            cancellationToken);
+
+    /// <summary>Validates the query and the connection, opens it read-only, runs <paramref name="work"/> and always rolls
+    /// back. Shared by reading and checking, so both are bound by exactly the same rules.</summary>
+    private async Task<T> RunReadOnlyAsync<T>(
+        TabularSqlQuery query,
+        Func<SqlEngine, DbConnection, DbTransaction?, string, CancellationToken, Task<T>> work,
+        CancellationToken cancellationToken)
     {
         if (!Engines.TryGetValue(query.Engine, out var engine))
         {
@@ -134,39 +180,7 @@ public sealed class TabularRowReader : ITabularRowReader
 
         try
         {
-            await using var command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = sql;
-            command.CommandTimeout = CommandTimeoutSeconds;
-            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
-
-            var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
-            var duplicate = columns.GroupBy(c => c, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
-            if (duplicate is not null)
-            {
-                throw new BusinessRuleException($"The query returns the column '{duplicate.Key}' more than once. Alias each column uniquely.");
-            }
-
-            var rows = new List<IReadOnlyDictionary<string, string?>>();
-            var truncated = false;
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                if (rows.Count >= maxRows)
-                {
-                    truncated = true;
-                    break;
-                }
-
-                var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-                for (var i = 0; i < columns.Count; i++)
-                {
-                    row[columns[i]] = await reader.IsDBNullAsync(i, cancellationToken) ? null : Format(reader.GetValue(i));
-                }
-
-                rows.Add(row);
-            }
-
-            return new TabularRows(columns, rows, truncated);
+            return await work(engine, connection, transaction, sql, cancellationToken);
         }
         finally
         {
@@ -179,6 +193,96 @@ public sealed class TabularRowReader : ITabularRowReader
             {
                 await ExecuteAsync(connection, null, "ROLLBACK", CancellationToken.None);
             }
+        }
+    }
+
+    private static async Task<TabularRows> ReadRowsAsync(
+        DbConnection connection, DbTransaction? transaction, string sql, int maxRows, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        command.CommandTimeout = CommandTimeoutSeconds;
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
+
+        var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
+        RequireUniqueColumns(columns);
+
+        var rows = new List<IReadOnlyDictionary<string, string?>>();
+        var truncated = false;
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            if (rows.Count >= maxRows)
+            {
+                truncated = true;
+                break;
+            }
+
+            var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < columns.Count; i++)
+            {
+                row[columns[i]] = await reader.IsDBNullAsync(i, cancellationToken) ? null : Format(reader.GetValue(i));
+            }
+
+            rows.Add(row);
+        }
+
+        return new TabularRows(columns, rows, truncated);
+    }
+
+    /// <summary>SQL Server: the result's columns from the query's compiled plan; the query itself never runs.</summary>
+    private static async Task<IReadOnlyList<string>> DescribeSqlServerAsync(
+        DbConnection connection, DbTransaction? transaction, string sql, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "EXEC sp_describe_first_result_set @tsql = @tsql";
+        command.CommandTimeout = CommandTimeoutSeconds;
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "@tsql";
+        parameter.DbType = DbType.String;
+        parameter.Value = sql;
+        command.Parameters.Add(parameter);
+
+        var columns = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var hidden = reader.GetOrdinal("is_hidden");
+        var name = reader.GetOrdinal("name");
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            if (!reader.GetBoolean(hidden))
+            {
+                columns.Add(await reader.IsDBNullAsync(name, cancellationToken) ? string.Empty : reader.GetString(name));
+            }
+        }
+
+        return columns;
+    }
+
+    /// <summary>PostgreSQL and MySQL: the query wrapped so it returns no row. The database still resolves every table,
+    /// view and column, which is the check.</summary>
+    private static async Task<IReadOnlyList<string>> DescribeWithLimitZeroAsync(
+        DbConnection connection, DbTransaction? transaction, string sql, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"SELECT * FROM (\n{sql.TrimEnd().TrimEnd(';')}\n) AS fhirbridge_check LIMIT 0";
+        command.CommandTimeout = CommandTimeoutSeconds;
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
+        return Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
+    }
+
+    private static void RequireUniqueColumns(IReadOnlyList<string> columns)
+    {
+        if (columns.Any(string.IsNullOrEmpty))
+        {
+            throw new BusinessRuleException("The query returns a column without a name. Give every computed column an alias.");
+        }
+
+        var duplicate = columns.GroupBy(c => c, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+        {
+            throw new BusinessRuleException($"The query returns the column '{duplicate.Key}' more than once. Alias each column uniquely.");
         }
     }
 
@@ -210,6 +314,8 @@ public sealed class TabularRowReader : ITabularRowReader
     private sealed record SqlEngine(
         Func<string, CancellationToken, Task<DbConnection>> OpenAsync,
         string? BeginReadOnly,
+        Func<DbConnection, DbTransaction?, string, CancellationToken, Task<IReadOnlyList<string>>> DescribeAsync,
+        Func<DbException, string?> ExplainedError,
         string? StartTransactionSql = null,
         string? VerifyReadOnlySql = null);
 }

@@ -20,6 +20,10 @@ public static partial class TabularSourceSettings
     public const string MaxRowsKey = "tab_maxRows";
     public const string TemplatesKey = "tab_templates";
 
+    /// <summary>The per-type entries (<see cref="TabularStreams"/>): each resource type with its own query or file and
+    /// template. A node without it is an older single-query node, run through <see cref="TemplatesKey"/>.</summary>
+    public const string StreamsKey = "tab_streams";
+
     public const string CsvKind = "csv";
     public const string SqlKind = "sql";
 
@@ -31,6 +35,7 @@ public static partial class TabularSourceSettings
 
     public const int MaxColumns = 200;
     public const int MaxTemplates = 10;
+    public const int MaxStreams = 30;
     public const int PreviewRows = 5;
 
     public static readonly IReadOnlyList<string> SqlEngines = ["sqlserver", "postgresql", "mysql"];

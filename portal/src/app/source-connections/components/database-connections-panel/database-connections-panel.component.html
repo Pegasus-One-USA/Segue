@@ -1,0 +1,52 @@
+<section class="db-panel" *appHideWithoutPermission="'tabularsources.view'">
+  <div class="db-head">
+    <div>
+      <h3 class="db-title">Database connections</h3>
+      <p class="db-sub">Databases that CSV / SQL Table sources read, one query per resource type. Connection strings are
+        kept as secrets and never shown.</p>
+    </div>
+    <button type="button" class="db-btn" *appHideWithoutPermission="'tabularsources.edit'" (click)="editing.set('new')"
+      [disabled]="editing() === 'new'">New</button>
+  </div>
+
+  @if (editing() === 'new') {
+    <app-tabular-database-editor (saved)="onSaved()" (cancelled)="editing.set(null)" />
+  }
+
+  @if (error(); as message) {
+    <p class="db-error" role="alert">{{ message }}</p>
+  }
+
+  @if (loading()) {
+    <p class="db-sub">Loading…</p>
+  } @else if (connections().length === 0) {
+    <p class="db-sub">No database connections yet.</p>
+  } @else {
+    <table class="db-table">
+      <thead>
+        <tr><th>Name</th><th>Engine</th><th>Updated</th><th>Created by</th><th></th></tr>
+      </thead>
+      <tbody>
+        @for (c of connections(); track c.id) {
+          <tr>
+            <td>{{ c.name }}</td>
+            <td>{{ c.engine }}</td>
+            <td>{{ c.updatedOnUtc | date: 'MMM d, y, h:mm a' }}</td>
+            <td>{{ c.createdBy ?? '—' }}</td>
+            <td class="db-actions">
+              <button type="button" class="db-link" *appHideWithoutPermission="'tabularsources.edit'" (click)="test(c)">Test</button>
+              <button type="button" class="db-link" *appHideWithoutPermission="'tabularsources.edit'" (click)="editing.set(c.id)">Edit</button>
+              <button type="button" class="db-link db-link--danger" *appHideWithoutPermission="'tabularsources.delete'" (click)="remove(c)">Delete</button>
+            </td>
+          </tr>
+          @if (c.id && results()[c.id]; as r) {
+            <tr><td colspan="5" [class]="r.ok ? 'db-ok' : 'db-bad'">{{ r.message }}</td></tr>
+          }
+          @if (editing() === c.id) {
+            <tr><td colspan="5"><app-tabular-database-editor [existing]="c" (saved)="onSaved()" (cancelled)="editing.set(null)" /></td></tr>
+          }
+        }
+      </tbody>
+    </table>
+  }
+</section>

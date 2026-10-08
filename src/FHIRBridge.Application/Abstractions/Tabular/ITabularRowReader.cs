@@ -23,4 +23,11 @@ public interface ITabularRowReader
     Task<TabularRows> ReadFileAsync(Guid fileId, int maxRows, CancellationToken cancellationToken);
 
     Task<TabularRows> ReadSqlAsync(TabularSqlQuery query, int maxRows, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The columns the query returns, read without returning a row, under the same read-only rules as
+    /// <see cref="ReadSqlAsync"/>. A table, view or column the database does not have, or a syntax error, is a
+    /// <c>BusinessRuleException</c> whose message is the database's own, which names the object and never a value.
+    /// </summary>
+    Task<IReadOnlyList<string>> DescribeSqlAsync(TabularSqlQuery query, CancellationToken cancellationToken);
 }

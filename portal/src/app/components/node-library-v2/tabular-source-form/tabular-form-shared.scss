@@ -135,3 +135,54 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.tab-ok {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-success-strong);
+}
+
+.tab-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.tab-card--ok {
+  border-color: var(--color-success);
+}
+
+.tab-card--bad {
+  border-color: var(--color-warning-strong);
+}
+
+.tab-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tab-template summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.tab-template textarea {
+  margin-top: 6px;
+}
+
+.tab-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
