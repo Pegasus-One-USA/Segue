@@ -28,6 +28,7 @@ import { PermissionActionGuard } from '../../../auth/services/permission-action-
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { TRANSFORMS } from '../../../data/transforms.data';
 import { PhaseConfigService } from '../../../services/phase-config.service';
+import { EhrWriteConnectionsPanelComponent } from '../../components/ehr-write-connections-panel/ehr-write-connections-panel.component';
 
 /**
  * Standalone admin CRUD for DestinationConfiguration rows — server-side paged/filtered (no existing screen in
@@ -49,6 +50,7 @@ import { PhaseConfigService } from '../../../services/phase-config.service';
     MatMenuModule,
     PaginationBarComponent,
     HideWithoutPermissionDirective,
+    EhrWriteConnectionsPanelComponent,
   ],
   templateUrl: './destination-connection-list.component.html',
   styleUrls: ['./destination-connection-list.component.scss'],

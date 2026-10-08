@@ -2,13 +2,15 @@ import { Observable } from 'rxjs';
 import {
   GeneratedSigningKeyModel,
   PagedResult,
+  SourceConnectionAccessFilter,
   SourceConnectionFilter,
   SourceConnectionModel,
   SourceConnectionRequest,
 } from '../models/source-connection.model';
 
 export abstract class ISourceConnectionService {
-  abstract getAll(): Observable<SourceConnectionModel[]>;
+  /** `access` narrows the list to connections that can read ('read') or write ('write'); omitted = every row. */
+  abstract getAll(access?: SourceConnectionAccessFilter): Observable<SourceConnectionModel[]>;
   abstract getPaged(filter: SourceConnectionFilter, silent?: boolean): Observable<PagedResult<SourceConnectionModel>>;
   abstract getById(id: string): Observable<SourceConnectionModel>;
   abstract create(req: SourceConnectionRequest): Observable<SourceConnectionModel>;

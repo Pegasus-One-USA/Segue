@@ -184,9 +184,13 @@ export class SourceConnectionListComponent implements OnInit, OnDestroy {
    *  ([StandardPermission(SourceConnections, Delete)] automatically, plus an explicit
    *  AuthorizePermissionAsync(sourceConnection.SourceSystemType, Delete) in the method body).
    *  Mirrored here with mode:'all' so a role missing either one doesn't see a Delete button the
-   *  backend would reject. */
+   *  backend would reject. A connection that can write (Read & Write here) is an EHR write connection too, so
+   *  the server also requires ehrwriteback.delete for it, as creating and editing its write side need the EHR
+   *  Write-Back create and edit rights. */
   deleteCodes(c: SourceConnectionModel): string[] {
-    return ['sourceconnections.delete', `${c.sourceSystemType.toLowerCase()}.delete`];
+    const codes = ['sourceconnections.delete', `${c.sourceSystemType.toLowerCase()}.delete`];
+    if (c.access === 'Write' || c.access === 'ReadWrite') codes.push('ehrwriteback.delete');
+    return codes;
   }
 
   /** Whether this row's 3-dot menu has anything in it at all — a view-only role (e.g. Audit) with
@@ -290,6 +294,8 @@ export class SourceConnectionListComponent implements OnInit, OnDestroy {
         sourceSystemType: this.ehrFilter() || undefined,
         applicationType: this.audienceFilter() || undefined,
         isEnabled: this.statusFilter() === '' ? undefined : this.statusFilter() === 'true',
+        // Sources only read: write-only EHR connections live under Destination Connections > EHR write connections.
+        access: 'read',
         sortBy: actionOnDir ? 'actionOn' : this.sortColumn(),
         sortOrder: actionOnDir ?? this.sortDirection(),
         page: this.pageIndex() + 1,

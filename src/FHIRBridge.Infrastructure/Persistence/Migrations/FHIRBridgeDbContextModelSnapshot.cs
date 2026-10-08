@@ -3088,6 +3088,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DepartmentId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 

@@ -1,0 +1,48 @@
+<form class="gfw" [formGroup]="form" (ngSubmit)="save()">
+  <div class="gfw-head">
+    <div>
+      <h2 class="gfw-title">
+        @if (readonly()) { FHIR server write connection } @else if (existing()) { Edit FHIR server write connection } @else { New FHIR server write connection }
+      </h2>
+      <p class="gfw-hint">An unauthenticated FHIR R4 server that EHR Write-Back writes to: as plain FHIR, or as a test
+        server that receives exactly what Epic, eClinicalWorks or athenahealth would.</p>
+    </div>
+    <button class="gfw-close" type="button" title="Close" (click)="cancelled.emit()">×</button>
+  </div>
+
+  <div class="gfw-body">
+    <div class="gfw-field">
+      <label class="gfw-label" for="gfw-name">Name</label>
+      <input id="gfw-name" class="gfw-input" formControlName="name" data-testid="gfw-name" />
+      @if (form.controls.name.invalid && form.controls.name.touched) {
+        <p class="gfw-error">Name is required.</p>
+      }
+    </div>
+
+    <div class="gfw-field">
+      <label class="gfw-label" for="gfw-baseUrl">FHIR base URL</label>
+      <input id="gfw-baseUrl" class="gfw-input" formControlName="baseUrl" placeholder="https://example.com/fhir"
+        data-testid="gfw-base-url" />
+      @if (form.controls.baseUrl.invalid && form.controls.baseUrl.touched) {
+        <p class="gfw-error">Enter the root FHIR endpoint (http or https, e.g. ".../fhir").</p>
+      }
+    </div>
+
+    <!-- The API has no field to switch a connection back on, so status is shown, not edited. A new one starts enabled. -->
+    <div class="gfw-field">
+      <span class="gfw-label">Status</span>
+      <span class="gfw-value">{{ existing() ? (existing()!.isEnabled ? 'Enabled' : 'Disabled') : 'Enabled' }}</span>
+    </div>
+
+    @if (error(); as message) {
+      <p class="gfw-error" role="alert">{{ message }}</p>
+    }
+  </div>
+
+  <div class="gfw-foot">
+    <button type="button" class="gfw-btn gfw-btn--ghost" (click)="cancelled.emit()">{{ readonly() ? 'Close' : 'Cancel' }}</button>
+    @if (!readonly()) {
+      <button type="submit" class="gfw-btn" data-testid="gfw-save" [disabled]="saving()">Save</button>
+    }
+  </div>
+</form>

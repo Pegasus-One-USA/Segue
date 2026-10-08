@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FHIRBridge.Infrastructure.Persistence;
@@ -14,6 +15,9 @@ namespace FHIRBridge.Infrastructure.Persistence;
 public sealed class InMemoryConfigurationRepository : IConfigurationRepository
 {
     private readonly ConcurrentDictionary<Guid, SourceConnection> _sources = new();
+    // The Access each source connection was last saved with. Callers mutate the stored instance itself before
+    // calling Update, so this is the only record of what it was: see UpdateSourceConnectionAsync.
+    private readonly ConcurrentDictionary<Guid, SourceConnectionAccess> _savedSourceAccess = new();
     private readonly ConcurrentDictionary<Guid, SourceConfiguration> _sourceConfigurations = new();
     private readonly ConcurrentDictionary<Guid, DestinationConfiguration> _destinations = new();
     private readonly ConcurrentDictionary<Guid, MappingProfile> _mappingProfiles = new();
@@ -82,6 +86,11 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
             query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
         }
 
+        if (filter.Access is { } access)
+        {
+            query = query.Where(x => access.Matches(x.Access));
+        }
+
         var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
         IOrderedEnumerable<SourceConnection> ordering = sortBy?.ToLowerInvariant() switch
         {
@@ -107,24 +116,55 @@ public sealed class InMemoryConfigurationRepository : IConfigurationRepository
 
     public async Task AddSourceConnectionAsync(SourceConnection e, CancellationToken ct)
     {
-        using (var scope = _scopeFactory.CreateScope())
+        // As in LicenseEnforcementSaveChangesInterceptor: a write-only connection is an EHR Write-Back target, not a
+        // source, so it is not checked against the source-connection quota or allow-list.
+        if (e.Access != SourceConnectionAccess.Write)
         {
-            await scope.ServiceProvider.GetRequiredService<ILicenseQuotaGuard>()
-                .EnsureSourceConnectionQuotaAvailableAsync(e.SourceSystemType, e.BaseUrl, ct);
+            await EnsureSourceConnectionQuotaAvailableAsync(e, ct);
         }
 
         _sources[e.Id] = e;
+        _savedSourceAccess[e.Id] = e.Access;
     }
 
-    public Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct)
+    public async Task UpdateSourceConnectionAsync(SourceConnection e, CancellationToken ct)
     {
+        // Giving a write-only connection read access is the moment it starts to count, checked like a new one (the
+        // interceptor's promotion rule). It is taken out of the store for the check so it is not counted twice.
+        if (_savedSourceAccess.TryGetValue(e.Id, out var savedAccess)
+            && savedAccess == SourceConnectionAccess.Write
+            && e.Access != SourceConnectionAccess.Write)
+        {
+            _sources.TryRemove(e.Id, out _);
+            try
+            {
+                await EnsureSourceConnectionQuotaAvailableAsync(e, ct);
+            }
+            catch
+            {
+                // The caller already changed this stored instance; put it back as it was saved so a refused
+                // promotion is not kept.
+                e.SetAccess(SourceConnectionAccess.Write);
+                _sources[e.Id] = e;
+                throw;
+            }
+        }
+
         _sources[e.Id] = e;
-        return Task.CompletedTask;
+        _savedSourceAccess[e.Id] = e.Access;
+    }
+
+    private async Task EnsureSourceConnectionQuotaAvailableAsync(SourceConnection e, CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ILicenseQuotaGuard>()
+            .EnsureSourceConnectionQuotaAvailableAsync(e.SourceSystemType, e.BaseUrl, ct);
     }
 
     public Task DeleteSourceConnectionAsync(SourceConnection sourceConnection, CancellationToken cancellationToken)
     {
         _sources.TryRemove(sourceConnection.Id, out _);
+        _savedSourceAccess.TryRemove(sourceConnection.Id, out _);
         return Task.CompletedTask;
     }
 

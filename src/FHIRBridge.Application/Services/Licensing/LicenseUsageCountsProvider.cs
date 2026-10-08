@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 
 namespace FHIRBridge.Application.Services.Licensing;
@@ -40,6 +41,10 @@ public sealed class LicenseUsageCountsProvider : ILicenseUsageCountsProvider
         // Runtime plane's workflow definitions are combined into one number for display.
         var workflowCount = routes.Count + workflowDefinitions.Count;
 
-        return new LicenseUsageCounts(users.Count, sourceConnections.Count, tenants.Count, workflowCount);
+        // A write-only connection is an EHR Write-Back target (Destination Connections > EHR write connections), not
+        // a source, so it is not counted against the source-connection quota. Read & Write still counts.
+        var sourceConnectionCount = sourceConnections.Count(connection => connection.Access != SourceConnectionAccess.Write);
+
+        return new LicenseUsageCounts(users.Count, sourceConnectionCount, tenants.Count, workflowCount);
     }
 }

@@ -231,6 +231,15 @@ public sealed class SourceConnectionsController : ControllerBase
         var denied = await this.AuthorizePermissionAsync(_authorizationService, sourceConnection.SourceSystemType, PermissionActionCode.Delete);
         if (denied is not null) return denied;
 
+        // A connection that can write is an EHR write connection too: deleting it stops every EHR Write-Back
+        // destination writing through it, so it needs the EHR Write-Back delete right as well, as creating and
+        // editing one need the create and edit rights.
+        if (sourceConnection.Access.AllowsWrite())
+        {
+            denied = await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, PermissionActionCode.Delete);
+            if (denied is not null) return denied;
+        }
+
         await _configurationService.DeleteSourceConnectionAsync(sourceConnectionId, cancellationToken);
         return NoContent();
     }

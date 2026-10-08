@@ -8,6 +8,7 @@ import { ISourceConnectionService } from './i-source-connection.service';
 import {
   GeneratedSigningKeyModel,
   PagedResult,
+  SourceConnectionAccessFilter,
   SourceConnectionFilter,
   SourceConnectionModel,
   SourceConnectionRequest,
@@ -17,8 +18,9 @@ import {
 export class ApiSourceConnectionService extends ISourceConnectionService {
   private readonly http = inject(HttpClient);
 
-  getAll(): Observable<SourceConnectionModel[]> {
-    return this.http.get<SourceConnectionModel[]>(SOURCE_CONNECTIONS_ENDPOINTS.list).pipe(
+  getAll(access?: SourceConnectionAccessFilter): Observable<SourceConnectionModel[]> {
+    const params = access ? new HttpParams().set('access', access) : undefined;
+    return this.http.get<SourceConnectionModel[]>(SOURCE_CONNECTIONS_ENDPOINTS.list, { params }).pipe(
       catchError(err => throwError(() => err))
     );
   }
@@ -35,6 +37,7 @@ export class ApiSourceConnectionService extends ISourceConnectionService {
     if (filter.sourceSystemType) params = params.set('sourceSystemType', filter.sourceSystemType);
     if (filter.applicationType) params = params.set('applicationType', filter.applicationType);
     if (filter.isEnabled !== undefined) params = params.set('isEnabled', String(filter.isEnabled));
+    if (filter.access) params = params.set('access', filter.access);
     if (filter.sortBy) params = params.set('sortBy', filter.sortBy);
     if (filter.sortOrder) params = params.set('sortOrder', filter.sortOrder);
 

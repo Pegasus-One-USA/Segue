@@ -26,6 +26,8 @@ interface WritableTarget {
   testableVendors: string[];
   /** APIs the destination must enable on top of selecting the type, one entry per variant. */
   optInApis: OptInApi[];
+  /** athenahealth: the connection's default department; this node's own Department id, when set, overrides it. */
+  departmentId: string | null;
 }
 
 interface OptInApi {
@@ -55,8 +57,9 @@ const VENDOR_LABELS: Record<string, string> = {
 };
 
 /**
- * EHR Write-Back destination form. Picks the EHR connection to write INTO — only enabled connections whose Access
- * includes Write and whose vendor accepts writes are offered — plus the write options. There is no secret: the
+ * EHR Write-Back destination form. Picks the EHR connection to write INTO — only enabled EHR write connections (added
+ * under Destination Connections > EHR write connections) whose vendor accepts writes are offered — plus the write
+ * options. There is no secret: the
  * destination writes over the chosen connection's own credentials.
  *
  * Dry run is the default. Clearing it sends every selected type the vendor supports live. eClinicalWorks and
@@ -94,8 +97,8 @@ const VENDOR_LABELS: Record<string, string> = {
             <span class="dw-error">Choose the EHR connection to write to.</span>
           }
           @if (!loading() && targets().length === 0) {
-            <span class="dw-hint">No connection can take writes yet. Set a connection's Access to Write or
-              Read &amp; Write (Epic, eClinicalWorks or athenahealth with Backend System, or Generic FHIR).</span>
+            <span class="dw-hint">No connection can take writes yet. Add an EHR write connection under Destination
+              Connections (Epic, eClinicalWorks, athenahealth or a FHIR server).</span>
           }
         </div>
 
@@ -155,9 +158,15 @@ const VENDOR_LABELS: Record<string, string> = {
         @if (effective()?.vendor === 'Athenahealth') {
           <div class="dw-field" [class.dw-field--error]="form.get('targetDepartmentId')!.invalid">
             <label class="dw-label" for="dw-ewb-department">Department id (athena)</label>
-            <input id="dw-ewb-department" class="dw-input" formControlName="targetDepartmentId" placeholder="e.g. 1" />
-            <span class="dw-hint">Where new patients are registered. Leave empty to write each chart in the patient's
-              own primary department (new patients are then rejected).</span>
+            <input id="dw-ewb-department" class="dw-input" formControlName="targetDepartmentId"
+                   [placeholder]="selected()?.departmentId ? 'Connection default: ' + selected()!.departmentId : 'e.g. 1'" />
+            @if (selected()?.departmentId) {
+              <span class="dw-hint">Leave empty to use the connection's department ({{ selected()!.departmentId }}), where
+                new patients are registered. A value here overrides it for this destination only.</span>
+            } @else {
+              <span class="dw-hint">Where new patients are registered. Leave empty to write each chart in the patient's
+                own primary department (new patients are then rejected).</span>
+            }
           </div>
         }
 
@@ -284,7 +293,8 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
   });
 
   constructor() {
-    this.sourceConnections.getAll().pipe(
+    // access=write asks the API for write-capable rows; the client-side check stays for an older API that ignores it.
+    this.sourceConnections.getAll('write').pipe(
       map(connections => connections.filter(c => c.isEnabled && (c.access === 'Write' || c.access === 'ReadWrite'))),
       switchMap(connections => connections.length === 0
         ? of([] as WritableTarget[])
@@ -448,6 +458,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       id: connection.id,
       name: connection.name,
       vendor: connection.sourceSystemType,
+      departmentId: connection.departmentId ?? null,
       resourceTypes: distinct(capabilities.map(c => c.resourceType)),
       liveTypes: distinct(capabilities
         .filter(c => c.liveWriteSupported && (!c.requiresVendorActivation || activated))

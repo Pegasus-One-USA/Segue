@@ -69,8 +69,9 @@ public sealed class EhrWriteVendorTargetTests(ApiFixture f)
     [Fact]
     public async Task Activating_vendor_write_apis_needs_the_ehr_write_back_edit_right()
     {
-        var (_, _, withoutJwt) = await f.CreateUserWithPermissionsAndLoginAsync("epic.create");
-        var (_, _, withJwt) = await f.CreateUserWithPermissionsAndLoginAsync("epic.create", "ehrwriteback.edit");
+        // ehrwriteback.create is what creating a connection with write access needs at all (EhrWriteConnectionTests).
+        var (_, _, withoutJwt) = await f.CreateUserWithPermissionsAndLoginAsync("epic.create", "ehrwriteback.create");
+        var (_, _, withJwt) = await f.CreateUserWithPermissionsAndLoginAsync("epic.create", "ehrwriteback.create", "ehrwriteback.edit");
         using var without = f.CreateAuthenticatedClient(withoutJwt);
         using var with = f.CreateAuthenticatedClient(withJwt);
 

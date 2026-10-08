@@ -18,4 +18,5 @@ public sealed record SourceConnectionDto(
     DateTime? ModifiedOnUtc = null,
     string? ModifiedBy = null,
     SourceConnectionAccess Access = SourceConnectionAccess.Read,
-    bool VendorWriteApisActivated = false);
+    bool VendorWriteApisActivated = false,
+    string? DepartmentId = null);

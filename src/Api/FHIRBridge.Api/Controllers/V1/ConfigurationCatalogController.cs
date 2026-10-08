@@ -47,13 +47,22 @@ public sealed class ConfigurationCatalogController : ControllerBase
     // matching its siblings below — destinations/paged (DestinationConnections.View), mapping-profiles/paged
     // (MappingProfiles.View), ehr-endpoints/paged (EhrEndpoints.View). Was UnifiedAdmin-only, which made
     // sourceconnections.view meaningless: a non-admin role granted it still got 403 here.
+    //
+    // access=read lists the connections a workflow can read from (Source Connections, source pickers), access=write
+    // the ones an EHR Write-Back destination can write to (Destination Connections > EHR write connections); a Read &
+    // Write connection is in both. Absent, every connection is listed.
     [HttpGet("source-connections")]
     [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.View, description: "View the list of source connections.")]
     [ProducesResponseType(typeof(IReadOnlyList<SourceConnectionDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ListSourceConnections(CancellationToken cancellationToken)
+    public async Task<IActionResult> ListSourceConnections(
+        [FromQuery] SourceConnectionAccessFilter? access,
+        CancellationToken cancellationToken)
     {
         var sources = await _repository.GetSourceConnectionsAsync(cancellationToken);
-        var dtos = sources.Select(ConfigurationMapper.ToDto).ToArray();
+        var dtos = sources
+            .Where(source => access is not { } wanted || wanted.Matches(source.Access))
+            .Select(ConfigurationMapper.ToDto)
+            .ToArray();
 
         var names = await _userDisplayNameResolver.ResolveAsync(
             dtos.SelectMany(dto => new[] { dto.CreatedBy, dto.ModifiedBy }), cancellationToken);
@@ -79,10 +88,11 @@ public sealed class ConfigurationCatalogController : ControllerBase
         [FromQuery] string? sortOrder,
         [FromQuery] int page,
         [FromQuery] int pageSize,
+        [FromQuery] SourceConnectionAccessFilter? access,
         CancellationToken cancellationToken)
     {
         var result = await _repository.GetSourceConnectionsPagedAsync(
-            new SourceConnectionFilter(search, sourceSystemType, applicationType, isEnabled),
+            new SourceConnectionFilter(search, sourceSystemType, applicationType, isEnabled, access),
             page <= 0 ? 1 : page,
             pageSize <= 0 ? 25 : pageSize,
             sortBy,

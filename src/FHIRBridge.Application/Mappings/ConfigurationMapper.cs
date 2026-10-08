@@ -42,7 +42,8 @@ public static class ConfigurationMapper
             sourceConnection.ModifiedOnUtc,
             sourceConnection.ModifiedBy,
             sourceConnection.Access,
-            sourceConnection.VendorWriteApisActivated);
+            sourceConnection.VendorWriteApisActivated,
+            sourceConnection.DepartmentId);
     }
 
     private static SourceInteractiveConfigurationDto? ToDto(SourceInteractiveConfiguration? interactive) =>

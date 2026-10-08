@@ -2889,8 +2889,13 @@ export class EhrVendorSourceFormComponent
     this.sourceConnectionSvc.getAll().subscribe({
       next: (connections) => {
         this._allConnectionNames = new Set(connections.map((c) => c.name));
+        // A source only reads: write-only EHR connections (Access = Write, managed under Destination Connections)
+        // are never offered here. The full list still feeds the name-collision check above (names are unique
+        // across every connection), which is why this filters client-side instead of asking for access=read.
         this.existingConnections.set(
-          connections.filter((c) => c.sourceSystemType === this.vendor()),
+          connections.filter(
+            (c) => c.sourceSystemType === this.vendor() && (c.access ?? 'Read') !== 'Write',
+          ),
         );
         this.loadingExisting.set(false);
       },
@@ -3762,9 +3767,8 @@ export class EhrVendorSourceFormComponent
       // actually assembled Epic connections; wiring non-Epic vendors all the way through canvas → workflow-build
       // is tracked as follow-up work, not part of this UI-layer split).
       Connector: this.vendor(),
-      Access: v.access ?? 'Read',
-      // Only meaningful with write access; the server also clears it when Access drops to Read.
-      'Vendor write APIs activated': v.access !== 'Read' && v.vendorWriteApisActivated ? 'true' : 'false',
+      // No 'Access' / 'Vendor write APIs activated': a source node only reads, and its save sends both as null so
+      // re-saving an old node can never downgrade a Write/ReadWrite connection or clear its activation.
       'Client ID': v.clientId ?? '',
       // Only meaningful when the audience is on Client Secret auth (showSecret()) — WizardServiceV2.save() treats
       // a blank value here as "leave whatever secret is already stored untouched" (existingClientSecretRef),

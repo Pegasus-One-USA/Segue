@@ -28,7 +28,8 @@ public sealed class LicenseEnforcementSaveChangesInterceptorTests
 {
     // Shared InMemoryDatabaseRoot: see DestinationConfigurationSoftDeleteTests' identical remark — avoids
     // EF's ManyServiceProvidersCreatedWarning once many per-test unique databases accumulate.
-    private static readonly InMemoryDatabaseRoot _root = new();
+    // internal: SourceConnectionWriteSideTests shares it rather than adding another service provider.
+    internal static readonly InMemoryDatabaseRoot _root = new();
 
     private FHIRBridgeDbContext CreateContext(string databaseName, ILicenseQuotaGuard guard)
     {
@@ -235,5 +236,47 @@ public sealed class LicenseEnforcementSaveChangesInterceptorTests
         await context.SaveChangesAsync();
 
         guard.VerifyNoOtherCalls();
+    }
+
+    private static SourceConnection EpicConnection(SourceConnectionAccess access) =>
+        new("Epic write",
+            SourceSystemType.Epic,
+            "https://fhir.example.org",
+            new SourceAuthenticationConfiguration(AuthenticationType.None, null, null, [], null, null, null),
+            access: access);
+
+    [Fact]
+    public async Task Adding_a_write_only_connection_never_touches_the_source_connection_check()
+    {
+        // A write-only connection is an EHR Write-Back target, not a source: outside the source quota and allow-list.
+        var guard = new Mock<ILicenseQuotaGuard>(MockBehavior.Strict);
+
+        await using var context = CreateContext(Guid.NewGuid().ToString(), guard.Object);
+        context.SourceConnections.Add(EpicConnection(SourceConnectionAccess.Write));
+
+        await context.SaveChangesAsync();
+
+        guard.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Giving_a_write_only_connection_read_access_checks_it_like_a_new_source()
+    {
+        var guard = new Mock<ILicenseQuotaGuard>();
+        guard.Setup(x => x.EnsureSourceConnectionQuotaAvailableAsync(
+                SourceSystemType.Epic, "https://fhir.example.org", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new LicenseQuotaExceededException("source connections", 1, 1));
+
+        await using var context = CreateContext(Guid.NewGuid().ToString(), guard.Object);
+        var connection = EpicConnection(SourceConnectionAccess.Write);
+        context.SourceConnections.Add(connection);
+        await context.SaveChangesAsync();
+
+        connection.SetAccess(SourceConnectionAccess.ReadWrite);
+        var act = () => context.SaveChangesAsync();
+
+        await act.Should().ThrowAsync<LicenseQuotaExceededException>();
+        guard.Verify(x => x.EnsureSourceConnectionQuotaAvailableAsync(
+            SourceSystemType.Epic, "https://fhir.example.org", It.IsAny<CancellationToken>()), Times.Once);
     }
 }

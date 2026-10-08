@@ -265,4 +265,33 @@ public sealed class EpicSourceConnectionScopeSyncServiceTests
         result!.Should().Contain(["patient/Patient.read", "patient/Observation.read"]);
         result.Should().NotContain("patient/Organization.read");
     }
+
+    [Fact]
+    public async Task A_write_only_connection_is_never_synced()
+    {
+        // No source node ever references it, so a sync would regenerate its scopes from nothing and strip the ones
+        // its write token is requested with.
+        var writeOnly = new SourceConnection(
+            "athena write",
+            SourceSystemType.Athenahealth,
+            "https://api.preview.platform.athenahealth.com/fhir/r4",
+            new SourceAuthenticationConfiguration(AuthenticationType.None, "client-4", null, ["system/AllergyIntolerance.write"], null, null, null),
+            applicationType: ApplicationType.Backend,
+            access: SourceConnectionAccess.Write);
+
+        _configurationRepository.Setup(x => x.GetSourceConnectionAsync(writeOnly.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(writeOnly);
+        _configurationRepository.Setup(x => x.GetSourceConnectionsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([writeOnly]);
+
+        var result = await Service().SyncAsync(writeOnly.Id, CancellationToken.None);
+        var changed = await Service().SyncAllAsync(CancellationToken.None);
+
+        result.Should().BeNull();
+        changed.Should().BeEmpty();
+        writeOnly.Authentication.Scopes.Should().Equal("system/AllergyIntolerance.write");
+        _workflowStore.Verify(x => x.ListAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _configurationRepository.Verify(
+            x => x.UpdateSourceConnectionAsync(It.IsAny<SourceConnection>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

@@ -98,11 +98,29 @@ public sealed record DestinationFilter(
     bool? IsEnabled);
 
 
+/// <param name="Access">Read keeps the rows that can be read from (Read, ReadWrite), Write the rows that can be
+/// written to (Write, ReadWrite); null keeps every row.</param>
 public sealed record SourceConnectionFilter(
     string? Search,
     SourceSystemType? SourceSystemType,
     ApplicationType? ApplicationType,
-    bool? IsEnabled);
+    bool? IsEnabled,
+    SourceConnectionAccessFilter? Access = null);
+
+/// <summary>Which side of a connection a list asks for: Source Connections lists the connections that can be read,
+/// Destination Connections' EHR write connections the ones that can be written to. A Read &amp; Write connection is in
+/// both.</summary>
+public enum SourceConnectionAccessFilter
+{
+    Read,
+    Write,
+}
+
+public static class SourceConnectionAccessFilterExtensions
+{
+    public static bool Matches(this SourceConnectionAccessFilter filter, SourceConnectionAccess access) =>
+        filter == SourceConnectionAccessFilter.Write ? access.AllowsWrite() : access.AllowsRead();
+}
 
 public sealed record MappingProfileFilter(
     string? Search,

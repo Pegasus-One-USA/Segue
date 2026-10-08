@@ -449,10 +449,11 @@ export class WizardServiceV2 {
       sourceSystemType: this.ehrType(),
       baseUrl:          fields['FHIR base URL'],
       applicationType:  AUDIENCE_TO_APPLICATION_TYPE[audienceKey] ?? null,
-      // Null keeps whatever is saved; the form always sends a value, so this only matters for older nodes.
-      access:           (fields['Access'] as 'Read' | 'Write' | 'ReadWrite' | undefined) || null,
-      // Null keeps whatever is saved, like Access.
-      vendorWriteApisActivated: fields['Vendor write APIs activated'] === 'true' ? true : fields['Vendor write APIs activated'] === 'false' ? false : null,
+      // A source node only reads: always null (Read on create, keep saved on update), even when an older node still
+      // carries an 'Access' / 'Vendor write APIs activated' field — so re-saving it can never downgrade a
+      // Write/ReadWrite connection or clear its activation. EHR write connections live under Destination Connections.
+      access:           null,
+      vendorWriteApisActivated: null,
       authentication: {
         authenticationType: AUTH_METHOD_TO_AUTHENTICATION_TYPE[liveAuthMethod] ?? 'OAuthClientCredentials',
         clientId:           liveClientId,

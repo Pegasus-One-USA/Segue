@@ -1,5 +1,6 @@
 ﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -106,6 +107,16 @@ public sealed class EfConfigurationRepository : IConfigurationRepository
         if (filter.IsEnabled.HasValue)
         {
             query = query.Where(x => x.IsEnabled == filter.IsEnabled.Value);
+        }
+
+        // Spelled out rather than SourceConnectionAccessExtensions.AllowsRead/AllowsWrite, which EF cannot translate.
+        if (filter.Access == SourceConnectionAccessFilter.Read)
+        {
+            query = query.Where(x => x.Access == SourceConnectionAccess.Read || x.Access == SourceConnectionAccess.ReadWrite);
+        }
+        else if (filter.Access == SourceConnectionAccessFilter.Write)
+        {
+            query = query.Where(x => x.Access == SourceConnectionAccess.Write || x.Access == SourceConnectionAccess.ReadWrite);
         }
 
         var totalCount = await query.CountAsync(ct);

@@ -287,9 +287,40 @@ public static class WorkflowEndpoints
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
                 }
 
-                var source = spec.ExistingId is { } existingSourceId
-                    ? await configurationService.UpdateSourceConnectionAsync(existingSourceId, spec.Source, cancellationToken)
-                    : await configurationService.AddSourceConnectionAsync(spec.Source, cancellationToken);
+                // A source node only reads, so its save never decides what the connection may write: Access, the
+                // vendor write-API activation and the department are dropped (null: Read on create, the saved value
+                // on update). An older canvas node still carrying Access=Read must not downgrade a connection that
+                // Destination Connections has since made able to write, nor clear its activation.
+                var sourceRequest = spec.Source with { Access = null, VendorWriteApisActivated = null, DepartmentId = null };
+                SourceConnectionDto source;
+                if (spec.ExistingId is { } savedSourceId
+                    && await configurationService.GetSourceConnectionByIdAsync(savedSourceId, cancellationToken) is { } savedSource)
+                {
+                    // As in ConfigurationsController.UpdateSourceConnection: the saved vendor's right too. The EHR
+                    // Write-Back edit right is never needed here: the access, activation and department a write
+                    // connection's write side is made of were dropped above, so this save cannot change them.
+                    if (savedSource.SourceSystemType != spec.Source.SourceSystemType
+                        && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                            authorizationService, httpContext.User, savedSource.SourceSystemType, PermissionActionCode.Edit))
+                    {
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    }
+
+                    // A write-only connection is an EHR write connection, listed under Destination Connections, and a
+                    // source form must not rewrite it. A node bound to one before source forms lost their Access
+                    // setting keeps its binding untouched, so the rest of the workflow still saves; the run refuses
+                    // to read through it (SourceNodeExecutors) until the node is pointed at a readable connection.
+                    source = savedSource.Access.AllowsRead()
+                        ? await configurationService.UpdateSourceConnectionAsync(savedSourceId, sourceRequest, cancellationToken)
+                        : savedSource;
+                }
+                else
+                {
+                    source = spec.ExistingId is { } existingSourceId
+                        ? await configurationService.UpdateSourceConnectionAsync(existingSourceId, sourceRequest, cancellationToken)
+                        : await configurationService.AddSourceConnectionAsync(sourceRequest, cancellationToken);
+                }
+
                 sourceIds[spec.NodeId] = source.Id;
                 nodes[spec.NodeId] = WithConfiguration(node, config => config["sourceConnectionId"] = source.Id.ToString());
             }
@@ -1330,6 +1361,15 @@ public static class WorkflowEndpoints
                     // connection of this vendor" rule. Resolved from the original connection's own vendor,
                     // since the copy request itself carries no vendor information.
                     var originalSource = await configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+
+                    // A write-only connection is an EHR write connection, not a source: cloning it would mint a
+                    // readable connection carrying the write app's credentials. As on /workflows/build, the copied
+                    // node keeps its binding to the original and the run refuses to read through it.
+                    if (originalSource is not null && !originalSource.Access.AllowsRead())
+                    {
+                        continue;
+                    }
+
                     if (originalSource is not null
                         && !await ControllerAuthorizationExtensions.HasPermissionAsync(
                             authorizationService, httpContext.User, originalSource.SourceSystemType, PermissionActionCode.Create))
@@ -3154,9 +3194,11 @@ public static class WorkflowEndpoints
             // Resets the incremental-sync cursor — the clone has never actually run, so LastSuccessfulSyncUtc
             // carried over from the original would make its first real run think resources up to that point
             // were already fetched by THIS connection, silently skipping them.
-            dto.Retrieval is { } retrieval ? retrieval with { LastSuccessfulSyncUtcByResourceType = null } : null,
-            // Without this the copy would silently drop to Read and its write-back destinations stop working.
-            dto.Access);
+            dto.Retrieval is { } retrieval ? retrieval with { LastSuccessfulSyncUtcByResourceType = null } : null);
+        // Access (and with it activation and the department) is left out, so the clone is Read: only the copied
+        // source node uses it, and a source only reads. The copied EHR Write-Back nodes keep writing over the
+        // original connection (dest_sourceConnectionId is not repointed), so copying write access would only mint a
+        // second EHR write connection without the ehrwriteback.create right that creating one needs.
 
         var cloned = await configurationService.AddSourceConnectionAsync(createRequest, cancellationToken);
         var result = (cloned.Id, cloned.ApplicationType);

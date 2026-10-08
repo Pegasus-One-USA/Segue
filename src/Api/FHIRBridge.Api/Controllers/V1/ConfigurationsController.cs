@@ -68,6 +68,9 @@ public sealed class ConfigurationsController : ControllerBase
         var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Create);
         if (denied is not null) return denied;
 
+        denied = await AuthorizeWriteAccessAsync(request, savedAllowsWrite: false, PermissionActionCode.Create);
+        if (denied is not null) return denied;
+
         denied = await AuthorizeVendorWriteActivationAsync(request, savedActivation: false);
         if (denied is not null) return denied;
 
@@ -87,11 +90,32 @@ public sealed class ConfigurationsController : ControllerBase
         var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Edit);
         if (denied is not null) return denied;
 
-        if (request.VendorWriteApisActivated is true)
+        // A missing connection skips the checks below that compare with the saved row and falls through to the
+        // service, which answers 404.
+        var saved = await _configurationService.GetSourceConnectionByIdAsync(sourceConnectionId, cancellationToken);
+        if (saved is not null)
         {
-            var saved = await _configurationService.GetSourceConnectionByIdAsync(sourceConnectionId, cancellationToken);
-            denied = await AuthorizeVendorWriteActivationAsync(request, saved?.VendorWriteApisActivated ?? false);
+            // The vendor right is checked against the saved connection too: otherwise a request naming another vendor
+            // would let a role edit (and re-vendor) a connection of a vendor it has no right to.
+            if (saved.SourceSystemType != request.SourceSystemType)
+            {
+                denied = await this.AuthorizePermissionAsync(_authorizationService, saved.SourceSystemType, PermissionActionCode.Edit);
+                if (denied is not null) return denied;
+            }
+
+            denied = await AuthorizeWriteAccessAsync(request, saved.Access.AllowsWrite(), PermissionActionCode.Edit);
             if (denied is not null) return denied;
+
+            denied = await AuthorizeVendorWriteActivationAsync(request, saved.VendorWriteApisActivated);
+            if (denied is not null) return denied;
+
+            // Changing a write connection's write-side settings (access, department, activation) needs the EHR
+            // Write-Back edit right as well. Source forms send none of them, so their re-saves never need it.
+            if (SourceConnectionWriteSide.UpdateChangesWriteSide(saved, request))
+            {
+                denied = await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, PermissionActionCode.Edit);
+                if (denied is not null) return denied;
+            }
         }
 
         var sourceConnection = await _configurationService.UpdateSourceConnectionAsync(
@@ -480,6 +504,18 @@ public sealed class ConfigurationsController : ControllerBase
 
         return Ok(route);
     }
+
+    /// <summary>Giving a connection write access lets EHR Write-Back destinations write into the EHR over its
+    /// credentials, so on top of the vendor's own permission it needs the EHR Write-Back right: Create when the
+    /// connection is created able to write, Edit when an update turns write access on. An update that leaves Access
+    /// out (null keeps the saved value) or keeps a connection that already writes able to write does not.</summary>
+    private async Task<IActionResult?> AuthorizeWriteAccessAsync(
+        CreateSourceConnectionRequest request,
+        bool savedAllowsWrite,
+        PermissionActionCode action) =>
+        request.Access is { } access && access.AllowsWrite() && !savedAllowsWrite
+            ? await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, action)
+            : null;
 
     /// <summary>Turning on a connection's vendor write APIs takes its eCW / athenaOne write-back types off dry run for
     /// every destination that writes over it, so it needs the EHR Write-Back edit right, the same right that takes a

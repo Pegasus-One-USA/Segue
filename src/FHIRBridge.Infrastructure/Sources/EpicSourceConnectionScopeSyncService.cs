@@ -55,6 +55,13 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
             return null;
         }
 
+        // A write-only connection is never a source node's connection, so the resource types "used" by it are always
+        // none; regenerating its scopes from that would strip the scopes its write token is requested with.
+        if (!sourceConnection.Access.AllowsRead())
+        {
+            return null;
+        }
+
         // athenahealth is exempt from the Interactive-only gate below: unlike every other vendor here, its Backend
         // System connections ALSO need their resource-type selection kept in sync with what's actually consumed
         // downstream — SourceConnectionRuntimeResolver regenerates scopes fresh from Retrieval.ResourceTypes on
@@ -154,7 +161,8 @@ public sealed class EpicSourceConnectionScopeSyncService : IEpicSourceConnection
         var connections = await _configurationRepository.GetSourceConnectionsAsync(cancellationToken);
         var changed = new List<Guid>();
 
-        foreach (var connection in connections.Where(c => c.Interactive is not null || c.SourceSystemType == SourceSystemType.Athenahealth))
+        foreach (var connection in connections.Where(c =>
+                     c.Access.AllowsRead() && (c.Interactive is not null || c.SourceSystemType == SourceSystemType.Athenahealth)))
         {
             var before = string.Join(' ', connection.Authentication.Scopes);
             var after = await SyncAsync(connection.Id, cancellationToken);

@@ -3063,6 +3063,10 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DepartmentId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -3204,6 +3208,51 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasDatabaseName("IX_TabularSourceFiles_CreatedOnUtc");
 
                     b.ToTable("TabularSourceFiles", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.TabularSqlConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Engine")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("KeyVaultName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SecretName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TabularSqlConnections_Name");
+
+                    b.ToTable("TabularSqlConnections", (string)null);
                 });
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.Tenant", b =>

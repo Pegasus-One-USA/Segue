@@ -227,7 +227,8 @@ export class MappingProfileDialogV2Component {
   readonly mappingErrors = signal<string[]>([]);
 
   constructor() {
-    this.http.get<NamedEntity[]>(SOURCE_CONNECTIONS_ENDPOINTS.list).subscribe({
+    // Sources only read: write-only EHR connections (Access = Write) are not offered here.
+    this.http.get<NamedEntity[]>(SOURCE_CONNECTIONS_ENDPOINTS.list, { params: { access: 'read' } }).subscribe({
       next: sources => this.sourceOptions.set(sources),
       error: () => this.sourceOptions.set([]),
     });

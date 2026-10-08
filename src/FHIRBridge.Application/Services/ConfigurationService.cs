@@ -87,6 +87,7 @@ public sealed class ConfigurationService : IConfigurationService
         CancellationToken cancellationToken)
     {
         await ValidateSourceConnectionRequestAsync(request, excludeId: null, cancellationToken);
+        ValidateDepartmentId(request.DepartmentId, request.Access ?? SourceConnectionAccess.Read);
         // License source-connection quota/allow-list enforcement lives centrally in
         // LicenseEnforcementSaveChangesInterceptor (watches for a newly-Added SourceConnection row).
         var authentication = await WriteInlineClientSecretAsync(request.Authentication, cancellationToken);
@@ -102,6 +103,12 @@ public sealed class ConfigurationService : IConfigurationService
         if (request.VendorWriteApisActivated is true)
         {
             sourceConnection.SetVendorWriteApisActivated(true);
+        }
+
+        // A department is a write setting: a connection that cannot write keeps none.
+        if (sourceConnection.Access.AllowsWrite())
+        {
+            sourceConnection.SetDepartmentId(request.DepartmentId);
         }
 
         await _repository.AddSourceConnectionAsync(sourceConnection, cancellationToken);
@@ -147,6 +154,8 @@ public sealed class ConfigurationService : IConfigurationService
             ValidateSourceConnectionAccess(request, sourceConnection.Access);
         }
 
+        ValidateDepartmentId(request.DepartmentId, request.Access ?? sourceConnection.Access);
+
         var authentication = PreserveSecretsIfBlank(ConfigurationMapper.ToDomain(resolvedRequestAuthentication), sourceConnection.Authentication);
         sourceConnection.Update(
             request.Name,
@@ -167,6 +176,13 @@ public sealed class ConfigurationService : IConfigurationService
         if (request.VendorWriteApisActivated is { } activated)
         {
             sourceConnection.SetVendorWriteApisActivated(activated && sourceConnection.Access.AllowsWrite());
+        }
+
+        // Null keeps the saved value and an empty one clears it. Applied after Access, which clears it when write
+        // access goes; a connection that cannot write keeps none.
+        if (request.DepartmentId is { } departmentId)
+        {
+            sourceConnection.SetDepartmentId(sourceConnection.Access.AllowsWrite() ? departmentId : null);
         }
 
         // Mapped immediately after Update(), before SaveChangesAsync — Update() reassigns brand-new owned-value-
@@ -1294,6 +1310,20 @@ public sealed class ConfigurationService : IConfigurationService
         }
     }
 
+    /// <summary>The same EHR-side id rule as an EHR Write-Back node's dest_targetDepartmentId. Checked only for a
+    /// connection that will be able to write: anything else ignores the department, so it cannot reject the save.</summary>
+    private static void ValidateDepartmentId(string? departmentId, SourceConnectionAccess resultingAccess)
+    {
+        if (resultingAccess.AllowsWrite()
+            && !string.IsNullOrWhiteSpace(departmentId)
+            && (departmentId.Trim().Length > SourceConnection.MaxDepartmentIdLength
+                || departmentId.Trim().Any(char.IsWhiteSpace)))
+        {
+            throw new InvalidOperationException(
+                $"Department ID must be the EHR's id as shown in the EHR: up to {SourceConnection.MaxDepartmentIdLength} characters, no spaces.");
+        }
+    }
+
     /// <summary>
     /// Write access is offered only where an EHR Write-Back destination could use it: a vendor that accepts writes,
     /// over a SMART application type that vendor accepts writes from. A null application type is a legacy Backend
@@ -1358,7 +1388,7 @@ public sealed class ConfigurationService : IConfigurationService
                 _ when !EhrWriteCapabilities.HasAnyWriteCapability(target.SourceSystemType) =>
                     $"{target.SourceSystemType} connections can only be read from; choose a connection to an EHR that accepts writes.",
                 _ when !target.Access.AllowsWrite() =>
-                    "The chosen EHR connection is read-only. Set its Access to Write or Read & Write first.",
+                    "The chosen EHR connection is read-only. Choose a connection listed under Destination Connections > EHR write connections.",
                 // A test run writes only to a Generic FHIR test server, never to the EHR it stands in for.
                 _ when !string.IsNullOrWhiteSpace(ReadMetadataString(connectionMetadataJson, "dest_testAsVendor"))
                        && target.SourceSystemType != EhrWriteCapabilities.TestServerType =>

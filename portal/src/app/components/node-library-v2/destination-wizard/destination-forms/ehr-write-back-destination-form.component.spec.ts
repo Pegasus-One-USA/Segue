@@ -33,6 +33,10 @@ const BY_VENDOR: Record<string, EhrWriteCapabilities> = {
     vendor: 'Healow', supportsPatientMatch: false, cloneModeEnabled: false,
     capabilities: [capability('AllergyIntolerance', { requiresVendorActivation: true }), capability('Condition', { createsHolderEncounter: true })],
   },
+  Athenahealth: {
+    vendor: 'Athenahealth', supportsPatientMatch: true, cloneModeEnabled: false,
+    capabilities: [capability('AllergyIntolerance', { requiresVendorActivation: true })],
+  },
 };
 
 const HAPI = { id: 'hapi', name: 'Local HAPI', sourceSystemType: 'GenericFhir', isEnabled: true, access: 'Write' } as SourceConnectionModel;
@@ -42,11 +46,11 @@ const HAPI = { id: 'hapi', name: 'Local HAPI', sourceSystemType: 'GenericFhir', 
  * options, and the APIs a vendor needs enabled are offered per variant and saved only for the vendor written as.
  */
 describe('EhrWriteBackDestinationFormComponent', () => {
-  async function createComponent() {
+  async function createComponent(connections: SourceConnectionModel[] = [HAPI], pick = 'hapi') {
     await TestBed.configureTestingModule({
       imports: [EhrWriteBackDestinationFormComponent],
       providers: [
-        { provide: ISourceConnectionService, useValue: { getAll: () => of([HAPI]) } },
+        { provide: ISourceConnectionService, useValue: { getAll: () => of(connections) } },
         { provide: EhrWriteCapabilitiesService, useValue: { forVendor: (vendor: string) => of(BY_VENDOR[vendor]) } },
       ],
     }).compileComponents();
@@ -54,7 +58,7 @@ describe('EhrWriteBackDestinationFormComponent', () => {
     const fixture = TestBed.createComponent(EhrWriteBackDestinationFormComponent);
     fixture.detectChanges();
     const form = fixture.componentInstance;
-    form.form.controls.sourceConnectionId.setValue('hapi');
+    form.form.controls.sourceConnectionId.setValue(pick);
     form.onTargetChanged();
     fixture.detectChanges();
     return { fixture, form };
@@ -101,6 +105,39 @@ describe('EhrWriteBackDestinationFormComponent', () => {
     expect(form.getFullConfig()['dest_enabledVariants']).toBe('');
     expect(form.effective()!.offersHolderEncounter).toBeTrue();
     expect(form.effective()!.liveTypes).toContain('AllergyIntolerance', 'a test run never waits for the contract switch');
+  });
+
+  it('points to Destination Connections when no connection can take writes', async () => {
+    const { fixture } = await createComponent([]);
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Add an EHR write connection under Destination');
+    expect(text).not.toContain("Set a connection's Access");
+  });
+
+  it("shows an athena connection's department as the default the node field overrides", async () => {
+    const athena = {
+      id: 'ath', name: 'athena write', sourceSystemType: 'Athenahealth', isEnabled: true, access: 'Write', departmentId: '150',
+    } as SourceConnectionModel;
+    const { fixture, form } = await createComponent([athena], 'ath');
+
+    const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('#dw-ewb-department')!;
+    expect(input.placeholder).toBe('Connection default: 150');
+    expect(form.getFullConfig()['dest_targetDepartmentId']).toBe('', 'an empty node field leaves the connection default in charge');
+  });
+
+  it("restores a saved node department over the athena connection's own", async () => {
+    const athena = {
+      id: 'ath', name: 'athena write', sourceSystemType: 'Athenahealth', isEnabled: true, access: 'Write', departmentId: '150',
+    } as SourceConnectionModel;
+    const { fixture, form } = await createComponent([athena], 'ath');
+
+    form.patchFrom({ dest_sourceConnectionId: 'ath', dest_targetDepartmentId: '7' });
+    fixture.detectChanges();
+
+    const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('#dw-ewb-department')!;
+    expect(input.value).toBe('7');
+    expect(form.getFullConfig()['dest_targetDepartmentId']).toBe('7');
   });
 
   it('restores a saved test run', async () => {

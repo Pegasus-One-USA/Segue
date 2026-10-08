@@ -86,7 +86,6 @@ export class GenericFhirSourceFormComponent implements SourceConfigFormComponent
   readonly form = this.fb.group({
     name: ['Generic FHIR R4', [Validators.required]],
     baseUrl: ['', [Validators.required]],
-    access: ['Read' as 'Read' | 'Write' | 'ReadWrite'],
     retrievalMethod: ['search-rest' as GenericFhirRetrievalMethod],
     // ── Subscription / Webhook ────────────────────────────────────────────────
     eventType: [''],
@@ -214,7 +213,6 @@ export class GenericFhirSourceFormComponent implements SourceConfigFormComponent
     this.form.patchValue({
       name: fields['__name'] || 'Generic FHIR R4',
       baseUrl: fields['FHIR base URL'] || '',
-      access: (fields['Access'] as 'Read' | 'Write' | 'ReadWrite') || 'Read',
       retrievalMethod: (fields['Retrieval method key'] as GenericFhirRetrievalMethod) || 'search-rest',
       eventType: fields['Event type'] || '',
       notificationPayload: fields['Notification payload'] || 'id-only',
@@ -270,7 +268,6 @@ export class GenericFhirSourceFormComponent implements SourceConfigFormComponent
       'App context': 'Backend system',
       'Ingestion mode': 'search',
       'FHIR base URL': v.baseUrl || '',
-      Access: v.access || 'Read',
       Resources: this.selectedResources().join(','),
       'Retrieval resource type': resourcesJoined,
       'Retrieval method key': v.retrievalMethod ?? 'search-rest',

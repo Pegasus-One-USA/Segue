@@ -239,7 +239,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var routeDestinationIds = new HashSet<Guid>();
         foreach (var (_, routesForType) in routesByResourceType)
         {
-            foreach (var routeItem in FilterEnabledRoutes(routesForType, config, request, scheduledAtUtc))
+            foreach (var routeItem in FilterEnabledRoutes(routesForType, config, request, scheduledAtUtc)
+                         .Where(route => !SourceIsWriteOnly(config, route)))
             {
                 routeSourceConnectionIds.Add(routeItem.MappingProfile.SourceConnectionId);
                 routeDestinationIds.Add(routeItem.MappingProfile.DestinationId);
@@ -283,7 +284,9 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         var bulkExportResourceTypesByKey = new Dictionary<RouteSourceKey, List<string>>();
         foreach (var (resourceType, routesForType) in routesByResourceType)
         {
-            var enabledRoutesForBulkScan = FilterEnabledRoutes(routesForType, config, request, scheduledAtUtc);
+            var enabledRoutesForBulkScan = FilterEnabledRoutes(routesForType, config, request, scheduledAtUtc)
+                .Where(route => !SourceIsWriteOnly(config, route))
+                .ToList();
             if (enabledRoutesForBulkScan.Count == 0)
             {
                 continue;
@@ -329,6 +332,27 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             processedResourceTypes.Add(resourceType);
 
             var enabledRoutes = FilterEnabledRoutes(routesForType, config, request, scheduledAtUtc);
+
+            // A write-only connection is an EHR Write-Back target, and its client id may not even be registered for
+            // reads, so its routes do not run. Reported on scheduled runs too, so the route does not just go quiet.
+            var writeOnlyRoutes = enabledRoutes.Where(route => SourceIsWriteOnly(config, route)).ToList();
+            if (writeOnlyRoutes.Count > 0)
+            {
+                foreach (var sourceName in writeOnlyRoutes
+                             .Select(route => config.SourceConnectionsById[route.MappingProfile.SourceConnectionId].Name)
+                             .Distinct(StringComparer.Ordinal))
+                {
+                    errors.Add(
+                        $"{resourceType}: source connection '{sourceName}' is write-only, so it cannot be read from. " +
+                        "Choose a connection listed under Source Connections.");
+                }
+
+                enabledRoutes = enabledRoutes.Except(writeOnlyRoutes).ToList();
+                if (enabledRoutes.Count == 0)
+                {
+                    continue;
+                }
+            }
 
             if (enabledRoutes.Count == 0)
             {
@@ -610,6 +634,12 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
         if (!webhookSourceConnection.IsEnabled)
         {
             throw new InvalidOperationException("Webhook source connection is disabled.");
+        }
+
+        if (!webhookSourceConnection.Access.AllowsRead())
+        {
+            throw new InvalidOperationException(
+                $"Webhook source connection '{webhookSourceConnection.Name}' is write-only, so it cannot be used as a source.");
         }
 
         // License allow-list re-check — same rationale as StartAsync's matching block: independent of the
@@ -1324,6 +1354,11 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
             .ToList();
     }
 
+    // True when the route's source connection exists but is write-only (an EHR Write-Back target).
+    private static bool SourceIsWriteOnly(ConfigurationSnapshot config, RouteMappingWorkItem route) =>
+        config.SourceConnectionsById.TryGetValue(route.MappingProfile.SourceConnectionId, out var source)
+        && !source.Access.AllowsRead();
+
     private static bool RouteDependenciesAreEnabled(ConfigurationSnapshot config, RouteMappingWorkItem route)
     {
         // A route's source and destination are owned by its mapping profile, so resolve them through the mapping.
@@ -1761,6 +1796,8 @@ public sealed class ConfiguredPipelineService : IConfiguredPipelineService
     // Loads the flat configuration once per run and indexes it for the in-memory joins the pipeline performs.
     private async Task<ConfigurationSnapshot> LoadConfigurationAsync(CancellationToken cancellationToken)
     {
+        // Every connection, write-only ones included: a route still pointing at a write-only one is reported by name
+        // (see SourceIsWriteOnly) rather than dropped as if its source were missing.
         var sources = await _configurationRepository.GetSourceConnectionsAsync(cancellationToken);
         var sourceConfigurations = await _configurationRepository.GetSourceConfigurationsAsync(cancellationToken);
         var destinations = await _configurationRepository.GetDestinationsAsync(cancellationToken);

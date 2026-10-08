@@ -53,6 +53,9 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
             .IsRequired()
             .HasDefaultValue(false);
 
+        builder.Property(x => x.DepartmentId)
+            .HasMaxLength(SourceConnection.MaxDepartmentIdLength);
+
         builder.OwnsOne(x => x.Interactive, interactive =>
         {
             var redirectUris = interactive.Property(x => x.RedirectUris)

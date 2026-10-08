@@ -146,34 +146,8 @@
           <p class="eaf-hint">Decides which Client ID set applies. {{ displayVendor() }} issues separate IDs per environment.</p>
         </div>
 
-        <div class="eaf-field">
-          <label class="eaf-label" for="eaf-access">Access <span class="eaf-req">*</span></label>
-          <div class="eaf-select-wrap">
-            <select id="eaf-access" class="eaf-select" formControlName="access">
-              <option value="Read">Read</option>
-              <option value="Write" [disabled]="!canChooseWriteAccess()">Write (EHR write-back only)</option>
-              <option value="ReadWrite" [disabled]="!canChooseWriteAccess()">Read &amp; Write</option>
-            </select>
-          </div>
-          @if (canChooseWriteAccess()) {
-            <p class="eaf-hint">Write lets an EHR Write-Back destination create records over this connection. Use a client ID registered for write-back only.</p>
-          } @else {
-            <p class="eaf-hint">Write access needs a vendor that accepts EHR write-back and the Backend System audience.</p>
-          }
-        </div>
-
-        @if (canChooseWriteAccess() && vendorWritesNeedActivation() && form.controls.access.value !== 'Read') {
-          <div class="eaf-field">
-            <label class="eaf-label" for="eaf-vendor-activation">
-              <input id="eaf-vendor-activation" type="checkbox" formControlName="vendorWriteApisActivated" />
-              Vendor write APIs activated
-            </label>
-            <p class="eaf-hint">{{ displayVendor() }} writes clinical records through APIs the practice must have turned
-              on (eClinicalWorks: contracted Create APIs activated for this practice; athenahealth: athenaOne APIs
-              enabled for this app). Until this is ticked, write-back to this connection runs as a dry run. Needs the
-              EHR Write-Back edit permission.</p>
-          </div>
-        }
+        <!-- No Access select or vendor-activation switch: a source node only reads. EHR write connections are managed
+             under Destination Connections > EHR write connections. -->
       </div>
     </div>
 

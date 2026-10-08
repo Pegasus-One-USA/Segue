@@ -101,13 +101,13 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
         if (!connection.Access.AllowsWrite())
         {
             throw new InvalidOperationException(
-                $"The EHR connection '{connection.Name}' is read-only. Set its Access to Write or Read & Write.");
+                $"The EHR connection '{connection.Name}' is read-only. Choose a connection listed under Destination Connections > EHR write connections.");
         }
 
         var vendor = EhrWriteCapabilities.VendorProfile(connection.SourceSystemType)
             ?? throw new InvalidOperationException($"{connection.SourceSystemType} does not accept EHR write-back.");
 
-        var options = ReadOptions(node);
+        var options = ReadOptions(node, connection.DepartmentId);
         if (options.TestAsVendor is { } tested && connection.SourceSystemType != EhrWriteCapabilities.TestServerType)
         {
             // A test run must never reach a real EHR: only a Generic FHIR connection can be the test server.
@@ -173,8 +173,9 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
 
     /// <summary>The node's write-back settings. The portal stores every value as a string. Anything missing or
     /// unparseable falls to the safe side: a dry run, no patient creation, no clone mode, no holder encounters, the
-    /// default cap, preliminary notes. Clone mode is checked against its system setting by the writer.</summary>
-    private static EhrWriteBackRunOptions ReadOptions(WorkflowNode node)
+    /// default cap, preliminary notes. Clone mode is checked against its system setting by the writer. The department
+    /// is the node's own <c>dest_targetDepartmentId</c> when set, else the write connection's.</summary>
+    private static EhrWriteBackRunOptions ReadOptions(WorkflowNode node, string? connectionDepartmentId)
     {
         var dryRun = !bool.TryParse(ReadStringConfiguration(node, "dest_dryRun"), out var parsedDryRun) || parsedDryRun;
         var createPatient = bool.TryParse(ReadStringConfiguration(node, "dest_createPatientIfMissing"), out var parsedCreate) && parsedCreate;
@@ -192,7 +193,9 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
         var cloneMode = bool.TryParse(ReadStringConfiguration(node, "dest_cloneMode"), out var parsedClone) && parsedClone;
         var holderEncounter = bool.TryParse(ReadStringConfiguration(node, "dest_createHolderEncounter"), out var parsedHolder) && parsedHolder;
         var providerId = ReadStringConfiguration(node, "dest_targetProviderId") is { } provider && !string.IsNullOrWhiteSpace(provider) ? provider.Trim() : null;
-        var departmentId = ReadStringConfiguration(node, "dest_targetDepartmentId") is { } department && !string.IsNullOrWhiteSpace(department) ? department.Trim() : null;
+        var departmentId = ReadStringConfiguration(node, "dest_targetDepartmentId") is { } department && !string.IsNullOrWhiteSpace(department)
+            ? department.Trim()
+            : string.IsNullOrWhiteSpace(connectionDepartmentId) ? null : connectionDepartmentId.Trim();
         var variants = (ReadStringConfiguration(node, "dest_enabledVariants") ?? string.Empty)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.Ordinal)

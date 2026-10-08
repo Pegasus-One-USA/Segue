@@ -109,7 +109,24 @@
           }
         </div>
 
-        <!-- Epic Audience | Environment -->
+        <!-- Epic Audience | Environment. An EHR write connection (write purpose) is always Backend System, so the
+             audience is fixed text there rather than a select. -->
+        @if (isWritePurpose()) {
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-audience-fixed">Audience</label>
+            <input id="eaf-audience-fixed" class="eaf-input" type="text" value="Backend System (server to server)" readonly
+                   data-testid="src-audience-fixed" />
+            <p class="eaf-hint">Write-back runs server to server via client credentials. No user context.</p>
+          </div>
+        } @else if (audienceLockedByWriteAccess()) {
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-audience-locked">Audience</label>
+            <input id="eaf-audience-locked" class="eaf-input" type="text" [value]="audienceLabel(audience())" readonly
+                   data-testid="src-audience-locked" />
+            <p class="eaf-hint">This connection also writes (EHR Write-Back), which needs Backend System, so its audience
+              cannot change here. Its write access is managed under Destination Connections &gt; EHR write connections.</p>
+          </div>
+        } @else {
         <div class="eaf-field" [class.eaf-field--error]="form.controls.audience.touched && form.controls.audience.invalid">
           <label class="eaf-label" for="eaf-audience">Audience <span class="eaf-req">*</span></label>
           <div class="eaf-select-wrap">
@@ -133,6 +150,7 @@
             <p class="eaf-hint">{{ disabledAudienceHint() }}</p>
           }
         </div>
+        }
 
         <div class="eaf-field" [class.eaf-field--error]="form.controls.environment.touched && form.controls.environment.invalid">
           <label class="eaf-label" for="eaf-environment">Environment <span class="eaf-req">*</span></label>
@@ -146,21 +164,26 @@
           <p class="eaf-hint">Decides which Client ID set applies. {{ displayVendor() }} issues separate IDs per environment.</p>
         </div>
 
-        <div class="eaf-field">
-          <label class="eaf-label" for="eaf-access">Access <span class="eaf-req">*</span></label>
-          <div class="eaf-select-wrap">
-            <select id="eaf-access" class="eaf-select" formControlName="access">
-              <option value="Read">Read</option>
-              <option value="Write" [disabled]="!canChooseWriteAccess()">Write (EHR write-back only)</option>
-              <option value="ReadWrite" [disabled]="!canChooseWriteAccess()">Read &amp; Write</option>
-            </select>
+        <!-- No Access select: Source Connections only read and EHR write connections (Destination Connections) only
+             write. The access control still round-trips the saved value; see buildFieldsToSave. -->
+        @if (showActivationSwitch()) {
+          <div class="eaf-field">
+            <label class="eaf-label" for="eaf-vendor-activation">
+              <input id="eaf-vendor-activation" type="checkbox" formControlName="vendorWriteApisActivated" />
+              Vendor write APIs activated
+            </label>
+            <p class="eaf-hint">{{ displayVendor() }} writes clinical records through APIs the practice must have turned
+              on (eClinicalWorks: contracted Create APIs activated for this practice; athenahealth: athenaOne APIs
+              enabled for this app). Until this is ticked, write-back to this connection runs as a dry run. Needs the
+              EHR Write-Back edit permission.</p>
           </div>
-          @if (canChooseWriteAccess()) {
-            <p class="eaf-hint">Write lets an EHR Write-Back destination create records over this connection. Use a client ID registered for write-back only.</p>
-          } @else {
-            <p class="eaf-hint">Write access needs a vendor that accepts EHR write-back and the Backend System audience.</p>
-          }
-        </div>
+        } @else if (isWritePurpose() && vendorWritesNeedActivation()) {
+          <div class="eaf-field">
+            <p class="eaf-hint" data-testid="src-activation-needs-edit">Vendor write APIs activated:
+              {{ form.controls.vendorWriteApisActivated.value ? 'yes' : 'no' }}. Until it is on, write-back to this
+              connection runs as a dry run. Turning it on needs the EHR Write-Back edit permission.</p>
+          </div>
+        }
       </div>
     </div>
 
@@ -305,6 +328,18 @@
                 <p class="eaf-error-msg">Practice ID is required.</p>
               }
               <p class="eaf-hint">athenahealth practice id — the bare number (e.g. 195900). Sent as ah-practice on every request.</p>
+            </div>
+          }
+
+          @if (showDepartmentId()) {
+            <div class="eaf-field" [class.eaf-field--error]="form.controls.departmentId.invalid">
+              <label class="eaf-label" for="eaf-departmentId">Department ID</label>
+              <input id="eaf-departmentId" class="eaf-input" type="text" formControlName="departmentId"
+                     placeholder="e.g. 1" data-testid="src-department-id" />
+              @if (form.controls.departmentId.invalid) {
+                <p class="eaf-error-msg">No spaces, at most 64 characters.</p>
+              }
+              <p class="eaf-hint">The athenahealth department write-backs file into. A write-back destination's own Department ID, when set, overrides it.</p>
             </div>
           }
 

@@ -1,0 +1,228 @@
+// Same card shape as Source Connections' database-connections-panel, so the two side panels read as one family.
+.ewc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.ewc-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ewc-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.ewc-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.ewc-btn {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ewc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    padding: 8px;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+}
+
+.ewc-url {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ewc-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.ewc-link {
+  margin-left: 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ewc-error {
+  color: var(--color-error-strong);
+  font-size: 12px;
+}
+
+// ─── Modals ───────────────────────────────────────────────────────────────────
+// Fixed to the viewport, not absolute: the Destination Connections page keeps the shared .list-page
+// `position: relative`, so an absolute backdrop would only cover the list's own (often short) height. Source
+// Connections gets away with absolute only because its page overrides .list-page to `position: static`.
+.ewc-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 20, 30, 0.45);
+}
+
+.ewc-backdrop--form {
+  padding: 24px;
+}
+
+// The vendor form expects a definitely sized box (its body scrolls, its footer pins to the bottom) — see
+// source-connection-list.component.scss's .sc-modal-panel for the full reasoning.
+.ewc-form-panel {
+  width: 100%;
+  max-width: 1200px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+
+  app-epic-source-form,
+  app-healow-source-form,
+  app-athenahealth-source-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  &--maximized {
+    position: fixed;
+    inset: 0;
+    max-width: none;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+}
+
+.ewc-picker,
+.ewc-small-panel {
+  width: min(720px, calc(100% - 48px));
+  max-height: calc(100% - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 18px 48px rgba(15, 20, 30, 0.22);
+  overflow: hidden;
+}
+
+.ewc-small-panel {
+  width: min(560px, calc(100% - 48px));
+}
+
+.ewc-picker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 12px;
+}
+
+.ewc-picker-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.ewc-close {
+  border: none;
+  background: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--color-muted);
+  cursor: pointer;
+
+  &:hover { color: var(--color-ink); }
+}
+
+.ewc-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 8px 24px 24px;
+  overflow-y: auto;
+}
+
+.ewc-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  text-align: left;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base);
+
+  &:hover {
+    border-color: var(--color-primary);
+    background: var(--color-side);
+  }
+
+  &__abbr {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-base);
+    // Theme-invariant white on the vendor's brand colour (set inline), same as Source Connections' picker.
+    color: var(--color-on-header-dark);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
+    strong { font-size: 14px; font-weight: 600; color: var(--color-ink); }
+    span   { font-size: 12.5px; color: var(--color-muted); }
+  }
+}

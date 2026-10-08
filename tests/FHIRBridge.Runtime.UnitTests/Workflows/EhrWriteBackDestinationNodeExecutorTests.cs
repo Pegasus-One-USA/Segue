@@ -175,6 +175,36 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
         channel.Options.TargetDepartmentId.Should().Be("150");
     }
 
+    [Theory]
+    [InlineData(null, "150")]
+    [InlineData("", "150")]
+    [InlineData("2", "2")]
+    public async Task The_department_is_the_nodes_own_when_set_else_the_connections(string? nodeDepartment, string expected)
+    {
+        // Saved workflows that carry dest_targetDepartmentId keep it; a node without one uses the write connection's.
+        var connection = Connection();
+        connection.SetDepartmentId("150");
+        var (executor, contexts, _) = Build(connection);
+        var node = Node(nodeDepartment is null
+            ? $$"""{"dest_sourceConnectionId":"{{TargetId}}"}"""
+            : $$"""{"dest_sourceConnectionId":"{{TargetId}}","dest_targetDepartmentId":"{{nodeDepartment}}"}""");
+
+        await executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        contexts.Single().EhrWriteChannel!.Options.TargetDepartmentId.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task No_department_on_the_node_or_the_connection_leaves_it_unset()
+    {
+        var (executor, contexts, _) = Build(Connection());
+        var node = Node($$"""{"dest_sourceConnectionId":"{{TargetId}}"}""");
+
+        await executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        contexts.Single().EhrWriteChannel!.Options.TargetDepartmentId.Should().BeNull();
+    }
+
     [Fact]
     public async Task Read_only_connection_is_refused()
     {
