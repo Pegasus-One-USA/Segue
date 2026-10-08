@@ -113,9 +113,11 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
 
         var selected = new HashSet<string>(channel.Options.ResourceTypes, StringComparer.OrdinalIgnoreCase);
         var testRun = channel.Options.IsTestRun;
+        // A test run sends every type, those the code keeps dry-run-only for the real vendor included: nothing reaches
+        // the vendor, and the rehearsal is how such a type is checked before it is allowed live.
         var live = channel.Options.DryRun
             ? new HashSet<string>(StringComparer.Ordinal)
-            : vendor.Capabilities.Where(c => c.IsLive(ActivatedFor(channel))).Select(c => c.ResourceType).ToHashSet(StringComparer.Ordinal);
+            : vendor.Capabilities.Where(c => testRun || c.IsLive(ActivatedFor(channel))).Select(c => c.ResourceType).ToHashSet(StringComparer.Ordinal);
         var targetKey = testRun
             ? EhrWriteKeys.TestTargetKey(channel.TargetBaseUrl, channel.TargetVendor.ToString())
             : EhrWriteKeys.TargetKey(channel.TargetBaseUrl);

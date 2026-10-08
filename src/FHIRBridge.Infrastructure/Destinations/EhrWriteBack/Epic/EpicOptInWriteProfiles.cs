@@ -433,7 +433,7 @@ public abstract class EpicRadiotherapySummaryWriteProfile : IEhrWriteProfile
     {
         var code = Objects(Object(source, "code"), "coding")
             .FirstOrDefault(c => String(c, "system") == SnomedSystem && String(c, "code") is { } x && CourseCodes.Contains(x));
-        if (!Objects(source, "category").Any(c => HasCoding(c, SnomedSystem, RadiotherapyCategory)) || code is null)
+        if (!Categories(source).Any(c => HasCoding(c, SnomedSystem, RadiotherapyCategory)) || code is null)
         {
             return EhrShapeResult.Skip("not-a-radiotherapy-summary");
         }
@@ -481,7 +481,8 @@ public abstract class EpicRadiotherapySummaryWriteProfile : IEhrWriteProfile
             return EhrShapeResult.Reject(problem);
         }
 
-        shaped["category"] = new JsonArray(CodeableConcept(SnomedSystem, RadiotherapyCategory, "Radiotherapy"));
+        var category = CodeableConcept(SnomedSystem, RadiotherapyCategory, "Radiotherapy");
+        shaped["category"] = CategoryIsList ? new JsonArray(category) : category;
         shaped["code"] = new JsonObject { ["coding"] = new JsonArray(new JsonObject { ["system"] = SnomedSystem, ["code"] = String(code, "code") }) };
         shaped["subject"] = new JsonObject { ["reference"] = subject };
         ShapeTail(source, shaped);
@@ -492,6 +493,13 @@ public abstract class EpicRadiotherapySummaryWriteProfile : IEhrWriteProfile
 
     public void BindReferences(JsonObject shaped, string targetPatientId, string? targetEncounterId) =>
         shaped["subject"] = ReferenceTo("Patient", targetPatientId);
+
+    /// <summary>R4 <c>ServiceRequest.category</c> is a list, <c>Procedure.category</c> a single concept.</summary>
+    protected virtual bool CategoryIsList => true;
+
+    /// <summary>The category concepts, read either way: a source may send a Procedure's as a list.</summary>
+    private static IEnumerable<JsonObject> Categories(JsonObject source) =>
+        source["category"] is JsonObject single ? [single] : Objects(source, "category");
 
     /// <summary>Elements between status and category; returns a rejection reason or null.</summary>
     protected virtual string? ShapeSpecific(JsonObject source, JsonObject shaped) => null;
@@ -514,6 +522,8 @@ public sealed class EpicRadiotherapySummaryProcedureWriteProfile : EpicRadiother
     public override string ResourceType => "Procedure";
 
     protected override IReadOnlySet<string> ExtensionUrls => Extensions;
+
+    protected override bool CategoryIsList => false;
 
     protected override void ShapeTail(JsonObject source, JsonObject shaped)
     {

@@ -634,11 +634,12 @@ EHRs, so every write can be rehearsed end to end before it is pointed at the rea
 FHIR (`EhrWriteCapabilities.TestServerType`; the executor and `ConfigurationService` refuse it on any other, so a test
 run can never reach a real EHR). The executor builds the TESTED vendor's channel over the test server's connection,
 and the writer runs exactly the vendor's path — capabilities, variants, profiles, encounter rules, ledger, write cap,
-report — with four differences:
+report — with five differences:
 
 | | Real write | Test run |
 |---|---|---|
 | Contract switch (eCW, athena) | must be on | counts as on (nothing reaches the vendor) |
+| Dry-run-only types (eCW, athena QuestionnaireResponse) | never sent | sent, so they are rehearsed before being allowed live |
 | Patients | ledger, identifier, then `$match` (Epic) or the MPI (eCW, athena) | ledger and identifier only; not found = not on the test server, created when the destination opts in |
 | Ledger key | the EHR's base URL | the test server's base URL **and** the tested vendor (`EhrWriteKeys.TestTargetKey`), so testing as Epic and then as athena on one server both write, and no test row is ever mistaken for a production write |
 | Report | `TargetVendor`, scope checked | `TestRun: true`, `ScopeStatus: test-server` |

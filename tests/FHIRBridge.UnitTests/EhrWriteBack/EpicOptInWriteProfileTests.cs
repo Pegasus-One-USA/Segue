@@ -145,6 +145,22 @@ public sealed class EpicOptInWriteProfileTests
     }
 
     [Fact]
+    public void A_radiotherapy_procedure_has_one_category_as_r4_defines_it_and_is_recognised_by_it()
+    {
+        var r4Procedure = Summary.Replace("%TYPE%", "Procedure")
+            .Replace("\"category\":[{\"coding\":[{\"system\":\"http://snomed.info/sct\",\"code\":\"1287742003\"}]}]",
+                     "\"category\":{\"coding\":[{\"system\":\"http://snomed.info/sct\",\"code\":\"1287742003\"}]}");
+        r4Procedure.Should().NotContain("\"category\":[");
+
+        var procedure = new EpicRadiotherapySummaryProcedureWriteProfile().Shape(Json(r4Procedure), Options).Resource!;
+        var order = new EpicRadiotherapySummaryServiceRequestWriteProfile().Shape(Json(Summary.Replace("%TYPE%", "ServiceRequest")), Options).Resource!;
+
+        procedure["category"].Should().BeOfType<JsonObject>();
+        Text(procedure["category"]!["coding"]![0]!["code"]).Should().Be("1287742003");
+        order["category"].Should().BeOfType<JsonArray>();
+    }
+
+    [Fact]
     public void Scan_metadata_needs_every_element_epic_requires_and_drops_the_scanning_user()
     {
         const string Scan = """

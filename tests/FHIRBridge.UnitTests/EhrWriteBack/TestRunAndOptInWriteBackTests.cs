@@ -10,6 +10,7 @@ using FHIRBridge.Infrastructure.Destinations.EhrWriteBack;
 using FHIRBridge.Infrastructure.Destinations.EhrWriteBack.Epic;
 using FHIRBridge.Infrastructure.Destinations.EhrWriteBack.GenericFhir;
 using FHIRBridge.Infrastructure.Destinations.EhrWriteBack.Healow;
+using FHIRBridge.Infrastructure.Destinations.EhrWriteBack.UsCore;
 using FHIRBridge.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -53,6 +54,11 @@ public sealed class TestRunAndOptInWriteBackTests
          "item":[{"linkId":"64407","answer":[{"valueInteger":7}]}]}
         """;
 
+    private const string AnsweredQuestionnaire = """
+        {"resourceType":"QuestionnaireResponse","id":"qr1","status":"completed","questionnaire":"Questionnaire/phq-2",
+         "subject":{"reference":"Patient/p1"},"item":[{"linkId":"1","answer":[{"valueInteger":1}]}]}
+        """;
+
     private static MappedEhrWriteBackDestinationWriter Writer(InMemoryEhrWriteLedgerRepository? ledger = null) =>
         new(
             new EhrWriteProfileRegistry(
@@ -61,6 +67,7 @@ public sealed class TestRunAndOptInWriteBackTests
                 new EpicLinesDrainsAirwaysWriteProfile(), new EpicImagingCharacteristicsWriteProfile(),
                 new EpicPatientEnteredQuestionnaireWriteProfile(),
                 new HealowAllergyIntoleranceWriteProfile(), new HealowPatientWriteProfile(),
+                new HealowQuestionnaireResponseWriteProfile(),
                 new GenericFhirWriteProfile("AllergyIntolerance"), new GenericFhirWriteProfile("Patient"),
             ]),
             ledger ?? new InMemoryEhrWriteLedgerRepository(),
@@ -142,6 +149,28 @@ public sealed class TestRunAndOptInWriteBackTests
         channel.Creates.Should().BeEmpty();
         Summary(result, "AllergyIntolerance").Reasons.Should().ContainKey("vendor-activation-required");
         result.EhrWrite!.TestRun.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_test_run_sends_a_type_that_is_dry_run_only_for_the_real_vendor()
+    {
+        var channel = new ScriptedChannel(SourceSystemType.Healow, testAs: SourceSystemType.Healow, types: ["QuestionnaireResponse"]) { IdentifierHit = "t-1" };
+
+        var result = await RunAsync(Writer(), channel, FhirSource, Patient, AnsweredQuestionnaire);
+
+        channel.Creates.Should().Equal("QuestionnaireResponse");
+        Summary(result, "QuestionnaireResponse").Written.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Outside_a_test_run_a_dry_run_only_type_is_not_sent()
+    {
+        var channel = new ScriptedChannel(SourceSystemType.Healow, testAs: null, types: ["QuestionnaireResponse"]) { IdentifierHit = "t-1" };
+
+        var result = await RunAsync(Writer(), channel, FhirSource, Patient, AnsweredQuestionnaire);
+
+        channel.Creates.Should().BeEmpty();
+        Summary(result, "QuestionnaireResponse").Reasons.Should().ContainKey("live-write-not-supported");
     }
 
     // ---- Variants a destination enables ----
