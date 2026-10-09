@@ -9,7 +9,7 @@ import { ToastService } from '../../../services/toast.service';
  * A plain FHIR server an EHR Write-Back destination writes to (as plain FHIR, or as a test server that receives
  * exactly what Epic, eClinicalWorks or athenahealth would). Saved as a GenericFhir SourceConnection with Backend
  * application type, no authentication and, when new, write-only access. There is no vendor form for this, so the
- * EHR write connections panel opens this instead.
+ * Destination Connections page opens this instead.
  */
 @Component({
   selector: 'app-generic-fhir-write-connection-form',
@@ -27,7 +27,8 @@ export class GenericFhirWriteConnectionFormComponent implements OnInit {
   readonly existing = input<SourceConnectionModel | null>(null);
   readonly readonly = input(false);
 
-  readonly saved = output<void>();
+  /** The saved connection, as the API returned it. */
+  readonly saved = output<SourceConnectionModel>();
   readonly cancelled = output<void>();
 
   readonly saving = signal(false);
@@ -68,10 +69,10 @@ export class GenericFhirWriteConnectionFormComponent implements OnInit {
     this.error.set(null);
     const call = c ? this.svc.update(c.id, request) : this.svc.create(request);
     call.subscribe({
-      next: () => {
+      next: (model) => {
         this.saving.set(false);
         this.toast.success(c ? 'EHR write connection updated.' : 'EHR write connection created.');
-        this.saved.emit();
+        this.saved.emit(model);
       },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);

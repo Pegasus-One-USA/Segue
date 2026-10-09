@@ -1,0 +1,21 @@
+// The filter selects both connection pages project into app-connection-list-toolbar — the app's 40px control height,
+// matching the search box and buttons next to them.
+.type-filter-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.type-filter-select {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  font-size: 13.5px;
+  color: var(--color-ink);
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

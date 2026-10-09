@@ -1,210 +1,63 @@
 <div class="list-page">
 
-  <!-- Filter Bar -->
-  <div class="filter-card">
-    <div class="filter-row">
+  <app-connection-list-toolbar
+    testIdPrefix="dest"
+    placeholder="Search by name, type or address…"
+    [search]="search()"
+    [canCreate]="canCreate()"
+    (searchChange)="onSearch($event)"
+    (resetClicked)="reset()"
+    (createClicked)="pickerOpen.set(true)">
+    <app-destination-connection-filters
+      [value]="filters()"
+      [rowTypes]="rowTypes()"
+      [showDestinations]="canListDestinations()"
+      [showWrite]="canListWrite()"
+      (valueChange)="onFilters($event)" />
+  </app-connection-list-toolbar>
 
-      <div class="search-wrap">
-        <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
-          <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
-          <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-        </svg>
-        <input
-          type="search"
-          class="search-input"
-          placeholder="Search by name..."
-          [value]="searchQuery()"
-          (input)="onSearch($any($event.target).value)"
-        />
-        @if (searching()) {
-          <span class="search-spinner" aria-hidden="true"></span>
-        }
-      </div>
-
-      <div class="type-filter-wrap">
-        <select class="type-filter-select" [value]="typeFilter()" (change)="onTypeFilterChange($any($event.target).value)">
-          <option value="">All types</option>
-          @for (g of typeGroups; track g.category) {
-            <optgroup [label]="g.category">
-              @for (t of g.options; track t.value) {
-                <option [value]="t.value">{{ t.label }}</option>
-              }
-            </optgroup>
-          }
-        </select>
-      </div>
-
-      <div class="type-filter-wrap">
-        <select class="type-filter-select" [value]="statusFilter()" (change)="onStatusFilterChange($any($event.target).value)">
-          <option value="">All statuses</option>
-          <option value="true">Enabled</option>
-          <option value="false">Disabled</option>
-        </select>
-      </div>
-
-      <div class="filter-actions">
-        <button class="btn-reset" type="button" (click)="reset()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
-            <path d="M3 3v5h5"></path>
-          </svg>
-          Reset
-        </button>
-        <button class="btn-add" type="button" *appHideWithoutPermission="CREATE_CODES" (click)="openNew()">
-          New
-        </button>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- Table Card -->
   <div class="table-card">
-
     @if (loading()) {
       <!-- The global loader already shows this page is busy — no local spinner here. -->
     } @else {
+      <app-connection-list-table
+        testIdPrefix="dest"
+        [rows]="result().items"
+        [total]="result().total"
+        [columns]="columns"
+        [sort]="sort()"
+        [actionsFor]="actionsFor"
+        [statusLabels]="statusLabels"
+        [emptyTitle]="isFiltered() ? 'No connections matched your search' : 'No destination connections yet'"
+        [emptyHint]="isFiltered() ? 'Try adjusting your search or filter.' : 'Get started by adding your first connection.'"
+        (sortChange)="onSort($event)"
+        (action)="onAction($event)" />
 
-
-      <div class="table-wrapper">
-        <table mat-table [dataSource]="items()" class="data-table">
-
-          <ng-container matColumnDef="name">
-            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('name')">
-              Name
-              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
-                {{ sortColumn() === 'name' && sortDirection() === 'desc' ? '↓' : '↑' }}
-              </span>
-            </th>
-            <td mat-cell *matCellDef="let d">
-              <div class="cell-name">
-                <span class="cell-primary">{{ d.name }}</span>
-              </div>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="destinationType">
-            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('destinationType')">
-              Type
-              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'destinationType'">
-                {{ sortColumn() === 'destinationType' && sortDirection() === 'desc' ? '↓' : '↑' }}
-              </span>
-            </th>
-            <td mat-cell *matCellDef="let d"><span class="type-badge">{{ d.destinationType }}</span></td>
-          </ng-container>
-
-          <ng-container matColumnDef="isEnabled">
-            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="onSort('isEnabled')">
-              Status
-              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'isEnabled'">
-                {{ sortColumn() === 'isEnabled' && sortDirection() === 'desc' ? '↓' : '↑' }}
-              </span>
-            </th>
-            <td mat-cell *matCellDef="let d">
-              <span class="badge" [class.badge-active]="d.isEnabled" [class.badge-inactive]="!d.isEnabled">
-                {{ d.isEnabled ? 'Enabled' : 'Disabled' }}
-              </span>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="actionBy">
-            <th mat-header-cell *matHeaderCellDef>Action by</th>
-            <td mat-cell *matCellDef="let d">
-              <span class="cell-muted">{{ (d.modifiedBy || d.createdBy) ?? '—' }}</span>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="actionOn">
-            <th mat-header-cell *matHeaderCellDef class="col-sortable" (click)="toggleActionOnSort()">
-              Action on
-              @if (actionOnSortDirection(); as dir) {
-                <span class="sort-ico sort-ico--active">{{ dir === 'desc' ? '↓' : '↑' }}</span>
-              }
-            </th>
-            <td mat-cell *matCellDef="let d">
-              <span class="cell-muted">{{ ((d.modifiedOnUtc || d.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef class="col-actions"></th>
-            <td mat-cell *matCellDef="let d" class="col-actions">
-              <div class="actions-cell">
-                @if (hasRowMenu(d)) {
-                <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu">
-                  <mat-icon>more_vert</mat-icon>
-                </button>
-                <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
-                  <!-- Placeholder only — view details for a destination connection is not implemented yet.
-                       Disabled, no click handler; same visibility/View pattern (including the .view
-                       permission gate) as source-connection-list's own View menu item, just not wired to
-                       anything yet. -->
-                  <button mat-menu-item disabled *appHideWithoutPermission="'destinationconnections.view'">
-                    <mat-icon>visibility</mat-icon>
-                    View (Coming Soon)
-                  </button>
-                  @if (canOpenEntity(d)) {
-                    <button
-                      mat-menu-item
-                      (click)="openEdit(d)"
-                    >
-                      <mat-icon>{{ hasHistory(d) ? 'visibility' : 'edit' }}</mat-icon>
-                      {{ hasHistory(d) ? 'View (has execution history)' : 'Edit' }}
-                    </button>
-                  }
-                  <button
-                    mat-menu-item
-                    class="menu-item-danger"
-                    *appHideWithoutPermission="deleteCodes(d); mode: 'all'"
-                    [disabled]="hasHistory(d) || isUsedInWorkflow(d)"
-                    (click)="confirmDelete(d)"
-                  >
-                    <mat-icon>delete_outline</mat-icon>
-                    {{ hasHistory(d)
-                      ? 'Cannot delete — has execution history'
-                      : isUsedInWorkflow(d)
-                        ? 'Cannot delete — referenced by a workflow'
-                        : 'Delete' }}
-                  </button>
-                </mat-menu>
-                }
-              </div>
-            </td>
-          </ng-container>
-
-          <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
-
-        </table>
-      </div>
-
-      @if (totalCount() === 0) {
-        <div class="empty-state">
-          <div class="empty-state__icon-wrap"><mat-icon>storage</mat-icon></div>
-          <h3 class="empty-state__title">
-            @if (searchQuery() || typeFilter() || statusFilter()) { No connections matched your search } @else { No destination connections yet }
-          </h3>
-          <p class="empty-state__sub">
-            @if (searchQuery() || typeFilter() || statusFilter()) { Try adjusting your search or filter. } @else { Get started by adding your first connection. }
-          </p>
-        </div>
-      }
-
-      @if (totalCount() > 0) {
+      @if (result().total > 0) {
         <app-pagination-bar
-          [pageIndex]="pageIndex()"
+          [pageIndex]="result().pageIndex"
           [pageSize]="pageSize()"
-          [totalCount]="totalCount()"
+          [totalCount]="result().total"
           [pageSizeOptions]="[5, 10, 25, 50]"
-          (pageChange)="onPageChange($event)"
+          (pageChange)="onPage($event)"
         />
       }
-
     }
-
   </div>
 
-  <!-- EHR connections write-back destinations write through: their own list, their own component. -->
-  <app-ehr-write-connections-panel />
+  @if (pickerOpen()) {
+    <app-connection-kind-picker
+      testIdPrefix="dest"
+      title="New destination connection"
+      subtitle="Choose where this connection writes to."
+      [groups]="pickerGroups()"
+      (picked)="onPicked($event)"
+      (closed)="pickerOpen.set(false)" />
+  }
+
+  <!-- Each kind owns its rows, actions and forms. Never inside an @if: the page loads them right after the view is
+       built. -->
+  <app-destination-configuration-kind (changed)="reload('destination')" />
+  <app-ehr-write-connection-kind (changed)="reload('ehr-write')" />
 
 </div>

@@ -42,6 +42,19 @@ describe('GenericFhirWriteConnectionFormComponent', () => {
     expect(request.retrieval).toBeNull();
   });
 
+  it('hands back the saved connection, so a caller can pick it at once', () => {
+    const form = render(null);
+    const created = { id: 'h9', name: 'HAPI', sourceSystemType: 'GenericFhir' } as SourceConnectionModel;
+    create.and.returnValue(of(created));
+    const saved = jasmine.createSpy('saved');
+    form.saved.subscribe(saved);
+    form.form.setValue({ name: 'HAPI', baseUrl: 'https://hapi.example/fhir' });
+
+    form.save();
+
+    expect(saved).toHaveBeenCalledWith(created);
+  });
+
   it('editing a Read & Write server keeps its access, retrieval, authentication and application type', () => {
     const retrieval = { retrievalMethod: 'search-rest', resourceTypes: ['Patient'], searchCriteria: null, incrementalSyncEnabled: false };
     const form = render({

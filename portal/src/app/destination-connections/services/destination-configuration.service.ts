@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams, HttpContext } from '@angular/common/http';
 import { SKIP_LOADER } from '../../core/loading.interceptor';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { EMPTY, Observable } from 'rxjs';
+import { expand, map, reduce } from 'rxjs/operators';
 import { DESTINATION_ENDPOINTS } from '../../core/api-endpoints';
 import {
   CreateDestinationConfigurationRequest,
@@ -40,6 +40,20 @@ export class DestinationConfigurationService {
 
     const context = silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
     return this.http.get<PagedResult<DestinationConfigurationDto>>(DESTINATION_ENDPOINTS.paged, { params, context });
+  }
+
+  /** Every destination, read page by page from the paged list — the Destination Connections page merges these with
+   *  the EHR write connections and pages them itself. The paged list, not the unpaged one: the unpaged list also drops
+   *  every type the role lacks `{type}.view` for, and the page has always listed those (destinationconnections.view
+   *  alone gates it). */
+  getAllPages(pageSize = 100): Observable<DestinationConfigurationDto[]> {
+    const fetchPage = (page: number) => this.getPaged({ page, pageSize, sortBy: 'name', sortOrder: 'asc' });
+    return fetchPage(1).pipe(
+      expand(result => result.items.length > 0 && result.page * result.pageSize < result.totalCount
+        ? fetchPage(result.page + 1)
+        : EMPTY),
+      reduce((all, result) => all.concat(result.items), [] as DestinationConfigurationDto[]),
+    );
   }
 
   create(request: CreateDestinationConfigurationRequest): Observable<DestinationConfigurationDto> {

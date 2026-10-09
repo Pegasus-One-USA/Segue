@@ -49,7 +49,7 @@ public sealed class ConfigurationCatalogController : ControllerBase
     // sourceconnections.view meaningless: a non-admin role granted it still got 403 here.
     //
     // access=read lists the connections a workflow can read from (Source Connections, source pickers), access=write
-    // the ones an EHR Write-Back destination can write to (Destination Connections > EHR write connections); a Read &
+    // the ones an EHR Write-Back destination can write to (listed on the Destination Connections page); a Read &
     // Write connection is in both. Absent, every connection is listed.
     [HttpGet("source-connections")]
     [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.View, description: "View the list of source connections.")]

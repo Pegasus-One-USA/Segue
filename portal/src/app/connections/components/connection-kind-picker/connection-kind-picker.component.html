@@ -1,0 +1,30 @@
+<div class="sc-modal-backdrop" tabindex="0" (click)="onBackdropClick($event)" (keydown.escape)="closed.emit()">
+  <div class="sc-picker-panel" role="dialog" [attr.aria-label]="title()">
+    <div class="sc-picker-head">
+      <div>
+        <h2 class="sc-picker-title">{{ title() }}</h2>
+        @if (subtitle()) {
+          <p class="sc-picker-sub">{{ subtitle() }}</p>
+        }
+      </div>
+      <button class="sc-picker-close" type="button" title="Close" (click)="closed.emit()">×</button>
+    </div>
+    <div class="sc-picker-body">
+      @for (group of shownGroups(); track group.heading) {
+        <h3 class="sc-picker-group">{{ group.heading }}</h3>
+        <div class="sc-picker-grid">
+          @for (card of group.cards; track card.kind + ':' + card.value) {
+            <button type="button" class="sc-picker-card" [attr.data-testid]="testIdPrefix() + '-vendor-card'"
+                    [attr.data-vendor]="card.value" [attr.data-kind]="card.kind" (click)="picked.emit(card)">
+              <span class="sc-picker-card__abbr" [style.background]="card.color">{{ card.abbr }}</span>
+              <span class="sc-picker-card__text">
+                <strong>{{ card.label }}</strong>
+                <span>{{ card.sub }}</span>
+              </span>
+            </button>
+          }
+        </div>
+      }
+    </div>
+  </div>
+</div>

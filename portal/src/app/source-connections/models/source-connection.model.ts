@@ -120,7 +120,8 @@ export interface SourceConnectionRequest {
 export type SourceConnectionAccessModel = 'Read' | 'Write' | 'ReadWrite';
 
 /** The list endpoints' `access` filter: 'read' = Read or ReadWrite rows, 'write' = Write or ReadWrite rows.
- *  Omitted = every row. Sources only read and EHR write connections only write, so each page asks for its own. */
+ *  Omitted = every row. Sources only read and EHR write connections only write, so the Source Connections page asks for
+ *  'read' and the Destination Connections page for 'write'. */
 export type SourceConnectionAccessFilter = 'read' | 'write';
 
 /** Matches the API's GeneratedSigningKeyDto shape exactly (see GeneratedSigningKeyDto.cs). The private key itself

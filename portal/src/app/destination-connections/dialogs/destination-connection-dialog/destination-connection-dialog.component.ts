@@ -25,6 +25,9 @@ import { Transform } from '../../../models/transform.model';
 export interface DestinationConnectionDialogData {
   mode: 'create' | 'edit' | 'view';
   destination?: DestinationConfigurationDto;
+  /** Create only: the type already chosen (the Destination Connections "New" picker), so the type grid is skipped.
+   *  Back-to-types still works. */
+  initialType?: DestinationType;
 }
 
 /** The DestinationTypes this admin dialog's create-flow offers, in display order. Deliberately kept identical
@@ -94,6 +97,29 @@ export const DESTINATION_CREATE_PERMISSION_CODES: string[] = [
   ...new Set(CREATE_TYPES.map(type => `${permissionPrefixFor(type)}.create`)),
 ];
 
+export interface DestinationCreateTypeCard {
+  destinationType: DestinationType;
+  title: string;
+  description: string;
+  permissionCode: string;
+}
+
+/** Create-flow type cards, derived from the TRANSFORMS catalog (single source of truth shared with the workflow
+ *  builder) and filtered to the types the current user can actually create. Shared by this dialog's type grid and
+ *  the Destination Connections "New" picker. */
+export function destinationCreateTypeCards(permissions: Pick<PermissionService, 'hasPermission'>): DestinationCreateTypeCard[] {
+  return CREATE_TYPES
+    .map(type => DEST_CATALOG.get(type))
+    .filter((t): t is Transform => !!t)
+    .map(t => ({
+      destinationType: t.destinationType!,
+      title: t.name,
+      description: t.sub,
+      permissionCode: `${permissionPrefixFor(t.destinationType!)}.create`,
+    }))
+    .filter(card => permissions.hasPermission(card.permissionCode));
+}
+
 @Component({
   selector: 'app-destination-connection-dialog',
   standalone: true,
@@ -125,7 +151,7 @@ export class DestinationConnectionDialogComponent {
   // type when it's editable here, else null → name/target-only).
   readonly chosenType = signal<DestinationType | null>(
     this.isCreate
-      ? null
+      ? (this.data.initialType ?? null)
       : (EDITABLE_TYPES.has(this.data.destination!.destinationType) ? this.data.destination!.destinationType : null),
   );
   readonly unsupportedType = computed(() => !this.isCreate && this.chosenType() === null);
@@ -135,18 +161,8 @@ export class DestinationConnectionDialogComponent {
    *  the matching engine's component (e.g. MySql, not SqlServer). */
   readonly formDestinationType = computed<DestinationType | null>(() => this.chosenType());
 
-  /** Create-flow type cards, derived from the TRANSFORMS catalog (single source of truth shared with the
-   *  workflow builder) and filtered to the types the current user can actually create. */
-  readonly createTypeCards = CREATE_TYPES
-    .map(type => DEST_CATALOG.get(type))
-    .filter((t): t is Transform => !!t)
-    .map(t => ({
-      destinationType: t.destinationType!,
-      title: t.name,
-      description: t.sub,
-      permissionCode: `${permissionPrefixFor(t.destinationType!)}.create`,
-    }))
-    .filter(card => this.permissions.hasPermission(card.permissionCode));
+  /** Create-flow type cards — see destinationCreateTypeCards. */
+  readonly createTypeCards = destinationCreateTypeCards(this.permissions);
 
   // Edit/view: Name + Target map straight to DestinationConfiguration's own persisted fields. The rich
   // sql/csv connection fields (server, credentials, folder, etc.) are never returned by the API — they were
@@ -227,7 +243,7 @@ export class DestinationConnectionDialogComponent {
     const type = this.formDestinationType();
     const form = this.connectionForm();
     if (!type || !form) return;
-    // Defense-in-depth: the trigger (DestinationConnectionListComponent.openNew()) already checked
+    // Defense-in-depth: the trigger (DestinationConfigurationKindComponent.create()) already checked
     // "holds any create code" before this dialog opened — this re-checks against the SPECIFIC type
     // the user just picked from the two type-choice cards, since holding sqlserver.create doesn't
     // imply csv.create or vice versa.
@@ -259,7 +275,7 @@ export class DestinationConnectionDialogComponent {
 
   private _saveEdit(): void {
     const destination = this.data.destination!;
-    // Defense-in-depth: DestinationConnectionListComponent.openEdit() already checked this before
+    // Defense-in-depth: DestinationConfigurationKindComponent.openEdit() already checked this before
     // opening the dialog — re-checked here against a permission change landing mid-edit.
     if (!this.actionGuard.ensure(`${permissionPrefixFor(destination.destinationType)}.edit`, `You do not have permission to edit this ${destination.destinationType} destination.`)) return;
     if (this.metaForm.invalid) {

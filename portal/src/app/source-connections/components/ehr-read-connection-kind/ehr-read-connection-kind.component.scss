@@ -1,0 +1,56 @@
+// ─── Source Connection modal (any per-vendor form — Epic, Cerner, Athenahealth, ...) ───────────────────────────
+// Each wrapper hosts EhrVendorSourceFormComponent, which assumes it sits inside a sized shell: its sticky
+// topbar/footer only pin correctly within a bounded, independently-scrolling box.
+.sc-modal-backdrop {
+  // Scoped to .shell-content rather than the viewport: the Source Connections page sets .list-page to
+  // `position: static`, so `inset: 0` resolves against the always definitely-sized content area (see
+  // source-connection-list.component.scss).
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 20, 30, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.sc-modal-panel {
+  // A definite `height`, not `max-height`: the form's :host/.eaf/.eaf-body chain is flex:1 all the way down so its
+  // white body stretches to meet the footer pinned at the true bottom, which needs a definite size to grow into.
+  width: 100%;
+  height: 100%;
+  background: var(--color-surface);
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  // overflow-y is intentionally NOT set: the form's own .eaf-body scrolls; a second scroll container here let short
+  // forms balloon to an indeterminate height.
+  app-epic-source-form,
+  app-cerner-source-form,
+  app-athenahealth-source-form,
+  app-allscripts-source-form,
+  app-healow-source-form,
+  app-meditech-source-form,
+  app-sample-source-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  &--maximized {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+  }
+}
+
+// backdrop-filter on an ancestor establishes a containing block for position:fixed descendants, which would defeat
+// "maximize" — same root cause and fix as .nld--maximized (see styles.scss).
+.sc-modal-backdrop:has(.sc-modal-panel--maximized) {
+  backdrop-filter: none !important;
+}

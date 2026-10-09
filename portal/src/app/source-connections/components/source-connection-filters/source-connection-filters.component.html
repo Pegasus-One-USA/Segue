@@ -1,0 +1,38 @@
+@if (showKind()) {
+  <div class="type-filter-wrap">
+    <select class="type-filter-select" data-testid="src-filter-kind" aria-label="Connection kind" [value]="value().kind" (change)="onKind($any($event.target).value)">
+      <option value="">All connections</option>
+      <option value="ehr-read">EHR</option>
+      <option value="database">Database</option>
+    </select>
+  </div>
+}
+
+<div class="type-filter-wrap">
+  <select class="type-filter-select" data-testid="src-filter-ehr" aria-label="EHR" [value]="value().vendor"
+          [disabled]="value().kind === 'database'" (change)="onVendor($any($event.target).value)">
+    <option value="">All EHRs</option>
+    @for (o of ehrOptions(); track o.value) {
+      <option [value]="o.value" [selected]="o.value === value().vendor">{{ o.label }}</option>
+    }
+  </select>
+</div>
+
+<div class="type-filter-wrap">
+  <select class="type-filter-select" data-testid="src-filter-audience" aria-label="Audience" [value]="value().audience"
+          [disabled]="value().kind === 'database'" (change)="onAudience($any($event.target).value)">
+    <option value="">All audiences</option>
+    @for (o of audienceOptions(); track o.value) {
+      <option [value]="o.value" [selected]="o.value === value().audience">{{ o.label }}</option>
+    }
+  </select>
+</div>
+
+<div class="type-filter-wrap">
+  <select class="type-filter-select" data-testid="src-filter-status" aria-label="Status" [value]="value().status"
+          [disabled]="value().kind === 'database'" (change)="onStatus($any($event.target).value)">
+    <option value="">All statuses</option>
+    <option value="true">Active</option>
+    <option value="false">Disabled</option>
+  </select>
+</div>

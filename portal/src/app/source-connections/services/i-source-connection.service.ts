@@ -18,6 +18,9 @@ export abstract class ISourceConnectionService {
   abstract delete(id: string): Observable<void>;
   /** Ids of every source connection currently referenced by at least one workflow's Source node. */
   abstract getUsedIds(): Observable<string[]>;
+  /** Ids of every connection an EHR write-back writes through: a workflow Destination node's dest_sourceConnectionId
+   *  or a saved EHR Write-Back destination's. */
+  abstract getWriteUsedIds(): Observable<string[]>;
   /** Generates a new SMART Backend Services (private_key_jwt) key pair server-side and stores the private key —
    *  not scoped to an existing connection, since the wizard calls this before a connection is saved.
    *  `sourceSystemType` (an exact SourceSystemType enum member name, e.g. "Epic", "Athenahealth") names the

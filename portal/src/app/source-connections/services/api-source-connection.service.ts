@@ -80,6 +80,14 @@ export class ApiSourceConnectionService extends ISourceConnectionService {
     );
   }
 
+  /** Always silent, like getUsedIds: a background check that only pre-disables Delete on in-use write connections. */
+  getWriteUsedIds(): Observable<string[]> {
+    const context = new HttpContext().set(SKIP_LOADER, true);
+    return this.http.get<string[]>(SOURCE_CONNECTIONS_ENDPOINTS.writeUsage, { context }).pipe(
+      catchError(err => throwError(() => err))
+    );
+  }
+
   generateSigningKey(sourceSystemType: string): Observable<GeneratedSigningKeyModel> {
     const params = new HttpParams().set('sourceSystemType', sourceSystemType);
     return this.http.post<GeneratedSigningKeyModel>(SOURCE_CONNECTIONS_ENDPOINTS.generateSigningKey, {}, { params }).pipe(

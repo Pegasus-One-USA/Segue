@@ -924,6 +924,39 @@ public static class WorkflowEndpoints
             return Results.Ok(usedDestinationIds);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
+        // Destination Connections page (and Source Connections, for a Read & Write connection): which source-connection
+        // ids an EHR write-back writes through right now — the dest_sourceConnectionId of any workflow Destination node,
+        // plus that of any saved EHR Write-Back destination. Used to lock Delete on a write connection still in use;
+        // the DELETE itself has no usage check, so this is a list-screen guard only.
+        group.MapGet("/workflows/ehr-write-connection-usage", async (
+            IWorkflowDefinitionStore store,
+            IConfigurationRepository configurationRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var workflows = await store.ListAsync(cancellationToken);
+            var usedFromNodes = workflows
+                .SelectMany(workflow => workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
+                .Select(node => TryGetConfigurationGuid(node.ConfigurationJson, "dest_sourceConnectionId", out var connectionId)
+                    ? connectionId
+                    : (Guid?)null);
+
+            var destinations = await configurationRepository.GetDestinationsAsync(cancellationToken);
+            var usedFromDestinations = destinations
+                .Where(destination => destination.DestinationType == DestinationType.EhrWriteBack)
+                .Select(destination => TryGetConfigurationGuid(destination.ConnectionMetadataJson, "dest_sourceConnectionId", out var connectionId)
+                    ? connectionId
+                    : (Guid?)null);
+
+            var usedConnectionIds = usedFromNodes
+                .Concat(usedFromDestinations)
+                .Where(connectionId => connectionId is not null && connectionId != Guid.Empty)
+                .Select(connectionId => connectionId!.Value)
+                .Distinct()
+                .ToArray();
+
+            return Results.Ok(usedConnectionIds);
+        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
         // Mapping Profiles master screen: which mapping profile ids are referenced right now, either by a workflow
         // node's config (mappingProfileId / the per-resource mappingProfileIds map — see BuildWorkflow above) or by
         // a persisted ResourcePipelineRoute (primary mapping, a composite ResourceMappings entry, or a parent

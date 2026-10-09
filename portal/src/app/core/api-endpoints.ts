@@ -111,6 +111,8 @@ export const SOURCE_CONNECTIONS_ENDPOINTS = {
   // WorkflowEndpoints, not ConfigurationsController — the usage check has to walk every workflow's Source
   // nodes, which only the Runtime workflow store can answer.
   usage: `${API_V1_BASE}/workflows/source-connection-usage`,
+  // Same store, Destination side: the connections EHR write-back nodes and EHR Write-Back destinations write through.
+  writeUsage: `${API_V1_BASE}/workflows/ehr-write-connection-usage`,
   // SourceConnectionsController — not scoped to an existing connection id, since the wizard calls this before
   // a connection is saved.
   generateSigningKey: `${API_V1_BASE}/source-connections/generate-signing-key`,

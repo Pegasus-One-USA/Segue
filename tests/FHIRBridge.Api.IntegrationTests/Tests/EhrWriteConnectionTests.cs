@@ -370,6 +370,78 @@ public sealed class EhrWriteConnectionTests(ApiFixture f)
         Assert.Equal("ReadWrite", (await GetConnectionAsync(originalId)).GetProperty("access").GetString());
     }
 
+    [Fact]
+    public async Task Write_connection_usage_lists_the_connections_write_back_nodes_and_destinations_write_through()
+    {
+        var fromNode = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+        var fromDestination = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+        var unused = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+
+        var workflow = await f.AdminClient.PostAsJsonAsync("/api/v1/workflows", new
+        {
+            Name = NewName("write-usage"),
+            IsEnabled = false,
+            Nodes = new[]
+            {
+                UsageNode("n-src", "EpicSourceNode", "Source", 0, new() { ["Resources"] = "AllergyIntolerance" }),
+                UsageNode("n-ewb", "EhrWriteBackDestinationNode", "Destination", 70, new()
+                {
+                    ["dest_dryRun"] = "true",
+                    ["dest_resources"] = "AllergyIntolerance",
+                    ["dest_sourceConnectionId"] = fromNode.ToString(),
+                }),
+            },
+            Edges = new[] { new { FromNodeId = "n-src", ToNodeId = "n-ewb" } },
+        });
+        await ApiFixture.EnsureOkAsync(workflow);
+        var destination = await f.AdminClient.PostAsJsonAsync("/api/v1/destinations", new
+        {
+            Name = NewName("ewb"),
+            DestinationType = "EhrWriteBack",
+            KeyVaultName = "test-vault",
+            SecretName = $"secret-{Guid.NewGuid():N}",
+            ConnectionMetadataJson = JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["dest_sourceConnectionId"] = fromDestination.ToString(),
+                ["dest_dryRun"] = "true",
+            }),
+        });
+        await ApiFixture.EnsureOkAsync(destination);
+
+        var resp = await f.AdminClient.GetAsync("/api/v1/workflows/ehr-write-connection-usage");
+
+        await ApiFixture.EnsureOkAsync(resp);
+        var used = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement
+            .EnumerateArray().Select(item => item.GetGuid()).ToHashSet();
+        Assert.Contains(fromNode, used);
+        Assert.Contains(fromDestination, used);
+        Assert.DoesNotContain(unused, used);
+    }
+
+    [Fact]
+    public async Task Write_connection_usage_is_for_admins_only()
+    {
+        using var viewer = await ClientWithAsync("sourceconnections.view", "ehrwriteback.view");
+
+        var resp = await viewer.GetAsync("/api/v1/workflows/ehr-write-connection-usage");
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    private static object UsageNode(string id, string nodeType, string category, int rank, Dictionary<string, string> settings) => new
+    {
+        Id = id,
+        NodeType = nodeType,
+        Category = category,
+        Rank = rank,
+        SubRank = 0,
+        DisplayName = nodeType,
+        ConfigurationJson = JsonSerializer.Serialize(settings),
+        PositionX = 0,
+        PositionY = 0,
+        IsEnabled = true,
+    };
+
     private Task<HttpResponseMessage> BuildAsync(object source, Guid? existingId, HttpClient? client = null, string? baseUrl = null)
     {
         if (baseUrl is not null)
