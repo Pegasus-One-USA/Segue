@@ -16,7 +16,7 @@ import {
   reflectComponentType,
 } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { forkJoin, of, Observable } from 'rxjs';
 import {
   catchError,
@@ -53,11 +53,12 @@ import {
   withTypeTicked,
 } from './ehr-write-type-grid/ehr-write-kinds.model';
 import { EhrReviewResourceTypesComponent } from './destination-forms/ehr-write-back/ehr-review-resource-types.component';
+import { EhrReviewNameComponent } from './destination-forms/ehr-write-back/ehr-review-name.component';
+import { EhrLiveWarningComponent } from './destination-forms/ehr-write-back/ehr-live-warning.component';
 import { EhrWriteTargetService } from './ehr-write-type-grid/ehr-write-target.service';
 import {
   EhrWriteVendor,
   savedWriteVendorOf,
-  savedWriteVendorOfMetadata,
   vendorLabel,
 } from './destination-forms/ehr-write-back/ehr-write-back.model';
 import { ehrWriteBackLabel } from '../../../connections/connection-labels';
@@ -559,6 +560,8 @@ interface ResolvedRuleOutputType {
     FhirRulesPanelComponent,
     EhrWriteTypeGridComponent,
     EhrReviewResourceTypesComponent,
+    EhrReviewNameComponent,
+    EhrLiveWarningComponent,
   ],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
@@ -971,6 +974,80 @@ export class DestinationWizardComponent implements OnInit {
     return isEhrWriteBackForm(form) ? form.reviewLines() : null;
   }
 
+  /** The destination's name field on Review: Step 1 is only the connection, so this is where the name is changed.
+   *  It starts as the chosen (or new) connection's name, shown as the placeholder when the field is emptied. EHR
+   *  Write-Back's form keeps it empty until changed and falls back to its connection's name itself. Null before the
+   *  form exists. */
+  reviewName(): { control: FormControl<string | null>; placeholder: string } | null {
+    if (this.isFhir()) return { control: this.fhirForm.controls.name, placeholder: this.step1Name() || this.destLabel() };
+    const form = this.activeForm();
+    if (!form) return null;
+    if (isEhrWriteBackForm(form)) return { control: form.nameControl(), placeholder: form.connectionName() ?? '' };
+    return { control: form.nameControl(), placeholder: this.step1Name() || this.destLabel() };
+  }
+
+  /** The name the destination had on leaving Step 1 (its connection's name): Review's placeholder, and what an
+   *  emptied name goes back to on save. */
+  readonly step1Name = signal('');
+  /** The name the destination record was last created or updated with this session; null when it was not saved here. */
+  private _provisionedName: string | null = null;
+
+  /** The Step 1 form's name control: FHIR's own, or the loaded form's. Null before the form exists. */
+  private _destinationNameControl(): FormControl<string | null> | null {
+    if (this.isFhir()) return this.fhirForm.controls.name;
+    try {
+      return this.activeForm()?.nameControl() ?? null;
+    } catch {
+      // A SQL-family wrapper's inner form is not created yet.
+      return null;
+    }
+  }
+
+  /** Step 1 hides the name, so a blank one (a new SQL connection starts without one) takes the type's label. */
+  private _fillBlankDestinationName(fallback: string): void {
+    const control = this._destinationNameControl();
+    if (control && !(control.value ?? '').trim()) control.setValue(fallback);
+  }
+
+  /** Step 1 hides each form's own name field (Review shows it), so it is not required there. The forms keep the rule
+   *  for Destination Connections, where the name is typed in; here a blank one is filled in on Next. Retried while
+   *  the form is not created yet, like _flushPendingFormPatch. */
+  private _relaxStep1NameRule(attempt = 0): void {
+    if (this.isEhrWriteBack() || this.isFhir()) return;
+    const control = this._destinationNameControl();
+    if (!control) {
+      if (attempt < 10) {
+        afterNextRender(() => this._relaxStep1NameRule(attempt + 1), { injector: this.injector });
+      }
+      return;
+    }
+    if (!control.hasValidator(Validators.required)) return;
+    control.removeValidators(Validators.required);
+    control.updateValueAndValidity();
+  }
+
+  /** The EHR a live EHR Write-Back writes into (Review's red warning); null for a test or dry run. */
+  ehrLiveLabel(): string | null {
+    const form = this.activeForm();
+    return isEhrWriteBackForm(form) ? form.liveEhrLabel() : null;
+  }
+
+  /** Step 1's saved-connection dropdown leaves the type's form closed until New connection is clicked (or a saved
+   *  connection is chosen, which fills it in). Without saved connections, or for a node reopened on its own
+   *  connection, the form shows straight away. Not used by EHR Write-Back, whose form is only the connection. */
+  readonly newConnectionOpen = signal(false);
+
+  showStep1Form(): boolean {
+    if (this.isEhrWriteBack() || !this.showConnectionModeToggle()) return true;
+    if (this.newConnectionOpen() || this.selectedExistingId()) return true;
+    return !this.existingOptionsLoading() && this.existingOptions().length === 0;
+  }
+
+  openNewConnection(): void {
+    if (this.selectedExistingId()) this.clearExistingConnection();
+    this.newConnectionOpen.set(true);
+  }
+
   // A saved node's fields (editing) or a picked existing connection's metadata can arrive before the Step 1
   // form component has actually been created (both can fire during ngOnInit, before the view — and this
   // outlet's child — exists). Queued here and flushed by the effect in the constructor the moment the form
@@ -991,7 +1068,8 @@ export class DestinationWizardComponent implements OnInit {
   private _step1Baseline: Record<string, unknown> | null = null;
 
   readonly fhirForm = this.fb.group({
-    name: ['Aidbox Production', [Validators.required]],
+    // Not required: Step 1 hides the name (Review shows it) and a blank one is filled in on Next.
+    name: ['Aidbox Production'],
     baseUrl: ['', [Validators.required]],
     project: ['', []],
     authType: ['oauth2', [Validators.required]],
@@ -2083,14 +2161,6 @@ export class DestinationWizardComponent implements OnInit {
     () => !this.editNode() || this.connectionMode() === 'existing',
   );
   readonly existingOptions = signal<DestinationConfigurationDto[]>([]);
-  /** What the "existing" dropdown offers: existingOptions, narrowed for an EHR tile to destinations that write to
-   *  (or, in a test run, stand in for) that tile's vendor. A record whose settings cannot be read is left out. */
-  readonly shownExistingOptions = computed(() => {
-    const options = this.existingOptions();
-    const vendor = this.ehrVendor();
-    if (!this.isEhrWriteBack() || !vendor) return options;
-    return options.filter((o) => savedWriteVendorOfMetadata(o.connectionMetadataJson) === vendor);
-  });
   readonly existingOptionsLoading = signal(false);
   readonly selectedExistingId = signal<string | null>(null);
 
@@ -2399,6 +2469,13 @@ export class DestinationWizardComponent implements OnInit {
         }),
       );
     });
+    // Each time a type's form is created: Step 1 hides its name field, so its name is not required there.
+    effect(() => {
+      const outlet = this.formOutlet();
+      this.activeFormType();
+      if (!outlet) return;
+      untracked(() => afterNextRender(() => this._relaxStep1NameRule(), { injector: this.injector }));
+    });
     // FHIR bypasses the outlet entirely (see isFhir()'s doc comment), so the effect above never fires for
     // it — fhirForm exists synchronously as a class field, so its baseline can be captured immediately
     // rather than waiting on afterNextRender()/an outlet that will never mount.
@@ -2528,8 +2605,8 @@ export class DestinationWizardComponent implements OnInit {
 
     // A switch between two EHR tiles (same destType, so the effect above does not fire): nothing chosen for the old
     // EHR fits the new one, so the wizard starts over on Step 1. The form clears a connection the new tile does not
-    // offer by itself; the existing-destination list is filtered by vendor at render time (shownExistingOptions), so
-    // it needs no reload. The dialog already confirmed before discarding progress.
+    // offer by itself; EHR Write-Back has no saved-connection list to reload. The dialog already confirmed before
+    // discarding progress.
     effect(() => {
       const vendor = this.ehrVendor();
       if (this._lastEhrVendor === undefined) {
@@ -2897,6 +2974,11 @@ export class DestinationWizardComponent implements OnInit {
   // ── navigation ────────────────────────────────────────────────────────────
   next(): void {
     if (this.step() === 1) {
+      // Step 1 is only the connection: the name follows it, and a blank one takes the type's label. Review shows it.
+      if (!this.isEhrWriteBack()) {
+        this._fillBlankDestinationName(this.destLabel());
+        this.step1Name.set((this._destinationNameControl()?.value ?? '').trim());
+      }
       // FHIR (Aidbox) is hand-rolled, not registry-routed (see isFhir()'s doc comment) — leaving Configure
       // first tests the base URL and credentials against the real server, and only provisions/advances once
       // that succeeds. There's no schema to introspect, so the test just validates the connection (and
@@ -3069,10 +3151,37 @@ export class DestinationWizardComponent implements OnInit {
       // Nothing hits the real database until this exact moment: every create-table/add-column/drop-column/
       // alter-column queued while mapping runs for real here, in order, before the mapping profile itself
       // is ever saved — see flushPendingSchemaOps.
-      this.flushPendingSchemaOps().subscribe((ok) => {
-        if (ok) this._save();
-      });
+      this._saveRenamedConnection(() =>
+        this.flushPendingSchemaOps().subscribe((ok) => {
+          if (ok) this._save();
+        }),
+      );
     }
+  }
+
+  /**
+   * Review is where the name is changed, but a new connection's record was already created on leaving Step 1 under
+   * the name it had then. When the name was changed on Review, that record is updated first, so it and the node
+   * carry the same name. An emptied name goes back to the connection's. A picked saved connection is not touched
+   * here: a changed name forks a new one at save (_save), as before. EHR Write-Back saves its record on leaving
+   * Options and keeps doing so.
+   */
+  private _saveRenamedConnection(onDone: () => void): void {
+    if (this.isEhrWriteBack() || this.chainNodeEntry()) {
+      onDone();
+      return;
+    }
+    if (this.step1Name()) this._fillBlankDestinationName(this.step1Name());
+    if (this.connectionMode() !== 'new' || !this.resolvedDestinationId() || this._provisionedName === null) {
+      onDone();
+      return;
+    }
+    const metadata = this.isFhir() ? this._getFhirMetadata() : this.activeForm()?.getMetadata();
+    if (!metadata || (metadata.fields['dest_name'] ?? '') === this._provisionedName) {
+      onDone();
+      return;
+    }
+    this.provisionDestinationConnection(metadata, onDone);
   }
 
   private _advancePastStep1(): void {
@@ -4471,6 +4580,7 @@ export class DestinationWizardComponent implements OnInit {
   clearExistingConnection(): void {
     this.connectionMode.set('new');
     this.selectedExistingId.set(null);
+    this.newConnectionOpen.set(false);
     this.selectedDeIdentificationProfileId.set(null);
     this._existingBaseline = null;
     const form = this.activeForm();
@@ -4487,10 +4597,13 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   private _loadExistingOptions(): void {
+    // EHR Write-Back's Step 1 is only its connection dropdown: there is no saved-destination list to offer. The one
+    // exception is a write-back node saved before that, from a picked saved destination (dest_connectionMode
+    // 'existing'): Save still needs that record to reuse it untouched or fork it, as it always did.
+    if (this.isEhrWriteBack() && this.connectionMode() !== 'existing') return;
     this.existingOptionsLoading.set(true);
     this.destinationConfigSvc
-      // EHR Write-Back asks the server for its own type only, so its first page is not crowded out by other types
-      // (shownExistingOptions then narrows it to the tile's vendor).
+      // EHR Write-Back asks the server for its own type only, so its first page is not crowded out by other types.
       .getPaged({
         isEnabled: true,
         page: 1,
@@ -5998,6 +6111,7 @@ export class DestinationWizardComponent implements OnInit {
       : this.destinationConfigSvc.create(request);
     obs.subscribe({
       next: (dto) => {
+        this._provisionedName = metadata.fields['dest_name'] ?? '';
         this.resolvedDestinationId.set(dto.id);
         this.resolvedSecretKeyVaultName.set(dto.keyVaultName);
         this.resolvedSecretName.set(dto.secretName);

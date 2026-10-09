@@ -1275,6 +1275,11 @@
     border: 1px solid color-mix(in srgb, var(--color-warning) 45%, white);
     color: var(--color-warning-strong);
   }
+  &--danger {
+    background: color-mix(in srgb, var(--color-error) 8%, white);
+    border: 1px solid color-mix(in srgb, var(--color-error) 45%, white);
+    color: var(--color-error);
+  }
 }
 
 .dw-recommend-callout {
@@ -1449,4 +1454,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dlw-adv-caret { transition: none; }
+}
+
+// Step 1 is only the connection: each type's own "Destination name" field is hidden in the wizard, and Review shows
+// the name instead (reviewName()). Scoped to the wizard's form host, so Destination Connections, which shows the same
+// forms, keeps the field.
+.dw-form-host ::ng-deep .dw-field:has(> [formcontrolname='name']) {
+  display: none;
 }

@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
+import { FormControl } from '@angular/forms';
 import { of, throwError } from 'rxjs';
 import { DestinationWizardComponent } from './destination-wizard.component';
 import { CanvasNode } from '../../../models/node-v2.model';
@@ -24,12 +25,15 @@ function fakeEhrForm(overrides: Partial<Record<string, unknown>> = {}) {
     dest_name: 'Epic write', dest_sourceConnectionId: 'c1', dest_ehrVendor: 'Epic', dest_dryRun: 'true',
     dest_testAsVendor: '', dest_maxWritesPerRun: '200', dest_enabledVariants: '', dest_createHolderEncounter: 'false',
   };
+  const nameControl = new FormControl<string | null>('');
   return {
     kind: 'ehrWriteBack',
     targetVendor: signal('Epic'),
     writableResourceTypes: signal(['AllergyIntolerance']),
     runMode: signal('dryRun'),
     connectionName: () => 'Epic prod',
+    nameControl: () => nameControl,
+    liveEhrLabel: (): string | null => null,
     // As the real form does: the kinds ticked on Step 2 become the saved switches.
     setWriteKinds: (kinds: EhrWriteKindSwitches) => {
       config['dest_enabledVariants'] = kinds.enabledVariants.join(',');
@@ -423,33 +427,28 @@ describe('DestinationWizardComponent — EHR Write-Back', () => {
     });
   });
 
-  describe('copy settings from a saved destination', () => {
-    it('asks the server for EHR write-back destinations only', () => {
+  it('Step 1 has no "copy settings from a saved destination" box: only the form Connection', () => {
+    create('ehrwriteback', { ehrVendor: 'Epic' });
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('#dw-existing')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Copy settings from');
+  });
+
+  describe('saved destinations', () => {
+    it('a new write-back asks for no saved destinations: Step 1 is only its connection', () => {
       create('ehrwriteback', { ehrVendor: 'Epic' });
+      (wizard as unknown as { _loadExistingOptions(): void })._loadExistingOptions();
+
+      expect(destinations.getPaged).not.toHaveBeenCalled();
+    });
+
+    it('a node saved from a picked saved destination still loads it, asking for EHR write-back destinations only', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      wizard.connectionMode.set('existing');
       (wizard as unknown as { _loadExistingOptions(): void })._loadExistingOptions();
 
       expect(destinations.getPaged.calls.mostRecent().args[0]).toEqual(
         jasmine.objectContaining({ destinationType: 'EhrWriteBack', isEnabled: true, page: 1, pageSize: 100 }));
-    });
-
-    it('offers only the tile\'s vendor, reading a test run as the vendor it stood in for', () => {
-      create('ehrwriteback', { ehrVendor: 'Epic' });
-      wizard.existingOptions.set([
-        destination('epic-live', { dest_ehrVendor: 'Epic' }),
-        destination('athena', { dest_ehrVendor: 'Athenahealth' }),
-        destination('epic-test', { dest_ehrVendor: 'GenericFhir', dest_testAsVendor: 'Epic' }),
-        destination('fhir', { dest_ehrVendor: 'GenericFhir' }),
-        { ...destination('broken', {}), connectionMetadataJson: '{not json' } as DestinationConfigurationDto,
-        destination('no-vendor', {}),
-      ]);
-
-      expect(wizard.shownExistingOptions().map(o => o.id)).toEqual(['epic-live', 'epic-test']);
-    });
-
-    it('without a tile, offers every saved write-back destination', () => {
-      create('ehrwriteback');
-      wizard.existingOptions.set([destination('a', { dest_ehrVendor: 'Epic' }), destination('b', {})]);
-      expect(wizard.shownExistingOptions().map(o => o.id)).toEqual(['a', 'b']);
     });
   });
 
@@ -462,12 +461,35 @@ describe('DestinationWizardComponent — EHR Write-Back', () => {
       expect(wizard.ehrReviewLines()).toEqual({ writesTo: 'w', mode: 'm' });
     });
 
+    it('lets the user name the destination on Review, defaulting to the connection name', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      expect(wizard.reviewName()).toBeNull();
+      const form = fakeEhrForm();
+      useForm(form);
+      const name = wizard.reviewName()!;
+      expect(name.placeholder).toBe('Epic prod');
+      expect(name.control).toBe(form.nameControl());
+    });
+
+    it('warns in red only for a live run into an EHR', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      useForm(fakeEhrForm());
+      expect(wizard.ehrLiveLabel()).toBeNull();
+
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      useForm(fakeEhrForm({ liveEhrLabel: () => 'Epic' }));
+      wizard.step.set(4);
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="ewb-live-warning"]')?.textContent?.trim())
+        .toBe('Live: records will be written into Epic. This cannot be undone.');
+    });
+
     it('names the destination type by the EHR of the tile', () => {
       create('ehrwriteback', { ehrVendor: 'Healow' });
       expect(wizard.reviewDestLabel()).toBe('EHR write-back — eClinicalWorks');
 
       create('ehrwriteback', { ehrVendor: 'GenericFhir' });
-      expect(wizard.reviewDestLabel()).toBe('EHR write-back — FHIR server');
+      expect(wizard.reviewDestLabel()).toBe('EHR write-back — FHIR test server');
 
       create('sql');
       expect(wizard.reviewDestLabel()).toBe('SQL Server');
@@ -511,11 +533,11 @@ describe('DestinationWizardComponent — EHR Write-Back', () => {
       expect(target()!.vendor).toBe('Epic');
     });
 
-    it('a legacy dry run that was also a test run is a plain dry run: the connection\'s own activation counts', () => {
+    it('a dry run over a test server stands in for the EHR with everything activated, as a test run does', () => {
       reopen({ ...LEGACY_TEST, dest_dryRun: 'true' }, 'Epic');
 
       expect(capabilities.writableResourceTypes).toHaveBeenCalledWith('Epic');
-      expect(target()!.vendorWriteApisActivated).toBeFalse();
+      expect(target()!.vendorWriteApisActivated).toBeTrue();
     });
   });
 

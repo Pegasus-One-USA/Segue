@@ -11,7 +11,7 @@ describe('connection labels', () => {
   });
 
   it('calls a Generic FHIR write connection a FHIR server', () => {
-    expect(writeVendorLabel('GenericFhir')).toBe('FHIR server');
+    expect(writeVendorLabel('GenericFhir')).toBe('FHIR test server');
     expect(writeVendorLabel('Healow')).toBe('eClinicalWorks');
     expect(writeVendorLabel('Cerner')).toBe('Cerner (Oracle Health)');
   });
@@ -33,7 +33,7 @@ describe('connection labels', () => {
     expect(ehrWriteBackLabel('Epic')).toBe('EHR write-back — Epic');
     expect(ehrWriteBackLabel('Healow')).toBe('EHR write-back — eClinicalWorks');
     expect(ehrWriteBackLabel('Athenahealth')).toBe('EHR write-back — athenahealth');
-    expect(ehrWriteBackLabel('GenericFhir')).toBe('EHR write-back — FHIR server');
+    expect(ehrWriteBackLabel('GenericFhir')).toBe('EHR write-back — FHIR test server');
     expect(ehrWriteBackLabel(null)).toBe('EHR write-back');
   });
 

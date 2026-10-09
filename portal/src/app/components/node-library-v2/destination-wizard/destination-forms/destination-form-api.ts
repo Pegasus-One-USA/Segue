@@ -1,4 +1,5 @@
 import { Signal } from '@angular/core';
+import { FormControl } from '@angular/forms';
 import { DestinationConfigFormComponent } from '../../../shared-v2/config-form/config-form-v2.contract';
 import { DestinationProbeRequest, DestinationTable } from '../../../../services/destination-schema.service';
 import { EhrWriteOptIns } from '../ehr-write-type-grid/ehr-write-type-grid.model';
@@ -31,6 +32,9 @@ export interface WizardDestinationFormApi extends DestinationConfigFormComponent
   patchFrom(fields: Record<string, string>, target?: string | null): void;
   /** Back to this form's blank defaults — the "✕ clear existing connection" affordance. */
   reset(): void;
+  /** The destination's name (dest_name). The wizard's Step 1 is only the connection, so it hides this field there,
+   *  fills it from the connection, and lets the user change it on Review. Destination Connections shows it as usual. */
+  nameControl(): FormControl<string | null>;
 }
 
 /** Extra members exposed only by the SQL-family wrappers (SqlServer/AzureSql/MySql/PostgreSql) — the live
@@ -140,7 +144,7 @@ export interface EhrWriteBackFormApi extends WizardDestinationFormApi {
   readonly targetVendor: Signal<string | null>;
   /** Resource types the selected target accepts writes for; empty when none (or before a choice). */
   readonly writableResourceTypes: Signal<string[]>;
-  /** Null while no run mode is chosen (Dry run turned off in System Settings and only Live offered). */
+  /** How it runs, from the connection chosen (an EHR: live; a test server: test) and Dry run; null before a connection. */
   readonly runMode: Signal<EhrRunMode | null>;
   /** The chosen connection's name, or null before one is chosen. */
   connectionName(): string | null;
@@ -152,6 +156,8 @@ export interface EhrWriteBackFormApi extends WizardDestinationFormApi {
   optionsValid(): boolean;
   /** The Review step's lines: where the destination writes and in which run mode. */
   reviewLines(): { writesTo: string; mode: string };
+  /** The EHR a live run writes into; null for a test run, a dry run or a plain FHIR server. */
+  liveEhrLabel(): string | null;
 }
 
 /** Keyed on its own `kind` marker, for the same reason as isMongoForm. */

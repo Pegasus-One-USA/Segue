@@ -9,7 +9,7 @@ import { CanvasNode } from '../../models/node-v2.model';
 import { ISourceConnectionService } from '../../source-connections/services/i-source-connection.service';
 import { PermissionService } from '../../auth/services/permission.service';
 
-const EHR_TILES = ['dest-ehr-epic', 'dest-ehr-ecw', 'dest-ehr-athena', 'dest-ehr-fhir'];
+const EHR_TILES = ['dest-ehr-epic', 'dest-ehr-ecw', 'dest-ehr-athena'];
 
 /**
  * The Node Library offers one destination tile per EHR under an "EHR" heading (the Fabric parent/children pattern).
@@ -134,7 +134,7 @@ describe('NodeLibraryDialogComponent — EHR destination tiles', () => {
     create();
     dialog.selectItem(item('dest-ehr-epic'));
     dialog.destWizardHasProgressed.set(true);
-    dialog.selectItem(item('dest-ehr-fhir'));
+    dialog.selectItem(item('dest-ehr-athena'));
 
     dialog.cancelDestSwitch();
 

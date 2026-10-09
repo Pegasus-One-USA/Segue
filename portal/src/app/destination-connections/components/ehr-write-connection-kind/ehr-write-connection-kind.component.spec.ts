@@ -81,7 +81,7 @@ describe('EhrWriteConnectionKindComponent', () => {
       kind: 'ehr-write', typeLabel: 'EHR write connection — athenahealth', writeApis: 'Activated',
       filterKeys: ['kind:ehr-write', 'ehr-write:Athenahealth'],
     }));
-    expect(hapi.typeLabel).toBe('EHR write connection — FHIR server');
+    expect(hapi.typeLabel).toBe('EHR write connection — FHIR test server');
     expect(hapi.writeApis).toBeNull();
   });
 

@@ -83,66 +83,50 @@
         }
       </div>
 
-      <!-- No explicit New/Existing toggle — the dropdown is always offered (canvas create only, see
-           showConnectionModeToggle); leaving it unselected just means "New connection". -->
-      @if (showConnectionModeToggle()) {
+      <!-- Step 1 is the Connection: the saved connections for this tile plus New connection (canvas create only, see
+           showConnectionModeToggle). The type's own form opens for New connection, or fills in from a chosen saved
+           connection (see showStep1Form). EHR Write-Back's form is only its connection dropdown, so it has none of this. -->
+      @if (showConnectionModeToggle() && !isEhrWriteBack()) {
         <div class="dw-field dw-field--full">
-          <label class="dw-label" for="dw-existing">
-            @if (isEhrWriteBack()) {
-              Copy settings from a saved {{ ehrLabel() }} destination (optional)
-            } @else {
-              Existing {{ destLabel() }} connection
-            }
-          </label>
+          <label class="dw-label" for="dw-existing">Connection</label>
           <div class="dw-existing-connection-row">
             <div class="dw-select-wrap">
               <!-- existingOptions() loads async (getPaged + a hasExecutionHistory check per candidate) — on
                    first render (e.g. reopening a node whose connection was already picked) selectedExistingId()
-                   is already restored, but no matching <option> exists yet. A [value] binding on the <select>
-                   itself doesn't work around this: Angular updates a host element's own property bindings
-                   BEFORE processing its child content, so even once existingOptions() loads, [value] would be
-                   (re-)applied in the same change-detection pass but strictly before the @for below inserts the
-                   matching <option> — so it still finds nothing to select. [selected] per <option> instead is
-                   evaluated as part of THAT option's own creation, which by construction only happens once it
-                   already exists — no ordering race. -->
+                   is already restored, but no matching <option> exists yet. [selected] per <option> is evaluated as
+                   part of THAT option's own creation, so there is no ordering race (a [value] on the <select> is
+                   applied before its options exist). -->
               <select
                 id="dw-existing"
                 class="dw-select"
                 [disabled]="existingOptionsLoading()"
                 (change)="selectExisting($any($event.target).value)"
               >
-                <option value="" disabled [selected]="!selectedExistingId()">{{ existingOptionsLoading() ? 'Loading…' : isEhrWriteBack() ? 'Choose a saved destination to copy…' : 'Choose a connection…' }}</option>
-                @for (o of shownExistingOptions(); track o.id) {
+                <option value="" disabled [selected]="!selectedExistingId()">{{ existingOptionsLoading() ? 'Loading…' : 'Choose a saved connection…' }}</option>
+                @for (o of existingOptions(); track o.id) {
                   <option [value]="o.id" [selected]="o.id === selectedExistingId()">{{ o.name }} ({{ o.destinationType }})</option>
                 }
               </select>
             </div>
             @if (selectedExistingId()) {
-              <button type="button" class="dw-clear-btn" title="Clear selected connection — start a new one instead"
+              <button type="button" class="dw-clear-btn" title="Clear the chosen connection"
                       (click)="clearExistingConnection()">✕</button>
             }
+            <button type="button" class="dw-btn" data-testid="dw-new-connection" (click)="openNewConnection()">New connection</button>
           </div>
-          @if (!existingOptionsLoading() && shownExistingOptions().length === 0 && isEhrWriteBack()) {
-            <span class="dw-hint">No saved {{ ehrLabel() }} destination to copy — set it up below.</span>
-          } @else if (!existingOptionsLoading() && shownExistingOptions().length === 0) {
-            <span class="dw-hint">No reusable {{ destLabel() }} connections found (connections with execution history can't be reused here) — configure a new one below.</span>
-          } @else {
-            <span class="dw-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</span>
+          @if (!existingOptionsLoading() && existingOptions().length === 0) {
+            <span class="dw-hint">No saved {{ destLabel() }} connection yet (one that has already run can't be reused here). Set up a new one below.</span>
+          } @else if (selectedExistingId()) {
+            <span class="dw-hint">Save without changing anything to use this connection as it is; change a field and Save creates a new, separate connection.</span>
           }
         </div>
       }
 
-      @if (isFhir()) {
+      @if (isFhir() && showStep1Form()) {
         <form [formGroup]="fhirForm" class="dw-form" autocomplete="off">
           <div class="dw-grid-3">
 
-            <div class="dw-field" [class.dw-field--error]="fhirForm.get('name')!.invalid && fhirForm.get('name')!.touched">
-              <label class="dw-label" for="dw-fhir-name">Destination name <span class="dw-req">*</span></label>
-              <input id="dw-fhir-name" class="dw-input" formControlName="name" placeholder="e.g. Aidbox Production" />
-              @if (fhirForm.get('name')!.invalid && fhirForm.get('name')!.touched) {
-                <span class="dw-error">Destination name is required.</span>
-              }
-            </div>
+            <!-- No name here: Step 1 is only the connection. The name is changed on Review. -->
 
             <div class="dw-field" [class.dw-field--error]="fhirForm.get('baseUrl')!.invalid && fhirForm.get('baseUrl')!.touched">
               <label class="dw-label" for="dw-fhir-baseUrl">Base URL <span class="dw-req">*</span></label>
@@ -289,7 +273,9 @@
       </div>
     }
     @if (!isFhir()) {
-      <div [class.dw-hidden]="!isStepActive(1) && !(isStepActive(3) && isEhrWriteBack() && !chainNodeEntry())">
+      <!-- dw-form-host hides each type's own "Destination name" field: Step 1 is only the connection, and Review shows
+           the name (see the stylesheet). Destination Connections shows the same forms with the field. -->
+      <div class="dw-form-host" [class.dw-hidden]="(!isStepActive(1) || !showStep1Form()) && !(isStepActive(3) && isEhrWriteBack() && !chainNodeEntry())">
         <ng-container [ngComponentOutlet]="activeFormType()" [ngComponentOutletInputs]="boundFormInputs()" />
       </div>
     }
@@ -974,6 +960,12 @@
       </div>
 
       <div class="dw-review-grid">
+        <!-- The name: Step 1 is only the connection, so it is changed here. -->
+        @if (reviewName(); as name) {
+          <div class="dw-review-card">
+            <app-ehr-review-name [control]="name.control" [placeholder]="name.placeholder" />
+          </div>
+        }
         <div class="dw-review-card">
           <span class="dw-review-key">Destination type</span>
           <span class="dw-review-val">{{ reviewDestLabel() }}</span>
@@ -996,10 +988,6 @@
         </div>
         @if (isSql()) {
           <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
-          <div class="dw-review-card">
             <span class="dw-review-key">SQL Server</span>
             <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_server'] || '—' }}</span>
           </div>
@@ -1017,18 +1005,10 @@
           </div>
         } @else if (isMongo()) {
           <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
-          <div class="dw-review-card">
             <span class="dw-review-key">Write mode</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_writeMode'] }}</span>
           </div>
         } @else if (isMedplum()) {
-          <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
           <div class="dw-review-card">
             <span class="dw-review-key">FHIR base URL</span>
             <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_medplumBaseUrl'] || '—' }}</span>
@@ -1042,10 +1022,6 @@
             <span class="dw-review-val">{{ activeFormConfig()['dest_medplumWriteMode'] }}</span>
           </div>
         } @else if (isFhir()) {
-          <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ fhirForm.value.name }}</span>
-          </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Base URL</span>
             <span class="dw-review-val dw-mono">{{ fhirForm.value.baseUrl || '—' }}</span>
@@ -1072,10 +1048,6 @@
 
           </div>
         } @else if (isBlob()) {
-          <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Container</span>
             <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_blobContainer'] || '—' }}</span>
@@ -1110,10 +1082,6 @@
           }
         } @else if (isDataLake()) {
           <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
-          <div class="dw-review-card">
             <span class="dw-review-key">Endpoint</span>
             <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_dlwEndpointUrl'] || 'stored as the secret' }}</span>
           </div>
@@ -1126,10 +1094,6 @@
             <span class="dw-review-val">{{ activeFormConfig()['dest_dlwPayloadShape'] }}, up to {{ activeFormConfig()['dest_dlwBatchSize'] }} records per request</span>
           </div>
         } @else if (isFabric()) {
-          <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Workspace</span>
             <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_fabricWorkspace'] || '—' }}</span>
@@ -1148,10 +1112,6 @@
           </div>
         } @else if (isApiEndpoint()) {
           <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
-          <div class="dw-review-card">
             <span class="dw-review-key">Endpoint</span>
             <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_apiHttpMethod'] }} {{ activeFormConfig()['dest_apiEndpointUrl'] }}</span>
           </div>
@@ -1164,10 +1124,6 @@
             <span class="dw-review-val">{{ activeFormConfig()['dest_apiPayloadShape'] }}, up to {{ activeFormConfig()['dest_apiBatchSize'] }} records per request{{ activeFormConfig()['dest_apiBodyTemplateJson'] ? ' (custom body template)' : '' }}</span>
           </div>
         } @else if (isEhrWriteBack()) {
-          <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
           @if (ehrReviewLines(); as lines) {
             <div class="dw-review-card">
               <span class="dw-review-key">Writes to</span>
@@ -1184,10 +1140,6 @@
           </div>
         } @else if (isAzureFhir()) {
           <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
-          <div class="dw-review-card">
             <span class="dw-review-key">FHIR service URL</span>
             <span class="dw-review-val dw-mono">{{ activeFormConfig()['dest_baseUrl'] || '—' }}</span>
           </div>
@@ -1196,10 +1148,6 @@
             <span class="dw-review-val">{{ activeFormConfig()['dest_authType'] === 'managedIdentity' ? 'Managed identity' : 'Client credentials' }}</span>
           </div>
         } @else {
-          <div class="dw-review-card">
-            <span class="dw-review-key">Name</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
-          </div>
           <div class="dw-review-card">
             <span class="dw-review-key">Delivery mode</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_deliveryMode'] }}</span>
@@ -1225,6 +1173,9 @@
         }
       </div>
 
+      @if (ehrLiveLabel(); as ehr) {
+        <app-ehr-live-warning [ehr]="ehr" />
+      }
       @if (isEhrWriteBack()) {
         <div class="dw-callout dw-callout--info">
           Shaped by the EHR's write rules: only the elements its API accepts are sent, and inactive and

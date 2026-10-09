@@ -25,7 +25,7 @@ export const WRITE_VENDORS: readonly WriteVendor[] = [
   { value: 'Epic', sourceId: 'epic', label: 'Epic', sub: 'Epic write-back over a Backend System app.' },
   { value: 'Healow', sourceId: 'healow', label: 'eClinicalWorks', sub: 'eClinicalWorks (Healow) FHIR write APIs.' },
   { value: 'Athenahealth', sourceId: 'athena', label: 'athenahealth', sub: 'athenaOne write APIs.' },
-  { value: 'GenericFhir', sourceId: 'generic-fhir', label: 'FHIR server', sub: 'Plain FHIR R4, or a test server that receives what an EHR would.', abbr: 'FHR' },
+  { value: 'GenericFhir', sourceId: 'generic-fhir', label: 'FHIR test server', sub: 'A FHIR R4 test server that receives exactly what an EHR would; nothing reaches the EHR.', abbr: 'FHR' },
 ];
 
 /** How each write vendor reads to an admin. */

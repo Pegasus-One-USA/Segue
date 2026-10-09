@@ -1,13 +1,10 @@
 import {
   WritableTarget,
-  connectionsFor,
-  defaultRunMode,
+  connectionGroupsFor,
   ehrReviewLines,
   isEhrWriteVendor,
   isTestableVendor,
-  runModeFields,
   runModeOf,
-  runModesFor,
   savedWriteVendorOf,
   vendorLabel,
 } from './ehr-write-back.model';
@@ -20,75 +17,32 @@ function target(id: string, vendor: string, testableVendors: string[] = []): Wri
   };
 }
 
-/** Run mode is saved as dest_dryRun + dest_testAsVendor; these helpers are the only translation both ways. */
+/** Run mode is saved as dest_dryRun + dest_testAsVendor; runModeOf reads it back as a reopened node and Review do. */
 describe('ehr-write-back.model', () => {
   describe('runModeOf', () => {
     it('reads a live run, a dry run and a test run', () => {
-      expect(runModeOf({ dest_dryRun: 'false' })).toEqual({ mode: 'live', droppedTestServer: false });
-      expect(runModeOf({ dest_dryRun: 'true' })).toEqual({ mode: 'dryRun', droppedTestServer: false });
-      expect(runModeOf({ dest_dryRun: 'false', dest_testAsVendor: 'Epic' })).toEqual({ mode: 'test', droppedTestServer: false });
+      expect(runModeOf({ dest_dryRun: 'false' })).toBe('live');
+      expect(runModeOf({ dest_dryRun: 'true' })).toBe('dryRun');
+      expect(runModeOf({ dest_dryRun: 'false', dest_testAsVendor: 'Epic' })).toBe('test');
     });
 
     it('treats anything but an explicit false as a dry run, as the executor does', () => {
-      expect(runModeOf({}).mode).toBe('dryRun');
-      expect(runModeOf({ dest_dryRun: '' }).mode).toBe('dryRun');
-      expect(runModeOf({ dest_dryRun: 'FALSE' }).mode).toBe('dryRun');
+      expect(runModeOf({})).toBe('dryRun');
+      expect(runModeOf({ dest_dryRun: '' })).toBe('dryRun');
+      expect(runModeOf({ dest_dryRun: 'FALSE' })).toBe('dryRun');
     });
 
-    it('reopens a test run that was also a dry run as a plain dry run, flagging the dropped test server', () => {
-      expect(runModeOf({ dest_dryRun: 'true', dest_testAsVendor: 'Healow' })).toEqual({ mode: 'dryRun', droppedTestServer: true });
-      expect(runModeOf({ dest_testAsVendor: 'Epic' })).toEqual({ mode: 'dryRun', droppedTestServer: true });
+    it('a dry run over a test server is a dry run', () => {
+      expect(runModeOf({ dest_dryRun: 'true', dest_testAsVendor: 'Healow' })).toBe('dryRun');
     });
 
     it('ignores a test-as vendor that cannot be tested', () => {
-      expect(runModeOf({ dest_dryRun: 'false', dest_testAsVendor: 'GenericFhir' })).toEqual({ mode: 'live', droppedTestServer: false });
-      expect(runModeOf({ dest_dryRun: 'false', dest_testAsVendor: 'Cerner' })).toEqual({ mode: 'live', droppedTestServer: false });
+      expect(runModeOf({ dest_dryRun: 'false', dest_testAsVendor: 'GenericFhir' })).toBe('live');
+      expect(runModeOf({ dest_dryRun: 'false', dest_testAsVendor: 'Cerner' })).toBe('live');
     });
   });
 
-  describe('runModeFields', () => {
-    it('writes each mode', () => {
-      expect(runModeFields('live', 'Epic')).toEqual({ dest_dryRun: 'false', dest_testAsVendor: '' });
-      expect(runModeFields('dryRun', 'Athenahealth')).toEqual({ dest_dryRun: 'true', dest_testAsVendor: '' });
-      expect(runModeFields('test', 'Healow')).toEqual({ dest_dryRun: 'false', dest_testAsVendor: 'Healow' });
-      expect(runModeFields('live', 'GenericFhir')).toEqual({ dest_dryRun: 'false', dest_testAsVendor: '' });
-      expect(runModeFields('dryRun', null)).toEqual({ dest_dryRun: 'true', dest_testAsVendor: '' });
-    });
-
-    it('refuses a test run for a vendor a test server cannot stand in for', () => {
-      expect(() => runModeFields('test', 'GenericFhir')).toThrow();
-      expect(() => runModeFields('test', null)).toThrow();
-    });
-
-    it('round-trips through runModeOf', () => {
-      for (const mode of ['live', 'dryRun', 'test'] as const) {
-        expect(runModeOf(runModeFields(mode, 'Epic')).mode).toBe(mode);
-      }
-    });
-  });
-
-  it('offers Test only for a vendor a test server can stand in for', () => {
-    expect(runModesFor('Epic')).toEqual(['live', 'dryRun', 'test']);
-    expect(runModesFor('Healow')).toEqual(['live', 'dryRun', 'test']);
-    expect(runModesFor('Athenahealth')).toEqual(['live', 'dryRun', 'test']);
-    expect(runModesFor('GenericFhir')).toEqual(['live', 'dryRun']);
-    expect(runModesFor(null)).toEqual(['live', 'dryRun']);
-  });
-
-  it('leaves Dry run out when it is not offered (turned off in System Settings)', () => {
-    expect(runModesFor('Epic', false)).toEqual(['live', 'test']);
-    expect(runModesFor('GenericFhir', false)).toEqual(['live']);
-    expect(runModesFor(null, false)).toEqual(['live']);
-    expect(runModesFor('Epic', true)).toEqual(['live', 'dryRun', 'test']);
-  });
-
-  it('starts in Dry run, else Test, and never in Live', () => {
-    expect(defaultRunMode(['live', 'dryRun', 'test'])).toBe('dryRun');
-    expect(defaultRunMode(['live', 'test'])).toBe('test');
-    expect(defaultRunMode(['live'])).toBeNull();
-  });
-
-  describe('connectionsFor', () => {
+  describe('connectionGroupsFor', () => {
     const targets = [
       target('epic', 'Epic'),
       target('athena', 'Athenahealth'),
@@ -97,24 +51,17 @@ describe('ehr-write-back.model', () => {
     ];
     const ids = (list: WritableTarget[]) => list.map(t => t.id);
 
-    it('offers the vendor\'s own connections for Live and Dry run', () => {
-      expect(ids(connectionsFor(targets, 'Epic', 'live'))).toEqual(['epic']);
-      expect(ids(connectionsFor(targets, 'Athenahealth', 'dryRun'))).toEqual(['athena']);
-      expect(ids(connectionsFor(targets, 'GenericFhir', 'live'))).toEqual(['hapi-all', 'hapi-ecw']);
+    it("groups the EHR's own connections and the test servers that stand in for it", () => {
+      const epic = connectionGroupsFor(targets, 'Epic');
+      expect(ids(epic.own)).toEqual(['epic']);
+      expect(ids(epic.testServers)).toEqual(['hapi-all']);
+      expect(ids(connectionGroupsFor(targets, 'Healow').testServers)).toEqual(['hapi-all', 'hapi-ecw']);
     });
 
-    it('offers FHIR servers that can stand in for the vendor in a test run', () => {
-      expect(ids(connectionsFor(targets, 'Epic', 'test'))).toEqual(['hapi-all']);
-      expect(ids(connectionsFor(targets, 'Healow', 'test'))).toEqual(['hapi-all', 'hapi-ecw']);
-    });
-
-    it('lists the vendor\'s own connections while no run mode is chosen', () => {
-      expect(ids(connectionsFor(targets, 'Epic', null))).toEqual(['epic']);
-    });
-
-    it('offers everything while no vendor is known', () => {
-      expect(ids(connectionsFor(targets, null, 'live'))).toEqual(ids(targets));
-      expect(ids(connectionsFor(targets, null, 'dryRun'))).toEqual(ids(targets));
+    it('a FHIR server has no test servers of its own', () => {
+      const fhir = connectionGroupsFor(targets, 'GenericFhir');
+      expect(ids(fhir.own)).toEqual(['hapi-all', 'hapi-ecw']);
+      expect(fhir.testServers).toEqual([]);
     });
   });
 
@@ -131,7 +78,7 @@ describe('ehr-write-back.model', () => {
 
   it('labels vendors as admins call them', () => {
     expect(vendorLabel('Healow')).toBe('eClinicalWorks');
-    expect(vendorLabel('GenericFhir')).toBe('FHIR server');
+    expect(vendorLabel('GenericFhir')).toBe('FHIR test server');
     expect(vendorLabel('Other')).toBe('Other');
     expect(vendorLabel(null)).toBe('');
   });
@@ -172,7 +119,14 @@ describe('ehr-write-back.model', () => {
     it('a test run', () => {
       expect(ehrReviewLines(config({ dest_dryRun: 'false', dest_testAsVendor: 'Healow' }), 'Healow', 'Epic prod')).toEqual({
         writesTo: 'Epic prod (FHIR test server), shaped as eClinicalWorks',
-        mode: 'Test on FHIR server: nothing reaches eClinicalWorks, up to 200 records per run',
+        mode: 'Test run: nothing reaches eClinicalWorks, up to 200 records per run',
+      });
+    });
+
+    it('a dry run over a test server', () => {
+      expect(ehrReviewLines(config({ dest_dryRun: 'true', dest_testAsVendor: 'Healow' }), 'Healow', 'HAPI')).toEqual({
+        writesTo: 'HAPI (FHIR test server), shaped as eClinicalWorks',
+        mode: 'Dry run: checks every record, sends nothing, up to 200 records per run',
       });
     });
 

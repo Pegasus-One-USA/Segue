@@ -35,7 +35,7 @@ export class GenericFhirWriteConnectionFormComponent implements OnInit {
   readonly error = signal<string | null>(null);
 
   readonly form = this.fb.nonNullable.group({
-    name: ['FHIR server', [Validators.required, Validators.maxLength(200)]],
+    name: ['FHIR test server', [Validators.required, Validators.maxLength(200)]],
     baseUrl: ['', [Validators.required, Validators.pattern(/^https?:\/\/\S+$/i)]],
   });
 

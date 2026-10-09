@@ -4,17 +4,18 @@ import { PermissionService } from '../../../../../auth/services/permission.servi
 import { SourceConnectionModel } from '../../../../../source-connections/models/source-connection.model';
 import { creatableWriteVendorCards } from '../../../../../connections/connection-permissions';
 import { EhrWriteConnectionCreateComponent } from '../../../../../destination-connections/components/ehr-write-connection-create/ehr-write-connection-create.component';
-import { EhrRunMode, EhrWriteVendor, WritableTarget, vendorLabel } from './ehr-write-back.model';
+import { EhrWriteVendor, WritableTarget, isTestableVendor, vendorLabel } from './ehr-write-back.model';
 
 /** Why the write connections could not be listed. */
 export type EhrWriteTargetsError = 'noViewPermission' | 'failed';
 
 /**
- * The write connection an EHR Write-Back destination writes through ("Write to"), or in a test run the FHIR test
- * server that stands in for the EHR ("Test server"). Only the connections that fit the run mode are passed in. New
- * connection creates one on the go (the shared create component); it is offered only to a role that may list write
- * connections here (sourceconnections.view, the right this picker's own list needs, so the new one can be picked) and
- * create one for this vendor (creatableWriteVendorCards: ehrwriteback.create plus the vendor's own .create).
+ * Step 1 of an EHR Write-Back destination: the one "Connection" dropdown. For an EHR tile it shows two groups, the
+ * EHR's own write connections (a live run) and the FHIR test servers that receive exactly what the EHR would (a test
+ * run); without a vendor it lists every write connection. Nothing is ever chosen for the user. New connection creates
+ * one on the go (the shared create component, as on Destination Connections): for an EHR tile, either an EHR
+ * connection or a test server. It is offered only to a role that may list write connections here
+ * (sourceconnections.view, so the new one can be picked) and create one for that vendor (creatableWriteVendorCards).
  */
 @Component({
   selector: 'app-ehr-write-connection-picker',
@@ -25,35 +26,55 @@ export type EhrWriteTargetsError = 'noViewPermission' | 'failed';
   styles: [':host { display: block; }'],
   template: `
     <div class="dw-field" [class.dw-field--error]="control().invalid && control().touched">
-      <label class="dw-label" for="dw-ewb-target">{{ runMode() === 'test' ? 'Test server' : 'Write to' }} <span class="dw-req">*</span></label>
+      <label class="dw-label" for="dw-ewb-target">Connection <span class="dw-req">*</span></label>
       <div class="dw-existing-connection-row">
         <div class="dw-select-wrap">
           <select id="dw-ewb-target" class="dw-select" [formControl]="control()">
             <option value="" disabled>{{ loading() ? 'Loading connections…' : 'Choose a connection' }}</option>
-            @for (target of targets(); track target.id) {
-              <option [value]="target.id">{{ target.name }} ({{ label(target.vendor) }})</option>
+            @if (grouped()) {
+              @if (own().length > 0) {
+                <optgroup [label]="label(vendor())" data-testid="ewb-group-own">
+                  @for (target of own(); track target.id) {
+                    <option [value]="target.id">{{ target.name }}</option>
+                  }
+                </optgroup>
+              }
+              @if (testServers().length > 0) {
+                <optgroup [label]="testGroupLabel()" data-testid="ewb-group-test">
+                  @for (target of testServers(); track target.id) {
+                    <option [value]="target.id">{{ target.name }}</option>
+                  }
+                </optgroup>
+              }
+            } @else {
+              @for (target of own(); track target.id) {
+                <option [value]="target.id">{{ target.name }} ({{ label(target.vendor) }})</option>
+              }
             }
           </select>
         </div>
-        @if (canCreate()) {
-          <button type="button" class="dw-btn" data-testid="ewb-new-connection" (click)="creating.set(true)">New connection</button>
+        @for (choice of createChoices(); track choice.vendor) {
+          <button type="button" class="dw-btn" [attr.data-testid]="choice.testId" (click)="creating.set(choice.vendor)">
+            {{ choice.text }}
+          </button>
         }
       </div>
       @if (control().invalid && control().touched) {
-        <span class="dw-error">Choose where to write.</span>
+        <span class="dw-error">Choose a connection.</span>
       }
       @if (loadError() === 'noViewPermission') {
         <span class="dw-hint dw-hint--warn">You need permission to view Source Connections to choose a write
           connection. Ask an administrator.</span>
       } @else if (loadError() === 'failed') {
         <span class="dw-hint dw-hint--warn">Loading write connections failed. Try again.</span>
-      } @else if (!loading() && targets().length === 0) {
+      } @else if (!loading() && own().length === 0 && testServers().length === 0) {
         <span class="dw-hint">{{ emptyText() }}</span>
       }
     </div>
 
-    @if (creating()) {
-      <app-ehr-write-connection-create [vendor]="createVendor()" (created)="onCreated($event)" (cancelled)="creating.set(false)" />
+    @if (creating(); as createVendor) {
+      <app-ehr-write-connection-create [vendor]="createVendor === 'any' ? null : createVendor"
+        (created)="onCreated($event)" (cancelled)="creating.set(null)" />
     }
   `,
 })
@@ -61,41 +82,57 @@ export class EhrWriteConnectionPickerComponent {
   private readonly permissions = inject(PermissionService);
 
   readonly control = input.required<FormControl<string | null>>();
-  /** The connections that fit the vendor and run mode. */
-  readonly targets = input<WritableTarget[]>([]);
+  /** The EHR the dropdown is grouped for; null lists `own` flat (every write connection). */
+  readonly vendor = input<EhrWriteVendor | null>(null);
+  /** The EHR's own write connections, or every write connection when there is no vendor. */
+  readonly own = input<WritableTarget[]>([]);
+  /** FHIR test servers that receive exactly what the EHR would. */
+  readonly testServers = input<WritableTarget[]>([]);
   readonly loading = input<boolean>(false);
   readonly loadError = input<EhrWriteTargetsError | null>(null);
-  readonly vendor = input<EhrWriteVendor | null>(null);
-  readonly runMode = input<EhrRunMode | null>('dryRun');
 
-  /** A connection was created here; the host reloads and picks it. */
+  /** A connection was created here; the host reloads it. */
   readonly created = output<SourceConnectionModel>();
 
-  readonly creating = signal(false);
+  /** The vendor a connection is being created for ('any': the create component asks which). */
+  readonly creating = signal<EhrWriteVendor | 'any' | null>(null);
 
-  /** A test run needs a FHIR server; otherwise the vendor's own (null: the create component asks which). */
-  readonly createVendor = computed<EhrWriteVendor | null>(() => (this.runMode() === 'test' ? 'GenericFhir' : this.vendor()));
+  /** Two groups for an EHR; a plain list without one. */
+  readonly grouped = computed(() => this.vendor() !== null);
+
+  readonly testGroupLabel = computed(() => `Test servers (receive exactly what ${vendorLabel(this.vendor())} would)`);
 
   readonly emptyText = computed(() => {
     const vendor = vendorLabel(this.vendor());
-    if (this.runMode() === 'test') {
-      return `No FHIR test server that can stand in for ${vendor} yet. Click New connection, or add one under Destination Connections.`;
-    }
-    return `No ${vendor || 'EHR'} write connection yet. Click New connection, or add one under Destination Connections.`;
+    return `No ${vendor || 'EHR'} write connection or test server yet. Click New connection, or add one under `
+      + 'Destination Connections.';
   });
 
-  /** Listing the new row here needs sourceconnections.view; creating it is creatableWriteVendorCards' rule. */
-  canCreate(): boolean {
-    if (this.loadError() === 'noViewPermission' || !this.permissions.hasPermission('sourceconnections.view')) return false;
-    return creatableWriteVendorCards(code => this.permissions.hasPermission(code), this.createVendor()).length > 0;
-  }
+  /** The New buttons this role may use: the EHR's own and a test server for an EHR tile, one plain button without. */
+  readonly createChoices = computed<{ vendor: EhrWriteVendor | 'any'; text: string; testId: string }[]>(() => {
+    if (this.loadError() === 'noViewPermission' || !this.permissions.hasPermission('sourceconnections.view')) return [];
+    const may = (vendor: EhrWriteVendor | null) =>
+      creatableWriteVendorCards(code => this.permissions.hasPermission(code), vendor).length > 0;
+    const vendor = this.vendor();
+    if (vendor === null) {
+      return may(null) ? [{ vendor: 'any', text: 'New connection', testId: 'ewb-new-connection' }] : [];
+    }
+    const choices: { vendor: EhrWriteVendor | 'any'; text: string; testId: string }[] = [];
+    if (may(vendor)) {
+      choices.push({ vendor, text: `New ${vendorLabel(vendor)} connection`, testId: 'ewb-new-connection' });
+    }
+    if (isTestableVendor(vendor) && may('GenericFhir')) {
+      choices.push({ vendor: 'GenericFhir', text: 'New test server', testId: 'ewb-new-test-server' });
+    }
+    return choices;
+  });
 
-  label(vendor: string): string {
+  label(vendor: string | null): string {
     return vendorLabel(vendor);
   }
 
   onCreated(connection: SourceConnectionModel): void {
-    this.creating.set(false);
+    this.creating.set(null);
     this.created.emit(connection);
   }
 }

@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { PhaseConfigServiceV2 } from '../../../../services/phase-config-v2.service';
 import { DestinationSchemaService, DestinationTable, DestinationProbeRequest } from '../../../../services/destination-schema.service';
@@ -259,6 +259,11 @@ export class DataFabricDestinationFormComponent implements WizardDestinationForm
       : '';
     const extension = v.fileFormat === 'parquet' ? 'parquet' : v.fileFormat === 'csv' ? 'csv' : 'ndjson';
     return `${v.workspace || '<workspace>'}/${item}/Files/${base}${partitions}/Patient_<timestamp>.${extension}`;
+  }
+
+  /** The destination's name. The wizard hides it on Step 1 (only the connection is chosen there) and shows it on Review. */
+  nameControl(): FormControl<string | null> {
+    return this.fabricForm.controls.name;
   }
 
   isValid(): boolean {

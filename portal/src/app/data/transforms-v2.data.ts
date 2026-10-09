@@ -61,7 +61,6 @@ export const TRANSFORMS: Transform[] = [
   ehrTile('dest-ehr-epic', 'Epic', 'Write to Epic.'),
   ehrTile('dest-ehr-ecw', 'Healow', 'Write to eClinicalWorks.'),
   ehrTile('dest-ehr-athena', 'Athenahealth', 'Write to athenahealth.'),
-  ehrTile('dest-ehr-fhir', 'GenericFhir', 'Write plain FHIR to a FHIR server.'),
   { id: 'dest-csv',         rank: 1, category: 'File',         destinationType: 'Csv',            name: 'CSV',                sub: 'Emit CSV files.',                   permissionPrefix: 'csv' },
   { id: 'dest-xlsx',        rank: 1, category: 'File',         destinationType: 'Excel',          name: 'Excel',              sub: 'Emit .xlsx workbooks.',             permissionPrefix: 'sourceconnections' },
   { id: 'dest-ndjson',      rank: 1, category: 'File',         destinationType: 'Ndjson',         name: 'NDJSON',             sub: 'Emit newline-delimited JSON.',      permissionPrefix: 'sourceconnections' },

@@ -1,4 +1,4 @@
-import { FormBuilder, FormGroup } from '@angular/forms';
+import { FormBuilder, FormControl, FormGroup } from '@angular/forms';
 import { Validators } from '@angular/forms';
 
 /** One type-appropriate placeholder field a stub destination form offers beyond name/target — e.g. a
@@ -31,6 +31,10 @@ export class SimpleStubFormEngine {
     };
     for (const f of extraFields) controls[f.key] = [''];
     this.form = fb.group(controls);
+  }
+
+  nameControl(): FormControl<string | null> {
+    return this.form.get('name') as FormControl<string | null>;
   }
 
   isValid(): boolean {

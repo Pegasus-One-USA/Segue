@@ -28,6 +28,9 @@ import {
   resourceTypeOptions,
 } from '../../data/connection-type-labels.util';
 import { PhaseConfigService } from '../../services/phase-config.service';
+import { EhrLiveWriteCheckService } from '../../services/ehr-live-write-check.service';
+import { DialogService } from '../../core/services/dialog.service';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../core/components/confirm-dialog/confirm-dialog.component';
 import {
   IntegrationDetails,
   buildIntegrationDetails,
@@ -73,6 +76,8 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly permissions = inject(PermissionService);
   private readonly phaseCfg = inject(PhaseConfigService);
   private readonly authStore = inject(AuthStore);
+  private readonly liveWriteCheck = inject(EhrLiveWriteCheckService);
+  private readonly dialogs = inject(DialogService);
 
   // ── RBAC: workflow.view (the route guard already reached here) only grants VIEW access — these four
   // are what actually gate each action-specific button/menu-item below, kept independent of one another
@@ -500,6 +505,32 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // A live EHR write-back that has not run yet asks first: records written into an EHR cannot be taken back.
+    this.busyId.set(row.workflowId);
+    this.liveWriteCheck.firstLiveWrite(row.workflowId, row.modifiedOnUtc).subscribe(ehr => {
+      this.busyId.set(null);
+      if (!ehr) {
+        this.dispatchRun(row, mode);
+        return;
+      }
+      this.dialogs
+        .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
+          width: '440px',
+          data: {
+            title: `Write into ${ehr} now?`,
+            message: `"${row.name}" writes records into ${ehr}. Records written cannot be undone.`,
+            confirmLabel: 'Run',
+            danger: true,
+          },
+        })
+        .afterClosed()
+        .subscribe(confirmed => {
+          if (confirmed) this.dispatchRun(row, mode);
+        });
+    });
+  }
+
+  private dispatchRun(row: WorkflowSummary, mode: 'sync' | 'async'): void {
     if (mode === 'async') {
       this.runAsync(row);
       return;

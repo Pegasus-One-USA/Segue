@@ -79,7 +79,7 @@ describe('DestinationConfigurationKindComponent', () => {
     expect(listed.map(r => r.typeLabel)).toEqual([
       'EHR write-back — Epic',
       'EHR write-back — eClinicalWorks',
-      'EHR write-back — FHIR server',
+      'EHR write-back — FHIR test server',
       'EHR write-back',
       'EHR write-back',
     ]);

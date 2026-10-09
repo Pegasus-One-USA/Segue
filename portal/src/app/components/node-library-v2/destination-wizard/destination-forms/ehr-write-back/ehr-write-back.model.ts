@@ -10,7 +10,7 @@ export { isEhrWriteVendor };
  * - live: writes into the vendor over its own write connection;
  * - dryRun: checks every record and sends nothing;
  * - test: sends exactly what the vendor would get to a FHIR test server (a Generic FHIR write connection) instead.
- * Saved as dest_dryRun + dest_testAsVendor (runModeFields); there is no run-mode key of its own.
+ * Saved as dest_dryRun + dest_testAsVendor; there is no run-mode key of its own.
  */
 export type EhrRunMode = 'live' | 'dryRun' | 'test';
 
@@ -85,57 +85,26 @@ export function savedWriteVendorOfMetadata(metadataJson: string | null | undefin
 }
 
 /**
- * The run modes a vendor offers: a FHIR server (or a vendor not known yet) has no test server to stand in for. Dry run
- * is left out when `dryRunOffered` is false (the EhrWriteBack:DryRunEnabled setting is off and the node was not saved
- * as a dry run).
+ * The run mode saved fields describe. Anything but an explicit dest_dryRun 'false' is a dry run, as in the executor;
+ * a dry run over a test server (dest_testAsVendor set) is still a dry run.
  */
-export function runModesFor(vendor: EhrWriteVendor | null, dryRunOffered = true): EhrRunMode[] {
-  const modes: EhrRunMode[] = vendor === null || vendor === 'GenericFhir' ? ['live', 'dryRun'] : ['live', 'dryRun', 'test'];
-  return dryRunOffered ? modes : modes.filter(mode => mode !== 'dryRun');
+export function runModeOf(fields: Readonly<Record<string, string | undefined>>): EhrRunMode {
+  if (fields['dest_dryRun'] !== 'false') return 'dryRun';
+  return isTestableVendor(fields['dest_testAsVendor']) ? 'test' : 'live';
 }
 
-/**
- * The run mode a destination starts in, or falls back to when its mode is not offered: Dry run, else Test on a FHIR
- * server. Never Live: when Live is all that is offered, null leaves Run mode unchosen so the user picks it on purpose.
- */
-export function defaultRunMode(offered: readonly EhrRunMode[]): EhrRunMode | null {
-  if (offered.includes('dryRun')) return 'dryRun';
-  return offered.includes('test') ? 'test' : null;
-}
-
-/**
- * The run mode saved fields describe. Anything but an explicit dest_dryRun 'false' is a dry run, as in the executor.
- * A saved test run that was also a dry run (the old "Test as" plus "Dry run") reopens as a plain dry run, and
- * `droppedTestServer` says the test server it pointed at no longer fits.
- */
-export function runModeOf(fields: Record<string, string>): { mode: EhrRunMode; droppedTestServer: boolean } {
-  const testAs = isTestableVendor(fields['dest_testAsVendor']);
-  const dry = fields['dest_dryRun'] !== 'false';
-  if (testAs && !dry) return { mode: 'test', droppedTestServer: false };
-  if (testAs && dry) return { mode: 'dryRun', droppedTestServer: true };
-  return { mode: dry ? 'dryRun' : 'live', droppedTestServer: false };
-}
-
-/** The saved fields for a run mode. Test needs a testable vendor; callers gate on the form being valid first. */
-export function runModeFields(
-  mode: EhrRunMode,
-  vendor: EhrWriteVendor | null,
-): { dest_dryRun: 'true' | 'false'; dest_testAsVendor: string } {
-  if (mode === 'live') return { dest_dryRun: 'false', dest_testAsVendor: '' };
-  if (mode === 'dryRun') return { dest_dryRun: 'true', dest_testAsVendor: '' };
-  if (!isTestableVendor(vendor)) throw new Error(`A test run cannot stand in for ${vendor ?? 'no vendor'}.`);
-  return { dest_dryRun: 'false', dest_testAsVendor: vendor };
-}
-
-/**
- * The write connections a run mode can use: the vendor's own for Live and Dry run, and FHIR servers that can stand in
- * for it in a test run. With no vendor known yet, every connection is offered. No run mode chosen yet lists the
- * vendor's own, as Live and Dry run do.
- */
-export function connectionsFor(targets: WritableTarget[], vendor: EhrWriteVendor | null, mode: EhrRunMode | null): WritableTarget[] {
-  if (vendor === null) return targets;
-  if (mode === 'test') return targets.filter(t => t.vendor === 'GenericFhir' && t.testableVendors.includes(vendor));
-  return targets.filter(t => t.vendor === vendor);
+/** The connections offered for an EHR, in the two groups the connection dropdown shows: the EHR's own write
+ *  connections (a live run), and the FHIR test servers that receive exactly what it would. */
+export function connectionGroupsFor(
+  targets: readonly WritableTarget[],
+  vendor: EhrWriteVendor,
+): { own: WritableTarget[]; testServers: WritableTarget[] } {
+  return {
+    own: targets.filter(t => t.vendor === vendor),
+    testServers: isTestableVendor(vendor)
+      ? targets.filter(t => t.vendor === 'GenericFhir' && t.testableVendors.includes(vendor))
+      : [],
+  };
 }
 
 /** The Review step's lines for a write-back: where it writes and in which run mode. The mode is read back from the
@@ -148,15 +117,13 @@ export function ehrReviewLines(
   const connection = connectionName ?? 'the chosen connection';
   const label = vendorLabel(vendor ?? config['dest_ehrVendor']) || 'the EHR';
   const max = `, up to ${config['dest_maxWritesPerRun'] || '500'} records per run`;
-  const { mode } = runModeOf(config);
-  if (mode === 'test') {
-    return {
-      writesTo: `${connection} (FHIR test server), shaped as ${label}`,
-      mode: `Test on FHIR server: nothing reaches ${label}${max}`,
-    };
-  }
+  const mode = runModeOf(config);
+  const writesTo = isTestableVendor(config['dest_testAsVendor'])
+    ? `${connection} (FHIR test server), shaped as ${label}`
+    : `${connection} (${label})`;
+  if (mode === 'test') return { writesTo, mode: `Test run: nothing reaches ${label}${max}` };
   return {
-    writesTo: `${connection} (${label})`,
+    writesTo,
     mode: mode === 'live' ? `Live: writes into ${label}${max}` : `Dry run: checks every record, sends nothing${max}`,
   };
 }

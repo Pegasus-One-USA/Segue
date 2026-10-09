@@ -6,7 +6,7 @@ import { ISourceConnectionService } from '../../../../source-connections/service
 import { SourceConnectionModel } from '../../../../source-connections/models/source-connection.model';
 import { EhrWriteCapabilities, EhrWriteCapabilitiesService, EhrWriteCapability } from '../../../../services/ehr-write-capabilities.service';
 import { PermissionService } from '../../../../auth/services/permission.service';
-import { EhrRunMode, EhrWriteVendor } from './ehr-write-back/ehr-write-back.model';
+import { EhrWriteVendor } from './ehr-write-back/ehr-write-back.model';
 
 function capability(resourceType: string, extra: Partial<EhrWriteCapability> = {}): EhrWriteCapability {
   return {
@@ -65,8 +65,8 @@ interface Options {
 }
 
 /**
- * The EHR Write-Back form: one tile per EHR presets the vendor, Run mode (Live / Dry run / Test on a FHIR server)
- * decides which write connections fit, and the saved keys stay dest_dryRun + dest_testAsVendor.
+ * The EHR Write-Back form: Step 1 is only the Connection (the EHR's own write connections and its FHIR test servers);
+ * the connection chosen decides the run, Dry run is an option, and the saved keys stay dest_dryRun + dest_testAsVendor.
  */
 describe('EhrWriteBackDestinationFormComponent', () => {
   function create(options: Options = {}) {
@@ -105,510 +105,301 @@ describe('EhrWriteBackDestinationFormComponent', () => {
       form.form.controls.sourceConnectionId.setValue(id);
       fixture.detectChanges();
     };
-    const mode = (m: EhrRunMode) => {
-      form.form.controls.runMode.setValue(m);
+    const options_ = () => {
+      fixture.componentRef.setInput('section', 'options');
       fixture.detectChanges();
     };
     const optionIds = () => Array.from(el.querySelectorAll<HTMLOptionElement>('#dw-ewb-target option')).map(o => o.value).filter(Boolean);
-    const modes = () => Array.from(el.querySelectorAll<HTMLInputElement>('input[type="radio"]')).map(r => r.dataset['mode']);
     const notice = () => el.querySelector('[data-testid="ewb-connection-notice"]')?.textContent?.trim() ?? null;
-    const text = () => el.textContent?.replace(/\s+/g, ' ') ?? '';
-    return { fixture, form, el, getAll, pick, mode, optionIds, modes, notice, text };
+    const byTestId = (id: string) => el.querySelector(`[data-testid="${id}"]`);
+    return { fixture, form, el, getAll, pick, showOptions: options_, optionIds, notice, byTestId };
   }
 
-  describe('a vendor tile', () => {
-    it('offers only that vendor\'s write connections, and in a test run only FHIR servers that can stand in for it', () => {
-      const { optionIds, mode } = create({ vendor: 'Epic' });
-      expect(optionIds()).toEqual(['epic']);
-
-      mode('test');
-      expect(optionIds()).toEqual(['hapi']);
+  describe('Step 1 is only the connection', () => {
+    it('shows no name, run mode, copy box or capability text: just the Connection dropdown', () => {
+      const { el } = create({ vendor: 'Epic' });
+      expect(el.querySelector('#dw-ewb-name')).toBeNull();
+      expect(el.querySelector('input[type="radio"]')).toBeNull();
+      expect(el.querySelector('.dw-callout--info')).toBeNull();
+      expect(el.querySelector('#dw-ewb-target')).not.toBeNull();
     });
 
-    it('starts as a dry run and offers Live, Dry run and Test', () => {
-      const { form, modes } = create({ vendor: 'Athenahealth' });
-      expect(form.runMode()).toBe('dryRun');
-      expect(modes()).toEqual(['live', 'dryRun', 'test']);
+    it('offers the EHR\'s own connections and the test servers that stand in for it, choosing none', () => {
+      const { form, optionIds } = create({ vendor: 'Epic' });
+      expect(optionIds()).toEqual(['epic', 'hapi']);
+      expect(form.form.controls.sourceConnectionId.value).toBe('');
+      expect(form.runMode()).toBeNull();
+      expect(form.isValid()).toBeFalse();
     });
 
-    it('saves each run mode as dest_dryRun + dest_testAsVendor, with the tile as dest_ehrVendor', () => {
-      const { form, pick, mode } = create({ vendor: 'Epic' });
+    it('never chooses the only live EHR connection for the user', () => {
+      const { form } = create({ vendor: 'Epic', connections: [EPIC] });
+      expect(form.form.controls.sourceConnectionId.value).toBe('');
+    });
+  });
+
+  describe('the connection decides the run', () => {
+    it('an EHR connection is a live run', () => {
+      const { form, pick, byTestId } = create({ vendor: 'Epic' });
       pick('epic');
-
-      mode('live');
-      expect(form.getFullConfig()).toEqual(jasmine.objectContaining({ dest_dryRun: 'false', dest_testAsVendor: '', dest_ehrVendor: 'Epic' }));
-      mode('dryRun');
-      expect(form.getFullConfig()).toEqual(jasmine.objectContaining({ dest_dryRun: 'true', dest_testAsVendor: '', dest_ehrVendor: 'Epic' }));
-      mode('test');
-      pick('hapi');
+      expect(form.runMode()).toBe('live');
+      expect(form.liveEhrLabel()).toBe('Epic');
+      expect(byTestId('ewb-test-run-line')).toBeNull();
       expect(form.getFullConfig()).toEqual(jasmine.objectContaining({
-        dest_dryRun: 'false', dest_testAsVendor: 'Epic', dest_ehrVendor: 'Epic', dest_sourceConnectionId: 'hapi',
+        dest_dryRun: 'false', dest_testAsVendor: '', dest_ehrVendor: 'Epic', dest_sourceConnectionId: 'epic',
       }));
-    });
-
-    it('takes the tested vendor\'s types and opt-in APIs in a test run', () => {
-      const { form, pick, mode } = create({ vendor: 'Epic' });
-      mode('test');
-      pick('hapi');
-
-      expect(form.targetVendor()).toBe('Epic');
-      expect(form.writableResourceTypes()).toEqual(['AllergyIntolerance', 'Observation', 'QuestionnaireResponse', 'Procedure', 'ServiceRequest']);
-      expect(form.effective()!.optInApis.map(api => api.variant))
-        .toEqual(['lines-drains-airways', 'patient-entered-questionnaire', 'external-radiotherapy-summary']);
-      expect(form.effective()!.optInApis.find(api => api.variant === 'patient-entered-questionnaire')!.tabularOnly).toBeTrue();
-    });
-
-    it('records the tile as dest_ehrVendor even before the tested vendor\'s capabilities load, and is not valid yet', () => {
-      const { form, pick, mode } = create({ vendor: 'Epic', pendingVendors: ['Epic'] });
-      mode('test');
-      pick('hapi');
-
-      expect(form.getFullConfig()['dest_ehrVendor']).toBe('Epic');
-      expect(form.isValid()).toBeFalse();
-      expect(form.getMetadata()).toBeNull();
-    });
-
-    it('a changed run mode reports a connection it no longer offers, without changing the form behind the user', () => {
-      const { form, pick, mode, notice } = create({ vendor: 'Epic' });
-      pick('epic');
       expect(form.isValid()).toBeTrue();
-
-      mode('test');
-
-      expect(form.form.controls.sourceConnectionId.value).toBe('epic');
-      expect(notice()).toContain('does not fit this run mode');
-      expect(form.isValid()).toBeFalse();
-
-      pick('hapi');
-      expect(notice()).toBeNull();
     });
 
-    it('saves only the enabled APIs the vendor written as offers', () => {
-      const { form, pick, mode } = create({ vendor: 'Epic' });
-      mode('test');
+    it('a test server is a test run for the tile\'s EHR, with one line saying nothing reaches it', () => {
+      const { form, pick, byTestId } = create({ vendor: 'Healow' });
       pick('hapi');
-
-      // The kinds ticked on Step 2, handed over by the wizard; a variant the vendor does not offer is never saved.
-      form.setWriteKinds({ enabledVariants: ['external-radiotherapy-summary', 'medical-history'], createHolderEncounter: false });
-      expect(form.getFullConfig()['dest_enabledVariants']).toBe('external-radiotherapy-summary');
-    });
-  });
-
-  it('the FHIR server tile offers Live and Dry run only, over FHIR servers', () => {
-    const { modes, optionIds, form, pick, mode } = create({ vendor: 'GenericFhir' });
-    expect(modes()).toEqual(['live', 'dryRun']);
-    expect(optionIds()).toEqual(['hapi']);
-
-    pick('hapi');
-    mode('live');
-    expect(form.getFullConfig()).toEqual(jasmine.objectContaining({ dest_dryRun: 'false', dest_testAsVendor: '', dest_ehrVendor: 'GenericFhir' }));
-  });
-
-  describe('reopening a saved node', () => {
-    it('restores a test run', () => {
-      const { form, fixture, optionIds } = create({ vendor: 'Epic' });
-      form.patchFrom({ dest_sourceConnectionId: 'hapi', dest_dryRun: 'false', dest_testAsVendor: 'Epic', dest_enabledVariants: 'lines-drains-airways' });
-      fixture.detectChanges();
-
       expect(form.runMode()).toBe('test');
-      expect(optionIds()).toEqual(['hapi']);
-      expect(form.form.controls.sourceConnectionId.value).toBe('hapi');
-      expect(form.targetVendor()).toBe('Epic');
-      expect(form.enabledVariants()).toEqual(['lines-drains-airways']);
-      expect(form.getFullConfig()['dest_enabledVariants']).toBe('lines-drains-airways');
+      expect(form.liveEhrLabel()).toBeNull();
+      expect(byTestId('ewb-test-run-line')?.textContent?.trim()).toBe('Test run: nothing reaches eClinicalWorks.');
+      expect(form.getFullConfig()).toEqual(jasmine.objectContaining({
+        dest_dryRun: 'false', dest_testAsVendor: 'Healow', dest_ehrVendor: 'Healow', dest_sourceConnectionId: 'hapi',
+      }));
+      expect(form.writableResourceTypes()).toEqual(['AllergyIntolerance', 'Condition']);
+      expect(form.isValid()).toBeTrue();
     });
 
-    it('reopens a test run that was also a dry run as a plain dry run, asking for another connection', () => {
-      const { form, fixture, notice, pick } = create({ vendor: 'Epic' });
-      form.patchFrom({ dest_sourceConnectionId: 'hapi', dest_dryRun: 'true', dest_testAsVendor: 'Epic' });
+    it('a test server is not valid until the tested EHR\'s capabilities load, and still records the tile', () => {
+      const { form, pick } = create({ vendor: 'Epic', pendingVendors: ['Epic'] });
+      pick('hapi');
+      expect(form.isValid()).toBeFalse();
+      expect(form.getFullConfig()['dest_ehrVendor']).toBe('Epic');
+    });
+  });
+
+  describe('the name', () => {
+    it('takes the chosen connection\'s name until the user changes it on Review', () => {
+      const { form, pick } = create({ vendor: 'Healow' });
+      pick('hapi');
+      expect(form.getFullConfig()['dest_name']).toBe('Local HAPI');
+      expect(form.connectionName()).toBe('Local HAPI');
+
+      form.nameControl().setValue('  eCW nightly  ');
+      expect(form.getFullConfig()['dest_name']).toBe('eCW nightly');
+    });
+
+    it('keeps a saved name', () => {
+      const { form } = create({ vendor: 'Epic' });
+      form.patchFrom({ dest_name: 'Epic allergies', dest_sourceConnectionId: 'epic', dest_dryRun: 'false' });
+      expect(form.getFullConfig()['dest_name']).toBe('Epic allergies');
+    });
+
+    it('a saved name that was the connection\'s own follows a newly chosen connection', () => {
+      const { form, pick } = create({ vendor: 'Healow' });
+      form.patchFrom({ dest_name: 'ecw', dest_sourceConnectionId: 'ecw', dest_dryRun: 'false' });
+      expect(form.getFullConfig()['dest_name']).toBe('ecw');
+
+      pick('hapi');
+      expect(form.getFullConfig()['dest_name']).toBe('Local HAPI');
+    });
+
+    it('a saved name the user typed stays when another connection is chosen', () => {
+      const { form, pick } = create({ vendor: 'Healow' });
+      form.patchFrom({ dest_name: 'eCW nightly', dest_sourceConnectionId: 'ecw', dest_dryRun: 'false' });
+
+      pick('hapi');
+      expect(form.getFullConfig()['dest_name']).toBe('eCW nightly');
+    });
+
+    it('decides about a saved name only once the connections have loaded', () => {
+      const pending = new Subject<SourceConnectionModel[]>();
+      const { form, pick } = create({ vendor: 'Healow', getAll: () => pending });
+      form.patchFrom({ dest_name: 'ecw', dest_sourceConnectionId: 'ecw', dest_dryRun: 'false' });
+      expect(form.nameControl().value).toBe('ecw');
+
+      pending.next(ALL);
+      pick('hapi');
+      expect(form.getFullConfig()['dest_name']).toBe('Local HAPI');
+    });
+  });
+
+  describe('Dry run is an option', () => {
+    it('is offered under Options while the setting is on, and saves a dry run', () => {
+      const { form, pick, showOptions, byTestId } = create({ vendor: 'Epic' });
+      pick('epic');
+      showOptions();
+      const box = byTestId('ewb-dry-run') as HTMLInputElement;
+      expect(box).not.toBeNull();
+      expect(box.parentElement?.textContent).toContain('Dry run: check every record, send nothing');
+
+      form.form.controls.dryRun.setValue(true);
+      expect(form.runMode()).toBe('dryRun');
+      expect(form.liveEhrLabel()).toBeNull();
+      expect(form.getFullConfig()).toEqual(jasmine.objectContaining({ dest_dryRun: 'true', dest_testAsVendor: '' }));
+    });
+
+    it('a dry run over a test server keeps the tested EHR', () => {
+      const { form, pick } = create({ vendor: 'Epic' });
+      pick('hapi');
+      form.form.controls.dryRun.setValue(true);
+      expect(form.getFullConfig()).toEqual(jasmine.objectContaining({ dest_dryRun: 'true', dest_testAsVendor: 'Epic' }));
+    });
+
+    it('is not offered with the setting off (or a missing setting)', () => {
+      for (const dryRunEnabled of [false, 'omitted'] as const) {
+        TestBed.resetTestingModule();
+        const { pick, showOptions, byTestId } = create({ vendor: 'Epic', dryRunEnabled });
+        pick('epic');
+        showOptions();
+        expect(byTestId('ewb-dry-run')).withContext(String(dryRunEnabled)).toBeNull();
+      }
+    });
+
+    it('a saved dry run stays ticked with a note while the setting is off', () => {
+      const { form, fixture, showOptions, byTestId } = create({ vendor: 'Epic', dryRunEnabled: false });
+      form.patchFrom({ dest_sourceConnectionId: 'epic', dest_dryRun: 'true' });
       fixture.detectChanges();
+      showOptions();
 
       expect(form.runMode()).toBe('dryRun');
-      expect(notice()).toContain('used to dry-run against a FHIR test server');
-      expect(form.isValid()).toBeFalse();
-      // Kept until the user chooses, so a save that never showed this form cannot rewrite it.
-      expect(form.getFullConfig()['dest_sourceConnectionId']).toBe('hapi');
-
-      pick('epic');
-      expect(notice()).toBeNull();
-      expect(form.isValid()).toBeTrue();
+      expect((byTestId('ewb-dry-run') as HTMLInputElement).checked).toBeTrue();
+      expect(byTestId('ewb-dry-run-off-note')).not.toBeNull();
+      expect(form.getFullConfig()['dest_dryRun']).toBe('true');
     });
 
     it('a node saved without dest_dryRun is a dry run', () => {
       const { form, fixture } = create({ vendor: 'Epic' });
       form.patchFrom({ dest_sourceConnectionId: 'epic' });
       fixture.detectChanges();
-
       expect(form.runMode()).toBe('dryRun');
-      expect(form.getFullConfig()['dest_dryRun']).toBe('true');
+    });
+  });
+
+  describe('reopening a saved node', () => {
+    it('restores a test run', () => {
+      const { form, fixture } = create({ vendor: 'Healow' });
+      form.patchFrom({ dest_sourceConnectionId: 'hapi', dest_dryRun: 'false', dest_testAsVendor: 'Healow', dest_ehrVendor: 'Healow' });
+      fixture.detectChanges();
+      expect(form.runMode()).toBe('test');
+      expect(form.isValid()).toBeTrue();
+    });
+
+    it('without a tile, a saved test run is grouped for the EHR it stood in for', () => {
+      const { form, fixture, optionIds } = create({ vendor: null });
+      form.patchFrom({ dest_sourceConnectionId: 'hapi', dest_dryRun: 'false', dest_testAsVendor: 'Athenahealth' });
+      fixture.detectChanges();
+      expect(optionIds()).toEqual(['ath', 'hapi']);
+      expect(form.getFullConfig()['dest_testAsVendor']).toBe('Athenahealth');
+    });
+
+    it('a saved live plain FHIR server write-back opens with a plain note and stays as saved', () => {
+      const { form, fixture, byTestId } = create({ vendor: null });
+      form.patchFrom({ dest_sourceConnectionId: 'hapi', dest_dryRun: 'false', dest_ehrVendor: 'GenericFhir' });
+      fixture.detectChanges();
+      expect(byTestId('ewb-plain-fhir-note')).not.toBeNull();
+      expect(form.liveEhrLabel()).toBeNull();
+      expect(form.isValid()).toBeTrue();
+      expect(form.getFullConfig()).toEqual(jasmine.objectContaining({ dest_dryRun: 'false', dest_testAsVendor: '', dest_ehrVendor: 'GenericFhir' }));
     });
 
     it('reports a saved connection that is no longer available', () => {
       const { form, fixture, notice } = create({ vendor: 'Epic' });
       form.patchFrom({ dest_sourceConnectionId: 'gone', dest_dryRun: 'false' });
       fixture.detectChanges();
-
       expect(notice()).toContain('no longer available');
       expect(form.isValid()).toBeFalse();
-      expect(form.form.controls.sourceConnectionId.value).toBe('gone');
     });
 
-    it('reports a saved connection only once the connections have loaded', () => {
-      const pending = new Subject<SourceConnectionModel[]>();
-      const { form, fixture, notice } = create({ vendor: 'Epic', getAll: () => pending });
-      form.patchFrom({ dest_sourceConnectionId: 'gone' });
+    it('reports a connection for another EHR', () => {
+      const { form, fixture, notice } = create({ vendor: 'Epic' });
+      form.patchFrom({ dest_sourceConnectionId: 'ath', dest_dryRun: 'false' });
       fixture.detectChanges();
-      expect(notice()).toBeNull();
-
-      pending.next(ALL);
-      pending.complete();
-      fixture.detectChanges();
-      expect(notice()).toContain('no longer available');
+      expect(notice()).toBe('That connection does not write to Epic. Choose another.');
     });
-
-    // The form stays mounted, hidden, while a chain node in front of the write-back is edited; what it reports as its
-    // config must then still be what the node was saved with.
-    const unlisted: [string, Options][] = [
-      ['without the right to list connections', { granted: [] }],
-      ['when listing them is refused', { getAll: () => throwError(() => new HttpErrorResponse({ status: 403 })) }],
-      ['when listing them fails', { getAll: () => throwError(() => new HttpErrorResponse({ status: 500 })) }],
-    ];
-    for (const [why, options] of unlisted) {
-      it(`keeps a legacy dry-run test node's connection ${why}`, () => {
-        const { form, fixture, notice } = create({ vendor: 'Epic', ...options });
-        form.patchFrom({ dest_sourceConnectionId: 'hapi', dest_dryRun: 'true', dest_testAsVendor: 'Epic' });
-        fixture.detectChanges();
-
-        expect(form.form.controls.sourceConnectionId.value).toBe('hapi');
-        expect(form.getFullConfig()['dest_sourceConnectionId']).toBe('hapi');
-        expect(form.runMode()).toBe('dryRun');
-        expect(notice()).toBeNull();
-      });
-    }
-  });
-
-  describe('without a tile', () => {
-    it('infers the vendor from a saved test run', () => {
-      const { form, fixture, modes } = create({ vendor: null });
-      form.patchFrom({ dest_sourceConnectionId: 'hapi', dest_dryRun: 'false', dest_testAsVendor: 'Healow' });
-      fixture.detectChanges();
-
-      expect(form.vendor()).toBe('Healow');
-      expect(modes()).toEqual(['live', 'dryRun', 'test']);
-      expect(form.form.controls.sourceConnectionId.value).toBe('hapi');
-      expect(form.getFullConfig()).toEqual(jasmine.objectContaining({ dest_testAsVendor: 'Healow', dest_ehrVendor: 'Healow' }));
-    });
-
-    it('with nothing saved, lists every connection and offers no Test', () => {
-      const { modes, optionIds, el } = create({ vendor: null });
-      expect(optionIds()).toEqual(['hapi', 'epic', 'ecw', 'ath']);
-      expect(modes()).toEqual(['live', 'dryRun']);
-      expect(el.textContent).toContain('Pick a connection to see every run mode.');
-    });
-
-    it('takes the vendor of the connection chosen', () => {
-      const { form, pick } = create({ vendor: null });
-      pick('ath');
-      expect(form.vendor()).toBe('Athenahealth');
-      expect(form.getFullConfig()['dest_ehrVendor']).toBe('Athenahealth');
-    });
-
-    it('keeps the vendor chosen before switching to Test, so a test server can be picked', () => {
-      const { form, pick, mode, optionIds, notice } = create({ vendor: null });
-      pick('epic');
-      mode('test');
-
-      expect(form.vendor()).toBe('Epic');
-      expect(optionIds()).toEqual(['hapi']);
-
-      pick('hapi');
-      expect(notice()).toBeNull();
-      expect(form.isValid()).toBeTrue();
-      expect(form.getFullConfig()).toEqual(jasmine.objectContaining({
-        dest_sourceConnectionId: 'hapi', dest_dryRun: 'false', dest_testAsVendor: 'Epic', dest_ehrVendor: 'Epic',
-      }));
-    });
-
-    it('falls back to Dry run when the run mode is not one the vendor offers', () => {
-      const { form, pick, mode } = create({ vendor: null });
-      pick('hapi');
-      mode('test');
-
-      expect(form.runMode()).toBe('dryRun');
-    });
-  });
-
-  describe('validity', () => {
-    it('isValid covers the connection; optionsValid the options; getMetadata needs both', () => {
-      const { form, pick } = create({ vendor: 'Epic' });
-      expect(form.isValid()).toBeFalse();
-
-      pick('epic');
-      expect(form.isValid()).toBeTrue();
-      expect(form.optionsValid()).toBeTrue();
-      expect(form.getMetadata()).not.toBeNull();
-
-      form.form.controls.maxWritesPerRun.setValue('0');
-      expect(form.isValid()).toBeTrue();
-      expect(form.optionsValid()).toBeFalse();
-      expect(form.getMetadata()).toBeNull();
-    });
-
-    it('is not valid with a connection the run mode does not offer', () => {
-      const { form } = create({ vendor: 'Epic' });
-      form.form.controls.sourceConnectionId.setValue('ath');
-      expect(form.isValid()).toBeFalse();
-    });
-  });
-
-  it('saves the holder encounter while testing as eClinicalWorks', () => {
-    const { form, pick, mode } = create({ vendor: 'Healow' });
-    mode('test');
-    pick('hapi');
-    form.setWriteKinds({ enabledVariants: [], createHolderEncounter: true });
-
-    expect(form.effective()!.offersHolderEncounter).toBeTrue();
-    expect(form.getFullConfig()['dest_createHolderEncounter']).toBe('true');
   });
 
   describe('sections', () => {
     it('the connection half shows no option controls, and the options half no connection picker', () => {
-      const { fixture, el, pick } = create({ vendor: 'Athenahealth' });
+      const { el, pick, showOptions } = create({ vendor: 'Athenahealth' });
       pick('ath');
-      expect(el.querySelector('#dw-ewb-target')).not.toBeNull();
       expect(el.querySelector('#dw-ewb-max')).toBeNull();
 
-      fixture.componentRef.setInput('section', 'options');
-      fixture.detectChanges();
+      showOptions();
       expect(el.querySelector('#dw-ewb-target')).toBeNull();
       expect(el.querySelector('#dw-ewb-max')).not.toBeNull();
       expect(el.querySelector('#dw-ewb-department')).not.toBeNull();
     });
 
-    it("shows an athena connection's department as the default the node field overrides", () => {
-      const { fixture, el, form, pick } = create({ vendor: 'Athenahealth' });
-      pick('ath');
-      fixture.componentRef.setInput('section', 'options');
-      fixture.detectChanges();
-
-      const input = el.querySelector<HTMLInputElement>('#dw-ewb-department')!;
-      expect(input.placeholder).toBe('Connection default: 150');
-      expect(form.getFullConfig()['dest_targetDepartmentId']).toBe('');
-
-      form.patchFrom({ dest_sourceConnectionId: 'ath', dest_targetDepartmentId: '7' });
-      fixture.detectChanges();
-      expect(el.querySelector<HTMLInputElement>('#dw-ewb-department')!.value).toBe('7');
-      expect(form.getFullConfig()['dest_targetDepartmentId']).toBe('7');
-    });
-
     it('tells an athena test run to set the department here', () => {
-      const { fixture, el, pick, mode } = create({ vendor: 'Athenahealth' });
-      mode('test');
+      const { el, pick, showOptions } = create({ vendor: 'Athenahealth' });
       pick('hapi');
-      fixture.componentRef.setInput('section', 'options');
-      fixture.detectChanges();
-
+      showOptions();
       expect(el.querySelector('[data-testid="ewb-athena-test-hint"]')).not.toBeNull();
     });
-  });
 
-  it('the options half lists no vendor APIs and no holder-encounter checkbox: Step 2 chooses the kinds', () => {
-    const { fixture, el, form, pick, mode } = create({ vendor: 'Healow' });
-    mode('test');
-    pick('hapi');
-    fixture.componentRef.setInput('section', 'options');
-    fixture.detectChanges();
-
-    expect(el.querySelector('[data-variant]')).toBeNull();
-    expect(el.textContent).not.toContain('Also write through');
-    expect(el.textContent).not.toContain('telephone encounter');
-    expect(el.querySelector('#dw-ewb-provider')).not.toBeNull();
-    expect(form.optionsValid()).toBeTrue();
-
-    form.setWriteKinds({ enabledVariants: [], createHolderEncounter: true });
-    expect(form.optIns()).toEqual({ enabledVariants: [], createHolderEncounter: true, createPatientIfMissing: false });
-    form.setWriteKinds({ enabledVariants: [], createHolderEncounter: false });
-    expect(form.getFullConfig()['dest_createHolderEncounter']).toBe('false');
-  });
-
-  it('the Epic options half lists no vendor APIs either', () => {
-    const { fixture, el, pick, mode } = create({ vendor: 'Epic' });
-    mode('test');
-    pick('hapi');
-    fixture.componentRef.setInput('section', 'options');
-    fixture.detectChanges();
-
-    expect(el.querySelector('[data-variant]')).toBeNull();
-    expect(el.textContent).not.toContain('APIs');
-    expect(el.textContent).not.toContain('needs a CSV / SQL source');
+    it('the options half lists no vendor APIs: Step 2 chooses the kinds', () => {
+      const { el, form, pick, showOptions } = create({ vendor: 'Healow' });
+      pick('hapi');
+      showOptions();
+      expect(el.querySelector('[data-variant]')).toBeNull();
+      expect(form.optionsValid()).toBeTrue();
+      form.setWriteKinds({ enabledVariants: [], createHolderEncounter: true });
+      expect(form.getFullConfig()['dest_createHolderEncounter']).toBe('true');
+    });
   });
 
   describe('listing write connections', () => {
     it('without permission to view Source Connections, asks nothing and says so, with no New button', () => {
       const { el, getAll } = create({ vendor: 'Epic', granted: ['ehrwriteback.create', 'epic.create'] });
-
       expect(getAll).not.toHaveBeenCalled();
       expect(el.textContent).toContain('You need permission to view Source Connections');
       expect(el.querySelector('[data-testid="ewb-new-connection"]')).toBeNull();
     });
 
-    it('a 403 says the same', () => {
-      const { el } = create({ vendor: 'Epic', getAll: () => throwError(() => new HttpErrorResponse({ status: 403 })) });
-      expect(el.textContent).toContain('You need permission to view Source Connections');
-      expect(el.querySelector('[data-testid="ewb-new-connection"]')).toBeNull();
-    });
-
-    it('any other failure says loading failed', () => {
+    it('a 500 says loading failed', () => {
       const { el } = create({ vendor: 'Epic', getAll: () => throwError(() => new HttpErrorResponse({ status: 500 })) });
       expect(el.textContent).toContain('Loading write connections failed. Try again.');
     });
 
     it('with no connection yet, points to New connection and Destination Connections', () => {
-      const { el, mode } = create({ vendor: 'Athenahealth', connections: [] });
-      mode('live');
-      expect(el.textContent).toContain('No athenahealth write connection yet. Click New connection, or add one under Destination Connections.');
+      const { el } = create({ vendor: 'Athenahealth', connections: [] });
+      expect(el.textContent).toContain('No athenahealth write connection or test server yet.');
       expect(el.querySelector('[data-testid="ewb-new-connection"]')).not.toBeNull();
-
-      mode('test');
-      expect(el.textContent).toContain('No FHIR test server that can stand in for athenahealth yet.');
+      expect(el.querySelector('[data-testid="ewb-new-test-server"]')).not.toBeNull();
     });
   });
 
   it('gives the Review step where it writes and how', () => {
-    const { form, pick, mode } = create({ vendor: 'Epic' });
+    const { form, pick } = create({ vendor: 'Epic' });
     pick('epic');
-    mode('live');
-
+    expect(form.reviewLines()).toEqual({ writesTo: 'epic (Epic)', mode: 'Live: writes into Epic, up to 500 records per run' });
+    pick('hapi');
     expect(form.reviewLines()).toEqual({
-      writesTo: 'epic (Epic)',
-      mode: 'Live: writes into Epic, up to 500 records per run',
+      writesTo: 'Local HAPI (FHIR test server), shaped as Epic',
+      mode: 'Test run: nothing reaches Epic, up to 500 records per run',
     });
-  });
-
-  describe('with Dry run turned off in System Settings', () => {
-    const OFF_NOTE = 'Dry run is turned off in System Settings. This destination stays a dry run until you choose another Run mode.';
-
-    it('a new destination is offered Live and Test, and starts as Test on a FHIR server', () => {
-      const { form, modes, text } = create({ vendor: 'Epic', dryRunEnabled: false });
-
-      expect(modes()).toEqual(['live', 'test']);
-      expect(form.runMode()).toBe('test');
-      expect(text()).not.toContain(OFF_NOTE);
-      expect(text()).toContain('Start with a test on a FHIR server.');
-    });
-
-    it('the FHIR server tile offers Live only and leaves Run mode unchosen until the user picks it', () => {
-      const { form, modes, pick, mode, el, text } = create({ vendor: 'GenericFhir', dryRunEnabled: false });
-      expect(modes()).toEqual(['live']);
-      expect(form.runMode()).toBeNull();
-      expect(el.querySelector<HTMLInputElement>('input[data-mode="live"]')!.checked).toBeFalse();
-      expect(text()).toContain('Choose a Run mode.');
-
-      pick('hapi');
-      expect(form.isValid()).toBeFalse();
-      expect(form.getMetadata()).toBeNull();
-      // Never a live write by default, even through the safety net.
-      expect(form.getFullConfig()['dest_dryRun']).toBe('true');
-
-      mode('live');
-      expect(form.isValid()).toBeTrue();
-      expect(form.getFullConfig()['dest_dryRun']).toBe('false');
-    });
-
-    it('without a tile, never preselects Live, not even once a connection is chosen', () => {
-      const { form, modes, pick } = create({ dryRunEnabled: false });
-      expect(modes()).toEqual(['live']);
-      expect(form.runMode()).toBeNull();
-
-      pick('epic');
-      expect(modes()).toEqual(['live', 'test']);
-      expect(form.runMode()).toBeNull();
-      expect(form.isValid()).toBeFalse();
-      expect(form.getFullConfig()['dest_dryRun']).toBe('true');
-    });
-
-    it('a saved dry run stays a dry run, with Dry run still offered and a note saying why', () => {
-      const { form, fixture, modes, mode, text } = create({ vendor: 'Epic', dryRunEnabled: false });
-      form.patchFrom({ dest_sourceConnectionId: 'epic', dest_dryRun: 'true' });
-      fixture.detectChanges();
-
-      expect(form.runMode()).toBe('dryRun');
-      expect(modes()).toEqual(['live', 'dryRun', 'test']);
-      expect(text()).toContain(OFF_NOTE);
-      expect(form.isValid()).toBeTrue();
-      expect(form.getFullConfig()).toEqual(jasmine.objectContaining({ dest_dryRun: 'true', dest_testAsVendor: '' }));
-
-      mode('live');
-      expect(text()).not.toContain(OFF_NOTE);
-      expect(form.getFullConfig()['dest_dryRun']).toBe('false');
-    });
-
-    it('a saved dry run on the FHIR server tile stays a dry run too', () => {
-      const { form, fixture, modes, text } = create({ vendor: 'GenericFhir', dryRunEnabled: false });
-      form.patchFrom({ dest_sourceConnectionId: 'hapi', dest_dryRun: 'true' });
-      fixture.detectChanges();
-
-      expect(form.runMode()).toBe('dryRun');
-      expect(modes()).toEqual(['live', 'dryRun']);
-      expect(text()).toContain(OFF_NOTE);
-      expect(form.getFullConfig()['dest_dryRun']).toBe('true');
-    });
-
-    it('a saved live run is offered no Dry run', () => {
-      const { form, fixture, modes } = create({ vendor: 'Epic', dryRunEnabled: false });
-      form.patchFrom({ dest_sourceConnectionId: 'epic', dest_dryRun: 'false' });
-      fixture.detectChanges();
-
-      expect(form.runMode()).toBe('live');
-      expect(modes()).toEqual(['live', 'test']);
-    });
-
-    it('a new destination after reset is offered no Dry run again', () => {
-      const { form, fixture, modes } = create({ vendor: 'Epic', dryRunEnabled: false });
-      form.patchFrom({ dest_sourceConnectionId: 'epic', dest_dryRun: 'true' });
-      fixture.detectChanges();
-
-      form.reset();
-      fixture.detectChanges();
-      expect(modes()).toEqual(['live', 'test']);
-      expect(form.runMode()).toBe('test');
-    });
-  });
-
-  it('treats a missing setting (older API or failed call) as off: Dry run is not offered', () => {
-    const { modes } = create({ vendor: 'Epic', dryRunEnabled: 'omitted' });
-
-    expect(modes()).toEqual(['live', 'test']);
-  });
-
-  it('with Dry run turned on, nothing changes: Dry run is offered, chosen first, and no note shows', () => {
-    const { form, modes, text } = create({ vendor: 'Epic', dryRunEnabled: true });
-
-    expect(modes()).toEqual(['live', 'dryRun', 'test']);
-    expect(form.runMode()).toBe('dryRun');
-    expect(text()).not.toContain('Dry run is turned off');
-    expect(text()).toContain('Start with a dry run.');
   });
 
   describe('a connection created on the go', () => {
-    it('is reloaded and picked when it fits', () => {
-      let connections = [HAPI];
+    it('a new test server is reloaded and picked', () => {
+      let connections = [EPIC];
       const { form, fixture, getAll } = create({ vendor: 'Epic', getAll: () => of(connections) });
-      connections = [HAPI, EPIC];
+      connections = [EPIC, HAPI];
+      form.onCreated(HAPI);
+      fixture.detectChanges();
+      expect(getAll).toHaveBeenCalledTimes(2);
+      expect(form.form.controls.sourceConnectionId.value).toBe('hapi');
+    });
 
+    it('a new EHR connection is not picked: a live run is chosen on purpose', () => {
+      let connections = [HAPI];
+      const { form, fixture, notice } = create({ vendor: 'Epic', getAll: () => of(connections) });
+      connections = [HAPI, EPIC];
       form.onCreated(EPIC);
       fixture.detectChanges();
-
-      expect(getAll).toHaveBeenCalledTimes(2);
-      expect(form.form.controls.sourceConnectionId.value).toBe('epic');
+      expect(form.form.controls.sourceConnectionId.value).toBe('');
+      expect(notice()).toBe('The new connection was added. Choose it above to write into Epic.');
     });
 
     it('says so when it cannot take writes yet', () => {
       const { form, fixture, notice } = create({ vendor: 'Epic', connections: [HAPI] });
-
       form.onCreated(conn('new-epic', 'Epic', { access: 'Read' }));
       fixture.detectChanges();
-
       expect(form.form.controls.sourceConnectionId.value).toBe('');
       expect(notice()).toContain('cannot take writes yet');
     });
